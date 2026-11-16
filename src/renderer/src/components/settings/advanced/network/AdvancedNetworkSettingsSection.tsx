@@ -7,7 +7,7 @@ import {
   normalizeProxyUrl,
   PROXY_URL_FAILURE_COPY,
   type ProxyUrlFailureCode
-} from '../../../../../../shared/network-proxy'
+} from '../../../../../../shared/network/network-proxy'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Button } from '../../../ui/button'

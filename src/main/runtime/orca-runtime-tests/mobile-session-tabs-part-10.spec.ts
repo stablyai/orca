@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { registerLivePty } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import {
   expectDesktopDropsPane,
   expectDesktopDropsTab

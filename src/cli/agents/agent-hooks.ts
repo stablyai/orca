@@ -6,6 +6,7 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
+import { ensureCliAppEnvironment } from '../runtime/profile/cli-app-environment'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles/orca-profiles'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -128,6 +129,16 @@ async function updateRunningRuntime(client: RuntimeClient, enabled: boolean): Pr
   return true
 }
 
+/** The running app owns the live setting and removes its hooks; otherwise the profile on disk. */
+export async function persistAgentStatusHooksEnabled(
+  client: RuntimeClient,
+  enabled: boolean
+): Promise<void> {
+  if (!(await updateRunningRuntime(client, enabled))) {
+    await updateEnabledOnDisk(enabled)
+  }
+}
+
 /** Null when no runtime answers; a running app owns the live setting. */
 async function readRunningRuntimeHooksEnabled(client: RuntimeClient): Promise<boolean | null> {
   if (!(await client.getOfflineRuntimeAdmission()).reachable) {
@@ -212,6 +223,7 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   },
   'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
+    ensureCliAppEnvironment()
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
     const runtimeEnabled = await readRunningRuntimeHooksEnabled(client)
@@ -225,11 +237,13 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   },
   'agent hooks off': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
+    ensureCliAppEnvironment()
     const result = await setAgentHooksEnabled(client, false)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
   'agent hooks on': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
+    ensureCliAppEnvironment()
     const result = await setAgentHooksEnabled(client, true)
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   }

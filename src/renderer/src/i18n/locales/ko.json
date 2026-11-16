@@ -5830,7 +5830,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} 연결 끊김",
           "runtimeHostProject": "Orca 서버의 프로젝트",
           "runtimeHostProjectNamed": "{{hostName}}의 프로젝트",
-          "ef18787206": "삭제 대기 중"
+          "ef18787206": "삭제 대기 중",
+          "notificationsMuted": "알림 음소거됨"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "에이전트",
@@ -5924,7 +5925,9 @@
           "copyPathOption": "경로",
           "copyNameOption": "워크트리 이름",
           "lineageSubmenu": "상위 및 하위",
-          "projectGroupSubmenu": "프로젝트 그룹"
+          "projectGroupSubmenu": "프로젝트 그룹",
+          "muteNotifications": "알림 음소거",
+          "unmuteNotifications": "알림 음소거 해제"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -22084,7 +22087,9 @@
       "chooseTransition": "상태 변경을 선택하세요:",
       "cancel": "취소",
       "noTransition": "{{key}}에 대해 {{column}}(으)로 가는 상태 변경을 사용할 수 없습니다.",
-      "queryTooLong": "Jira 쿼리가 너무 깁니다. 쿼리를 줄이거나 필터를 지우세요."
+      "queryTooLong": "Jira 쿼리가 너무 깁니다. 쿼리를 줄이거나 필터를 지우세요.",
+      "reorderColumn": "{{column}} 순서 변경",
+      "reorderColumnHint": "이 레인의 이슈: {{count}}개. 왼쪽 및 오른쪽 화살표 키로 이동할 수 있습니다."
     },
     "favourites": {
       "activeLabel": "Jira 즐겨찾기: {{name}}",
@@ -22170,21 +22175,13 @@
     "language": {
       "back": "언어",
       "requestPrompt": "Orca에서 어떤 언어를 지원하면 좋을까요?",
-      "requestSuccess": "언어 요청이 기록되었습니다. 설정을 계속할 수 있습니다.",
       "requestError": "요청을 기록하지 못했습니다. 다시 시도하세요.",
       "retry": "다시 시도",
       "requestAction": "언어 지원 요청",
       "title": "표시 언어",
-      "device": "시스템 언어: {{language}}",
-      "unsupported": "시스템 언어: {{language}}. 이 언어는 아직 지원되지 않습니다.",
-      "unknown": "시스템 언어를 감지하지 못했습니다. 아래에서 언어를 선택하세요.",
-      "loadError": "이 언어를 불러오지 못했습니다. 다시 시도하세요.",
-      "saveError": "언어 설정을 저장하지 못했습니다. 다시 시도하세요.",
-      "other": "다른 언어…",
       "settingsError": "설정을 불러오지 못했습니다.",
       "loadingSettings": "설정 불러오는 중…",
-      "loading": "언어 불러오는 중…",
-      "saving": "언어 저장 중…"
+      "loading": "언어 불러오는 중…"
     }
   },
   "resourceManager": {

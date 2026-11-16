@@ -75,6 +75,7 @@
                   "when": "ws.isSparse",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
+                { "el": "NotificationsMuted" },
                 {
                   "el": "HostBadge",
                   "when": "vars.newStyle && !vars.metaRow && vars.hostBadge",

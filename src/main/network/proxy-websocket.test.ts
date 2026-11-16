@@ -11,7 +11,7 @@ import {
 } from '../browser/electron-fixtures/browser-local-https-test-certificate'
 import { createSocksProxy } from './proxy-socks.test-fixture'
 import { setDefaultProxySessionResolver } from './electron-default-proxy-session'
-import { PROXY_ENVIRONMENT_KEYS } from '../../shared/network-proxy'
+import { PROXY_ENVIRONMENT_KEYS } from '../../shared/network/network-proxy'
 import { createProxyWebSocket } from './proxy-websocket'
 import { applyProxySettingsToSession, resetProxyApplicationForTests } from './proxy-settings'
 

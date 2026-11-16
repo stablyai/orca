@@ -7,7 +7,7 @@ import nacl from 'tweetnacl'
 import { WebSocketServer } from 'ws'
 import { createSocksProxy } from '../../network/proxy-socks.test-fixture'
 import { setDefaultProxySessionResolver } from '../../network/electron-default-proxy-session'
-import { PROXY_ENVIRONMENT_KEYS } from '../../../shared/network-proxy'
+import { PROXY_ENVIRONMENT_KEYS } from '../../../shared/network/network-proxy'
 import { setMainHttpClient } from '../../network/http-client'
 import {
   applyElectronProxySettings,

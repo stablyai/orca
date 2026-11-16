@@ -1,4 +1,4 @@
-import { normalizeProxyUrl } from '../../shared/network-proxy'
+import { normalizeProxyUrl } from '../../shared/network/network-proxy'
 import type { ProxySession } from './electron-default-proxy-session'
 
 export type ElectronProxyCredentials = {

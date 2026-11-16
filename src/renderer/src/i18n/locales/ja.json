@@ -6418,7 +6418,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} が切断されました",
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
           "runtimeHostProjectNamed": "{{hostName}} 上のプロジェクト",
-          "ef18787206": "削除待ち"
+          "ef18787206": "削除待ち",
+          "notificationsMuted": "通知はミュート中"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agent",
@@ -6513,7 +6514,9 @@
           "copyPathOption": "パス",
           "copyNameOption": "ワークツリー名",
           "lineageSubmenu": "親と子",
-          "projectGroupSubmenu": "プロジェクトグループ"
+          "projectGroupSubmenu": "プロジェクトグループ",
+          "muteNotifications": "通知をミュート",
+          "unmuteNotifications": "通知のミュートを解除"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -20997,7 +21000,6 @@
           "reopen": "再度開く",
           "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。"
         },
-        "ignoredFilesLost": "無視されたファイルは失われます: {{names}}",
         "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
       },
       "atRiskLocalFiles": {
@@ -23601,7 +23603,9 @@
       "chooseTransition": "ステータス変更を選択:",
       "cancel": "キャンセル",
       "noTransition": "{{key}} では {{column}} へのステータス変更を利用できません。",
-      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。"
+      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。",
+      "reorderColumn": "{{column}} を並び替え",
+      "reorderColumnHint": "このレーンの Issue: {{count}} 件。左右の矢印キーで移動できます。"
     },
     "favourites": {
       "activeLabel": "Jira のお気に入り: {{name}}",
@@ -23687,21 +23691,13 @@
     "language": {
       "back": "言語",
       "requestPrompt": "Orcaに対応してほしい言語は何ですか？",
-      "requestSuccess": "言語のリクエストを記録しました。設定を続けられます。",
       "requestError": "リクエストを記録できませんでした。再試行してください。",
       "retry": "再試行",
       "requestAction": "言語をリクエスト",
       "title": "表示言語",
-      "device": "システム言語：{{language}}",
-      "unsupported": "システム言語：{{language}}。この言語はまだサポートされていません。",
-      "unknown": "システム言語を検出できませんでした。以下から選択してください。",
-      "loadError": "この言語を読み込めませんでした。再試行してください。",
-      "saveError": "言語設定を保存できませんでした。再試行してください。",
-      "other": "その他の言語…",
       "settingsError": "設定を読み込めませんでした。",
       "loadingSettings": "設定を読み込み中…",
-      "loading": "言語を読み込み中…",
-      "saving": "言語を保存中…"
+      "loading": "言語を読み込み中…"
     }
   },
   "resourceManager": {

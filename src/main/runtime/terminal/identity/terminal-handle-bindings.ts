@@ -6,7 +6,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { TerminalHandleAccess } from '../../agent-senders/runtime-agent-sender-associations'
 import { readIssuedTerminalHandles } from './terminal-issued-handle-reader'
 

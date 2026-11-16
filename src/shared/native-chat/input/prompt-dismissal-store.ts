@@ -9,7 +9,8 @@ export type PromptDismissalStore<T> = {
   forgetWhere: (match: (scopeKey: string) => boolean) => void
   readAsync: (scopeKey: string) => ReadonlySet<string>
   hideAsync: (scopeKey: string, ids: readonly string[]) => void
-  forgetAsync: (scopeKey: string) => void
+  /** With ids, shows only those again; without, every hidden one in the scope. */
+  forgetAsync: (scopeKey: string, ids?: readonly string[]) => void
   clearForTests: () => void
 }
 
@@ -71,12 +72,18 @@ export function createPromptDismissalStore<T>(): PromptDismissalStore<T> {
       setBoundedScopeCacheEntry(dismissals, scopeKey, { ...entry, hidden })
       notify()
     },
-    forgetAsync: (scopeKey) => {
+    forgetAsync: (scopeKey, ids) => {
       const entry = dismissals.get(scopeKey)
       if (!entry?.hidden) {
         return
       }
-      if (entry.prompt !== undefined) {
+      const kept = ids ? [...entry.hidden].filter((id) => !ids.includes(id)) : []
+      if (kept.length === entry.hidden.size) {
+        return
+      }
+      if (kept.length > 0) {
+        dismissals.set(scopeKey, { ...entry, hidden: new Set(kept) })
+      } else if (entry.prompt !== undefined) {
         dismissals.set(scopeKey, { prompt: entry.prompt })
       } else {
         dismissals.delete(scopeKey)

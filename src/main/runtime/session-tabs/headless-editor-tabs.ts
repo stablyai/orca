@@ -9,7 +9,7 @@ import type {
 } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { editorRowHost } from '../../../shared/workspace-session/session-tab-file-host'
 import {
   editorTabNamesFile,

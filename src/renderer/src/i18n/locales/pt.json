@@ -23378,7 +23378,9 @@
       "chooseTransition": "Escolha uma alteração de status:",
       "cancel": "Cancelar",
       "noTransition": "Nenhuma alteração de status para {{column}} está disponível para {{key}}.",
-      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros."
+      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros.",
+      "reorderColumn": "Reordenar {{column}}",
+      "reorderColumnHint": "Issues nesta coluna: {{count}}. Use as setas para a esquerda e para a direita para movê-la."
     },
     "favourites": {
       "loadFailed": "Não foi possível carregar os favoritos do Jira.",
@@ -23462,21 +23464,13 @@
     "language": {
       "back": "Idiomas",
       "requestPrompt": "Qual idioma você gostaria que o Orca oferecesse?",
-      "requestSuccess": "Solicitação de idioma registrada. Você pode continuar a configuração.",
       "requestError": "Não foi possível registrar sua solicitação. Tente novamente.",
       "retry": "Tentar novamente",
       "requestAction": "Solicitar idioma",
       "title": "Idioma de exibição",
-      "device": "Idioma do sistema: {{language}}",
-      "unsupported": "Idioma do sistema: {{language}}. Este idioma ainda não é compatível.",
-      "unknown": "Não foi possível detectar o idioma do sistema. Escolha um idioma abaixo.",
-      "loadError": "Não foi possível carregar este idioma. Tente novamente.",
-      "saveError": "Não foi possível salvar sua preferência de idioma. Tente novamente.",
-      "other": "Outro idioma…",
       "settingsError": "Não foi possível carregar suas configurações.",
       "loadingSettings": "Carregando configurações…",
-      "loading": "Carregando idioma…",
-      "saving": "Salvando idioma…"
+      "loading": "Carregando idioma…"
     }
   },
   "resourceManager": {

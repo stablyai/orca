@@ -1,6 +1,9 @@
 import { X509Certificate } from 'node:crypto'
 import { getCACertificates, type ConnectionOptions } from 'node:tls'
-import type { NetworkProxySettings, NetworkProxyTlsSettings } from '../../shared/network-proxy'
+import type {
+  NetworkProxySettings,
+  NetworkProxyTlsSettings
+} from '../../shared/network/network-proxy'
 import type { ProxySession } from './electron-default-proxy-session'
 import { closeProxySessionConnections } from './proxy-session-connections'
 
