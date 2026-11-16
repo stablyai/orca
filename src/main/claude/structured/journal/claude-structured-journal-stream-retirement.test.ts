@@ -53,15 +53,20 @@ function journal() {
         delta: { type: `${kind}_delta`, [kind]: text }
       }
     })
-  const final = (uuid: string, text: string, kind: 'text' | 'thinking' = 'text') =>
+  const final = (
+    uuid: string,
+    text: string,
+    kind: 'text' | 'thinking' = 'text',
+    messageId?: string
+  ) =>
     frame({
       type: 'assistant',
       uuid,
       parent_tool_use_id: 'agent-tool',
-      message: { role: 'assistant', content: [{ type: kind, [kind]: text }] }
+      message: { id: messageId, role: 'assistant', content: [{ type: kind, [kind]: text }] }
     })
   const row = (key: string) => writes.findLast((write) => write.key === key)
-  return { translator, writes, send, delta, final, row }
+  return { translator, writes, frame, send, delta, final, row }
 }
 
 describe('Claude stream retirement', () => {
@@ -160,6 +165,57 @@ describe('Claude stream retirement', () => {
       })
       expect(row('claude:claude-session:second-next')).toBeUndefined()
       expect(row('claude:claude-session:first-final')).toBeUndefined()
+      expect(row('claude:claude-session:second-final')).toBeUndefined()
+    }
+  )
+
+  it.each([
+    ['text', 'before'],
+    ['text', 'after'],
+    ['thinking', 'before'],
+    ['thinking', 'after']
+  ] as const)(
+    'keeps sequential %s block identities until message_stop %s the last final',
+    (kind, stopOrder) => {
+      const { translator, frame, send, delta, final, row } = journal()
+      send('prompt')
+      frame({
+        type: 'stream_event',
+        uuid: 'message-start',
+        parent_tool_use_id: 'agent-tool',
+        event: { type: 'message_start', message: { id: 'child-message' } }
+      })
+      delta('first-block', 'First ', 'agent-tool', 0, kind)
+      final('first-final', 'First complete', kind, 'child-message')
+      delta('second-block', 'Second ', 'agent-tool', 1, kind)
+      translator.flush()
+      const stop = () =>
+        frame({
+          type: 'stream_event',
+          uuid: 'message-stop',
+          parent_tool_use_id: 'agent-tool',
+          event: { type: 'message_stop' }
+        })
+      if (stopOrder === 'before') {
+        stop()
+      }
+      final('second-final', 'Second complete', kind, 'child-message')
+      if (stopOrder === 'after') {
+        stop()
+      }
+      delta('later-block', 'Later message', 'agent-tool', 0, kind)
+      translator.flush()
+
+      expect(row('claude:claude-session:block%3Achild-message%3A0')?.body).toMatchObject({
+        blocks: [{ type: 'text', text: 'First complete' }]
+      })
+      expect(row('claude:claude-session:block%3Achild-message%3A1')?.body).toMatchObject({
+        blocks: [{ type: 'text', text: 'Second complete' }]
+      })
+      expect(row('claude:claude-session:later-block')?.body).toMatchObject({
+        blocks: [{ type: 'text', text: 'Later message' }]
+      })
+      expect(row('claude:claude-session:second-block')).toBeUndefined()
       expect(row('claude:claude-session:second-final')).toBeUndefined()
     }
   )
