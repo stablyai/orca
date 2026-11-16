@@ -23,21 +23,44 @@ afterEach(() => {
 })
 
 describe('upsertHookTrustEntries', () => {
-  it('leaves an unchanged approval followed by another table byte-identical', () => {
-    const original = [
-      '[hooks.state."/home/me/.codex/hooks.json:stop:0:0"]',
-      'enabled = true',
-      'trusted_hash = "sha256:KEEP"',
-      '',
-      '[features]',
-      'daemon_auto_start = false',
-      ''
-    ].join('\n')
+  it.each([
+    {
+      name: 'followed by another table',
+      sourcePath: '/home/me/.codex/hooks.json',
+      original: [
+        '[hooks.state."/home/me/.codex/hooks.json:stop:0:0"]',
+        'enabled = true',
+        'trusted_hash = "sha256:KEEP"',
+        '',
+        '[features]',
+        'daemon_auto_start = false',
+        ''
+      ].join('\n')
+    },
+    {
+      name: 'with both Windows spellings ending the file',
+      sourcePath: 'C:\\Users\\me\\.codex\\hooks.json',
+      original: [
+        'model = "B"',
+        '',
+        '[hooks.state]',
+        '',
+        "[hooks.state.'C:\\Users\\me\\.codex\\hooks.json:stop:0:0']",
+        'enabled = true',
+        'trusted_hash = "sha256:KEEP"',
+        '',
+        "[hooks.state.'C:/Users/me/.codex/hooks.json:stop:0:0']",
+        'enabled = true',
+        'trusted_hash = "sha256:KEEP"',
+        ''
+      ].join('\n')
+    }
+  ])('leaves an unchanged approval $name byte-identical', ({ sourcePath, original }) => {
     writeFileSync(configPath, original, 'utf-8')
 
     upsertHookTrustEntries(configPath, [
       {
-        sourcePath: '/home/me/.codex/hooks.json',
+        sourcePath,
         eventLabel: 'stop',
         groupIndex: 0,
         handlerIndex: 0,

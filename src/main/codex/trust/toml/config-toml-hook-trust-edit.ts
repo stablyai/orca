@@ -166,13 +166,17 @@ function upsertTrustSlots(
   if (otherMatches.length > 0) {
     return false
   }
-  const firstText = slots[0].chunks.join('')
+  // Duplicates right after the first slot are dropped, so the gap that survives is the last one's.
+  let kept = slots[0]
+  while (kept.next && slots.includes(kept.next)) {
+    kept = kept.next
+  }
   const enabled = explicitEnabled ?? !slots.some((slot) => isBlockDisabled(slot.chunks.join('')))
   const block = buildTrustBlocks(keys, hash, enabled)
   return replaceHookTrustSlots(
     document,
     slots,
-    `${block}${keepBlockSeparator(firstText)}`,
+    `${block}${keepBlockSeparator(kept.chunks.join(''))}`,
     normalizedKeys
   )
 }
@@ -194,12 +198,20 @@ function upsertTrustBlocks(
     explicitEnabled ??
     !ranges.some((range) => isBlockDisabled(content.slice(range.start, range.end)))
   const block = buildTrustBlocks(keys, hash, enabled)
+  let kept = ranges[0]
+  for (const range of ranges.slice(1)) {
+    if (range.start !== kept.end) {
+      break
+    }
+    kept = range
+  }
+  const separator = keepBlockSeparator(content.slice(kept.start, kept.end))
   let cursor = 0
   let deduped = ''
   ranges.forEach((range, index) => {
     deduped += content.slice(cursor, range.start)
     if (index === 0) {
-      deduped += `${block}${keepBlockSeparator(content.slice(range.start, range.end))}`
+      deduped += `${block}${separator}`
     }
     cursor = range.end
   })
