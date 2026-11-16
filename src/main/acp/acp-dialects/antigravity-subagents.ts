@@ -17,13 +17,15 @@ const manageSubagentsSchema = z.looseObject({
   Action: z.string().optional(),
   ConversationIds: z.array(z.string().trim().min(1)).optional()
 })
+const MAX_SWARM_WORKERS = 64
+
 const swarmInputSchema = z.looseObject({
   action: z.string().optional(),
   name: z.string().trim().min(1).optional(),
   model: z.string().trim().min(1).optional(),
   brief: z.string().optional(),
   tasks: z.array(z.string()).optional(),
-  n: z.number().int().positive().optional()
+  n: z.number().int().positive().max(MAX_SWARM_WORKERS).optional()
 })
 
 function invokeSubagentLabel(
@@ -52,13 +54,16 @@ export function antigravityToolSubagents(
     }
     const input = invokeSubagentSchema.safeParse(tool.input).data
     const out = subagentOutputSchema.safeParse(update.rawOutput).data
-    const id = out?.conversationId ?? out?.ConversationId ?? update.toolCallId
+    const conversationId = out?.conversationId ?? out?.ConversationId
     const label = invokeSubagentLabel(input)
     return [
       {
-        id,
+        id: update.toolCallId,
         state: update.status === 'failed' ? 'failed' : 'working',
         settlesWithTurn: true,
+        ...(conversationId && conversationId !== update.toolCallId
+          ? { aliases: [conversationId] }
+          : {}),
         ...(label ? { label } : {})
       }
     ]

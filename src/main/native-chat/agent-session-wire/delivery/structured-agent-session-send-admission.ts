@@ -37,6 +37,7 @@ type SendContext = Pick<
   | 'operationReceipt'
   | 'agents'
   | 'agent'
+  | 'accountHome'
   | 'persistedOptions'
 >
 

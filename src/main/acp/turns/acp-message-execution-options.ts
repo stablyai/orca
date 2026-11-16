@@ -32,6 +32,11 @@ export async function applyAcpMessageOptions(
   }
   for (const key of ['model', 'effort', 'fastMode', 'interactionMode'] as const) {
     const value = options[key]
+    if (key === 'interactionMode' && value === 'plan' && !session.options.offersMode('plan')) {
+      throw new AgentSessionOptionRejectedError(
+        `${session.spec.agent} offers no session option named ${key}`
+      )
+    }
     if (
       value === undefined ||
       session.options.appliedInput.get(key) === value ||
@@ -39,7 +44,7 @@ export async function applyAcpMessageOptions(
         ? !session.options.write(key, value)
         : session.options.matchesNativeRestoredOption(key, value) ||
           (key === 'effort' && !session.options.offersEffort(value)) ||
-          (key === 'interactionMode' && !session.options.offersMode('plan')))
+          (key === 'interactionMode' && value !== 'plan' && !session.options.offersMode('plan')))
     ) {
       continue
     }

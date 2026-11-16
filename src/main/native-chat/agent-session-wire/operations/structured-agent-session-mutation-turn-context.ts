@@ -24,6 +24,7 @@ export function mutationTurnContext<TValue>(
     adapter: request.adapter,
     agents: request.agents,
     agent: record.provider,
+    ...(record.accountHome ? { accountHome: record.accountHome } : {}),
     logger: request.logger,
     ...(persistedOptions ? { persistedOptions } : {}),
     persistOptions: (options) =>

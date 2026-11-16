@@ -218,6 +218,53 @@ it('normalizes run_command output, surfaces Orchestrator plan documents, and att
     }
   })
 
+  const titleOnlyPlanEvents = translator.notification(
+    'session/update',
+    {
+      sessionId: 'agy-plan',
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'call_plan_title_only',
+        title: 'Run exit_plan_mode',
+        status: 'completed',
+        rawInput: { plan: '## Title-only Plan' }
+      }
+    },
+    125
+  )
+  expect(titleOnlyPlanEvents).toContainEqual(
+    expect.objectContaining({
+      type: 'item.update',
+      item: 'plan-tool:call_plan_title_only',
+      body: {
+        kind: 'status',
+        presentation: 'plan-document',
+        text: '## Title-only Plan'
+      }
+    })
+  )
+
+  const titleOnlyApproval = translator.request(
+    'session/request_permission',
+    {
+      sessionId: 'agy-plan',
+      toolCall: {
+        toolCallId: 'call_exit_plan_title_only',
+        title: 'Run exit_plan_mode',
+        rawInput: { plan: '# Title-only Approval Plan' }
+      },
+      options: [{ optionId: 'allow', name: 'Allow', kind: 'allow_once' }]
+    },
+    9
+  )
+  expect(titleOnlyApproval.presentation?.body).toMatchObject({
+    kind: 'approval',
+    subject: {
+      kind: 'plan',
+      text: '# Title-only Approval Plan'
+    }
+  })
+
   const exitPlanApproval = translator.request(
     'session/request_permission',
     {
@@ -276,6 +323,21 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
     },
     210
   )
+  // Completing invoke_subagent binds its conversationId alias without creating a second subagent.
+  translator.notification(
+    'session/update',
+    {
+      sessionId: 'agy-orch',
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'call_sub_1',
+        name: 'invoke_subagent',
+        status: 'completed',
+        rawOutput: { conversationId: 'conv-sub-1' }
+      }
+    },
+    215
+  )
   translator.notification(
     'session/update',
     {
@@ -308,6 +370,14 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
     }),
     expect.objectContaining({
       type: 'live',
+      observedAt: 215,
+      child: expect.objectContaining({
+        handle: { idKind: 'task_id', id: 'call_sub_1' },
+        state: 'working'
+      })
+    }),
+    expect.objectContaining({
+      type: 'live',
       observedAt: 220,
       child: expect.objectContaining({
         handle: { idKind: 'task_id', id: 'swarm:verifier-1' },
@@ -326,7 +396,24 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
     })
   ])
 
-  // Killing a named swarm worker transitions it immediately to cancelled.
+  // Oversized swarm worker counts are ignored.
+  translator.notification(
+    'session/update',
+    {
+      sessionId: 'agy-orch',
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'call_swarm_oversized',
+        name: 'swarm',
+        status: 'completed',
+        rawInput: { action: 'add', name: 'huge', n: 65 }
+      }
+    },
+    225
+  )
+  expect(translator.subagents.drainEvidence()).toEqual([])
+
+  // Killing a named swarm worker and a conversationId-aliased subagent settles canonical handles.
   translator.notification(
     'session/update',
     {
@@ -341,11 +428,32 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
     },
     230
   )
+  translator.notification(
+    'session/update',
+    {
+      sessionId: 'agy-orch',
+      update: {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'call_sub_kill',
+        name: 'manage_subagents',
+        status: 'completed',
+        rawInput: { Action: 'kill', ConversationIds: ['conv-sub-1'] }
+      }
+    },
+    235
+  )
+  expect(translator.subagents.has('conv-sub-1')).toBe(true)
   expect(translator.subagents.drainEvidence()).toEqual([
     {
       type: 'ended',
       observedAt: 230,
       handle: { idKind: 'task_id', id: 'swarm:verifier-1' },
+      outcome: 'cancelled'
+    },
+    {
+      type: 'ended',
+      observedAt: 235,
+      handle: { idKind: 'task_id', id: 'call_sub_1' },
       outcome: 'cancelled'
     }
   ])
@@ -353,12 +461,6 @@ it('tracks Antigravity invoke_subagent, manage_subagents, and swarm lifecycles a
   // Ending the parent `session/prompt` settles remaining turn-bound subagents cleanly.
   translator.promptResult('msg-orch', { stopReason: 'end_turn' }, 250)
   expect(translator.subagents.drainEvidence()).toEqual([
-    {
-      type: 'ended',
-      observedAt: 250,
-      handle: { idKind: 'task_id', id: 'call_sub_1' },
-      outcome: 'succeeded'
-    },
     {
       type: 'ended',
       observedAt: 250,

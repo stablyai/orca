@@ -87,13 +87,21 @@ const planFieldsSchema = z.looseObject({
     .optional()
 })
 
+function isExitPlanModeTool(
+  name: string | null | undefined,
+  title: string | null | undefined
+): boolean {
+  return (
+    name === 'exit_plan_mode' || name === 'Run exit_plan_mode' || title === 'Run exit_plan_mode'
+  )
+}
+
 function planApprovalSubject(toolCall: ToolCallUpdate): AgentJournalApprovalSubject | undefined {
   const parsed = planFieldsSchema.safeParse(toolCall.rawInput).data
   if (!parsed) {
     return undefined
   }
-  const isExitPlan = toolCall.name === 'exit_plan_mode' || toolCall.title === 'Run exit_plan_mode'
-  if (isExitPlan) {
+  if (isExitPlanModeTool(toolCall.name, toolCall.title)) {
     const text = parsed.plan?.trim()
     return text ? { kind: 'plan', text } : undefined
   }
@@ -201,7 +209,7 @@ function familyEfforts(family: string, models: readonly ModelInfo[]) {
 }
 
 function toolPlan(update: ToolCallUpdate, tool: AgentJournalToolCallItem): string | undefined {
-  if (update.status !== 'completed' || tool.name !== 'exit_plan_mode') {
+  if (update.status !== 'completed' || !isExitPlanModeTool(tool.name, update.title)) {
     return undefined
   }
   return planFieldsSchema.safeParse(tool.input).data?.plan?.trim() || undefined

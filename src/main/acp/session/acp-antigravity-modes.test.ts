@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { AgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
 import { antigravityHostAccountHome } from '../../antigravity/antigravity-host-acp'
 import { agentChatPermissionModes } from '../../../shared/agent-launch/permissions/agent-chat-permission-support'
@@ -16,13 +17,14 @@ import {
   HOST_TEST_SESSION as HOST_SESSION,
   hostTestAttachParams
 } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { prepareStructuredAgentSessionCreateForWorktree } from '../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
   waitFor
 } from './testing/acp-structured-adapter.test-support'
-import { framesOf, openHostRig, send } from './testing/acp-structured-host.test-support'
+import { framesOf, message, openHostRig, send } from './testing/acp-structured-host.test-support'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
@@ -30,7 +32,7 @@ afterEach(async () => {
 
 const HOST_SPEC = ANTIGRAVITY_LAUNCH_SPEC.hostBackend!.spec
 
-function agyModeConfigOptions(modes: readonly string[], currentMode = 'default') {
+function agyModeConfigOptions(modes: readonly string[] | null, currentMode = 'default') {
   return [
     {
       id: 'model',
@@ -43,20 +45,24 @@ function agyModeConfigOptions(modes: readonly string[], currentMode = 'default')
         { value: 'gemini-pro-orchestrator', name: 'Orchestrator (Carbon)' }
       ]
     },
-    {
-      id: 'mode',
-      name: 'Mode',
-      category: 'mode',
-      type: 'select',
-      currentValue: currentMode,
-      options: modes.map((value) => ({ value, name: value }))
-    }
+    ...(modes
+      ? [
+          {
+            id: 'mode',
+            name: 'Mode',
+            category: 'mode',
+            type: 'select',
+            currentValue: currentMode,
+            options: modes.map((value) => ({ value, name: value }))
+          }
+        ]
+      : [])
   ]
 }
 
-function scriptAgyModes(modes: readonly string[]) {
+function scriptAgyModes(modes: readonly string[] | null, initialMode = 'default') {
   return (agent: AcpScriptedAgent) => {
-    let configOptions = agyModeConfigOptions(modes)
+    let configOptions = agyModeConfigOptions(modes, initialMode)
     agent.confirmConfigOptions(configOptions)
     agent.on('session/new', (frame) =>
       agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions })
@@ -147,6 +153,48 @@ describe('Antigravity auto and native plan execution modes', () => {
         value: 'plan'
       })
     ).toMatchObject({ ok: false })
+    const managedBody = message('Plan on managed runtime')
+    expect(
+      await managedRig.host.send(CALLER, {
+        envelope: envelope('agentSession.send', {
+          body: managedBody,
+          options: { interactionMode: 'plan' }
+        }),
+        body: managedBody,
+        options: { interactionMode: 'plan' }
+      })
+    ).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'optionRejected' }
+      }
+    })
+    const managedAccountHome = { variable: 'GEMINI_HOME', path: '/state/antigravity-chat' }
+    const stubRuntime = {
+      getAgentProviderSessionRows: () => [],
+      getStructuredAgentCliSourceRoute: () => 'unknown' as const,
+      resolveStructuredAgentSessionCreateIntent: async () => {
+        const { providerHandle: _ph, ...resolved } = hostTestAttachParams(null, {
+          provider: 'antigravity',
+          agent: 'antigravity',
+          accountHome: managedAccountHome,
+          providerHandle: undefined
+        })
+        return resolved
+      }
+    }
+    await expect(
+      prepareStructuredAgentSessionCreateForWorktree({
+        runtime: stubRuntime,
+        ensureHost: async () => managedRig.host,
+        envelope: envelope('agentSession.create', { agent: 'antigravity' }),
+        worktree: '/workspace',
+        agent: 'antigravity',
+        caller: CALLER,
+        options: { interactionMode: 'plan' }
+      })
+    ).rejects.toBeInstanceOf(AgentSessionRefusalError)
   })
 
   it('enables idle plan toggles and plan-approval mode transitions on host agy while preserving auto build mode', async () => {
@@ -282,5 +330,159 @@ describe('Antigravity auto and native plan execution modes', () => {
       value: 'auto'
     })
     agent.reply(thirdPrompt, { stopReason: 'end_turn' })
+  })
+
+  it('reports interactionMode unsupported and rejects plan dispatch when live session omits mode selector', async () => {
+    const noMode = await openAcpAdapterRig({
+      spec: HOST_SPEC,
+      script: scriptAgyModes(null)
+    })
+    await noMode.acquire({ permissionMode: 'own' })
+    const live = await noMode.adapter.readOptions({ sessionId: ADAPTER_SESSION, fence: 1 })
+    expect(live.interactionModeSupported).toBe(false)
+    expect(live.current.interactionMode).toBeUndefined()
+    await expect(
+      noMode.adapter.dispatch({
+        sessionId: ADAPTER_SESSION,
+        fence: 1,
+        clientMessageId: 'msg-no-mode-plan',
+        body: message('Plan without mode selector'),
+        executionOptions: { interactionMode: 'plan' }
+      })
+    ).rejects.toThrow(/offers no session option named interactionMode/)
+    expect(noMode.sent('session/prompt')).toEqual([])
+  })
+
+  it('preserves native non-plan build mode across plan toggles on own permission sessions', async () => {
+    const { rig, host } = await openHostRig({
+      spec: ANTIGRAVITY_LAUNCH_SPEC,
+      deps: {
+        resolveLaunch: async () => ({
+          spec: HOST_SPEC,
+          command: '/usr/local/bin/agy',
+          prefixArgs: [],
+          args: ['acp'],
+          cwd: '/workspace',
+          env: {},
+          envToDelete: [],
+          fullAccess: false,
+          resume: null
+        })
+      },
+      script: scriptAgyModes(['default', 'accept-edits', 'auto', 'plan'], 'auto')
+    })
+    await host.attach(
+      CALLER,
+      hostTestAttachParams(null, {
+        provider: 'antigravity',
+        agent: 'antigravity',
+        options: { permissionMode: 'own' },
+        accountHome: antigravityHostAccountHome('/Users/neo'),
+        providerHandle: undefined
+      })
+    )
+    await send(host, 'Start in native auto')
+    const firstPrompt = await rig.frame('session/prompt', 0)
+    rig.child().agent.reply(firstPrompt, { stopReason: 'end_turn' })
+    await waitFor(async () => {
+      const live = await host.readOptions(HOST_SESSION)
+      expect(live.current.interactionMode).toBe('default')
+    })
+
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', { key: 'interactionMode', value: 'plan' }),
+        key: 'interactionMode',
+        value: 'plan'
+      })
+    ).toMatchObject({ ok: true })
+    await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(1))
+    expect(
+      await host.setOption(CALLER, {
+        envelope: envelope('agentSession.setOption', { key: 'interactionMode', value: 'default' }),
+        key: 'interactionMode',
+        value: 'default'
+      })
+    ).toMatchObject({ ok: true })
+    await waitFor(() =>
+      expect(framesOf(rig.child(), 'session/set_config_option').map((f) => f.params)).toEqual([
+        expect.objectContaining({ configId: 'mode', value: 'plan' }),
+        expect.objectContaining({ configId: 'mode', value: 'auto' })
+      ])
+    )
+  })
+
+  it('clears cached interactionMode proof when the agent changes mode outside Orca writes', async () => {
+    const { rig, host } = await openHostRig({
+      spec: ANTIGRAVITY_LAUNCH_SPEC,
+      deps: {
+        resolveLaunch: async () => ({
+          spec: HOST_SPEC,
+          command: '/usr/local/bin/agy',
+          prefixArgs: [],
+          args: ['acp'],
+          cwd: '/workspace',
+          env: {},
+          envToDelete: [],
+          fullAccess: false,
+          resume: null
+        })
+      },
+      script: scriptAgyModes(['default', 'accept-edits', 'auto', 'plan'])
+    })
+    await host.attach(
+      CALLER,
+      hostTestAttachParams(null, {
+        provider: 'antigravity',
+        agent: 'antigravity',
+        options: { permissionMode: 'auto' },
+        accountHome: antigravityHostAccountHome('/Users/neo'),
+        providerHandle: undefined
+      })
+    )
+    const planBody = message('Draft plan')
+    await host.send(CALLER, {
+      envelope: envelope('agentSession.send', {
+        body: planBody,
+        options: { interactionMode: 'plan' }
+      }),
+      body: planBody,
+      options: { interactionMode: 'plan' }
+    })
+    const firstPrompt = await rig.frame('session/prompt', 0)
+    const { agent } = rig.child()
+    agent.reply(firstPrompt, { stopReason: 'end_turn' })
+    await waitFor(() => expect(framesOf(rig.child(), 'session/set_config_option')).toHaveLength(2))
+
+    // Agent switches mode back to `auto` outside Orca's own option writes.
+    agent.notify('session/update', {
+      sessionId: PROVIDER_SESSION,
+      update: {
+        sessionUpdate: 'config_option_update',
+        configOptions: agyModeConfigOptions(['default', 'accept-edits', 'auto', 'plan'], 'auto')
+      }
+    })
+    await waitFor(async () => {
+      const live = await host.readOptions(HOST_SESSION)
+      expect(live.current.reportedPermissionMode).toBe('auto')
+    })
+
+    // Sending another turn in `plan` mode must re-apply `plan` instead of trusting stale appliedInput.
+    const nextPlanBody = message('Refine plan')
+    await host.send(CALLER, {
+      envelope: envelope('agentSession.send', {
+        body: nextPlanBody,
+        options: { interactionMode: 'plan' }
+      }),
+      body: nextPlanBody,
+      options: { interactionMode: 'plan' }
+    })
+    const secondPrompt = await rig.frame('session/prompt', 1)
+    expect(framesOf(rig.child(), 'session/set_config_option').map((f) => f.params)).toEqual([
+      expect.objectContaining({ configId: 'mode', value: 'auto' }),
+      expect.objectContaining({ configId: 'mode', value: 'plan' }),
+      expect.objectContaining({ configId: 'mode', value: 'plan' })
+    ])
+    agent.reply(secondPrompt, { stopReason: 'end_turn' })
   })
 })

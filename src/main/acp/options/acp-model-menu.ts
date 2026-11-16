@@ -1,9 +1,11 @@
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
   acpEffortOption,
   acpListedModels,
   acpSelectChoices,
   acpSelectOffers,
-  acpSelectOption
+  acpSelectOption,
+  type AcpSelectOption
 } from './acp-select-choices'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type {
@@ -14,6 +16,51 @@ import type { AgentSessionOptionsResult } from '../../../shared/agent-session/op
 import type { SessionConfigOption, SessionModelState } from '../generated/acp-protocol.generated'
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
+
+export type AcpOptionWrite =
+  | { method: 'config'; configId: string; value: string }
+  | { method: 'model'; modelId: string }
+
+function acpFastOption(
+  configOptions: readonly SessionConfigOption[],
+  fastConfigId: string | undefined
+): AcpSelectOption | null {
+  const option = fastConfigId ? configOptions.find((entry) => entry.id === fastConfigId) : undefined
+  return option?.type === 'select' ? option : null
+}
+
+export function buildAcpOptionWrite(input: {
+  key: string
+  value: string
+  configOptions: readonly SessionConfigOption[]
+  models: SessionModelState | null
+  fastConfigId: string | undefined
+  buildMode: string
+}): AcpOptionWrite | null {
+  const { key, value, configOptions, models, fastConfigId, buildMode } = input
+  if (key === 'fastMode') {
+    const fast = acpFastOption(configOptions, fastConfigId)
+    return fast ? { method: 'config', configId: fast.id, value } : null
+  }
+  if (key === 'model') {
+    const option = acpSelectOption(configOptions, 'model')
+    if (option) {
+      return { method: 'config', configId: option.id, value }
+    }
+    return models ? { method: 'model', modelId: value } : null
+  }
+  if (key === 'effort') {
+    const option = acpEffortOption(configOptions)
+    return option ? { method: 'config', configId: option.id, value } : null
+  }
+  if (key === 'interactionMode' && isAgentSessionInteractionMode(value)) {
+    const option = acpSelectOption(configOptions, 'mode')
+    return option && acpSelectOffers(option, 'plan')
+      ? { method: 'config', configId: option.id, value: value === 'plan' ? 'plan' : buildMode }
+      : null
+  }
+  return null
+}
 
 /** Native choices never establish an unobserved model's capability or configured default. */
 export function acpModelMenuModels(input: {
@@ -97,9 +144,7 @@ export function readAcpOptionsMenu(input: {
       ? ('plan' as const)
       : ('default' as const)
     : undefined
-  const fastOption = input.dialect.fastConfigId
-    ? input.configOptions.find((entry) => entry.id === input.dialect.fastConfigId)
-    : undefined
+  const fastOption = acpFastOption(input.configOptions, input.dialect.fastConfigId)
   const menu = {
     models: acpModelMenuModels({
       dialect: input.dialect,
@@ -120,5 +165,5 @@ export function readAcpOptionsMenu(input: {
       ]
     }
   }
-  return withFastModeOption(menu, fastOption?.type === 'select' ? fastOption : null)
+  return withFastModeOption(menu, fastOption)
 }

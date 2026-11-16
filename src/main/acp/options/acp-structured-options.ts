@@ -4,9 +4,8 @@ import {
   acpSelectOption,
   type AcpSelectOption
 } from './acp-select-choices'
-import { readAcpOptionsMenu } from './acp-model-menu'
+import { buildAcpOptionWrite, readAcpOptionsMenu, type AcpOptionWrite } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
-import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
@@ -25,9 +24,7 @@ import type {
   SessionModelState
 } from '../generated/acp-protocol.generated'
 
-export type AcpOptionWrite =
-  | { method: 'config'; configId: string; value: string }
-  | { method: 'model'; modelId: string }
+export type { AcpOptionWrite }
 
 export class AcpStructuredOptions {
   constructor(
@@ -47,6 +44,7 @@ export class AcpStructuredOptions {
   private configOptions: SessionConfigOption[] = []
   private models: SessionModelState | null = null
   private buildMode = 'default'
+  private buildModePinned = false
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
   private isBuiltin: (command: AvailableCommand) => boolean = () => false
@@ -113,7 +111,9 @@ export class AcpStructuredOptions {
   ): void {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
-    this.buildMode = 'default'
+    this.buildModePinned = false
+    const mode = this.select('mode')?.currentValue
+    this.buildMode = mode && mode !== 'plan' ? mode : 'default'
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
     this.unobservedCurrent.clear()
@@ -165,6 +165,14 @@ export class AcpStructuredOptions {
       }
       if (this.effortOption()) {
         this.unobservedCurrent.delete('effort')
+      }
+      const mode = this.select('mode')?.currentValue
+      if (!this.buildModePinned && mode && mode !== 'plan') {
+        this.buildMode = mode
+      }
+      const appliedMode = this.appliedInput.get('interactionMode')
+      if (appliedMode !== undefined && this.currentInteractionMode() !== appliedMode) {
+        this.appliedInput.delete('interactionMode')
       }
     }
     const proof = this.selectorProof
@@ -230,35 +238,18 @@ export class AcpStructuredOptions {
 
   adoptBuildMode(mode: string): void {
     this.buildMode = mode
+    this.buildModePinned = true
   }
 
   write(key: string, value: string): AcpOptionWrite | null {
-    if (key === 'fastMode') {
-      const fast = this.fastOption()
-      return fast ? { method: 'config', configId: fast.id, value } : null
-    }
-    if (key === 'model') {
-      const option = this.select('model')
-      if (option) {
-        return { method: 'config', configId: option.id, value }
-      }
-      return this.models ? { method: 'model', modelId: value } : null
-    }
-    if (key === 'effort') {
-      const option = this.effortOption()
-      return option ? { method: 'config', configId: option.id, value } : null
-    }
-    if (key === 'interactionMode' && isAgentSessionInteractionMode(value)) {
-      const option = this.select('mode')
-      return option && this.offersMode('plan')
-        ? {
-            method: 'config',
-            configId: option.id,
-            value: value === 'plan' ? 'plan' : this.buildMode
-          }
-        : null
-    }
-    return null
+    return buildAcpOptionWrite({
+      key,
+      value,
+      configOptions: this.configOptions,
+      models: this.models,
+      fastConfigId: this.dialect.fastConfigId,
+      buildMode: this.buildMode
+    })
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
@@ -338,12 +329,6 @@ export class AcpStructuredOptions {
 
   private effortOption(): AcpSelectOption | null {
     return acpEffortOption(this.configOptions)
-  }
-
-  private fastOption(): AcpSelectOption | null {
-    const id = this.dialect.fastConfigId
-    const option = id ? this.configOptions.find((entry) => entry.id === id) : undefined
-    return option?.type === 'select' ? option : null
   }
 
   private select(category: string): AcpSelectOption | null {

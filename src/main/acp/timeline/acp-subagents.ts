@@ -43,15 +43,17 @@ export function acpSubagentOutcome(
 
 export class AcpSubagents {
   private readonly known = new Map<string, KnownSubagent>()
+  private readonly aliases = new Map<string, string>()
   private readonly pending: AgentChildWorkEvidence[] = []
 
   /** Include settled subagents so they cannot be reclassified as background tasks. */
   has(id: string): boolean {
-    return this.known.has(id)
+    return this.known.has(this.aliases.get(id) ?? id)
   }
 
   dispose(): void {
     this.known.clear()
+    this.aliases.clear()
     this.pending.length = 0
   }
 
@@ -75,9 +77,15 @@ export class AcpSubagents {
   ): ProviderTimelineEvent[] {
     const replies: ProviderTimelineEvent[] = []
     for (const update of updates) {
-      const known = this.known.get(update.id)
+      const id = this.aliases.get(update.id) ?? update.id
+      const known = this.known.get(id)
       if (!known && update.knownOnly === true) {
         continue
+      }
+      for (const alias of update.aliases ?? []) {
+        if (alias && alias !== id) {
+          this.aliases.set(alias, id)
+        }
       }
       const turn = update.turn ?? join.turn
       const subagent = known ?? {
@@ -86,7 +94,7 @@ export class AcpSubagents {
           ...(turn === undefined ? {} : { turn })
         }
       }
-      this.known.set(update.id, subagent)
+      this.known.set(id, subagent)
       if (update.restart && subagent.ended !== undefined) {
         subagent.ended = undefined
         subagent.replyDigest = undefined
@@ -100,13 +108,13 @@ export class AcpSubagents {
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
       // Late live reports must not resurrect an ended run after the host retires its record.
       if (ending || subagent.ended === undefined) {
-        this.pending.push(subagentEvidence(update, at))
+        this.pending.push(subagentEvidence(id === update.id ? update : { ...update, id }, at))
       }
       if (ending) {
         subagent.ended ??= update.state
       }
       if (update.result && subagent.ended === 'completed') {
-        replies.push(...this.reply(update.id, subagent, update.result))
+        replies.push(...this.reply(id, subagent, update.result))
       }
     }
     return replies

@@ -36,6 +36,7 @@ import {
   type AgentSessionAttachmentExpiredError
 } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import './structured-agent-session-turns-prompt'
 import './structured-agent-session-turns-cancel'
@@ -52,6 +53,7 @@ export type AgentSessionTurnContext = {
   /** Registry declarations; agents.capabilities(agent) is this session’s answer. */
   agents: StructuredAgentRegistry
   agent: string
+  accountHome?: AgentSessionAccountHome | null
   logger: StructuredAgentSessionLogger
   persistedOptions?: Readonly<Record<string, string>>
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>

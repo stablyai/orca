@@ -40,10 +40,11 @@ function acceptsOptionPick(
 export function structuredAgentSessionOptionOverridesRefusal(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
   provider: string,
-  options: Readonly<Record<string, string>>
+  options: Readonly<Record<string, string>>,
+  accountHome?: Parameters<StructuredAgentDefinition['restingOptions']['acceptsKey']>[1]
 ) {
   const key = Object.keys(options).find(
-    (key) => !acceptsOptionPick(agents, provider, key, options[key] ?? '')
+    (key) => !acceptsOptionPick(agents, provider, key, options[key] ?? '', accountHome)
   )
   return key === undefined
     ? null
