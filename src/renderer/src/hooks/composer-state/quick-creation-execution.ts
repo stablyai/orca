@@ -252,6 +252,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       if (persistDraft) {
         clearNewWorkspaceDraft()
       }
+      options?.onAccepted?.()
 
       if (handoff) {
         handoff.start(request)

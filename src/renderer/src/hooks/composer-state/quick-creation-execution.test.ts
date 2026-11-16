@@ -169,3 +169,30 @@ it('auto-submits a typed prompt with the linked context as the chat first messag
     useAppStore.setState({ settings: original })
   }
 })
+
+it('reports acceptance only for a creation that goes ahead, so a refused draft is kept', async () => {
+  const settings = getDefaultSettings('/test')
+  const prepare = vi.fn<() => Promise<PreparedQuickSubmit | null>>()
+  const onAccepted = vi.fn()
+  const { result } = renderExecution(settings, prepare)
+  function create(): Promise<void> {
+    return result.current.executeQuickCreation(
+      { kind: 'none' },
+      'opencode',
+      'fix',
+      null,
+      'repo-1',
+      { onAccepted }
+    )
+  }
+
+  prepare.mockResolvedValueOnce(null)
+  await act(create)
+  expect(onAccepted).not.toHaveBeenCalled()
+  expect(background).not.toHaveBeenCalled()
+
+  prepare.mockResolvedValueOnce(prepared)
+  await act(create)
+  expect(onAccepted).toHaveBeenCalledOnce()
+  expect(background).toHaveBeenCalledOnce()
+})

@@ -1,7 +1,7 @@
 import { useMemo, type Ref } from 'react'
 import { useAppStore } from '@/store'
 import { formatNativeChatFileReference } from '../../../../shared/native-chat/input/composer/agent-image-paste'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
@@ -16,6 +16,7 @@ import {
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 const NO_OPTIONS_SURFACE: SessionOptionsSurface = {
   getSnapshot: () => [],
@@ -31,6 +32,14 @@ const NO_COMMAND_CAUSES = {
   retry: false
 } as const
 
+/** What a launch prompt is written for: its draft scope, the agent it goes to, and the checkout its references resolve in. */
+export type AgentLaunchPromptTarget = {
+  scopeKey: string
+  agent: AgentType
+  /** Absent where no checkout backs the launch yet, so files cannot be referenced. */
+  worktreeId?: string | null
+}
+
 /** One prompt per agent and workspace owner, kept while the panel closes and reopens. */
 export function agentLaunchPromptScopeKey(entry: AgentPickerEntry): string {
   return nativeChatLaunchPromptDraftScopeKey(
@@ -40,20 +49,23 @@ export function agentLaunchPromptScopeKey(entry: AgentPickerEntry): string {
   )
 }
 
-/** The chat composer as a launch's first prompt: sending it is the launch, so nothing reaches a session. */
-export function AgentLaunchPromptComposer({
-  entry,
-  composerRef,
-  disabled,
-  onLaunch
-}: {
-  entry: AgentPickerEntry
-  composerRef: Ref<NativeChatComposerHandle>
-  disabled?: boolean
-  onLaunch: (prompt: string) => boolean | void | Promise<boolean>
-}): React.JSX.Element {
-  const scopeKey = agentLaunchPromptScopeKey(entry)
-  const { worktreeId } = entry
+export function agentLaunchPromptTarget(entry: AgentPickerEntry): AgentLaunchPromptTarget {
+  return {
+    scopeKey: agentLaunchPromptScopeKey(entry),
+    agent: entry.agent,
+    worktreeId: entry.worktreeId
+  }
+}
+
+type LaunchHandler = (prompt: string) => boolean | void | Promise<boolean>
+
+/** Sending is the launch: text goes to onLaunch, with selected skills named as files. */
+function useAgentLaunchPromptTransport(
+  target: AgentLaunchPromptTarget,
+  onLaunch: LaunchHandler
+): { transport: NativeChatStructuredComposerTransport; notices: NativeChatComposerNotice[] } {
+  const { scopeKey } = target
+  const worktreeId = target.worktreeId ?? undefined
   const runtimeEnvironmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
@@ -93,6 +105,32 @@ export function AgentLaunchPromptComposer({
       composerError ? [{ key: 'composer-error', kind: 'error', ...composerError }] : [],
     [composerError]
   )
+  return { transport, notices }
+}
+
+/** The chat composer as a launch's first prompt: sending it is the launch, so nothing reaches a session. */
+export function AgentLaunchPromptComposer({
+  target,
+  composerRef,
+  disabled,
+  unavailableHint,
+  placeholder,
+  onLaunch
+}: {
+  target: AgentLaunchPromptTarget
+  composerRef: Ref<NativeChatComposerHandle>
+  disabled?: boolean
+  /** Disables the input, keeping its draft, and shows this reason as its placeholder. */
+  unavailableHint?: string
+  placeholder?: string
+  onLaunch: LaunchHandler
+}): React.JSX.Element {
+  const { scopeKey, agent } = target
+  const t = useTranslate()
+  const { transport, notices } = useAgentLaunchPromptTransport(target, onLaunch)
+  const defaultPlaceholder = getNativeChatAgentProfile(agent)
+    ? t('agentPicker.promptPlaceholder', 'Add a prompt (optional): / for skills, @ for files')
+    : t('agentPicker.promptPlaceholderFilesOnly', 'Add a prompt (optional): @ for files')
   const launchPrompt = useMemo(
     () => ({
       onEmptySubmit: () => {
@@ -101,17 +139,9 @@ export function AgentLaunchPromptComposer({
           clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)
         }
       },
-      placeholder: getNativeChatAgentProfile(entry.agent)
-        ? translate(
-            'agentPicker.promptPlaceholder',
-            'Add a prompt (optional): / for skills, @ for files'
-          )
-        : translate(
-            'agentPicker.promptPlaceholderFilesOnly',
-            'Add a prompt (optional): @ for files'
-          )
+      placeholder: placeholder ?? defaultPlaceholder
     }),
-    [entry.agent, onLaunch, scopeKey]
+    [defaultPlaceholder, onLaunch, placeholder, scopeKey]
   )
   return (
     <NativeChatComposer
@@ -120,8 +150,9 @@ export function AgentLaunchPromptComposer({
       paneKey={scopeKey}
       draftScopeKey={scopeKey}
       targetPtyId={null}
-      agent={entry.agent}
+      agent={agent}
       canSend={!disabled}
+      unavailableHint={unavailableHint}
       structuredTransport={transport}
       notices={notices}
       launchPrompt={launchPrompt}

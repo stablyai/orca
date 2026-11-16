@@ -25,7 +25,13 @@ vi.mock('@/store', () => ({
 vi.mock('@/components/NewWorkspaceComposerModal', () => ({
   // Seeds from modalData only on mount, like the real composer state.
   WorkspaceComposerBody: ({ modalData }: { modalData: { initialRepoId?: string } }) => (
-    <textarea data-workspace-prompt-input="true" defaultValue={modalData.initialRepoId} />
+    <div data-workspace-prompt-input="true">
+      <textarea
+        contentEditable
+        suppressContentEditableWarning
+        defaultValue={modalData.initialRepoId}
+      />
+    </div>
   )
 }))
 
@@ -40,7 +46,9 @@ function renderPane(): HTMLTextAreaElement {
   act(() => {
     root?.render(<NewWorkspaceComposerPane />)
   })
-  const prompt = container.querySelector<HTMLTextAreaElement>('[data-workspace-prompt-input]')
+  const prompt = container.querySelector<HTMLTextAreaElement>(
+    '[data-workspace-prompt-input] textarea'
+  )
   if (!prompt) {
     throw new Error('prompt textarea not rendered')
   }
@@ -124,7 +132,9 @@ describe('NewWorkspaceComposerPane Escape ownership', () => {
     act(() => {
       root?.render(<NewWorkspaceComposerPane />)
     })
-    const prompt = document.querySelector<HTMLTextAreaElement>('[data-workspace-prompt-input]')
+    const prompt = document.querySelector<HTMLTextAreaElement>(
+      '[data-workspace-prompt-input] textarea'
+    )
     expect(prompt?.value).toBe('repo-2')
   })
 })

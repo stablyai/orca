@@ -188,6 +188,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
               if (persistDraft) {
                 clearNewWorkspaceDraft()
               }
+              options?.onAccepted?.()
               onCreated?.()
             }
           }

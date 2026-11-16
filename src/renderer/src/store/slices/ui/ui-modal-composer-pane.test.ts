@@ -123,6 +123,7 @@ describe('prompt-first composer when a creation takes the center', () => {
     store.setState({
       activePendingCreationId: 'creation-1',
       pendingWorktreeCreations: {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the creation surface reads only loaderVisible and status.
         'creation-1': { loaderVisible: true } as never
       }
     })

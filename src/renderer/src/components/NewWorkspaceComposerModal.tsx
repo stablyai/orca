@@ -41,6 +41,8 @@ import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-r
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
+import { buildComposerRecoverySnapshot } from '@/components/new-workspace/composer/composer-recovery-snapshot'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -135,6 +137,7 @@ export function WorkspaceComposerBody({
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
+  const promptFirst = settings?.promptFirstComposer === true
   const {
     cardProps,
     composerRef,
@@ -235,63 +238,70 @@ export function WorkspaceComposerBody({
     [observation.contextKey]
   )
 
-  const handleCreate = useCallback(async (): Promise<void> => {
-    if (createDisabled) {
-      return
-    }
-    await submitQuick(quickAgent, {
-      // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
-      setupOnly: quickAgent === null,
-      launchChoice: launchSelection.choice,
-      typedPrompt: cardProps.agentPrompt,
-      onLegacyPreparationFailure: (error) => {
-        if (isSubmissionCancelled()) {
-          return
-        }
-        const snapshot = {
-          ...modalData,
-          prefilledName: cardProps.name,
-          initialRepoId: cardProps.repoId,
-          initialBaseBranch: cardProps.baseBranch,
-          initialWorkspaceTarget:
-            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
-              ? {
-                  projectId: cardProps.selectedProjectId,
-                  hostId: cardProps.selectedRepoExecutionHostId,
-                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
+  const handleCreate = useCallback(
+    async (typedPrompt: string): Promise<boolean> => {
+      if (createDisabled) {
+        return false
+      }
+      let accepted = false
+      await submitQuick(quickAgent, {
+        // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
+        setupOnly: quickAgent === null,
+        launchChoice: launchSelection.choice,
+        typedPrompt,
+        onAccepted: () => {
+          accepted = true
+        },
+        onLegacyPreparationFailure: (error) => {
+          if (isSubmissionCancelled()) {
+            return
+          }
+          const snapshot = buildComposerRecoverySnapshot(modalData, cardProps, {
+            ...quickAgentPick,
+            agent: quickAgent,
+            note: cardProps.note
+          })
+          toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
+            action: {
+              label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+              onClick: () => {
+                if (!isSubmissionCancelled() && isModalSurfaceIdle(useAppStore.getState())) {
+                  useAppStore.getState().openModal('new-workspace-composer', snapshot)
                 }
-              : modalData.initialWorkspaceTarget,
-          linkedWorkItem: cardProps.linkedWorkItem,
-          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
-        }
-        toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
-          action: {
-            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
-            onClick: () => {
-              if (!isSubmissionCancelled() && isModalSurfaceIdle(useAppStore.getState())) {
-                useAppStore.getState().openModal('new-workspace-composer', snapshot)
               }
             }
-          }
-        })
-      },
-      ...quickWorkspacePickerInputs(
-        pickerDraft,
-        quickAgentPick.entry,
-        launchSelection.choice?.executionHostId
-      )
-    })
-  }, [
-    createDisabled,
-    quickAgent,
-    launchSelection.choice,
-    submitQuick,
-    pickerDraft,
-    quickAgentPick,
-    isSubmissionCancelled,
-    modalData,
-    cardProps
-  ])
+          })
+        },
+        ...quickWorkspacePickerInputs(
+          pickerDraft,
+          quickAgentPick.entry,
+          launchSelection.choice?.executionHostId
+        )
+      })
+      return accepted
+    },
+    [
+      createDisabled,
+      quickAgent,
+      launchSelection.choice,
+      submitQuick,
+      pickerDraft,
+      quickAgentPick,
+      isSubmissionCancelled,
+      modalData,
+      cardProps
+    ]
+  )
+  const promptEditorRef = useRef<NativeChatComposerHandle | null>(null)
+  // Why: prompt-first, the editor owns the draft, so an agent create goes through its submit; Blank Terminal creates empty.
+  const requestCreate = useCallback((): void => {
+    const promptEditor = promptFirst && quickAgent !== null ? promptEditorRef.current : null
+    if (promptEditor?.submit) {
+      promptEditor.submit()
+      return
+    }
+    void handleCreate(promptFirst ? '' : cardProps.agentPrompt)
+  }, [cardProps.agentPrompt, handleCreate, promptFirst, quickAgent])
   const {
     addProjectOpen,
     addProjectMounted,
@@ -338,11 +348,11 @@ export function WorkspaceComposerBody({
         return
       }
       event.preventDefault()
-      void handleCreate()
+      requestCreate()
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
+  }, [active, composerRef, createDisabled, requestCreate, nestedDialogOpen])
 
   return (
     <>
@@ -395,7 +405,9 @@ export function WorkspaceComposerBody({
           agentSettingsInvoker.current = invoker
           setAgentSettingsOpen(true)
         }}
-        onCreate={() => void handleCreate()}
+        onCreate={requestCreate}
+        promptEditorRef={promptEditorRef}
+        onPromptLaunch={handleCreate}
         onAddProjectOverride={handleOpenAddProject}
         onAddProjectEntryRequest={handleOpenAddProjectEntryRequest}
         onNestedDialogOpenChange={handleNestedDialogOpenChange}

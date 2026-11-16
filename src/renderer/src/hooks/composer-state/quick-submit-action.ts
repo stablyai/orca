@@ -136,6 +136,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         liveStore.setActivePendingWorktreeCreation(pendingCreationId)
         liveStore.setActiveView('terminal')
         liveStore.setSidebarOpen(true)
+        options?.onAccepted?.()
         onCreated?.()
         return
       }

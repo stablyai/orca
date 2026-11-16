@@ -8,7 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
-import { AgentLaunchPromptComposer } from './AgentLaunchPromptComposer'
+import { AgentLaunchPromptComposer, agentLaunchPromptTarget } from './AgentLaunchPromptComposer'
 import {
   agentPickerButtonOrder,
   type AgentPickerEntry,
@@ -146,7 +146,7 @@ export function AgentLaunchSetupFooter({
         }}
       >
         <AgentLaunchPromptComposer
-          entry={entry}
+          target={agentLaunchPromptTarget(entry)}
           composerRef={composer}
           disabled={disabled}
           onLaunch={(prompt) =>

@@ -39,6 +39,10 @@ vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: () => <input aria-label="workspace name" />
 }))
 
+vi.mock('@/components/agent/AgentLaunchPromptComposer', () => ({
+  AgentLaunchPromptComposer: () => <div contentEditable="true" />
+}))
+
 vi.mock('@/components/new-workspace/project-selection/ProjectCombobox', () => ({
   default: () => <div />
 }))

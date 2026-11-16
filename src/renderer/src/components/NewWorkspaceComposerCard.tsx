@@ -80,22 +80,24 @@ export default function NewWorkspaceComposerCard(
     activeFolderWorkspaceId,
     onAddProjectOverride,
     onAddProjectEntryRequest,
-    onNestedDialogOpenChange
+    onNestedDialogOpenChange,
+    promptEditorRef
   } = props
   const projectOptions = props.projectOptions ?? EMPTY_PROJECT_OPTIONS
   const projectHostSetupOptions = props.projectHostSetupOptions ?? EMPTY_PROJECT_HOST_SETUP_OPTIONS
   const ephemeralVmRecipes = props.ephemeralVmRecipes ?? EMPTY_EPHEMERAL_VM_RECIPES
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
+  const promptFirst = useAppStore((state) => state.settings?.promptFirstComposer === true)
   const attachDropOwner = useNewWorkspaceComposerFileDrop({
     projectPath: props.selectedRepoPath,
     hostId: selectedRepoExecutionHostId,
     connectionId: props.selectedRepoConnectionId,
-    applyDrop: props.onNativeFileDrop
+    // Why: prompt-first drops belong to the prompt editor's own drop target, not the hidden prompt field.
+    applyDrop: promptFirst ? undefined : props.onNativeFileDrop
   })
   const openModal = useAppStore((state) => state.openModal)
   const composerOpen = useAppStore((state) => selectOpenWorkspaceComposerData(state) !== null)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
-  const promptFirst = useAppStore((state) => state.settings?.promptFirstComposer === true)
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
   )
@@ -198,14 +200,12 @@ export default function NewWorkspaceComposerCard(
     nameInputFocusFrameRef.current = requestAnimationFrame(() => {
       nameInputFocusFrameRef.current = null
       if (promptFirst) {
-        composerRef?.current
-          ?.querySelector<HTMLElement>('[data-workspace-prompt-input="true"]')
-          ?.focus()
+        promptEditorRef?.current?.focus()
         return
       }
       nameInputRef?.current?.focus()
     })
-  }, [cancelNameInputFocusFrame, composerRef, nameInputRef, promptFirst])
+  }, [cancelNameInputFocusFrame, nameInputRef, promptFirst, promptEditorRef])
   const handleAddProject = React.useCallback((): void => {
     if (onAddProjectOverride) {
       onAddProjectOverride()
@@ -330,6 +330,7 @@ export default function NewWorkspaceComposerCard(
       className={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md transition',
         isFileDragOver &&
+          !promptFirst &&
           props.selectedRepoPath &&
           selectedRepoExecutionHostId &&
           props.onNativeFileDrop &&
