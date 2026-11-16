@@ -146,7 +146,14 @@ async function removeHeldCopy(
   completion: { awaitFolderDeletion?: boolean }
 ): Promise<WorkspaceCopyRemovalResult> {
   if (options.endHolders?.length) {
-    await endConsentedHolders(host, plan.copyRoot, options.endHolders)
+    const survivors = await endConsentedHolders(host, plan.copyRoot, options.endHolders)
+    // Why: on macOS a held folder still moves, so a move is no proof the program let go of it.
+    if (survivors.length > 0) {
+      throw new WorkspaceCopyError(
+        'refused',
+        `${survivors.map(processLabel).join(', ')} did not exit, so ${plan.copyRoot} was not deleted. Close ${survivors.length === 1 ? 'it' : 'them'} and try again.`
+      )
+    }
   }
   const aside = await moveFolderAside(host, plan)
   let perforce: { deletedChanges: number[]; deletedShelves: number[] } = {

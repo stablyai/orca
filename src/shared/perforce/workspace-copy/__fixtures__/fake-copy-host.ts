@@ -20,6 +20,8 @@ export type FakeHostOptions = {
   processes?: HostProcess[]
   /** Pid to the folder it has open, as the kernel's per-file list reports it. */
   folderHolders?: Map<number, string>
+  /** Pids that ignore the request to end and keep running. */
+  unendable?: number[]
 }
 
 /** A copy host over a fake Perforce server and a tree copier that can pretend to block-clone. */
@@ -73,6 +75,9 @@ export function createFakeCopyHost(
     listProcesses: async () => options.processes ?? [],
     listFolderHolders: async () => options.folderHolders ?? null,
     endProcess: async (target) => {
+      if (options.unendable?.includes(target.pid)) {
+        return false
+      }
       const running = options.processes ?? []
       const index = running.findIndex((p) => p.pid === target.pid)
       if (index !== -1) {

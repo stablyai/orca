@@ -96,18 +96,27 @@ export function isConsentedHolder(
   )
 }
 
-/** Ends the holders of `root` the user agreed to end; the host re-checks each is the same process. */
+/**
+ * Ends the holders of `root` the user agreed to end; the host re-checks each is the same process.
+ * Returns the ones that did not exit.
+ */
 export async function endConsentedHolders(
   host: WorkspaceCopyHost,
   root: string,
   consents: readonly WorkspaceCopyHolderConsent[]
-): Promise<void> {
+): Promise<WorkspaceCopyHolder[]> {
   if (!host.endProcess) {
-    return
+    return []
   }
+  const survivors: WorkspaceCopyHolder[] = []
   for (const holder of await processesUnder(host, root)) {
-    if (holder.canEnd !== false && isConsentedHolder(holder, consents)) {
-      await host.endProcess(holder)
+    if (
+      holder.canEnd !== false &&
+      isConsentedHolder(holder, consents) &&
+      !(await host.endProcess(holder))
+    ) {
+      survivors.push(holder)
     }
   }
+  return survivors
 }
