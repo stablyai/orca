@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
@@ -35,7 +36,7 @@ function byIdentity(workspaces: Worktree[], identities: ReadonlySet<string>): Wo
 /** Tag reads for rendering, and queued tag writes over git worktrees and folder workspaces alike. */
 export function useWorkspaceTagCommands(): WorkspaceTagCommands {
   const worktrees = useAllWorktrees()
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
 
   const allWorkspaces = useMemo(
     () => [

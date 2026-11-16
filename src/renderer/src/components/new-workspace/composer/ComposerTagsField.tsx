@@ -2,7 +2,7 @@ import React, { useId } from 'react'
 import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   MAX_WORKTREE_TAGS,
   normalizeWorktreeTag,
@@ -29,6 +29,7 @@ export function ComposerTagsField({
   onDraftChange: (value: string) => void
   disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const inputId = useId()
   const { allTags } = useWorkspaceTagCommands()
   const atLimit = tags.length >= MAX_WORKTREE_TAGS
@@ -53,7 +54,7 @@ export function ComposerTagsField({
   return (
     <div className="space-y-1">
       <label htmlFor={inputId} className="text-xs font-medium text-muted-foreground">
-        {translate('auto.components.NewWorkspaceComposerCard.tags', 'Tags')}
+        {t('auto.components.NewWorkspaceComposerCard.tags', 'Tags')}
       </label>
       {tags.length > 0 ? (
         <div className="flex flex-wrap gap-1">
@@ -64,7 +65,7 @@ export function ComposerTagsField({
               variant="outline"
               size="xs"
               disabled={disabled}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.NewWorkspaceComposerCard.removeTag',
                 'Remove tag {{value0}}',
                 { value0: tag }
@@ -100,11 +101,11 @@ export function ComposerTagsField({
         onBlur={() => addTag(query)}
         placeholder={
           atLimit
-            ? translate(
+            ? t(
                 'auto.components.NewWorkspaceComposerCard.tagsLimit',
                 'A workspace can have up to 32 tags'
               )
-            : translate(
+            : t(
                 'auto.components.NewWorkspaceComposerCard.tagsPlaceholder',
                 'Add a tag and press Enter'
               )

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent
@@ -65,19 +66,22 @@ export function useOrderedHeaderDrag({
   const [state, setState] = useState<OrderedHeaderDragState>(INITIAL_STATE)
   const [sessionArmed, setSessionArmed] = useState(false)
   const latestDropIndexRef = useRef<number | null>(null)
-  latestDropIndexRef.current = state.dropIndex
   const orderedIdsRef = useRef(orderedIds)
-  orderedIdsRef.current = orderedIds
   const onCommitRef = useRef(onCommit)
-  onCommitRef.current = onCommit
   const getContainerRef = useRef(getScrollContainer)
-  getContainerRef.current = getScrollContainer
   const readHeaderRectsRef = useRef(readHeaderRects)
-  readHeaderRectsRef.current = readHeaderRects
   const isActionTargetRef = useRef(isActionTarget)
-  isActionTargetRef.current = isActionTarget
   const requireAllHeaderRectsRef = useRef(requireAllHeaderRects)
-  requireAllHeaderRectsRef.current = requireAllHeaderRects
+  // Why after commit: pointer handlers read these between renders, and render must stay pure.
+  useLayoutEffect(() => {
+    latestDropIndexRef.current = state.dropIndex
+    orderedIdsRef.current = orderedIds
+    onCommitRef.current = onCommit
+    getContainerRef.current = getScrollContainer
+    readHeaderRectsRef.current = readHeaderRects
+    isActionTargetRef.current = isActionTarget
+    requireAllHeaderRectsRef.current = requireAllHeaderRects
+  })
 
   const dragSessionRef = useRef<{
     id: string

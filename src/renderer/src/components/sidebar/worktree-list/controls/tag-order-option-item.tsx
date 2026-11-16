@@ -8,7 +8,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { TAG_ORDER_OPTIONS } from './sidebar-workspace-option-items'
 
 /** Project order, one level down: shown only while the sidebar groups by tag. */
@@ -17,6 +17,7 @@ export function TagOrderOptionItem({
 }: {
   preserveWorkspaceBoardOpen: boolean
 }): JSX.Element {
+  const t = useTranslate()
   const tagOrderBy = useAppStore((s) => s.tagOrderBy)
   const setTagOrderBy = useAppStore((s) => s.setTagOrderBy)
   const tagOrderLabel = TAG_ORDER_OPTIONS.find((opt) => opt.id === tagOrderBy)?.label ?? 'Name'
@@ -25,7 +26,7 @@ export function TagOrderOptionItem({
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between">
           <span>
-            {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrder', 'Tag order')}
+            {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tagOrder', 'Tag order')}
           </span>
           <span className="text-[11px] font-medium text-muted-foreground">{tagOrderLabel}</span>
         </span>

@@ -9,9 +9,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Plus, Tag } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { normalizeWorktreeTag, worktreeTagKey } from '../../../../../shared/worktree/metadata/worktree-tags'
+import {
+  normalizeWorktreeTag,
+  worktreeTagKey
+} from '../../../../../shared/worktree/metadata/worktree-tags'
 import { getTagSelectionState } from './workspace-tag-actions'
 import { useWorkspaceTagCommands } from './use-workspace-tag-commands'
 
@@ -19,6 +22,7 @@ export function WorktreeTagsMenuItems(props: {
   contextWorktrees: readonly Worktree[]
   disabled: boolean
 }) {
+  const t = useTranslate()
   const { allTags, resolveLive, toggleTag } = useWorkspaceTagCommands()
   const liveWorktrees = resolveLive(props.contextWorktrees)
   const onToggleTag = (tag: string) => void toggleTag(props.contextWorktrees, tag)
@@ -64,7 +68,7 @@ export function WorktreeTagsMenuItems(props: {
         }}
       >
         <Tag className="size-3.5" />
-        {translate('auto.components.sidebar.WorktreeContextMenu.tags', 'Tags')}
+        {t('auto.components.sidebar.WorktreeContextMenu.tags', 'Tags')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-52">
         <div className="p-1">
@@ -90,11 +94,11 @@ export function WorktreeTagsMenuItems(props: {
               }
             }}
             onPointerDown={(event) => event.stopPropagation()}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.sidebar.WorktreeContextMenu.tagsSearch',
               'Find or create a tag…'
             )}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.WorktreeContextMenu.tagsSearch',
               'Find or create a tag…'
             )}
@@ -117,7 +121,7 @@ export function WorktreeTagsMenuItems(props: {
                 <span className="min-w-0 flex-1 truncate">{entry.tag}</span>
                 {state === 'some' ? (
                   <span className="text-muted-foreground">
-                    {translate('auto.components.sidebar.WorktreeContextMenu.tagsPartial', 'some')}
+                    {t('auto.components.sidebar.WorktreeContextMenu.tagsPartial', 'some')}
                   </span>
                 ) : null}
               </DropdownMenuCheckboxItem>
@@ -135,7 +139,7 @@ export function WorktreeTagsMenuItems(props: {
             >
               <Plus className="size-3.5" />
               <span className="min-w-0 flex-1 truncate">
-                {translate(
+                {t(
                   'auto.components.sidebar.WorktreeContextMenu.tagsCreate',
                   'Create “{{value0}}”',
                   {
@@ -148,7 +152,7 @@ export function WorktreeTagsMenuItems(props: {
         ) : null}
         {visibleTags.length === 0 && !canCreate ? (
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeContextMenu.tagsEmpty',
               'Type a name to create the first tag'
             )}

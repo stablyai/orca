@@ -42,6 +42,7 @@ function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, str
     groupBy: t('hostScreen.workspaceOptionsSheet.groupBy', 'Group by'),
     sortBy: t('hostScreen.workspaceOptionsSheet.sortBy', 'Sort by'),
     projectOrderBy: t('hostScreen.workspaceOptionsSheet.projectOrder', 'Project order'),
+    tagOrderBy: t('hostScreen.workspaceOptionsSheet.tagOrder', 'Tag order'),
     cardLayout: t('hostScreen.workspaceOptionsSheet.cardLayout', 'Card layout'),
     cardProperties: t('hostScreen.workspaceOptionsSheet.showProperties', 'Show properties'),
     cardDisplay: t('hostScreen.workspaceOptionsSheet.cardDisplay', 'Card display'),

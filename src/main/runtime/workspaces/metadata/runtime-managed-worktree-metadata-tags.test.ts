@@ -19,6 +19,7 @@ function setup(initialTags: string[]) {
   const worktree = { id: 'repo::/wt', repoId: 'repo', hostId: 'local' } as ResolvedWorktree
   const ports = {
     resolveWorktree: async () => worktree,
+    resolveParent: vi.fn(),
     validateParent: vi.fn(),
     invalidateResolved: vi.fn(),
     invalidateScan: vi.fn(),
