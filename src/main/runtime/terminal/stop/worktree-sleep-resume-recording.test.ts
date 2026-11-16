@@ -221,7 +221,7 @@ it.each([100, 1000])(
 )
 
 describe('a hookless resumed Codex across wakes and shell-confirmed command finishes', () => {
-  const SESSION = { key: 'session_id', id: 'woken-codex' }
+  const SESSION = { key: 'session_id' as const, id: 'woken-codex' }
   const SLEPT: SleepingAgentSessionRecord = {
     paneKey: PANE_KEY,
     tabId: 'host-tab',
@@ -284,7 +284,15 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       live.add(ptyId)
       const binding = { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID, incarnationId: ptyId }
       await runtime.syncWindowGraph(1, {
-        tabs: [{ ...binding, worktreeId: TEST_WORKTREE_ID, title: 'codex', layout: null }],
+        tabs: [
+          {
+            ...binding,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'codex',
+            activeLeafId: HEADLESS_LEAF_ID,
+            layout: null
+          }
+        ],
         leaves: [{ ...binding, worktreeId: TEST_WORKTREE_ID, ptyId, paneRuntimeId: 1 }]
       })
       runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
