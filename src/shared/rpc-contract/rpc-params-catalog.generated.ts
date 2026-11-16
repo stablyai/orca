@@ -3,6 +3,7 @@
 import type { z } from 'zod'
 import { AntigravityChatAuthConfigSchema } from '../agent-accounts/antigravity/antigravity-chat-auth-config'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
+import { AgentUpdateRequestSchema } from '../agent-updates/agent-update-types'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -925,6 +926,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSessionAttachment.uploadStart': AttachmentUploadStartParams,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
+  'agentUpdates.getState': null,
+  'agentUpdates.refresh': null,
+  'agentUpdates.update': AgentUpdateRequestSchema,
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionHandoff': AiVaultPrepareSessionHandoffParams,
