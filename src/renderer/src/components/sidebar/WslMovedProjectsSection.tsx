@@ -67,7 +67,8 @@ const WslMovedProjectsSection = React.memo(function WslMovedProjectsSection() {
             folderWorkspaces: selectFolderWorkspaces(state),
             unifiedTabsByWorktree: state.unifiedTabsByWorktree,
             repos: state.repos,
-            runtimeEnvironments: state.runtimeEnvironments
+            runtimeEnvironments: state.runtimeEnvironments,
+            projectGroups: state.projectGroups
           }
     )
   )

@@ -25,6 +25,10 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
+import { getFolderWorkspaceWorktreeHostId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { isWebClientLocation } from '../../app-shell/platform/web-client-location'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getRepoIdFromWorktreeId,
@@ -51,8 +55,10 @@ export async function fetchWslMovedProjects(
     set((state) =>
       sameMovedProjects(state.wslMovedProjects, projects) ? state : { wslMovedProjects: projects }
     )
-    // An undone move's hidden entry must list again if the project moves later.
-    get().retainHiddenWslMovedProjects(projects)
+    // Desktop only: a web client's list is always empty, and its prune would drop the desktop's keys.
+    if (!isWebClientLocation()) {
+      get().retainHiddenWslMovedProjects(projects)
+    }
   } catch (error) {
     // Without the list the moved chats stay hidden, as before this entry existed; nothing breaks.
     console.warn('[wsl-move] Could not list moved projects:', error)
@@ -176,8 +182,8 @@ export function selectWslMovedChatWorkspaces(
 }
 
 type WslMovedEntry = ReturnType<typeof selectWslMovedChatWorkspaces>[number]
-type HostRowCatalog = Pick<AppState, 'repos' | 'runtimeEnvironments'> & {
-  folderWorkspaces: readonly Pick<FolderWorkspace, 'id' | 'connectionId' | 'executionHostId'>[]
+type HostRowCatalog = Pick<AppState, 'repos' | 'runtimeEnvironments' | 'projectGroups'> & {
+  folderWorkspaces: readonly FolderWorkspace[]
 }
 
 /** Whether the project's host lists it, so that row's menu still offers "Use on this computer again". */
@@ -185,13 +191,35 @@ export function wslMovedProjectHasHostRow(
   catalog: HostRowCatalog,
   project: WslMovedProject
 ): boolean {
-  const rows = project.kind === 'repo' ? catalog.repos : catalog.folderWorkspaces
-  return rows.some(
-    (row) =>
-      row.id === project.id &&
-      wslMovedProjectOnHost(project, catalog.runtimeEnvironments, getRepoExecutionHostId(row)) !==
-        null
+  const hostIds =
+    project.kind === 'repo'
+      ? catalog.repos.filter((row) => row.id === project.id).map(getRepoExecutionHostId)
+      : catalog.folderWorkspaces
+          .filter((row) => row.id === project.id)
+          .map((row) => getFolderWorkspaceHostId(row, catalog.projectGroups))
+  return hostIds.some(
+    (hostId) => wslMovedProjectOnHost(project, catalog.runtimeEnvironments, hostId) !== null
   )
+}
+
+/**
+ * The host owning the clicked row, resolved as `wslMovedProjectHasHostRow` does: a folder's comes
+ * from its record (its project group's host when unstamped), picked by the row's own identity.
+ */
+export function wslMovedRowOwnerHostId(
+  catalog: Pick<HostRowCatalog, 'folderWorkspaces' | 'projectGroups'>,
+  row: Pick<Worktree, 'id' | 'hostId'>
+): string | null {
+  const scope = parseWorkspaceKey(row.id)
+  if (scope?.type !== 'folder') {
+    return row.hostId ?? null
+  }
+  const folder = catalog.folderWorkspaces.find(
+    (candidate) =>
+      candidate.id === scope.folderWorkspaceId &&
+      (!row.hostId || getFolderWorkspaceWorktreeHostId(candidate) === row.hostId)
+  )
+  return folder ? getFolderWorkspaceHostId(folder, catalog.projectGroups) : null
 }
 
 /**

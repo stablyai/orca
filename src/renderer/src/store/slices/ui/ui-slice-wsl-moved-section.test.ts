@@ -114,4 +114,17 @@ describe('the startup read of moved projects', () => {
     expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
     expect(savedHiddenKeys()).toBeUndefined()
   })
+
+  // A web client runs the same startup read, but its list is always empty.
+  it('never prunes on a web client, which writes nothing', async () => {
+    vi.stubGlobal('window', {
+      __ORCA_WEB_CLIENT__: true,
+      api: { ui: { set: uiSet }, repos: { listWslMoved } }
+    })
+    const store = storeHiding([REPO_KEY])
+    listWslMoved.mockResolvedValueOnce([])
+    await fetchWslMovedProjects(store.setState, store.getState)
+    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
+    expect(savedHiddenKeys()).toBeUndefined()
+  })
 })

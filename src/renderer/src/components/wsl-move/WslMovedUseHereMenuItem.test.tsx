@@ -72,6 +72,24 @@ beforeEach(() => {
   useAppStore.setState({
     wslMovedProjects: [movedRepo, movedFolder],
     runtimeEnvironments: [wslHost('Debian'), wslHost('Ubuntu')],
+    folderWorkspaces: [
+      {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'notes',
+        folderPath: '/home/me/notes',
+        executionHostId: UBUNTU,
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        createdAt: 0,
+        updatedAt: 0
+      }
+    ],
     // The same repo id on both hosts, Debian's listed first.
     repos: [
       { ...TEST_REPO, id: 'repo-1', executionHostId: DEBIAN },

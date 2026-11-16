@@ -5,8 +5,11 @@ import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-proj
 import {
   canHideWslMovedEntry,
   selectListedWslMovedChatWorkspaces,
-  wslMovedProjectOnHost
+  wslMovedProjectOnHost,
+  wslMovedRowOwnerHostId
 } from './wsl-moved-projects'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { TEST_REPO } from './repo.test-fixture'
 
 function environment(
@@ -87,6 +90,7 @@ describe('selectListedWslMovedChatWorkspaces', () => {
         executionHostId: toRuntimeExecutionHostId(ubuntu.id)
       })),
       folderWorkspaces: [],
+      projectGroups: [],
       runtimeEnvironments: [ubuntu]
     }
   }
@@ -104,5 +108,57 @@ describe('selectListedWslMovedChatWorkspaces', () => {
 
   it('returns the same list when nothing is hidden', () => {
     expect(selectListedWslMovedChatWorkspaces(groups, [], catalog([]))).toBe(groups)
+  })
+})
+
+describe('a moved folder whose host comes only from its project group', () => {
+  const folder: FolderWorkspace = {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    name: 'notes',
+    folderPath: '/home/me/notes',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0
+  }
+  const group: ProjectGroup = {
+    id: 'group-1',
+    name: 'notes',
+    parentPath: '/home/me',
+    executionHostId: toRuntimeExecutionHostId(ubuntu.id),
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 0,
+    updatedAt: 0
+  }
+  const movedFolder: WslMovedProject = {
+    kind: 'folder',
+    id: 'folder-1',
+    displayName: 'notes',
+    path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\notes',
+    distro: 'Ubuntu'
+  }
+  const catalog = {
+    repos: [],
+    folderWorkspaces: [folder],
+    projectGroups: [group],
+    runtimeEnvironments: [ubuntu]
+  }
+
+  // The menu and the hide rule resolve the host alike, so the entry can be hidden and undone.
+  it('counts as listed on its host and its row resolves to that host', () => {
+    expect(canHideWslMovedEntry(catalog, { project: movedFolder, workspaces: [] })).toBe(true)
+    expect(wslMovedRowOwnerHostId(catalog, { id: 'folder:folder-1', hostId: 'local' })).toBe(
+      toRuntimeExecutionHostId(ubuntu.id)
+    )
   })
 })
