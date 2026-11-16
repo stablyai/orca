@@ -3,14 +3,17 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
-import { AcpAgentError, AcpAuthRequiredError, AcpRpcError } from '../../transport/acp-errors'
+import {
+  AcpAgentError,
+  AcpAuthRequiredError,
+  AcpRpcError,
+  temporaryAcpProviderAnswer
+} from '../../transport/acp-errors'
 import type { AcpDialect } from '../../acp-dialects/acp-dialect'
 import type { InitializeResponse } from '../../generated/acp-protocol.generated'
 import type { AcpStructuredConnection } from '../../process/acp-structured-connection'
 import type { AcpStructuredLaunch } from '../../launch/acp-structured-launch-resolution'
 import { providerRequestTimeoutOf } from '../../../provider-process/provider-request-timeout'
-
-import { temporaryAcpStartupAnswer } from './acp-startup-outcome'
 
 const ACP_RESOURCE_NOT_FOUND = -32002
 // Without a `cwd`, OpenCode 2.x lists every folder's sessions.
@@ -29,7 +32,7 @@ export async function acpReopenTakeover(
   // its own answer would replace the failure the user must see.
   if (
     error instanceof AcpAuthRequiredError ||
-    temporaryAcpStartupAnswer(error) ||
+    temporaryAcpProviderAnswer(error) ||
     providerRequestTimeoutOf(error) ||
     start.over
   ) {
