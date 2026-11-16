@@ -6,12 +6,12 @@ const CLAUDE_IN_CHROME_ENV = 'CLAUDE_CODE_ENABLE_CFC'
  *  terminal would apply it; a launch that already chooses by flag or env keeps its choice. */
 export async function claudeInChromeDefaultArgs(
   env: Record<string, string>,
-  configuredArgs: Readonly<Record<string, string | null>>,
+  /** The command's prefix and the configured arguments, as typed. */
+  args: readonly string[],
   platform: NodeJS.Platform = process.platform
 ): Promise<Record<string, null>> {
   const chosen =
-    Object.hasOwn(configuredArgs, 'chrome') ||
-    Object.hasOwn(configuredArgs, 'no-chrome') ||
+    args.some((arg) => arg === '--chrome' || arg === '--no-chrome') ||
     Object.keys(env).some(
       (key) => (platform === 'win32' ? key.toUpperCase() : key) === CLAUDE_IN_CHROME_ENV
     )

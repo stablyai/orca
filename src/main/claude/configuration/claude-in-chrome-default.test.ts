@@ -20,9 +20,9 @@ afterEach(() => {
 
 it('applies Claude in Chrome "Enabled by default" unless the launch already chooses', async () => {
   const env = { CLAUDE_CONFIG_DIR: configDir }
-  await expect(claudeInChromeDefaultArgs(env, {}, 'darwin')).resolves.toEqual({ chrome: null })
-  await expect(claudeInChromeDefaultArgs(env, { 'no-chrome': null }, 'darwin')).resolves.toEqual({})
+  await expect(claudeInChromeDefaultArgs(env, [], 'darwin')).resolves.toEqual({ chrome: null })
+  await expect(claudeInChromeDefaultArgs(env, ['--no-chrome'], 'darwin')).resolves.toEqual({})
   await expect(
-    claudeInChromeDefaultArgs({ ...env, CLAUDE_CODE_ENABLE_CFC: '0' }, {}, 'darwin')
+    claudeInChromeDefaultArgs({ ...env, CLAUDE_CODE_ENABLE_CFC: '0' }, [], 'darwin')
   ).resolves.toEqual({})
 })

@@ -230,7 +230,8 @@ export function claudeStructuredLaunchPart(
       record.sessionId,
       probeLaunch
     )
-    const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
+    const launchArgs = await deps.resolveLaunchArgs()
+    const configured = claudeStructuredLaunchArgs(launchArgs)
     const { thinkingDisplayArgs, visuals } = await launchFlags
     const additionalDirectories = [
       ...configured.additionalDirectories,
@@ -273,7 +274,7 @@ export function claudeStructuredLaunchPart(
     // Read the config of the account directory the spawn pins, as session acquisition does.
     const chromeArgs = await claudeInChromeDefaultArgs(
       { ...env, ...claudeConfigDirEnvPatch(launchHome, { env }) },
-      configured.extraArgs
+      [...prefixArgs, ...launchArgs]
     )
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     if (fork?.throughEntryId && !resumesTranscript) {
