@@ -187,9 +187,22 @@ test('captures the worker strip in an isolated hidden native chat', async ({
       }
       if (scenario === 'remote' && width === 900) {
         const remoteStop = strip.getByRole('button', { name: /^Stop ORCA-1 ·/ })
+        await chat.composer.focus()
+        await page.mouse.move(5, 5)
+        await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0)
         await remoteStop.focus()
-        await remoteStop.hover()
-        await expect(page.getByRole('tooltip')).toContainText('computer it runs on')
+        const policy = page.getByRole('tooltip', { name: /computer it runs on/ })
+        await expect(policy).toBeVisible()
+        measurements.push({
+          theme,
+          width,
+          height,
+          remote: {
+            action: await remoteStop.getAttribute('aria-label'),
+            unavailable: await remoteStop.getAttribute('aria-disabled'),
+            policy: await policy.textContent()
+          }
+        })
         await page.screenshot({
           path: join(
             root,
