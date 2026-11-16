@@ -6,7 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import '../../worktree-list/listing/visible-worktrees'
 import { computeVisibleWorktrees } from '../../worktree-list/listing/compute-visible-worktrees'
 import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,

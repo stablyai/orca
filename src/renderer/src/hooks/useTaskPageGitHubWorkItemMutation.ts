@@ -5,7 +5,7 @@ import {
 } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-patches'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ParsedTaskQuery } from '../../../shared/work-items/task-query'
 import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'

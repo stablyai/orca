@@ -5,8 +5,9 @@ import {
   splitWorktreeIdForFilesystem,
   worktreeIdentityKey
 } from '../../../../shared/worktree/id'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+// oxfmt-ignore
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost

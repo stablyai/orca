@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   parseExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getFolderFileConnectionOwnerFromState } from '../../workspace/ownership/connection-owner-resolution'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {

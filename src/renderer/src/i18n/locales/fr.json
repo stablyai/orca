@@ -6369,7 +6369,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} déconnecté",
           "runtimeHostProject": "Projet sur serveur Orca",
           "runtimeHostProjectNamed": "Projet sur {{hostName}}",
-          "ef18787206": "En attente de suppression"
+          "ef18787206": "En attente de suppression",
+          "notificationsMuted": "Notifications désactivées"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -6465,7 +6466,9 @@
           "copyPathOption": "Chemin",
           "copyNameOption": "Nom du worktree",
           "lineageSubmenu": "Parent et enfants",
-          "projectGroupSubmenu": "Groupe de projets"
+          "projectGroupSubmenu": "Groupe de projets",
+          "muteNotifications": "Désactiver les notifications",
+          "unmuteNotifications": "Réactiver les notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Mise à jour requise",
@@ -22201,7 +22204,7 @@
         "listLabel": "Sessions Claude à redémarrer",
         "settingRestart": "Toujours redémarrer",
         "settingKeep": "Ne jamais redémarrer",
-        "settingDescription": "Le redémarrage poursuit chaque conversation dans un terminal sur le nouveau compte.",
+        "settingDescription": "Le redémarrage poursuit chaque conversation dans un terminal sur le nouveau compte. Les sessions occupées interrompent leur travail en cours.",
         "restartingOne": "Redémarrage d’une session Claude sur {{account}}",
         "restartingOther": "Redémarrage de {{count}} sessions Claude sur {{account}}",
         "groupOnAccount": "En cours sur {{account}}",
@@ -22220,15 +22223,17 @@
         "restartCount_one": "Redémarrer {{count}} session",
         "restartCount_other": "Redémarrer {{count}} sessions",
         "restartCount_many": "Redémarrer {{count}} sessions",
-        "reviewBody_one": "{{count}} autre session Claude n’a pas été déplacée vers {{next}}.",
-        "reviewBody_other": "{{count}} autres sessions Claude n’ont pas été déplacées vers {{next}}.",
-        "reviewBody_many": "{{count}} autres sessions Claude n’ont pas été déplacées vers {{next}}.",
-        "body_one": "{{count}} session Claude est toujours active sur {{previous}}. Le redémarrage poursuit la conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
-        "body_other": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
-        "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
+        "reviewBody_one": "{{count}} session Claude n’a pas été déplacée vers {{next}}.",
+        "reviewBody_other": "{{count}} sessions Claude n’ont pas été déplacées vers {{next}}.",
+        "reviewBody_many": "{{count}} sessions Claude n’ont pas été déplacées vers {{next}}.",
+        "body_one": "{{count}} session Claude est toujours active sur {{previous}}. Le redémarrage poursuit la conversation sur {{next}}. Les sessions occupées interrompent leur travail en cours et redémarrent maintenant.",
+        "body_other": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées interrompent leur travail en cours et redémarrent maintenant.",
+        "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées interrompent leur travail en cours et redémarrent maintenant.",
         "reasonSharedSession": "Également ouverte dans un autre volet",
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
-        "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
+        "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
+        "strandedOne": "1 session Claude est peut-être encore sur {{previous}}. Redémarrez-la manuellement pour basculer.",
+        "strandedOther": "{{count}} sessions Claude sont peut-être encore sur {{previous}}. Redémarrez-les manuellement pour basculer."
       },
       "oauthUsage": {
         "title": "Suivi de l’utilisation de Claude",
@@ -22827,7 +22832,9 @@
       "chooseTransition": "Choisissez un changement de statut :",
       "cancel": "Annuler",
       "noTransition": "Aucun changement de statut vers {{column}} n'est disponible pour {{key}}.",
-      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres."
+      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres.",
+      "reorderColumn": "Réorganiser {{column}}",
+      "reorderColumnHint": "Issues dans cette colonne : {{count}}. Utilisez les flèches gauche et droite pour la déplacer."
     },
     "favourites": {
       "activeLabel": "Favoris Jira : {{name}}",

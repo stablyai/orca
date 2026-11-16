@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { isPairedWebClientWindow } from '../../../../app-shell/chrome/desktop-window-chrome'
@@ -8,7 +8,7 @@ import { getOrcadSshDeployment } from '../../../../../../shared/remote-runtime/h
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AppState } from '@/store/types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export const MANAGED_BROWSER_UNAVAILABLE_MESSAGE =
   "Managed browser tabs are unavailable because this web client's paired runtime does not support browser streaming."

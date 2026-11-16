@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   parseChatUiLaunchTipAudience,
   type ChatUiLaunchTipAudience

@@ -2,7 +2,8 @@ import { useCallback, useMemo } from 'react'
 import {
   useAgentMessageSenderSource,
   useAgentMessageSenderSources,
-  useLeasedSenderSelector
+  useLeasedSenderSelector,
+  useStableSenderTarget
 } from './native-chat-agent-message-sender-source'
 import type { AgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
 import type { AppState } from '@/store/types'
@@ -64,17 +65,7 @@ function useSenderLocation(
   const sessionId = sender?.party.orcaSessionId
   const handle = sender?.party.terminalHandle
   const savedAgent = agentMessageSavedKind(sender)
-  const targetKind = target?.kind
-  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
-  const stableTarget = useMemo<RuntimeClientTarget | undefined>(
-    () =>
-      targetKind === 'local'
-        ? { kind: 'local' }
-        : environmentId !== undefined
-          ? { kind: 'environment', environmentId }
-          : undefined,
-    [targetKind, environmentId]
-  )
+  const stableTarget = useStableSenderTarget(target)
   const identity = useMemo<AgentMessageSender | undefined>(
     () =>
       address
@@ -183,15 +174,8 @@ export function useAgentMessageSenderViews(
   inputs: readonly AgentMessageSenderInput[],
   target?: RuntimeClientTarget
 ) {
-  const targetKind = target?.kind
-  const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
+  const stable = useStableSenderTarget(target)
   const lookups = useMemo(() => {
-    const stable: RuntimeClientTarget | undefined =
-      targetKind === 'local'
-        ? { kind: 'local' }
-        : environmentId !== undefined
-          ? { kind: 'environment', environmentId }
-          : undefined
     return inputs.map(({ sender, worktreeId }) => ({
       locate: (state: AppState) => {
         const resolved = sender
@@ -209,6 +193,6 @@ export function useAgentMessageSenderViews(
           : undefined,
       savedAgent: agentMessageSavedKind(sender)
     }))
-  }, [inputs, targetKind, environmentId])
+  }, [inputs, stable])
   return useAgentMessageSenderSources(lookups)
 }

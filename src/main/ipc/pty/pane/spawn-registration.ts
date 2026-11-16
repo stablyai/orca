@@ -12,7 +12,7 @@ import {
   setAdoptedPtyOwnership,
   setPtyOwnership
 } from '../provider/ownership-state'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { errorMessage } from '../../../../shared/errors/error-message'

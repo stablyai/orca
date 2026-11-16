@@ -9,7 +9,7 @@ import type {
 } from '../../../shared/jira/jira-saved-filters'
 import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,

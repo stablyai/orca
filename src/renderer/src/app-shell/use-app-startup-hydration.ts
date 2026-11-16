@@ -2,6 +2,7 @@ import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/stru
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/native-chat/local-sessions/local-structured-chats'
 import { syncZoomCSSVar } from '@/app-shell/chrome/ui-zoom'
+import { recoverStrandedEditorDrafts } from '@/components/editor/model-lifetime/retention/stranded-editor-draft-recovery'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store/index'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
@@ -35,7 +36,7 @@ import {
   isOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
@@ -211,6 +212,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             )
           })
           restoreStructuredLaunchSurfaces()
+          recoverStrandedEditorDrafts()
           // Discovery must not wait for terminal or SSH restoration.
           const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)
           await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>

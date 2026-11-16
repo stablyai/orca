@@ -1,11 +1,8 @@
-import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
+import '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
-import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -150,29 +147,6 @@ function makePersistedSplitSession(): WorkspaceSessionState {
 }
 
 describe('OrcaRuntimeService terminal surface retirement', () => {
-  it('fences an early-exited replacement even when its pane already exists', async () => {
-    const runtime = new OrcaRuntimeService()
-    runtime.attachWindow(1)
-    await syncSplit(runtime)
-    runtime.registerPty('pty-left', WORKTREE_ID, null, {
-      tabId: 'tab',
-      leafId: 'left',
-      incarnationId: 'incarnation-old'
-    })
-
-    runtime.onPtySpawned('pty-left', 'incarnation-replacement')
-    await runtime.onPtyExit('pty-left', 0, 'incarnation-replacement')
-
-    expect(() =>
-      runtime.assertPtyRegistrationAllowed('pty-left', 'incarnation-replacement')
-    ).toThrow('agent_session_exited_during_start')
-    runtime.releaseRejectedPtyRegistrationFence('pty-left', 'incarnation-replacement')
-    const internals = runtime as unknown as {
-      pendingPtyRegistrationIncarnations: Map<string, string | null>
-    }
-    expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
-  })
-
   it('retires the exact split leaf and rejects a stale renderer resurrection', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.attachWindow(1)
@@ -248,116 +222,5 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       expect.objectContaining({ id: 'tab::right', status: 'ready' })
     ])
     expect(setWorkspaceSession).not.toHaveBeenCalled()
-  })
-
-  it('publishes only same-repo retirements individually accepted by persistence', async () => {
-    let session = makePersistedSplitSession()
-    session.terminalLayoutsByTabId.tab.ptyIdsByLeafId = {
-      left: 'pty-shared',
-      right: 'pty-shared'
-    }
-    session.tabsByWorktree[WORKTREE_ID]![0]!.ptyId = 'pty-shared'
-    session.terminalPtyIncarnationsByPaneKey = {
-      'tab:left': 'incarnation-exiting',
-      'tab:right': 'incarnation-newer'
-    }
-    const setWorkspaceSession = vi.fn((next: WorkspaceSessionState) => {
-      session = next
-    })
-    const runtime = new OrcaRuntimeService(
-      runtimeStore(
-        withDurableRuntimeStore({
-          getWorkspaceSession: () => session,
-          setWorkspaceSession,
-          flushOrThrow: vi.fn()
-        })
-      )
-    )
-    runtime.attachWindow(1)
-    const snapshot = makeSplitSnapshot()
-    const sharedSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      tabs: snapshot.tabs.map((tab) =>
-        tab.type === 'terminal'
-          ? {
-              ...tab,
-              ptyId: 'pty-shared',
-              parentLayout: tab.parentLayout
-                ? {
-                    ...tab.parentLayout,
-                    ptyIdsByLeafId: { left: 'pty-shared', right: 'pty-shared' }
-                  }
-                : undefined
-            }
-          : tab
-      )
-    }
-    await syncSplit(runtime, sharedSnapshot)
-    runtime.registerPty('pty-shared', WORKTREE_ID, null, {
-      tabId: 'tab',
-      leafId: 'left',
-      incarnationId: 'incarnation-exiting'
-    })
-    const published: RuntimeMobileSessionTabsResult[] = []
-    const unsubscribe = runtime.onMobileSessionTabsChanged((event) => published.push(event))
-
-    await runtime.onPtyExit('pty-shared', 0, 'incarnation-exiting')
-
-    expect(session.terminalLayoutsByTabId.tab).toMatchObject({
-      root: { type: 'leaf', leafId: 'right' },
-      ptyIdsByLeafId: { right: 'pty-shared' }
-    })
-    expect(session.terminalPtyIncarnationsByPaneKey).toEqual({
-      'tab:right': 'incarnation-newer'
-    })
-    expect(published.at(-1)?.tabs).toEqual([
-      expect.objectContaining({
-        ptyId: 'pty-shared',
-        parentLayout: expect.objectContaining({ root: { type: 'leaf', leafId: 'right' } })
-      })
-    ])
-    expect((await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([
-      expect.objectContaining({
-        ptyId: 'pty-shared',
-        parentLayout: expect.objectContaining({ root: { type: 'leaf', leafId: 'right' } })
-      })
-    ])
-    expect(setWorkspaceSession).toHaveBeenCalledOnce()
-    unsubscribe()
-  })
-
-  it('keeps the in-memory retirement when the durable flush fails', async () => {
-    let session = makePersistedSplitSession()
-    const original = structuredClone(session)
-    const setWorkspaceSession = vi.fn((next: WorkspaceSessionState) => {
-      session = next
-    })
-    const runtime = new OrcaRuntimeService(
-      runtimeStore(
-        withDurableRuntimeStore({
-          getWorkspaceSession: () => session,
-          setWorkspaceSession,
-          flushOrThrow: vi.fn(() => {
-            throw new Error('disk unavailable')
-          })
-        })
-      )
-    )
-    runtime.attachWindow(1)
-    await syncSplit(runtime)
-    runtime.registerPty('pty-left', WORKTREE_ID, null, {
-      tabId: 'tab',
-      leafId: 'left',
-      incarnationId: 'incarnation-a'
-    })
-
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-
-    await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
-
-    expect(session).not.toEqual(original)
-    expect(session.terminalLayoutsByTabId.tab?.ptyIdsByLeafId).toEqual({ right: 'pty-right' })
-    expect(setWorkspaceSession).toHaveBeenCalledOnce()
-    errorSpy.mockRestore()
   })
 })

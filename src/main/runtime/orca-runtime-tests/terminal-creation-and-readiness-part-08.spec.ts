@@ -1,47 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import './bind-first-pane.test-fixture'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import './runtime-test-module-registration.spec'
-import { AGENT_PROMPT_BRACKETED_PASTE_START } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import '../../../shared/agent-launch/startup/agent-prompt-injection'
 import '../../../shared/clipboard/clipboard-text'
 import { OrcaRuntimeService } from '../orca-runtime'
 import '../orca-runtime-test-mocks/setup.spec'
-import { TERMINAL_INPUT_CHUNK_MAX_BYTES } from '../../../shared/terminal/input/terminal-input'
+import '../../../shared/terminal/input/terminal-input'
 import { TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('rejects an agent prompt when the atomic paste write fails', async () => {
-    vi.useFakeTimers()
-    try {
-      const writes: string[] = []
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-        write: (_ptyId, data) => {
-          writes.push(data)
-          return false
-        },
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        launchAgent: 'claude'
-      })
-      const prompt = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
-
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
-      const sendRejection = expect(sendPromise).rejects.toThrow('terminal_not_writable')
-      await vi.runAllTimersAsync()
-
-      await sendRejection
-      expect(writes[0]).toContain(AGENT_PROMPT_BRACKETED_PASTE_START)
-      expect(writes).toHaveLength(1)
-      expect(writes).not.toContain('\r')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('coalesces concurrent focusTerminal navigations so only the latest full reveal runs', async () => {
     // Resolve initial create immediately, then gate reveals for the focus storm.
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-create' })

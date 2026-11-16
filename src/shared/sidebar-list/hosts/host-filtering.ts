@@ -5,7 +5,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import type { Repo } from '../../repository/repo-types'

@@ -1,4 +1,5 @@
 import { STRUCTURED_AGENT_SESSION_MCP_METHODS } from './catalog/structured-agent-session-mcp'
+import { STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS } from './conversation/structured-agent-session-auto-review-approval'
 import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './catalog/structured-agent-session-account-usage'
 import { STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS } from './catalog/structured-agent-session-usage-limit-continue'
 import { STRUCTURED_AGENT_SESSION_SKIP_ASYNC_QUESTIONS_METHODS } from './conversation/structured-agent-session-skip-async-questions'
@@ -58,8 +59,8 @@ import '../../../../../shared/rpc-contract/structured-agent-session/structured-a
 import { sendStructuredAgentSessionForClient } from './conversation/structured-agent-session-send-compatibility'
 import { runConversationCommandForClient } from './conversation/structured-agent-session-conversation-command'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './creation/structured-agent-session-close-before-create'
 import * as queuedImages from './attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceHistory } from './subscriptions/structured-agent-session-receipt-devices'
@@ -226,5 +227,6 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS,
   ...STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS,
   ...STRUCTURED_AGENT_SESSION_MCP_METHODS,
+  ...STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS,
   ...STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS
 ]

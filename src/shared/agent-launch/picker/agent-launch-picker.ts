@@ -1,4 +1,4 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import type { TextActionPickerCatalog } from './agent-launch-picker-text-action'
 import { agentPickerLaunchChoices } from './agent-launch-picker-effective-choices'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'

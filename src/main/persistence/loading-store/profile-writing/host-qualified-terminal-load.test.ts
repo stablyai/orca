@@ -20,7 +20,7 @@ import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../../shared/constants'
+import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { restoredPaneStartPlan } from '../../../runtime/terminal/recovery/restored-pane-start'
 import { panesBoundToAnotherWorkspace } from '../../../runtime/terminal/recovery/foreign-pane-bindings'
 

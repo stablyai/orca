@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SourceControlGroupOrder } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { SourceControlGroupOrder } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlGroupOrder } from '../../../../../shared/source-control/listing/source-control-group-order'
 import { Input } from '../../ui/input'
