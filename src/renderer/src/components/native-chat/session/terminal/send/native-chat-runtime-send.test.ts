@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { writes } = vi.hoisted(() => ({ writes: [] as string[] }))
+const { writes } = vi.hoisted((): { writes: string[] } => ({ writes: [] }))
 
 vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: (_ptyId: string, data: string) => {
@@ -53,7 +53,7 @@ describe('sendNativeChatMessage input line ownership', () => {
   })
 
   // Enter that arrives while the agent is still reading the paste becomes part of it.
-  it('presses Enter only once the pasted message stops changing on the input line', async () => {
+  it('presses Enter only once the input line shows the whole pasted message', async () => {
     let line = ''
     sendNativeChatMessage('pty-1', 'Reply with PONG', {
       readInputLine: () => line,
@@ -63,10 +63,11 @@ describe('sendNativeChatMessage input line ownership', () => {
     expect(writes).toEqual(['Reply with PONG'])
 
     line = 'Reply with'
-    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(writes).toEqual(['Reply with PONG'])
+
     line = 'Reply with PONG'
     await vi.advanceTimersByTimeAsync(100)
-    expect(writes).toEqual(['Reply with PONG'])
 
     await vi.advanceTimersByTimeAsync(100)
     expect(writes).toEqual(['Reply with PONG', '\r'])

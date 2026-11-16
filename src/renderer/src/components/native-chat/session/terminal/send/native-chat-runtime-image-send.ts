@@ -1,4 +1,7 @@
-import { sendNativeChatObservedWrites } from './native-chat-observed-send'
+import {
+  sendNativeChatObservedWrites,
+  type NativeChatObservedWrite
+} from './native-chat-observed-send'
 import { agentImagePasteWrites } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { agentImagePastePath } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste-path'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -33,7 +36,7 @@ export function sendNativeChatMessageWithImageAttachments(
   }
   const trimmedText = text.trim()
   if (options?.onWriteRejected) {
-    const writes = agentImagePasteWrites(
+    const writes: NativeChatObservedWrite[] = agentImagePasteWrites(
       agent,
       imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
       trimmedText.length > 0
@@ -47,7 +50,7 @@ export function sendNativeChatMessageWithImageAttachments(
     writes.push({
       data: NATIVE_CHAT_SUBMIT,
       delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
-      afterPasteLands: true
+      afterPasteOf: text
     })
     return sendNativeChatObservedWrites(ptyId, writes, options)
   }
@@ -76,6 +79,7 @@ export function sendNativeChatMessageWithImageAttachments(
             afterNativeChatPasteLands({
               readInputLine: options?.readInputLine,
               lineWasEmpty,
+              text,
               delay,
               submit: () => {
                 sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')

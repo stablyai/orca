@@ -55,7 +55,7 @@ export function sendNativeChatMessage(
         {
           data: NATIVE_CHAT_SUBMIT,
           delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
-          afterPasteLands: true
+          afterPasteOf: text
         }
       ],
       options
@@ -84,6 +84,7 @@ export function sendNativeChatMessage(
             afterNativeChatPasteLands({
               readInputLine: options?.readInputLine,
               lineWasEmpty,
+              text,
               delay,
               submit: () => {
                 sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')

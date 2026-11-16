@@ -8,11 +8,11 @@ import {
 } from './native-chat-input-clear'
 import { afterNativeChatPasteLands, readNativeChatInputLine } from './native-chat-paste-landed'
 
-/** `afterPasteLands`: hold this write (Enter) until the input line shows the earlier writes settled. */
+/** `afterPasteOf`: hold this write (Enter) until the input line shows that pasted message. */
 export type NativeChatObservedWrite = {
   data: string
   delayBeforeMs: number
-  afterPasteLands?: boolean
+  afterPasteOf?: string
 }
 
 export function sendNativeChatObservedWrites(
@@ -34,10 +34,11 @@ export function sendNativeChatObservedWrites(
       let acknowledged = true
       let lineWasEmpty = false
       const whenReady = (write: NativeChatObservedWrite, send: () => void): void =>
-        write.afterPasteLands
+        write.afterPasteOf !== undefined
           ? afterNativeChatPasteLands({
               readInputLine: options.readInputLine,
               lineWasEmpty,
+              text: write.afterPasteOf,
               delay,
               submit: send
             })
