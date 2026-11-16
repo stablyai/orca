@@ -12,6 +12,7 @@ import type { WorkspaceAgentHistoryTranscriptTally } from '../../../shared/works
 import { scanAiVaultSessions } from '../session-scanner'
 import { removeAiVaultSessionPathPermanently } from '../deletion/host-session-delete'
 import { removeAiVaultSessionPath } from '../deletion/session-delete'
+import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { invalidateSessionParseCacheEntry } from '../parse-cache/session-parse-cache-store'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import type { AiVaultScanOptions } from '../session-scanner-types'
@@ -236,7 +237,11 @@ async function walkRemovals(
     let stats
     try {
       stats = await lstat(path)
-    } catch {
+    } catch (error) {
+      // Only a missing path is idle; any other failure could hide a live file.
+      if (!isENOENT(error)) {
+        newestMtimeMs = Number.POSITIVE_INFINITY
+      }
       return
     }
     newestMtimeMs = Math.max(newestMtimeMs, stats.mtimeMs)
