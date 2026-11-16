@@ -82,6 +82,7 @@
       "exampleChildren": "1 child",
       "statusCaption": "Title flags agents that need you",
       "childrenCaption": "Parents sum up child worktrees",
+      "unreadCaption": "<label>Blue dot:</label> unread",
       "dismiss": "Dismiss"
     },
     "revealFiltered": {
@@ -873,7 +874,7 @@
         "profile": "Browser profile",
         "empty": "No sites have been allowed or blocked yet.",
         "title": "Site permissions",
-        "description": "Sites ask before using your camera, microphone, location and more. Change what you allowed or blocked for each site.",
+        "description": "Sites ask before using your camera, microphone, location, opening other apps and more. Change what you allowed or blocked for each site.",
         "search": {
           "permissions": "permissions",
           "camera": "camera",
@@ -881,7 +882,8 @@
           "location": "location",
           "notifications": "notifications",
           "clipboard": "clipboard",
-          "localNetwork": "local network"
+          "localNetwork": "local network",
+          "apps": "apps"
         }
       },
       "profileScope": {
@@ -1138,7 +1140,8 @@
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
-      "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+      "codexRemoveHome": "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+      "claudeRemoveProfile": "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
@@ -2568,6 +2571,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+click to open in the system browser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Workspace comment",
+        "createdByAutomation": "Created by automation",
+        "linkedTask": "Linked task",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Linked issue",
+        "listeningPort": "Listening port"
       }
     },
     "hooks": {
@@ -4234,6 +4246,8 @@
           "draft": "Draft",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels",
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "allStates": "All",
           "filterPullRequests": "Filter pull requests",
           "filterIssues": "Filter issues",
@@ -5585,7 +5599,8 @@
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: one summary per provider",
             "footerDetailAria": "Usage footer detail",
-            "notChecked": "Not checked"
+            "notChecked": "Not checked",
+            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -8183,7 +8198,6 @@
           "locationSaveFailed": "Account location could not be saved. Try again.",
           "dbb9626ed1": "Cancel",
           "63843e37e2": "Remove Claude Account?",
-          "380a7736cc": "Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.",
           "0d47394635": "Remove Codex Account?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Find this in the URL after logging into opencode.ai (e.g.",
@@ -19841,7 +19855,11 @@
           "confirm": "Open {{app}}",
           "confirmLink": "Open link",
           "cancel": "Cancel",
-          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed."
+          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed.",
+          "localFileDescription": "A local file wants to open another application.",
+          "tabSiteDescription": "A page on {{site}} wants to open another application.",
+          "alwaysAllowLocalFiles": "Always allow local files to open {{scheme}} links",
+          "alwaysAllow": "Always allow {{site}} to open {{scheme}} links"
         },
         "httpAuth": {
           "title": "Sign in",
@@ -19870,7 +19888,8 @@
             "midi": "MIDI devices",
             "windowManagement": "Window management",
             "idleDetection": "Device use",
-            "localNetwork": "Local network"
+            "localNetwork": "Local network",
+            "externalApp": "Open {{scheme}} links"
           },
           "ask": {
             "camera": "Use your camera",
@@ -20855,6 +20874,7 @@
           "xhigh": "XHigh"
         },
         "imageUnavailable": "Preview unavailable",
+        "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
       },
@@ -21481,7 +21501,8 @@
         "export": "Export the session to HTML",
         "settings": "Open settings in Terminal",
         "extensions": "Open the extension dashboard in Terminal",
-        "hotkeys": "Show keyboard shortcuts in Terminal"
+        "hotkeys": "Show keyboard shortcuts in Terminal",
+        "mcpManage": "Manage MCP servers"
       },
       "modelDescriptions": {
         "grok_4_7": "xAI's latest frontier model",
@@ -21602,6 +21623,58 @@
           "alreadyRedeemed": "That reset credit was already used."
         }
       },
+      "mcp": {
+        "title": "MCP servers",
+        "close": "Close",
+        "loading": "Loading…",
+        "notRunning": "Connect when you send your next message",
+        "unsupported": "Update Orca on this chat’s host to manage them here",
+        "readFailed": "Couldn’t load",
+        "retry": "Retry",
+        "empty": "None set up for this chat",
+        "cancel": "Cancel",
+        "reconnect": "Reconnect",
+        "toggle": "Use {{name}}",
+        "actionFailed": "Couldn’t do that. Try again.",
+        "summary": {
+          "connected": "{{count}} connected",
+          "needsAuth_one": "{{count}} needs sign-in",
+          "needsAuth_other": "{{count}} need sign-in",
+          "failed": "{{count}} failed",
+          "signingIn": "signing in to {{name}}"
+        },
+        "source": {
+          "project": "Project",
+          "local": "Local",
+          "user": "User",
+          "plugin": "Plugin",
+          "session": "Session"
+        },
+        "status": {
+          "connected": "Connected",
+          "tools_one": "{{count}} tool",
+          "tools_other": "{{count}} tools",
+          "pending": "Connecting…",
+          "needsAuth": "Needs sign-in",
+          "failed": "Failed",
+          "failedReason": "Failed: {{error}}",
+          "disabled": "Disabled",
+          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+        },
+        "signIn": {
+          "action": "Sign in",
+          "waiting": "Waiting for sign-in…",
+          "waitingBrowser": "Waiting for your browser…",
+          "remote": "After you sign in, the browser lands on a page that won’t load. Copy that page’s address and paste it here.",
+          "external": "Finish on the page that opened",
+          "done": "Done",
+          "finish": "Finish",
+          "openAgain": "Open again",
+          "addressLabel": "Sign-in page address",
+          "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
+          "pastePlaceholder": "http://localhost:…"
+        }
+      },
       "cardKindHidden": {
         "description": "You can change this anytime in",
         "settingsLink": "Settings > Chat UI > Turn activity",
@@ -21635,6 +21708,15 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "urlRequest": {
+        "title": "Sign-in requested",
+        "open": "Open sign-in page",
+        "decline": "Decline",
+        "opened": "Opened the sign-in page in your browser.",
+        "openAgain": "Open again",
+        "finished": "Sign-in finished",
+        "finishedWith": "Sign-in finished · {{message}}"
       }
     },
     "tab": {
@@ -22611,6 +22693,18 @@
       "keywordJira": "jira",
       "keywordDefaultProject": "default project",
       "keywordIssuePicker": "issue picker"
+    },
+    "RepositoryBrowserProfileSection": {
+      "title": "Browser profile",
+      "description": "New browser tabs in this project, including ones agents open, use this profile. Point several projects at one profile to share a sign-in.",
+      "keywordProfile": "browser profile",
+      "keywordCookies": "cookies",
+      "keywordSignIn": "sign in",
+      "selectLabel": "Profile for new tabs",
+      "inherit": "Browser setting ({{scope}})",
+      "deletedOption": "Deleted profile",
+      "deleted": "The profile picked for this project was deleted, so new tabs follow the Browser setting.",
+      "saveFailed": "Couldn't save the browser profile. The Orca on this project's host may need an update."
     },
     "managed-runtime": {
       "cancelled": "Installation cancelled.",
@@ -23884,7 +23978,17 @@
         "failed": "Sign-in failed. Try again."
       }
     },
-    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser."
+    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "rename": {
+      "action": "Rename",
+      "title": "Rename account",
+      "description": "Only the name Orca shows changes. Leave it blank to show {{email}}.",
+      "label": "Display name",
+      "reset": "Reset to default",
+      "cancel": "Cancel",
+      "save": "Save",
+      "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    }
   },
   "fileSearch": {
     "failed": "Search failed. Try again.",

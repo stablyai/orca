@@ -131,7 +131,7 @@ it.each(['operation', 'devtools', 'debugger', 'grab', 'popup', 'route-popup'])(
           }
         }
       })
-      guest.emit('input-event', {}, { type: 'mouseDown' })
+      guest.emit('before-mouse-event', {}, { type: 'mouseDown' })
       const response = controller.windowOpenHandler({
         url: 'https://login.test/oauth',
         frameName: 'auth'

@@ -607,6 +607,7 @@ $EditReadbackLimit = 1048576
 $MaxScreenshotPngBytes = 900000
 $MaxScreenshotEdge = 1280
 $MinScreenshotScale = 0.25
+$JpegScreenshotQuality = 80
 $ScreenshotScaleStep = 0.85
 # Windows' own hung-window threshold, so a briefly busy app is not reported as hung; still far under the request timeout.
 $WindowResponseTimeoutMilliseconds = 5000
@@ -1463,20 +1464,45 @@ function Get-OrcaRenderedElementIndex([string]$Line, [int]$Depth) {
     $null
 }
 
-function ConvertTo-OrcaPngBytes([System.Drawing.Image]$Image) {
+function ConvertTo-OrcaImageBytes([System.Drawing.Image]$Image, [string]$Format) {
     $stream = $null
+    $parameters = $null
     try {
         $stream = New-Object System.IO.MemoryStream
-        $Image.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        if ($Format -eq "jpeg") {
+            $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+                Where-Object { $_.FormatID -eq [System.Drawing.Imaging.ImageFormat]::Jpeg.Guid } |
+                Select-Object -First 1
+            $parameters = New-Object System.Drawing.Imaging.EncoderParameters 1
+            $parameters.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), ([long]$JpegScreenshotQuality)
+            $Image.Save($stream, $codec, $parameters)
+        } else {
+            $Image.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        }
         return ,$stream.ToArray()
     } finally {
+        if ($null -ne $parameters) { $parameters.Dispose() }
         if ($null -ne $stream) { $stream.Dispose() }
     }
 }
 
-function New-OrcaScreenshotPayload([byte[]]$Bytes, [int]$Width, [int]$Height, [double]$Scale) {
+# The size and format the caller asked for; a value the RPC layer would refuse is ignored.
+function Get-OrcaScreenshotRequest($Operation) {
+    $request = [pscustomobject]@{ format = "png"; maxScale = $null; maxEdge = $null }
+    if ($Operation.screenshotFormat -eq "jpeg") { $request.format = "jpeg" }
+    foreach ($pair in @(@("screenshotScale", "maxScale"), @("screenshotMaxEdge", "maxEdge"))) {
+        $value = $Operation.($pair[0])
+        if (($value -is [int] -or $value -is [long] -or $value -is [double] -or $value -is [decimal]) -and [double]$value -gt 0 -and -not [double]::IsInfinity([double]$value)) {
+            $request.($pair[1]) = [double]$value
+        }
+    }
+    $request
+}
+
+function New-OrcaScreenshotPayload([byte[]]$Bytes, [string]$Format, [int]$Width, [int]$Height, [double]$Scale) {
     [pscustomobject]@{
         base64 = [Convert]::ToBase64String($Bytes)
+        format = $Format
         width = $Width
         height = $Height
         scale = $Scale
@@ -1500,37 +1526,47 @@ function Resize-OrcaBitmap([System.Drawing.Bitmap]$Source, [int]$Width, [int]$He
     }
 }
 
-function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap) {
+function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap, $Request) {
     $originalWidth = [int][Math]::Max(1, $Bitmap.Width)
     $originalHeight = [int][Math]::Max(1, $Bitmap.Height)
-    $pngBytes = ConvertTo-OrcaPngBytes $Bitmap
-    if ($pngBytes.Length -le $MaxScreenshotPngBytes) {
-        return New-OrcaScreenshotPayload $pngBytes $originalWidth $originalHeight 1.0
+    $longEdge = [double][Math]::Max($originalWidth, $originalHeight)
+    # Captures here are one pixel per window coordinate, so the scale cap is the resize factor itself.
+    $requested = 1.0
+    if ($null -ne $Request.maxScale) { $requested = [Math]::Min($requested, $Request.maxScale) }
+    if ($null -ne $Request.maxEdge) { $requested = [Math]::Min($requested, $Request.maxEdge / $longEdge) }
+
+    # Why: screenshots cross process boundaries as base64 in JSON; after the requested size, cap noisy
+    # large-window payloads to match the macOS provider's memory bounds.
+    $scales = New-Object System.Collections.Generic.List[double]
+    $scales.Add($requested)
+    $scale = [Math]::Min($requested, $MaxScreenshotEdge / $longEdge)
+    while ($scale -ge $MinScreenshotScale) {
+        $scales.Add($scale)
+        $scale *= $ScreenshotScaleStep
     }
 
-    # Why: screenshots cross process boundaries as PNG base64 in JSON; cap noisy
-    # large-window payloads to match the macOS provider's memory bounds.
-    $scale = [Math]::Min(1.0, $MaxScreenshotEdge / [double][Math]::Max($originalWidth, $originalHeight))
-    while ($scale -ge $MinScreenshotScale) {
-        $width = [int][Math]::Max(1, [Math]::Round($originalWidth * $scale))
-        $height = [int][Math]::Max(1, [Math]::Round($originalHeight * $scale))
-        if ($width -eq $originalWidth -and $height -eq $originalHeight) {
-            $scale *= $ScreenshotScaleStep
-            continue
-        }
+    $tried = $null
+    foreach ($candidateScale in $scales) {
+        # Rounds down, so a requested scale or edge is a ceiling; the epsilon keeps an exact product such as 0.5 x 200 whole.
+        $width = [int][Math]::Max(1, [Math]::Floor($originalWidth * $candidateScale + 1e-9))
+        $height = [int][Math]::Max(1, [Math]::Floor($originalHeight * $candidateScale + 1e-9))
+        if ("${width}x${height}" -eq $tried) { continue }
+        $tried = "${width}x${height}"
 
         $resized = $null
         try {
-            $resized = Resize-OrcaBitmap $Bitmap $width $height
-            $candidateBytes = ConvertTo-OrcaPngBytes $resized
+            $image = $Bitmap
+            if ($width -ne $originalWidth -or $height -ne $originalHeight) {
+                $resized = Resize-OrcaBitmap $Bitmap $width $height
+                $image = $resized
+            }
+            $candidateBytes = ConvertTo-OrcaImageBytes $image $Request.format
             if ($candidateBytes.Length -le $MaxScreenshotPngBytes) {
-                return New-OrcaScreenshotPayload $candidateBytes $width $height ($width / [double]$originalWidth)
+                return New-OrcaScreenshotPayload $candidateBytes $Request.format $width $height ($width / [double]$originalWidth)
             }
         } finally {
             if ($null -ne $resized) { $resized.Dispose() }
         }
-
-        $scale *= $ScreenshotScaleStep
     }
 
     [pscustomobject]@{
@@ -1541,8 +1577,8 @@ function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap) {
     }
 }
 
-function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame, [IntPtr]$WindowHandle) {
-    if (-not $IncludeScreenshot -or $null -eq $WindowFrame) { return $null }
+function Get-OrcaScreenshot($ScreenshotRequest, $WindowFrame, [IntPtr]$WindowHandle) {
+    if ($null -eq $ScreenshotRequest -or $null -eq $WindowFrame) { return $null }
     $bitmap = $null
     $graphics = $null
     try {
@@ -1555,7 +1591,7 @@ function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame, [IntPtr]$Win
             $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
             $graphics.CopyFromScreen([int][Math]::Round($WindowFrame.x), [int][Math]::Round($WindowFrame.y), 0, 0, $bitmap.Size)
         }
-        Get-OrcaBoundedScreenshotPayload $bitmap
+        Get-OrcaBoundedScreenshotPayload $bitmap $ScreenshotRequest
     } catch {
         $null
     } finally {
@@ -1564,7 +1600,7 @@ function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame, [IntPtr]$Win
     }
 }
 
-function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = $null, $WindowIndex = $null, [bool]$RestoreWindow = $false, $TreeRoot = $null) {
+function New-OrcaSnapshot([string]$Query, $ScreenshotRequest, $WindowId = $null, $WindowIndex = $null, [bool]$RestoreWindow = $false, $TreeRoot = $null) {
     $process = Find-OrcaProcess $Query
     Assert-OrcaWindowTarget $process $WindowId $WindowIndex
     # Root first: its hang probe must run before ShowWindow, which blocks on a hung window.
@@ -1580,7 +1616,7 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
         }
     }
     $tree = Render-OrcaTree $walkRoot $windowFrame (Test-OrcaBrowserProcess $process)
-    $screenshot = Get-OrcaScreenshot $IncludeScreenshot $windowFrame ([IntPtr]$process.MainWindowHandle)
+    $screenshot = Get-OrcaScreenshot $ScreenshotRequest $windowFrame ([IntPtr]$process.MainWindowHandle)
 
     [pscustomobject]@{
         snapshotId = [guid]::NewGuid().ToString()
@@ -1588,7 +1624,8 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
         windowTitle = $process.MainWindowTitle
         windowId = Get-OrcaWindowId $process
         windowBounds = $windowFrame
-        screenshotPngBase64 = if ($null -ne $screenshot) { $screenshot.base64 } else { $null }
+        screenshotBase64 = if ($null -ne $screenshot) { $screenshot.base64 } else { $null }
+        screenshotFormat = if ($null -ne $screenshot) { $screenshot.format } else { $null }
         screenshotWidth = if ($null -ne $screenshot) { $screenshot.width } else { $null }
         screenshotHeight = if ($null -ne $screenshot) { $screenshot.height } else { $null }
         screenshotScale = if ($null -ne $screenshot) { $screenshot.scale } else { $null }
@@ -2423,7 +2460,7 @@ function Send-OrcaPasteText([IntPtr]$WindowHandle, [string]$Text) {
 }
 
 function Invoke-OrcaOperation($Operation) {
-    $includeScreenshot = -not [bool]$Operation.noScreenshot
+    $screenshotRequest = if ([bool]$Operation.noScreenshot) { $null } else { Get-OrcaScreenshotRequest $Operation }
     if ($Operation.tool -eq "handshake") {
         return [pscustomobject]@{ ok = $true; capabilities = Get-OrcaHandshake }
     }
@@ -2438,7 +2475,7 @@ function Invoke-OrcaOperation($Operation) {
         return Invoke-OrcaLaunchApp $Operation
     }
     if ($Operation.tool -eq "get_app_state") {
-        return [pscustomobject]@{ ok = $true; snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex ([bool]$Operation.restoreWindow) $Operation.root }
+        return [pscustomobject]@{ ok = $true; snapshot = New-OrcaSnapshot $Operation.app $screenshotRequest $Operation.windowId $Operation.windowIndex ([bool]$Operation.restoreWindow) $Operation.root }
     }
 
     $process = Find-OrcaProcess $Operation.app
@@ -2610,14 +2647,14 @@ function Invoke-OrcaOperation($Operation) {
 
     try {
         try {
-            $snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex
+            $snapshot = New-OrcaSnapshot $Operation.app $screenshotRequest $Operation.windowId $Operation.windowIndex
         } catch {
             if ($_.Exception.Message -like "window_not_responding:*") { throw }
             if ($null -eq $Operation.windowId -and $null -eq $Operation.windowIndex) { throw }
             if ($null -eq $action.verification) {
                 $action | Add-Member -NotePropertyName verification -NotePropertyValue ([pscustomobject]@{ state = "unverified"; reason = "window_changed" })
             }
-            $snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $null $null
+            $snapshot = New-OrcaSnapshot $Operation.app $screenshotRequest $null $null
         }
     } catch {
         # Why: the input was already sent, so the pre-action "nothing was sent" wording would invite a duplicate retry.

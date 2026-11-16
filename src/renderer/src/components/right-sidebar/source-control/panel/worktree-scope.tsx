@@ -1,3 +1,4 @@
+import { captureAgentStatusView } from '@/store/slices/agent-status/agent-status-ownership-boundary'
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { create, type StoreApi } from 'zustand'
 import { AppStateViewContext, useAppStateValue } from '@/store/retained-views/app-state-view'
@@ -44,7 +45,7 @@ export function SourceControlScopeProvider({
     if (active) {
       return useAppStore
     }
-    const snapshot = useAppStore.getState()
+    const snapshot = captureAgentStatusView(useAppStore.getState())
     return create<AppState>(() => snapshot)
   }, [active])
   const [visibleOwner, setVisibleOwner] = useState(owner)

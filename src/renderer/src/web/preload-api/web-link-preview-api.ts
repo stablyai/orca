@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { LinkPreviewResult } from '../../../../shared/link-preview'
+import type { LinkPreviewResult } from '../../../../shared/browser/link-preview'
 import { callRuntimeResult } from './web-runtime-calls'
 
 const UNAVAILABLE: LinkPreviewResult = { kind: 'unavailable' }

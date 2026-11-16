@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { isPluginUiLanguage } from '../../../shared/ui-language'
+import { isPluginUiLanguage } from '../../../shared/i18n/ui-language'
 import { useAppStore } from '@/store/index'
 import {
   usePluginLanguagePackStore,

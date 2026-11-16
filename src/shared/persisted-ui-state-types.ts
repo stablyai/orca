@@ -2,7 +2,7 @@ import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from './browser/devtools/browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
-import type { ReleaseChannel } from './release-channel'
+import type { ReleaseChannel } from './updater/release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
 import type { FeatureTipSeenId } from './feature-education/feature-tips'
 import type { ContextualTourId } from './feature-education/contextual-tours/contextual-tours'
@@ -11,7 +11,7 @@ import type { UsagePercentageDisplay } from './agent-usage/display/usage-percent
 import type { StatusBarUsageMode } from './status-bar/status-bar-usage-mode'
 import type { StatusBarUsageFormat } from './status-bar/status-bar-usage-format'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
-import type { CustomPet } from './pet-types'
+import type { CustomPet } from './pets/pet-types'
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,

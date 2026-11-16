@@ -13,7 +13,7 @@ import { DeviceRegistrySightings } from './device-registry-sightings'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
-import type { DelegatedPhone } from '../../../../../shared/delegated-mobile-device-contract'
+import type { DelegatedPhone } from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import {
   planDelegatedMobileDevices,
   type DelegatedMobileDeviceEntry
@@ -36,7 +36,7 @@ import {
   type DeviceKeyLookup,
   type TokenDeviceEntry
 } from './device-entry'
-import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 
 export class DeviceRegistry extends DeviceRegistrySightings {
   addDevice(

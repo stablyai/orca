@@ -1,6 +1,6 @@
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isAgentStatusHooksEnabled } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -158,7 +158,7 @@ export function configureLocalPtyProvider(args: {
         return
       }
       const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(id)
-      clearProviderPtyState(id)
+      clearProviderPtyState(id, { exitProven: true })
       ptyOwnership.delete(id)
       runtime?.onPtyExit(id, code, incarnationId, {
         providerExitObserved: true,

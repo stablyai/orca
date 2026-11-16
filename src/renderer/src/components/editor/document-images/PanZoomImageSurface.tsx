@@ -1,6 +1,6 @@
 import type React from 'react'
 import { cn } from '@/lib/class-names'
-import type { PanZoomSize } from '../../../../../shared/pan-zoom-view'
+import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoom-view'
 import type { PanZoomViewport } from '../viewer-viewport/use-pan-zoom-viewport'
 
 const CURSOR_CLASS = {

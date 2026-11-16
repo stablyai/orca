@@ -23,7 +23,7 @@ import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 
 export type ActivateMarkdownLink = (
   href: string,

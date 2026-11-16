@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
@@ -41,7 +42,7 @@ export type TerminalTabActivityFlags = AgentPaneActivityFlags & {
 }
 
 type FlagsCache = {
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | undefined
   agentStatusEpoch: number | undefined
   flagsByTabId: Map<string, TerminalTabActivityFlags>
 }
@@ -50,7 +51,7 @@ type FlagsCache = {
 let flagsCache: FlagsCache | null = null
 
 export function getTerminalTabActivityFlags(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | undefined,
   agentStatusEpoch: number | undefined
 ): Map<string, TerminalTabActivityFlags> {
   // Invalidate on freshness epoch as well as map identity; stale boundaries advance without replacing hook rows.
@@ -64,7 +65,7 @@ export function getTerminalTabActivityFlags(
 
   const flagsByTabId = new Map<string, TerminalTabActivityFlags>()
   const now = Date.now()
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey ?? {})) {
+  for (const [paneKey, entry] of Array.from(agentStatusByPaneKey?.entries() ?? [])) {
     const identity = parseAgentStatusPaneKey(entry.paneKey || paneKey)
     if (!identity) {
       continue
@@ -156,7 +157,7 @@ const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 type TerminalTabActivityInput = {
   // Carry launchAgent to attribute providerless spinner titles; omitting this optional field compiles but loses the status signal.
   tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey?: AcceptedAgentStatuses
   // Freshness epochs invalidate cached flags even when pane-map identity is unchanged.
   agentStatusEpoch?: number
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
@@ -203,7 +204,7 @@ export function resolveTerminalTabProgramProgress({
 }: {
   tabId: string
   status: TerminalTabActivityStatus
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey?: AcceptedAgentStatuses
   agentStatusEpoch?: number
 }): number | undefined {
   if (status !== 'working' && status !== 'permission') {

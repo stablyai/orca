@@ -25,7 +25,7 @@ import {
 } from '../../terminal/recovery/restored-pane-start'
 import { isPublishedHeld, reopenHeldPanes } from '../../terminal/recovery/held-pane-reopen'
 import { reopenNewerDaemonTerminals } from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
-import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
+import type { NewerDaemonReopenResult } from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import type { WorkspaceLayoutStream } from '../../terminal/surface/workspace-layout-stream'
 import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
