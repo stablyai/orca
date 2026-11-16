@@ -97,6 +97,8 @@ export async function createStructuredWorkerSession(args: {
   host: StructuredAgentSessionHost
   /** The lease the create was admitted at. */
   fence: number
+  /** The provider options the session launches with: the dispatch's own over the seeded saved selection. */
+  options?: Readonly<Record<string, string>>
 }> {
   const sessionId = randomUUID()
   // Register before attach builds child env or missing ORCA_TERMINAL_HANDLE can misroute orchestration to the coordinator.
@@ -149,7 +151,7 @@ export async function createStructuredWorkerSession(args: {
       )
     }
     ensureStructuredWorkerSessionBinding(identity)
-    return { identity, host, fence: created.value.fence }
+    return { identity, host, fence: created.value.fence, options: record.options }
   } catch (error) {
     // Failed post-create starts must retire the otherwise unowned live provider child.
     structuredWorkerIdentities.forget(identity.handle)
