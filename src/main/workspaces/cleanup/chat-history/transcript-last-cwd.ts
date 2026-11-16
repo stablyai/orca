@@ -125,7 +125,9 @@ export async function isChatStillIdleInGoneFolder(
   if (companions === null) {
     return false
   }
+  const versions = new Map<string, string | null>()
   for (const companion of companions) {
+    versions.set(companion, await fileVersion(companion))
     const idle = companion.endsWith('.jsonl')
       ? await isStillIdleInGoneFolder(companion, folderKey, now)
       : await stat(companion).then(
@@ -136,8 +138,20 @@ export async function isChatStillIdleInGoneFolder(
       return false
     }
   }
-  // Checking companions takes a while: the chat itself may have been resumed meanwhile.
-  return (await fileVersion(filePath)) === before
+  // Checking takes a while: the chat or a subagent may have been resumed meanwhile, or a new one added.
+  if ((await fileVersion(filePath)) !== before) {
+    return false
+  }
+  const after = await companionFiles(filePath)
+  if (after === null || after.length !== companions.length) {
+    return false
+  }
+  for (const companion of after) {
+    if (!versions.has(companion) || (await fileVersion(companion)) !== versions.get(companion)) {
+      return false
+    }
+  }
+  return true
 }
 
 async function fileVersion(filePath: string): Promise<string | null> {
