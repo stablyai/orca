@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
-import { getDividerFarOverhangPx, installDividerNativeDragGuard } from '@/lib/divider-hit-area'
+import { DIVIDER_HIT_PX } from '@/lib/divider-hit-area'
 import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-split-drag-ratio'
 
-// Matches the .tab-group-split-resize-handle box in main.css.
-const HANDLE_THICKNESS_PX = 6
-const FAR_OVERHANG_STYLE: React.CSSProperties & Record<`--${string}`, string> = {
-  '--divider-far-overhang': `${getDividerFarOverhangPx(HANDLE_THICKNESS_PX)}px`
+type WideHandleStyle = React.CSSProperties & Record<`--${string}`, string>
+// Why: the line reaches the center of a perpendicular parent gap so split T-junctions connect.
+const LINE_EXTENSION = `${DIVIDER_HIT_PX / 2}px`
+const WIDE_VERTICAL_STYLE: WideHandleStyle = {
+  width: DIVIDER_HIT_PX,
+  '--divider-extension': LINE_EXTENSION
+}
+const WIDE_HORIZONTAL_STYLE: WideHandleStyle = {
+  height: DIVIDER_HIT_PX,
+  '--divider-extension': LINE_EXTENSION
 }
 
 export function ResizeHandle({
   direction,
-  growHitArea = false,
+  wide = false,
   onResizeStart,
   onResizeEnd,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
-  /** Widen the grab area over the second pane (away from the first pane's scrollbar) to the shared size. */
-  growHitArea?: boolean
+  /** Use the shared in-flow grab size instead of the compact 6px gutter (DevTools docks keep 6px). */
+  wide?: boolean
   onResizeStart: () => void
   onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
@@ -33,12 +39,6 @@ export function ResizeHandle({
     },
     []
   )
-
-  useEffect(() => {
-    if (growHitArea) {
-      installDividerNativeDragGuard()
-    }
-  }, [growHitArea])
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -184,8 +184,8 @@ export function ResizeHandle({
     <div
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
-      }${growHitArea ? ' has-far-overhang' : ''}${dragging ? ' is-dragging' : ''}`}
-      style={growHitArea ? FAR_OVERHANG_STYLE : undefined}
+      }${wide ? ' is-wide' : ''}${dragging ? ' is-dragging' : ''}`}
+      style={wide ? (isHorizontal ? WIDE_VERTICAL_STYLE : WIDE_HORIZONTAL_STYLE) : undefined}
       onPointerDown={onPointerDown}
     />
   )

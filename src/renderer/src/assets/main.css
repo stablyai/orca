@@ -1215,25 +1215,6 @@ html.native-shell .app-layout {
   cursor: row-resize;
 }
 
-/* Side-by-side seams widen over the right pane only; the box (and the left pane's scrollbar edge) keeps today's stacking.
-   z-index 31 keeps the far side above in-pane edge UI (diff/outline separators are z-30) in either focus state;
-   the 1px end insets leave sub-pixel overlaps with a perpendicular parent seam to that parent. */
-.tab-group-split-resize-handle.has-far-overhang::before {
-  content: '';
-  position: absolute;
-  z-index: 31;
-  top: 1px;
-  bottom: 1px;
-  left: 100%;
-  width: var(--divider-far-overhang);
-}
-
-/* HTML drag-and-drop near pane edges must reach the pane, not the widened grab area. */
-:root[data-divider-dragging] :is(.tab-group-split-resize-handle, .pane-divider)::before,
-:root[data-divider-dragging] [data-divider-overhang] {
-  pointer-events: none;
-}
-
 .tab-group-split-resize-handle::after {
   content: '';
   position: absolute;
@@ -1257,6 +1238,21 @@ html.native-shell .app-layout {
   top: 50%;
   height: 3px;
   transform: translateY(-50%);
+}
+
+/* Wide (in-flow) seams extend the line into a perpendicular parent gap; the parent owns that hit area. */
+.tab-group-split-resize-handle.is-wide::after {
+  pointer-events: none;
+}
+
+.tab-group-split-resize-handle.is-wide.is-vertical::after {
+  top: calc(-1 * var(--divider-extension, 0px));
+  bottom: calc(-1 * var(--divider-extension, 0px));
+}
+
+.tab-group-split-resize-handle.is-wide.is-horizontal::after {
+  left: calc(-1 * var(--divider-extension, 0px));
+  right: calc(-1 * var(--divider-extension, 0px));
 }
 
 .tab-group-split-resize-handle:hover::after,

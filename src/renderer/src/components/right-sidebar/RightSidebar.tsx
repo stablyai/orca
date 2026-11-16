@@ -34,7 +34,6 @@ import { useRightSidebarTabRouting } from './activity-bar/use-right-sidebar-tab-
 import { useWindowWidth } from './layout/use-window-width'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
-import { DividerFarOverhang } from '@/components/pane-resize/DividerFarOverhang'
 
 function RightSidebarInner(): React.JSX.Element {
   const t = useTranslate()
@@ -237,9 +236,7 @@ function RightSidebarInner(): React.JSX.Element {
         <div
           className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
           onMouseDown={onResizeStart}
-        >
-          <DividerFarOverhang extentPx={4} />
-        </div>
+        />
       </div>
 
       {activityBarPosition === 'side' && (

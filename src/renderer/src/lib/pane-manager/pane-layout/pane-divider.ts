@@ -1,11 +1,11 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from '../pane-manager-types'
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
-import { getDividerFarOverhangPx, installDividerNativeDragGuard } from '../../divider-hit-area'
+import { DIVIDER_HIT_PX } from '../../divider-hit-area'
 
 export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   const thickness = styleOptions.dividerThicknessPx ?? 4
   const HIT_PADDING = 3
-  return thickness + HIT_PADDING * 2
+  return Math.max(DIVIDER_HIT_PX, thickness + HIT_PADDING * 2)
 }
 
 export function createDivider(
@@ -21,8 +21,6 @@ export function createDivider(
   if (isVertical) {
     divider.style.width = `${hitSize}px`
     divider.style.cursor = 'col-resize'
-    setFarOverhang(divider, hitSize)
-    installDividerNativeDragGuard()
   } else {
     divider.style.height = `${hitSize}px`
     divider.style.cursor = 'row-resize'
@@ -32,11 +30,6 @@ export function createDivider(
 
   attachDividerDrag(divider, isVertical, callbacks)
   return divider
-}
-
-// Why: only side-by-side dividers widen, over the right pane; the left pane's scrollbar edge keeps today's box.
-function setFarOverhang(divider: HTMLElement, hitSize: number): void {
-  divider.style.setProperty('--divider-far-overhang', `${getDividerFarOverhangPx(hitSize)}px`)
 }
 
 export function disposeDivider(divider: HTMLElement): void {
@@ -60,7 +53,6 @@ export function applyDividerStyles(root: HTMLElement, styleOptions: PaneStyleOpt
     const isVertical = el.classList.contains('is-vertical')
     if (isVertical) {
       el.style.width = `${hitSize}px`
-      setFarOverhang(el, hitSize)
     } else {
       el.style.height = `${hitSize}px`
     }

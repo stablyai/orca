@@ -13,7 +13,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useAppStore } from '@/store/index'
 import { MARKDOWN_TOC_RESIZE_HANDLE_CLASS_NAME } from './markdown-toc-resize-handle'
-import { DividerFarOverhang } from '@/components/pane-resize/DividerFarOverhang'
 import {
   MARKDOWN_TOC_PANEL_MIN_WIDTH,
   clampMarkdownTocPanelWidth,
@@ -210,9 +209,7 @@ export function MarkdownTableOfContentsPanel({
           'Resize table of contents'
         )}
         onMouseDown={onResizeStart}
-      >
-        <DividerFarOverhang extentPx={4} />
-      </div>
+      />
     </aside>
   )
 }
