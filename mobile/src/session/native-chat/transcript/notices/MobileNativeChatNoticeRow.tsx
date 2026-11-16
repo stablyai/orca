@@ -34,6 +34,7 @@ import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
 import { nativeChatRestartNoteText } from './native-chat-restart-note-copy'
+import { nativeChatReviewNoticeSummary } from './native-chat-review-notice-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
 import { sayMobileAgentSessionFailure } from '../../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../../i18n/mobile-i18n'
@@ -165,32 +166,7 @@ export function MobileNativeChatNoticeRow({
   switch (look.kind) {
     case 'auto-review-denied':
     case 'settled-permission': {
-      const agent = names.agentName ?? look.agent
-      const summary =
-        look.kind === 'auto-review-denied'
-          ? t('chat.notice.autoReviewDenied', "{{agent}}'s automatic review denied: {{action}}", {
-              agent,
-              action: look.denial.summary
-            })
-          : look.decision === 'approved'
-            ? t(
-                'chat.notice.safetyReviewApproved',
-                '{{agent}} approved this action. View details.',
-                {
-                  agent
-                }
-              )
-            : look.decision === 'denied'
-              ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
-                  agent
-                })
-              : t(
-                  'chat.notice.safetyReview',
-                  '{{agent}} reported a safety review warning. View details.',
-                  {
-                    agent
-                  }
-                )
+      const summary = nativeChatReviewNoticeSummary(look, names.agentName ?? look.agent, t)
       return (
         <View>
           <MobileNativeChatNoticeDisclosure

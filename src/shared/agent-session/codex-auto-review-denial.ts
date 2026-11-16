@@ -1,6 +1,8 @@
 // Codex's automatic review of an action, as its `item/autoApprovalReview/completed` notification reports it.
 // Codex's own terminal UI shows a denial in the chat and lets the person approve one retry of it.
 
+import { isRecord } from '../agent-status/child-work/agent-status-child-work-value-guards'
+
 export const CODEX_AUTO_REVIEW_COMPLETED_FRAME = 'notification:item/autoApprovalReview/completed'
 
 export type CodexAutoReviewDenial = {
@@ -12,10 +14,7 @@ export type CodexAutoReviewDenial = {
   event: Record<string, unknown> | null
 }
 
-const record = (value: unknown): Record<string, unknown> | null =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
+const record = (value: unknown): Record<string, unknown> | null => (isRecord(value) ? value : null)
 const text = (value: unknown): string | null =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 

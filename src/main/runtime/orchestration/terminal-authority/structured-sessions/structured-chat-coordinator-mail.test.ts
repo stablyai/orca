@@ -87,9 +87,10 @@ describe("another agent's message in a structured chat", () => {
     await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
 
     // Dev builds run the CLI as `orca-dev`.
-    expect(
-      turnText(chat.turns[0]!).replace('`orca-dev orchestration', '`orca orchestration')
-    ).toBe(`You have 1 orchestration message. Run \`orca orchestration check --run ${runId}\`.`)
+    const pointer = turnText(chat.turns[0]!).replace('`orca-dev ', '`orca ')
+    expect(pointer).toBe(
+      `You have 1 orchestration message. Run \`orca orchestration check --run ${runId}\`.`
+    )
     const snapshot = await readTestHostJournal(host, COORDINATOR)
     const card = snapshot.items.find(
       (item) =>
@@ -104,9 +105,8 @@ describe("another agent's message in a structured chat", () => {
     await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
     expect(turnText(chat.turns[1]!)).toBe('I approve the deploy')
 
-    await expect(
-      call('orchestration.check', {}, { sessionId: COORDINATOR })
-    ).resolves.toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
+    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
+    expect(checked).toMatchObject({ runId, count: 1, messages: [{ type: 'worker_done' }] })
     expect(unread(`run:${runId}`)).toEqual([])
   })
 })

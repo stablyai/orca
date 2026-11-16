@@ -24,7 +24,6 @@ import { structuredAgentSessionRestartResumeSurfaces } from '../recovery/structu
 import * as conversation from '../delivery/structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
-import { approveStructuredAutoReviewDenial } from '../operations/structured-auto-review-approval'
 import { createStructuredAgentSessionWorkspaceSleeper } from '../termination/structured-agent-session-workspace-sleep'
 
 export class StructuredAgentSessionHost {
@@ -253,7 +252,6 @@ export class StructuredAgentSessionHost {
     mutationWiring.createStructuredAgentSessionHostMutationContext({
       deps: this.deps,
       sessions: this.sessions,
-      subscribers: this.clientDelivery.subscribers,
       lifetime: this.lifetime,
       clientDelivery: this.clientDelivery,
       conversationDelivery: this.conversationDelivery,
@@ -282,6 +280,7 @@ export class StructuredAgentSessionHost {
   )
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
+  approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions
@@ -301,12 +300,6 @@ export class StructuredAgentSessionHost {
   forkBoundary: BackgroundTasks['forkBoundary'] = (...a) => this.backgroundTasks.forkBoundary(...a)
   savedContent = (sessionId: string) => this.backgroundTasks.savedContent(sessionId)
   historyItem = (id: string, itemId: string) => this.backgroundTasks.historyItem(id, itemId)
-  approveAutoReviewDenial = (sessionId: string, itemId: string) =>
-    approveStructuredAutoReviewDenial(
-      { deps: this.deps, conversation: (id) => this.lifetime.conversation(id) },
-      sessionId,
-      itemId
-    )
   conversationOutline = (sessionId: string) => this.backgroundTasks.conversationOutline(sessionId)
   namingPrompt = this.reads.namingPrompt
   approvalPrompt = this.reads.approvalPrompt
