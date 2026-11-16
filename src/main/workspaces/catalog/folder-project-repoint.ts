@@ -1,12 +1,12 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../../shared/cross-platform-path'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { repoIdForHostLocalProjectId } from '../../../shared/project-host-setup-projection'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import { repoIdForHostLocalProjectId } from '../../../shared/project/host-setup/project-host-setup-projection'
 import {
   getRepoIdFromWorktreeId,
   getRepoMainWorktreeId,

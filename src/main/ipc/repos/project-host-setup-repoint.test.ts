@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
 
 const { handlers } = vi.hoisted(() => ({
