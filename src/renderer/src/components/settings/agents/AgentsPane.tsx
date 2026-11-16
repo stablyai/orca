@@ -5,6 +5,7 @@ import {
 } from './behavior/claude-subagent-navigation-copy'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { translateLocalExecutionHostLabel } from '../../sidebar/execution-host-label'
+import { AgentHistorySetting } from './behavior/AgentHistorySetting'
 import { AgentAwakeSetting } from './behavior/AgentAwakeSetting'
 import { AgentCacheTimerSection } from './behavior/AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './runtime/AgentRuntimeSetting'
@@ -109,6 +110,13 @@ export function AgentsPane({
           <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
       </SettingsGroup>
+      {!isPairedWebClientWindow() ? (
+        <AgentHistorySetting
+          settings={settings}
+          updateSettings={updateSettings}
+          hostScope={hostScope}
+        />
+      ) : null}
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
     </div>
   )

@@ -25,6 +25,7 @@ import {
   getAgentWorkspaceTrustSearchKeywords,
   getAgentWorkspaceTrustTitle
 } from './behavior/agent-workspace-trust-copy'
+import { getAgentHistorySearchEntry } from './behavior/agent-history-search'
 import { getAgentCacheTimerSearchEntries } from './behavior/agent-cache-timer-search'
 import {
   getCodexTerminalServerIsolationDescription,
@@ -88,6 +89,7 @@ function expandAgentSearchText(value: string): string[] {
 }
 
 type AgentsPaneSearchOptions = {
+  includeAgentHistory?: boolean
   includeAgentAwake?: boolean
   /** Chat UI's per-agent Chat | CLI choice, shown in the Installed list. */
   includeAgentChatChoice?: boolean
@@ -96,6 +98,7 @@ type AgentsPaneSearchOptions = {
   includeCodexTerminalServerIsolation?: boolean
 }
 
+const AGENT_HISTORY_SEARCH_ENTRY_ID = 'agent-history'
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
 const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
 /** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
@@ -245,10 +248,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.agents.search.checks', 'checks')
     ]
   },
+  { ...getAgentHistorySearchEntry(), id: AGENT_HISTORY_SEARCH_ENTRY_ID },
   ...getAgentCacheTimerSearchEntries()
 ])
 
 export function getAgentsPaneSearchEntries({
+  includeAgentHistory = true,
   includeAgentAwake = true,
   includeAgentChatChoice = false,
   includeAgentRuntime = true,
@@ -256,6 +261,9 @@ export function getAgentsPaneSearchEntries({
   includeCodexTerminalServerIsolation = true
 }: AgentsPaneSearchOptions = {}) {
   const hiddenIds = new Set<string>()
+  if (!includeAgentHistory) {
+    hiddenIds.add(AGENT_HISTORY_SEARCH_ENTRY_ID)
+  }
   if (!includeAgentAwake) {
     hiddenIds.add(AGENT_AWAKE_SEARCH_ENTRY_ID)
   }

@@ -43,6 +43,7 @@ export function buildCapabilitySettingsSections(
       ),
       icon: Bot,
       searchEntries: getAgentsPaneSearchEntries({
+        includeAgentHistory: !isWebClient,
         includeAgentAwake: !isWebClient,
         includeAgentChatChoice: !isWebClient,
         includeAgentRuntime: isLocalWindowsHost,

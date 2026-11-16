@@ -4,14 +4,14 @@ import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type {
   WorkspaceAgentHistoryMeasurement,
   WorkspaceAgentHistoryTally
-} from '../../../../../shared/workspace-agent-history/workspace-agent-history-types'
-import { errorMessage } from '../../../../../shared/errors/error-message'
-import { formatBytes } from '../../../../../shared/text/format-bytes'
-import { Button } from '../../ui/button'
+} from '../../../../../../shared/workspace-agent-history/workspace-agent-history-types'
+import { errorMessage } from '../../../../../../shared/errors/error-message'
+import { formatBytes } from '../../../../../../shared/text/format-bytes'
+import { Button } from '../../../ui/button'
 import {
   Dialog,
   DialogContent,
@@ -19,16 +19,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from '../../ui/dialog'
-import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
-import { SettingsGroup, SettingsGroupNestedRows } from '../section-layout/SettingsGroup'
-import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
-import { matchesSettingsSearch } from '../search/settings-search'
-import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+} from '../../../ui/dialog'
+import { SettingsRow, SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
+import { SettingsGroup, SettingsGroupNestedRows } from '../../section-layout/SettingsGroup'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { getAgentHistorySearchEntry } from './agent-history-search'
+import { matchesSettingsSearch } from '../../search/settings-search'
+import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 
-export function WorkspaceAgentHistorySetting({
+export function AgentHistorySetting({
   hostScope,
   settings,
   updateSettings
@@ -39,7 +39,7 @@ export function WorkspaceAgentHistorySetting({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const query = useAppStateValue((state) => state.settingsSearchQuery)
-  const search = getWorkspaceCleanupSettingsSearchParts().agentHistory
+  const search = getAgentHistorySearchEntry()
   // Transcripts are read from this computer's disk, so a remote server's scope has no such setting.
   if (
     hostScope.target.kind === 'environment' ||
