@@ -116,6 +116,8 @@ export class RuntimeClientSettingsController {
         : { artifactSharingEnabled: isArtifactSharingEnabled(settings) }),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       workspaceCleanupPolicy: settings.workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules(),
+      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
+      deleteChatHistoryWithWorkspace: settings.deleteChatHistoryWithWorkspace === true,
       ...(this.sharingServices?.skills() === false
         ? {}
         : { agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings) }),

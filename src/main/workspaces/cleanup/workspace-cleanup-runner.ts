@@ -35,6 +35,7 @@ import {
   readWorkspaceCleanupRunHistory
 } from './workspace-cleanup-run-history'
 import { listEnabledWorkspaceCleanupRules } from './workspace-cleanup-enabled-rules'
+import { deleteChatHistoryOfDeletedWorkspaces } from './chat-history/deleted-workspace-chat-history'
 
 // Let the window restore its terminals and session drafts before the first evidence read.
 const STARTUP_DELAY_MS = 2 * 60 * 1000
@@ -64,6 +65,7 @@ export class WorkspaceCleanupRunner {
   private timer: ReturnType<typeof setTimeout> | null = null
   private nextRunAt: number | null = null
   private enabledRules = new Set<string>()
+  private chatHistoryOn = false
   private unsubscribe: (() => void) | null = null
   private readonly abort = new AbortController()
 
@@ -76,11 +78,14 @@ export class WorkspaceCleanupRunner {
       return
     }
     this.enabledRules = listEnabledWorkspaceCleanupRules(this.deps.store)
+    this.chatHistoryOn = this.readChatHistoryOn()
     this.unsubscribe = this.deps.runtime.onClientEvent(
       (event) => {
         if (
           event.type === 'reposChanged' ||
-          (event.type === 'settingsChanged' && event.keys.includes('workspaceCleanupPolicy'))
+          (event.type === 'settingsChanged' &&
+            (event.keys.includes('workspaceCleanupPolicy') ||
+              event.keys.includes('deleteChatHistoryWithWorkspace')))
         ) {
           this.noteRulesChanged()
         }
@@ -143,8 +148,16 @@ export class WorkspaceCleanupRunner {
     return {
       runs: await readWorkspaceCleanupRunHistory(this.deps.historyDirectory),
       running: this.isRunning(),
-      nextRunAt: this.enabledRules.size > 0 ? this.nextRunAt : null
+      nextRunAt: this.hasWork() ? this.nextRunAt : null
     }
+  }
+
+  private readChatHistoryOn(): boolean {
+    return this.deps.store.getSettings().deleteChatHistoryWithWorkspace === true
+  }
+
+  private hasWork(): boolean {
+    return this.enabledRules.size > 0 || this.chatHistoryOn
   }
 
   private globalRules(): WorkspaceCleanupRules {
@@ -167,8 +180,8 @@ export class WorkspaceCleanupRunner {
     try {
       // A run already going may have read the rules before the change that scheduled this one.
       await this.current?.catch(() => undefined)
-      // Off by default: with no rule on, a scheduled run costs nothing and leaves no record.
-      if (this.unsubscribe && this.enabledRules.size > 0) {
+      // Off by default: with nothing on, a scheduled run costs nothing and leaves no record.
+      if (this.unsubscribe && this.hasWork()) {
         await (this.current ?? this.track(this.execute(trigger)))
       }
     } catch (error) {
@@ -183,8 +196,13 @@ export class WorkspaceCleanupRunner {
 
   private noteRulesChanged(): void {
     const previous = this.enabledRules
+    const chatHistoryWasOn = this.chatHistoryOn
     this.enabledRules = listEnabledWorkspaceCleanupRules(this.deps.store)
-    if ([...this.enabledRules].some((rule) => !previous.has(rule))) {
+    this.chatHistoryOn = this.readChatHistoryOn()
+    if (
+      [...this.enabledRules].some((rule) => !previous.has(rule)) ||
+      (this.chatHistoryOn && !chatHistoryWasOn)
+    ) {
       this.schedule(SETTINGS_DEBOUNCE_MS, 'settings')
     }
   }
@@ -244,13 +262,14 @@ export class WorkspaceCleanupRunner {
   private async execute(trigger: WorkspaceCleanupRunTrigger): Promise<WorkspaceCleanupRun> {
     const startedAt = Date.now()
     const rows: WorkspaceCleanupRunRow[] = []
+    let chatHistory: WorkspaceCleanupRun['chatHistory']
     let error: string | undefined
     try {
       const removals: (DecidedWorkspace & { reason: WorkspaceCleanupRuleReason })[] = []
-      for (const { workspace, ref, evaluation } of await this.evaluate(
-        this.globalRules(),
-        startedAt
-      )) {
+      // With no rule on every workspace is kept unwatched, so skip the Git reads behind that verdict.
+      const decided =
+        this.enabledRules.size > 0 ? await this.evaluate(this.globalRules(), startedAt) : []
+      for (const { workspace, ref, evaluation } of decided) {
         if (evaluation.action === 'delete') {
           removals.push({ workspace, ref, evaluation, reason: evaluation.reason })
         } else {
@@ -273,6 +292,10 @@ export class WorkspaceCleanupRunner {
         })
         rows.push({ ...ref, reason, ...outcome })
       }
+      // After removals, so this run's deleted workspaces are gone from disk when the sweep looks.
+      if (this.readChatHistoryOn() && !this.abort.signal.aborted) {
+        chatHistory = await deleteChatHistoryOfDeletedWorkspaces(this.deps.store, this.abort.signal)
+      }
     } catch (cause) {
       error = errorMessage(cause)
     }
@@ -282,6 +305,7 @@ export class WorkspaceCleanupRunner {
       startedAt,
       finishedAt: Date.now(),
       rows,
+      ...(chatHistory ? { chatHistory } : {}),
       ...(error ? { error } : {})
     })
     await this.record(run)

@@ -22575,7 +22575,13 @@
           "waiting": "Inactive {{elapsed}} of {{after}} days",
           "title": "Activity",
           "notListed_one": "1 more kept workspace is not listed.",
-          "notListed_other": "{{count}} more kept workspaces are not listed."
+          "notListed_other": "{{count}} more kept workspaces are not listed.",
+          "chatsDeletedCount_one": "1 chat deleted",
+          "chatsDeletedCount_other": "{{count}} chats deleted",
+          "chatsDeleted_one": "Deleted 1 chat from a deleted workspace",
+          "chatsDeleted_other": "Deleted {{count}} chats from deleted workspaces",
+          "chatsFailed_one": "1 chat couldn't be deleted",
+          "chatsFailed_other": "{{count}} chats couldn't be deleted"
         },
         "runFailed": "Couldn't run cleanup.",
         "updateFailed": "Couldn't save the cleanup rules.",
@@ -22641,7 +22647,10 @@
           "activityDescription": "What each cleanup run removed and kept.",
           "history": "history",
           "runs": "runs",
-          "envFile": ".env"
+          "envFile": ".env",
+          "chat": "chat",
+          "transcripts": "transcripts",
+          "diskSpace": "disk space"
         },
         "cleanUpNow": "Clean up now",
         "status": {
@@ -22659,7 +22668,9 @@
           "review": "Review workspaces",
           "turnOnHint": "Turn on a rule to use this.",
           "justNow": "just now",
-          "inUnderAMinute": "in under a minute"
+          "inUnderAMinute": "in under a minute",
+          "lastRunChats_one": "Last run {{when}} deleted 1 chat from a deleted workspace.",
+          "lastRunChats_other": "Last run {{when}} deleted {{count}} chats from deleted workspaces."
         },
         "change": {
           "title": "Change {{rule}}?",
@@ -22690,6 +22701,15 @@
           "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
           "named": "Pin and keep {{name}}",
           "label": "Pin and keep"
+        },
+        "chatHistory": {
+          "title": "Chat history",
+          "updateFailed": "Couldn't update the setting on {{host}}.",
+          "unsupported": "Update Orca on {{host}} to use this setting there.",
+          "confirmTitle": "Delete chat history from deleted workspaces?",
+          "confirmDescription": "Orca will delete agent chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "deleteWithWorkspace": "Delete chat history with the workspace",
+          "deleteWithWorkspaceDescription": "Agent chats from deleted workspaces are removed within the hour to free disk space. They can't be recovered."
         }
       },
       "repository": {

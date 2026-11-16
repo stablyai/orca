@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises'
+import { lstat, rm } from 'node:fs/promises'
 import { getAiVaultWslHomeDirs } from '../discovery/ai-vault-scan-roots'
 import { invalidateAiVaultSessionListCache } from '../listing/cached-session-list'
 import { deleteAiVaultSessionFile, type AiVaultSessionPathRemover } from './session-delete'
@@ -73,4 +73,43 @@ export async function deleteHostAiVaultSession(
   }
 
   return result
+}
+
+/** Cleanup deletes for good: the Trash would keep the space it is meant to free. Caches clear once. */
+export async function deleteHostAiVaultSessionsPermanently(
+  targets: readonly { agent: AiVaultAgent; filePath: string }[]
+): Promise<{ deleted: number; failed: number; freedBytes: number }> {
+  const wslHomeDirs = await getAiVaultWslHomeDirs()
+  const deletedPaths: string[] = []
+  let failed = 0
+  let freedBytes = 0
+  for (const target of targets) {
+    const sizeBytes = await lstat(target.filePath).then(
+      (stats) => stats.size,
+      () => 0
+    )
+    const result = await deleteAiVaultSessionFile(
+      { ...target, executionHostId: LOCAL_EXECUTION_HOST_ID, wslHomeDirs },
+      removeAiVaultSessionPathPermanently
+    )
+    if (result.outcome === 'deleted') {
+      deletedPaths.push(target.filePath)
+      freedBytes += sizeBytes
+    } else {
+      failed += 1
+    }
+  }
+  if (deletedPaths.length > 0) {
+    remoteDeleteDeps.invalidateMultiHostListCache?.()
+    invalidateAiVaultSessionListCache()
+    for (const path of deletedPaths) {
+      invalidateSessionParseCacheEntry(path)
+    }
+    await (remoteDeleteDeps.invalidateBackgroundCache ?? invalidateAiVaultBackgroundCache)(
+      deletedPaths
+    ).catch((error) => {
+      console.warn('[ai-vault] background cache invalidation failed:', error)
+    })
+  }
+  return { deleted: deletedPaths.length, failed, freedBytes }
 }
