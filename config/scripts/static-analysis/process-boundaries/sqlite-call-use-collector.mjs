@@ -1,12 +1,27 @@
 import ts from 'typescript-api'
 import { propertyName, unwrap } from '../module-requests/static-module-specifiers.mjs'
 
-const METHODS = new Set(['prepare', 'run', 'get', 'all', 'iterate', 'exec'])
+// pragma() and transaction() run SQL too: a durability pragma or BEGIN/COMMIT blocks like any statement.
+const METHODS = new Set([
+  'prepare',
+  'run',
+  'get',
+  'all',
+  'iterate',
+  'exec',
+  'pragma',
+  'transaction'
+])
 const SQLITE_MODULE =
   /^(?:node:sqlite|better-sqlite3)$|(?:^|\/)(?:sync-database|sqlite-statement)(?:\.[cm]?[jt]s)?$/
 
-// Local syntax only: imported SQLite types, typed receivers, constructors and prepare() results.
 export function countSqliteCalls(file, contents) {
+  return collectSqliteCallSites(file, contents).length
+}
+
+// Local syntax only: imported SQLite types, typed receivers, constructors and prepare() results.
+/** Start offsets of each synchronous SQLite call. */
+export function collectSqliteCallSites(file, contents) {
   const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
   if (source.parseDiagnostics.length) {
     throw new Error(`Cannot parse ${file}; SQLite ratchet must not skip it.`)
@@ -149,18 +164,20 @@ export function countSqliteCalls(file, contents) {
       }
     }
   }
-  return calls.filter((node) => {
-    const target = unwrap(node.expression)
-    if (ts.isNewExpression(node)) {
-      return constructor(target)
-    }
-    if (callableConstructors.has(key(target))) {
-      return true
-    }
-    return (
-      (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) &&
-      METHODS.has(propertyName(target)) &&
-      instance(target.expression)
-    )
-  }).length
+  return calls
+    .filter((node) => {
+      const target = unwrap(node.expression)
+      if (ts.isNewExpression(node)) {
+        return constructor(target)
+      }
+      if (callableConstructors.has(key(target))) {
+        return true
+      }
+      return (
+        (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) &&
+        METHODS.has(propertyName(target)) &&
+        instance(target.expression)
+      )
+    })
+    .map((node) => node.getStart(source))
 }

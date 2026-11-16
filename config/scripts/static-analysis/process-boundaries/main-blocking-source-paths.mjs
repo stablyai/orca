@@ -5,6 +5,7 @@ import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 const entries = JSON.parse(
   readFileSync(new URL('../../../main-blocking-worker-entries.json', import.meta.url), 'utf8')
 )
+export const MAIN_BLOCKING_WORKER_ENTRIES = entries
 for (const [file, reason] of Object.entries(entries)) {
   if (
     !file.startsWith('src/main/') ||

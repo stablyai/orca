@@ -100,9 +100,10 @@ export function createGatedCallCollector(families, ratchetName) {
       throw new Error(`Cannot parse ${file}; the ${ratchetName} ratchet must not skip it.`)
     }
     if (!analyze) {
-      return { count: 0, symbols: [] }
+      return { count: 0, symbols: [], sites: [] }
     }
     const used = new Set()
+    const sites = []
     let count = 0
     const namespaces = new Map(
       families.flatMap((family) =>
@@ -154,8 +155,9 @@ export function createGatedCallCollector(families, ratchetName) {
       }
       return null
     }
-    function recordUse(name) {
+    function recordUse(name, node) {
       used.add(name)
+      sites.push({ name, position: node.getStart(source) })
       count += 1
     }
     function visitImport(node) {
@@ -193,8 +195,7 @@ export function createGatedCallCollector(families, ratchetName) {
               .filter((element) => !element.isTypeOnly)
               .map((element) => (element.propertyName ?? element.name).text)
       for (const name of names.filter((name) => symbols.has(name))) {
-        used.add(name)
-        count += 1
+        recordUse(name, node)
       }
     }
     function visit(node) {
@@ -279,16 +280,16 @@ export function createGatedCallCollector(families, ratchetName) {
     for (const node of members) {
       const name = propertyName(node)
       if (!aliasSetup.has(node) && moduleSymbols(node.expression)?.has(name)) {
-        recordUse(name)
+        recordUse(name, node)
       }
     }
     for (const node of identifiers) {
       const name = aliasSetup.has(node) ? null : functions.get(node.text)
       if (name) {
-        recordUse(name)
+        recordUse(name, node)
       }
     }
-    return { count, symbols: [...used].sort() }
+    return { count, symbols: [...used].sort(), sites }
   }
 
   function adviceFor(symbols) {

@@ -185,7 +185,10 @@ export function runCountRatchet(ratchet, root, arg) {
   const keep = (counts) => (inScope ? new Map([...counts].filter(([key]) => inScope(key))) : counts)
   const { grown, shrunk } = diffCounts(keep(current), keep(baseline))
   for (const { file, now, allowed } of grown) {
-    console.error(`${file}: ${now} ${ratchet.unit}, baseline allows ${allowed}.`)
+    const detail = ratchet.detail?.(file)
+    console.error(
+      `${file}: ${now} ${ratchet.unit}, baseline allows ${allowed}.${detail ? ` ${detail}` : ''}`
+    )
   }
   if (grown.length > 0) {
     console.error(ratchet.fix.join('\n'))

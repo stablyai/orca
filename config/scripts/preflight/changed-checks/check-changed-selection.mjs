@@ -35,6 +35,13 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
+  'check-main-blocking-helper-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'src/preload/',
+    'config/main-blocking-worker-entries.json',
+    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
+  ],
   'check-main-sync-fs-ratchet.mjs': [
     'src/main/',
     'src/shared/',
@@ -306,10 +313,23 @@ export function selectTypecheckProjects(files) {
 const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/process-boundaries/gated-call-use-collector.mjs': [
     'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs',
     'check-daemon-blocking-call-ratchet.mjs',
     'check-main-sync-fs-ratchet.mjs',
     'check-main-sync-spawn-ratchet.mjs',
     'check-recurring-timer-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/main-blocking-import-graph.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs',
+    'check-main-sync-fs-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/main-blocking-helper-propagation.mjs': [
+    'check-main-blocking-helper-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/sqlite-call-use-collector.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs'
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
     'check-react-compiler-compat-ratchet.mjs'
