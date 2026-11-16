@@ -24,7 +24,8 @@ A plugin adds highlighting for a language through `contributes.syntaxes` in `orc
   surrounding pairs. Every marker is printable text on one line. Auto-closing and surrounding
   pairs are at most 8 characters, because the editor types them as you type. Comment markers and
   brackets can be up to 128. `validate:plugin` refuses an entry that breaks these limits; Orca
-  skips just that entry and loads the rest.
+  skips just that entry and loads the rest. Without `autoClosingPairs`, Orca auto-closes only the
+  brackets that fit in 8 characters.
 - A plugin can contribute up to 16 syntaxes. Scope names must be unique within the plugin.
 
 ## How Orca uses it

@@ -4,10 +4,10 @@
  */
 import { posix } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
+import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
-import { wslUncPathToLinux } from '../../../shared/wsl-paths'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
+import { wslUncPathToLinux } from '../../../shared/file-access/wsl-paths'
 import { parseWindowsDriveMountInfo, type WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
 import { resolveWslExecutablePath } from '../execution/wsl-executable-path'

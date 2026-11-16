@@ -1,12 +1,8 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import {
-  formatKeybinding,
-  formatKeybindingList,
-  getEffectiveKeybindingsForAction,
-  isDoubleTapBinding,
-  type KeybindingActionId,
-  type KeybindingOverrides
-} from '../../../shared/keybindings'
+import { formatKeybinding, formatKeybindingList } from '../../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../../shared/keybindings/effective'
+import { isDoubleTapBinding } from '../../../shared/keybindings/normalization'
+import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/keybindings/types'
 import { getShortcutPlatform } from '../lib/keyboard/shortcut-platform'
 import { localizeUnassignedDisplay } from '@/i18n/unassigned-label'
 

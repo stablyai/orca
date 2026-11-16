@@ -1,11 +1,11 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { useAppStore } from '../../../store/index'
 import {
   nativeChatCardDismissKey,
   nativeChatPromptDismissalMatches,
   nativeChatPromptOccurrenceKey,
   nativeChatPromptWaitStartedAt
-} from '../../../../../shared/native-chat/input/native-chat-prompt-dismiss-key'
+} from '../../../../../shared/native-chat/input/approvals/native-chat-prompt-dismiss-key'
 import {
   nativeChatPromptDismissals as dismissals,
   type NativeChatPromptDismissal
@@ -43,9 +43,7 @@ export function useNativeChatPromptCardPresentation({
   transcriptSettled?: boolean
   dismissAsync?: () => void
 }): NativeChatPromptCardPresentation {
-  const startedAt = useAppStore((s) =>
-    nativeChatPromptWaitStartedAt(card, s.agentStatusByPaneKey[paneKey])
-  )
+  const startedAt = nativeChatPromptWaitStartedAt(card, useAgentStatus(paneKey))
   const content = nativeChatCardDismissKey(card)
   const promptKey = nativeChatPromptOccurrenceKey(card, content, startedAt)
   const scopeKey = JSON.stringify([paneKey, targetPtyId])

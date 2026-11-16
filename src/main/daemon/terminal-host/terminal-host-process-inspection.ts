@@ -4,11 +4,11 @@ import { getInspectableTerminalHostSession } from './terminal-host-session-acces
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
-import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
-import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-table-snapshot-reader'
-import { resolveRemoteForegroundEvidence } from '../../providers/agent-foreground-process'
-import { buildPaneProcessFingerprint } from '../../providers/posix-pane-foreground-fingerprint'
+import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
+import { getCheapProcessTableSnapshot } from '../../../shared/process-observation/tables/cheap-process-table-snapshot-reader'
+import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
+import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
+import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
 import { resolveSpawnFileForegroundFromRows } from '../pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from '../pty-subprocess/spawn-file-child-processes'
@@ -18,7 +18,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { PtyProcessInspectionOptions } from '../../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation

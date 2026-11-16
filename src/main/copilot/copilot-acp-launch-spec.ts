@@ -2,12 +2,12 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { COPILOT_ACP_DIALECT } from '../acp/acp-dialects/copilot-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
-import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
   sessionFileResumeTargetMatches,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 // Chats and terminals share Copilot's session store; `--resume` also takes ID prefixes.
 const COPILOT_SESSION_HISTORY: StructuredAgentSessionHistory = {

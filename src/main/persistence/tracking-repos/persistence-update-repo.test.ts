@@ -19,6 +19,12 @@ import {
 } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
+import { registerWorktreeCatalogRoutes } from '../../runtime/workspaces/catalog/worktree-catalog-live-route'
+import { resolveWorktreeScanRuntime } from '../../runtime/workspaces/catalog/runtime-worktree-scan-cache'
+import {
+  isLiveWorktreeCatalogRoute,
+  setWorktreeCatalogRouteResolver
+} from '../../workspaces/catalog/repo-worktree-catalog-route'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -94,6 +100,46 @@ describe('Store', () => {
       { path: '/local/repo', displayName: 'test' },
       { path: '/remote/repo', displayName: 'Remote renamed' }
     ])
+  })
+
+  it("revokes a repo's local Git catalog route as soon as its registration is removed", async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/local/repo' }))
+    registerWorktreeCatalogRoutes(store as never)
+    try {
+      const repo = store.getRepos()[0]
+      const route = {
+        repoPath: '/local/repo',
+        runtimeKey: resolveWorktreeScanRuntime(store as never, repo).runtimeKey
+      }
+      expect(isLiveWorktreeCatalogRoute('r1', 'local', route)).toBe(true)
+
+      store.removeProjectForHost({ id: 'r1' })
+
+      expect(isLiveWorktreeCatalogRoute('r1', 'local', route)).toBe(false)
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+    }
+  })
+
+  it('admits a folder converted to Git as a local Git route as soon as the write lands', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/local/folder', kind: 'folder' }))
+    registerWorktreeCatalogRoutes(store as never)
+    try {
+      const routeFor = () => ({
+        repoPath: '/local/folder',
+        runtimeKey: resolveWorktreeScanRuntime(store as never, store.getRepos()[0]).runtimeKey
+      })
+      expect(isLiveWorktreeCatalogRoute('r1', 'local', routeFor())).toBe(false)
+
+      store.updateRepo({ id: 'r1' }, { kind: 'git', folderUpgradeGitRootPath: '/local/folder' })
+
+      expect(store.getRepos()[0]?.kind).toBe('git')
+      expect(isLiveWorktreeCatalogRoute('r1', 'local', routeFor())).toBe(true)
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+    }
   })
 
   it('repo mutations preserve independent project host setup records', async () => {

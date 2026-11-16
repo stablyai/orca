@@ -55,7 +55,7 @@ export function NativeChatPullRequestEventLine({
     <div
       className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-sm`}
     >
-      <div className="flex min-w-0 items-center gap-1.5 px-1 text-xs text-chat-foreground-faint">
+      <div className="flex min-w-0 items-center gap-1.5 px-1 text-sm text-chat-foreground-faint">
         <Icon
           aria-hidden
           className={cn('size-3.5 shrink-0', failing ? 'text-destructive' : 'text-status-success')}

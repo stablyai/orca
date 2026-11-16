@@ -6,7 +6,7 @@ const {
   ORCAD_TEMPLATE_TARGETS_DIR,
   orcadRipgrepArtifact,
   orcadTemplatePackagedRipgrep
-} = require('../../../../src/shared/orcad-artifacts.ts')
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts')
 const { verifyPackagedOrcadTemplate } = require('./verify-packaged-orcad-template.cjs')
 
 function sha256(path) {

@@ -3,13 +3,15 @@ import { performance } from 'node:perf_hooks'
 import { platform, release } from 'node:os'
 import {
   HEADER_LENGTH,
-  MAX_MESSAGE_SIZE,
+  MAX_MESSAGE_SIZE
+} from '../../../../src/shared/remote-runtime/relay/relay-frame-decoder'
+import {
   MessageType,
   encodeFrame,
   encodePreparedJsonRpcFrame,
   prepareJsonRpcPayload,
   type JsonRpcNotification
-} from '../../../../src/wsl-guest/protocol'
+} from '../../../../src/wsl-guest/transport/wire/protocol'
 
 type BenchmarkCase = {
   name: string

@@ -2,12 +2,12 @@
  * Which relay-era leases the bridge may serve.
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  */
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { LegacyRelayBridgedPane } from '../../../../shared/legacy-relay-bridge-contract'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { LegacyRelayClient, LegacyRelayPty } from './legacy-relay-client'
-import { isEpochScopedRelayPtyId } from '../../../../shared/ssh-pending-pty-kill'
+import { isEpochScopedRelayPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
 import type { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 
 /** A relay's listing row: the endpoint that answered, and the connection the answer came on. */

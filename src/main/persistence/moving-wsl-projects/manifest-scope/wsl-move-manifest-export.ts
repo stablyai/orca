@@ -18,12 +18,12 @@ import {
   ORCAD_MIGRATION_MANIFEST_VERSION,
   parseOrcadMigrationManifest
 } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
-import { withoutOrcadRetainedMarker } from '../../../../shared/orcad-retained-marker'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { withoutOrcadRetainedMarker } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-retained-marker'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId, getRepoMainWorktreeId } from '../../../../shared/worktree/id'
-import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
+import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import { hasDormantState } from '../../migrating-orcad-catalog/source/dormancy/orcad-migration-dormant-state'
 import {
   rewriteOrcadMigrationPayloadPaths,
@@ -31,7 +31,7 @@ import {
 } from '../../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import type { Store } from '../../loading-store/store'
 import { compareKeys } from '../../migrating-orcad-catalog/source/catalog/orcad-source-key-order'
-import { wslUncPathToLinux } from '../../../../shared/wsl-paths'
+import { wslUncPathToLinux } from '../../../../shared/file-access/wsl-paths'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import { withoutWindowsShellChoices } from '../desktop-state/wsl-move-windows-shell-choices'
 import { withoutDesktopFocus, withoutPtyBindings } from '../terminal-state/wsl-move-session-rewrite'

@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../execution-host'
 import type { ExecutionHostRegistryEntry } from './execution-host-registry-entry'
-import type { SshConnectionState } from '../ssh-types'
+import type { SshConnectionState } from '../remote-runtime/ssh/ssh-types'
 
 /** The deployment fields host pairing reads; a WSL distro has no SSH host row to merge with. */
 export type ManagedOrcadDeploymentSummary = { kind?: 'ssh'; sshTargetId: string } | { kind: 'wsl' }

@@ -41,28 +41,32 @@ const HOT_MAPS = new Set([
 ])
 const OWNER_ROOTS = [
   {
-    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    rel: 'store/terminals/parking/terminal-parking-input-owner.ts',
     name: 'acceptTerminalParkingInputs',
     inputs: []
   },
   {
-    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    rel: 'store/terminals/parking/terminal-parking-input-owner.ts',
     name: 'publishAcceptedTerminalParkingInputs',
     inputs: []
   },
   {
-    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    rel: 'store/terminals/parking/terminal-parking-input-owner.ts',
     name: 'invalidateTerminalParkingPtyInputs',
     inputs: []
   },
   {
-    rel: 'store/terminals/terminal-tab-owner-index.ts',
+    rel: 'store/terminals/ownership/terminal-tab-owner-index.ts',
     name: 'update',
     inputs: ['tabsByWorktree']
   },
-  { rel: 'store/terminals/sleeping-agent-record-index.ts', name: 'update', inputs: ['records'] },
   {
-    rel: 'store/terminals/sleeping-agent-record-index.ts',
+    rel: 'store/terminals/sleep/sleeping-agent-record-index.ts',
+    name: 'update',
+    inputs: ['records']
+  },
+  {
+    rel: 'store/terminals/sleep/sleeping-agent-record-index.ts',
     name: 'acceptTransition',
     inputs: ['previous', 'next']
   },
@@ -73,14 +77,14 @@ const OWNER_ROOTS = [
   }
 ]
 const KEY_DIFFS = new Set([
-  `${RENDERER}store/terminals/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
-  `${RENDERER}store/terminals/terminal-tab-owner-index.ts#diffUnknownTabOwnerKeys`,
-  `${RENDERER}store/terminals/sleeping-agent-record-index.ts#diffUnknownSleepingRecordKeys`,
+  `${RENDERER}store/terminals/parking/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
+  `${RENDERER}store/terminals/ownership/terminal-tab-owner-index.ts#diffUnknownTabOwnerKeys`,
+  `${RENDERER}store/terminals/sleep/sleeping-agent-record-index.ts#diffUnknownSleepingRecordKeys`,
   `${RENDERER}lib/workspace/tabs/worktree-tab-bucket-projection.ts#diffUnknownProjectionKeys`
 ])
 const COLD_RESYNCS = new Set([
-  `${RENDERER}store/terminals/terminal-parking-input-owner.ts#resyncTerminalParkingWorkspaceIds`,
-  `${RENDERER}store/terminals/sleeping-agent-record-index.ts#resyncSleepingAgentRecordKeys`
+  `${RENDERER}store/terminals/parking/terminal-parking-input-owner.ts#resyncTerminalParkingWorkspaceIds`,
+  `${RENDERER}store/terminals/sleep/sleeping-agent-record-index.ts#resyncSleepingAgentRecordKeys`
 ])
 
 function isColdResyncCall(node, source) {
@@ -139,15 +143,15 @@ const ADDRESSED_FIELDS = new Set([
   'sleepingAgentSessionsByPaneKey'
 ])
 const ORDINARY_WRITERS = [
-  'store/terminals/terminal-layout-state.ts',
-  'store/terminals/terminal-pane-hibernation.ts',
-  'store/terminals/terminal-pty-bindings.ts',
-  'store/terminals/terminal-pty-release.ts',
-  'store/terminals/terminal-orphan-cleanup.ts',
-  'store/terminals/terminal-startup-queues.ts',
-  'store/terminals/terminal-tab-presentation.ts',
-  'store/terminals/terminal-shutdown-state.ts',
-  'store/terminals/window-tab-start-in-main.ts',
+  'store/terminals/layout/terminal-layout-state.ts',
+  'store/terminals/sleep/terminal-pane-hibernation.ts',
+  'store/terminals/pty/terminal-pty-bindings.ts',
+  'store/terminals/pty/terminal-pty-release.ts',
+  'store/terminals/retirement/terminal-orphan-cleanup.ts',
+  'store/terminals/tabs/creation/terminal-startup-queues.ts',
+  'store/terminals/tabs/presentation/terminal-tab-presentation.ts',
+  'store/terminals/sleep/terminal-shutdown-state.ts',
+  'store/terminals/tabs/creation/window-tab-start-in-main.ts',
   'store/slices/agent-status/agent-status-live-reducer.ts',
   'store/slices/agent-status/agent-status-launch-actions.ts',
   'store/slices/agent-status/agent-status-provider-session-actions.ts',

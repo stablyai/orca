@@ -1,11 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {

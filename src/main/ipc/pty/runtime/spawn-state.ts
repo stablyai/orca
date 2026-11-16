@@ -5,13 +5,10 @@ import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/run
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
-import type {
-  IPtyProvider,
-  PtySpawnOptions,
-  PtySpawnResult
-} from '../../../providers/pty-provider-contract'
+import type { IPtyProvider, PtySpawnOptions } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
@@ -32,7 +29,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
-import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {

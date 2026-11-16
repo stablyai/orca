@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as BackgroundDistroGateModule from '../../../wsl/discovery/wsl-background-distro-gate'
-import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
+import { wslDistroHoldMessage } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { prepareRuntimePtySpawn } from './spawn-preflight'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import { makeRuntimePtySpawnTestDeps } from './spawn-preflight-test-deps-fixture'

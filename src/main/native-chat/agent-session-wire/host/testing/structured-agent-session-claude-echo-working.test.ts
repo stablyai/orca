@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { ClaudeStructuredSessionAdapter } from '../../../../claude/structured/claude-structured-session-adapter'
 import {
@@ -13,7 +13,10 @@ import {
   PROVIDER_SESSION_ID
 } from '../../../../claude/structured/claude-structured-session-test-support'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../../../runtime/agent-session/installation/structured-claude-runtime-adapter'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -23,13 +26,10 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -73,7 +73,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestAgentSessionDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
@@ -95,10 +95,6 @@ afterEach(async () => {
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
-
-function settled(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 20))
-}
 
 async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   const submissions = new Map<string, AgentJournalSubmission>()
@@ -126,6 +122,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
       )
     }
   })
+  await vi.waitFor(() => expect(working).toEqual([false]))
   working.length = 0
   const body = hostTestMessage('hi')
   await host.send(CALLER, {
@@ -141,7 +138,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
     },
     body
   })
-  await settled()
+  await vi.waitFor(() => expect(claude.current.connections[0]?.sent).toHaveLength(1))
   const connection = claude.current.connections[0]!
   if (backlog) {
     // Queue the previous result immediately ahead of the new echo in the same read.
@@ -158,11 +155,11 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
     })
   }
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)!, uuid: 'echo-uuid' })
-  await settled()
-
-  expect([...submissions.values()].map((submission) => submission.dispatchState)).toEqual([
-    'accepted'
-  ])
+  await vi.waitFor(() =>
+    expect([...submissions.values()].map((submission) => submission.dispatchState)).toEqual([
+      'accepted'
+    ])
+  )
   expect([...turns.values()]).toEqual(['running'])
   expect(working).not.toContain(false)
 }

@@ -3,8 +3,8 @@ import { isAbsolute } from 'node:path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { isWslUncPath } from '../../../shared/wsl-paths'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   areTaskSourceContextsEqual,
   normalizeStoredTaskSourceContext
@@ -20,7 +20,7 @@ import {
   removeWorktreeMetadataForHost
 } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
+import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/metadata/meta-persisted-defaults'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/worktree-metadata/local-only-worktree-meta-rehoming'
 
@@ -57,7 +57,8 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     } else if (projectIds.has(ownerId)) {
       continue
     }
-    if (meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) {
+    // An archived workspace's checkout is missing on purpose; its row is the workspace.
+    if ((meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) || meta?.archivedCheckout) {
       continue
     }
     if (!isAbsolute(worktreePath) || isWslUncPath(worktreePath)) {

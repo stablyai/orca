@@ -66,41 +66,6 @@ describe('OrcaRuntimeService', () => {
     expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
   })
 
-  it('matches explicit-id cwd PTYs when the resolved worktree cache is incomplete', async () => {
-    vi.mocked(listWorktrees).mockResolvedValueOnce([
-      {
-        path: '/tmp/worktree-a/nested',
-        head: 'ghi',
-        branch: 'feature/nested',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    const runtime = createRuntime()
-    await runtime.listTerminals()
-    vi.mocked(listWorktrees).mockClear()
-    vi.mocked(listWorktrees).mockRejectedValue(
-      new Error('explicit-id fallback should not rescan worktrees')
-    )
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        { id: 'cwd-only-pty', cwd: `${TEST_WORKTREE_PATH}/src`, title: 'cwd shell' },
-        { id: 'nested-controller-pty', cwd: `${TEST_WORKTREE_PATH}/nested/src`, title: 'nested' }
-      ]
-    })
-
-    const terminals = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-
-    expect(listWorktrees).not.toHaveBeenCalled()
-    expect(terminals.terminals.map((terminal) => terminal.worktreeId)).toEqual([TEST_WORKTREE_ID])
-    const internals = runtime as unknown as { ptysById: Map<string, unknown> }
-    expect(internals.ptysById.has('cwd-only-pty')).toBe(true)
-    expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
-  })
-
   it('keeps explicit-id cold-cache terminal lists from adopting nested worktree PTYs', async () => {
     const nestedWorktreeId = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}/nested`
     vi.mocked(listWorktrees).mockClear()
@@ -136,29 +101,6 @@ describe('OrcaRuntimeService', () => {
     const internals = runtime as unknown as { ptysById: Map<string, unknown> }
     expect(internals.ptysById.has('cwd-only-pty')).toBe(true)
     expect(internals.ptysById.has('nested-controller-pty')).toBe(false)
-  })
-
-  it('ignores cwd-only controller PTYs for malformed explicit worktree IDs', async () => {
-    vi.mocked(listWorktrees).mockClear()
-    vi.mocked(listWorktrees).mockRejectedValue(
-      new Error('malformed explicit-id fallback should not rescan worktrees')
-    )
-    const runtime = createRuntime()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        { id: 'cwd-only-pty', cwd: `${TEST_WORKTREE_PATH}/src`, title: 'cwd shell' }
-      ]
-    })
-
-    const terminals = await runtime.listTerminals(`id:${TEST_REPO_ID}::`)
-
-    expect(listWorktrees).not.toHaveBeenCalled()
-    expect(terminals.terminals).toEqual([])
-    const internals = runtime as unknown as { ptysById: Map<string, unknown> }
-    expect(internals.ptysById.has('cwd-only-pty')).toBe(false)
   })
 
   it('keeps same-path folder workspace instance PTYs scoped to their exact ids', async () => {

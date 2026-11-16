@@ -1,7 +1,7 @@
 // remote -v replaces serial get-url children with one while preserving insteadOf expansion and the first URL.
 // Raw config differs: it is unexpanded and returns the last multivar. remote -v predates get-url (2.7), requiring no capability gate.
 
-import { iterateProcessOutputLines } from '../../process-output-field-scanner'
+import { iterateProcessOutputLines } from '../../process-observation/process-output-field-scanner'
 
 export type GitRemoteVerboseEntry = {
   name: string

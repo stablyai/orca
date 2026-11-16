@@ -1,11 +1,11 @@
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { AI_VAULT_AGENT_SOURCES } from '../../ai-vault/session-scanner-agent-sources'
-import { normalizedWslHomeDirs } from '../../ai-vault/session-scanner-roots'
-import { sessionCandidatesFromDiscoveries } from '../../ai-vault/session-scanner-candidates'
-import { discoverAiVaultSessionSources } from '../../ai-vault/session-scanner-source-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../ai-vault/discovery/session-scanner-agent-sources'
+import { normalizedWslHomeDirs } from '../../ai-vault/discovery/session-scanner-roots'
+import { sessionCandidatesFromDiscoveries } from '../../ai-vault/discovery/session-scanner-candidates'
+import { discoverAiVaultSessionSources } from '../../ai-vault/discovery/session-scanner-source-discovery'
 import type {
   AiVaultScanOptions,
-  SessionFileCandidate,
+  SessionFileChoice,
   SessionFileDiscovery
 } from '../../ai-vault/session-scanner-types'
 
@@ -19,7 +19,7 @@ export type SessionSearchScanRoots = Omit<
 
 export type SessionSearchDiscovery = {
   /** Newest first with Codex hardlink aliases collapsed, matching session-list discovery. */
-  candidates: SessionFileCandidate[]
+  candidates: SessionFileChoice[]
   discoveries: SessionFileDiscovery[]
   issues: AiVaultScanIssue[]
 }

@@ -1,6 +1,6 @@
 /** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
 
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredAgentSessionPaneKey,
@@ -25,6 +25,9 @@ export type AgentSessionRecordReader = {
   /** Changes identity only when records join or leave or a /clear links them, so lookups derived from
    *  every record's lineage can be reused across other writes. */
   lineageRevision?: () => object
+  /** The chat whose provider handle chain names a native session id, from an index the store's
+   *  commits keep; readers without it scan the records. */
+  providerAliasOwner?: (nativeId: string) => string | null
 }
 
 /** Null until the agent-session host is installed; callers that must see records ensure it first. */
@@ -43,6 +46,7 @@ export function conversationRecordReader(store: {
   listClearedFrom?: (sessionId: string) => readonly string[]
   isSessionTabRetired?: AgentSessionRecordReader['isSessionTabRetired']
   lineageRevision?: AgentSessionRecordReader['lineageRevision']
+  providerAliasOwner?: AgentSessionRecordReader['providerAliasOwner']
 }): AgentSessionRecordReader {
   return {
     getRecord: store.getConversation,
@@ -55,7 +59,8 @@ export function conversationRecordReader(store: {
       : {}),
     ...(store.listClearedFrom ? { listClearedFrom: store.listClearedFrom } : {}),
     isSessionTabRetired: store.isSessionTabRetired,
-    lineageRevision: store.lineageRevision
+    lineageRevision: store.lineageRevision,
+    ...(store.providerAliasOwner ? { providerAliasOwner: store.providerAliasOwner } : {})
   }
 }
 

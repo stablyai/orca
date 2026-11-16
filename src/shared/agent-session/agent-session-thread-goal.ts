@@ -80,6 +80,15 @@ export function currentAgentSessionThreadGoalSourceBySequence<T extends GoalCand
   return latest === null ? undefined : { item: latest, goal: goalFromRow(latest.body) }
 }
 
+/** Codex starts the next turn itself while its goal is active; Claude pursues a goal within one turn. */
+export function agentSessionThreadGoalStartsTurns(item: GoalCandidate | undefined): boolean {
+  return (
+    item?.body.kind === 'status' &&
+    isAgentSessionThreadGoalFrame(item.body.providerFrame) &&
+    currentAgentSessionThreadGoal([item])?.status === 'active'
+  )
+}
+
 /** Goal statuses that still describe work in progress, so readers keep them in view. */
 export function isAgentSessionThreadGoalOpen(goal: AgentJournalThreadGoal | null): boolean {
   return goal !== null && goal.status !== 'complete'

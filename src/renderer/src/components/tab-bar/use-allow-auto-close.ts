@@ -9,7 +9,7 @@ import {
   type WorkerAutoCloseSubject
 } from '@/runtime/agent-orchestration/worker-auto-close'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 function tabWorkerSubjects(tabId: string, sessionId: string | undefined): WorkerAutoCloseSubject[] {
   if (sessionId) {

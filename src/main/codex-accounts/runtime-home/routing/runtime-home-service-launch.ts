@@ -10,7 +10,7 @@ import {
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/configuration/homes/codex-real-home-path'
 import { markCodexSessionBackfillMarkerPending } from '../../../codex/history/backfill/codex-session-backfill-marker'
 import { getCodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-scan-dates'
@@ -20,6 +20,7 @@ import { ManagedCodexHomeTemporarilyUnavailableError } from '../../managed-homes
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
 import { blockedWslDistroForExec } from '../../../wsl/discovery/wsl-background-exec-gate'
 import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
+import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   protected initializeLastSyncedState(): void {
@@ -38,7 +39,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   prepareForCodexLaunch(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: CodexHomeLaunchOptions
   ): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
@@ -51,7 +52,8 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     if (selfContainedAccount) {
       const perAccountHome = this.prepareSelfContainedManagedHomeForLaunch(
         selfContainedAccount,
-        options?.unavailableManagedHomePath
+        options?.unavailableManagedHomePath,
+        options?.deferConfigSync
       )
       if (perAccountHome) {
         return perAccountHome
@@ -67,7 +69,11 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     this.invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv)
     this.syncForCurrentSelection(target, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
-    syncSystemConfigIntoManagedCodexHome()
+    if (options?.deferConfigSync) {
+      options.deferConfigSync(() => syncSystemConfigIntoManagedCodexHome())
+    } else {
+      syncSystemConfigIntoManagedCodexHome()
+    }
     // Keep large history scans off the launch path.
     if (
       isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
@@ -128,7 +134,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   async prepareForCodexLaunchAsync(
     target?: CodexAccountSelectionTarget,
     launchEnv?: NodeJS.ProcessEnv,
-    options?: { unavailableManagedHomePath?: string }
+    options?: CodexHomeLaunchOptions
   ): Promise<string | null> {
     if (target?.runtime !== 'wsl') {
       return this.prepareForCodexLaunch(target, launchEnv, options)

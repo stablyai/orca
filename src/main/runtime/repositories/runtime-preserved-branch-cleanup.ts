@@ -9,7 +9,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { forceDeleteLocalBranch } from '../../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote'

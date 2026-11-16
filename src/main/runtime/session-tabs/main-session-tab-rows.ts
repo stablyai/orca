@@ -4,12 +4,12 @@ import {
 } from './mobile-session-tab-selection'
 // Use main's rows/order/groups, augmented by window-only rows and live view facts (selection, dirty state, titles, theme/status and editor drafts).
 
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /** Main's projection of the rows (projectSessionTabs): the snapshot minus the runtime's stamps. */
 export type MainSessionTabRows = Omit<

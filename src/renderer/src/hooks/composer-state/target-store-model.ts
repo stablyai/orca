@@ -1,8 +1,8 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
 import type {
@@ -15,12 +15,12 @@ import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspa
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerStoreActions } from './composer-store-actions'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace/creation/workspace-source'
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export type ComposerTargetStoreModel = {

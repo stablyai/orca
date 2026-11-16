@@ -4,9 +4,9 @@ import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
-import '../../../../shared/keybindings'
+
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
-import { normalizeAppIconId } from '../../../../shared/app-icon'
+import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../../shared/plugins/capabilities/plugin-owned-settings'
 import {
@@ -22,12 +22,12 @@ import {
   stripRetiredGlobalSettings
 } from '../../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../../applying-settings/onboarding-normalization'
-import { normalizeMachineName } from '../../../../shared/machine-name'
+import { normalizeMachineName } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 import { normalizeWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { replaceRetiredSpeechModelId } from '../../../speech/model-catalog'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { VoiceSettings } from '../../../../shared/speech-types'
-import { dictationShortcutModeSettings } from '../../../../shared/dictation-shortcut-mode'
+import type { VoiceSettings } from '../../../../shared/speech/speech-types'
+import { dictationShortcutModeSettings } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 

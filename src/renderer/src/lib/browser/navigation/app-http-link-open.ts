@@ -22,6 +22,8 @@ export type OpenAppHttpLinkOptions = {
   worktreeId?: string | null
   /** The click, so the setting's Shift escape modifier applies. */
   event?: AppHttpLinkClick
+  /** Explicit destination override when a surface bypasses the link setting. */
+  destination?: 'orca' | 'system'
 }
 
 function isEscapeModifierClick(event: AppHttpLinkClick | undefined): boolean {
@@ -42,6 +44,22 @@ export function openAppHttpLink(
   const state = appStateAccessor?.()
   const hostWorktreeId = options.worktreeId || state?.activeWorktreeId
   const host = state && hostWorktreeId ? resolveBrowserHost(state, hostWorktreeId) : null
+  if (options.destination === 'system') {
+    return openOwnedHttpLink(url, {
+      worktreeId: host?.worktreeId ?? null,
+      sourceOwner: host?.owner ?? LOCAL_OWNER,
+      forceSystemBrowser: true
+    })
+  }
+  if (options.destination === 'orca') {
+    return openOwnedHttpLink(url, {
+      worktreeId: host?.worktreeId ?? null,
+      sourceOwner: host?.owner ?? LOCAL_OWNER,
+      allowRemoteInApp: Boolean(host),
+      forceInApp: Boolean(host),
+      forceSystemBrowser: !host
+    })
+  }
   return openOwnedHttpLink(url, {
     worktreeId: host?.worktreeId ?? null,
     sourceOwner: host?.owner ?? LOCAL_OWNER,

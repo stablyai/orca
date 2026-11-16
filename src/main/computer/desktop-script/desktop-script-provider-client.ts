@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
@@ -20,9 +21,11 @@ import {
 } from './actions/desktop-script-action'
 import { validateComputerProviderActionParams } from '../action-contracts/computer-provider-action-validation'
 import { execBridge, mapBridgeError } from './desktop-script-provider-bridge'
+import { launchBridgeApp, listBridgeApps } from './desktop-script-apps'
 import {
   optionalNumberParam,
   optionalStringParam,
+  screenshotRequestParams,
   stringParam
 } from './desktop-script-provider-params'
 import {
@@ -40,6 +43,7 @@ import {
   isRuntimeHostUnavailable
 } from './runtime-host/desktop-script-runtime-host'
 import { DesktopScriptSnapshotStore } from './snapshots/desktop-script-snapshot-store'
+import { readSubtreeSnapshot } from './snapshots/desktop-script-subtree-snapshot'
 import { normalizeBridgeApp, renderSnapshot } from './snapshots/desktop-script-snapshot-rendering'
 import { normalizeComputerActionResult } from '../action-contracts/computer-action-verification-normalization'
 import { RuntimeClientError } from '../runtime-client-error'
@@ -69,21 +73,16 @@ export class DesktopScriptProviderClient {
   }
 
   async listApps(): Promise<ComputerListAppsResult> {
-    const response = await this.callBridge({ tool: 'list_apps' })
-    return {
-      apps: (response.apps ?? []).map((app) => ({
-        name: app.name,
-        bundleId: app.bundleId ?? app.bundleIdentifier ?? null,
-        pid: app.pid,
-        isRunning: true,
-        lastUsedAt: null,
-        useCount: null
-      }))
-    }
+    return await listBridgeApps((request) => this.callBridge(request))
   }
 
   async capabilities(): Promise<ComputerProviderCapabilities> {
     return await this.readCapabilities()
+  }
+
+  async launchApp(params: Record<string, unknown>): Promise<ComputerLaunchAppResult> {
+    const capabilities = await this.readCapabilities()
+    return await launchBridgeApp(capabilities, (request) => this.callBridge(request), params)
   }
 
   async listWindows(params: Record<string, unknown>): Promise<ComputerListWindowsResult> {
@@ -119,12 +118,20 @@ export class DesktopScriptProviderClient {
 
   async snapshot(params: Record<string, unknown>): Promise<ComputerSnapshotResult> {
     const app = stringParam(params, 'app')
+    const rootElementIndex = optionalNumberParam(params, 'rootElementIndex')
+    if (rootElementIndex !== undefined) {
+      return await readSubtreeSnapshot(this.snapshotStore, (request) => this.callBridge(request), {
+        app,
+        rootElementIndex,
+        params
+      })
+    }
     const response = await this.callBridge({
       tool: 'get_app_state',
       app,
       windowId: optionalNumberParam(params, 'windowId'),
       windowIndex: optionalNumberParam(params, 'windowIndex'),
-      noScreenshot: params.noScreenshot === true,
+      ...screenshotRequestParams(params),
       restoreWindow: params.restoreWindow === true
     })
     return this.rememberAndRender(app, response, params.noScreenshot === true, params)
@@ -170,7 +177,7 @@ export class DesktopScriptProviderClient {
       value: optionalStringParam(params, 'value'),
       windowBounds: null,
       ...actionWindowTarget,
-      noScreenshot: params.noScreenshot === true,
+      ...screenshotRequestParams(params),
       restoreWindow: params.restoreWindow === true
     })
     const action = verifyDesktopAction(

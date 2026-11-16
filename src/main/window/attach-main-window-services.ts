@@ -26,6 +26,7 @@ import {
   requestSystemMediaAccess
 } from '../browser/site-settings/permissions/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { reloadWithRendererCheckpoint } from './renderer-relays/native-unload-coordinator'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {
   PreQuitCleanupFailureMode,
@@ -36,29 +37,27 @@ import { openCodeHookService, openCode2HookService } from '../opencode/status-ho
 import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth/runtime-auth-types'
-import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
+import { getKnownWorktreeIdsForHistoryGc } from '../pty/history/history-gc-worktree-ids'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/selection/runtime-selection'
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
-import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
+import { scheduleMainWindowAutoUpdaterSetup } from '../updater/lifecycle/main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
-import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
-import { isPluginFramePermissionRequest } from './host-frame-permission-policy'
+import { registerDroppedPathPreparation } from './file-drop/dropped-path-preparation-ipc'
+import { isPluginFramePermissionRequest } from './security/host-frame-permission-policy'
 import { installPluginDesktopFrameServices } from '../plugins/panels/desktop-actions/plugin-frame-desktop-services'
-
-export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
 let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
 let tccPromptHandlerTokenCounter = 0
 let activeTccPromptHandlerToken: number | null = null
 
-export function attachMainWindowServices(
+export async function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
   runtime: OrcaRuntimeService,
@@ -67,6 +66,8 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    deferSshInitialization?: boolean
+    hostInitialization?: Promise<void>
     prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
@@ -80,7 +81,7 @@ export function attachMainWindowServices(
     updateInstallMode?: UpdateInstallMode
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
-): void {
+): Promise<void> {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store, runtime)
   // Repo IPC mutations must invalidate paired-client catalogs too (#11994).
@@ -94,7 +95,7 @@ export function attachMainWindowServices(
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
   // Folder projects have no watcher target; poll for external git init so they upgrade without restart (#11477).
   startFolderRepoGitUpgradeWatch(store, mainWindow)
-  registerWorkspaceCleanupHandlers(store)
+  registerWorkspaceCleanupHandlers(store, () => runtime.getExistingOrchestrationDb())
   registerPtyHandlers(
     mainWindow,
     runtime,
@@ -133,7 +134,19 @@ export function attachMainWindowServices(
   } else {
     void hydrateLocalPtyRegistryAtBoot(store)
   }
-  registerSshHandlers(store, () => mainWindow, runtime)
+  const sshReady = registerSshHandlers(
+    store,
+    () => mainWindow,
+    runtime,
+    options?.hostInitialization
+  )
+  if (options?.deferSshInitialization) {
+    void sshReady.catch((error: unknown) =>
+      console.warn('[startup] SSH initialization failed:', error)
+    )
+  } else {
+    await sshReady
+  }
   registerDroppedPathPreparation(mainWindow, async () => {
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
       runtime.ensureStructuredAgentSessionHost()
@@ -258,8 +271,7 @@ function registerAppReloadHandler(
     ) {
       return
     }
-    onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
-    mainWebContents.reload()
+    return reloadWithRendererCheckpoint(mainWebContents, false, onBeforeRendererReload)
   })
   mainWindow.on('closed', () => {
     if (activeAppReloadHandlerToken !== handlerToken) {

@@ -1,6 +1,6 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
@@ -17,9 +17,9 @@ import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createPendingWorkerLaunchReceipt,
   resolveFederatedWorkerLaunchReceipt
-} from '../../rpc/methods/orchestration/worker/worker-launch-preferences'
-import { validateFederatedWorkerStartPlacement } from '../../rpc/methods/orchestration/worker/worker-start-validation'
-import { resolveFederatedWorkerStartBudgets } from '../../rpc/methods/orchestration/worker/worker-start-budgets'
+} from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
+import { validateFederatedWorkerStartPlacement } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-validation'
+import { resolveFederatedWorkerStartBudgets } from '../../rpc/methods/orchestration/worker/start/launch/worker-start-budgets'
 import { resolveDispatchCreator } from '../../rpc/methods/orchestration/runs/dispatch-creator'
 import {
   isReadyRemoteFederatedWorkerStartReceipt,
@@ -31,7 +31,7 @@ import {
   federatedUnknownReceipt,
   isKnownRemoteStartFailure
 } from './federated-worker-start-receipts'
-import { releaseRetriedWorkerTerminal } from '../../rpc/methods/orchestration/worker/retried-worker-terminal-release'
+import { releaseRetriedWorkerTerminal } from '../../rpc/methods/orchestration/worker/release/retried-worker-terminal-release'
 import { withWorkerStartNext } from '../../rpc/methods/orchestration/receipt-next'
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { resolveFederatedChildParent } from './federated-worker-child-parent'
@@ -72,7 +72,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     model: params.model,
     effort: params.effort
   })
-  const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
+  const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
   const status = (await runtime.callOrchestrationWorkerServer(

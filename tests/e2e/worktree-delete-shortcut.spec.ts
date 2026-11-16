@@ -63,6 +63,9 @@ test.describe('Worktree Delete Shortcut', () => {
     await expect
       .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId))
       .toBe(worktreeId)
+    // A click hands keys to the opened workspace; the shortcut acts only from the focused list.
+    await pressShortcut(orcaPage, '0', { shift: true })
+    await expect(orcaPage.locator('[data-worktree-sidebar]')).toBeFocused()
     if (!previousActiveId || previousActiveId === worktreeId) {
       throw new Error('Expected a different workspace to hover')
     }
@@ -71,7 +74,7 @@ test.describe('Worktree Delete Shortcut', () => {
 
     const dialog = orcaPage.getByRole('dialog')
     await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: 'Delete Workspace', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
 
     await expect
       .poll(async () => getAllWorktreeIds(orcaPage), {

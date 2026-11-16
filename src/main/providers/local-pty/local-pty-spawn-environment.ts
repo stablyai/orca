@@ -1,5 +1,5 @@
 import { mergeGitConfigEnvProtocol } from '../../../shared/git/commands/git-credential-prompt-env'
-import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
+import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
@@ -14,7 +14,7 @@ import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listen
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import type { PtySpawnOptions } from '../pty-provider-contract'
+import type { PtySpawnOptions } from '../pty/provider-contract'
 import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 
 /** Pane ownership must be fresh even when Orca itself was launched inside an agent. */

@@ -1,10 +1,10 @@
-import type { GitHubOwnerRepo } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import {
   SHOW_MOBILE_DETAIL_METADATA_EDITORS,
   SHOW_MOBILE_DETAIL_REVIEW_PANELS
 } from '../task-list/mobile-tasks-options'
-import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { withGitHubTargetOperation } from '../../source-control/review/github-operations/github-work-item-operation'
 import { requireGitHubTaskTarget } from './github-task-identity'
 import type { ListAndDetailEffectsModel } from '../task-list/use-mobile-tasks-list-and-detail-effects'
 import { useEffect } from 'react'

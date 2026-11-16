@@ -3,8 +3,8 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   HOSTED_REVIEW_LINK_KEYS
-} from '../../../../shared/worktree/hosted-review-links'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+} from '../../../../shared/worktree/hosted-review/hosted-review-links'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'

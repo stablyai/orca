@@ -5,14 +5,14 @@ import type {
   ProjectGroup,
   ProjectGroupMutation,
   ProjectGroupUpdate
-} from '../../../shared/project-group-types'
+} from '../../../shared/project/groups/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
-} from '../../../shared/project-groups'
+} from '../../../shared/project/groups/project-groups'
 import { getNextRootProjectOrder } from '../../../shared/root-project-order'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {
@@ -120,6 +120,9 @@ export class ProjectGroupPersistenceOperations {
     }
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
+    }
+    if (updates.hookSettings !== undefined) {
+      group.hookSettings = updates.hookSettings
     }
     group.updatedAt = Date.now()
   }

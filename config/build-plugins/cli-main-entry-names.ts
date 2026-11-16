@@ -1,5 +1,7 @@
 // The CLI loads these paths after electron-vite replaces out/main.
 export const CLI_MAIN_ENTRY_NAMES = [
+  'worker-threads/worker-thread-entry-path',
+  'worker-threads/worker-thread-spawn',
   'agent-hooks/installation/managed-agent-hook-controls',
   'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',
@@ -9,9 +11,12 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'skills/bundled-skill-install/bundled-skill-local-host',
   'skills/bundled-skill-install/bundled-skill-installation',
   'filesystem/macos-tree-clone',
-  'orcad/orcad-stale-lock-reclaim',
-  'orcad/orcad-host-identity-reset',
-  'plugins/plugin-authoring-checks',
+  'orcad/instance-lock/orcad-stale-lock-reclaim',
+  'orcad/profile-state/orcad-host-identity-reset',
+  'plugins/artifacts/plugin-artifact-validation',
+  'plugins/artifacts/plugin-content-hash',
+  'plugins/artifacts/plugin-host-call-validation',
+  'plugins/catalog/plugin-catalog-release-entry',
   // `orca vm env doctor` runs its checks in the CLI process.
   'environment-doctor/environment-doctor',
   'environment-doctor/environment-doctor-host',
@@ -25,5 +30,5 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/recovery/profile-state-recovery-command',
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/http1-compatibility-marker'
+  'startup/network-compatibility/http1-compatibility-marker'
 ] as const

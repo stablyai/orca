@@ -1,7 +1,7 @@
 import { basename } from '@/lib/path'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { describeDropSkipReason } from '@/lib/files/drop/drop-skip-reason-copy'
-import { isAgentInlineImagePath } from '../../../../../../shared/agent-inline-image-types'
+import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import type { NativeChatAttachmentFocusOptions } from '../uploads/native-chat-resolved-path-ownership'
 import {
   nativeChatAttachFailedNotice,

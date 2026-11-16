@@ -12,8 +12,8 @@ import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES,
   runtimeTempUploadTotalReason
-} from '../../shared/clipboard-image'
-import { saveClipboardImageBufferInRuntime } from '../window/clipboard-runtime-image-upload'
+} from '../../shared/clipboard/clipboard-image'
+import { saveClipboardImageBufferInRuntime } from '../window/clipboard/clipboard-runtime-image-upload'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 /** Handlers that copy client-local files to the paired server a chat runs on. */
@@ -32,7 +32,7 @@ export function registerAgentSessionAttachmentUploadHandlers(): void {
           {
             ...args,
             // The manual-disconnect check keys on the resolved id, not whatever selector came in.
-            environmentId: resolveEnvironment(userDataPath, args.environmentId).id,
+            environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id,
             userDataPath,
             signal: lifetime.signal
           },

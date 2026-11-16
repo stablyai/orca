@@ -2,7 +2,7 @@ import { WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT } from '@/constants/terminal'
 import type { WakeHibernatedAgentsWorktreeDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { useAppStore } from '@/store/index'
-import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from '../../workspace/activation/worktree-activation-pty-inventory'
@@ -13,7 +13,7 @@ import {
   isStrandedWorkspaceSleepRecord,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 type BackgroundSleepingAgentWakeDispatcherOptions = {

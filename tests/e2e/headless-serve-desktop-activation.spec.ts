@@ -25,12 +25,10 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { RuntimeClientError } from '../../src/cli/runtime/types'
-import type {
-  RuntimeStatus,
-  RuntimeTerminalCreate,
-  RuntimeTerminalRead
-} from '../../src/shared/runtime-types'
+import { RuntimeClientError } from '../../src/cli/runtime/connection/types'
+import type { RuntimeStatus } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalCreate } from '../../src/shared/terminal/runtime/runtime-terminal-create-contract'
+import type { RuntimeTerminalRead } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 

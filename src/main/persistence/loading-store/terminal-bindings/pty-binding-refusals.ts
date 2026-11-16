@@ -6,7 +6,7 @@ import '../../restoring-sessions/terminal-layout-normalization'
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { PtyBindingSourceExpectation } from '../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isClosedPaneFenced } from '../../terminal-topology/closed-pane-binding-fence'
+import { isClosedPaneFenced } from '../../terminal-topology/pane-ownership/closed-pane-binding-fence'
 
 export type PtyBindingRefusalRequest = {
   tabId: string

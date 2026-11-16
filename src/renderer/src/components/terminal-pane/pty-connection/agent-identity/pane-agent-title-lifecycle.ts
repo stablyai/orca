@@ -15,7 +15,7 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
       return
     }
     const currentState = useAppStore.getState()
-    const activeHookStatus = currentState.agentStatusByPaneKey[session.cacheKey]
+    const activeHookStatus = currentState.agentStatusByPaneKey.get(session.cacheKey)
     if (session.shouldSuppressTitleCompletionForFreshHook(title, activeHookStatus)) {
       // Idle titles can appear mid-tool while hooks still own an active turn.
       if (activeHookStatus) {

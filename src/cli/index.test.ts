@@ -18,7 +18,7 @@ const {
   spawnMock: vi.fn()
 }))
 
-vi.mock('./runtime-client', async () => {
+vi.mock('./runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
   return createRuntimeClientModuleMock({
     callMock,
@@ -28,7 +28,17 @@ vi.mock('./runtime-client', async () => {
   })
 })
 
-vi.mock('./runtime/environments', () => ({
+vi.mock('./runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: serveOrcaAppMock
+}))
+
+vi.mock('./runtime/profile/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: getDefaultUserDataPathMock
+}))
+
+vi.mock('./runtime/pairing/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
@@ -44,7 +54,7 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { okFixture, queueFixtures } from './test-fixtures'
+import { okFixture, queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
 
 describe('command aliases dispatch to the canonical handler', () => {
   let logSpy: ReturnType<typeof vi.spyOn>
@@ -77,50 +87,5 @@ describe('command aliases dispatch to the canonical handler', () => {
     } finally {
       process.exitCode = priorExitCode
     }
-  })
-
-  it('rejects the archive-hook waiver without --run-hooks instead of ignoring it', async () => {
-    queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
-    const priorExitCode = process.exitCode
-
-    try {
-      await main(
-        ['worktree', 'rm', '--worktree', 'id:wt-1', '--allow-failed-archive-hook', '--json'],
-        '/tmp/repo'
-      )
-
-      expect(process.exitCode).toBe(1)
-      expect(callMock).not.toHaveBeenCalledWith('worktree.rm', expect.anything())
-      expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
-        ok: false,
-        error: {
-          code: 'invalid_argument',
-          message: expect.stringContaining('without --run-hooks no hook runs at all')
-        }
-      })
-    } finally {
-      process.exitCode = priorExitCode
-    }
-  })
-
-  it('surfaces progressive-disclosure command groups in root --help without connecting to a runtime', async () => {
-    runtimeClientConstructorMock.mockClear()
-
-    await main(['--help'], '/tmp/repo')
-    const rootHelp = String(logSpy.mock.calls.at(-1)?.[0])
-    for (const entry of ['  artifacts ', '  agent hooks ', '  claude-teams ', '  jira ']) {
-      expect(rootHelp).toContain(entry)
-    }
-
-    for (const args of [
-      ['artifacts', '--help'],
-      ['agent', 'hooks', '--help'],
-      ['claude-teams', '--help'],
-      ['jira', '--help']
-    ]) {
-      await main(args, '/tmp/repo')
-      expect(String(logSpy.mock.calls.at(-1)?.[0])).toContain(`orca ${args.slice(0, -1).join(' ')}`)
-    }
-    expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
   })
 })

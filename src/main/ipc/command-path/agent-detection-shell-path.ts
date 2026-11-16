@@ -1,4 +1,7 @@
-import { hydrateShellPath, mergePathSegments } from '../../startup/hydrate-shell-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../../startup/shell-environment/hydrate-shell-path'
 import { getPreflightWslTarget, type PreflightRuntimeContext } from '../preflight-runtime-target'
 
 export async function hydrateShellPathForAgentDetection(

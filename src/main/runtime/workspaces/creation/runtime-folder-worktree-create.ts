@@ -1,16 +1,16 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
+import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
+import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import { randomUUID } from 'node:crypto'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
 import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-display-name'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   getRuntimeFolderWorkspaceInstanceId,
@@ -31,6 +31,7 @@ import {
   type RuntimeFolderWorktreeSetupDeps
 } from './runtime-folder-worktree-setup'
 import { buildRuntimeSetupReceipt } from './runtime-local-worktree-setup'
+import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 
 type RuntimeFolderWorktreeCreateDeps = {
   store: RuntimeStore
@@ -146,7 +147,8 @@ export async function createRuntimeFolderWorktree(args: {
     kind: 'created',
     worktreeId: worktree.id,
     path: worktree.path,
-    branch: worktree.branch
+    branch: worktree.branch,
+    ...createdWorktreeLifecycleIdentity(worktree)
   })
   const setupResult = deps.setup
     ? await prepareFolderWorktreeSetup({

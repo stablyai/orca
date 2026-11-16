@@ -6,7 +6,7 @@ import {
   withdrawPaneFromSession,
   type PaneLayoutChange,
   type TerminalPaneAdmission
-} from '../../persistence/terminal-topology/terminal-pane-admission'
+} from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import type {
   CommandOf,
   LayoutRefusalCode

@@ -30,7 +30,7 @@ import {
   getWindowsRemoteWriteCapabilities
 } from './system-ssh-windows-write-capabilities'
 import { WINDOWS_STDIN_WRITE_CHUNK_BYTES } from './system-ssh-windows-write-strategy'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 type FakeChannel = EventEmitter & {
   stdin: Writable

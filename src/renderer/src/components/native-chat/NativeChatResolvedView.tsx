@@ -1,3 +1,4 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
@@ -9,7 +10,8 @@ import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
-import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
+import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -31,7 +33,7 @@ import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/nati
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
 import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend
@@ -100,14 +102,12 @@ export function NativeChatResolvedView({
   // Use the live session’s reconciled lifecycle for every working-state consumer.
   const liveWorking = session.status === 'working'
   // Preview the in-progress hook reply before its completed transcript turn arrives.
-  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  const hookPreview = useAgentStatus(paneKey)?.lastAssistantMessage
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
-  const hookPreviewIsToolOutput = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
-  )
+  const hookPreviewIsToolOutput = useAgentStatus(paneKey)?.lastAssistantMessageIsToolOutput === true
   // A coalesced interrupt/restart can stay working; the newer epoch must still clear Stop suppression.
-  const workingEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null)
-  const turnEpoch = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.turnStartedAt ?? null)
+  const workingEpoch = useAgentStatus(paneKey)?.stateStartedAt ?? null
+  const turnEpoch = useAgentStatus(paneKey)?.turnStartedAt ?? null
   const sendWorkingEpoch =
     (session.hookWorking ?? liveWorking) || session.hookAwaitingInput ? turnEpoch : undefined
   const canSend = useNativeChatCanSend(targetPtyId)
@@ -205,7 +205,8 @@ export function NativeChatResolvedView({
     questionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady
+    composerReady,
+    surfaceReady: shownPromptCard !== null
   })
 
   const pendingMessages = useMemo(
@@ -324,6 +325,7 @@ export function NativeChatResolvedView({
         }
         rootInput.onKeyDownCapture(event)
       }}
+      onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, paneKey)}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className={cn(
         NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
@@ -348,7 +350,9 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatMessageList
+          <NativeChatSubagentTranscripts
+            find={find}
+            paneKey={paneKey}
             ref={messageListRef}
             session={sessionWithPending}
             isVisible={isVisible}

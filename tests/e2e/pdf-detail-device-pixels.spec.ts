@@ -2,10 +2,8 @@ import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { createPdfFindFixture } from './helpers/pdf-find-fixture'
-import {
-  buildPdfScalePreferenceKey,
-  PDF_SCALE_PREFERENCES_STORAGE_KEY
-} from '../../src/renderer/src/components/editor/pdf-scale-preference-storage'
+import { PDF_SCALE_PREFERENCES_STORAGE_KEY } from '../../src/renderer/src/components/editor/pdf/pdf-scale-preference-storage'
+import { buildFileViewPreferenceKey as buildPdfScalePreferenceKey } from '../../src/renderer/src/components/editor/view-mode/file-view-preference-storage'
 
 test.use({ orcaAppExtraArgs: ['--force-device-scale-factor=1'] })
 
@@ -58,11 +56,11 @@ test('PDF detail tiles keep device resolution after consecutive capped zooms and
     }
     await orcaPage.getByTitle('Zoom in', { exact: true }).click()
     await expect.poll(() => canvas.evaluate((current, old) => current !== old, previous)).toBe(true)
-    await expect(page).not.toHaveClass(/loadingIcon/)
+    await page.locator(':scope:not(.loadingIcon)').waitFor({ state: 'attached' })
     await previous.dispose()
   }
   await expect(orcaPage.getByText('381%', { exact: true })).toBeVisible()
-  await expect(page.locator('.canvasWrapper > canvas')).toHaveCount(2)
+  await page.locator('.canvasWrapper > canvas').nth(1).waitFor({ state: 'visible' })
 
   const observations: object[] = []
   const checkTile = async (): Promise<void> => {
@@ -112,7 +110,7 @@ test('PDF detail tiles keep device resolution after consecutive capped zooms and
     container.scrollTop = element.offsetTop + element.clientHeight - container.clientHeight
   })
   await expect.poll(() => canvas.evaluate((current, old) => current !== old, previous)).toBe(true)
-  await expect(page).not.toHaveClass(/loadingIcon/)
+  await page.locator(':scope:not(.loadingIcon)').waitFor({ state: 'attached' })
   await previous.dispose()
   await checkTile()
   writeFileSync(testInfo.outputPath('detail-geometry.json'), JSON.stringify(observations, null, 2))

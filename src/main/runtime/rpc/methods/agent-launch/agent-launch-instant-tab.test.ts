@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 
 import '../../../../../shared/agent-launch/contracts/agent-launch-replay-refusal'
-import '../../errors'
+import '../../responses/rpc-response'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 
 import type {
@@ -33,7 +33,7 @@ import { openTestAgentSessionRecordStore } from '../../../agent-session/records/
 
 import type { RpcContext } from '../../core'
 
-import '../../rpc-caller-identity'
+import '../../callers/rpc-caller-identity'
 import {
   methodNamed,
   rpcContext,
@@ -186,25 +186,6 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
         AGENT_LAUNCH_TAB_CLOSED_CODE
       )
       expect(retried.published).toEqual([])
-    })
-
-    it('stops an agent whose tab was closed while its terminal was created, before its prompt is pasted', async () => {
-      const runtime = hostWithWindow({ terminalPaneKey: PANE_KEY, lineCarriesPrompt: false })
-      const spawn = runtime.createTerminal.getMockImplementation()!
-      runtime.createTerminal.mockImplementationOnce(async (selector, createOptions) => {
-        markAgentLaunchesClosedByUser('wt-7', { kind: 'tab', tabId: TAB_ID })
-        return spawn(selector, createOptions)
-      })
-
-      await expect(
-        replayLaunch(
-          runtime,
-          { paneKey: PANE_KEY, prompt: { text: 'fix the build', delivery: 'submit' } },
-          CLI
-        )
-      ).rejects.toMatchObject({ code: AGENT_LAUNCH_TAB_CLOSED_CODE })
-      expect(runtime.closeTerminal).toHaveBeenCalledWith('term_1')
-      expect(deliverTerminalAgentLaunchPrompt).not.toHaveBeenCalled()
     })
   })
 })

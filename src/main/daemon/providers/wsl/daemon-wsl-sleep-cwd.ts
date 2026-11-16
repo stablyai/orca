@@ -1,5 +1,5 @@
 /** Bridge WSL bash lacks OSC 7; read its shell folder before Sleep so wake avoids the spawn folder. Failures retain the old fallback. */
-import { toWindowsWslUncPath } from '../../../../shared/wsl-paths'
+import { toWindowsWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import {
   paneShells,
