@@ -3,7 +3,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
-import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import {
+  pluginManifestSchema,
+  type PluginManifest
+} from '../../../../../shared/plugins/manifest/plugin-manifest'
 import {
   PluginUpdatePublisher,
   pluginKeyOwner,
@@ -40,10 +43,31 @@ describe('pluginKeyOwner', () => {
   })
 })
 
-function preview(official: boolean, execution: string): PluginMarketplaceHostInstallPreview {
+function previewFor(
+  pluginKey: string,
+  manifest: PluginManifest,
+  official: boolean
+): PluginMarketplaceHostInstallPreview {
   return {
+    marketplaceSourceId: 'official',
+    marketplaceName: 'Orca Plugins',
+    marketplaceOwner: 'stablyai',
+    marketplaceCommit: 'c',
+    pluginKey,
+    source: { kind: 'git', url: 'https://github.com/acme/plugin.git', ref: 'v1' },
+    resolvedCommit: 'r',
+    contentHash: 'h',
+    consentFingerprint: `reviewed-${pluginKey}`,
+    manifest,
     official,
-    manifest: pluginManifestSchema.parse({
+    bundled: false
+  }
+}
+
+function preview(official: boolean, execution: string): PluginMarketplaceHostInstallPreview {
+  return previewFor(
+    'octocat.orca-mermaid-live',
+    pluginManifestSchema.parse({
       manifestVersion: 2,
       id: 'orca-mermaid-live',
       publisher: 'octocat',
@@ -55,8 +79,9 @@ function preview(official: boolean, execution: string): PluginMarketplaceHostIns
       capabilities: [],
       ...(execution === 'trusted-worker' ? { main: 'worker.js' } : {}),
       contributes: {}
-    })
-  } as PluginMarketplaceHostInstallPreview
+    }),
+    official
+  )
 }
 
 describe('PluginUpdatePublisher', () => {

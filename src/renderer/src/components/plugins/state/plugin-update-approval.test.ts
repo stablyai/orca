@@ -1,20 +1,50 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
+import {
+  pluginManifestSchema,
+  type PluginManifest
+} from '../../../../../shared/plugins/manifest/plugin-manifest'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), warning: vi.fn() } }))
 
 const { installUpdates } = await import('./plugin-update-approval')
 const { toast } = await import('sonner')
 
-const preview = (pluginKey: string): PluginMarketplaceHostInstallPreview =>
-  ({
-    pluginKey,
+function previewFor(
+  pluginKey: string,
+  manifest: PluginManifest,
+  official: boolean
+): PluginMarketplaceHostInstallPreview {
+  return {
     marketplaceSourceId: 'official',
+    marketplaceName: 'Orca Plugins',
+    marketplaceOwner: 'stablyai',
     marketplaceCommit: 'c',
+    pluginKey,
+    source: { kind: 'git', url: 'https://github.com/acme/plugin.git', ref: 'v1' },
     resolvedCommit: 'r',
+    contentHash: 'h',
     consentFingerprint: `reviewed-${pluginKey}`,
-    manifest: { version: '2.0.0' }
-  }) as PluginMarketplaceHostInstallPreview
+    manifest,
+    official,
+    bundled: false
+  }
+}
+
+const manifest = pluginManifestSchema.parse({
+  manifestVersion: 2,
+  id: 'plugin',
+  publisher: 'acme',
+  name: 'Plugin',
+  version: '2.0.0',
+  execution: 'data',
+  license: 'MIT',
+  engines: { orca: '>=1.4.248' },
+  capabilities: [],
+  contributes: {}
+})
+const preview = (pluginKey: string): PluginMarketplaceHostInstallPreview =>
+  previewFor(pluginKey, manifest, true)
 
 function stubApi(installed: Record<string, { ok: boolean; consentFingerprint?: string }>) {
   const consent = vi.fn(async () => [])

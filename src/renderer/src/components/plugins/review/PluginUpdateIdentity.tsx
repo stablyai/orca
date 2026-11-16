@@ -60,11 +60,7 @@ export function PluginUpdatePublisher({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge
-          tabIndex={0}
-          data-plugin-not-official={notice}
-          className="gap-1 border-status-warning-border bg-status-warning-background text-status-warning-text"
-        >
+        <Badge variant="warning" tabIndex={0} data-plugin-not-official={notice}>
           <TriangleAlert className="size-3.5" aria-hidden="true" />
           {label}
         </Badge>
