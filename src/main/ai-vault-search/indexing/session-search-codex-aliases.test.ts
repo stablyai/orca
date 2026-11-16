@@ -1,5 +1,6 @@
 import type * as TranscriptFs from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
-import { copyFile, mkdir, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { zstdCompressSync } from 'node:zlib'
 import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -208,4 +209,15 @@ it('keeps a successfully excluded canonical rollout excluded on unchanged sweeps
   await sweep()
   expect(io.paths).toEqual([])
   expect(matches()).toEqual([])
+})
+
+it('keeps one indexed copy after a preferred archive appears beside an indexed account copy', async () => {
+  io.failed = ''
+  await rm(real)
+  await sweep()
+  await writeFile(`${real}.zst`, zstdCompressSync(await readFile(managed)))
+  await sweep()
+  await sweep()
+  expect(matches()).toEqual([{ user_text: 'readablealiasneedle' }])
+  expect(index.db.prepare('SELECT path FROM files').all()).toEqual([{ path: `${real}.zst` }])
 })
