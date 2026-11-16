@@ -72,6 +72,8 @@ export async function sweepDeletedWorkspaceChatHistory(
     return result
   }
   const sessions = await listInScope(deps, parents.scopePaths)
+  // The scan can take minutes: a workspace archived meanwhile must still be protected.
+  const listedNow = await readListedFolders(deps.store)
   const goneByCwd = new Map<string, Promise<GoneFolder | null>>()
 
   const byFolder = new Map<string, { folder: GoneFolder; targets: ChatHistoryTarget[] }>()
@@ -96,7 +98,7 @@ export async function sweepDeletedWorkspaceChatHistory(
       continue
     }
     const key = goneFolderKey(folder)
-    if (listed.gone.has(key)) {
+    if (listed.gone.has(key) || listedNow.gone.has(key)) {
       continue
     }
     const group = byFolder.get(key) ?? { folder, targets: [] }

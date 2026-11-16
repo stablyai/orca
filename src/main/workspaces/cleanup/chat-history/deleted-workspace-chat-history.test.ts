@@ -51,9 +51,13 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     mkdirSync(join(workspaces, 'tools'), { recursive: true })
     mkdirSync(join(root, 'links'), { recursive: true })
     symlinkSync(join(workspaces, 'tools'), join(root, 'links', 'tools'))
+    // Transcript parsers trim the recorded cwd, so `spaced` must not read as gone.
+    mkdirSync(join(appWorkspaces, 'spaced '), { recursive: true })
     // Agents record the physical cwd; the temp root can sit behind a symlink (macOS /var).
     const physical = (path: string): string => join(realpathSync(root), path.slice(root.length))
     const gone = join(appWorkspaces, 'gone')
+    // Archived while the session scan runs: its row appears after the first read of the store.
+    const archivedDuringScan: Record<string, object> = {}
     const store = {
       getSettings: () => ({
         workspaceDir: workspaces,
@@ -109,6 +113,7 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       ],
       // Archived: the row stays while its folder is gone, including one nested in a gone folder.
       getAllWorktreeMeta: () => ({
+        ...archivedDuringScan,
         [`app::${join(appWorkspaces, 'archived')}`]: {},
         [`app::${join(appWorkspaces, 'team', 'feature')}`]: {},
         [`app::${join(workspaces, 'docs')}`]: {},
@@ -124,29 +129,36 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     } as unknown as RuntimeStore
     const deleted: ChatHistoryTarget[] = []
 
+    const sessionsToList = [
+      session('gone.jsonl', gone),
+      session('gone-subfolder.jsonl', join(gone, 'packages', 'web')),
+      session('live.jsonl', join(appWorkspaces, 'live')),
+      session('archived.jsonl', join(appWorkspaces, 'archived')),
+      session('recent.jsonl', gone, { modifiedAt: TEN_MINUTES_AGO }),
+      session('outside.jsonl', join(root, 'elsewhere', 'gone')),
+      session('codex.jsonl', gone, { agent: 'codex' }),
+      session('server.jsonl', gone, { executionHostId: 'runtime:env-1' }),
+      session('unmounted.jsonl', join(root, 'unmounted', 'other', 'feature')),
+      session('renamed.jsonl', join(appWorkspaces, 'old-name')),
+      session('folder-workspace.jsonl', join(appWorkspaces, 'folder-workspace')),
+      session('nested-archived.jsonl', join(appWorkspaces, 'team', 'feature')),
+      session('not-a-workspace.jsonl', join(root, 'repos', 'sibling', 'old-tool')),
+      session('flat-workspace-subfolder.jsonl', join(workspaces, 'docs', 'packages', 'old')),
+      session('gone-physical.jsonl', physical(join(appWorkspaces, 'gone-two'))),
+      session('checkout-subfolder.jsonl', physical(join(root, 'repos', 'sibling', 'website'))),
+      session('unrelated-clone.jsonl', join(workspaces, 'api', 'old-package')),
+      session('symlinked-folder-project.jsonl', join(workspaces, 'tools', 'old')),
+      session('trimmed-cwd.jsonl', join(appWorkspaces, 'spaced')),
+      session('archived-mid-scan.jsonl', join(appWorkspaces, 'archived-mid-scan'))
+    ]
+
     const result = await sweepDeletedWorkspaceChatHistory({
       store,
       now: NOW,
-      listSessions: async () => [
-        session('gone.jsonl', gone),
-        session('gone-subfolder.jsonl', join(gone, 'packages', 'web')),
-        session('live.jsonl', join(appWorkspaces, 'live')),
-        session('archived.jsonl', join(appWorkspaces, 'archived')),
-        session('recent.jsonl', gone, { modifiedAt: TEN_MINUTES_AGO }),
-        session('outside.jsonl', join(root, 'elsewhere', 'gone')),
-        session('codex.jsonl', gone, { agent: 'codex' }),
-        session('server.jsonl', gone, { executionHostId: 'runtime:env-1' }),
-        session('unmounted.jsonl', join(root, 'unmounted', 'other', 'feature')),
-        session('renamed.jsonl', join(appWorkspaces, 'old-name')),
-        session('folder-workspace.jsonl', join(appWorkspaces, 'folder-workspace')),
-        session('nested-archived.jsonl', join(appWorkspaces, 'team', 'feature')),
-        session('not-a-workspace.jsonl', join(root, 'repos', 'sibling', 'old-tool')),
-        session('flat-workspace-subfolder.jsonl', join(workspaces, 'docs', 'packages', 'old')),
-        session('gone-physical.jsonl', physical(join(appWorkspaces, 'gone-two'))),
-        session('checkout-subfolder.jsonl', physical(join(root, 'repos', 'sibling', 'website'))),
-        session('unrelated-clone.jsonl', join(workspaces, 'api', 'old-package')),
-        session('symlinked-folder-project.jsonl', join(workspaces, 'tools', 'old'))
-      ],
+      listSessions: async () => {
+        archivedDuringScan[`app::${join(appWorkspaces, 'archived-mid-scan')}`] = {}
+        return sessionsToList
+      },
       isEnabled: () => true,
       deleteSessions: async (targets) => {
         deleted.push(...targets)

@@ -24,6 +24,11 @@ export class ChatHistorySweepSchedule {
     )
   }
 
+  /** When an hourly run next sweeps; startup, settings, Clean up now and the CLI always do. */
+  hourlyDueAt(): number {
+    return this.lastSweptAt + HOURLY_SWEEP_INTERVAL_MS
+  }
+
   /** Undefined when not due or when the scan failed: that is not a failed cleanup run, and the next run tries again. */
   async sweepIfDue(
     trigger: WorkspaceCleanupRunTrigger,

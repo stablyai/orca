@@ -1,4 +1,4 @@
-import { lstat, realpath, stat } from 'node:fs/promises'
+import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
@@ -14,8 +14,9 @@ import { listWorkspaceCleanupOwnedRepos } from '../workspace-cleanup-run-evidenc
 type Identity = string
 
 async function identityOf(path: string): Promise<Identity | null> {
-  return stat(path).then(
-    (stats) => (stats.isDirectory() ? `${stats.dev}:${stats.ino}` : null),
+  // Bigint: NTFS file ids exceed 2^53 and would round together; inode 0 means no identity.
+  return stat(path, { bigint: true }).then(
+    (stats) => (stats.isDirectory() && stats.ino !== 0n ? `${stats.dev}:${stats.ino}` : null),
     () => null
   )
 }
@@ -80,7 +81,8 @@ function listedPaths(store: RuntimeStore): string[] {
       }
     }
   }
-  return paths
+  // A WSL path can't protect a local parent, and touching it can boot a stopped distro.
+  return paths.filter((path) => !parseWslUncPath(path))
 }
 
 export type ListedFolders = {
@@ -108,7 +110,11 @@ export async function readListedFolders(store: RuntimeStore): Promise<ListedFold
 
 /** Whether the folder or any ancestor is something Orca still lists, such as a flat workspace named like a repo. */
 async function isInsideListedFolder(directory: string, listed: ListedFolders): Promise<boolean> {
-  let current = directory
+  // Walk the physical ancestors: a symlinked folder can sit inside a listed checkout elsewhere.
+  let current = await realpath(directory).catch(() => null)
+  if (current === null) {
+    return true
+  }
   for (;;) {
     const id = await identityOf(current)
     if (id && listed.present.has(id)) {
@@ -166,10 +172,21 @@ export async function readWorkspaceParents(
   return { scopePaths, ids }
 }
 
-/** Re-reads the gone folder right before deletion: the volume may be gone or the folder recreated. */
+/**
+ * Whether the ancestor holds a folder that could be this one under a lossy spelling: transcript
+ * parsers trim the recorded cwd, and names can differ only in case or Unicode form.
+ */
+async function hasLookalikeSibling(folder: GoneFolder): Promise<boolean> {
+  const wanted = foldName(folder.name.trim())
+  const entries = await readdir(folder.ancestor).catch(() => null)
+  return entries === null || entries.some((entry) => foldName(entry.trim()) === wanted)
+}
+
+/** Whether the gone folder is gone under every spelling; also re-read right before deletion. */
 export async function isStillGone(folder: GoneFolder): Promise<boolean> {
   return (
     (await identityOf(folder.ancestor)) === folder.ancestorId &&
-    (await presence(join(folder.ancestor, folder.name))) === 'missing'
+    (await presence(join(folder.ancestor, folder.name))) === 'missing' &&
+    !(await hasLookalikeSibling(folder))
   )
 }

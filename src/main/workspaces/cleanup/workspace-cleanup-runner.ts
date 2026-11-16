@@ -64,6 +64,7 @@ export class WorkspaceCleanupRunner {
   private readonly previews = new Map<string, Promise<WorkspaceCleanupPreview>>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private nextRunAt: number | null = null
+  private nextTrigger: WorkspaceCleanupRunTrigger | null = null
   private enabledRules = new Set<string>()
   private chatHistoryOn = false
   private unsubscribe: (() => void) | null = null
@@ -151,12 +152,24 @@ export class WorkspaceCleanupRunner {
     return {
       runs: await readWorkspaceCleanupRunHistory(this.deps.historyDirectory),
       running: this.isRunning(),
-      nextRunAt: this.hasWork() ? this.nextRunAt : null
+      nextRunAt: this.reportedNextRunAt()
     }
   }
 
   private hasWork(): boolean {
     return this.enabledRules.size > 0 || this.chatHistoryOn
+  }
+
+  /** With only chat history on, hourly ticks before its sweep is due run nothing, so report the one that does. */
+  private reportedNextRunAt(): number | null {
+    const next = this.nextRunAt
+    if (next === null || !this.hasWork()) {
+      return null
+    }
+    const due = this.chatHistory.hourlyDueAt()
+    return this.enabledRules.size > 0 || this.nextTrigger !== 'hourly' || due <= next
+      ? next
+      : next + Math.ceil((due - next) / HOURLY_MS) * HOURLY_MS
   }
 
   private globalRules(): WorkspaceCleanupRules {
@@ -168,6 +181,7 @@ export class WorkspaceCleanupRunner {
       clearTimeout(this.timer)
     }
     this.nextRunAt = Date.now() + delayMs
+    this.nextTrigger = trigger
     this.timer = setTimeout(() => {
       this.timer = null
       void this.runScheduled(trigger)
