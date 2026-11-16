@@ -5,6 +5,7 @@
 //   DELETE /v1/sandboxes/:id/shares/:shareId                              -> {share}
 //   POST   /v1/shares/:token/visit -> {url}  (team-only: a one-time sign-in URL for this viewer)
 // The public side is src/share-gateway.ts.
+import { devOnly } from './dev-only'
 import { auditSession } from './api/audit'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
@@ -77,7 +78,7 @@ export function shareSecrets(env: Env): string[] | null {
  * from SHARE_HOST_SUFFIX (a separate registrable domain).
  */
 export function sharePathMode(env: Env): boolean {
-  return env.SHARE_PATH_MODE === 'on' || (env.SHARE_PATH_MODE !== 'off' && env.SANDBOX_ENV !== 'prod')
+  return env.SHARE_PATH_MODE === 'on' || (env.SHARE_PATH_MODE !== 'off' && devOnly(env))
 }
 
 export function shareState(link: ShareLinkRow, now: number): ShareState {

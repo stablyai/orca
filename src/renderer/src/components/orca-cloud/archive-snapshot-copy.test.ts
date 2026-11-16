@@ -1,43 +1,49 @@
 import { describe, expect, it } from 'vitest'
 import { translate } from '@/i18n/i18n'
-import { formatShortDate } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import { archivedSnapshotLine, archiveSnapshotDefinition } from './archive-snapshot-copy'
+import {
+  archiveDialogKeptLine,
+  archivedCountdownShort,
+  archivedSnapshotLine,
+  archiveSnapshotDefinition
+} from './archive-snapshot-copy'
 import { cloudStateDetail } from './cloud-state-copy'
 
 const NOW = Date.UTC(2026, 10, 11, 12)
 const DAY = 86_400_000
 
-describe('archiveSnapshotDefinition (one definition of "snapshot")', () => {
-  it('names an archived workspace’s own kept-until date', () => {
-    const keptUntil = NOW + 9 * DAY
-    const text = archiveSnapshotDefinition(translate, { keptUntil, ttlDays: 30, now: NOW })
-    expect(text).toContain(`until ${formatShortDate(keptUntil)}, then deletes it`)
-    expect(text).toContain('its files, chats and terminal history')
-    expect(text).toContain('Like a sleeping workspace, it doesn’t use sandbox hours.')
+describe('archive copy: relative retention, never an unexplained date', () => {
+  it('the Archive tooltip is one short sentence with the control plane’s TTL', () => {
+    const text = archiveSnapshotDefinition(translate, { ttlDays: 14 })
+    expect(text).toBe('Stops the workspace and keeps it for 14 days, then deletes it.')
+    expect(text.split(/\s+/).length).toBeLessThanOrEqual(12)
   })
 
-  it('before archiving: today plus the control plane’s TTL, so a deployed override shows', () => {
-    const text = archiveSnapshotDefinition(translate, { ttlDays: 14, now: NOW })
-    expect(text).toContain(`until ${formatShortDate(NOW + 14 * DAY)}`)
-  })
-
-  it('without a date or TTL it says "for 30 days" and never invents a date', () => {
-    const text = archiveSnapshotDefinition(translate, { ttlDays: null, now: NOW })
-    expect(text).toContain('for 30 days, then deletes it')
-    expect(text).not.toContain('until')
-  })
-
-  it('an archived workspace reads in the archived voice everywhere: what it holds, the day it is deleted', () => {
-    const keptUntil = NOW + 3 * DAY
-    const line = archivedSnapshotLine(translate, keptUntil)
-    expect(line).toBe(
-      `A read-only snapshot of its files, chats and terminal history. Unarchive before ${formatShortDate(keptUntil)} to open terminals and agents again; after that it’s deleted.`
+  it('before the TTL loads it says 30 days, the control plane default', () => {
+    expect(archiveSnapshotDefinition(translate, { ttlDays: null })).toBe(
+      'Stops the workspace and keeps it for 30 days, then deletes it.'
     )
-    // The status and hovercard state line say the same words as the archived view.
-    expect(cloudStateDetail('archived', translate, keptUntil)).toBe(line)
-    // No sandbox-hours sentence for a workspace that's already archived.
-    expect(line).not.toContain('sandbox hours')
-    // An older control plane without a date: the 30-day rule, never an invented date.
-    expect(cloudStateDetail('archived', translate)).toContain('within 30 days of archiving')
+    expect(archiveDialogKeptLine(translate, null)).toBe(
+      'It’s kept for 30 days, then deleted. You can unarchive it until then.'
+    )
+  })
+
+  it('an archived workspace counts down in days, in the same words on every surface', () => {
+    const keptUntil = NOW + 3 * DAY - 60_000
+    const line = archivedSnapshotLine(translate, keptUntil, NOW)
+    expect(line).toBe('Read-only. Deletes in 3 days unless you unarchive it.')
+    expect(archivedSnapshotLine(translate, NOW + DAY, NOW)).toBe(
+      'Read-only. Deletes in 1 day unless you unarchive it.'
+    )
+    expect(archivedSnapshotLine(translate, NOW - 1, NOW)).toBe(
+      'Read-only. Deletes today unless you unarchive it.'
+    )
+    expect(archivedCountdownShort(translate, keptUntil, NOW)).toBe('deletes in 3 days')
+    expect(line).not.toMatch(/snapshot|sandbox hours/)
+  })
+
+  it('without a deletion date (older control plane) it names the rule, never a date', () => {
+    expect(cloudStateDetail('archived', translate)).toBe(
+      'Read-only. Deletes 30 days after archiving unless you unarchive it.'
+    )
   })
 })

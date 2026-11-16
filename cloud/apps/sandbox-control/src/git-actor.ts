@@ -7,7 +7,7 @@ import type { SandboxRow } from './store'
 
 export type GithubActing =
   | { actingAs: 'member'; userId: string; login: string }
-  | { actingAs: 'bot'; reason: 'not_github' | 'off' | 'sender_not_connected' | 'reconnect' }
+  | { actingAs: 'bot'; reason: 'not_github' | 'off' | 'transferred' | 'sender_not_connected' | 'reconnect' }
 
 /** The env side: whether GH-AS-MEMBER applies to an account. */
 export type GithubActingOptions = { enabled: (accountId: string) => boolean }
@@ -77,6 +77,10 @@ function decide(row: SandboxRow, owner: GitHubUserTokenRow | null, now: number, 
   }
   if (!options.enabled(row.account_id)) {
     return { actingAs: 'bot', reason: 'off' }
+  }
+  // OWNER-TRANSFER: never the new owner on GitHub (member-git.ts memberMayAct).
+  if (row.ownership_transferred_at != null) {
+    return { actingAs: 'bot', reason: 'transferred' }
   }
   if (!owner) {
     return { actingAs: 'bot', reason: 'sender_not_connected' }

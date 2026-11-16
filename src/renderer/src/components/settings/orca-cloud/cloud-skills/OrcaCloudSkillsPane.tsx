@@ -73,7 +73,7 @@ export function CloudSkillsSyncSettingsView({
         title={t('cloudSkillsSync.autoSync', 'Sync when a workspace starts or wakes')}
         description={t(
           'cloudAgentConfig.autoSyncHint',
-          'Copies your Claude and Codex skills, commands, subagents, output styles and memory you’ve turned on into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten.'
+          'Copies what you turn on here into each cloud workspace, without overwriting changes made there. Anything that looks like a key stays on this computer.'
         )}
         checked={preferences.autoSync}
         onChange={(autoSync) => onChange({ autoSync })}

@@ -179,6 +179,9 @@ describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail
     const off = await setup()
     await off.seed('alice', 'alice-gh', 11, false)
     expect((await detail(off, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'off' })
+    // A transferred workspace is the App's on GitHub, whoever owns it now.
+    t.h.raw.prepare('UPDATE sandboxes SET ownership_transferred_at = 1 WHERE id = ?').run(t.id)
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'transferred' })
   })
 
   it('a teammate sees nothing; a row still stored as team stays the owner’s', async () => {
