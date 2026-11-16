@@ -6917,36 +6917,6 @@
           "durationSeconds": 549,
           "summary": "The primary user topology used an isolated headed Orca desktop as the owning server and a separate paired Edge client. Host inspection reported Codex alive before, during, and after a page-scoped WebSocket fault; the client showed no completion toast, reconnected to the same live Codex TUI, and explicit stop restored the shell prompt with no child process.",
           "currentCommand": "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop"
-        },
-        {
-          "date": "2026-07-22",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
-          "result": "failed",
-          "durationSeconds": 3.11,
-          "summary": "The exact cross-boundary oracle failed on pre-#9687 commit 2a32c5c9a because the retired publication still contained the pinned persisted terminal surface.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts"
-        },
-        {
-          "date": "2026-07-22",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
-          "result": "failed",
-          "durationSeconds": 3.48,
-          "summary": "The exact strengthened oracle failed on PR #9053 head d3a1d3047 because its stale-headless pruning retained the pinned persisted terminal surface.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts"
-        },
-        {
-          "date": "2026-07-22",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
-          "result": "passed",
-          "durationSeconds": 3.18,
-          "summary": "The same strengthened oracle passed on main@4fce2de49.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -7054,7 +7024,8 @@
         "Audit5916 removes the entire local-worktree-creation-part-02.spec import from the retained runtime driver, intentionally losing the mocked exact-name create refusal when a selected PR matches a remote branch. The sole zero-auth terminal-handle registrar for another deleted suite is also retired, with no authored credit. Driver selectors retain only their narrowed import scope. Unchanged dated independent receipts are not equivalent replacement or fresh whole-gate validation. ",
         "Audit5922 intentionally retires Gemini interrupt versus Codex navigation classification and command-finished cleanup arbitration under supplied status/transport; the retained completion wrapper loses exactly two finite arbitration cases while its other registration factories remain. These narrow alarms are lost without equivalent replacement. Remaining selectors/assertions and dated evidenceRuns retain their original scope; no fresh validation or whole-gate replacement claim. Preserve complete historical narratives and earlier knownGaps verbatim.",
         "Audit5943 retires the complete task-complete-dispatch registration fragment (three cases) from the retained completion wrapper. Generic-spinner false completion suppression, hidden idle-cursor reset byte ordering and exclusion of stale prior-turn notification prompts/details lose these narrow alarms without equivalent replacement. Other wrapper factories and selectors keep their original scope; this audit transfers no fresh run or whole-gate coverage. Prior dated evidence and earlier gaps remain historical.",
-        "Audit5946 retires seven finite hook-completion side-effect cases and two narrow command-finished routing cases from the retained completion wrapper. Hook versus title/process completion notification timing, replacement-agent attention veto, cache/cursor/focus-report side effects and two Droid/shell-routing projection alarms lose these examples without equivalent replacement. Identity-preserving sleeping records, accepted-status reconciliation, ordered input mode teardown, owner/refusal and liveness guards remain. Other factories and selectors retain only their original scope; no fresh execution or whole-gate equivalence is claimed. Preserve earlier knownGaps and complete dated evidence as history"
+        "Audit5946 retires seven finite hook-completion side-effect cases and two narrow command-finished routing cases from the retained completion wrapper. Hook versus title/process completion notification timing, replacement-agent attention veto, cache/cursor/focus-report side effects and two Droid/shell-routing projection alarms lose these examples without equivalent replacement. Identity-preserving sleeping records, accepted-status reconciliation, ordered input mode teardown, owner/refusal and liveness guards remain. Other factories and selectors retain only their original scope; no fresh execution or whole-gate equivalence is claimed. Preserve earlier knownGaps and complete dated evidence as history",
+        "Module-layout settings/host cleanup retires these three complete historical remote-terminal-tab-retirement receipts because their whole test Program is removed. They describe only the original dated source and are no longer active evidence; no equivalent replacement or fresh validation is claimed. Full original receipts: [{\"date\":\"2026-07-22\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts\",\"result\":\"failed\",\"durationSeconds\":3.11,\"summary\":\"The exact cross-boundary oracle failed on pre-#9687 commit 2a32c5c9a because the retired publication still contained the pinned persisted terminal surface.\",\"currentCommand\":\"pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts\"},{\"date\":\"2026-07-22\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts\",\"result\":\"failed\",\"durationSeconds\":3.48,\"summary\":\"The exact strengthened oracle failed on PR #9053 head d3a1d3047 because its stale-headless pruning retained the pinned persisted terminal surface.\",\"currentCommand\":\"pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts\"},{\"date\":\"2026-07-22\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts\",\"result\":\"passed\",\"durationSeconds\":3.18,\"summary\":\"The same strengthened oracle passed on main@4fce2de49.\",\"currentCommand\":\"pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-terminal-tab-retirement.unit.test.ts\"}]"
       ],
       "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if a retry can physically spawn twice, if a stale exit/publication can replace or resurrect a terminal, or if mixed-version fallback occurs after an authority side effect."
     },
