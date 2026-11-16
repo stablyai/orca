@@ -5,12 +5,13 @@
 // mode those requests are forwarded to the proxy for this check instead of being swapped by the firewall.
 import { Kind, parse, type DocumentNode, type FragmentDefinitionNode, type SelectionSetNode, type ValueNode } from 'graphql'
 
+const pathOfEarly = (path: string) => (path.split('?')[0] ?? '').toLowerCase()
 export const APPROVAL_REFUSED_MESSAGE =
   "Approvals have to be done by a person on GitHub, not from an Orca Cloud workspace. Open the pull request on github.com to approve it."
 
 /** The answer a refused approval gets: GitHub-shaped JSON for REST, a GraphQL error for /graphql. */
 export function approvalRefusal(path: string): { deny: string; answer: { status: number; contentType: string; body: string } } {
-  const graphql = (path.split('?')[0] ?? '') === '/graphql'
+  const graphql = pathOfEarly(path) === '/graphql'
   return {
     deny: 'approval_refused',
     answer: {
@@ -21,22 +22,76 @@ export function approvalRefusal(path: string): { deny: string; answer: { status:
   }
 }
 
+/** Review G2's refusal: GitHub-shaped, says what to do. */
+export const UNNORMALIZED_WRITE_REFUSAL = {
+  deny: 'path_not_allowed',
+  answer: { status: 403, contentType: 'application/json', body: JSON.stringify({ message: 'Orca Cloud refused this request: its path has escapes or empty or dot segments. Send the plain path.' }) }
+}
+
 /** A pull request review, or a pending review's submission (case-insensitive, optional trailing slash). */
 export const REVIEW_PATH = /\/pulls\/\d+\/reviews(\/\d+\/events)?\/?$/i
+/** Dismissing a review (unblocks a merge a REQUEST_CHANGES review was holding). */
+const DISMISSAL_PATH = /\/pulls\/\d+\/reviews\/\d+\/dismissals\/?$/i
+/** Approving a fork PR's workflow run, or an environment deployment waiting for review. */
+const RUN_APPROVAL_PATH = /\/actions\/runs\/\d+\/approve\/?$/i
+const PENDING_DEPLOYMENTS_PATH = /\/actions\/runs\/\d+\/pending_deployments\/?$/i
+
+const pathOf = (path: string) => (path.split('?')[0] ?? '').toLowerCase()
+const writes = (method: string) => !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())
+
+/**
+ * Review G2: a write whose path GitHub would normalize differently than these checks read it (percent-escapes, empty
+ * or dot segments) is refused outright, so `/repos/o/r/pulls/7/%72eviews` or `/x/%2e%2e/repos/...` can't slip past.
+ */
+export function unnormalizedWrite(method: string, path: string): boolean {
+  if (!writes(method)) {
+    return false
+  }
+  const raw = path.split('?')[0] ?? ''
+  return raw.includes('%') || raw.includes('//') || raw.split('/').some((segment) => segment === '.' || segment === '..')
+}
 
 /** Requests whose body the approval check must read (the proxy reads it as text only for these). */
 export function approvalCheckReadsBody(method: string, path: string): boolean {
-  const pathname = path.split('?')[0] ?? ''
-  return method.toUpperCase() === 'POST' && (pathname === '/graphql' || REVIEW_PATH.test(pathname))
+  if (method.toUpperCase() !== 'POST') {
+    return false
+  }
+  const pathname = pathOf(path)
+  return pathname === '/graphql' || REVIEW_PATH.test(pathname) || PENDING_DEPLOYMENTS_PATH.test(pathname)
 }
 
-/** Is this request an approval (REST or GraphQL)? Anything unreadable on those endpoints counts as one. */
+/** Is this request an approval, or approval-shaped (REST or GraphQL)? Anything unreadable on those counts as one. */
 export function requestApproves(request: { method: string; path: string; body: string | null }): boolean {
+  const method = request.method.toUpperCase()
+  const pathname = pathOf(request.path)
+  if (method === 'PUT' && DISMISSAL_PATH.test(pathname)) {
+    return true
+  }
+  if (method === 'POST' && RUN_APPROVAL_PATH.test(pathname)) {
+    return true
+  }
   if (!approvalCheckReadsBody(request.method, request.path)) {
     return false
   }
-  const pathname = request.path.split('?')[0] ?? ''
-  return pathname === '/graphql' ? graphqlApproves(request.body) : restApproves(request.body)
+  if (pathname === '/graphql') {
+    return graphqlApproves(request.body)
+  }
+  if (PENDING_DEPLOYMENTS_PATH.test(pathname)) {
+    return deploymentApproves(request.body)
+  }
+  return restApproves(request.body)
+}
+
+function deploymentApproves(body: string | null): boolean {
+  if (body === null) {
+    return true
+  }
+  try {
+    const state = (JSON.parse(body) as { state?: unknown } | null)?.state
+    return String(state ?? '').toLowerCase() !== 'rejected'
+  } catch {
+    return true
+  }
 }
 
 function restApproves(body: string | null): boolean {
@@ -52,6 +107,8 @@ function restApproves(body: string | null): boolean {
 }
 
 const REVIEW_MUTATIONS = new Set(['addPullRequestReview', 'submitPullRequestReview'])
+/** Approval-shaped mutations refused whatever their input (review G4). */
+const ALWAYS_REFUSED_MUTATIONS = new Set(['dismissPullRequestReview'])
 type Variables = Record<string, unknown>
 
 /** Fails toward "approves": an unreadable body, or a review mutation whose event can't be resolved. */
@@ -63,15 +120,17 @@ export function graphqlApproves(body: string | null): boolean {
   try {
     parsed = JSON.parse(body)
   } catch {
-    return mentionsReviewApproval(body)
+    // Review G3: unreadable (a Content-Encoding'd body never parses as JSON): refused.
+    return true
   }
   // Batched requests: any of them.
   const requests = Array.isArray(parsed) ? parsed : [parsed]
   return requests.some((request) => requestBodyApproves(request))
 }
 
-function mentionsReviewApproval(text: string): boolean {
-  return /addPullRequestReview|submitPullRequestReview/.test(text) && /approve/i.test(text)
+/** Review G3: a query graphql-js can't parse but GitHub might: refused if it names a review mutation at all. */
+function mentionsReviewMutation(text: string): boolean {
+  return /addPullRequestReview|submitPullRequestReview|dismissPullRequestReview/i.test(text)
 }
 
 function requestBodyApproves(request: unknown): boolean {
@@ -86,7 +145,7 @@ function requestBodyApproves(request: unknown): boolean {
   try {
     document = parse(query, { noLocation: true, maxTokens: 20_000 })
   } catch {
-    return mentionsReviewApproval(query)
+    return mentionsReviewMutation(query)
   }
   const vars: Variables = variables && typeof variables === 'object' && !Array.isArray(variables) ? (variables as Variables) : {}
   const fragments = new Map<string, FragmentDefinitionNode>()
@@ -115,6 +174,9 @@ function requestBodyApproves(request: unknown): boolean {
 function selectionsApprove(set: SelectionSetNode, fragments: ReadonlyMap<string, FragmentDefinitionNode>, vars: Variables, seen: Set<string>): boolean {
   for (const selection of set.selections) {
     if (selection.kind === Kind.FIELD) {
+      if (ALWAYS_REFUSED_MUTATIONS.has(selection.name.value)) {
+        return true
+      }
       if (REVIEW_MUTATIONS.has(selection.name.value) && fieldApproves(selection.name.value, selection.arguments ?? [], vars)) {
         return true
       }

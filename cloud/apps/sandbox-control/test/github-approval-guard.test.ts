@@ -1,6 +1,6 @@
 // APPROVALS-REFUSED: what counts as an approval on api.github.com, fail-closed on anything unclear.
 import { describe, expect, it } from 'vitest'
-import { graphqlApproves, requestApproves } from '../src/github-approval-guard'
+import { graphqlApproves, requestApproves, unnormalizedWrite } from '../src/github-approval-guard'
 
 const gql = (query: string, variables?: unknown, extra: Record<string, unknown> = {}) => JSON.stringify({ query, ...(variables ? { variables } : {}), ...extra })
 
@@ -24,7 +24,13 @@ describe('GraphQL approvals', () => {
       gql('mutation M($i: AddPullRequestReviewInput!) { addPullRequestReview(input: $i) { clientMutationId } }'),
       gql('mutation { submitPullRequestReview(input: { pullRequestReviewId: "R" }) { clientMutationId } }'),
       gql('mutation { addPullRequestReview(input: { pullRequestId: "P", event: APPROVE }'),
-      'not json addPullRequestReview APPROVE'
+      'not json addPullRequestReview APPROVE',
+      // Review G3: unreadable is refused (a gzip body never parses); an unparsable query naming a review mutation too,
+      // its event may be in the variables.
+      '\u001f\u008b\u0008binary',
+      gql('mutation M($i: X!) { addPullRequestReview(input: $i) { clientMutationId } ', { i: { pullRequestId: 'P', event: 'APPROVE' } }),
+      // Review G4: dismissing a review unblocks a merge.
+      gql('mutation { dismissPullRequestReview(input: { pullRequestReviewId: "R", message: "x" }) { clientMutationId } }')
     ]) {
       expect(graphqlApproves(body), body).toBe(true)
     }
@@ -59,3 +65,23 @@ describe('REST approvals', () => {
     expect(requestApproves({ method: 'GET', path: '/repos/a/b/pulls/1/reviews', body: null })).toBe(false)
   })
 })
+
+describe('review G2 and G4: unnormalized write paths; approval-shaped REST actions', () => {
+  it('a write with escapes, empty or dot segments is refused before any check; reads are untouched', () => {
+    for (const path of ['/repos/o/r/pulls/7/%72eviews', '/x/%2e%2e/repos/o/r/pulls/7/reviews', '//repos/o/r/pulls/7/reviews', '/repos/o/r/./pulls/7/reviews', '/repos/o/r/../r/pulls/7/reviews']) {
+      expect(unnormalizedWrite('POST', path), path).toBe(true)
+    }
+    expect(unnormalizedWrite('GET', '/repos/o/r/%2e%2e')).toBe(false)
+    expect(unnormalizedWrite('POST', '/repos/o/r/issues/7/comments?x=%20')).toBe(false)
+  })
+
+  it('dismissals, fork-run approvals and environment approvals are refused; repository-id routes are covered', () => {
+    expect(requestApproves({ method: 'PUT', path: '/repos/o/r/pulls/7/reviews/9/dismissals', body: '{}' })).toBe(true)
+    expect(requestApproves({ method: 'POST', path: '/repos/o/r/actions/runs/5/approve', body: null })).toBe(true)
+    expect(requestApproves({ method: 'POST', path: '/repos/o/r/actions/runs/5/pending_deployments', body: JSON.stringify({ state: 'approved', environment_ids: [1] }) })).toBe(true)
+    expect(requestApproves({ method: 'POST', path: '/repos/o/r/actions/runs/5/pending_deployments', body: JSON.stringify({ state: 'rejected', environment_ids: [1] }) })).toBe(false)
+    expect(requestApproves({ method: 'POST', path: '/repositories/123/pulls/7/reviews', body: JSON.stringify({ event: 'APPROVE' }) })).toBe(true)
+    expect(requestApproves({ method: 'POST', path: '/GraphQL', body: gql('mutation { addPullRequestReview(input: { pullRequestId: "P", event: APPROVE }) { clientMutationId } }') })).toBe(true)
+  })
+})
+

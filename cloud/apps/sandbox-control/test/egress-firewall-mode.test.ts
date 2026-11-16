@@ -61,11 +61,11 @@ describe('EGRESS firewall mode', () => {
     const git = gitBasicAuthorization(githubPlaceholderToken(row))
     expect(claims(rules('github.com'), git)[0]).toMatchObject({ transform: [{ headers: { authorization: gitBasicAuthorization(APP_TOKEN) } }] })
     const [bearer, token] = githubPlaceholderHeaders(row)
-    // APPROVALS-REFUSED: POST /graphql and POSTs under /repos/ go to the proxy first; the firewall swaps the rest.
+    // APPROVALS-REFUSED: every write goes to the proxy first; the firewall swaps reads.
     const swap = (placeholder: string) => claims(rules('api.github.com'), placeholder).find((rule) => 'transform' in rule)
     expect(swap(bearer!)).toMatchObject({ transform: [{ headers: { authorization: `Bearer ${APP_TOKEN}` } }] })
     expect(swap(token!)).toMatchObject({ transform: [{ headers: { authorization: `token ${APP_TOKEN}` } }] })
-    expect(claims(rules('api.github.com'), bearer!)[0]).toMatchObject({ match: { path: { exact: '/graphql' }, method: ['POST'] } })
+    expect(claims(rules('api.github.com'), bearer!)[0]).toMatchObject({ match: { path: { startsWith: '/' }, method: ['POST', 'PUT', 'PATCH', 'DELETE'] } })
   })
 
   it('W1: Cursor’s key exchange stays on the egress proxy (its reply is filtered), never in the policy', async () => {
@@ -100,7 +100,7 @@ describe('EGRESS firewall mode', () => {
     expect(JSON.stringify(box().policy.allow['api.anthropic.com'])).not.toContain(ANTHROPIC_KEY)
   })
 
-  it('APPROVALS-REFUSED: with the App token on the firewall, POST /graphql and POSTs under /repos/ go to the proxy first', async () => {
+  it('APPROVALS-REFUSED: with the App token on the firewall, every write goes to the proxy first, whatever its path', async () => {
     const { egressPolicy } = await import('../src/lifecycle')
     const { h } = await setup()
     const life = (await lifecycleDeps(h.env, h.deps))!
@@ -108,11 +108,8 @@ describe('EGRESS firewall mode', () => {
     const policy = egressPolicy(life, row, 'ghs_app_token', [], { classes: new Set(['github_app']), full: true, accounts: [], secrets: new Map() })
     const api = policy.allow['api.github.com']!
     const forwards = api.filter((rule) => 'forwardURL' in rule)
-    expect(forwards.map((rule) => [(rule as { match: { path: unknown; method?: unknown } }).match.path, (rule as { match: { method?: unknown } }).match.method])).toEqual(
-      expect.arrayContaining([
-        [{ exact: '/graphql' }, ['POST']],
-        [{ startsWith: '/repos/' }, ['POST']]
-      ])
+    expect(new Set(forwards.map((rule) => JSON.stringify([(rule as { match: { path: unknown } }).match.path, (rule as { match: { method?: unknown } }).match.method])))).toEqual(
+      new Set([JSON.stringify([{ startsWith: '/' }, ['POST', 'PUT', 'PATCH', 'DELETE']])])
     )
     // The forwards come before the firewall swap, so they claim those requests first; the token is only in the swap.
     const firstTransform = api.findIndex((rule) => 'transform' in rule)

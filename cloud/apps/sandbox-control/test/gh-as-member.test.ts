@@ -168,6 +168,11 @@ describe('APPROVALS-REFUSED: no approval leaves a workspace; merges are the owne
     expect((await app('/repos/acme/app/pulls/7/reviews', { event: 'APPROVE' })).status).toBe(403)
     expect((await app('/graphql', { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_x", event: APPROVE }) { clientMutationId } }' })).status).toBe(403)
     expect(t.upstream.length).toBe(before)
+    // Review G2/G4: an escaped path or a dismissal is refused too.
+    expect((await app('/repos/acme/app/pulls/7/%72eviews', { event: 'APPROVE' })).status).toBe(403)
+    expect((await t.api('/repos/acme/app/pulls/7/reviews/3/dismissals', 'PUT', { message: 'x' }, `Bearer orca-ph-${t.id}`)).status).toBe(403)
+    expect((await t.api('/repos/acme/app/pulls/7/%72eviews', 'POST', { event: 'APPROVE' })).status).toBe(403)
+    expect(t.upstream.length).toBe(before)
     expect((await app('/repos/acme/app/issues/7/comments', { body: 'x' })).status).toBe(200)
     expect(t.upstream.at(-1)!.authorization).toBe(APP)
     expect((await app('/repos/acme/app/pulls/7/reviews', { event: 'COMMENT', body: 'x' })).status).toBe(200)

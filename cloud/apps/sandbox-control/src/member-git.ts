@@ -8,7 +8,7 @@ import type { ProxiedRoute } from './egress-proxy'
 import { parseGitHubRepo } from './github-app'
 import { getUserTokenRow, memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { gitBasicAuthorization } from './network-policy'
-import { approvalCheckReadsBody, approvalRefusal, requestApproves } from './github-approval-guard'
+import { UNNORMALIZED_WRITE_REFUSAL, approvalCheckReadsBody, approvalRefusal, requestApproves, unnormalizedWrite } from './github-approval-guard'
 import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, classifyGraphqlRequest, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
 import { settledCache } from './settled-cache'
 import type { SandboxRow } from './store'
@@ -88,7 +88,7 @@ export function memberGitRoutes(deps: MemberGitDeps) {
             : {
                 header: 'authorization',
                 placeholders: [`Bearer ${placeholder}`, `token ${placeholder}`],
-                readsBody: (method, path) => (method.toUpperCase() === 'POST' && path.split('?')[0] === '/graphql') || approvalCheckReadsBody(method, path),
+                readsBody: (method, path) => (method.toUpperCase() === 'POST' && (path.split('?')[0] ?? '').toLowerCase() === '/graphql') || approvalCheckReadsBody(method, path),
                 credential: async (request) => memberApiCredential(deps, row, identity, allowed, request)
               }
         )
@@ -171,7 +171,11 @@ async function memberApiCredential(
   allowed: (method: string, path: string) => boolean,
   request: { method: string; path: string; body: string | null }
 ): ReturnType<ProxiedRoute['credential']> {
-  // APPROVALS-REFUSED (github-approval-guard.ts): never from a workspace, on any identity.
+  // APPROVALS-REFUSED (github-approval-guard.ts): never from a workspace, on any identity. A write whose path GitHub
+  // would normalize differently than this check reads it is refused first (review G2).
+  if (unnormalizedWrite(request.method, request.path)) {
+    return UNNORMALIZED_WRITE_REFUSAL
+  }
   if (requestApproves(request)) {
     return approvalRefusal(request.path)
   }

@@ -516,18 +516,16 @@ export function egressPolicy(
           : []),
         ...(appOnFirewall && gitToken
           ? [
-              // APPROVALS-REFUSED: what could be an approval (GraphQL, and POSTs under /repos/, reviews among them)
-              // goes to the proxy, which reads the body and refuses approvals; the firewall swaps the rest.
+              // APPROVALS-REFUSED: every write with the App placeholder goes to the proxy, which reads it and refuses
+              // approvals; only reads (GET/HEAD) are swapped by the firewall. Not scoped by path: the firewall matches
+              // the raw path and GitHub normalizes it (review G1, the #776 lesson).
               {
                 host: 'api.github.com',
                 header: 'authorization',
                 placeholders: githubPlaceholderHeaders(row),
                 via: 'forward' as const,
                 forwardURL: proxyUrl,
-                paths: [
-                  { exact: '/graphql', methods: ['POST'] },
-                  { startsWith: '/repos/', methods: ['POST'] }
-                ]
+                paths: [{ startsWith: '/', methods: ['POST', 'PUT', 'PATCH', 'DELETE'] }]
               },
               ...githubPlaceholderHeaders(row).map(
               (placeholder): CredentialRoute => ({
