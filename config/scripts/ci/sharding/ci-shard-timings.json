@@ -5017,7 +5017,6 @@
       "tests/e2e/tab-sidebar-closed-overlap.spec.ts": 28600,
       "tests/e2e/tabs.spec.ts": 164500,
       "tests/e2e/tasks-page.spec.ts": 90400,
-      "tests/e2e/terminal-attention.spec.ts": 69700,
       "tests/e2e/terminal-cjk-ime-committed-text.spec.ts": 122400,
       "tests/e2e/terminal-codex-hidden-startup-background.spec.ts": 17500,
       "tests/e2e/terminal-codex-home.spec.ts": 14600,
