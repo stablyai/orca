@@ -13,19 +13,22 @@ type Props = {
 
 export function ProxyTlsSettingsFields({ settings, updateSettings }: Props): React.JSX.Element {
   const source = settings.httpProxyCaCertificate ?? ''
-  const [draft, setDraft] = useState(source)
+  const [draft, setDraft] = useState<string | null>(null)
   const [previousSource, setPreviousSource] = useState(source)
   const [error, setError] = useState<string | null>(null)
   if (source !== previousSource) {
     setPreviousSource(source)
-    setDraft(source)
     setError(null)
   }
 
   const save = async (updates: Partial<GlobalSettings>): Promise<void> => {
+    const submittedDraft = draft
     setError(null)
     try {
       await updateSettings(updates)
+      if (updates.httpProxyCaCertificate !== undefined) {
+        setDraft((current) => (current === submittedDraft ? null : current))
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
@@ -39,14 +42,15 @@ export function ProxyTlsSettingsFields({ settings, updateSettings }: Props): Rea
         </Label>
         <Textarea
           id="settings-proxy-ca-certificate"
-          value={draft}
+          value={draft ?? source}
           onChange={(event) => {
             setDraft(event.target.value)
             setError(null)
           }}
           onBlur={() => {
-            if (draft.trim() !== source) {
-              void save({ httpProxyCaCertificate: draft.trim() })
+            const certificate = (draft ?? source).trim()
+            if (certificate !== source) {
+              void save({ httpProxyCaCertificate: certificate })
             }
           }}
           autoCapitalize="none"

@@ -244,7 +244,11 @@ export function AdvancedNetworkSettingsSection({
         'bypass',
         'localhost',
         'mirror',
-        'nodejs'
+        'nodejs',
+        'ssl',
+        'tls',
+        'ca',
+        'pem'
       ]}
       className="space-y-3 py-3"
     >
