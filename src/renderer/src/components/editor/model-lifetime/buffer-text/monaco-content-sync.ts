@@ -1,4 +1,5 @@
 import type { editor } from 'monaco-editor'
+import { markForeignLineBreaks } from './new-model-line-ending-state'
 
 export type MonacoContentSyncMode = 'undoable' | 'read-only-live-tail'
 
@@ -16,10 +17,21 @@ export function normalizeToModelEol(
   return content.replace(separators, eol)
 }
 
-/** A model without line breaks takes the ending of incoming text that has them, as a fresh load would. */
-function adoptIncomingLineEnding(model: editor.ITextModel, content: string): void {
+/**
+ * Outside text with line breaks makes the model an existing file, mounted or not; a model without
+ * line breaks takes that text's ending, as a fresh load would.
+ */
+function adoptIncomingLineEnding(
+  model: editor.ITextModel,
+  content: string,
+  currentContent: string
+): void {
   const firstBreak = content.search(/\r\n|\n|\r/)
-  if (firstBreak === -1 || model.getLineCount() > 1) {
+  if (firstBreak === -1 || content === currentContent) {
+    return
+  }
+  markForeignLineBreaks(model)
+  if (model.getLineCount() > 1) {
     return
   }
   const eol = content.startsWith('\r\n', firstBreak) ? '\r\n' : '\n'
@@ -81,7 +93,7 @@ export function syncContentOnMount(
     return false
   }
   const modelContent = currentContentSnapshot ?? model.getValue()
-  adoptIncomingLineEnding(model, content)
+  adoptIncomingLineEnding(model, content, modelContent)
   const normalizedContent = normalizeToModelEol(content, model, modelContent)
   if (modelContent === normalizedContent) {
     return false
@@ -102,7 +114,7 @@ export function syncContentUpdate(
     return
   }
   const currentContent = model.getValue()
-  adoptIncomingLineEnding(model, content)
+  adoptIncomingLineEnding(model, content, currentContent)
   const normalizedContent = normalizeToModelEol(content, model, currentContent)
   if (currentContent.length === normalizedContent.length) {
     replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, true)
