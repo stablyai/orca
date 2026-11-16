@@ -1,55 +1,20 @@
-import { ArrowRight } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
-import { reachablePluginCapabilities } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
+import { pluginCapabilityReachable } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
-import {
-  installedPluginTrust,
-  pluginPointsFromManifest,
-  pluginTrust
-} from '../presentation/plugin-access-profile'
-import { pluginTrustLabel } from '../presentation/plugin-consent-copy'
 import { pluginCapabilityDescription } from '../presentation/plugin-capability-presentation'
 import { pluginPublisherNotice } from '../presentation/plugin-publisher-trust'
 import { useInstalledPluginManifest } from '../state/use-plugin-contribution-source'
 import { PluginNotOfficialWarning } from './PluginNotOfficialWarning'
 import { AllAccess, movedFromSource, sourceLabel, updateChanges } from './PluginUpdateCandidate'
 
-type AccessLine = { text: string; added: boolean }
-
-function AccessColumn({
-  title,
-  lines
-}: {
-  title: string
-  lines: readonly AccessLine[]
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <div className="min-w-0 space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">{title}</p>
-      <ul className="space-y-1 text-sm">
-        {lines.map((line) =>
-          line.added ? (
-            <li key={line.text} data-added="" className="text-status-warning-text">
-              {t('auto.components.settings.PluginUpdateAllDialog.newAccess', 'New: {{value0}}', {
-                value0: line.text
-              })}
-            </li>
-          ) : (
-            <li key={line.text}>{line.text}</li>
-          )
-        )}
-      </ul>
-    </div>
-  )
-}
-
 /**
- * One update that asks for more than the installed version: what it could do before, what it
- * could do after, with every addition marked. Approving here is the only way such an update lands.
+ * One update that asks for more than the installed version. Why only the additions: what the
+ * plugin could already do was approved before, and repeating it hides the one line that matters.
+ * Everything else stays behind "See all access". Approving here is the only way such an update lands.
  */
 export function PluginUpdateReview({
   entry,
@@ -62,16 +27,8 @@ export function PluginUpdateReview({
   const installed = entry.installed
   const installedManifest = useInstalledPluginManifest(installed)
   const execution = pluginExecutionProfile(preview.manifest)
-  const afterTrust = pluginTrust({
-    execution,
-    points: pluginPointsFromManifest(preview.manifest),
-    hasWorker: preview.manifest.main !== undefined
-  })
-  const beforeTrust = installed ? installedPluginTrust(installed, installedManifest) : null
-  const beforeLabel = beforeTrust ? pluginTrustLabel(beforeTrust, t) : null
-  const afterLabel = pluginTrustLabel(afterTrust, t)
   // Why main's list: it compares whole grants, so a wider scope of a held kind is new too.
-  const { capabilities: grown, warnings } = updateChanges(preview, t)
+  const { capabilities: grown, warnings } = updateChanges(preview, t, installedManifest)
   const movedFrom = movedFromSource(entry, preview)
   const notice = pluginPublisherNotice({
     official: preview.official,
@@ -79,21 +36,20 @@ export function PluginUpdateReview({
     manifest: preview.manifest,
     types: null
   })
-
-  const before: AccessLine[] = [
-    ...(beforeLabel ? [{ text: beforeLabel, added: false }] : []),
-    ...(installed?.capabilities ?? []).map((capability) => ({
-      text: pluginCapabilityDescription(capability.kind, capability.description, t),
-      added: false
-    }))
-  ]
-  const after: AccessLine[] = [
-    { text: afterLabel, added: beforeLabel !== null && beforeLabel !== afterLabel },
-    ...warnings.map((text) => ({ text, added: true })),
-    ...reachablePluginCapabilities(preview.manifest.capabilities, execution).map((capability) => ({
-      text: pluginCapabilityDescription(capability.kind, capability.kind, t),
-      added: grown.includes(capability.kind)
-    }))
+  const additions = [
+    ...(movedFrom !== null
+      ? [
+          t(
+            'auto.components.settings.PluginUpdateAllDialog.sourceMoved',
+            'New source: {{value0}} (was {{value1}})',
+            { value0: sourceLabel(preview.source), value1: movedFrom }
+          )
+        ]
+      : []),
+    ...warnings,
+    ...grown
+      .filter((kind) => pluginCapabilityReachable(kind, execution))
+      .map((kind) => pluginCapabilityDescription(kind, kind, t))
   ]
 
   return (
@@ -114,33 +70,32 @@ export function PluginUpdateReview({
           </span>
         </p>
       </div>
-      <p className="text-sm text-muted-foreground">
-        {t(
-          'auto.components.settings.PluginUpdateReview.explain',
-          'This update asks for more than the version you approved. It installs only if you approve it here.'
-        )}
-      </p>
-      {movedFrom !== null ? (
-        <p className="text-sm text-status-warning-text">
+      {additions.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'auto.components.settings.PluginUpdateReview.asksFor',
+              'This version can do more than the one you approved:'
+            )}
+          </p>
+          <ul className="space-y-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
+            {additions.map((line) => (
+              <li key={line} data-added="" className="flex items-start gap-2">
+                <Plus className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0">{line}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
           {t(
-            'auto.components.settings.PluginUpdateAllDialog.sourceMoved',
-            'New source: {{value0}} (was {{value1}})',
-            { value0: sourceLabel(preview.source), value1: movedFrom }
+            'auto.components.settings.PluginUpdateReview.uncompared',
+            'Orca couldn’t compare this version with the one you approved. Check what it can access before you update.'
           )}
         </p>
-      ) : null}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 rounded-lg border border-border bg-muted/40 p-3">
-        <AccessColumn
-          title={t('auto.components.settings.PluginUpdateReview.before', 'Before')}
-          lines={before}
-        />
-        <ArrowRight className="mt-6 size-4 text-muted-foreground" aria-hidden="true" />
-        <AccessColumn
-          title={t('auto.components.settings.PluginUpdateReview.after', 'After')}
-          lines={after}
-        />
-      </div>
-      <AllAccess preview={preview} execution={execution} />
+      )}
+      <AllAccess preview={preview} execution={execution} defaultOpen={additions.length === 0} />
     </div>
   )
 }

@@ -14086,7 +14086,12 @@
           "allAccess": "See all access",
           "update": "Update",
           "review": "Review",
-          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}",
+          "newFileTypes": "Changes which files it opens",
+          "newHooks": "Can change or stop what Orca and your agents do",
+          "newSettings": "A settings page",
+          "newStatusBarItems": "Status bar items",
+          "opensFileTypes": "Opens new file types: {{value0}}"
         },
         "PluginAuthor": {
           "publisher": "Publisher",
@@ -14270,9 +14275,8 @@
           "title": "Review update to {{value0}}",
           "back": "Back",
           "approve": "Approve & update",
-          "explain": "This update asks for more than the version you approved. It installs only if you approve it here.",
-          "before": "Before",
-          "after": "After"
+          "asksFor": "This version can do more than the one you approved:",
+          "uncompared": "Orca couldn’t compare this version with the one you approved. Check what it can access before you update."
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "its publisher",

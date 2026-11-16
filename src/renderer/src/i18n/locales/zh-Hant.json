@@ -12934,15 +12934,19 @@
           "newRecipes": "機器配方",
           "newContributions": "代替你執行動作的功能",
           "allAccess": "查看所有存取權限",
-          "update": "更新"
+          "update": "更新",
+          "newFileTypes": "變更它開啟的檔案",
+          "newHooks": "可以變更或阻止 Orca 和你的代理程式的動作",
+          "newSettings": "一個設定頁面",
+          "newStatusBarItems": "狀態列項目",
+          "opensFileTypes": "開啟新的檔案類型：{{value0}}"
         },
         "PluginUpdateReview": {
           "title": "檢視 {{value0}} 的更新",
           "back": "返回",
           "approve": "核准並更新",
-          "explain": "此更新要求的權限超出你已核准的版本。只有在這裡核准後才會安裝。",
-          "before": "之前",
-          "after": "之後"
+          "asksFor": "此版本比你核准的版本能做更多事情：",
+          "uncompared": "Orca 無法將此版本與你核准的版本比較。更新前請檢查它可以存取的內容。"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其發布者",

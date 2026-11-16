@@ -13351,7 +13351,12 @@
           "sourceMoved": "新来源：{{value0}}（原为 {{value1}}）",
           "update": "更新",
           "review": "查看",
-          "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行"
+          "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行",
+          "newFileTypes": "更改它打开的文件",
+          "newHooks": "可以更改或阻止 Orca 和你的智能体的操作",
+          "newSettings": "一个设置页面",
+          "newStatusBarItems": "状态栏项目",
+          "opensFileTypes": "打开新的文件类型：{{value0}}"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",
@@ -13435,9 +13440,8 @@
           "title": "查看 {{value0}} 的更新",
           "back": "返回",
           "approve": "批准并更新",
-          "explain": "此更新请求的权限超出了你已批准的版本。只有在这里批准后才会安装。",
-          "before": "之前",
-          "after": "之后"
+          "asksFor": "此版本比你批准的版本能做更多事情：",
+          "uncompared": "Orca 无法将此版本与你批准的版本进行比较。更新前请检查它可以访问的内容。"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其发布者",

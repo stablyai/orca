@@ -13171,7 +13171,12 @@
           "newShortcuts": "Raccourcis clavier",
           "sourceMoved": "Nouvelle source : {{value0}} (avant {{value1}})",
           "update": "Mettre à jour",
-          "review": "Examiner"
+          "review": "Examiner",
+          "newFileTypes": "Change les fichiers qu’il ouvre",
+          "newHooks": "Peut modifier ou arrêter ce que font Orca et vos agents",
+          "newSettings": "Une page de réglages",
+          "newStatusBarItems": "Éléments de la barre d’état",
+          "opensFileTypes": "Ouvre de nouveaux types de fichiers : {{value0}}"
         },
         "PluginDetailInfo": {
           "previous": "Précédente",
@@ -13285,9 +13290,8 @@
           "title": "Examiner la mise à jour de {{value0}}",
           "back": "Retour",
           "approve": "Approuver et mettre à jour",
-          "explain": "Cette mise à jour demande plus que la version que vous avez approuvée. Elle ne s’installe que si vous l’approuvez ici.",
-          "before": "Avant",
-          "after": "Après"
+          "asksFor": "Cette version peut faire plus que celle que vous avez approuvée :",
+          "uncompared": "Orca n’a pas pu comparer cette version à celle que vous avez approuvée. Vérifiez ce à quoi elle peut accéder avant de mettre à jour."
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "son éditeur",

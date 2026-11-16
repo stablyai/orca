@@ -76,9 +76,50 @@ const contributionGrowthLabel = (point: PluginContributionPoint): string => {
   if (point === 'vmRecipes') {
     return translate('auto.components.settings.PluginUpdateAllDialog.newRecipes', 'Machine recipes')
   }
+  if (point === 'customEditors') {
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newFileTypes',
+      'Changes which files it opens'
+    )
+  }
+  if (point === 'hooks') {
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newHooks',
+      'Can change or stop what Orca and your agents do'
+    )
+  }
+  if (point === 'settings') {
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newSettings',
+      'A settings page'
+    )
+  }
+  if (point === 'statusBarItems') {
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newStatusBarItems',
+      'Status bar items'
+    )
+  }
   return translate(
     'auto.components.settings.PluginUpdateAllDialog.newContributions',
     'Features that act for you'
+  )
+}
+
+type EditorFiles = { extensions?: readonly string[]; filenames?: readonly string[] }
+
+/** The file types the update's editors open that the installed version's don't, as written. */
+export function addedEditorFiles(
+  installed: { contributes: { customEditors?: readonly EditorFiles[] } } | null | undefined,
+  next: { contributes: { customEditors?: readonly EditorFiles[] } }
+): string[] {
+  const files = (editors: readonly EditorFiles[] | undefined): string[] =>
+    (editors ?? []).flatMap((editor) => [...(editor.extensions ?? []), ...(editor.filenames ?? [])])
+  const held = new Set(
+    files(installed?.contributes.customEditors).map((file) => file.toLowerCase())
+  )
+  return [...new Set(files(next.contributes.customEditors))].filter(
+    (file) => !held.has(file.toLowerCase())
   )
 }
 
@@ -92,7 +133,9 @@ const replacementLine = (command: string, action: string, t: Translate = transla
 /** What main found the update adds over the installed version, as review lines. */
 export function updateChanges(
   preview: PluginMarketplaceHostInstallPreview,
-  t?: Translate
+  t?: Translate,
+  /** The installed manifest, when loaded: names the file types a new editor opens. */
+  installedManifest?: Parameters<typeof addedEditorFiles>[0]
 ): {
   capabilities: string[]
   warnings: string[]
@@ -110,7 +153,16 @@ export function updateChanges(
   // Why: a panel profile has no trust warning of its own, but its growth still asks again.
   const executionLines =
     growth?.execution && execution.length === 0 ? [contributionGrowthLabel('panels')] : execution
-  const contributions = (growth?.contributions ?? []).map(contributionGrowthLabel)
+  const newFiles = installedManifest ? addedEditorFiles(installedManifest, preview.manifest) : []
+  const contributions = (growth?.contributions ?? []).map((point) =>
+    point === 'customEditors' && newFiles.length > 0
+      ? (t ?? translate)(
+          'auto.components.settings.PluginUpdateAllDialog.opensFileTypes',
+          'Opens new file types: {{value0}}',
+          { value0: newFiles.join(', ') }
+        )
+      : contributionGrowthLabel(point)
+  )
   // Why named: "Commands" alone would hide that one takes over an Orca action.
   const replacements = growth?.contributions.includes('commands')
     ? preview.manifest.contributes.commands.flatMap((command) =>
@@ -144,10 +196,12 @@ function NewLine({ children }: { children: string }): React.JSX.Element {
 /** Everything the update can reach, for the rare reader who wants more than what's new. */
 export function AllAccess({
   preview,
-  execution
+  execution,
+  defaultOpen = false
 }: {
   preview: PluginMarketplaceHostInstallPreview
   execution: ReturnType<typeof pluginExecutionProfile>
+  defaultOpen?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const lines = [
@@ -160,7 +214,7 @@ export function AllAccess({
     )
   ]
   return (
-    <Collapsible>
+    <Collapsible defaultOpen={defaultOpen}>
       <CollapsibleTrigger asChild>
         <Button variant="ghost" size="xs" className="group -ml-2 mt-1">
           {t('auto.components.settings.PluginUpdateAllDialog.allAccess', 'See all access')}

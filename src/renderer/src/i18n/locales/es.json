@@ -12900,7 +12900,12 @@
           "newShortcuts": "Atajos de teclado",
           "sourceMoved": "Nueva fuente: {{value0}} (antes {{value1}})",
           "update": "Actualizar",
-          "review": "Revisar"
+          "review": "Revisar",
+          "newFileTypes": "Cambia qué archivos abre",
+          "newHooks": "Puede cambiar o detener lo que hacen Orca y tus agentes",
+          "newSettings": "Una página de ajustes",
+          "newStatusBarItems": "Elementos de la barra de estado",
+          "opensFileTypes": "Abre nuevos tipos de archivo: {{value0}}"
         },
         "PluginDetailInfo": {
           "previous": "Anterior",
@@ -13014,9 +13019,8 @@
           "title": "Revisar la actualización de {{value0}}",
           "back": "Atrás",
           "approve": "Aprobar y actualizar",
-          "explain": "Esta actualización pide más que la versión que aprobaste. Solo se instala si la apruebas aquí.",
-          "before": "Antes",
-          "after": "Después"
+          "asksFor": "Esta versión puede hacer más que la que aprobaste:",
+          "uncompared": "Orca no pudo comparar esta versión con la que aprobaste. Revisa a qué puede acceder antes de actualizar."
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "su editor",

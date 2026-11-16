@@ -13112,15 +13112,19 @@
           "newRecipes": "Maschinenrezepte",
           "newContributions": "Funktionen, die für dich handeln",
           "allAccess": "Alle Zugriffe anzeigen",
-          "update": "Aktualisieren"
+          "update": "Aktualisieren",
+          "newFileTypes": "Ändert, welche Dateien es öffnet",
+          "newHooks": "Kann ändern oder stoppen, was Orca und deine Agenten tun",
+          "newSettings": "Eine Einstellungsseite",
+          "newStatusBarItems": "Statusleisten-Elemente",
+          "opensFileTypes": "Öffnet neue Dateitypen: {{value0}}"
         },
         "PluginUpdateReview": {
           "title": "Update für {{value0}} prüfen",
           "back": "Zurück",
           "approve": "Genehmigen & aktualisieren",
-          "explain": "Dieses Update verlangt mehr als die Version, die du genehmigt hast. Es wird nur installiert, wenn du es hier genehmigst.",
-          "before": "Vorher",
-          "after": "Nachher"
+          "asksFor": "Diese Version kann mehr als die, die du genehmigt hast:",
+          "uncompared": "Orca konnte diese Version nicht mit der genehmigten vergleichen. Prüfe vor dem Update, worauf sie zugreifen kann."
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "seinem Herausgeber",

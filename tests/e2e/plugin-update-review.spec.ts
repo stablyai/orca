@@ -263,9 +263,7 @@ test('confirms card removal, reviews a lone access-growing update directly, and 
     const singleReview = single.locator(`[data-plugin-update-review="stablyai.${PLUGINS[0]}"]`)
     await expect(singleReview).toBeVisible(GIT_STEP)
     await expect(single.locator('[data-plugin-update]')).toHaveCount(0)
-    await expect(singleReview).toContainText(
-      'This update asks for more than the version you approved. It installs only if you approve it here.'
-    )
+    await expect(singleReview).toContainText('This version can do more than the one you approved:')
     await expect(singleReview.locator('[data-added]', { hasText: FULL_ACCESS })).toBeVisible()
     await expect(singleReview.getByRole('button', { name: 'See all access' })).toBeVisible()
     await expect(single.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
