@@ -10,6 +10,7 @@ import {
 } from './use-agent-pane-thread-store-data'
 import {
   projectAgentPaneThreads,
+  retainActivityThreadMode,
   retainActivityThreadProjection
 } from './activity-thread-projection'
 import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
@@ -44,7 +45,8 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
   const chatNames = useStructuredChatTabNames()
 
   const mode = badgeOnly ? 'live' : 'all'
-  useEffect(() => retainActivityThreadProjection(mode), [mode])
+  useEffect(() => retainActivityThreadProjection(), [])
+  useEffect(() => retainActivityThreadMode(mode), [mode])
   const allThreads = useMemo(
     () => projectAgentPaneThreads({ storeData, agentStatusEpoch, chatNames }, mode),
     [storeData, agentStatusEpoch, chatNames, mode]

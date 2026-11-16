@@ -58,24 +58,35 @@ const threadProjections: Record<ProjectionMode, ThreadProjection> = {
   all: createThreadProjection(),
   live: createThreadProjection()
 }
-const mountedConsumers: Record<ProjectionMode, number> = { all: 0, live: 0 }
+let mountedReaders = 0
+const mountedReadersByMode: Record<ProjectionMode, number> = { all: 0, live: 0 }
 
 function releaseEventsProjection(): void {
   eventsProjection = null
   resetActivityEventBuildCache(eventBuildCache)
 }
 
-/** Count a mounted reader; the last one out drops the projection so retired workspaces are not retained. */
-export function retainActivityThreadProjection(mode: ProjectionMode): () => void {
-  mountedConsumers[mode] += 1
+/** Count a mounted reader; the last one out drops everything so retired workspaces are not retained. */
+export function retainActivityThreadProjection(): () => void {
+  mountedReaders += 1
   return () => {
-    mountedConsumers[mode] -= 1
-    if (mountedConsumers[mode] === 0) {
-      threadProjections[mode] = createThreadProjection()
-    }
-    if (mountedConsumers.all === 0 && mountedConsumers.live === 0) {
+    mountedReaders -= 1
+    if (mountedReaders === 0) {
       releaseEventsProjection()
       releaseActivityTabProjection()
+      threadProjections.all = createThreadProjection()
+      threadProjections.live = createThreadProjection()
+    }
+  }
+}
+
+/** Count a reader of one mode; switching modes keeps the shared events build warm. */
+export function retainActivityThreadMode(mode: ProjectionMode): () => void {
+  mountedReadersByMode[mode] += 1
+  return () => {
+    mountedReadersByMode[mode] -= 1
+    if (mountedReadersByMode[mode] === 0) {
+      threadProjections[mode] = createThreadProjection()
     }
   }
 }
@@ -147,10 +158,10 @@ export function projectAgentPaneThreads(
   mode: 'all' | 'live'
 ): AgentPaneThread[] {
   if (mode === 'live' && !hasLiveActivity(inputs)) {
+    threadProjections.live = createThreadProjection()
     // An empty badge alone keeps nothing; with a full reader mounted the shared build stays warm.
-    if (mountedConsumers.all === 0) {
+    if (mountedReadersByMode.all === 0) {
       releaseEventsProjection()
-      threadProjections.live = createThreadProjection()
     }
     return NO_THREADS
   }
