@@ -333,7 +333,6 @@
 4 test-no-real-time-wait:tests/e2e/terminal-warm-reattach-split-live-output.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-windows-codex-multiline-paste.spec.ts
 1 test-no-real-time-wait:tests/e2e/unopened-workspace-agent-single-resume.spec.ts
-2 test-no-real-time-wait:tests/e2e/workspace-emoji-picker.spec.ts
 1 test-no-real-time-wait:tests/e2e/workspace-sleep-in-main.spec.ts
 3 test-no-real-time-wait:tests/e2e/workspace-sleep-main-resume.spec.ts
 1 test-no-real-time-wait:tests/e2e/worktree-active-delete-scroll-position.spec.ts

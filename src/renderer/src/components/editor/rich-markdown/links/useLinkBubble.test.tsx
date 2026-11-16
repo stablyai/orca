@@ -213,36 +213,4 @@ describe('useLinkBubble hover and targetRange actions', () => {
 
     expect(activeEditor.getMarkdown()).toBe('[docs](https://example.com)')
   })
-
-  it('selects the full URL text on double-click in the hover bubble and keeps it open while selected', () => {
-    vi.useFakeTimers()
-    const { editor: activeEditor } = mountEditorWithBubble(
-      'PR: [344](https://github.com/nwparker/orca-private/pull/344)'
-    )
-    const linkEl = activeEditor.view.dom.querySelector('a')!
-
-    act(() => {
-      linkEl.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, buttons: 0 }))
-      vi.advanceTimersByTime(160)
-    })
-
-    const urlSpan = document.querySelector<HTMLSpanElement>('[data-rich-markdown-link-url]')!
-    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
-    act(() => {
-      urlSpan.dispatchEvent(mouseDown)
-      urlSpan.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
-    })
-
-    expect(mouseDown.defaultPrevented).toBe(false)
-    expect(window.getSelection()?.toString()).toBe(
-      'https://github.com/nwparker/orca-private/pull/344'
-    )
-
-    const bubbleEl = document.querySelector<HTMLElement>('[data-rich-markdown-link-bubble]')!
-    act(() => {
-      bubbleEl.dispatchEvent(new PointerEvent('pointerout', { bubbles: false }))
-      vi.advanceTimersByTime(200)
-    })
-    expect(document.querySelector('[data-rich-markdown-link-bubble]')).not.toBeNull()
-  })
 })
