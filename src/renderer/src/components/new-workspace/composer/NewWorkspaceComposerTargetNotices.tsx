@@ -1,7 +1,7 @@
 import React from 'react'
 import { LoaderCircle, PlugZap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
 
@@ -17,6 +17,7 @@ export function ProjectNotice({
   emptyProjectMessage,
   projectDescriptionId
 }: ProjectNoticeProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (projectError) {
     return (
       <p id={projectDescriptionId} className="text-[11px] text-destructive">
@@ -28,7 +29,7 @@ export function ProjectNotice({
     return (
       <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
         {emptyProjectMessage ??
-          translate(
+          t(
             'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
             'Add a project before creating a workspace.'
           )}
@@ -68,6 +69,7 @@ export function ConnectHostNotice({
   connectButtonLabel,
   selectedProjectName
 }: ConnectHostNoticeProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (!selectedRepoRequiresConnection || !selectedRepoConnectionId) {
     return null
   }
@@ -79,13 +81,9 @@ export function ConnectHostNotice({
     >
       <div className="min-w-0">
         <div className="truncate text-xs font-medium text-foreground">
-          {translate(
-            'auto.components.NewWorkspaceComposerCard.connectProject',
-            'Connect {{name}}',
-            {
-              name: selectedProjectName
-            }
-          )}
+          {t('auto.components.NewWorkspaceComposerCard.connectProject', 'Connect {{name}}', {
+            name: selectedProjectName
+          })}
         </div>
         <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
       </div>
@@ -103,7 +101,7 @@ export function ConnectHostNotice({
           <PlugZap className="size-3.5" />
         )}
         {selectedRepoConnectInProgress
-          ? translate('auto.components.NewWorkspaceComposerCard.f660aa1454', 'Connecting')
+          ? t('auto.components.NewWorkspaceComposerCard.f660aa1454', 'Connecting')
           : connectButtonLabel}
       </Button>
     </div>

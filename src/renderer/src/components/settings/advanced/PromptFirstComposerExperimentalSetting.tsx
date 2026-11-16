@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -14,6 +14,7 @@ export function PromptFirstComposerExperimentalSetting({
   settings,
   updateSettings
 }: PromptFirstComposerExperimentalSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const enabled = settings.promptFirstComposer === true
   const entry = getPromptFirstComposerSearchEntry()
 
@@ -31,7 +32,7 @@ export function PromptFirstComposerExperimentalSetting({
           <p className="text-xs text-muted-foreground">{entry.description}</p>
         </div>
         <Switch
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.ExperimentalPane.promptFirstComposer.toggleLabel',
             'Toggle starting new workspaces from a prompt'
           )}

@@ -8,7 +8,7 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
 import type { NeedsSetupProjectHostOption } from '@/lib/workspace/creation/project-host-setup-options'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
@@ -101,6 +101,7 @@ export function NewWorkspaceComposerPromptToolbar({
   onToggleAdvanced,
   submitShortcutModifierLabel
 }: NewWorkspaceComposerPromptToolbarProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <fieldset
       disabled={disabled}
@@ -114,7 +115,7 @@ export function NewWorkspaceComposerPromptToolbar({
         aria-expanded={advancedOpen}
         className="shrink-0"
       >
-        {translate('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
+        {t('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
         <ChevronDown className={cn('size-3 transition-transform', advancedOpen && 'rotate-180')} />
       </Button>
       <div className="ml-auto flex min-w-0 items-center justify-end gap-1">
@@ -130,7 +131,7 @@ export function NewWorkspaceComposerPromptToolbar({
             onAddProject={onAddProject}
             placeholder={
               projectPlaceholder ??
-              translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
+              t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
             }
             triggerClassName={PILL_FIELD_CLASS}
             invalid={Boolean(projectError)}
@@ -165,10 +166,7 @@ export function NewWorkspaceComposerPromptToolbar({
             pillTrigger
             onOpenAgentSettings={onOpenAgentSettings}
             onTriggerEnter={createDisabled ? undefined : onCreate}
-            emptyLabel={translate(
-              'auto.components.agent.AgentCombobox.986f946354',
-              'Blank Terminal'
-            )}
+            emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
             defaultAgent={defaultTuiAgent}
             onSetDefault={handleSetDefaultAgent}
             onSelectBlankTerminal={() => onQuickAgentChange(null)}

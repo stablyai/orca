@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import { cn } from '@/lib/class-names'
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
@@ -21,6 +21,7 @@ export function NewWorkspaceComposerPromptSection({
   onCreate,
   toolbar
 }: NewWorkspaceComposerPromptSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key !== 'Enter' || event.metaKey || event.ctrlKey || event.altKey) {
       return
@@ -59,7 +60,7 @@ export function NewWorkspaceComposerPromptSection({
       <ImeTextarea
         ref={promptRef}
         data-workspace-prompt-input="true"
-        aria-label={translate('auto.components.NewWorkspaceComposerCard.promptLabel', 'Prompt')}
+        aria-label={t('auto.components.NewWorkspaceComposerCard.promptLabel', 'Prompt')}
         value={agentPrompt}
         disabled={disabled}
         onChange={(event) => onAgentPromptChange?.(event.target.value)}
@@ -67,11 +68,11 @@ export function NewWorkspaceComposerPromptSection({
         rows={3}
         placeholder={
           disabled
-            ? translate(
+            ? t(
                 'auto.components.NewWorkspaceComposerCard.promptPlaceholderNoAgent',
                 'Pick an agent to send it a prompt'
               )
-            : translate(
+            : t(
                 'auto.components.NewWorkspaceComposerCard.promptPlaceholder',
                 'What should the agent do in this worktree?'
               )
