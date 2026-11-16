@@ -39,6 +39,8 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { devOnly } from './dev-only'
+import { configureTeamSharing, teamSharingEnabled } from './team-sharing'
 import { purgeTeamSecrets, teamDeleteRoute, teamWorkspaceCount } from './team-delete'
 import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneReadSnapshotToOwner, revokeDeviceSessionReaderKeys } from './read-snapshots'
 import { refreshEnvironment, refreshStaleEnvironments, type GoldenRefreshOptions } from './environment-golden-refresh'
@@ -137,7 +139,8 @@ import { pushCredentialToSandbox, refreshAfterSecretChange, refreshSandboxEnv } 
 import { credentialPushTargets, markCredentialChanged, pushCredentialChange, pushPendingCredentialChanges, type CredentialChange, type PushDeps } from './credential-outbox'
 import { markExpiredAccountCredentials, refreshGitHubUserTokens } from './credential-refresh'
 import type { CredentialAgent } from './agent-credential-names'
-import { ACCOUNT_PROVIDERS, accountProvider, claudeAccount, isSharedWorkspace } from './account-providers'
+import { ACCOUNT_PROVIDERS, accountProvider, claudeAccount } from './account-providers'
+import { sharedWorkspaceMode } from './shared-workspace'
 import { handleAccountRequestSucceeded, handleAccountUnauthorized, runScheduledAccountChecks, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
 import { codexAccount, parseStoredCodex, refreshCodexLeases, storeCodexLogin } from './codex-credentials'
@@ -207,7 +210,8 @@ import {
   recordOwnerDeviceForCreate,
   revokeForAccessChange,
   revokeGrantsForDeviceSession,
-  revokeOne
+  revokeOne,
+  sweepHeldTeamGrants
 } from './grants'
 import { getOrgPrompts, putOrgPrompts } from './org-prompts'
 import {
@@ -475,7 +479,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('account_owner_changed')
               }
-              if (isSharedWorkspace(row)) {
+              if (await sharedWorkspaceMode(env.SANDBOX_DB, row)) {
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('account_not_shared')
               }
@@ -888,7 +892,7 @@ function githubManifestStart(url: URL): Response {
 
 /** GitHub App manifest flow redirect: the operator's exchange script reads the one-time code from logs. */
 function githubManifestCallback(env: Env, url: URL): Response {
-  if (env.SANDBOX_ENV === 'prod') {
+  if (!devOnly(env)) {
     return fail('not_found', 404)
   }
   const code = url.searchParams.get('code') ?? ''
@@ -923,7 +927,7 @@ async function configureAppWebhook(env: Env, deps: Deps, body: unknown): Promise
 
 function devCredentials(env: Env): CredentialBroker {
   const value = env.EGRESS_DEV_STATIC_AUTHORIZATION
-  if (!value || env.SANDBOX_ENV === 'prod') {
+  if (!value || !devOnly(env)) {
     return NO_CREDENTIALS
   }
   return { authorizationFor: async (_row, host) => (host === 'api.github.com' ? value : null) }
@@ -1061,7 +1065,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       ...regions,
       egressProxyUrl: env.EGRESS_PROXY_URL,
       sessionDeadlineMs:
-        env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
+        env.SESSION_DEADLINE_MS && devOnly(env) ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
   }
   // ENV-BUILD-CHURN: every environment boot records the use; a stale one refreshes lazily.
@@ -1101,7 +1105,7 @@ async function goldenRegions(
   }
   // Preview versions in dev may pin an image under test (shared D1's active image is the live one);
   // the pin replaces the default region's image, so it must be a snapshot taken in that region.
-  const override = env.SANDBOX_ENV !== 'prod' ? env.GOLDEN_SNAPSHOT_OVERRIDE : undefined
+  const override = devOnly(env) ? env.GOLDEN_SNAPSHOT_OVERRIDE : undefined
   if (override) {
     goldens[defaultRegion] = override
   }
@@ -1355,6 +1359,7 @@ async function shareGateway(request: Request, url: URL, env: Env, deps: Deps): P
 }
 
 export async function handleRequest(request: Request, env: Env, deps: Deps = {}): Promise<Response> {
+  configureTeamSharing(env)
   try {
     return await routeRequest(request, env, deps)
   } catch (error) {
@@ -1443,7 +1448,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
     if (url.pathname === '/v1/github/manifest-callback') {
       return githubManifestCallback(env, url)
     }
-    if (url.pathname === '/v1/github/manifest-start' && env.SANDBOX_ENV !== 'prod') {
+    if (url.pathname === '/v1/github/manifest-start' && devOnly(env)) {
       return githubManifestStart(url)
     }
     if (url.pathname === '/v1/github/setup' || url.pathname === '/v1/github/callback') {
@@ -1515,7 +1520,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (url.pathname === '/v1/internal/github/app-webhook' && request.method === 'POST') {
         return await configureAppWebhook(env, deps, await readJson(request))
       }
-      if (url.pathname === '/v1/internal/dev/member-github' && request.method === 'POST' && env.SANDBOX_ENV !== 'prod') {
+      if (url.pathname === '/v1/internal/dev/member-github' && request.method === 'POST' && devOnly(env)) {
         // Dev rehearsal only: stand in a member's GitHub user token with a fresh app installation
         // token for one repo, so git-as-sender can be exercised without a second GitHub human.
         const body = DevMemberGitHubSchema.safeParse(await readJson(request))
@@ -1538,7 +1543,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         )
         return json({ stored: true, expiresAt: minted.expiresAt })
       }
-      if (url.pathname === '/v1/internal/dev/codex-login' && request.method === 'POST' && env.SANDBOX_ENV !== 'prod') {
+      if (url.pathname === '/v1/internal/dev/codex-login' && request.method === 'POST' && devOnly(env)) {
         // Dev rehearsal only (EGRESS-REFRESH): store a Codex login for a throwaway identity, so the central
         // refresher can be exercised with a near-expiry or bogus token without a real ChatGPT sign-in.
         const body = DevCodexLoginSchema.safeParse(await readJson(request))
@@ -1583,8 +1588,9 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         console.error(JSON.stringify({ event: 'config_error', variable: 'EGRESS_PROXY_URL', environment: env.SANDBOX_ENV }))
         return json({ error: 'egress_proxy_missing', keySwap: 'off' }, 503)
       }
-      // keySwap: whether model keys can be swapped at egress (the launch smoke asserts "on").
-      return json({ ok: true, keySwap: env.EGRESS_PROXY_URL ? 'on' : 'off' }, 200)
+      // keySwap: whether model keys can be swapped at egress; environment: the SANDBOX_ENV name (not a secret).
+      // The launch smoke (scripts/launch-smoke.mjs) asserts keySwap "on" and environment "prod".
+      return json({ ok: true, keySwap: env.EGRESS_PROXY_URL ? 'on' : 'off', environment: env.SANDBOX_ENV ?? null }, 200)
     }
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
@@ -1599,7 +1605,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         { headers: { 'cache-control': 'public, max-age=300' } }
       )
     }
-    if (url.pathname === '/v1/github/dev-connect' && env.SANDBOX_ENV !== 'prod') {
+    if (url.pathname === '/v1/github/dev-connect' && devOnly(env)) {
       // Dev-only, link-shareable start of the user flow: mints a fresh 10-min state per click for a dev:<sub>
       // account (desktop builds call POST /v1/github/connect instead).
       const connect = githubConnect(env, deps)
@@ -1644,7 +1650,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
           })
       })
     }
-    if (url.pathname === '/v1/github/dev-user-connect' && env.SANDBOX_ENV !== 'prod') {
+    if (url.pathname === '/v1/github/dev-user-connect' && devOnly(env)) {
       // Dev-only, link-shareable start of a member's own GitHub identity (git as the sender) for
       // dev:org:<org> member <sub>; desktop builds call POST /v1/github/user/connect instead.
       const connect = githubConnect(env, deps)
@@ -2435,7 +2441,8 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const route = `${request.method} ${action ?? ''}${grantId ? ' :grant' : ''}`
   const view = async (r = row) => (await workspaceViews(db, caller, [r], clock(), githubActingOptions(env)))[0]
   if (route === 'GET ') {
-    return json({ workspace: await view() })
+    // TEAM-SHARING hold: the capability rides on the single-workspace answer too (panels and link opens read it).
+    return json({ workspace: await view(), teamSharing: teamSharingEnabled() })
   }
   if (route === 'GET read-snapshot') {
     try {
@@ -2799,11 +2806,15 @@ function errorResponse(error: unknown): Response {
   return fail('internal_error', 500)
 }
 
+/** TEAM-SHARING hold: whether this isolate has run the held-grants sweep yet (a value, never a promise). */
+let heldSweepRan = false
+
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work.catch(() => undefined)) })
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    configureTeamSharing(env)
     // Every minute: routines (schedule slots, run polling). Every fifth minute: everything else.
     ctx.waitUntil(
       lifecycleDeps(env, {}).then(async (life) => {
@@ -2834,6 +2845,17 @@ export default {
     )
     const fifthMinute = new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0
     ctx.waitUntil(credentialTick(env, fifthMinute))
+    // TEAM-SHARING hold: every fifth minute, and on an isolate's first run (so right after a deploy).
+    if (!teamSharingEnabled() && (fifthMinute || !heldSweepRan)) {
+      heldSweepRan = true
+      ctx.waitUntil(
+        lifecycleDeps(env, {}).then(async (life) => {
+          const swept = life ? await sweepHeldTeamGrants(life).catch(() => null) : null
+          // Counts only.
+          console.log(JSON.stringify({ event: 'team_sharing_held_sweep', ...(swept ?? { failed: true }) }))
+        })
+      )
+    }
     if (env.AGENT_ACCOUNTS_CODEX === 'on') {
       ctx.waitUntil(codexTick(env, fifthMinute))
     }

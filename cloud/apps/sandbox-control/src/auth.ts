@@ -1,5 +1,6 @@
 // Desktop callers present a short-lived ES256 JWT minted by Orca Cloud auth (aud=orca-sandbox,
 // purpose=sandbox), verified against the auth JWKS — the billing Worker's pattern.
+import { devOnly } from './dev-only'
 import {
   createLocalJWKSet,
   jwtVerify,
@@ -114,7 +115,7 @@ let stagingKeys: { source: string; keys: JWTVerifyGetKey } | null = null
 /** Staging auth's keys and issuer; never honored in prod. Same accounts as billing dev (it trusts staging too). */
 function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string[] | undefined } | null {
   const source = env.SANDBOX_STAGING_JWKS_URL ?? (env.SANDBOX_STAGING_JWKS ? `inline:${env.SANDBOX_STAGING_JWKS}` : null)
-  if (env.SANDBOX_ENV === 'prod' || !source || !env.SANDBOX_STAGING_AUTH_ISSUER) {
+  if (!devOnly(env) || !source || !env.SANDBOX_STAGING_AUTH_ISSUER) {
     return null
   }
   if (stagingKeys?.source !== source) {
@@ -177,7 +178,7 @@ export async function authenticateDesktop(
   const caller =
     (await verify(token, keysFor(env), env, issuerList(env.SANDBOX_AUTH_ISSUER), now)) ??
     (staging ? await verify(token, staging.keys, env, staging.issuer, now) : null)
-  if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
+  if (caller || !env.SANDBOX_DEV_JWKS || !devOnly(env)) {
     if (!caller || (await tokenPredatesRemoval(env.SANDBOX_DB, caller))) {
       return null
     }

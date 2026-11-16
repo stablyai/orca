@@ -42,12 +42,12 @@ describe('SANDBOX_DEV_BILLING_ENFORCE_PREFIX', () => {
     expect(devBillingEnforcePrefix({ SANDBOX_ENV: 'dev', SANDBOX_DEV_BILLING_ENFORCE_PREFIX: 'dev:billing-test-' })).toBe('dev:billing-test-')
   })
 
-  it('outside dev, dev accounts keep the plain bypass even with the prefix set (prod sends everything to billing anyway)', async () => {
+  it('outside dev/local/test (staging, prod) there is no dev-account bypass at all: everything goes to billing', async () => {
     const { client, seen } = billing()
     const staging = withDevAccountBypass({ SANDBOX_ENV: 'staging', SANDBOX_DEV_BILLING_ENFORCE_PREFIX: 'dev:billing-test-' } as Env, client)
-    expect(await staging.checkStart(start('dev:billing-test-alice'))).toMatchObject({ allow: true })
+    await staging.checkStart(start('dev:billing-test-alice'))
     const prod = withDevAccountBypass({ SANDBOX_ENV: 'prod', SANDBOX_DEV_BILLING_ENFORCE_PREFIX: 'dev:billing-test-' } as Env, client)
     expect(await prod.checkStart(start('user:bob'))).toMatchObject({ allow: false })
-    expect(seen).toEqual(['user:bob'])
+    expect(seen).toEqual(['dev:billing-test-alice', 'user:bob'])
   })
 })

@@ -9,6 +9,28 @@ set -euo pipefail
 DIR=/etc/orca/members
 caller="${SUDO_USER:-}"
 case "$caller" in '' | root | *[!a-z0-9_-]*) echo 'orca-git-identity: run through orca-git-as' >&2; exit 4 ;; esac
+# Hands the caller a one-shot copy of a member's git config (owned by them, removed by orca-git-as).
+emit() {
+  local file
+  file="$DIR/$(printf '%s' "$1" | tr ':' '_').gitconfig"
+  [ -s "$file" ] || exit 3
+  out="$(sudo -u "$caller" mktemp)"
+  cat "$file" >"$out"
+  echo "$out"
+  exit 0
+}
+# GH-SOLO: a workspace only one person can use (the control plane's rule, member-git.ts pickActing) acts as that
+# person whoever typed: a TUI typed into directly has no attested sender. The control plane writes `solo` only
+# while that holds, and removes it before any other member's device is paired (grants.ts).
+if [ -s "$DIR/solo" ]; then
+  solo="$(cat "$DIR/solo")"
+  case "$solo" in '' | *[!A-Za-z0-9_.:-]*) exit 3 ;; esac
+  if [ -n "${ORCA_GIT_AS:-}" ] && [ "$ORCA_GIT_AS" != "$solo" ]; then
+    echo "orca-git-as: only $solo uses this workspace, not $ORCA_GIT_AS; refusing to push as someone else." >&2
+    exit 4
+  fi
+  emit "$solo"
+fi
 # orcad's own data dir and HOME (the agent's user may not use its passwd home, e.g. HOME=/vercel).
 orcad_pid="$(pgrep -u "$caller" -f orcad-server.js | head -n 1 || true)"
 [ -n "$orcad_pid" ] || exit 3
@@ -42,9 +64,4 @@ if [ -n "${ORCA_GIT_AS:-}" ] && [ "$ORCA_GIT_AS" != "$member" ]; then
   echo "orca-git-as: this agent's latest message came from $member, not $ORCA_GIT_AS; refusing to push as someone else." >&2
   exit 4
 fi
-file="$DIR/$(printf '%s' "$member" | tr ':' '_').gitconfig"
-[ -s "$file" ] || exit 3
-# The caller reads the identity through this one-shot copy (owned by them, removed by orca-git-as).
-out="$(sudo -u "$caller" mktemp)"
-cat "$file" >"$out"
-echo "$out"
+emit "$member"

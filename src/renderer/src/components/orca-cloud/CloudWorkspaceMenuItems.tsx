@@ -1,20 +1,11 @@
 import React, { useContext } from 'react'
-import { useCloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
+import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 import { toast } from 'sonner'
-import {
-  Archive,
-  ArchiveRestore,
-  HardDriveDownload,
-  Link2,
-  Lock,
-  RotateCw,
-  Users
-} from 'lucide-react'
+import { Archive, ArchiveRestore, Link2, Lock, RotateCw, Users } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { toastSharedWithTeam } from '@/components/cloud-workspaces/shared-with-team-toast'
-import { isCloudSyncAvailable, requestCloudSyncFocus } from '@/lib/orca-cloud/cloud-sync-store'
 import {
   ConfirmationDialogContext,
   type ConfirmationDialogContextValue
@@ -32,8 +23,6 @@ import {
   type CloudWorkspace
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
-import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { isPairedCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
 import { useCloudWorkspaceRecord } from './use-cloud-workspace-record'
 
@@ -70,11 +59,9 @@ function CloudMenuRows({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useCloudPanelActions(worktreeId, noop)
-  const { workspace, reload } = useCloudWorkspaceRecord(worktreeId, hostId)
+  const { workspace, loaded, reload } = useCloudWorkspaceRecord(worktreeId, hostId)
   const confirm = useContext(ConfirmationDialogContext)
   const busy = view.pending !== undefined
-  // Mirroring syncs this desktop's own cloud workspaces; a paired one has no synced copy here.
-  const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, worktreeId))
   const archived = view.state === 'archived'
   const groups = cloudWorkspaceActionGroups({
     surface: 'sidebar',
@@ -97,12 +84,6 @@ function CloudMenuRows({
           {t('orcaCloudWorkspace.restart', 'Restart')}
         </DropdownMenuItem>
       ) : null}
-      {isCloudSyncAvailable() && view.state !== 'archived' && !paired ? (
-        <DropdownMenuItem onSelect={() => requestCloudSyncFocus(worktreeId)}>
-          <HardDriveDownload className="size-3.5" />
-          {t('orcaCloudSync.menuItem', 'Mirror to this computer…')}
-        </DropdownMenuItem>
-      ) : null}
       {has('archive') && actions.onArchive ? (
         <ArchiveSnapshotTooltip side="left">
           <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
@@ -117,12 +98,17 @@ function CloudMenuRows({
           {t('orcaCloudWorkspace.unarchive', 'Unarchive')}
         </DropdownMenuItem>
       ) : null}
-      {workspace && (has('share') || has('makePrivate')) ? (
+      {/* Before the first answer for this row (it's fetched on row hover, so rarely), the rows
+          show disabled instead of appearing under the pointer a moment later. */}
+      {(workspace || !loaded) && (has('share') || has('makePrivate')) ? (
         <>
           <DropdownMenuSeparator />
           {has('share') ? (
             <DropdownMenuItem
-              onSelect={() => void setVisibility(workspace, 'team', { reload, t, confirm })}
+              disabled={!workspace}
+              onSelect={() =>
+                workspace && void setVisibility(workspace, 'team', { reload, t, confirm })
+              }
             >
               <Users className="size-3.5" />
               {t('auto.components.cloudWorkspaces.shareWithTeam', 'Share with team')}
@@ -130,7 +116,10 @@ function CloudMenuRows({
           ) : null}
           {has('makePrivate') ? (
             <DropdownMenuItem
-              onSelect={() => void setVisibility(workspace, 'private', { reload, t, confirm })}
+              disabled={!workspace}
+              onSelect={() =>
+                workspace && void setVisibility(workspace, 'private', { reload, t, confirm })
+              }
             >
               <Lock className="size-3.5" />
               {t('auto.components.cloudWorkspaces.makePrivate', 'Make private')}
@@ -202,16 +191,20 @@ export function CloudCopyWorkspaceLinkItem({
   hostId?: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { workspace } = useCloudWorkspaceRecord(worktreeId, hostId ?? null)
+  const { workspace, loaded } = useCloudWorkspaceRecord(worktreeId, hostId ?? null)
   // SHARE-LINKS-HOLD: no way to produce a share link while it's held.
-  const shareLinks = useCloudShareLinksEnabled()
-  if (!workspace || !shareLinks) {
+  const shareLinks = useCloudTeamSharingEnabled()
+  // Not asked yet: disabled in place rather than appearing a moment later.
+  if ((!workspace && loaded) || !shareLinks) {
     return null
   }
   return (
-    <DropdownMenuItem onSelect={() => void copyCloudWorkspaceLink(workspace.id)}>
+    <DropdownMenuItem
+      disabled={!workspace}
+      onSelect={() => workspace && void copyCloudWorkspaceLink(workspace.id)}
+    >
       <Link2 className="size-3.5" />
-      {workspace.number
+      {workspace?.number
         ? t('auto.components.cloudWorkspaces.linkToNumber', 'Link to {{number}}', {
             number: formatWorkspaceNumber(workspace.number)
           })

@@ -9,6 +9,7 @@
 // the control plane at runtime chooses the recipient keys and drives the VM, so it is trusted not to
 // add its own key (same as relaying grant keys). Access mirrors canOpen at read time, and pruning
 // (removal, private, revoke) deletes wrapped keys at once, without the VM.
+import { effectiveVisibility } from './team-sharing'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { ensureEntryPoints } from './golden-images'
@@ -202,7 +203,7 @@ export async function readerKeysFor(db: D1Database, row: SandboxRow, now: number
   if (row.archived_at !== null) {
     return []
   }
-  const team = row.visibility === 'team'
+  const team = effectiveVisibility(row) === 'team'
   const { results } = await db
     .prepare(
       `SELECT k.id, k.public_key FROM reader_keys k
@@ -340,7 +341,7 @@ export async function captureReadSnapshot(deps: LifecycleDeps, row: SandboxRow, 
   await deps.db.batch(statements)
   // The workspace may have been made private while sealing: re-apply the current rule.
   const current = await deps.db.prepare('SELECT * FROM sandboxes WHERE id = ?').bind(row.id).first<SandboxRow>()
-  if (current && current.visibility !== 'team') {
+  if (current && effectiveVisibility(current) !== 'team') {
     await pruneReadSnapshotToOwner(deps.db, current)
   }
   return done({
@@ -387,7 +388,7 @@ export async function readSnapshotTimes(db: D1Database, ids: readonly string[]):
 
 export async function getReadSnapshot(db: D1Database, caller: SandboxCaller, row: SandboxRow, keyId: string | null, now: number) {
   // Belt and braces over canOpen: a private workspace's snapshot opens only for its owner.
-  if (!canOpen(caller, row) || (row.visibility !== 'team' && !isOwner(caller, row))) {
+  if (!canOpen(caller, row) || (effectiveVisibility(row) !== 'team' && !isOwner(caller, row))) {
     throw new WorkspaceError('not_found')
   }
   if (!keyId || !KEY_ID.test(keyId)) {

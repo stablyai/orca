@@ -4,8 +4,8 @@ import {
 } from '../../../../../shared/keybindings/definitions'
 import {
   CLOUD_SHARE_LINK_ACTION_ID,
-  cloudShareLinksEnabled
-} from '@/lib/orca-cloud/cloud-share-links-flag'
+  cloudTeamSharingEnabled
+} from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import type {
   KeybindingActionId,
   KeybindingDefinition
@@ -36,7 +36,7 @@ export function groupDefinitions(
     disabledAgentTabActionIds(disabledTuiAgents)
   )
   // SHARE-LINKS-HOLD: no ⌘⌥⇧L entry while share links are held.
-  if (!cloudShareLinksEnabled()) {
+  if (!cloudTeamSharingEnabled()) {
     hiddenAgentActionIds.add(CLOUD_SHARE_LINK_ACTION_ID)
   }
   const groups = new Map<string, KeybindingDefinition[]>()

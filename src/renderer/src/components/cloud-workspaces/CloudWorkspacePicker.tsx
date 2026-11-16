@@ -1,5 +1,6 @@
 // "Open cloud workspace…": cloud workspaces this computer's sidebar doesn't show, as the same rows
 // (and ⋯ menu) the team list had. Open goes through openCloudWorkspace and closes the picker.
+import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -55,10 +56,16 @@ function pickerCopy(
     case 'open':
       return {
         title: t('components.cloudWorkspaces.picker.title', 'Open cloud workspace'),
-        description: t(
-          'components.cloudWorkspaces.picker.description',
-          'Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.'
-        )
+        // TEAM-SHARING-HOLD: nothing is shared by teammates while sharing is held.
+        description: cloudTeamSharingEnabled()
+          ? t(
+              'components.cloudWorkspaces.picker.description',
+              'Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.'
+            )
+          : t(
+              'components.cloudWorkspaces.picker.descriptionOwn',
+              'Your cloud workspaces that aren’t in your sidebar, such as ones started on another computer.'
+            )
       }
     case 'teammate':
       return {

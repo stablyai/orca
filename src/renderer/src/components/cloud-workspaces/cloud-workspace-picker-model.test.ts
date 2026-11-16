@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+const teamSharing = vi.hoisted(() => ({ on: true }))
+vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
+  CLOUD_SHARE_LINK_ACTION_ID: 'cloudWorkspace.copyLink',
+  cloudTeamSharingEnabled: () => teamSharing.on,
+  useCloudTeamSharingEnabled: () => teamSharing.on
+}))
 import {
   initialPickerControls,
   pickerListQuery,
@@ -109,5 +115,19 @@ describe('what the picker lists', () => {
     expect(rows('acme/payments')).toHaveLength(2)
     expect(rows(`W-${mine.number}`)).toEqual(['Mine here'])
     expect(rows('nothing like this')).toEqual([])
+  })
+
+  it('TEAM-SHARING-HOLD: no Team scope on a team while sharing is held; Open lists your own', () => {
+    teamSharing.on = false
+    try {
+      expect(initialPickerControls(true).scope).toBe('mine')
+      expect(pickerShowsScope({ kind: 'open' }, true)).toBe(false)
+      expect(
+        pickerListQuery({ kind: 'open' }, { scope: 'team', archived: false, search: '' }, true)
+          .scope
+      ).toBe('mine')
+    } finally {
+      teamSharing.on = true
+    }
   })
 })

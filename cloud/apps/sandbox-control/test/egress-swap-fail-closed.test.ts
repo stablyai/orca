@@ -142,9 +142,9 @@ describe('EGRESS-SWAP-FAIL-CLOSED', () => {
     const missing = await setup({ SANDBOX_ENV: 'staging' })
     expect(await missing.h.call('GET', '/v1/health')).toEqual({ status: 503, body: { error: 'egress_proxy_missing', keySwap: 'off' } })
     const present = await setup({ SANDBOX_ENV: 'staging', EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy' })
-    expect(await present.h.call('GET', '/v1/health')).toEqual({ status: 200, body: { ok: true, keySwap: 'on' } })
+    expect(await present.h.call('GET', '/v1/health')).toEqual({ status: 200, body: { ok: true, keySwap: 'on', environment: 'staging' } })
     const local = await setup({ SANDBOX_ENV: 'test' })
-    expect(await local.h.call('GET', '/v1/health')).toEqual({ status: 200, body: { ok: true, keySwap: 'off' } })
+    expect(await local.h.call('GET', '/v1/health')).toEqual({ status: 200, body: { ok: true, keySwap: 'off', environment: 'test' } })
   })
 
   it('a respond route compiles to a matched direct response, before the trailing deny', () => {

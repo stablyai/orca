@@ -78,21 +78,21 @@ const entry = (status: HostedWorkspaceStatus): CloudStatusEntry => ({
 })
 
 const FOLDER = '/Users/me/orca/cloud/Hello-World/fix-login-redirect'
-function syncView(id: string, mirror: boolean, empty = false): CloudSyncView {
-  const openPath = mirror ? FOLDER : `${FOLDER}/.context`
+function syncView(id: string, empty = false): CloudSyncView {
+  const openPath = `${FOLDER}/.context`
   return {
     workspaceId: id,
-    choice: { context: true, mirror },
+    choice: { context: true },
     folder: FOLDER,
     phase: 'synced',
-    files: empty ? 0 : mirror ? 1_204 : 12,
-    bytes: empty ? 0 : mirror ? 38_400_000 : 640_000,
+    files: empty ? 0 : 12,
+    bytes: empty ? 0 : 640_000,
     progress: null,
     lastSyncedAt: Date.now() - 2 * 60_000,
     editedHere: 0,
     skippedLarge: 0,
     overLimit: 0,
-    limits: { maxBytes: 2_000_000_000, maxFileBytes: 100_000_000 },
+    limits: { maxBytes: 250_000_000, maxFileBytes: 50_000_000 },
     error: null,
     openPath,
     displayPath: openPath.replace('/Users/me', '~')
@@ -105,7 +105,6 @@ const AS_OF = new Date(new Date().setHours(14, 31, 0, 0)).getTime()
 function card({
   id,
   state = 'running',
-  mirror = false,
   emptyContext = false,
   attention = null,
   layer = 'main',
@@ -114,7 +113,6 @@ function card({
 }: {
   id: string
   state?: CloudDotState
-  mirror?: boolean
   emptyContext?: boolean
   attention?: CloudCardAttention | null
   layer?: CloudCardLayer
@@ -122,7 +120,7 @@ function card({
   paired?: boolean
 }) {
   // Seeded once, outside render: the card reads it through the same store as the live app.
-  seedCloudSyncView(syncView(id, mirror, emptyContext))
+  seedCloudSyncView(syncView(id, emptyContext))
   return defineFixture({
     width: 320,
     // A paired card is registered as paired (PAIRED-STATUS), as the app does for its row.
@@ -168,10 +166,8 @@ export const runningNotStarted = card({
 })
 /** Details open: the bars, uptime and sandbox hours. */
 export const detailsOpen = card({ id: 'card-details', details: true })
-/** The sub-panel with the mirror off: the two switches and the .context status. */
-export const onComputerMirrorOff = card({ id: 'card-sync-off', layer: 'onComputer' })
-/** The sub-panel with the mirror on: where the files are, Open folder and Copy path. */
-export const onComputerMirrorOn = card({ id: 'card-sync-on', layer: 'onComputer', mirror: true })
+/** The sub-panel: the .context switch, its status, where the files are, Open folder and Copy path. */
+export const onComputer = card({ id: 'card-sync', layer: 'onComputer' })
 
 /** The ⋯ menu open: Details, Restart, Move to this computer; Archive and Delete after a separator. */
 export const menuOpen = defineFixture({
@@ -320,7 +316,7 @@ export const besideSidebar = defineFixture({
       idsLoaded: true,
       status: { [PLACEMENT_ID]: entry(running) }
     })
-    seedCloudSyncView(syncView(PLACEMENT_ID, false))
+    seedCloudSyncView(syncView(PLACEMENT_ID))
   },
   render: () => (
     <div className="flex h-[420px] bg-background">

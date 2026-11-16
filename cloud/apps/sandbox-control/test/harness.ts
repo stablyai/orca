@@ -61,6 +61,8 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
     VERCEL_PROJECT_ID: 'prj_orca',
     // Off unless a test turns it on (auto-environments.test.ts): it starts builds behind creates.
     AUTO_ENVIRONMENTS: 'off',
+    // Team sharing is on for the suite (its behavior is what most team tests cover); test/team-sharing-hold.test.ts holds it.
+    TEAM_SHARING: 'on',
     ...overrides
   }
   // No live github.com from tests: repos count as public unless a test says otherwise.

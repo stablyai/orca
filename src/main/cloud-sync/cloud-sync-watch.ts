@@ -1,4 +1,4 @@
-// The cloud's file watch, read for sync: which workspace paths changed, or that a rescan is
+// The cloud's file watch, read for sync: which `.context` paths changed, or that a rescan is
 // needed (overflow, or a directory event that can stand for many files). Events come from the VM
 // and are validated like any other reply.
 import { z } from 'zod'
@@ -28,7 +28,7 @@ export type WatchBatch =
   | { kind: 'paths'; paths: string[] }
   | { kind: 'none' }
 
-export function readWatchEvent(event: unknown, root: string, mirror: boolean): WatchBatch {
+export function readWatchEvent(event: unknown, root: string): WatchBatch {
   const parsed = WatchEventSchema.safeParse(event)
   if (!parsed.success) {
     return { kind: 'none' }
@@ -50,7 +50,7 @@ export function readWatchEvent(event: unknown, root: string, mirror: boolean): W
     }
     for (const candidate of [change.data.absolutePath, change.data.oldAbsolutePath]) {
       const rel = relativeToRoot(root, candidate)
-      if (rel && isSafeSyncPath(rel) && (mirror || isContextPath(rel))) {
+      if (rel && isSafeSyncPath(rel) && isContextPath(rel)) {
         paths.push(rel)
       }
     }
