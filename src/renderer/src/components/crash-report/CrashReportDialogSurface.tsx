@@ -227,7 +227,7 @@ export function CrashReportDialogSurface({
                       : report.createdAt
                   ).toLocaleString(intlLocale)}{' '}
                   · {report.platform} {report.arch} ·{' '}
-                  {t('auto.components.crash.report.CrashReportDialog.835037edc9', 'Orca')}{' '}
+                  {t('auto.components.crash.report.CrashReportDialog.835037edc9', 'Zotz')}{' '}
                   {report.appVersion}
                 </div>
               </div>

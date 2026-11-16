@@ -1,12 +1,12 @@
 {
-  "name": "orca",
+  "name": "zotz",
   "version": "1.4.214",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
   "bin": {
-    "orca": "./out/cli/index.js",
-    "orca-dev": "./config/scripts/development/launch/orca-dev.mjs"
+    "orca-dev": "./config/scripts/development/launch/orca-dev.mjs",
+    "zotz": "./out/cli/index.js"
   },
   "main": "./out/main/index.js",
   "scripts": {

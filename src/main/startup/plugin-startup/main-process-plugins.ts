@@ -166,8 +166,8 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     findName: (pluginKey) => pluginService.findValidPlugin(pluginKey)?.manifest.name ?? null,
     isKillListed: (pluginKey) => Boolean(state.pluginKillListService?.find(pluginKey))
   })
-  // Why packaged only (like the safety list): dev and e2e runs must not update fixtures unasked.
-  const autoUpdateScheduled = app.isPackaged || process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'
+  // Zotz: plugin auto-update is opt-in everywhere; upstream ran it in every packaged build.
+  const autoUpdateScheduled = process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'
   const syncPluginAutoUpdate = (runNow: boolean): void => {
     if (!autoUpdateScheduled) {
       return

@@ -1486,8 +1486,8 @@
   "menu": {
     "checkForUpdates": "Check for Updates...",
     "settings": "Settings",
-    "exploreOrca": "Explore Orca",
-    "gettingStarted": "Getting Started with Orca",
+    "exploreOrca": "Explore Zotz",
+    "gettingStarted": "Getting Started with Zotz",
     "reportCrash": "Report Crash...",
     "file": "File",
     "exit": "Exit",
@@ -1515,10 +1515,10 @@
     "copy": "Copy",
     "selectAll": "Select All",
     "quitAndStopAllSessions": "Quit Completely...",
-    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch.",
-    "about": "About Orca",
+    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Zotz reattaches on next launch.",
+    "about": "About Zotz",
     "cut": "Cut",
-    "hide": "Hide Orca",
+    "hide": "Hide Zotz",
     "hideOthers": "Hide Others",
     "minimize": "Minimize",
     "redo": "Redo",
@@ -1529,12 +1529,12 @@
     "zoom": "Zoom"
   },
   "tray": {
-    "openOrca": "Open Orca",
+    "openOrca": "Open Zotz",
     "quit": "Quit",
     "minimizeNotice": {
-      "body": "Orca is still running in the system tray"
+      "body": "Zotz is still running in the system tray"
     },
-    "activityWaiting": "Orca - activity waiting",
+    "activityWaiting": "Zotz - activity waiting",
     "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
@@ -1617,7 +1617,7 @@
       "df1d56bf87": "The workspace shell hit an error.",
       "9e0b441a91": "Toggle right sidebar",
       "e81217c1b7": "Hide App Name",
-      "5096cbbc86": "Orca",
+      "5096cbbc86": "Zotz",
       "8b0b8eb54f": "Application menu",
       "caea5b51b9": "Restart now",
       "0a9e810705": "Changes won't be saved until restart. Your previous tabs are safe on disk.",
@@ -5225,7 +5225,7 @@
             "bbcd9b7b85": "Collapse workspace",
             "c4a8968bdd": "Expand workspace",
             "b10695d6ce": "Kill session",
-            "288a4dd177": "Orca",
+            "288a4dd177": "Zotz",
             "53dd5560ae": "Collapse Orca",
             "e419d27083": "Expand Orca",
             "41ae4fa725": "Killing…",
@@ -16076,7 +16076,7 @@
         "OnboardingFlow": {
           "1b5e182e9f": "Welcome to Orca",
           "adaa0aa627": "Go to onboarding step {{value0}}: {{value1}}",
-          "a249f81538": "Orca",
+          "a249f81538": "Zotz",
           "277ba45540": "Orca onboarding",
           "97c42cda00": "Install the GitHub CLI to:",
           "ae3b00ca82": "Set up GitHub tasks",
@@ -16366,7 +16366,7 @@
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Desktops",
             "af761a0c0d": "Settings",
-            "5d94e8ddcc": "Orca",
+            "5d94e8ddcc": "Zotz",
             "dc1f3f5535": "Jump back in",
             "c2a0215163": "Waiting for input",
             "0c14dac908": "2m",
@@ -18070,7 +18070,7 @@
             "88fea8e84e": "Don't Send",
             "50b00dc327": "Copy Details",
             "6d3ebe216a": "Diagnostic text",
-            "835037edc9": "Orca",
+            "835037edc9": "Zotz",
             "8e24fe4f75": "Crash report sent.",
             "8b8473c544": "Crash report copied.",
             "765591798d": "Checking for crash reports...",
@@ -25797,6 +25797,12 @@
       "summary": "Orca stopped responding",
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
+    }
+  },
+  "zotz": {
+    "updater": {
+      "manualUpdate": "Zotz updates with git pull + build.",
+      "manualUpdateDetail": "See docs/zotz/UPDATE.md. Set ZOTZ_ENABLE_UPDATER=1 to turn the built-in updater back on."
     }
   }
 }

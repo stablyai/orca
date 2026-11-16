@@ -1228,8 +1228,8 @@ jobs:
           rpm="dist/orca-ide-${version}.x86_64.rpm"
           test -s "$deb"
           test -s "$rpm"
-          deb_marker="$(dpkg-deb --fsys-tarfile "$deb" | tar -xOf - ./opt/Orca/resources/package-type)"
-          rpm_marker="$(rpm2cpio "$rpm" | cpio --quiet --extract --to-stdout ./opt/Orca/resources/package-type)"
+          deb_marker="$(dpkg-deb --fsys-tarfile "$deb" | tar -xOf - ./opt/Zotz/resources/package-type)"
+          rpm_marker="$(rpm2cpio "$rpm" | cpio --quiet --extract --to-stdout ./opt/Zotz/resources/package-type)"
           [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
           # Only the AppImage carries the pinned Node (config/scripts/desktop-distribution/linux/appimage-node-runtime.cjs).
@@ -1411,7 +1411,7 @@ jobs:
         run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
 
       - name: Smoke packaged Windows PTY native capability
-        run: pnpm run smoke:windows-pty-native-capability -- --exe=dist/win-unpacked/Orca.exe
+        run: pnpm run smoke:windows-pty-native-capability -- --exe=dist/win-unpacked/Zotz.exe
 
       - name: Smoke packaged CLI
         run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked

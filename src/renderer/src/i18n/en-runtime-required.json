@@ -2294,8 +2294,8 @@
     "liveTerminals_other": "{{count}} live terminals will reconnect after restart."
   },
   "menu": {
-    "about": "About Orca",
-    "hide": "Hide Orca",
+    "about": "About Zotz",
+    "hide": "Hide Zotz",
     "hideOthers": "Hide Others",
     "minimize": "Minimize",
     "quitApp": "Quit {{appName}}",

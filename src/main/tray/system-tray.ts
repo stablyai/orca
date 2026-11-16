@@ -45,9 +45,9 @@ let nativeThemeUpdatedListener: (() => void) | null = null
 // Per-worktree tooltips distinguish concurrent dev instances.
 function baseTooltip(): string {
   if (!devIndicator) {
-    return 'Orca'
+    return 'Zotz'
   }
-  return devIndicator.label ? `Orca DEV (${devIndicator.label})` : 'Orca DEV'
+  return devIndicator.label ? `Zotz DEV (${devIndicator.label})` : 'Zotz DEV'
 }
 
 // Downscale the app image for Windows' 16px notification-area slot.
@@ -81,7 +81,7 @@ function applyTrayImage(): void {
         tray.setToolTip(
           devIndicator
             ? `${baseTooltip()} - ${translateMain('tray.activityWaitingSuffix', 'activity waiting')}`
-            : translateMain('tray.activityWaiting', 'Orca - activity waiting')
+            : translateMain('tray.activityWaiting', 'Zotz - activity waiting')
         )
         return
       } catch (error) {
@@ -250,7 +250,7 @@ function buildTrayMenu(opts: SystemTrayOptions): Menu {
         ] satisfies Electron.MenuItemConstructorOptions[])
       : []),
     {
-      label: translateMain('tray.openOrca', 'Open Orca'),
+      label: translateMain('tray.openOrca', 'Open Zotz'),
       click: safeMenuAction(() => opts.onOpen())
     },
     { type: 'separator' },

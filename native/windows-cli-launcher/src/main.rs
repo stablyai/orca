@@ -51,13 +51,17 @@ fn main() {
         ))
     };
 
-    let electron_path = app_directory.join("Orca.exe");
-    if !electron_path.is_file() {
+    // Zotz renames the packaged executable; keep Orca.exe as a fallback for upstream layouts.
+    let Some(electron_path) = ["Zotz.exe", "Orca.exe"]
+        .iter()
+        .map(|name| app_directory.join(name))
+        .find(|path| path.is_file())
+    else {
         fail(&format!(
-            "Unable to locate Orca.exe next to \"{}\"",
+            "Unable to locate Zotz.exe next to \"{}\"",
             resources_directory.display()
-        ));
-    }
+        ))
+    };
 
     let cli_path: PathBuf = resources_directory
         .join("app.asar.unpacked")

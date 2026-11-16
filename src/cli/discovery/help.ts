@@ -11,6 +11,7 @@ import { formatCommandScopedFlagHelp } from './command-scoped-flag-help'
 import { FLAG_HELP_TEXT } from './flag-help-text'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
+import { withZotzProductName } from './zotz-help-branding'
 
 const ROOT_HELP_TEXT = [ROOT_HELP_TEXT_PRIMARY, ROOT_HELP_TEXT_SECONDARY].join('\n')
 // Command lines only: leaves `name:orca`, paths, `orca://`, `orca-ide` and quoted `orca` names intact.
@@ -41,9 +42,10 @@ function formatHelp(specs: CommandSpec[], commandPath: string[]): string {
 
 function withInvokedCliCommand(text: string): string {
   const command = resolveInvokedCliCommand()
+  const branded = withZotzProductName(text)
   return command === 'orca'
-    ? text
-    : text.replace(CLI_COMMAND_WORD, (_match, prefix: string) => `${prefix}${command}`)
+    ? branded
+    : branded.replace(CLI_COMMAND_WORD, (_match, prefix: string) => `${prefix}${command}`)
 }
 
 export function formatCommandHelp(spec: CommandSpec): string {

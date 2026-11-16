@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
 import { RuntimeClientError } from '../../runtime/connection/types'
+import { ZOTZ_CLI_COMMAND } from '../../../shared/zotz/zotz-app-identity'
 
 export function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
   const configured = process.env.ORCA_CLI_COMMAND
@@ -47,7 +48,7 @@ export function isDevCliInvocation(): boolean {
 // SSH/headless Node CLIs stay `orca`.
 export function resolveInvokedCliCommand(): string {
   if (process.platform !== 'linux') {
-    return 'orca'
+    return ZOTZ_CLI_COMMAND
   }
   const configured = process.env.ORCA_CLI_COMMAND?.trim()
   if (configured) {
@@ -56,5 +57,5 @@ export function resolveInvokedCliCommand(): string {
   if (isDevCliInvocation()) {
     return 'orca-dev'
   }
-  return process.env.ELECTRON_RUN_AS_NODE === '1' ? 'orca-ide' : 'orca'
+  return process.env.ELECTRON_RUN_AS_NODE === '1' ? 'orca-ide' : ZOTZ_CLI_COMMAND
 }

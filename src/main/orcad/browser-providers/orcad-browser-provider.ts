@@ -15,6 +15,7 @@ import { watchOrcadBrowserInstallPark } from './orcad-browser-install-park'
 import { openServeBundlePark } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { ORCAD_BROWSER_PARK_LABEL } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { errorMessage } from '../../../shared/errors/error-message'
+import { ZOTZ_PRODUCT_NAME } from '../../../shared/zotz/zotz-app-identity'
 
 export type OrcadBrowserProvider = {
   kind: 'electron' | 'chromium'
@@ -78,19 +79,29 @@ export function installedElectronCandidates(
   const joinPath = platform === 'win32' ? win32.join : posix.join
   if (platform === 'darwin') {
     return [
+      `/Applications/${ZOTZ_PRODUCT_NAME}.app/Contents/MacOS/${ZOTZ_PRODUCT_NAME}`,
+      joinPath(
+        homePath,
+        'Applications',
+        `${ZOTZ_PRODUCT_NAME}.app`,
+        'Contents',
+        'MacOS',
+        ZOTZ_PRODUCT_NAME
+      ),
       '/Applications/Orca.app/Contents/MacOS/Orca',
       joinPath(homePath, 'Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
     ]
   }
   if (platform === 'win32') {
-    return [
+    return [ZOTZ_PRODUCT_NAME, 'Orca'].flatMap((name) => [
       ...(environment.LOCALAPPDATA
-        ? [joinPath(environment.LOCALAPPDATA, 'Programs', 'Orca', 'Orca.exe')]
+        ? [joinPath(environment.LOCALAPPDATA, 'Programs', name, `${name}.exe`)]
         : []),
-      ...(environment.ProgramFiles ? [joinPath(environment.ProgramFiles, 'Orca', 'Orca.exe')] : [])
-    ]
+      ...(environment.ProgramFiles ? [joinPath(environment.ProgramFiles, name, `${name}.exe`)] : [])
+    ])
   }
   return [
+    `/opt/${ZOTZ_PRODUCT_NAME}/orca-ide`,
     joinPath(homePath, '.local', 'bin', 'orca-ide'),
     '/usr/local/bin/orca-ide',
     '/usr/bin/orca-ide',
