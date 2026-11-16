@@ -48,7 +48,10 @@ function isCodexNoRolloutError(
 }
 
 /** Codex refuses to resume an archived thread until it is unarchived; it is the same conversation. */
-function isCodexArchivedThreadError(error: unknown, threadId: string): boolean {
+function isCodexArchivedThreadError(
+  error: unknown,
+  threadId: string
+): error is CodexAppServerRequestError {
   return (
     isCodexAppServerRequestError(error) &&
     error.method === 'thread/resume' &&
@@ -115,14 +118,26 @@ export async function openCodexThread(
         { timeoutMs }
       )
     }
+    // An archived thread was saved, so it is never replaced by a new one.
+    let archived = false
     try {
       opened = await resume().catch(async (error: unknown) => {
         if (!isCodexArchivedThreadError(error, resumeThreadId)) {
           throw error
         }
-        // Archived outside Orca: unarchive once and reopen the same thread, never a new one.
+        archived = true
         throwIfSignalAborted(signal)
-        await connection.request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
+        await connection
+          .request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
+          .catch((unarchiveError: unknown) => {
+            // Something else already unarchived it; the retry below reopens it.
+            if (
+              !isCodexAppServerRequestError(unarchiveError) ||
+              !/\bno archived rollout found for thread id\b/i.test(unarchiveError.message)
+            ) {
+              throw Object.assign(error, { cause: unarchiveError })
+            }
+          })
         return resume()
       })
     } catch (error) {
@@ -145,7 +160,7 @@ export async function openCodexThread(
       if (!isCodexNoRolloutError(error, resumeThreadId)) {
         throw error
       }
-      if (!launch.supersedeIfUnsaved) {
+      if (!launch.supersedeIfUnsaved || archived) {
         throw withProviderDiagnostic(
           Object.assign(
             new AgentSessionAcquisitionRefusal(error.message, 'savedConversationMissing'),
