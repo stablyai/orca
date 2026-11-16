@@ -47,7 +47,7 @@ function state(
     createdAt: 0
   }
   return {
-    agentStatusByPaneKey: { [PANE_KEY]: statusEntry },
+    agentStatusByPaneKey: new Map([[PANE_KEY, statusEntry]]),
     tabsByWorktree: { wt: [tab] },
     unifiedTabsByWorktree: {},
     terminalLayoutsByTabId: {
