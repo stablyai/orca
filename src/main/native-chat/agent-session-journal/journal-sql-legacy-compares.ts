@@ -1,5 +1,6 @@
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import { isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 
 /**
  * Converted chats an older Orca may have continued, with no revision to compare, are compared one
@@ -9,6 +10,7 @@ export async function compareJournalLegacyChatsWhenIdle(
   writer: Pick<JournalSqlOwner, 'maintain'>,
   readers: Pick<JournalSqlReaderPool, 'database' | 'compareLegacyChat'>,
   boundary: () => Promise<boolean>,
+  stopped: () => boolean,
   report: (error: unknown, sessionId: string) => void
 ): Promise<void> {
   let after: string | null = null
@@ -24,13 +26,17 @@ export async function compareJournalLegacyChatsWhenIdle(
       if (!(await boundary())) {
         return
       }
-      // A reader that can't answer leaves the compare for the next launch.
       let result: Awaited<ReturnType<JournalSqlReaderPool['compareLegacyChat']>>
       try {
         result = await readers.compareLegacyChat(compare.sessionId)
       } catch (error) {
         report(error, compare.sessionId)
-        continue
+        // Stopping or contention leaves it for the next launch; a chat whose compare took its
+        // reader down is absorbed with its error, never retried into the same crash.
+        if (stopped() || isSqliteStorageFailure(error)) {
+          continue
+        }
+        result = { error: error instanceof Error ? error.message : String(error) }
       }
       if (result && ('error' in result || result.revision === compare.revision)) {
         await writer.maintain({ kind: 'legacy-compare-settle', ...compare, ...result })

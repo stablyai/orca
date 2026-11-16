@@ -117,6 +117,7 @@ export class JournalSqlBackgroundMaintenance {
             this.writer,
             this.readers,
             () => this.boundary(),
+            () => this.stopped.signal.aborted,
             (error, id) => this.report(error, id)
           )
           await this.convertSavedChats()
