@@ -13,11 +13,10 @@ import {
   cloudRuntimesFrom,
   previewRemoval,
   removeLocalCopy,
-  removeMirroredFiles,
   type CloudRuntime
 } from './cloud-sync-local-copy'
 import { CONTEXT_DIR, displayPath } from './cloud-sync-paths'
-import { limitsInfo, type CloudSyncChoice } from './cloud-sync-plan'
+import { CONTEXT_LIMITS_INFO, type CloudSyncChoice } from './cloud-sync-plan'
 import type { SyncCall } from './cloud-sync-remote'
 import {
   createCloudSyncSession,
@@ -51,7 +50,7 @@ function idleState(
     workspaceId: runtime.workspaceId,
     choice,
     folder: runtime.folder,
-    phase: !choice.context && !choice.mirror ? 'off' : 'waiting',
+    phase: choice.context ? 'waiting' : 'off',
     files: previous?.files ?? 0,
     bytes: previous?.bytes ?? 0,
     progress: null,
@@ -59,7 +58,7 @@ function idleState(
     editedHere: previous?.editedHere ?? 0,
     skippedLarge: previous?.skippedLarge ?? 0,
     overLimit: previous?.overLimit ?? 0,
-    limits: limitsInfo(choice),
+    limits: CONTEXT_LIMITS_INFO,
     error: null
   }
 }
@@ -77,8 +76,7 @@ export function createCloudSyncService(deps: CloudSyncServiceDeps) {
   let disposed = false
 
   const viewOf = (state: CloudSyncState): CloudSyncView => {
-    const openPath =
-      state.choice.mirror || !state.choice.context ? state.folder : join(state.folder, CONTEXT_DIR)
+    const openPath = join(state.folder, CONTEXT_DIR)
     return { ...state, openPath, displayPath: displayPath(openPath, deps.home) }
   }
 
@@ -175,7 +173,7 @@ export function createCloudSyncService(deps: CloudSyncServiceDeps) {
         continue
       }
       const choice = await deps.store.choice(runtime.workspaceId)
-      if (!runtime.running || (!choice.context && !choice.mirror)) {
+      if (!runtime.running || !choice.context) {
         await reconcileIdle(runtime, choice)
         continue
       }
@@ -269,17 +267,12 @@ export function createCloudSyncService(deps: CloudSyncServiceDeps) {
         return null
       }
       const choice = await deps.store.setChoice(workspaceId, patch)
-      const session = sessions.get(workspaceId)
-      if (!choice.context && !choice.mirror) {
+      if (!choice.context) {
         await stopSession(workspaceId)
         await removeLocalCopy(deps.store, workspaceId, runtime.folder)
-        states.delete(workspaceId)
-      } else if (session) {
-        void session.session.setChoice(choice)
-      } else {
-        if (!choice.mirror) {
-          await removeMirroredFiles(deps.store, workspaceId, runtime.folder)
-        }
+      }
+      // A running session's state stands; otherwise the reconcile below starts one (or goes idle).
+      if (!sessions.has(workspaceId)) {
         states.delete(workspaceId)
       }
       await reconcile()

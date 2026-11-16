@@ -14,7 +14,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-async function setup(vm: FakeVm, choice: CloudSyncChoice = { context: true, mirror: false }) {
+async function setup(vm: FakeVm, choice: CloudSyncChoice = { context: true }) {
   const folder = await mkdtemp(join(tmpdir(), 'cloud-sync-folder-'))
   const userData = await mkdtemp(join(tmpdir(), 'cloud-sync-userdata-'))
   dirs.push(folder, userData)
@@ -38,7 +38,7 @@ const settle = async (session: { resync: () => Promise<void> }): Promise<void> =
 }
 
 describe('cloud sync session', () => {
-  it('copies .context (gitignored, walked) read-only and leaves other files alone by default', async () => {
+  it('copies .context (gitignored, walked) read-only and nothing outside it', async () => {
     const vm = createFakeVm()
     vm.write('.context/plan.md', '# Plan')
     vm.write('.context/shots/one.png', 'PNG')
@@ -53,21 +53,23 @@ describe('cloud sync session', () => {
     await session.stop()
   })
 
-  it('mirrors the workspace minus .gitignore, then removes it when the mirror is turned off', async () => {
+  it('removes files outside .context that an older build copied', async () => {
     const vm = createFakeVm()
     vm.write('.context/plan.md', 'p')
     vm.write('src/index.ts', 'code')
-    vm.write('dist/bundle.js', 'built')
-    vm.ignored.add('dist/bundle.js')
-    const { folder, session, last } = await setup(vm, { context: true, mirror: true })
+    const { folder, store, session } = await setup(vm)
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(join(folder, 'src'))
+    await writeFile(join(folder, 'src/index.ts'), 'code')
+    const copied = await stat(join(folder, 'src/index.ts'))
+    await store.writeIndex('ws', {
+      version: 1,
+      folder,
+      lastSyncedAt: 1,
+      entries: { 'src/index.ts': { rs: 4, rm: 1, ls: copied.size, lm: copied.mtimeMs } }
+    })
     await session.start()
-    expect(await readFile(join(folder, 'src/index.ts'), 'utf8')).toBe('code')
-    await expect(stat(join(folder, 'dist/bundle.js'))).rejects.toThrow()
-    expect(last()).toMatchObject({ phase: 'synced', files: 2 })
-    await session.setChoice({ context: true, mirror: false })
     await expect(stat(join(folder, 'src/index.ts'))).rejects.toThrow()
-    // The emptied directory goes too; .context stays.
-    await expect(stat(join(folder, 'src'))).rejects.toThrow()
     expect(await readFile(join(folder, '.context/plan.md'), 'utf8')).toBe('p')
     await session.stop()
   })
@@ -75,16 +77,16 @@ describe('cloud sync session', () => {
   it('second pass is incremental: only changed files are read again', async () => {
     const vm = createFakeVm()
     for (let i = 0; i < 50; i++) {
-      vm.write(`src/f${i}.ts`, `v${i}`)
+      vm.write(`.context/f${i}.md`, `v${i}`)
     }
-    const { folder, session } = await setup(vm, { context: true, mirror: true })
+    const { folder, session } = await setup(vm)
     await session.start()
     vm.calls.length = 0
-    vm.write('src/f7.ts', 'changed')
+    vm.write('.context/f7.md', 'changed')
     await settle(session)
     expect(vm.calls.filter((method) => method === 'files.readChunk')).toHaveLength(1)
     expect(vm.calls.filter((method) => method === 'files.statMany')).toHaveLength(1)
-    expect(await readFile(join(folder, 'src/f7.ts'), 'utf8')).toBe('changed')
+    expect(await readFile(join(folder, '.context/f7.md'), 'utf8')).toBe('changed')
     await session.stop()
   })
 
@@ -220,7 +222,7 @@ describe('cloud sync session', () => {
 })
 
 describe('safetyIntervalMs', () => {
-  it('re-checks small folders every 30 s and large mirrors at most every 10 min', () => {
+  it('re-checks small folders every 30 s and large ones at most every 10 min', () => {
     expect(safetyIntervalMs(0)).toBe(30_000)
     expect(safetyIntervalMs(21)).toBe(30_000)
     expect(safetyIntervalMs(2_000)).toBe(60_000)

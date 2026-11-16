@@ -1,12 +1,12 @@
 // A workspace's copy on this computer as a whole: where it is (from the runtime record), what
-// removing it would take with it, and removing it (archive, delete, both rows off).
+// removing it would take with it, and removing it (archive, delete, sync turned off).
 import { rm, rmdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { getEphemeralVmRecipeResultConnection } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import type { CloudSyncRemovalPreview } from '../../shared/cloud-sync/cloud-sync-contract'
 import { localStatAt, removeCopies } from './cloud-sync-local-writes'
-import { SYNC_TEMP_DIR, cloudSyncFolder, isContextPath } from './cloud-sync-paths'
+import { SYNC_TEMP_DIR, cloudSyncFolder } from './cloud-sync-paths'
 import { isLocalCopyEdited } from './cloud-sync-plan'
 import type { CloudSyncStore } from './cloud-sync-store'
 
@@ -72,20 +72,6 @@ export async function removeLocalCopy(
   await rmdir(folder).catch(() => undefined)
   await rmdir(join(folder, '..')).catch(() => undefined)
   await store.removeIndex(workspaceId)
-}
-
-/** Mirror turned off while asleep: the mirrored files go now (they'd only get staler). */
-export async function removeMirroredFiles(
-  store: CloudSyncStore,
-  workspaceId: string,
-  folder: string
-): Promise<void> {
-  const index = await store.readIndex(workspaceId, folder)
-  const outside = Object.keys(index.entries).filter((path) => !isContextPath(path))
-  if (outside.length > 0) {
-    await removeCopies(folder, outside, index.entries)
-    await store.writeIndex(workspaceId, index)
-  }
 }
 
 export async function previewRemoval(

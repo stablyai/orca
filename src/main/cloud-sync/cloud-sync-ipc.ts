@@ -125,18 +125,15 @@ export function installCloudSync(
   ipcMain.handle(CH.getState, (_event, workspaceId: unknown) =>
     typeof workspaceId === 'string' ? sync.getState(workspaceId) : null
   )
-  ipcMain.handle(
-    CH.setChoice,
-    (_event, args: { workspaceId?: unknown; context?: unknown; mirror?: unknown }) => {
-      if (typeof args?.workspaceId !== 'string') {
-        return null
-      }
-      return sync.setChoice(args.workspaceId, {
-        ...(typeof args.context === 'boolean' ? { context: args.context } : {}),
-        ...(typeof args.mirror === 'boolean' ? { mirror: args.mirror } : {})
-      })
+  ipcMain.handle(CH.setChoice, (_event, args: { workspaceId?: unknown; context?: unknown }) => {
+    if (typeof args?.workspaceId !== 'string') {
+      return null
     }
-  )
+    return sync.setChoice(
+      args.workspaceId,
+      typeof args.context === 'boolean' ? { context: args.context } : {}
+    )
+  })
   ipcMain.handle(CH.openFolder, (_event, workspaceId: unknown) =>
     typeof workspaceId === 'string' ? sync.openFolder(workspaceId) : { ok: false }
   )

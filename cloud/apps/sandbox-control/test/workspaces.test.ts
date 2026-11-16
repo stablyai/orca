@@ -52,15 +52,23 @@ describe('workspace registry', () => {
     expect((await t.req(t.bob, 'GET', '/v1/sandboxes')).body.sandboxes).toEqual([])
 
     expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })).status).toBe(404)
-    const shared = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team', section: 'Auth' })
-    expect(shared.body.workspace).toMatchObject({ visibility: 'team', section: 'Auth' })
-    const seen = await t.req(t.bob, 'GET', '/v1/team/workspaces?scope=team')
-    expect(seen.body.workspaces.map((w: { id: string; access: string }) => [w.id, w.access])).toEqual([[t.id, 'can_open']])
-    expect((await t.req(t.bob, 'GET', '/v1/team/workspaces?scope=mine')).body.workspaces).toEqual([])
-    expect((await t.req(t.bob, 'GET', '/v1/team/workspaces?by=alice&section=Auth')).body.workspaces).toHaveLength(1)
-    expect((await t.req(t.bob, 'GET', '/v1/team/workspaces?by=dave')).body.workspaces).toEqual([])
+    // Sharing is gone: the owner can't share it, and a row still stored as `team` stays the owner's alone.
+    expect((await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })).body).toEqual({
+      error: 'invalid_request',
+      reason: 'team_sharing_unavailable'
+    })
+    const kept = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'private', section: 'Auth' })
+    expect(kept.body.workspace).toMatchObject({ visibility: 'private', section: 'Auth' })
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(t.id)
+    for (const scope of ['team', 'mine']) {
+      expect((await t.req(t.bob, 'GET', `/v1/team/workspaces?scope=${scope}`)).body.workspaces).toEqual([])
+    }
+    // `scope=team` is an alias of `mine` (older mobile builds send it).
+    expect((await t.req(t.alice, 'GET', '/v1/team/workspaces?scope=team')).body.workspaces.map((w: { id: string; visibility: string }) => [w.id, w.visibility])).toEqual([[t.id, 'private']])
+    expect((await t.req(t.bob, 'GET', '/v1/team/workspaces?by=alice&section=Auth')).body.workspaces).toEqual([])
+    expect((await t.req(t.bob, 'GET', `/v1/team/workspaces/${t.id}`)).status).toBe(404)
     // Members cannot edit a teammate's workspace; another org sees nothing.
-    expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { title: 'mine now' })).status).toBe(403)
+    expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { title: 'mine now' })).status).toBe(404)
     const stranger = await t.as('eve', 'owner', 'other')
     expect((await t.req(stranger, 'GET', `/v1/team/workspaces/${t.id}`)).status).toBe(404)
     expect((await t.req(stranger, 'GET', `/v1/team/links/resolve?w=${t.id}`)).status).toBe(404)
@@ -171,8 +179,7 @@ describe('workspace registry', () => {
 
   it('only the owner or a team admin can archive', async () => {
     const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })).status).toBe(403)
+    expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })).status).toBe(404)
     expect(t.h.vercel.boxes.get(`orca-test-${t.id}`)!.status).toBe('running')
   })
 
@@ -188,18 +195,13 @@ describe('workspace registry', () => {
     expect(w.cost).toMatchObject({ computeMs: 90 * MIN, computeUsdMicros: 1_500_000, tokenUsdMicros: 2_500_000, totalUsdMicros: 4_000_000 })
   })
 
-  it('labels owners and present teammates with the name claim from their own tokens', async () => {
+  it('labels the owner with the name claim from their own token', async () => {
     const t = await team()
     const named = async (who: { sub: string; org: string }, name: string, method: string, path: string, body?: unknown) =>
       t.h.call(method, path, { bearer: await t.h.token(who.sub, who.org, 'sandbox', { org_role: 'member', name }), body })
-    await named(t.alice, 'Alice  Lovelace\u0007', 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    // Before Bob sends a named request, his id has no label (the roster or the id stands in).
-    const before = await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}`)
-    expect(before.body.workspace.memberNames).toEqual({ alice: 'Alice Lovelace' })
-    await named(t.bob, 'Bob B', 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'b-1', state: 'viewing' })
-    const after = await t.req(t.alice, 'GET', '/v1/team/workspaces')
-    expect(after.body.workspaces[0].memberNames).toMatchObject({ bob: 'Bob B' })
-    expect(after.body.workspaces[0].memberNames.alice).not.toContain('\u0007')
+    await named(t.alice, 'Alice  Lovelace\u0007', 'PATCH', `/v1/team/workspaces/${t.id}`, { section: 'x' })
+    const seen = await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}`)
+    expect(seen.body.workspace.memberNames).toEqual({ alice: 'Alice Lovelace' })
     // Another org never sees these labels.
     const other = await t.as('alice', 'member', 'globex')
     await t.req(other, 'POST', '/v1/sandboxes', { workspaceId: 'ws-x', machineSize: 'standard' })
@@ -207,25 +209,13 @@ describe('workspace registry', () => {
     expect(theirs.body.workspaces[0].memberNames).toEqual({})
   })
 
-  it('tracks live presence per member device and expires it', async () => {
-    const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'a-laptop', state: 'viewing' })
-    const typed = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'b-1', state: 'typing', chatId: 'chat_9' })
-    expect(typed.body.presence.map((p: { userId: string; state: string }) => `${p.userId}:${p.state}`).sort()).toEqual(['alice:viewing', 'bob:typing'])
-    const [w] = (await t.req(t.alice, 'GET', '/v1/team/workspaces')).body.workspaces
-    expect(w.lastActivityBy).toBe('alice')
-    await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'b-1', state: 'left' })
-    t.h.advance(46_000)
-    expect((await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}`)).body.workspace.presence).toEqual([])
-  })
-
   it('resolves deep links only for people who can see the workspace', async () => {
     const t = await team()
     expect((await t.req(t.bob, 'GET', `/v1/team/links/resolve?w=${t.id}&c=chat_1`)).status).toBe(404)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    const link = await t.req(t.bob, 'GET', `/v1/team/links/resolve?w=${t.id}&c=chat_1`)
-    expect(link.body).toMatchObject({ chatId: 'chat_1', workspace: { id: t.id, access: 'can_open' } })
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(t.id)
+    expect((await t.req(t.bob, 'GET', `/v1/team/links/resolve?w=${t.id}&c=chat_1`)).status).toBe(404)
+    const link = await t.req(t.alice, 'GET', `/v1/team/links/resolve?w=${t.id}&c=chat_1`)
+    expect(link.body).toMatchObject({ chatId: 'chat_1', workspace: { id: t.id, access: 'owner' } })
     expect((await t.req(t.bob, 'GET', '/v1/team/links/resolve?w=nope')).status).toBe(400)
   })
 
@@ -236,23 +226,22 @@ describe('workspace registry', () => {
     expect(w.visibility).toBe('private')
     expect((await h.call('PATCH', `/v1/team/workspaces/${body.sandbox.id}`, { body: { visibility: 'team' } })).body).toEqual({
       error: 'invalid_request',
-      reason: 'personal_account'
+      reason: 'team_sharing_unavailable'
     })
   })
 })
 
 describe('workspace grants (E2EE pairing through the control plane)', () => {
-  it('seals a fresh single-device offer to the teammate device and nothing usable crosses the control plane', async () => {
+  it('seals a fresh single-device offer to the owner’s device and nothing usable crosses the control plane', async () => {
     const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
     const key = generateGrantRecipientKey()
-    const res = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, {
+    const res = await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/grants`, {
       recipientPublicKeyB64: key.publicKeyB64,
-      deviceLabel: 'Bob MacBook',
+      deviceLabel: 'Alice MacBook',
       deviceKind: 'desktop'
     })
     expect(res.status).toBe(200)
-    expect(res.body.grant).toMatchObject({ userId: 'bob', deviceKind: 'desktop', status: 'active' })
+    expect(res.body.grant).toMatchObject({ userId: 'alice', deviceKind: 'desktop', status: 'active' })
     const opened = await openSealedGrant(res.body.sealed, res.body.grant.id, key.secretKey, nodeSealedGrantPrimitives)
     expect(opened.pairingUrl).toMatch(/^orca:\/\/pair\?code=/)
     expect(opened.scope).toBe('runtime')
@@ -267,37 +256,39 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     expect(grantCmd.env.ORCA_PUBLIC_WSS).toMatch(/^wss:\/\//)
   })
 
-  it('refuses grants on private workspaces and wakes a sleeping team workspace for a teammate', async () => {
+  it('refuses grants to anyone but the owner (a row still stored as team included) and wakes a sleeping one for the owner', async () => {
     const t = await team()
     const key = generateGrantRecipientKey()
-    const body = { recipientPublicKeyB64: key.publicKeyB64, deviceLabel: 'Bob phone', deviceKind: 'mobile' }
+    const body = { recipientPublicKeyB64: key.publicKeyB64, deviceLabel: 'phone', deviceKind: 'mobile' }
     expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, body)).status).toBe(404)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(t.id)
+    expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, body)).status).toBe(404)
+    expect((await t.req(t.admin, 'POST', `/v1/team/workspaces/${t.id}/grants`, body)).status).toBe(404)
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
-    const res = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, body)
+    const res = await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/grants`, body)
     expect(res.status).toBe(200)
     expect((await openSealedGrant(res.body.sealed, res.body.grant.id, key.secretKey, nodeSealedGrantPrimitives)).scope).toBe('mobile')
-    expect((await t.req(t.bob, 'GET', `/v1/team/workspaces/${t.id}`)).body.workspace).toMatchObject({ status: 'running', access: 'granted' })
+    expect((await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}`)).body.workspace).toMatchObject({ status: 'running', access: 'owner' })
+    expect(t.h.raw.prepare("SELECT COUNT(*) AS n FROM workspace_grants WHERE user_id <> 'alice'").get()).toEqual({ n: 0 })
   })
 
-  it('revokes in the VM at once, and on going private, and queues revokes while suspended', async () => {
+  it('revokes in the VM at once, and queues revokes while suspended', async () => {
     const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    const grant = async (bearer: typeof t.bob, label: string) =>
+    const grant = async (bearer: typeof t.alice, label: string) =>
       (await t.req(bearer, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: label, deviceKind: 'desktop' })).body.grant
-    const g1 = await grant(t.bob, 'one')
-    const g2 = await grant(t.bob, 'two')
+    const g1 = await grant(t.alice, 'one')
+    const g2 = await grant(t.alice, 'two')
     const box = [...t.h.vercel.boxes.values()][0]!
     expect(box.devices).toHaveLength(3)
 
-    const del = await t.req(t.bob, 'DELETE', `/v1/team/workspaces/${t.id}/grants/${g1.id}`)
+    const del = await t.req(t.alice, 'DELETE', `/v1/team/workspaces/${t.id}/grants/${g1.id}`)
     expect(del.body).toMatchObject({ revoked: 1, queued: 0, grant: { status: 'revoked' } })
     expect(box.devices).toHaveLength(2)
 
     // Suspended: the revoke is queued and applied at the next boot, before orcad starts.
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
-    const priv = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'private' })
-    expect(priv.body.revoked).toEqual({ revoked: 0, queued: 1 })
+    const queued = await t.req(t.alice, 'DELETE', `/v1/team/workspaces/${t.id}/grants/${g2.id}`)
+    expect(queued.body).toMatchObject({ revoked: 0, queued: 1 })
     t.h.vercel.commands.length = 0
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/resume`)
     const order = t.h.vercel.commands.map((c) => c.command)
@@ -306,8 +297,8 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     expect(box.devices).toEqual([`dev-owner-${box.params.name}`])
     const statuses = t.h.raw.prepare('SELECT id, status FROM workspace_grants ORDER BY created_at').all() as { id: string; status: string }[]
     expect(statuses.find((s) => s.id === g2.id)!.status).toBe('revoked')
-    // Bob's device list is empty; the owner's own device stays.
-    expect((await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}/grants`)).body.grants.map((g: { deviceLabel: string }) => g.deviceLabel)).toEqual(['Owner desktop'])
+    // The revoked devices are gone; the owner's own create-time device stays.
+    expect((await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}/grants`)).body.grants.filter((g: { status: string }) => g.status === 'active').map((g: { deviceLabel: string }) => g.deviceLabel)).toEqual(['Owner desktop'])
   })
 
   it('reassigning the owner revokes the previous owner devices and moves the lifecycle API', async () => {
@@ -328,61 +319,51 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     expect((await t.req(t.bob, 'POST', `/v1/sandboxes/${t.id}/suspend`)).status).toBe(200)
   })
 
-  it('revokes a removed member everywhere (auth push)', async () => {
+  it('revokes a removed member’s own devices everywhere (auth push)', async () => {
     const t = await team()
     t.h.env.OPERATOR_TOKEN = 'o'.repeat(40)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' })
-    const res = await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'bob' } })
-    expect(res.body).toEqual({ revoked: 1, queued: 0, keysRevoked: 0, devicesRevoked: 0, grantsRevoked: 1, grantsQueued: 0, routinesDisabled: 0, readerKeysRevoked: 0 })
+    await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'a', deviceKind: 'desktop' })
+    const res = await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'alice' } })
+    expect(res.body).toMatchObject({ grantsRevoked: expect.any(Number), grantsQueued: 0 })
+    expect(res.body.grantsRevoked).toBeGreaterThanOrEqual(1)
+    expect(t.h.raw.prepare("SELECT COUNT(*) AS n FROM workspace_grants WHERE user_id = 'alice' AND status = 'active'").get()).toEqual({ n: 0 })
   })
 })
 
 describe('team wake (phones)', () => {
-  it('a teammate wakes a team workspace with the single-flight wake, never learns the endpoint, billed to the team', async () => {
+  it('the owner wakes it with the single-flight wake, billed to the team; racing wakes start the VM once', async () => {
     const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
     const checksBefore = t.h.billing.checks.length
-    const woke = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=30s`)
+    const woke = await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=30s`)
     expect(woke.status).toBe(200)
-    expect(HostedWakeResponseSchema.parse(woke.body)).toMatchObject({ state: 'ready', endpoint: null, sandboxId: t.id })
-    // The same start check as the owner's own wake: the team's account pays.
+    expect(HostedWakeResponseSchema.parse(woke.body)).toMatchObject({ state: 'ready', sandboxId: t.id })
     expect(t.h.billing.checks.slice(checksBefore)).toEqual([expect.objectContaining({ accountId: 'org:acme' })])
-    // Racing wakes from teammate and owner start the VM once.
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
     const answers = await Promise.all([
-      t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=30s`),
+      t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=30s`),
       t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/wake?wait=30s`)
     ])
     expect(answers.map((a) => a.body.state)).toEqual(['ready', 'ready'])
   })
 
-  it('is not found for a non-member, for a private workspace, and for an archived one', async () => {
+  it('is not found for a teammate (a row still stored as team included), an outsider, an admin, and an archived one', async () => {
     const t = await team()
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
-    // Private (the default): teammates cannot wake it.
     expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(t.id)
+    expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
+    expect((await t.req(t.admin, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
     const outsider = await t.as('mallory', 'member', 'globex')
     expect((await t.req(outsider, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/archive`, {})
-    expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
-  })
-
-  it('an org admin cannot wake a private workspace, and a running one never hands a teammate its endpoint', async () => {
-    const t = await team()
-    expect((await t.req(t.admin, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    const running = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)
-    expect(running.body).toMatchObject({ state: 'ready', endpoint: null })
+    expect((await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/wake?wait=1s`)).status).toBe(404)
   })
 
   it('keeps the desktop blocking wake (no wait) answering {workspace}', async () => {
     const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
     await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
-    const woke = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/wake`)
+    const woke = await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/wake`)
     expect(woke.body.workspace).toMatchObject({ id: t.id, status: 'running' })
   })
 })
@@ -390,7 +371,6 @@ describe('team wake (phones)', () => {
 describe('grant races', () => {
   it('a removal that lands while the grant is being issued wins: the new device is killed, not activated', async () => {
     const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
     const box = [...t.h.vercel.boxes.values()][0]!
     t.h.vercel.commandHandler = (params) => {
       if (params.command === GRANT_COMMAND) {
@@ -399,9 +379,9 @@ describe('grant races', () => {
       }
       return undefined
     }
-    const res = await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' })
+    const res = await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/grants`, { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' })
     expect(res.status).toBe(404)
-    const rows = t.h.raw.prepare(`SELECT status, revoke_reason, orcad_device_id FROM workspace_grants WHERE user_id = 'bob'`).all() as { status: string; revoke_reason: string; orcad_device_id: string }[]
+    const rows = t.h.raw.prepare(`SELECT status, revoke_reason, orcad_device_id FROM workspace_grants WHERE user_id = 'alice' AND device_label = 'b'`).all() as { status: string; revoke_reason: string; orcad_device_id: string }[]
     expect(rows).toEqual([{ status: 'revoked', revoke_reason: 'member_removed', orcad_device_id: expect.stringMatching(/^dev-grant/) }])
     expect(box.devices).not.toContain(rows[0]!.orcad_device_id)
   })
@@ -432,23 +412,22 @@ describe('desktop wire contract', () => {
   it('every registry response parses with the desktop schemas', async () => {
     const wire = await import('../../../../src/shared/cloud-workspaces/cloud-workspaces-wire')
     const t = await team()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    wire.CloudWorkspaceListResponseSchema.parse((await t.req(t.bob, 'GET', '/v1/team/workspaces')).body)
-    wire.CloudWorkspaceResponseSchema.parse((await t.req(t.bob, 'GET', `/v1/team/workspaces/${t.id}`)).body)
+    wire.CloudWorkspaceListResponseSchema.parse((await t.req(t.alice, 'GET', '/v1/team/workspaces')).body)
+    wire.CloudWorkspaceResponseSchema.parse((await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}`)).body)
     wire.CloudWorkspacePresenceResponseSchema.parse(
-      (await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'c', state: 'viewing' })).body
+      (await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'c', state: 'viewing' })).body
     )
-    wire.CloudWorkspaceLinkResponseSchema.parse((await t.req(t.bob, 'GET', `/v1/team/links/resolve?w=${t.id}`)).body)
+    wire.CloudWorkspaceLinkResponseSchema.parse((await t.req(t.alice, 'GET', `/v1/team/links/resolve?w=${t.id}`)).body)
     const issued = wire.CloudWorkspaceGrantIssuedSchema.parse(
       (
-        await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/grants`, {
+        await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/grants`, {
           recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64,
           deviceLabel: 'x',
           deviceKind: 'desktop'
         })
       ).body
     )
-    wire.CloudWorkspaceGrantListSchema.parse((await t.req(t.bob, 'GET', `/v1/team/workspaces/${t.id}/grants`)).body)
+    wire.CloudWorkspaceGrantListSchema.parse((await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}/grants`)).body)
     expect(wire.parseCloudWorkspaceLink(wire.cloudWorkspaceLink(t.id, 'chat 1'))).toEqual({ target: { kind: 'id', workspaceId: t.id }, chatId: 'chat 1' })
     expect(issued.grant.status).toBe('active')
   })

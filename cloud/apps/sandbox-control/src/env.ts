@@ -37,12 +37,7 @@ export type Env = {
   ENV_REFRESH_RECENT_DAYS?: string
   /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
   MEMBER_GIT_IDENTITY?: string
-  /** How long after a member's own send their GitHub identity stays usable (default 30). */
-  /** GH-AS-MEMBER: how long a shared workspace's latest sender keeps acting after their last send (default 60; `0`: no cap). */
-  MEMBER_GIT_SHARED_MAX_MINUTES?: string
-  /** GH-AS-MEMBER: `on` lets gh in workspaces act as the attested sender (off by default). */
-  /** TEAM-SHARING hold (team-sharing.ts): `on` lets workspaces be shared with the team; anything else holds it. */
-  TEAM_SHARING?: string
+  /** GH-AS-MEMBER: `on` lets gh in workspaces act as the owner (off by default). */
   GH_AS_MEMBER?: string
   /**
    * Who sees a member's daily activity heatmap on their profile. `opt_in` (default): only members

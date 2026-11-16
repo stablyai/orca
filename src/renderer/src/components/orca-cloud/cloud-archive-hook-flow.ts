@@ -99,12 +99,12 @@ export async function runCloudArchiveHook(
         options.wake
           ? translate(
               'orcaCloudWorkspace.archiveHook.waking',
-              'Waking {{name}} to run its archive hook…',
+              'Waking {{name}} to run its archive script…',
               { name }
             )
           : translate(
               'orcaCloudWorkspace.archiveHook.running',
-              'Running {{name}}’s archive hook…',
+              'Running {{name}}’s archive script…',
               {
                 name
               }
@@ -143,7 +143,7 @@ export async function runCloudArchiveHook(
   if (result.state === 'succeeded') {
     const output = archiveHookOutputTail(result.runs)
     toast.success(
-      translate('orcaCloudWorkspace.archiveHook.succeeded', '{{name}}’s archive hook finished', {
+      translate('orcaCloudWorkspace.archiveHook.succeeded', '{{name}}’s archive script finished', {
         name
       }),
       output ? { description: output } : undefined
@@ -171,7 +171,7 @@ export function askArchiveAnywayAfterHookFailure(
     }
     const output = archiveHookOutputTail(result.runs)
     toast.error(
-      translate('orcaCloudWorkspace.archiveHook.failedTitle', '{{name}}’s archive hook failed', {
+      translate('orcaCloudWorkspace.archiveHook.failedTitle', '{{name}}’s archive script failed', {
         name: name ?? ''
       }),
       {

@@ -228,7 +228,10 @@ export function CloudWorkspaceStatusPanel({
       {unavailable ? (
         <InlineError
           tone="neutral"
-          title={t('orcaCloudWorkspace.statusUnavailableTitle', 'Couldn’t get the sandbox status.')}
+          title={t(
+            'orcaCloudWorkspace.statusUnavailableTitle',
+            'Couldn’t get the workspace status.'
+          )}
           retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
           retrying={entry?.loading}
           onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}
@@ -309,8 +312,8 @@ export function CloudWorkspaceStatusPanel({
         </p>
       ) : null}
 
-      {/* ARCHIVED-DEAD-ACTIONS: .context sync and mirroring run for this desktop's own cloud
-          workspaces only, so a paired card doesn't offer them. */}
+      {/* ARCHIVED-DEAD-ACTIONS: .context sync runs for this desktop's own cloud workspaces only,
+          so a paired card doesn't offer it. */}
       {state === 'archived' || paired ? null : (
         <OnComputerRow view={sync} onOpen={() => setLayer('onComputer')} />
       )}

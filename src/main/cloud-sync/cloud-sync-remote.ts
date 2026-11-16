@@ -1,9 +1,9 @@
-// The cloud half of a sync pass, over the workspace's E2EE orcad connection: list what is in
-// scope (gitignore-aware), stat it in batches, and page files down. Replies are validated, never
+// The cloud half of a sync pass, over the workspace's E2EE orcad connection: walk `.context`,
+// stat it in batches, and page files down. Replies are validated, never
 // trusted: the VM is not this process.
 import { z } from 'zod'
 import { FILE_STAT_MANY_MAX } from '../../shared/file-access/file-stat-many'
-import { CONTEXT_DIR, isContextPath, isSafeSyncPath } from './cloud-sync-paths'
+import { CONTEXT_DIR, isSafeSyncPath } from './cloud-sync-paths'
 import type { RemoteEntry } from './cloud-sync-plan'
 
 export type SyncCall = <T = unknown>(
@@ -12,11 +12,8 @@ export type SyncCall = <T = unknown>(
   options?: { timeoutMs?: number; signal?: AbortSignal }
 ) => Promise<T>
 
-export type SyncScope = 'context' | 'workspace'
-
 const LIST_TIMEOUT_MS = 60_000
 const STAT_TIMEOUT_MS = 60_000
-const CANDIDATE_BATCH = 100
 const FALLBACK_STAT_CONCURRENCY = 12
 const CONTEXT_MAX_DEPTH = 8
 
@@ -66,7 +63,6 @@ const WorktreeRows = z.looseObject({
 const DirEntries = z.array(
   z.looseObject({ name: z.string(), isDirectory: z.boolean(), isSymlink: z.boolean().optional() })
 )
-const PathList = z.array(z.string())
 const StatMany = z.object({
   entries: z.array(
     z.union([
@@ -108,12 +104,12 @@ export async function resolveCloudWorktree(
 }
 
 /** Every regular file under `.context` (it is usually gitignored, so it is walked, not listed). */
-async function listContext(
+export async function listContext(
   call: SyncCall,
   selector: string,
   maxFiles: number,
   signal?: AbortSignal
-): Promise<string[]> {
+): Promise<{ paths: string[]; truncated: boolean }> {
   const out: string[] = []
   const walk = async (dir: string, depth: number): Promise<void> => {
     if (depth > CONTEXT_MAX_DEPTH || out.length >= maxFiles) {
@@ -151,83 +147,7 @@ async function listContext(
     }
   }
   await walk(CONTEXT_DIR, 0)
-  return out
-}
-
-/** Paths in scope: `.context` always; the whole workspace (minus .gitignore) for a mirror. */
-export async function listScope(
-  call: SyncCall,
-  selector: string,
-  scope: SyncScope,
-  maxFiles: number,
-  signal?: AbortSignal
-): Promise<{ paths: string[]; truncated: boolean }> {
-  const context = await listContext(call, selector, maxFiles, signal)
-  if (scope === 'context') {
-    return { paths: context, truncated: context.length >= maxFiles }
-  }
-  const listed = PathList.parse(
-    await call(
-      'files.listAll',
-      // Quick-open listing adds gitignored files unless told not to.
-      { worktree: selector, includeIgnored: false, maxResults: maxFiles + 1 },
-      { timeoutMs: LIST_TIMEOUT_MS, signal }
-    )
-  )
-  const paths = new Set(context)
-  for (const path of listed) {
-    if (isSafeSyncPath(path) && !isContextPath(path)) {
-      paths.add(path)
-    }
-  }
-  const all = [...paths]
-  return { paths: all.slice(0, maxFiles), truncated: all.length > maxFiles }
-}
-
-/**
- * Of the changed paths a watch reported, the ones a mirror includes: `.context` always, others
- * only when the cloud's listing (which honours .gitignore) still has them.
- */
-export async function filterIncluded(
-  call: SyncCall,
-  selector: string,
-  scope: SyncScope,
-  paths: readonly string[],
-  signal?: AbortSignal
-): Promise<Set<string>> {
-  const included = new Set<string>()
-  const others: string[] = []
-  for (const path of paths) {
-    if (!isSafeSyncPath(path)) {
-      continue
-    }
-    if (isContextPath(path)) {
-      included.add(path)
-    } else if (scope === 'workspace') {
-      others.push(path)
-    }
-  }
-  for (let i = 0; i < others.length; i += CANDIDATE_BATCH) {
-    const batch = others.slice(i, i + CANDIDATE_BATCH)
-    const listed = PathList.parse(
-      await call(
-        'files.listAll',
-        {
-          worktree: selector,
-          includeIgnored: false,
-          candidatePaths: batch,
-          maxResults: batch.length
-        },
-        { timeoutMs: LIST_TIMEOUT_MS, signal }
-      )
-    )
-    for (const path of listed) {
-      if (batch.includes(path)) {
-        included.add(path)
-      }
-    }
-  }
-  return included
+  return { paths: out, truncated: out.length >= maxFiles }
 }
 
 /** Hosts whose orcad predates `files.statMany` (an older sandbox image). */

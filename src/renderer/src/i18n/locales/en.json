@@ -2656,24 +2656,24 @@
       "orcaCloudSession": {
         "workspaceGone": "That workspace is no longer in Orca.",
         "thisWorkspaceLower": "this workspace",
-        "sandboxRestartSoonDetail": "Cloud sandboxes restart after 24 hours. Files are kept and Orca resumes your agents after the restart.",
+        "sandboxRestartSoonDetail": "Cloud workspaces restart after 24 hours. Your files are kept and agents resume.",
         "restartNow": "Restart now",
         "open": "Open",
-        "sandboxRestartFailed": "Couldn't restart the sandbox for {{name}}",
-        "restartNotRunning": "The sandbox isn't running. Open the workspace to wake it.",
+        "sandboxRestartFailed": "Couldn’t restart {{name}}",
+        "restartNotRunning": "The workspace isn’t running. Open it to wake it.",
         "restartFailedDetail": "It still restarts on its own after 24 hours.",
-        "sandboxRestarted": "Sandbox for {{name}} restarted",
+        "sandboxRestarted": "{{name}} restarted",
         "restartedResumingDetail": "Files are kept and Orca is resuming your agents. The next restart is in 24 hours.",
-        "sandboxRestarting": "Restarting the sandbox for {{name}}…",
+        "sandboxRestarting": "Restarting {{name}}…",
         "restartingDetail": "Usually under a minute. Orca resumes your agents once it is back.",
-        "sandboxRestartsInMinutes_one": "Sandbox for {{name}} restarts in {{count}} minute",
-        "sandboxRestartsInMinutes_other": "Sandbox for {{name}} restarts in {{count}} minutes",
+        "sandboxRestartsInMinutes_one": "{{name}} restarts in {{count}} minute",
+        "sandboxRestartsInMinutes_other": "{{name}} restarts in {{count}} minutes",
         "deletingSandbox": "Deleting the sandbox…",
-        "deletingSandboxDetail": "Creating the workspace was canceled, so its sandbox is deleted and stops using sandbox hours.",
+        "deletingSandboxDetail": "Creating the workspace was canceled, so nothing is left running.",
         "sandboxDeleted": "Sandbox deleted",
         "sandboxDeletedDetail": "Nothing from the canceled workspace is left running.",
         "sandboxDeleteFailed": "Couldn't delete the sandbox",
-        "sandboxDeleteFailedDetail": "It may still be running and using sandbox hours.",
+        "sandboxDeleteFailedDetail": "It may still be running and adding to your usage.",
         "tryAgain": "Try again"
       },
       "runtimePortForwards": {
@@ -2688,8 +2688,8 @@
       "orcaCloud": {
         "workspaceActions": {
           "unavailable": "Orca Cloud is unavailable.",
-          "archiveSleepFailed": "It’s still running. Your files are safe.",
-          "archiveHookKept": "Not archived: its archive hook failed. Fix it and archive again."
+          "archiveSleepFailed": "It’s still running and adding to your usage. Your files are safe.",
+          "archiveHookKept": "Not archived: its archive script failed. Fix it and archive again."
         },
         "pairedWake": {
           "notPaired2": "This workspace is no longer linked to this computer. Use Open cloud workspace… to link it again."
@@ -4788,7 +4788,7 @@
             "checksAttentionTitleVm": "The VM is up, but some environment checks need attention",
             "checksCountTitleVm_one": "The VM is up, but {{count}} environment check failed",
             "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed",
-            "provisionBodyCloudKept": "Something went wrong while starting the sandbox. Try again, or delete the sandbox to stop using sandbox hours.",
+            "provisionBodyCloudKept": "Try again, or delete it so it stops adding to your usage.",
             "provisionBodyCloud2": "Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged.",
             "provisionBodyVm": "Your VM recipe stopped with an error before the VM was ready.",
             "createBodyVm": "The VM started, but creating the workspace on it stopped with an error.",
@@ -8635,8 +8635,8 @@
           "delete": "Delete",
           "uncommitted_one": "{{count}} uncommitted change",
           "uncommitted_other": "{{count}} uncommitted changes",
-          "bodyNoSnapshot": "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone.",
-          "archiveHookWake": "It wakes first to run its archive hook (orca.yaml scripts.archive)."
+          "bodyNoSnapshot": "Deletes the workspace and all its files, chats and uncommitted changes. This can’t be undone.",
+          "archiveHookWake": "It wakes first to run the archive script in orca.yaml."
         },
         "orcaCloudHost": {
           "running": "{{count}} running",
@@ -9157,10 +9157,10 @@
         },
         "orcaCloudPredictiveWake": {
           "title": "Wake sleeping workspaces early",
-          "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
+          "description": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Early wakes add to your usage.",
           "group": "Orca Cloud",
-          "description_one": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours.",
-          "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
+          "description_one": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minute. Early wakes add to your usage.",
+          "description_other": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minutes. Early wakes add to your usage."
         },
         "cloudApi": {
           "formerMember": "Former member",
@@ -9219,7 +9219,7 @@
             "permissions": "Permissions",
             "custom": "Custom",
             "includes": "Includes",
-            "restricted": "Only team owners and admins can grant access to: {{scopes}}. Ask one of them if a script needs it.",
+            "restricted": "Only team owners and admins can give access to {{scopes}}. Ask one of them if a script needs it.",
             "scopeRequired": "Pick at least one scope.",
             "expiry": "Expires",
             "expiryNever": "Never",
@@ -28069,7 +28069,7 @@
     },
     "menu": {
       "sleep": "Sleep",
-      "sleepDescription": "Close this workspace's panels and put its sandbox to sleep. Opening the workspace wakes it.",
+      "sleepDescription": "Pauses the workspace until you open it again.",
       "wake": "Wake",
       "retryWake": "Try waking again",
       "waking": "Waking…"
@@ -28080,7 +28080,6 @@
       "prMerged": "Merged",
       "prClosed": "Closed",
       "since": "Archived {{when}}",
-      "keptUntilShort": "kept until {{date}}",
       "title": "Archived workspace",
       "unarchiving": "Unarchiving…",
       "loadFailed": "Couldn’t load the archive details.",
@@ -28099,7 +28098,10 @@
       "files_other": "{{count}} files",
       "loadFailedDetail": "Your files are safe in the archive.",
       "moreFiles_one": "{{count}} more file not shown",
-      "moreFiles_other": "{{count}} more files not shown"
+      "moreFiles_other": "{{count}} more files not shown",
+      "deletesInShort_one": "deletes in {{count}} day",
+      "deletesInShort_other": "deletes in {{count}} days",
+      "deletesTodayShort": "deletes today"
     },
     "state": {
       "archived": "Archived",
@@ -28156,19 +28158,19 @@
       "asleepUnnamed": "This workspace is asleep."
     },
     "dismiss": "Dismiss",
-    "restartSandbox": "Restart sandbox",
+    "restartSandbox": "Restart",
     "archive": "Archive",
     "oom": {
       "titleRan": "{{name}} ran out of memory",
       "titleProcess": "A process ran out of memory",
-      "stopped": "It was stopped so the sandbox stays up. Restart to recover.",
+      "stopped": "Orca stopped it to keep the workspace running. Restart to recover.",
       "guardTitle": "Orca stopped {{name}} to keep the workspace responsive",
       "guardTitleProcess": "Orca stopped a process to keep the workspace responsive",
       "guardDetail": "The workspace was out of memory. Consider a larger machine.",
       "machineSize": "Machine size"
     },
     "unresponsive": {
-      "sandboxTitle": "This sandbox isn’t responding"
+      "sandboxTitle": "This workspace isn’t responding"
     },
     "detail": {
       "restartKeeps": "Restart keeps your files; agents resume.",
@@ -28176,8 +28178,8 @@
       "waking": "Waking…",
       "asleepSafe": "Your files and chats are safe. Opening it wakes it.",
       "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
-      "startFailed": "The sandbox couldn’t start. Nothing was lost.",
-      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe."
+      "startFailed": "Couldn’t start the workspace. Your files are safe.",
+      "wakeFailed": "Couldn’t wake the workspace. Your files and chats are safe."
     },
     "restarting": "Restarting…",
     "restart": "Restart",
@@ -28188,8 +28190,6 @@
       "usage": "CPU {{cpu}}% · Memory {{used}} / {{total}} GB",
       "syncOff": "Off",
       "syncError": "Couldn’t sync",
-      "mirroringAndContext": "Mirroring · .context synced",
-      "mirroring": "Mirroring",
       "contextSynced": ".context synced",
       "more": "More actions",
       "details": "Details",
@@ -28206,7 +28206,7 @@
     "usedOfTotal": "{{used}} / {{total}}",
     "disk": "Disk",
     "uptime": "Up for",
-    "keptUntil": "Kept until",
+    "keptUntil": "Deletes",
     "region": "Region",
     "ago": "{{ago}} ago",
     "wake": "Wake",
@@ -28238,7 +28238,7 @@
     },
     "sandboxHoursValue": "{{value}} sandbox hours",
     "idleSleptNoTime": "{{name}} went to sleep while idle",
-    "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it.",
+    "idleSleptDetail": "Your files and chats are saved. Open it to wake it.",
     "typingNotSent": "Your typing wasn’t sent.",
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
@@ -28255,12 +28255,13 @@
     "archiveFailedNamed": "Couldn’t archive {{name}}",
     "archivedNamed": "Archived {{name}}",
     "archivedWorkspace": "Archived the workspace",
-    "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files.",
+    "archivedDetail_one": "Kept for {{count}} day, then deleted.",
+    "archivedDetail_other": "Kept for {{count}} days, then deleted.",
     "tryAgain": "Try again",
     "sleep": "Sleep",
     "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
     "sleepFailedCount": "Couldn’t put {{count}} workspaces to sleep",
-    "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe.",
+    "sleepFailedDetail": "It’s still running and adding to your usage. Your files are safe.",
     "versionSkew": {
       "newerTitle": "This cloud workspace uses a newer version of Orca",
       "olderTitle": "This cloud workspace uses an older version of Orca",
@@ -28273,7 +28274,7 @@
     "deleteFailedNamed": "Couldn’t delete {{name}}",
     "productName": "Orca Cloud",
     "cloudMarkLabel": "Cloud workspace · {{state}}",
-    "statusUnavailableTitle": "Couldn’t get the sandbox status.",
+    "statusUnavailableTitle": "Couldn’t get the workspace status.",
     "files": {
       "wakeForAll": "Wake the workspace to browse all its files.",
       "asleep": "Files aren’t available while the workspace is asleep.",
@@ -28305,14 +28306,20 @@
       "sleptRangeShortDivider": "Slept {{range}}",
       "sleptBareDivider": "Slept"
     },
-    "archivedDetailLocalEdits_one": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.",
-    "archivedDetailLocalEdits_other": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.",
-    "archivedDetailLocalCopy": "It goes to sleep and stays browsable: PRs, last changes and files. The copy on this computer is removed too.",
+    "archivedDetailLocalEdits_one": "Kept for {{days}} days, then deleted. {{count}} changed file on this computer will be removed.",
+    "archivedDetailLocalEdits_other": "Kept for {{days}} days, then deleted. {{count}} changed files on this computer will be removed.",
+    "archivedDetailLocalCopy_one": "Kept for {{count}} day, then deleted. The copy on this computer will be removed.",
+    "archivedDetailLocalCopy_other": "Kept for {{count}} days, then deleted. The copy on this computer will be removed.",
     "archiveSnapshot": {
-      "definitionUntil": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) until {{date}}, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
-      "definition": "Archive keeps a snapshot of this workspace (its files, chats and terminal history) for 30 days, then deletes it. Unarchive it from its menu before then. Like a sleeping workspace, it doesn’t use sandbox hours.",
-      "archivedUntil": "A read-only snapshot of its files, chats and terminal history. Unarchive before {{date}} to open terminals and agents again; after that it’s deleted.",
-      "archived": "A read-only snapshot of its files, chats and terminal history. Unarchive within 30 days of archiving to open terminals and agents again; after that it’s deleted."
+      "definition_one": "Stops the workspace and keeps it for {{count}} day, then deletes it.",
+      "definition_other": "Stops the workspace and keeps it for {{count}} days, then deletes it.",
+      "dialogKept_one": "It’s kept for {{count}} day, then deleted. You can unarchive it until then.",
+      "dialogKept_other": "It’s kept for {{count}} days, then deleted. You can unarchive it until then.",
+      "deletesIn_one": "Read-only. Deletes in {{count}} day unless you unarchive it.",
+      "deletesIn_other": "Read-only. Deletes in {{count}} days unless you unarchive it.",
+      "deletesToday": "Read-only. Deletes today unless you unarchive it.",
+      "archived": "Read-only. Deletes 30 days after archiving unless you unarchive it.",
+      "archivedNote": "Read-only. Unarchive it to keep working."
     },
     "primaryDelete": {
       "noSandbox2": "Orca couldn't find this workspace's sandbox. Find it in Open cloud workspace… to delete it."
@@ -28334,14 +28341,14 @@
       "busy": "It’s already running for this workspace.",
       "timedOut": "It didn’t finish within 2 minutes.",
       "exited": "It exited with code {{code}}.",
-      "waking": "Waking {{name}} to run its archive hook…",
-      "running": "Running {{name}}’s archive hook…",
-      "succeeded": "{{name}}’s archive hook finished",
-      "failedTitle": "{{name}}’s archive hook failed",
+      "waking": "Waking {{name}} to run its archive script…",
+      "running": "Running {{name}}’s archive script…",
+      "succeeded": "{{name}}’s archive script finished",
+      "failedTitle": "{{name}}’s archive script failed",
       "archiveAnyway": "Archive anyway",
       "keep": "Keep it",
-      "wakeFirst": "It wakes first to run its archive hook.",
-      "skip": "Skip hook"
+      "wakeFirst": "It wakes first to run the archive script in orca.yaml.",
+      "skip": "Skip script"
     }
   },
   "cloudAgentSetup": {
@@ -28579,7 +28586,7 @@
     },
     "loading": "Loading cloud secrets…",
     "unavailable": "Cloud secrets aren’t available for this account yet.",
-    "descriptionEdge": "Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach cloud workspaces as environment variables that anything in the sandbox can read."
+    "descriptionEdge": "Model keys and agent sign-ins never enter the workspace. Other secrets become environment variables any code there can read."
   },
   "cloudMcpSync": {
     "appliesEverywhere": "Applies to every cloud workspace",
@@ -28677,9 +28684,10 @@
       "chats_other": "{{count}} agent chats",
       "archive": "Archive cloud workspace",
       "changesPartial": "Uncommitted changes, partly",
-      "archived": "The cloud workspace is archived. Unarchive it any time.",
-      "stillRunning": "The cloud workspace is still running and using sandbox hours. Archive it to stop that; you can unarchive later.",
-      "open": "Open workspace"
+      "stillRunning": "The cloud workspace is still running and adding to your usage. Archive it if you’re done.",
+      "open": "Open workspace",
+      "archived_one": "Cloud workspace archived. It’s kept for {{count}} day, then deleted.",
+      "archived_other": "Cloud workspace archived. It’s kept for {{count}} days, then deleted."
     },
     "partialDetail": "Some changes didn’t apply cleanly. They were saved here, so nothing is lost:",
     "title": {
@@ -28810,9 +28818,9 @@
       "fetchReady": "This workspace can reach {{repo}} now.",
       "fetchNoAccess": "Orca’s GitHub app doesn’t have access to {{repo}}.",
       "fetchNoAccessMeaning": "Pulls and pushes won’t work until it does.",
-      "grantAccess": "Grant access",
+      "grantAccess": "Give Orca access",
       "fetchNoAccessRequested": "An owner of {{owner}} has been asked to approve it. Pulls and pushes won’t work until they do.",
-      "fetchNoAccessCantInstall": "Only an owner of {{owner}} can grant it. Pulls and pushes won’t work until they do.",
+      "fetchNoAccessCantInstall": "Only an owner of {{owner}} can give Orca access. Pulls and pushes won’t work until they do.",
       "fetchNeedsRestart": "This workspace can’t use Orca’s access to {{repo}} yet.",
       "pushNeedsRestart": "Orca Cloud can push to {{repo}} now, but this workspace can’t use the new access yet.",
       "newAccessNeedsRestart": "Restart the workspace to use the new access. Your files are kept."
@@ -29803,7 +29811,6 @@
     }
   },
   "orcaCloudSync": {
-    "menuItem": "Mirror to this computer…",
     "gb": "{{value}} GB",
     "mb": "{{value}} MB",
     "kb": "{{value}} KB",
@@ -29828,15 +29835,13 @@
     "syncedEmpty": "Synced · {{ago}}",
     "contextLabel": ".context folder",
     "contextHelper": "Plans and screenshots from this workspace, synced to this computer.",
-    "mirrorLabel": "Mirror to this computer",
-    "mirrorHelper": "A read-only copy of this workspace’s files, kept up to date while it runs.",
     "openFolder": "Open folder",
     "copied": "Copied",
     "copyPath": "Copy path",
     "tryAgain": "Try again",
     "editedHere_one": "{{count}} file changed on this computer. Edits here don’t sync back. The cloud copy replaces it when it changes.",
     "editedHere_other": "{{count}} files changed on this computer. Edits here don’t sync back. The cloud copy replaces them when it changes.",
-    "overLimit": "The mirror is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
+    "overLimit": "The .context folder is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
     "tooLarge": "Files over {{size}} aren’t copied.",
     "removal": "The copy on this computer is removed too."
   },
@@ -29914,7 +29919,7 @@
   },
   "cloudAgentConfig": {
     "title": "Skills, agents & memory",
-    "autoSyncHint": "Copies your Claude and Codex skills, commands, subagents, output styles and memory you’ve turned on into each cloud workspace. Anything that looks like a key stays on this computer, and nothing made in the sandbox is overwritten."
+    "autoSyncHint": "Copies what you turn on here into each cloud workspace, without overwriting changes made there. Anything that looks like a key stays on this computer."
   },
   "openExternal": {
     "copyLink": "Copy link",
@@ -29928,7 +29933,7 @@
     "bot": "Pushes and PRs go out as Orca bot",
     "stale": "Pushes and PRs go out as Orca bot (no one has sent in the last hour)",
     "noSenderYet": "Pushes and PRs go out as whoever sends next, or Orca bot",
-    "caveat": "Approvals always go out as Orca bot, and so do merges in shared workspaces.",
+    "caveat": "Approve pull requests on GitHub. Workspaces can’t approve.",
     "connect": "Connect GitHub"
   },
   "cloudFollow": {

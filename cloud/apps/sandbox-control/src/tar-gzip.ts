@@ -9,7 +9,7 @@ function octal(value: number, width: number): string {
   return value.toString(8).padStart(width - 1, '0')
 }
 
-function header(path: string, entry: { type: 'file' | 'dir'; size: number; mode: number; mtime: number }): Uint8Array {
+function header(path: string, entry: { type: 'file' | 'dir'; size: number; mode: number; mtime: number }): Uint8Array<ArrayBuffer> {
   const block = new Uint8Array(BLOCK)
   const encoder = new TextEncoder()
   const put = (offset: number, text: string, width: number) => {
@@ -56,10 +56,11 @@ export async function tarGzipFile(input: { dirs: string[]; path: string; bytes: 
     }
   }
   const padding = (BLOCK - (input.bytes.length % BLOCK)) % BLOCK
-  const parts: Uint8Array[] = [
+  // Blob parts must be ArrayBuffer-backed; the copy of `bytes` also detaches it from a shared buffer.
+  const parts: Uint8Array<ArrayBuffer>[] = [
     ...input.dirs.map((dir) => header(`${dir}/`, { type: 'dir', size: 0, mode: 0o755, mtime: input.mtime })),
     header(input.path, { type: 'file', size: input.bytes.length, mode: 0o644, mtime: input.mtime }),
-    input.bytes,
+    input.bytes.slice(),
     new Uint8Array(padding),
     new Uint8Array(BLOCK * 2) // end-of-archive marker
   ]

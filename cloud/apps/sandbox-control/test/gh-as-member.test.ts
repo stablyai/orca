@@ -56,7 +56,7 @@ async function setup() {
     body: { accountId: 'org:acme', userId: 'alice', repoUrl: REPO, login: 'alice-gh', githubUserId: 11, name: 'alice' }
   })
   const placeholder = await memberPlaceholder(id, 'alice')
-  async function api(path: string, method: string, body?: unknown) {
+  async function api(path: string, method: string, body?: unknown, authorization = `token ${placeholder}`) {
     const oidc = await new SignJWT({ team_id: 'team_orca', project_id: 'prj_orca', sandbox_name: `orca-test-${id}` })
       .setProtectedHeader({ alg: 'RS256', kid: 'v1' })
       .setIssuer(ISSUER)
@@ -74,7 +74,7 @@ async function setup() {
           'vercel-forwarded-port': '443',
           'vercel-forwarded-path': path,
           'vercel-sandbox-oidc-token': oidc,
-          authorization: `token ${placeholder}`
+          authorization
         }
       })
     )
@@ -129,9 +129,10 @@ const sentBy = (t: Awaited<ReturnType<typeof setup>>, user: string, at: number) 
 const MERGE = { query: 'mutation { mergePullRequest(input: { pullRequestId: "PR_in" }) { clientMutationId } }' }
 const COMMENT = { query: 'mutation { addComment(input: { subjectId: "PR_in", body: "x" }) { clientMutationId } }' }
 
-describe('review M2: approvals never as a member; merges only in a one-person workspace', () => {
-  it('an approval goes out on the installation token even when the owner is alone; comments and other reviews are the member', async () => {
+describe('APPROVALS-REFUSED: no approval leaves a workspace; merges are the owner’s', () => {
+  it('an approval through the owner’s gh is refused (403, never sent); comments and other reviews are the owner', async () => {
     const t = await setup()
+    const before = t.upstream.length
     for (const body of [
       { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_in", event: APPROVE }) { clientMutationId } }' },
       { query: 'mutation { submitPullRequestReview(input: { pullRequestReviewId: "PRR_in", event: APPROVE }) { clientMutationId } }' },
@@ -140,26 +141,45 @@ describe('review M2: approvals never as a member; merges only in a one-person wo
         variables: { input: { pullRequestId: 'PR_in', event: 'approve' } }
       }
     ]) {
-      await t.api('/graphql', 'POST', body)
-      expect(t.upstream.at(-1)!.authorization).toBe(APP)
+      const refused = await t.api('/graphql', 'POST', body)
+      expect(refused.status).toBe(403)
+      expect(JSON.parse(refused.body).errors[0].message).toContain('Approvals have to be done by a person on GitHub')
     }
     for (const event of ['APPROVE', 'approve', 'Approve']) {
-      await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event })
-      expect(t.upstream.at(-1)!.authorization).toBe(APP)
-      await t.api('/repos/acme/app/pulls/7/reviews/3/events', 'POST', { event })
-      expect(t.upstream.at(-1)!.authorization).toBe(APP)
+      expect((await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event })).status).toBe(403)
+      expect((await t.api('/repos/acme/app/pulls/7/reviews/3/events', 'POST', { event })).status).toBe(403)
     }
-    await t.api('/repos/acme/app/Pulls/7/Reviews/', 'POST', { event: 'APPROVE' })
-    expect(t.upstream.at(-1)!.authorization).toBe(APP)
+    const rest = await t.api('/repos/acme/app/Pulls/7/Reviews/', 'POST', { event: 'APPROVE' })
+    expect([rest.status, JSON.parse(rest.body).message]).toEqual([403, expect.stringContaining('person on GitHub')])
+    // Nothing of those reached GitHub.
+    expect(t.upstream.length).toBe(before)
     await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'REQUEST_CHANGES', body: 'x' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
-    await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'COMMENT', body: 'x' })
+    await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'COMMENT', body: 'I approve of the idea' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
     await t.api('/graphql', 'POST', { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_in", event: REQUEST_CHANGES, body: "x" }) { clientMutationId } }' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
   })
 
-  it('merges (GraphQL, PR merge, branch merge) are the owner alone, the installation token once shared', async () => {
+  it('the workspace’s own App placeholder can’t approve either; other App calls go out as before', async () => {
+    const t = await setup()
+    const before = t.upstream.length
+    const app = (path: string, body: unknown) => t.api(path, 'POST', body, `Bearer orca-ph-${t.id}`)
+    expect((await app('/repos/acme/app/pulls/7/reviews', { event: 'APPROVE' })).status).toBe(403)
+    expect((await app('/graphql', { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_x", event: APPROVE }) { clientMutationId } }' })).status).toBe(403)
+    expect(t.upstream.length).toBe(before)
+    // Review G2/G4: an escaped path or a dismissal is refused too.
+    expect((await app('/repos/acme/app/pulls/7/%72eviews', { event: 'APPROVE' })).status).toBe(403)
+    expect((await t.api('/repos/acme/app/pulls/7/reviews/3/dismissals', 'PUT', { message: 'x' }, `Bearer orca-ph-${t.id}`)).status).toBe(403)
+    expect((await t.api('/repos/acme/app/pulls/7/%72eviews', 'POST', { event: 'APPROVE' })).status).toBe(403)
+    expect(t.upstream.length).toBe(before)
+    expect((await app('/repos/acme/app/issues/7/comments', { body: 'x' })).status).toBe(200)
+    expect(t.upstream.at(-1)!.authorization).toBe(APP)
+    expect((await app('/repos/acme/app/pulls/7/reviews', { event: 'COMMENT', body: 'x' })).status).toBe(200)
+    expect(t.upstream.at(-1)!.authorization).toBe(APP)
+  })
+
+  it('merges (GraphQL, PR merge, branch merge) are the owner’s; a stray grant or send changes nothing', async () => {
     const t = await setup()
     const mergeAll = async () => {
       const seen: (string | null)[] = []
@@ -172,49 +192,24 @@ describe('review M2: approvals never as a member; merges only in a one-person wo
       return seen
     }
     expect(await mergeAll()).toEqual(Array(3).fill(`Bearer ${MEMBER_TOKEN}`))
+    // Leftovers from before sharing was removed: a teammate grant row and their later send.
     grantBob(t)
-    sentBy(t, 'alice', t.h.now())
-    expect(await mergeAll()).toEqual(Array(3).fill(APP))
-    // A comment is still the latest sender's own.
-    await t.api('/graphql', 'POST', COMMENT)
-    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
-  })
-})
-
-describe('shared-workspace cap: 60 min by default', () => {
-  it("the latest sender acts for 60 min after their send, then the bot; a one-person workspace isn't capped", async () => {
-    const t = await setup()
-    sentBy(t, 'alice', t.h.now() - 10 * 60 * 60_000)
-    await t.api('/graphql', 'POST', COMMENT)
-    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
-    grantBob(t)
-    sentBy(t, 'alice', t.h.now() - 61 * 60_000)
-    await t.api('/graphql', 'POST', COMMENT)
-    expect(t.upstream.at(-1)!.authorization).toBe(APP)
-    sentBy(t, 'alice', t.h.now() - 59 * 60_000)
+    sentBy(t, 'bob', t.h.now())
+    expect(await mergeAll()).toEqual(Array(3).fill(`Bearer ${MEMBER_TOKEN}`))
     await t.api('/graphql', 'POST', COMMENT)
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
   })
 })
 
 describe('memberMayAct (identity rule)', () => {
-  it('the only person who can use a workspace always acts; in a shared one, the latest sender until another sends', async () => {
+  it('the owner always acts, with no send and no expiry; no one else ever does', async () => {
     const t = await setup()
-    const db = t.h.env.SANDBOX_DB
-    const row = (await getSandbox(db, t.id))!
-    // Alone: no send needed, no expiry.
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(true)
-    expect(await memberMayAct(db, row, 'mallory', t.h.now(), null)).toBe(false)
-    // Shared with bob.
-    t.h.raw.prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('g1', ?, 'org:acme', 'bob', 'desktop', 'Bob', 'active', 1)`).run(t.id)
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(false)
-    t.h.raw.prepare('INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?)').run(t.id, 'alice', t.h.now() - 10 * 60 * 60_000)
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(true)
-    expect(await memberMayAct(db, row, 'bob', t.h.now(), null)).toBe(false)
-    // An optional cap bounds the shared case.
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), 60 * 60_000)).toBe(false)
-    t.h.raw.prepare('INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?)').run(t.id, 'bob', t.h.now())
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(false)
-    expect(await memberMayAct(db, row, 'bob', t.h.now(), null)).toBe(true)
+    const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
+    expect(memberMayAct(row, 'alice')).toBe(true)
+    expect(memberMayAct(row, 'bob')).toBe(false)
+    grantBob(t)
+    sentBy(t, 'bob', t.h.now())
+    expect(memberMayAct(row, 'alice')).toBe(true)
+    expect(memberMayAct(row, 'bob')).toBe(false)
   })
 })

@@ -95,7 +95,7 @@ export function cloudFetchNoticeLine(
         action: {
           label: h.installing
             ? t('orcaCloud.setupNotices.waitingForGitHub', 'Waiting for GitHub…')
-            : t('orcaCloud.setupNotices.grantAccess', 'Grant access'),
+            : t('orcaCloud.setupNotices.grantAccess', 'Give Orca access'),
           icon: h.installing ? <Loader2 className="animate-spin" /> : <GitPullRequestArrow />,
           run: h.install,
           pending: h.installing
@@ -116,7 +116,7 @@ export function cloudFetchNoticeLine(
         text: noAccess,
         description: t(
           'orcaCloud.setupNotices.fetchNoAccessCantInstall',
-          'Only an owner of {{owner}} can grant it. Pulls and pushes won’t work until they do.',
+          'Only an owner of {{owner}} can give Orca access. Pulls and pushes won’t work until they do.',
           { owner }
         ),
         action: copyRequest

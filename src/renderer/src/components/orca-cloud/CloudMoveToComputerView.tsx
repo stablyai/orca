@@ -7,12 +7,14 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { InlineError } from '@/components/ui/inline-error'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useTranslate } from '@/i18n/use-translate'
+import { useArchiveTtlDays } from '@/lib/orca-cloud/archive-ttl'
 import { cn } from '@/lib/class-names'
 import {
   CLOUD_MOVE_STEPS,
   effectiveArchiveAfter,
   type CloudMoveState
 } from '@/lib/orca-cloud/orca-cloud-move-store'
+import { DEFAULT_ARCHIVE_TTL_DAYS } from './archive-snapshot-copy'
 import { cloudMoveFailureCause, cloudMoveStepLabel, formatMoveSize } from './cloud-move-copy'
 import { BulletList, CloudMovePartialResult, useFocusOnStage } from './cloud-move-parts'
 
@@ -58,6 +60,7 @@ export function CloudMoveToComputerView({
   onReapply?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const archiveTtl = useArchiveTtlDays() ?? DEFAULT_ARCHIVE_TTL_DAYS
   const primary = useRef<HTMLButtonElement | null>(null)
   useFocusOnStage(state.stage, primary)
 
@@ -368,11 +371,16 @@ export function CloudMoveToComputerView({
         {state.archivedAfter
           ? t(
               'orcaCloudMove.done.archived',
-              'The cloud workspace is archived. Unarchive it any time.'
+              'Cloud workspace archived. It’s kept for {{count}} days, then deleted.',
+              {
+                count: archiveTtl,
+                defaultValue_one:
+                  'Cloud workspace archived. It’s kept for {{count}} day, then deleted.'
+              }
             )
           : t(
               'orcaCloudMove.done.stillRunning',
-              'The cloud workspace is still running and using sandbox hours. Archive it to stop that; you can unarchive later.'
+              'The cloud workspace is still running and adding to your usage. Archive it if you’re done.'
             )}
       </p>
       <div className="flex justify-end gap-2">

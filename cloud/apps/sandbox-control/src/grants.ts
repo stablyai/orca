@@ -1,4 +1,4 @@
-// Per-member, per-device access to a workspace's orcad, issued through the control plane without
+// Per-device access to a workspace's orcad for its owner's devices (workspaces are never shared), issued through the control plane without
 // the control plane ever holding a usable credential:
 //   POST   /v1/team/workspaces/:id/grants {recipientPublicKeyB64, deviceLabel, deviceKind}
 //          -> {grant, sealed}  (the VM mints a fresh single-device orcad offer and seals it to the
@@ -7,12 +7,11 @@
 //   DELETE /v1/team/workspaces/:id/grants/:grantId   grantee, workspace owner or org admin
 // Revocation removes the device from orcad's registry (orca-sandbox-revoke); while the sandbox is
 // not running it is queued and applied at the next boot before orcad starts.
-import { teamSharingEnabled } from './team-sharing'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { isDeviceSessionLive } from './device-sessions'
 import { markRevoked, runVmRevoke, type GrantRow } from './grant-revokes'
-import { DROP_SOLO_SCRIPT, LifecycleError, settleMemberGit, resumeSandbox, syncMemberGit, type LifecycleDeps, type Ready } from './lifecycle'
+import { LifecycleError, settleMemberGit, resumeSandbox, syncMemberGit, type LifecycleDeps, type Ready } from './lifecycle'
 import { ensureEntryPoints } from './golden-images'
 import type { CommandResult } from './sandbox-provider'
 import { ORCAD_PORT } from './sandbox-vm-commands'
@@ -104,7 +103,9 @@ export async function issueGrant(
   row: SandboxRow,
   body: z.infer<typeof GrantRequestSchema>
 ) {
-  if (!canOpen(caller, row)) {
+  // Only the owner ever holds a grant (their own devices): workspaces are never shared. canOpen already says so;
+  // this is the invariant a leftover rule change could never relax.
+  if (!canOpen(caller, row) || caller.userId !== row.user_id || caller.accountId !== row.account_id) {
     throw new WorkspaceError('not_found')
   }
   const { n } = (await deps.db
@@ -134,14 +135,6 @@ export async function issueGrant(
     .run()
   let output: z.infer<typeof GrantOutputSchema>
   try {
-    // GH-SOLO: anyone but a still-untransferred owner makes it (possibly) shared: drop the VM's one-person mark
-    // first, and refuse the grant if that fails (lifecycle.ts DROP_SOLO_SCRIPT).
-    if (caller.userId !== row.user_id || row.ownership_transferred_at != null) {
-      const dropped = await deps.provider.runCommand(live.sessionId, { command: 'bash', args: ['-c', DROP_SOLO_SCRIPT], sudo: true, timeoutMs: 15_000 })
-      if (dropped.exitCode !== 0) {
-        throw new Error(`drop_solo_exit_${dropped.exitCode}`)
-      }
-    }
     const result = await withEntryPoints(deps, live.sessionId, GRANT_COMMAND, () =>
       deps.provider.runCommand(live.sessionId, {
         command: GRANT_COMMAND,
@@ -255,7 +248,7 @@ export async function revokeOne(deps: LifecycleDeps, caller: SandboxCaller, row:
   return { grant: grantView((await getGrant(deps.db, grantId))!), ...result }
 }
 
-/** Access rules changed (private, archived, new owner): drop every device the new rules exclude. */
+/** Access rules changed (archived, new owner): drop every device the new rules exclude. */
 export async function revokeForAccessChange(
   deps: LifecycleDeps,
   row: SandboxRow,
@@ -267,40 +260,6 @@ export async function revokeForAccessChange(
     .bind(row.id, row.user_id)
     .all<GrantRow>()
   return revokeGrants(deps, row, results, { by, reason: mode === 'non_owner' ? 'workspace_private' : 'owner_changed' })
-}
-
-/**
- * TEAM-SHARING hold (team-sharing.ts): while sharing is held, a workspace stored as `team` acts private, so
- * every device grant but its owner's goes, the way making it private revokes them (reason team_sharing_held).
- * Transferred workspaces keep their own rules. Bounded per run; the next run takes the rest.
- */
-export async function sweepHeldTeamGrants(deps: LifecycleDeps): Promise<{ workspaces: number; revoked: number; queued: number }> {
-  const out = { workspaces: 0, revoked: 0, queued: 0 }
-  if (teamSharingEnabled()) {
-    return out
-  }
-  const { results } = await deps.db
-    .prepare(
-      `SELECT g.* FROM workspace_grants g JOIN sandboxes s ON s.id = g.sandbox_id
-       WHERE g.status IN ('issuing', 'active') AND g.user_id <> s.user_id AND s.visibility = 'team' AND s.ownership_transferred_at IS NULL AND s.status <> 'destroyed'
-       ORDER BY g.sandbox_id LIMIT 500`
-    )
-    .all<GrantRow>()
-  const bySandbox = new Map<string, GrantRow[]>()
-  for (const grant of results) {
-    bySandbox.set(grant.sandbox_id, [...(bySandbox.get(grant.sandbox_id) ?? []), grant])
-  }
-  for (const [sandboxId, grants] of bySandbox) {
-    const row = await getSandbox(deps.db, sandboxId)
-    if (!row) {
-      continue
-    }
-    const result = await revokeGrants(deps, row, grants, { by: 'system', reason: 'team_sharing_held' }).catch(() => ({ revoked: 0, queued: 0 }))
-    out.workspaces++
-    out.revoked += result.revoked
-    out.queued += result.queued
-  }
-  return out
 }
 
 /** A member left the org (auth push) or a phone session ended (W8): revoke everywhere. */

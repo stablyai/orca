@@ -1,5 +1,5 @@
 // How many days an archived workspace's snapshot is kept, from the control plane's GET /v1/config
-// (ARCHIVE_TTL_DAYS or its 30-day default), so the "until <date>" copy matches what reconcile deletes.
+// (ARCHIVE_TTL_DAYS or its 30-day default), so the "kept for N days" copy matches what reconcile deletes.
 import { useSyncExternalStore } from 'react'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
 
@@ -37,6 +37,12 @@ function subscribe(listener: () => void): () => void {
 /** Null until the control plane answers; callers then fall back to copy without a date. */
 export function useArchiveTtlDays(): number | null {
   return useSyncExternalStore(subscribe, () => ttlDays)
+}
+
+/** The retention for non-React copy (toasts): the loaded TTL, or null before it loads. */
+export function archiveTtlDays(): number | null {
+  load()
+  return ttlDays
 }
 
 /** Tests and fixtures: seed or clear the cached TTL. */

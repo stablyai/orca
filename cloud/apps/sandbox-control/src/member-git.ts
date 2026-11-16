@@ -1,46 +1,23 @@
-// Git as the sender. Every member with access to a workspace (its owner and anyone holding an active
-// grant) who connected GitHub gets a placeholder of their own. The VM's `orca-git-as <member>` sends
-// it; the egress proxy swaps it for that member's GitHub user token, and only for the workspace
-// repository (git smart HTTP on github.com, REST under /repos/<owner>/<repo> on api.github.com).
-// Who may use which identity is decided in the VM by orcad's attestation: orca-git-identity (root)
-// maps the paired device that sent the agent's latest turn to a member and refuses any other member;
-// member files are root-only. Tokens never enter the VM and work for this repository only. Residual
-// risk: members share the VM user, so a member with a shell could subvert orcad itself.
+// Git and gh as the workspace's owner. Workspaces are never shared: only the owner can use one, so the owner
+// always acts. If they connected GitHub they get a placeholder of their own; the VM's git and gh send it
+// (orca-git-identity hands it to every process, no sender attestation: there is no one else to tell apart), and
+// the egress proxy swaps it for their GitHub user token, only for the workspace repository (git smart HTTP on
+// github.com; on api.github.com REST under /repos/<owner>/<repo> and allowlisted GraphQL mutations pinned to it).
+// Tokens never enter the VM. Approvals are refused outright (github-approval-guard.ts).
 import type { ProxiedRoute } from './egress-proxy'
 import { parseGitHubRepo } from './github-app'
 import { getUserTokenRow, memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { gitBasicAuthorization } from './network-policy'
-import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, approves, classifyGraphqlRequest, merges, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
+import { UNNORMALIZED_WRITE_REFUSAL, approvalCheckReadsBody, approvalRefusal, requestApproves, unnormalizedWrite } from './github-approval-guard'
+import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, classifyGraphqlRequest, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
 import { settledCache } from './settled-cache'
 import type { SandboxRow } from './store'
-
-/** A member's GitHub identity works only this long after they themselves sent a message (default). */
-export const MEMBER_GIT_WINDOW_MS = 30 * 60_000
-
-/** Their own client reports each send (their Orca token): the window cannot be opened from the VM. */
-export async function recordMemberSend(db: D1Database, sandboxId: string, userId: string, now: number): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?)
-       ON CONFLICT (sandbox_id, user_id) DO UPDATE SET sent_at = excluded.sent_at`
-    )
-    .bind(sandboxId, userId, now)
-    .run()
-}
-
-export async function memberSentWithin(db: D1Database, sandboxId: string, userId: string, now: number, windowMs: number): Promise<boolean> {
-  const row = await db
-    .prepare('SELECT sent_at FROM workspace_member_sends WHERE sandbox_id = ? AND user_id = ?')
-    .bind(sandboxId, userId)
-    .first<{ sent_at: number }>()
-  return row !== null && now - row.sent_at <= windowMs
-}
 
 export type MemberGitDeps = {
   db: D1Database
   identity: (row: SandboxRow, userId: string) => Promise<MemberGitIdentity | null>
   /**
-   * GH-AS-MEMBER: the App's installation token for this workspace (`Bearer …`), for what a member's gh sends
+   * GH-AS-MEMBER: the App's installation token for this workspace (`Bearer …`), for what the owner's gh sends
    * that isn't theirs to sign (queries, other API calls), and to check where a mutation's targets live.
    */
   appAuthorization?: (row: SandboxRow) => Promise<string | null>
@@ -48,104 +25,25 @@ export type MemberGitDeps = {
 }
 
 /**
- * GH-AS-MEMBER identity rule (replaces the 30-minute window, which lapsed while an agent was still working
- * on its sender's request): in a workspace only one person can use, that person always acts as themselves;
- * in a shared one, the latest member to send a message acts until a different member sends, for at most
- * MEMBER_GIT_SHARED_MAX_MINUTES after that send (default 60 min). Approvals never carry a member's identity, and
- * merges do only in a one-person workspace (review M2).
+ * The identity rule: the owner always acts as themselves, and no one else ever does. Except a workspace that ever
+ * changed hands (OWNER-TRANSFER): its disk is the previous owner's, and whatever they left there runs at every
+ * boot, so it never acts as the new owner on GitHub either; git and gh go out as the App (the same reasoning as
+ * shared credential mode, shared-workspace.ts).
  */
-export async function memberMayAct(db: D1Database, row: SandboxRow, userId: string, now: number, sharedMaxMs: number | null): Promise<boolean> {
-  const acting = await actingMember(db, row, now, sharedMaxMs)
-  return 'userId' in acting && acting.userId === userId
+export function memberMayAct(row: Pick<SandboxRow, 'user_id' | 'ownership_transferred_at'>, userId: string): boolean {
+  return userId === row.user_id && row.ownership_transferred_at == null
 }
 
-/**
- * Who the identity rule above picks right now, before checking their GitHub connection: the only person, or a
- * shared workspace's latest sender (`until`: when their window lapses; null = no cap). The one source for
- * both the egress choice (memberMayAct) and what the UI shows (git-actor.ts).
- */
-export async function actingMember(db: D1Database, row: SandboxRow, now: number, sharedMaxMs: number | null): Promise<ActingMember> {
-  const { results } = await db
-    .prepare(`SELECT DISTINCT user_id FROM workspace_grants WHERE sandbox_id = ? AND status = 'active'`)
-    .bind(row.id)
-    .all<{ user_id: string }>()
-  const grantees = results.map((r) => r.user_id)
-  const solo = pickActing(row, grantees, null, now, sharedMaxMs)
-  if ('userId' in solo) {
-    // One person: no send needed (and no read on the egress path).
-    return solo
-  }
-  const latest = await db
-    .prepare('SELECT user_id, sent_at FROM workspace_member_sends WHERE sandbox_id = ? ORDER BY sent_at DESC LIMIT 1')
-    .bind(row.id)
-    .first<{ user_id: string; sent_at: number }>()
-  return pickActing(row, grantees, latest, now, sharedMaxMs)
-}
-
-/**
- * GH-SOLO: the one person who can use this workspace, or null. From the people set itself (active grantees, plus
- * the untransferred owner, who may have no grant row: the create's own pairing code), never from "no expiry".
- * Someone else's grant still being issued or revoked (their device may be pairing, or not yet unpaired) means not
- * solo.
- */
-export async function soloMember(db: D1Database, row: SandboxRow): Promise<string | null> {
-  const { results } = await db
-    .prepare(`SELECT DISTINCT user_id, status FROM workspace_grants WHERE sandbox_id = ? AND status IN ('issuing', 'active', 'revoking')`)
-    .bind(row.id)
-    .all<{ user_id: string; status: string }>()
-  const pick = pickActing(
-    row,
-    results.filter((r) => r.status === 'active').map((r) => r.user_id),
-    null,
-    0,
-    null
-  )
-  if (!('userId' in pick)) {
-    return null
-  }
-  return results.some((r) => r.user_id !== pick.userId) ? null : pick.userId
-}
-
-export type ActingMember = { userId: string; until: number | null } | { none: 'no_send' | 'stale' }
-
-/** The rule itself, on already-read rows (the workspace list reads them for every row in one go). */
-export function pickActing(
-  row: Pick<SandboxRow, 'user_id' | 'ownership_transferred_at'>,
-  grantees: readonly string[],
-  latest: { user_id: string; sent_at: number } | null,
-  now: number,
-  sharedMaxMs: number | null
-): ActingMember {
-  const people = new Set(grantees)
-  if (row.ownership_transferred_at == null) {
-    people.add(row.user_id)
-  }
-  if (people.size === 1) {
-    return { userId: [...people][0]!, until: null }
-  }
-  if (!latest || !people.has(latest.user_id)) {
-    return { none: 'no_send' }
-  }
-  if (sharedMaxMs !== null && now - latest.sent_at > sharedMaxMs) {
-    return { none: 'stale' }
-  }
-  return { userId: latest.user_id, until: sharedMaxMs === null ? null : latest.sent_at + sharedMaxMs }
-}
-
-/** Members whose GitHub identity this workspace may use: owner + active grantees, connected only. */
+/** Whose GitHub identity this workspace may use: its owner, once connected (else none; none after a transfer). */
 export async function connectedMembers(db: D1Database, row: SandboxRow): Promise<string[]> {
-  // OWNER-TRANSFER: on a transferred workspace the owner has no entry of their own. They count
-  // only while they hold an active grant, exactly like any member of a shared workspace.
-  const ownerToo = row.ownership_transferred_at == null
-  const { results } = await db
-    .prepare(
-      `SELECT t.user_id FROM github_user_tokens t WHERE t.account_id = ? AND ((? = 1 AND t.user_id = ?) OR t.user_id IN
-         (SELECT g.user_id FROM workspace_grants g WHERE g.sandbox_id = ? AND g.status = 'active'))
-       ORDER BY t.user_id`
-    )
-    .bind(row.account_id, ownerToo ? 1 : 0, row.user_id, row.id)
-    .all<{ user_id: string }>()
-  return results.map((r) => r.user_id)
+  if (row.ownership_transferred_at != null) {
+    return []
+  }
+  const token = await db
+    .prepare('SELECT user_id FROM github_user_tokens WHERE account_id = ? AND user_id = ?')
+    .bind(row.account_id, row.user_id)
+    .first<{ user_id: string }>()
+  return token ? [token.user_id] : []
 }
 
 export function repoPathAllowed(repoUrl: string | null, host: string): (method: string, path: string) => boolean {
@@ -190,8 +88,7 @@ export function memberGitRoutes(deps: MemberGitDeps) {
             : {
                 header: 'authorization',
                 placeholders: [`Bearer ${placeholder}`, `token ${placeholder}`],
-                readsBody: (method, path) =>
-                  (method.toUpperCase() === 'POST' && path.split('?')[0] === '/graphql') || REVIEW_PATH.test(path.split('?')[0] ?? ''),
+                readsBody: (method, path) => (method.toUpperCase() === 'POST' && (path.split('?')[0] ?? '').toLowerCase() === '/graphql') || approvalCheckReadsBody(method, path),
                 credential: async (request) => memberApiCredential(deps, row, identity, allowed, request)
               }
         )
@@ -223,7 +120,7 @@ export async function memberGitConfigs(deps: MemberGitDeps, row: SandboxRow) {
 }
 
 /**
- * GIT-COAUTHOR: members who connected GitHub but whose identity can't be used right now (token expired and
+ * GIT-COAUTHOR: an owner who connected GitHub but whose identity can't be used right now (token expired and
  * not refreshable, or member git off for the account). Their commits fall back to the workspace identity, so
  * the VM adds a `Co-authored-by` trailer with their GitHub noreply address: attribution survives, no token.
  */
@@ -235,9 +132,8 @@ export async function memberCoauthors(db: D1Database, row: SandboxRow, installed
     }
     const token = await getUserTokenRow(db, row.account_id, userId)
     const coauthor = token ? coauthorTrailer(token.github_login, token.github_user_id, token.github_name) : null
-    const deviceIds = coauthor ? await memberDeviceIds(db, row.id, userId) : []
-    if (coauthor && deviceIds.length > 0) {
-      out.push({ userId, coauthor, deviceIds })
+    if (coauthor) {
+      out.push({ userId, coauthor, deviceIds: await memberDeviceIds(db, row.id, userId) })
     }
   }
   return out
@@ -275,15 +171,19 @@ async function memberApiCredential(
   allowed: (method: string, path: string) => boolean,
   request: { method: string; path: string; body: string | null }
 ): ReturnType<ProxiedRoute['credential']> {
+  // APPROVALS-REFUSED (github-approval-guard.ts): never from a workspace, on any identity. A write whose path GitHub
+  // would normalize differently than this check reads it is refused first (review G2).
+  if (unnormalizedWrite(request.method, request.path)) {
+    return UNNORMALIZED_WRITE_REFUSAL
+  }
+  if (requestApproves(request)) {
+    return approvalRefusal(request.path)
+  }
   const app = () => (deps.appAuthorization ? deps.appAuthorization(row) : Promise.resolve(null))
   const pathname = request.path.split('?')[0] ?? ''
   const isGraphql = request.method.toUpperCase() === 'POST' && pathname === '/graphql'
   if (!isGraphql) {
     if (allowed(request.method, request.path)) {
-      // Review M2: a REST approval never carries a member's identity; a merge does only in a one-person workspace.
-      if (restApproves(request) || (restMerges(request) && (await isSharedWorkspace(deps.db, row)))) {
-        return app()
-      }
       const id = await identity()
       return id ? `Bearer ${id.token}` : app()
     }
@@ -291,9 +191,6 @@ async function memberApiCredential(
   }
   const verdict = classifyGraphqlRequest(request.body ?? '')
   if (!verdict.member) {
-    return app()
-  }
-  if (approves(verdict.fields) || (merges(verdict.fields) && (await isSharedWorkspace(deps.db, row)))) {
     return app()
   }
   const id = await identity()
@@ -363,39 +260,3 @@ async function targetsInWorkspaceRepo(deps: MemberGitDeps, row: SandboxRow, appT
 }
 
 /** A pull request review, or a pending review's submission (case-insensitive, optional trailing slash). */
-const REVIEW_PATH = /\/pulls\/\d+\/reviews(\/\d+\/events)?\/?$/i
-
-/** REST approval: a review, or a pending review's submission, with event APPROVE (any case). */
-function restApproves(request: { method: string; path: string; body: string | null }): boolean {
-  const pathname = request.path.split('?')[0] ?? ''
-  if (request.method.toUpperCase() !== 'POST' || !REVIEW_PATH.test(pathname)) {
-    return false
-  }
-  if (request.body === null) {
-    return true
-  }
-  try {
-    const event = (JSON.parse(request.body) as { event?: unknown } | null)?.event
-    return String(event ?? '').toUpperCase() === 'APPROVE'
-  } catch {
-    // Unreadable: treat as an approval (fails toward the installation token).
-    return true
-  }
-}
-
-/** REST merge: a pull request's (PUT …/pulls/N/merge) or a branch into another (POST /repos/o/r/merges). */
-function restMerges(request: { method: string; path: string }): boolean {
-  const pathname = request.path.split('?')[0] ?? ''
-  const method = request.method.toUpperCase()
-  return (method === 'PUT' && /\/pulls\/\d+\/merge\/?$/i.test(pathname)) || (method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/merges\/?$/i.test(pathname))
-}
-
-/** More than one person can use this workspace (owner plus other active grantees). */
-async function isSharedWorkspace(db: D1Database, row: SandboxRow): Promise<boolean> {
-  const { results } = await db.prepare(`SELECT DISTINCT user_id FROM workspace_grants WHERE sandbox_id = ? AND status = 'active'`).bind(row.id).all<{ user_id: string }>()
-  const people = new Set(results.map((r) => r.user_id))
-  if (row.ownership_transferred_at == null) {
-    people.add(row.user_id)
-  }
-  return people.size > 1
-}

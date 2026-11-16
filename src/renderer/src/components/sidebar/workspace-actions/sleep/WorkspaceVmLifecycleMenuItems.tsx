@@ -111,7 +111,9 @@ export function WorkspaceVmLifecycleMenuItems({
     return null
   }
   if (!action) {
-    return <>{sleepItems}</>
+    // This desktop's own cloud workspace mid-transition has no lifecycle item. (A paired one has no
+    // VM record here; its Sleep is `sleepItems`, which reaches the sandbox.)
+    return cloud ? null : <>{sleepItems}</>
   }
   const vmItem = (
     <VmLifecycleMenuItem
@@ -134,8 +136,10 @@ export function WorkspaceVmLifecycleMenuItems({
     />
   )
   // Sleep and Suspend VM are one action on a running VM. A VM still asleep or waking keeps Sleep
-  // only while it has restored panels to close; otherwise Sleep would sit there disabled.
-  return replacesSleep && (action === 'suspend' || !hasSleepableActivity) ? (
+  // only while it has restored panels to close; otherwise Sleep would sit there disabled. Not on
+  // Orca Cloud (Neil): there that "Sleep" read as a second, contradictory item beside Wake; the
+  // cloud row has exactly one lifecycle item, Sleep or Wake.
+  return cloud || (replacesSleep && (action === 'suspend' || !hasSleepableActivity)) ? (
     vmItem
   ) : (
     <>
@@ -200,7 +204,7 @@ function VmLifecycleMenuItem({
         {cloud
           ? t(
               'orcaCloudWorkspace.menu.sleepDescription',
-              "Close this workspace's panels and put its sandbox to sleep. Opening the workspace wakes it."
+              'Pauses the workspace until you open it again.'
             )
           : t(
               'workspace.vm.menu.suspendDescription',

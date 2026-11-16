@@ -179,61 +179,34 @@ describe('read snapshots of sleeping workspaces (E2EE)', () => {
     expect(list.body.workspaces[0].readSnapshotAt).toBe(t.h.now())
   })
 
-  it('opens for teammates only on team workspaces; private stays owner-only; bad keys and other people’s keys are refused', async () => {
+  it('opens for the owner only, a row still stored as team included; bad keys and other people’s keys are refused', async () => {
     const t = await setup()
     const own = await t.register(t.alice)
     const bobs = await t.register(t.bob)
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(t.id)
     await t.sleep()
-    // Private: Bob can't see it at all, and was never a recipient.
+    // Bob can't see it at all, and was never a recipient.
     expect((await t.read(t.bob, bobs.id)).body).toEqual({ error: 'not_found' })
-    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/resume`)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    await t.sleep()
-    const res = await t.read(t.bob, bobs.id)
+    expect(t.h.raw.prepare('SELECT key_id FROM read_snapshot_keys').all()).toEqual([{ key_id: own.id }])
+    const res = await t.read(t.alice, own.id)
     expect(res.status).toBe(200)
-    expect((await t.open(res.body, bobs.secretKey)).sessions).toHaveLength(2)
-    // Bob can't fetch Alice's wrapped key, nor open his blob with another key.
-    expect((await t.read(t.bob, own.id)).status).toBe(400)
-    await expect(t.open(res.body, own.secretKey)).rejects.toThrow('decrypt_failed')
+    await expect(t.open(res.body, bobs.secretKey)).rejects.toThrow('decrypt_failed')
     // Another org's member sees nothing.
     const mallory = t.as('mallory', 'member', 'evil')
     const mk = await t.register(mallory)
     expect((await t.read(mallory, mk.id)).status).toBe(404)
   })
 
-  it('making it private prunes teammates at once, without the VM', async () => {
+  it('a removed owner can no longer read, and their wrapped keys are deleted', async () => {
     const t = await setup()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
     const own = await t.register(t.alice)
-    const bobs = await t.register(t.bob)
     await t.sleep()
-    expect((await t.read(t.bob, bobs.id)).status).toBe(200)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'private' })
-    expect((await t.read(t.bob, bobs.id)).status).toBe(404)
-    expect(t.h.raw.prepare('SELECT key_id FROM read_snapshot_keys').all()).toEqual([{ key_id: own.id }])
-    // Even back to team: Bob's wrapped key is gone until the next sleep re-seals.
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    expect((await t.read(t.bob, bobs.id)).body).toEqual({ error: 'not_sealed_for_key' })
-  })
-
-  it('a removed member can no longer read, and their wrapped keys are deleted', async () => {
-    const t = await setup()
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
-    await t.register(t.alice)
-    const bobs = await t.register(t.bob)
-    await t.sleep()
-    expect((await t.read(t.bob, bobs.id)).status).toBe(200)
-    const removed = await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'bob' } })
+    expect((await t.read(t.alice, own.id)).status).toBe(200)
+    const removed = await t.h.call('POST', '/v1/internal/org-members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'alice' } })
     expect(removed.body.readerKeysRevoked).toBe(1)
-    // A token minted after removal (stale org claim) still gets nothing: key revoked, wrapped key gone.
     t.h.advance(1000)
-    const again = await t.read(t.bob, bobs.id)
-    expect(again.status).not.toBe(200)
-    expect(t.h.raw.prepare('SELECT key_id FROM read_snapshot_keys WHERE key_id = ?').all(bobs.id)).toEqual([])
-    // Next sleep is not sealed to him either.
-    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/resume`)
-    await t.sleep()
-    expect(t.h.raw.prepare('SELECT key_id FROM read_snapshot_keys WHERE key_id = ?').all(bobs.id)).toEqual([])
+    expect((await t.read(t.alice, own.id)).status).not.toBe(200)
+    expect(t.h.raw.prepare('SELECT key_id FROM read_snapshot_keys WHERE key_id = ?').all(own.id)).toEqual([])
   })
 
   it('a device added after the last sleep gets not_sealed_for_key; no snapshot yet is no_snapshot', async () => {

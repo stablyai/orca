@@ -890,9 +890,9 @@
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
         },
         "orcaCloudPredictiveWake": {
-          "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
-          "description_one": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours.",
-          "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
+          "description": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Early wakes add to your usage.",
+          "description_one": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minute. Early wakes add to your usage.",
+          "description_other": "Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minutes. Early wakes add to your usage."
         },
         "repository": {
           "search": {
@@ -1448,8 +1448,8 @@
         "xcodeSimulatorToolsUnavailable": "Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`."
       },
       "orcaCloudSession": {
-        "sandboxRestartsInMinutes_one": "Sandbox for {{name}} restarts in {{count}} minute",
-        "sandboxRestartsInMinutes_other": "Sandbox for {{name}} restarts in {{count}} minutes"
+        "sandboxRestartsInMinutes_one": "{{name}} restarts in {{count}} minute",
+        "sandboxRestartsInMinutes_other": "{{name}} restarts in {{count}} minutes"
       },
       "rateLimits": {
         "errors": {
@@ -2589,6 +2589,8 @@
       "stopsAgents_other": "Stops {{count}} running agents"
     },
     "done": {
+      "archived_one": "Cloud workspace archived. It’s kept for {{count}} day, then deleted.",
+      "archived_other": "Cloud workspace archived. It’s kept for {{count}} days, then deleted.",
       "chats_one": "{{count}} agent chat",
       "chats_other": "{{count}} agent chats",
       "untracked_one": "{{count}} untracked file",
@@ -2604,15 +2606,29 @@
     "removalEdited_other": "{{count}} changed files on this computer will be removed."
   },
   "orcaCloudWorkspace": {
+    "archiveSnapshot": {
+      "definition_one": "Stops the workspace and keeps it for {{count}} day, then deletes it.",
+      "definition_other": "Stops the workspace and keeps it for {{count}} days, then deletes it.",
+      "deletesIn_one": "Read-only. Deletes in {{count}} day unless you unarchive it.",
+      "deletesIn_other": "Read-only. Deletes in {{count}} days unless you unarchive it.",
+      "dialogKept_one": "It’s kept for {{count}} day, then deleted. You can unarchive it until then.",
+      "dialogKept_other": "It’s kept for {{count}} days, then deleted. You can unarchive it until then."
+    },
     "archived": {
+      "deletesInShort_one": "deletes in {{count}} day",
+      "deletesInShort_other": "deletes in {{count}} days",
       "files": "{{count}} files",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
       "moreFiles_one": "{{count}} more file not shown",
       "moreFiles_other": "{{count}} more files not shown"
     },
-    "archivedDetailLocalEdits_one": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.",
-    "archivedDetailLocalEdits_other": "It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.",
+    "archivedDetailLocalCopy_one": "Kept for {{count}} day, then deleted. The copy on this computer will be removed.",
+    "archivedDetailLocalCopy_other": "Kept for {{count}} days, then deleted. The copy on this computer will be removed.",
+    "archivedDetailLocalEdits_one": "Kept for {{days}} days, then deleted. {{count}} changed file on this computer will be removed.",
+    "archivedDetailLocalEdits_other": "Kept for {{days}} days, then deleted. {{count}} changed files on this computer will be removed.",
+    "archivedDetail_one": "Kept for {{count}} day, then deleted.",
+    "archivedDetail_other": "Kept for {{count}} days, then deleted.",
     "card": {
       "sleepsIn_one": "Sleeps in {{count}} min if idle",
       "sleepsIn_other": "Sleeps in {{count}} min if idle"
