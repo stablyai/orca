@@ -30,9 +30,10 @@ export function pendingWslDriveCheckoutGitRouting(
     }
     // Paths this Git prints map back to the drive only once the distro's mount root is known.
     if (options.wslDistro) {
-      // Background Git never boots a stopped distro, so admit before reading its root.
-      await admitWslGit(options)
-      await settleWslAutomountRoot(options.wslDistro, options.signal)
+      await settleWslAutomountRoot(options.wslDistro, {
+        signal: options.signal,
+        admit: () => admitWslGit(options)
+      })
     }
     await pendingWslWindowsCheckoutGitConfig(args, options)
   })()

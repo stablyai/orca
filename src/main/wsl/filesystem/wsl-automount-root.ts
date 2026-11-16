@@ -24,6 +24,8 @@ import { resolveWslExecutablePath } from '../execution/wsl-executable-path'
 export const DEFAULT_WSL_AUTOMOUNT_ROOT = '/mnt/'
 
 const READ_TIMEOUT_MS = 5_000
+// Git's first call may be the one that boots the distro, so its read allows for a cold start.
+const COLD_READ_TIMEOUT_MS = 60_000
 // A wake re-reads at most this often per distro, so terminals opened on a running distro stay free.
 export const WSL_AUTOMOUNT_WAKE_REREAD_INTERVAL_MS = 5 * 60_000
 
@@ -33,7 +35,7 @@ const roots = new Map<string, string>()
 // Read since its last start, the default `/mnt/` too: one guest launch per start, not per probe.
 const readSinceStart = new Set<string>()
 const readAt = new Map<string, number>()
-const pending = new Map<string, Promise<void>>()
+const pending = new Map<string, Promise<boolean>>()
 // Bumped on a stop, so a read still in flight then neither marks the restarted distro read.
 const stopCounts = new Map<string, number>()
 const changeListeners = new Set<() => void>()
@@ -63,69 +65,84 @@ function changed(): void {
   }
 }
 
-function startRead(distro: string, read: WslAutomountRootReader): Promise<void> {
+// A failed read is not retried for this long, by probes or Git, so a broken distro fails fast.
+const FAILED_READ_RETRY_MS = 10_000
+const failedAt = new Map<string, number>()
+
+function recentlyFailed(key: string): boolean {
+  const failed = failedAt.get(key)
+  return failed !== undefined && performance.now() - failed < FAILED_READ_RETRY_MS
+}
+
+/** Resolves true when this read was overtaken by a stop, so the restarted distro needs its own read. */
+function startRead(distro: string, read: WslAutomountRootReader): Promise<boolean> {
   const key = distroKey(distro)
   const stopCount = stopCounts.get(key) ?? 0
   const reading = read(distro)
+    .catch(() => null)
     .then((root) => {
-      // Unread (null) retries on the next probe; a stop mid-read leaves it for the restart.
-      if (!root || (stopCounts.get(key) ?? 0) !== stopCount) {
-        return
+      if ((stopCounts.get(key) ?? 0) !== stopCount) {
+        return true
       }
+      if (!root) {
+        failedAt.set(key, performance.now())
+        return false
+      }
+      failedAt.delete(key)
       readSinceStart.add(key)
       readAt.set(key, performance.now())
       const previous = roots.get(key) ?? DEFAULT_WSL_AUTOMOUNT_ROOT
-      if (root === previous) {
-        return
+      if (root !== previous) {
+        if (root === DEFAULT_WSL_AUTOMOUNT_ROOT) {
+          roots.delete(key)
+        } else {
+          roots.set(key, root)
+        }
+        changed()
       }
-      if (root === DEFAULT_WSL_AUTOMOUNT_ROOT) {
-        roots.delete(key)
-      } else {
-        roots.set(key, root)
-      }
-      changed()
+      return false
     })
-    // Unreadable: links under it fall back to `/mnt/`.
-    .catch(() => {})
     .finally(() => pending.delete(key))
   pending.set(key, reading)
   return reading
 }
 
-// A failed read refuses Git output for this long before reading again, so polls fail fast.
-const FAILED_READ_RETRY_MS = 10_000
-const failedAt = new Map<string, number>()
-
 /**
- * Reads `distro`'s root before its Git output is read back, when not yet read since its start;
- * rejects when it cannot be read, since output under an unknown root cannot be mapped to a drive.
- * Only for a caller admitted to run Git there, so the distro is already running or being started.
+ * Reads `distro`'s root before its Git output is read back, when not yet read since its start,
+ * and rejects when it cannot be read: output under an unknown root cannot map back to a drive.
+ * `admit` runs before any read, so background Git never boots a stopped distro to read it.
  */
 export function settleWslAutomountRoot(
   distro: string,
-  signal?: AbortSignal,
-  read: WslAutomountRootReader = readWslAutomountRoot
+  options: {
+    signal?: AbortSignal
+    admit?: () => Promise<void> | null
+    read?: WslAutomountRootReader
+  } = {}
 ): Promise<void> | null {
   const key = distroKey(distro)
   if (readSinceStart.has(key)) {
     return null
   }
-  const unreadable = (): Error =>
-    new Error(
-      `Orca couldn't read where WSL distro ${distro} mounts Windows drives. Try again in a moment.`
-    )
-  const failed = failedAt.get(key)
-  if (failed !== undefined && performance.now() - failed < FAILED_READ_RETRY_MS) {
-    return Promise.reject(unreadable())
-  }
-  const reading = pending.get(key) ?? startRead(distro, read)
-  return waitForPromiseWithSignal(reading, signal).then(() => {
-    if (!readSinceStart.has(key)) {
-      failedAt.set(key, performance.now())
-      throw unreadable()
+  const read = options.read ?? ((name: string) => readWslAutomountRoot(name, COLD_READ_TIMEOUT_MS))
+  const readOnce = async (): Promise<boolean> => {
+    if (recentlyFailed(key)) {
+      return false
     }
-    failedAt.delete(key)
-  })
+    await options.admit?.()
+    return waitForPromiseWithSignal(pending.get(key) ?? startRead(distro, read), options.signal)
+  }
+  return (async () => {
+    // One more read when a stop overtook the first: the distro restarted, nothing failed.
+    if ((await readOnce()) && !readSinceStart.has(key)) {
+      await readOnce()
+    }
+    if (!readSinceStart.has(key)) {
+      throw new Error(
+        `Orca couldn't read where WSL distro ${distro} mounts Windows drives. Try again in a moment.`
+      )
+    }
+  })()
 }
 
 /**
@@ -140,7 +157,12 @@ export function followWslAutomountRoots(
     const wantedKeys = new Set(wanted().map(distroKey))
     for (const distro of running) {
       const key = distroKey(distro)
-      if (!wantedKeys.has(key) || readSinceStart.has(key) || pending.has(key)) {
+      if (
+        !wantedKeys.has(key) ||
+        readSinceStart.has(key) ||
+        pending.has(key) ||
+        recentlyFailed(key)
+      ) {
         continue
       }
       // A list probed mid-stop still names the distro, and wsl.exe would boot it again. The cache
@@ -185,14 +207,17 @@ export function followWslAutomountRoots(
 }
 
 /** The effective root from the distro itself: `wslpath` applies `wsl.conf` as WSL does. */
-export async function readWslAutomountRoot(distro: string): Promise<string | null> {
+export async function readWslAutomountRoot(
+  distro: string,
+  timeoutMs: number = READ_TIMEOUT_MS
+): Promise<string | null> {
   const fence = buildPosixStdoutFence("wslpath -u 'C:\\'", 'WSL')
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(distro, ['sh', '-c', fence.command]),
     env: { ...process.env, WSL_UTF8: '1' },
     cwd: resolveWslInteropSpawnCwd(),
-    timeoutMs: READ_TIMEOUT_MS,
+    timeoutMs,
     maxOutputBytes: 4_096
   })
   if (result.timedOut || result.code !== 0) {

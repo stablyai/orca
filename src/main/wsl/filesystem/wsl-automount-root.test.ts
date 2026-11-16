@@ -6,7 +6,7 @@ afterEach(() => resetWslAutomountRootsForTests())
 
 describe('settleWslAutomountRoot', () => {
   it('maps Git output under a custom root back to the drive once settled', async () => {
-    await settleWslAutomountRoot('Ubuntu', undefined, async () => '/qamnt/')
+    await settleWslAutomountRoot('Ubuntu', { read: async () => '/qamnt/' })
 
     expect(translateWslOutputPath('/qamnt/c/wt/child', 'C:\\wt', { wslDistro: 'Ubuntu' })).toBe(
       'C:\\wt\\child'
@@ -14,6 +14,6 @@ describe('settleWslAutomountRoot', () => {
   })
 
   it('refuses when the root cannot be read, instead of guessing /mnt/', async () => {
-    await expect(settleWslAutomountRoot('Ubuntu', undefined, async () => null)).rejects.toThrow()
+    await expect(settleWslAutomountRoot('Ubuntu', { read: async () => null })).rejects.toThrow()
   })
 })
