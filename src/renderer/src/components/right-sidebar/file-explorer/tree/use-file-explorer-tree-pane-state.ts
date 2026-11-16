@@ -9,7 +9,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
-import {
+import type {
   buildFolderStatusMap,
   buildStatusMap
 } from '../../../../../../shared/git/status/git-path-decoration'
@@ -21,6 +21,7 @@ import { useFileExplorerInlineInput } from '../mutations/useFileExplorerInlineIn
 import { useFileExplorerNodeCommands } from '../mutations/use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from '../selection/use-file-explorer-row-scrolling'
 import { useFileExplorerLoadMore } from './use-file-explorer-load-more'
+import { useFileExplorerGitDecorations } from './use-file-explorer-submodule-status'
 import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-effects'
 import { useFileExplorerWatch } from '../watching/useFileExplorerWatch'
 import { useClearNameFilterForReveal } from '../navigation/use-clear-name-filter-for-reveal'
@@ -156,8 +157,12 @@ export function useFileExplorerTreePaneState({
   )
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
 
-  const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
-  const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
+  const { statusByRelativePath, folderStatusByRelativePath } = useFileExplorerGitDecorations({
+    activeWorktreeId,
+    worktreePath,
+    entries,
+    expanded: effectiveExpanded
+  })
 
   const deletion = useFileDeletion({
     activeWorktreeId,
