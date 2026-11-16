@@ -187,7 +187,7 @@ export type PreloadApi = {
   plainSsh?: PlainSshTerminalApi
   /** Desktop only: streams files and folders from a paired runtime host to this machine. */
   runtimeDownloads?: RuntimeDownloadsApi
-  /** Desktop only: Orca Cloud workspace files synced to this computer (.context and the mirror). */
+  /** Desktop only: an Orca Cloud workspace's `.context` folder synced to this computer. */
   cloudSync?: CloudSyncApi
   /** Desktop only: the API keys Orca hands to agent launches. */
   agentApiKeys?: AgentApiKeysApi
