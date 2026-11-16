@@ -15,7 +15,7 @@ import {
   openJournalLegacySource
 } from './database/journal-legacy-source'
 import { compareJournalLegacyChat } from './database/journal-legacy-compare'
-import { isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
+import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 
 if (
   !parentPort ||
@@ -122,7 +122,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
           result = source ? compareJournalLegacyChat(source, db, operation.sessionId) : null
         } catch (error) {
           // The chat's own failure is its answer; the caller records it rather than retrying.
-          if (isSqliteStorageFailure(error)) {
+          if (isSqliteStorageFailure(error) || isSqliteCorruption(error)) {
             throw error
           }
           result = { error: error instanceof Error ? error.message : String(error) }

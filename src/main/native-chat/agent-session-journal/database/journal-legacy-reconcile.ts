@@ -2,7 +2,7 @@ import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { runJournalTransaction } from './journal-database'
-import { isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
+import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
 import { journalDatabasePath } from './journal-host-database'
 import {
@@ -167,7 +167,8 @@ function absorbChats(
       revision = journalLegacyChatRevision(source, id) ?? 'null'
       absorbChat(source, db, id, revision, adoption, pass)
     } catch (error) {
-      if (isSqliteStorageFailure(error)) {
+      // Corruption past the original's own revision read may be this file's: never absorb it.
+      if (isSqliteStorageFailure(error) || (revision !== undefined && isSqliteCorruption(error))) {
         console.warn('[agent-session-journal] keeping chats an older Orca saved paused', error)
         return false
       }

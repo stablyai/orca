@@ -59,7 +59,7 @@ const STORAGE_ERRCODES = new Set([
 
 /**
  * The database or its disk failed, not the row being written: every other row would fail too.
- * Corruption is the row's: a damaged page fails only the rows on it.
+ * Corruption is the caller's call: it may be one row's page or the whole file.
  */
 export function isSqliteStorageFailure(error: unknown): boolean {
   const errcode = primaryErrcode(error)
