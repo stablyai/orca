@@ -14,6 +14,10 @@ import {
   openJournalLegacySource
 } from './database/journal-legacy-source'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+import {
+  JOURNAL_READER_REPLY_BYTE_LIMIT,
+  journalReaderReplyExceedsLimit
+} from './journal-sql-reader-reply-limit'
 
 installWorkerSendLedger('orca-journal-sql-reader')
 
@@ -30,6 +34,19 @@ let original: Database.Database | undefined
 let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 function reply(message: JournalSqlReaderReply): void {
+  if ('id' in message && message.type !== 'failed' && journalReaderReplyExceedsLimit(message)) {
+    // Refused here so the caller's read fails instead of the receiving thread running out of memory.
+    port.postMessage({
+      type: 'failed',
+      id: message.id,
+      error: journalSqlFailure(
+        new Error(
+          `journal read reply (${message.type}) exceeds ${JOURNAL_READER_REPLY_BYTE_LIMIT} bytes`
+        )
+      )
+    } satisfies JournalSqlReaderReply)
+    return
+  }
   port.postMessage(message)
 }
 try {

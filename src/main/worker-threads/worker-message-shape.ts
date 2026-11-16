@@ -14,6 +14,12 @@ const NODE_BUDGET = 2048
 const ENTRY_BUDGET = 16_384
 /** An object with more keys than this is a keyed collection (a Record of rows), not a struct. */
 const RECORD_ENTRY_KEYS = 64
+/** A message this large can stall or exhaust the receiving thread. */
+const LARGE_BYTES = 16 * 2 ** 20
+const LARGE_ITEMS = 50_000
+const LARGE_DEPTH = 100
+const TRUNCATED_LARGE_BYTES = 4 * 2 ** 20
+const TRUNCATED_LARGE_ITEMS = 10_000
 
 /**
  * Bounded and iterative, visiting each object once, so a huge, wide, deep or cyclic payload costs
@@ -98,6 +104,16 @@ export function describeWorkerMessage(message: unknown): WorkerMessageShape {
     }
   }
   return { kind: messageKind(message), items, bytes, depth, truncated }
+}
+
+/** Counts are lower bounds once a walk is cut short, so a truncated walk needs less evidence. */
+export function isLargeWorkerMessage(shape: WorkerMessageShape): boolean {
+  return (
+    shape.bytes >= LARGE_BYTES ||
+    shape.items >= LARGE_ITEMS ||
+    shape.depth >= LARGE_DEPTH ||
+    (shape.truncated && (shape.bytes >= TRUNCATED_LARGE_BYTES || shape.items >= TRUNCATED_LARGE_ITEMS))
+  )
 }
 
 function messageKind(message: unknown): string {

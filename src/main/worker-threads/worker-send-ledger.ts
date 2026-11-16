@@ -7,7 +7,11 @@ import {
   threadId
 } from 'node:worker_threads'
 import { appendWorkerLargeSend } from './worker-large-send-log'
-import { describeWorkerMessage, type WorkerMessageShape } from './worker-message-shape'
+import {
+  describeWorkerMessage,
+  isLargeWorkerMessage,
+  type WorkerMessageShape
+} from './worker-message-shape'
 import type { WorkerThreadRole } from './worker-thread-roles'
 
 /**
@@ -32,13 +36,6 @@ const LAST_TRUNCATED = 56
 const ROLE = 64
 const LAST_KIND = ROLE + TEXT_BYTES
 const MAX_KIND = LAST_KIND + TEXT_BYTES
-
-/** A send this large can stall or exhaust the receiving thread; it is logged before posting. */
-const LARGE_SEND_BYTES = 16 * 2 ** 20
-const LARGE_SEND_ITEMS = 50_000
-const LARGE_SEND_DEPTH = 100
-const TRUNCATED_LARGE_SEND_BYTES = 4 * 2 ** 20
-const TRUNCATED_LARGE_SEND_ITEMS = 10_000
 
 export type WorkerSendLedgerEntry = {
   role: string
@@ -133,7 +130,7 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
       try {
         const shape = describeWorkerMessage(args[0])
         recordSend(view, shape)
-        if (typeof largeSendLog === 'string' && isLargeSend(shape)) {
+        if (typeof largeSendLog === 'string' && isLargeWorkerMessage(shape)) {
           logLargeSend(largeSendLog, role, shape)
         }
       } catch {
@@ -157,17 +154,6 @@ function recordSend(view: DataView, shape: WorkerMessageShape): void {
     writeText(view, MAX_KIND, shape.kind)
   }
   view.setFloat64(HEAP_USED, getHeapStatistics().used_heap_size, true)
-}
-
-/** Counts are lower bounds once a walk is cut short, so a truncated walk needs less evidence. */
-function isLargeSend(shape: WorkerMessageShape): boolean {
-  return (
-    shape.bytes >= LARGE_SEND_BYTES ||
-    shape.items >= LARGE_SEND_ITEMS ||
-    shape.depth >= LARGE_SEND_DEPTH ||
-    (shape.truncated &&
-      (shape.bytes >= TRUNCATED_LARGE_SEND_BYTES || shape.items >= TRUNCATED_LARGE_SEND_ITEMS))
-  )
 }
 
 function logLargeSend(path: string, role: string, shape: WorkerMessageShape): void {
