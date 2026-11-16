@@ -2,6 +2,7 @@
 // hosts ask it before evicting; native chat runs Pi as a child, so the question arrives as a file in
 // a private folder (never a prompt or dialog, which other extensions and the model would see) and
 // the answer leaves as a status line.
+// Every native chat loads this file, so it also carries the chat's stand-ins for Pi's TUI-only commands.
 
 export const PI_BACKGROUND_WORK_STATUS_KEY = 'orca-background-work'
 export const PI_BACKGROUND_WORK_DIR_ENV = 'ORCA_PI_BACKGROUND_WORK_DIR'
@@ -115,6 +116,19 @@ export function getPiBackgroundWorkBridgeSource(): string {
     '    try {',
     "      ctx.ui.setStatus(STATUS_KEY, 'gone')",
     '    } catch {}',
+    '  })',
+    // Pi runs /reload only in its TUI; over RPC the text would reach the model.
+    "  pi.registerCommand('reload', {",
+    "    description: 'Reload extensions, skills, prompts, and context files',",
+    '    handler: async (_args, ctx) => {',
+    '      if (!ctx.isIdle()) {',
+    "        ctx.ui.notify('Wait for the current response to finish before reloading.', 'warning')",
+    '        return',
+    '      }',
+    // Reload replaces this instance, so the old ctx cannot notify afterwards.
+    "      ctx.ui.notify('Reloading extensions, skills, prompts, and context files', 'info')",
+    '      await ctx.reload()',
+    '    }',
     '  })',
     '}',
     ''
