@@ -1,5 +1,5 @@
 diff --git a/src/SearchAddon.ts b/src/SearchAddon.ts
-index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..e89e4dde18d860f858b44bf2745db19829f386cd 100644
+index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..f24e53e722e3cb0e531bac4d97a930e2c58bcd48 100644
 --- a/src/SearchAddon.ts
 +++ b/src/SearchAddon.ts
 @@ -35,6 +35,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
@@ -19,20 +19,30 @@ index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..e89e4dde18d860f858b44bf2745db198
      this._register(toDisposable(() => this.clearDecorations()));
    }
  
-@@ -72,12 +75,25 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+@@ -72,12 +75,34 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
      if (this._state.cachedSearchTerm && this._state.lastSearchOptions?.decorations) {
        this._highlightTimeout.value = disposableTimeout(() => {
          const term = this._state.cachedSearchTerm;
-+        if (this._selectionChangedByUser || this._terminal?.getSelection() !== this._selectionAfterFind) {
-+          this._refreshHighlights(term!, this._state.lastSearchOptions!);
++        const searchOptions = this._state.lastSearchOptions;
++        if (!term || !searchOptions?.decorations) {
++          return;
++        }
++        if (this._selectionChangedByUser || this._selectionShape() !== this._selectionAfterFind) {
++          this._refreshHighlights(term, searchOptions);
 +          return;
 +        }
          this._state.clearCachedTerm();
-         this.findPrevious(term!, { ...this._state.lastSearchOptions, incremental: true }, { noScroll: true });
+-        this.findPrevious(term!, { ...this._state.lastSearchOptions, incremental: true }, { noScroll: true });
++        this.findPrevious(term, { ...searchOptions, incremental: true }, { noScroll: true });
        }, 200);
      }
    }
  
++  private _selectionShape(): string {
++    const range = this._terminal?.getSelectionPosition();
++    return range ? `${range.start.x},${range.end.x},${range.end.y - range.start.y}` : '';
++  }
++
 +  private _refreshHighlights(term: string, searchOptions: ISearchOptions): void {
 +    const activeMatch = this._resultTracker.selectedDecoration?.match;
 +    this._highlightAllMatches(term, searchOptions);
@@ -45,21 +55,21 @@ index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..e89e4dde18d860f858b44bf2745db198
    public clearDecorations(retainCachedSearchTerm?: boolean): void {
      this._resultTracker.clearSelectedDecoration();
      this._decorationManager?.clearHighlightDecorations();
-@@ -112,6 +128,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+@@ -112,6 +137,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
      }
  
      const found = this._findNextAndSelect(term, searchOptions, internalSearchOptions);
 +    this._selectionChangedByUser = false;
-+    this._selectionAfterFind = this._terminal.getSelection();
++    this._selectionAfterFind = this._selectionShape();
      this._fireResults(searchOptions);
      this._state.cachedSearchTerm = term;
  
-@@ -193,6 +211,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+@@ -193,6 +220,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
      }
  
      const found = this._findPreviousAndSelect(term, searchOptions, internalSearchOptions);
 +    this._selectionChangedByUser = false;
-+    this._selectionAfterFind = this._terminal.getSelection();
++    this._selectionAfterFind = this._selectionShape();
      this._fireResults(searchOptions);
      this._state.cachedSearchTerm = term;
  
