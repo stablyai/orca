@@ -2,7 +2,7 @@ import {
   collectCompactWorkspaceWords,
   foldWorkspaceNameWhitespaceToHyphen
 } from './workspace-name-text-scanner'
-import { escapeRegex } from '../../string-utils'
+import { escapeRegex } from '../../text/regex-escaping'
 import type { JiraIssueKeyCasing } from '../../ui-chrome-types'
 import { JIRA_ISSUE_KEY_PATTERN } from '../../jira/jira-issue-url'
 

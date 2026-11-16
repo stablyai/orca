@@ -20,7 +20,7 @@ import {
   getSshConnectionManager,
   getSshTargetRegistryStore
 } from '../../../ssh/targets/ssh-target-registry'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 export async function releaseUnreachableOrcadSetup(args: {
   userDataPath: string

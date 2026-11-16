@@ -8,7 +8,7 @@ import type { InternalCreateOrAttachOptions } from './terminal-host-agent-sessio
 import type { TerminalSpawnGate } from '../admission/terminal-spawn-gate'
 import type { LegacyRestoreDetails } from '../admission/legacy-restore-records'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
-import { sharedPromiseSettlementWaiters } from '../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../shared/concurrency/promise-settlement-waiters'
 
 export function createSessionExitHandler(
   onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],

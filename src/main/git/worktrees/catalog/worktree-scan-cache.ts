@@ -1,5 +1,5 @@
 import { readTranslatedWorktreeGraph } from './worktree-list-reader'
-import { abortSignalReason } from '../../../../shared/abort-signal-reason'
+import { abortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   annotateSparseCheckoutStatus,

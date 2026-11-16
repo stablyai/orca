@@ -21,7 +21,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
+} from '../../../shared/remote-runtime/protocol/protocol-version'
 
 import {
   MANAGED_SERVER_RUNTIME_CAPABILITY,

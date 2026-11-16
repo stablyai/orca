@@ -6,13 +6,13 @@ import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quic
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
-import { normalizeAppIconId } from '../../../../shared/app-icon'
+import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../../shared/plugins/capabilities/plugin-owned-settings'
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../../shared/shell/launch/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../../shared/native-chat/native-chat-shell-environment'
@@ -22,7 +22,7 @@ import {
   stripRetiredGlobalSettings
 } from '../../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../../applying-settings/onboarding-normalization'
-import { normalizeMachineName } from '../../../../shared/machine-name'
+import { normalizeMachineName } from '../../../../shared/remote-runtime/host-metadata/machine-name'
 import { normalizeWorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import { replaceRetiredSpeechModelId } from '../../../speech/model-catalog'
 import type { PersistedState } from '../../../../shared/persisted-state-types'

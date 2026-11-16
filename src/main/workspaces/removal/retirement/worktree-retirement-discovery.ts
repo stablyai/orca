@@ -17,7 +17,7 @@ import {
   wslGatedStat
 } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { RetirementScanResult } from './worktree-retirement-backfill-scan'
 import { normalizeRetirableGeneratedName } from './retirable-generated-name'
 import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'

@@ -217,7 +217,7 @@ function createRouteGuest(session: Session) {
   return {
     guest: guest as unknown as WebContents,
     emitInput: (type: string) => {
-      for (const listener of listeners.get('input-event') ?? []) {
+      for (const listener of listeners.get('before-mouse-event') ?? []) {
         listener({}, { type })
       }
     },
@@ -273,7 +273,7 @@ function createPopupContents(options: { partition?: string; webRtcPolicyThrows?:
       order.push('webrtc-policy')
     }),
     emitInput: (type: string) => {
-      for (const listener of listeners.get('input-event') ?? []) {
+      for (const listener of listeners.get('before-mouse-event') ?? []) {
         listener({}, { type })
       }
     },

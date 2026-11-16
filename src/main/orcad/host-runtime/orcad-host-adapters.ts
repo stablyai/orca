@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { ORCAD_CLI_PACKAGE_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
-import { setAppEnvironment, type AppEnvironment } from '../../../shared/app-environment'
+import {
+  setAppEnvironment,
+  type AppEnvironment
+} from '../../../shared/app-lifecycle/app-environment'
 import { createNodeServiceEnvironment } from '../../backend/node-service-environment'
-import { setSecretStore } from '../../../shared/secret-store'
+import { setSecretStore } from '../../../shared/secure-storage/secret-store'
 import { resolveOrcadInstallRoot, resolveOrcadPath } from './orcad-app-paths'
 import { getOrcadCliLauncherPath } from '../serve-startup/orcad-cli-launcher'
 import { createOrcadSecretStore, type OrcadSecretStore } from '../credentials/orcad-secret-store'

@@ -8,7 +8,7 @@ import {
   mobileReviewDiffInput,
   type MobileReviewDiffInput
 } from './mobile-diff-review-loaders'
-import { shouldIgnoreTrimWhitespace } from '../../../../../src/shared/diff-whitespace'
+import { shouldIgnoreTrimWhitespace } from '../../../../../src/shared/source-control/diff/diff-whitespace'
 import { useMobileSourceControlSettings } from '../../settings/mobile-source-control-settings'
 import { defineHostQuery, prefetchHostQuery, useHostQuery } from '../../../query/host-query'
 import type { HostQueryTarget } from '../../../query/host-query-key'

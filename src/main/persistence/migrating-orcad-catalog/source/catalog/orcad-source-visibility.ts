@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
 
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'

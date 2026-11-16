@@ -2,7 +2,7 @@ import { bumpWorktreeScanGeneration } from '../catalog/worktree-scan-cache'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { lstat, readFile, realpath } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
 import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
 import {

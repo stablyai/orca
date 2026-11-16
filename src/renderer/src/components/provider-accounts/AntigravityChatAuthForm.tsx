@@ -14,7 +14,7 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
-} from '../../../../shared/antigravity-chat-auth-config'
+} from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'

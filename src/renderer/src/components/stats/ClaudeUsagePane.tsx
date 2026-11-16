@@ -9,7 +9,10 @@ import {
   Sparkles,
   Waypoints
 } from 'lucide-react'
-import type { ClaudeUsageRange, ClaudeUsageScope } from '../../../../shared/claude-usage-types'
+import type {
+  ClaudeUsageRange,
+  ClaudeUsageScope
+} from '../../../../shared/agent-usage/analytics/claude-usage-types'
 import { useAppStore } from '../../store'
 import { ClaudeUsageDetails } from './ClaudeUsageDetails'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'

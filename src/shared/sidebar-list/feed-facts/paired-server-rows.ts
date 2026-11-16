@@ -18,7 +18,7 @@ import type {
 } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
 import { getWorkspaceRowKindFacts } from '../../worktree/visibility/workspace-kinds'
-import { openEnum } from '../../zod-salvage'
+import { openEnum } from '../../validation/zod-salvage'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../workspace/status/workspace-statuses'
 import { SMART_TIERS } from '../sorting/sort-stamps'
 import {

@@ -9,7 +9,7 @@ import {
 import { currentManagedOrcadUpdateDeferral } from './orcad-managed-update-deferrals'
 import { findIncompleteManagedOrcadMigration } from './orcad-managed-migration-status'
 import { collectManagedTerminalCensus } from './orcad-terminal-census-client'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { bundledManagedOrcadVersion } from './orcad-managed-auto-update'
 import { availableManagedOrcadUpdate } from './orcad-managed-update-decision'
 

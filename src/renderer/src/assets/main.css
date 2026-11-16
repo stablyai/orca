@@ -105,6 +105,7 @@
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
   --color-unread: var(--unread);
+  --color-unread-inverse: var(--unread-inverse);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -274,6 +275,8 @@
   --question-option-border-mix: 16%;
   /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
   --unread: var(--color-blue-500);
+  /* The unread dot on an inverted surface (tips): blue-500 keeps 3:1 on both the near-black and near-white inverse. */
+  --unread-inverse: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;

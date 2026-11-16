@@ -62,6 +62,7 @@ type RepositoryUpdates = Partial<
   hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
+  browserProfileId?: string | null
 }
 
 // Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.

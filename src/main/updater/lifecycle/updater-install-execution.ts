@@ -10,7 +10,7 @@ import { getMacUpdateRunningInstances } from '../mac-install/macos-update-runnin
 import { commitServeSupervisorPark } from './serve-supervisor-install-park'
 import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
-import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'

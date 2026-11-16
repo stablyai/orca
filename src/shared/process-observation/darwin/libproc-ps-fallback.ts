@@ -5,7 +5,7 @@ import {
   createSettleNotifier,
   monotonicNow,
   type Settled
-} from '../../deadline-settle-notifier'
+} from '../../concurrency/deadline-settle-notifier'
 
 /** Every setuid /bin/ps the in-process reader still needs runs through a fork budget: fallbacks while the reader is
  * down (stalled pool, rejecting addon), forced subprocess captures, and argv recovery for other users' processes.

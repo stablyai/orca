@@ -12,7 +12,7 @@ import { connectTarget } from './ssh-connect-flow'
 import { connectionManager } from './ssh-ipc-context'
 import { getPublicSshState } from './ssh-renderer-broadcast'
 import { disconnectSshHostForUser } from './ssh-host-user-disconnect'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import {
   clearSshCredentialDeclined,
   isSshCredentialDeclined

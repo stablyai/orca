@@ -2,7 +2,7 @@ import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch/cho
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import {
@@ -29,8 +29,8 @@ import type {
   PairingLocalUiField
 } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar-usage-format'
+import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar/status-bar-usage-format'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import {
@@ -44,9 +44,9 @@ import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/pe
 import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeUiLanguage } from '../../../../shared/ui-language'
-import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
-import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
+import { normalizeUiLanguage } from '../../../../shared/i18n/ui-language'
+import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/i18n/portuguese-ui-language-migration'
+import { normalizeUsagePercentageDisplay } from '../../../../shared/agent-usage/display/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 
 export function mergeWebUIState(

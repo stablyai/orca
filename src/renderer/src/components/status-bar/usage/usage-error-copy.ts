@@ -1,8 +1,8 @@
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatRateLimitUserFacingError } from '@/components/status-bar/usage/errors/rate-limit-user-facing-error'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { describeOwnerNotSetUp, getOwnerNotSetUpLabel } from './owner-not-set-up-copy'
 
 function isUsageRateLimitError(p: ProviderRateLimits): boolean {

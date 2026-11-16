@@ -1,4 +1,7 @@
-import type { RateLimitBucket, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  RateLimitBucket,
+  RateLimitWindow
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { deriveMostConstrainedWindow } from '../../rate-limit-bucket-summary'
 
 /** Parse command.data from agy print envelopes (verified 1.2.11); response text rounds fractions and loses ids/disabled flags. */
