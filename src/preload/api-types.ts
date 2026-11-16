@@ -10,6 +10,7 @@ import type {
 import type { HooksApi } from './api/agent-hooks/agent-hook-api'
 import type { SkillsApi } from './api/skills/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status/agent-status-api'
+import type { ZotzNodeApi } from './api/zotz/zotz-node-api'
 import type {
   ClaudeUsageApi,
   CodexUsageApi,
@@ -123,6 +124,7 @@ export type PreloadApi = {
   telemetryAcknowledgeBanner: TelemetryApi['telemetryAcknowledgeBanner']
   settings: SettingsApi
   agentAwake: AgentAwakeApi
+  zotzNode: ZotzNodeApi
   localhostWorktreeLabels: LocalhostWorktreeLabelsApi
   keybindings: KeybindingsApi
   codexAccounts: CodexAccountsApi

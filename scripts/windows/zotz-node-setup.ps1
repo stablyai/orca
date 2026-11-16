@@ -32,8 +32,12 @@ param(
     [ValidateRange(0, 23)]
     [int]$ActiveHoursEnd = 0,
     [string]$TaskXmlPath = '',
+    # Zotz.exe; its inbound Block rules (a dismissed "Allow access" prompt) outrank any Allow.
+    [string]$AppPath = '',
     [string]$TaskName = '\Zotz\Server',
     [string]$ResultPath = '',
+    # A transcript, because the wizard runs this elevated in a hidden window.
+    [string]$LogPath = '',
     [switch]$SkipSsh
 )
 
@@ -41,6 +45,9 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $script:Results = [ordered]@{}
+if ($LogPath) {
+    try { Start-Transcript -LiteralPath $LogPath -Force | Out-Null } catch {}
+}
 
 function Write-Step([string]$Message) {
     Write-Host "[zotz] $Message"
@@ -52,6 +59,9 @@ function Set-StepResult([string]$Id, [string]$Status, [string]$Detail) {
 }
 
 function Save-Results {
+    if ($LogPath) {
+        try { Stop-Transcript | Out-Null } catch {}
+    }
     if (-not $ResultPath) { return }
     $payload = [ordered]@{ version = 1; steps = @($script:Results.Values) }
     $json = $payload | ConvertTo-Json -Depth 4
@@ -177,6 +187,19 @@ Invoke-Step 'firewall' {
         New-NetFirewallRule -Name $rule.Name -DisplayName $rule.DisplayName -Direction Inbound `
             -Action Allow -Protocol TCP -LocalPort $rule.Port -RemoteAddress $TailnetRange `
             -Profile Any -Enabled True | Out-Null
+    }
+    if ($AppPath) {
+        # Same cleanup as Orca's mobile firewall repair: only exact-app Block rules covering this port.
+        $blocking = @(Get-NetFirewallApplicationFilter -Program $AppPath -ErrorAction SilentlyContinue |
+            Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' })
+        foreach ($rule in $blocking) {
+            $portFilter = $rule | Get-NetFirewallPortFilter
+            $ports = @($portFilter.LocalPort | ForEach-Object { [string]$_ })
+            if (($ports -contains 'Any') -or ($ports -contains [string]$Port)) {
+                Write-Step "removing blocking rule '$($rule.DisplayName)'"
+                $rule | Remove-NetFirewallRule
+            }
+        }
     }
     # OpenSSH's own rule admits port 22 from anywhere; the tailnet rule above replaces it.
     Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentlyContinue |

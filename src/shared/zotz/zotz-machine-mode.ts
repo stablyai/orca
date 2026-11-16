@@ -32,3 +32,12 @@ export function resolveZotzComputerAwakeMode(settings: ZotzMachineModeSettings):
     settings.keepComputerAwakeWhileAgentsRun
   )
 }
+
+/** A server listens beyond loopback from startup, refusing public sources like `serve --refuse-public`. */
+export function zotzServerNetworkSources(
+  settings: Pick<ZotzMachineModeSettings, 'zotzMachineMode'> | null | undefined
+): { allowPublic: false; refusePublic: true; pairingAddress: null } | null {
+  return resolveZotzMachineMode(settings) === 'server'
+    ? { allowPublic: false, refusePublic: true, pairingAddress: null }
+    : null
+}

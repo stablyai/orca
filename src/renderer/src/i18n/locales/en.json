@@ -25803,6 +25803,65 @@
     "updater": {
       "manualUpdate": "Zotz updates with git pull + build.",
       "manualUpdateDetail": "See docs/zotz/UPDATE.md. Set ZOTZ_ENABLE_UPDATER=1 to turn the built-in updater back on."
+    },
+    "machineMode": {
+      "autostartRemoveFailed": "Could not remove the sign-in task: {{detail}}",
+      "autostartRemoved": "Zotz no longer starts at sign-in.",
+      "back": "Back",
+      "change": "Change",
+      "description": "You can change this later in Settings → General.",
+      "later": "Decide later",
+      "personal": {
+        "description": "Use Zotz on this computer. Nothing in the system changes.",
+        "title": "Personal"
+      },
+      "server": {
+        "description": "An always-on node: reachable over Tailscale, never sleeps, starts by itself. You send it work from another computer or your phone.",
+        "title": "Remote server"
+      },
+      "settingsDescription": "Switch between personal use and an always-on remote server, or run the server setup again.",
+      "settingsLabel": "Machine mode: {{mode}}",
+      "settingsTitle": "This computer",
+      "title": "How will you use this computer?",
+      "unset": "Not chosen yet"
+    },
+    "nodeSetup": {
+      "description": "Zotz connects Tailscale (installing it if missing), keeps this computer awake, opens its port only to your tailnet, starts at sign-in and restarts if it stops. Settings that need an administrator are applied with one permission prompt.",
+      "detail": {
+        "autologon": "Use Sysinternals Autologon so Windows signs in by itself after a restart. Zotz never asks for or stores your password.",
+        "declined": "Administrator permission was declined.",
+        "devBuild": "Skipped in development builds.",
+        "installing": "Installing Tailscale…",
+        "waitingForLogin": "Waiting for you to log in to Tailscale…"
+      },
+      "done": "Done",
+      "link": {
+        "copy": "Copy",
+        "description": "Anyone with the link can run commands as you on this computer until you revoke it in Settings.",
+        "desktop": "Link for another computer (Zotz or Orca)",
+        "generating": "Generating the access link…",
+        "qr": "Scan it with the Orca mobile app while your phone is on Tailscale.",
+        "qrAlt": "Pairing QR code",
+        "regenerate": "New link",
+        "title": "Access link",
+        "web": "Link for a browser"
+      },
+      "open": "Open",
+      "retry": "Run again",
+      "running": "Setting up…",
+      "start": "Set up server",
+      "step": {
+        "autologon": "Automatic sign-in (manual)",
+        "autostart": "Start at sign-in and restart if it stops",
+        "firewall": "Firewall open to Tailscale only",
+        "keepAwake": "Keep this computer awake",
+        "networkExposure": "Accept remote connections",
+        "power": "Never sleep on power",
+        "ssh": "SSH with keys only",
+        "tailscale": "Tailscale connected",
+        "windowsUpdate": "No automatic restarts while signed in"
+      },
+      "title": "Set up this computer as a remote server"
     }
   }
 }
