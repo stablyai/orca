@@ -6,6 +6,7 @@ import {
 import { JournalForkStages } from './journal-fork-stages'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -134,7 +135,15 @@ async function drain(): Promise<void> {
             command.command.operation.kind.startsWith('queue-'))
       )
       if (controlsInput && !journalOrchestrationAttached(database) && existsSync(authorityPath)) {
-        database.prepare('ATTACH DATABASE ? AS orchestration_authority').run(authorityPath)
+        const spendsFailureRecovery = writes.some(
+          ({ command }) =>
+            command.type === 'write' && command.command.operation.kind === 'failure-resume'
+        )
+        const readOnlyAuthority = pathToFileURL(authorityPath)
+        readOnlyAuthority.searchParams.set('mode', 'ro')
+        database
+          .prepare('ATTACH DATABASE ? AS orchestration_authority')
+          .run(spendsFailureRecovery ? authorityPath : readOnlyAuthority.href)
         markJournalOrchestrationAttached(database)
       }
       const result = await batch.run<WriteRequest, CommitResponse>(
@@ -201,7 +210,7 @@ async function drain(): Promise<void> {
         error: journalSqlFailure(error)
       }))
     }
-    // Streaming writes never reserve the orchestration writer; only input controls share that lock.
+    // Only a failure grant reserves the orchestration writer; queue reads use a read-only attachment.
     if (journalOrchestrationAttached(database)) {
       try {
         database.exec('DETACH DATABASE orchestration_authority')
