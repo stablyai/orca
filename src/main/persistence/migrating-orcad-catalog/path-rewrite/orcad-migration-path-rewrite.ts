@@ -2,7 +2,7 @@
 import type { OrcadMigrationCatalogPayload } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import {
-  parseHostQualifiedPtyId,
+  decodeSavedLocalPtyId,
   PTY_SESSION_ID_SEPARATOR
 } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -154,11 +154,9 @@ function rewriteOwnerKey(value: string, rewriter: OrcadMigrationPathRewriter): s
 }
 
 function rewritePtySessionId(value: string, rewriter: OrcadMigrationPathRewriter): string {
-  const qualified = parseHostQualifiedPtyId(value)
-  if (qualified) {
-    return qualified.hostId === 'local'
-      ? `${qualified.hostId}|${rewritePtySessionId(qualified.ptyId, rewriter)}`
-      : value
+  const physicalId = decodeSavedLocalPtyId(value)
+  if (physicalId !== value) {
+    return `local|${rewritePtySessionId(physicalId, rewriter)}`
   }
   const at = value.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   if (at <= 0) {

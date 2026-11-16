@@ -15,7 +15,7 @@ export function ptySessionIdForAgentCreateOperation(
 ): string {
   // Preserve the legacy eight-character suffix budget for maximum-length workspace IDs.
   const suffix = operationId.slice(0, 8)
-  return worktreeId ? `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${suffix}` : suffix
+  return worktreeId ? `${worktreeId}${PTY_SESSION_ID_SEPARATOR}${suffix}` : operationId
 }
 
 /** Session IDs may contain workspace paths; require their derived key to stay strictly inside userData. */

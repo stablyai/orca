@@ -1,7 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
-import { parsePtySessionId } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
@@ -67,7 +67,8 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
     return false
   }
   // Daemon-fail-open IDs lack session models; remount would respawn instead of restoring the shell.
-  return parsePtySessionId(ptyId).worktreeId === worktreeId
+  const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  return separatorIdx !== -1 && ptyId.slice(0, separatorIdx) === worktreeId
 }
 
 export type TerminalParkRestorePolicy = {

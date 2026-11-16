@@ -1,5 +1,4 @@
 import { makePaneKey, type PaneKey } from '../stable-pane-id'
-import { isWithinPtyIdLengthLimit } from '../../terminal/pty/lifecycle/pty-session-id-format'
 
 /** Detach one pane into a new tab; the leaf id and its terminal move with it. */
 export type TerminalLeafMoveRequest = {
@@ -71,10 +70,7 @@ export function isTerminalLeafMoveRequest(value: unknown): value is TerminalLeaf
     !isId(candidate.sourceTabId) ||
     !isId(candidate.targetTabId) ||
     !isId(candidate.leafId) ||
-    !(
-      candidate.ptyId === null ||
-      (typeof candidate.ptyId === 'string' && isWithinPtyIdLengthLimit(candidate.ptyId))
-    ) ||
+    !(candidate.ptyId === null || isId(candidate.ptyId)) ||
     !(candidate.keepsSourcePane === undefined || candidate.keepsSourcePane === true) ||
     candidate.sourceTabId === candidate.targetTabId
   ) {

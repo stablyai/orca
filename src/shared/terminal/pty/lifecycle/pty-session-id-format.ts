@@ -1,47 +1,19 @@
 /** Share minted-session parsing across main/renderer hydration and memory attribution; divergent copies caused REMOTE mislabels. */
 
 import { parseWorkspaceKey } from '../../../workspace/identity/workspace-scope'
-import {
-  getExecutionHostIdFromWorktreeHostIdentity,
-  getWorktreeIdFromHostIdentity
-} from '../../../worktree/host-qualified-identity'
-import {
-  type ExecutionHostId,
-  parseExecutionHostId,
-  toRuntimeExecutionHostId,
-  toSshExecutionHostId
-} from '../../../execution-host'
 
 export const PTY_SESSION_ID_SEPARATOR = '@@'
 export const WORKTREE_ID_SEPARATOR = '::'
 
-/** Read the staged host-first spelling without changing saved or provider IDs. */
-export function parseHostQualifiedPtyId(
-  sessionId: string
-): { hostId: ExecutionHostId; ptyId: string } | null {
-  const hostId = getExecutionHostIdFromWorktreeHostIdentity(sessionId)
-  if (!hostId || sessionId.slice(0, sessionId.indexOf('|')) !== hostId) {
-    return null
-  }
-  const host = parseExecutionHostId(hostId)
-  if (
-    (host?.kind === 'ssh' && toSshExecutionHostId(host.targetId) !== hostId) ||
-    (host?.kind === 'runtime' && toRuntimeExecutionHostId(host.environmentId) !== hostId)
-  ) {
-    return null
-  }
-  const ptyId = getWorktreeIdFromHostIdentity(sessionId)
-  return ptyId ? { hostId, ptyId } : null
-}
-
-export function isWithinPtyIdLengthLimit(ptyId: string): boolean {
-  const physicalId = parseHostQualifiedPtyId(ptyId)?.ptyId ?? ptyId
-  return physicalId.length > 0 && physicalId.length <= 512
+/** Saved local bindings may be qualified by a newer build; provider/history IDs stay raw. */
+export function decodeSavedLocalPtyId(sessionId: string): string {
+  return sessionId.startsWith('local|') && sessionId.length > 'local|'.length
+    ? sessionId.slice('local|'.length)
+    : sessionId
 }
 
 /** Require @@ plus a valid Git/folder workspace identity; arbitrary UUIDs must not invent memory owners. Return null for unminted IDs. */
 export function parsePtySessionId(sessionId: string): { worktreeId: string | null } {
-  sessionId = parseHostQualifiedPtyId(sessionId)?.ptyId ?? sessionId
   const idx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   if (idx <= 0) {
     return { worktreeId: null }
@@ -60,14 +32,12 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
 
 /** False only for an id minted for another worktree; an id in no minted form names no owner. */
 export function isPtySessionIdOwnedByWorktree(sessionId: string, worktreeId: string): boolean {
-  sessionId = parseHostQualifiedPtyId(sessionId)?.ptyId ?? sessionId
   const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   return separatorIdx === -1 || sessionId.slice(0, separatorIdx) === worktreeId
 }
 
 /** Bare counter ids from the in-process local provider; a start never reattaches one by id alone, only through a pane main already binds it to. */
 export function isLocalCounterPtyId(sessionId: string): boolean {
-  sessionId = parseHostQualifiedPtyId(sessionId)?.ptyId ?? sessionId
   return /^\d+$/.test(sessionId)
 }
 
@@ -80,7 +50,6 @@ export function mintServePtySessionId(worktreeId: string, uuid: string): string 
 
 /** Accepts the workspace-less `serve-<uuid>` ids that older hosts minted and still restore. */
 export function isServeMintedPtySessionId(sessionId: string): boolean {
-  sessionId = parseHostQualifiedPtyId(sessionId)?.ptyId ?? sessionId
   const separatorIdx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   const tag =
     separatorIdx === -1

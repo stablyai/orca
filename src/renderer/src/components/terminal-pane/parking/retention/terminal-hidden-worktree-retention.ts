@@ -1,9 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
-import {
-  isPtySessionIdOwnedByWorktree,
-  PTY_SESSION_ID_SEPARATOR
-} from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { terminalProviderHasAuthoritativeSnapshot } from '../../../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
@@ -67,7 +64,7 @@ export function classifyEvictionExemptTerminalPty(
   if (separatorIdx === -1) {
     return 'fail-open'
   }
-  if (!isPtySessionIdOwnedByWorktree(ptyId, worktreeId)) {
+  if (ptyId.slice(0, separatorIdx) !== worktreeId) {
     return 'foreign-worktree'
   }
   return terminalProviderHasAuthoritativeSnapshot(ptyId) ? null : 'capability-unknown'

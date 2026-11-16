@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { isWithinPtyIdLengthLimit } from '../../terminal/pty/lifecycle/pty-session-id-format'
 import { isTerminalLeafId } from '../../workspace-layout/stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
@@ -127,7 +126,7 @@ const MovePaneToNewTabCommand = z.object({
   index: z.number().int().nonnegative().optional(),
   /** The terminal the window's pane shows now, when it has one. */
   windowDetach: z.object({
-    ptyId: z.string().refine(isWithinPtyIdLengthLimit).nullable(),
+    ptyId: z.string().min(1).max(512).nullable(),
     /** The pane's folder, where an unbound pane's new shell starts. */
     startupCwd: z.string().min(1).optional()
   })

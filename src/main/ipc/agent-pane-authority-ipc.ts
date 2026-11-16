@@ -4,7 +4,7 @@ import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isValidPaneKey } from '../agent-hooks/server/server-status-identity'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../agent-hooks/observations/migration-unsupported-pty-state'
 
-import { isWithinPtyIdLengthLimit } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
+const MAX_PTY_ID_LENGTH = 512
 
 export type AgentPaneAuthorityOwnership = {
   ownsPty: (paneKey: string, ptyId: string) => boolean
@@ -60,7 +60,7 @@ export function registerAgentPaneAuthorityIpcHandlers(
       args.fromPaneKey === args.toPaneKey ||
       (args.ptyId !== undefined &&
         (typeof args.ptyId !== 'string' ||
-          !isWithinPtyIdLengthLimit(args.ptyId) ||
+          args.ptyId.length > MAX_PTY_ID_LENGTH ||
           args.ptyId.trim() !== args.ptyId ||
           args.ptyId.length === 0)) ||
       !agentHookServer.canTransferPaneAuthority(args.fromPaneKey, ptyId, ownership.ownsPty)

@@ -1,6 +1,5 @@
 import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
-import { parsePtySessionId } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 export function shortCwd(cwd: string): string {
   if (!cwd) {
@@ -15,8 +14,9 @@ export function formatWorkspace(session: { cwd: string | null; sessionId: string
   if (session.cwd) {
     return shortCwd(session.cwd)
   }
-  const worktreeId = parsePtySessionId(session.sessionId).worktreeId
-  if (worktreeId) {
+  const sep = session.sessionId.lastIndexOf('@@')
+  if (sep !== -1) {
+    const worktreeId = session.sessionId.slice(0, sep)
     return shortCwd(splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? worktreeId)
   }
   return 'unknown'
