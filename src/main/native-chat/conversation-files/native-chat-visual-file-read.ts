@@ -12,8 +12,8 @@ import type {
   AgentSessionReadVisualResult,
   AgentSessionVisualReadError
 } from '../../../shared/rpc-contract/structured-agent-session/agent-session-visual-params'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
-import { readLocalFileBounded } from '../../ipc/filesystem/local-regular-file-read'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
+import { readLocalFileBounded } from '../../filesystem/local-file-io/local-regular-file-read'
 
 // O_NOFOLLOW prevents final-component swaps; Windows relies on lstat and post-open identity checks.
 const VISUAL_OPEN_FLAGS =

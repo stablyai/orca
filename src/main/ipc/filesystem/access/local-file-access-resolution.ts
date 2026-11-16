@@ -7,14 +7,14 @@ import {
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
 } from './filesystem-auth'
-import { isDescendantOrEqual } from './filesystem-path-containment'
+import { isDescendantOrEqual } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import { getFloatingWorkspaceFileRoots } from '../../floating-workspace-directory'
 import {
   isDeviceNamespacePath,
   isNetworkSharePath,
   isWindowsReservedDeviceName
 } from '../../automatic-load-path-text'
-import { NOT_A_REGULAR_FILE_MESSAGE } from '../local-regular-file-read'
+import { NOT_A_REGULAR_FILE_MESSAGE } from '../../../filesystem/local-file-io/local-regular-file-read'
 import { isChatImageTarget } from './chat-image-target'
 import {
   realpathAcrossWslDriveMount,
