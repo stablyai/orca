@@ -7,7 +7,6 @@ import {
   type DroppableContainer,
   type UniqueIdentifier
 } from '@dnd-kit/core'
-import type { RefObject } from 'react'
 import { isPaneDropData, isTabDragData } from './tab-drag-data'
 import {
   findTabGroupPanelUnderPointer,
@@ -56,52 +55,48 @@ function distanceToRect(point: { x: number; y: number }, rect: ClientRect): numb
  * of each tab (scrolled-off tabs keep unclipped rects over the neighbouring split), and in strip
  * gaps the tab nearest the pointer.
  */
-export function createTabDragCollisionDetection(
+export function resolveTabDragCollisions(
+  args: Parameters<CollisionDetection>[0],
   worktreeId: string,
-  geometryRef: RefObject<TabGroupPanelGeometrySnapshot | null>
-): CollisionDetection {
-  return (args) => {
-    const pointer = args.pointerCoordinates
-    const geometry = geometryRef.current
-    const panel =
-      pointer && geometry ? findTabGroupPanelUnderPointer(worktreeId, pointer, { geometry }) : null
-    const scrollerRects = new Map<Element, ClientRect>()
-    const droppableContainers: DroppableContainer[] = []
-    const droppableRects = new Map<UniqueIdentifier, ClientRect>()
-    const tabs: { droppable: DroppableContainer; rect: ClientRect }[] = []
-    for (const droppable of args.droppableContainers) {
-      const data = droppable.data.current
-      const isTab = isTabDragData(data)
-      if (panel && (isTab || isPaneDropData(data)) && data.groupId !== panel.groupId) {
-        continue
-      }
-      const measured = args.droppableRects.get(droppable.id)
-      const rect =
-        measured && isTab
-          ? visibleTabRect(droppable.node.current, measured, scrollerRects)
-          : measured
-      if (!rect) {
-        continue
-      }
-      droppableContainers.push(droppable)
-      droppableRects.set(droppable.id, rect)
-      if (isTab) {
-        tabs.push({ droppable, rect })
-      }
+  geometry: TabGroupPanelGeometrySnapshot | null
+): Collision[] {
+  const pointer = args.pointerCoordinates
+  const panel =
+    pointer && geometry ? findTabGroupPanelUnderPointer(worktreeId, pointer, { geometry }) : null
+  const scrollerRects = new Map<Element, ClientRect>()
+  const droppableContainers: DroppableContainer[] = []
+  const droppableRects = new Map<UniqueIdentifier, ClientRect>()
+  const tabs: { droppable: DroppableContainer; rect: ClientRect }[] = []
+  for (const droppable of args.droppableContainers) {
+    const data = droppable.data.current
+    const isTab = isTabDragData(data)
+    if (panel && (isTab || isPaneDropData(data)) && data.groupId !== panel.groupId) {
+      continue
     }
-    const scoped = { ...args, droppableContainers, droppableRects }
-    const hits = pointerWithin(scoped)
-    if (hits.length > 0) {
-      return hits
+    const measured = args.droppableRects.get(droppable.id)
+    const rect =
+      measured && isTab ? visibleTabRect(droppable.node.current, measured, scrollerRects) : measured
+    if (!rect) {
+      continue
     }
-    if (!pointer || tabs.length === 0) {
-      return closestCenter(scoped)
+    droppableContainers.push(droppable)
+    droppableRects.set(droppable.id, rect)
+    if (isTab) {
+      tabs.push({ droppable, rect })
     }
-    return tabs
-      .map(({ droppable, rect }): Collision => ({
-        id: droppable.id,
-        data: { droppableContainer: droppable, value: distanceToRect(pointer, rect) }
-      }))
-      .sort((a, b) => a.data!.value - b.data!.value)
   }
+  const scoped = { ...args, droppableContainers, droppableRects }
+  const hits = pointerWithin(scoped)
+  if (hits.length > 0) {
+    return hits
+  }
+  if (!pointer || tabs.length === 0) {
+    return closestCenter(scoped)
+  }
+  return tabs
+    .map(({ droppable, rect }): Collision => ({
+      id: droppable.id,
+      data: { droppableContainer: droppable, value: distanceToRect(pointer, rect) }
+    }))
+    .sort((a, b) => a.data!.value - b.data!.value)
 }

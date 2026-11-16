@@ -24,7 +24,7 @@ import { canDropTabIntoPaneBody, isTabDragData, type TabDragItemData } from './t
 import { useTabDragGestureLifecycle } from './tab-drag-gesture-lifecycle'
 import { useTabDragHoverPreview, type HoveredTabDropTarget } from './tab-drag-hover-preview'
 import { commitTabDragDrop } from './tab-drag-drop-commit'
-import { createTabDragCollisionDetection } from './tab-drag-collision'
+import { resolveTabDragCollisions } from './tab-drag-collision'
 
 export type { HoveredTabInsertion }
 export type { HoveredTabDropTarget }
@@ -91,8 +91,8 @@ export function useTabDragSplit({
   const preDragActivationSnapshotRef = useRef<TabDragActivationSnapshot | null>(null)
   const tabDragActiveRef = useRef(false)
   const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
-  const collisionDetection = useMemo(
-    () => createTabDragCollisionDetection(worktreeId, dragGeometryRef),
+  const collisionDetection = useCallback<CollisionDetection>(
+    (args) => resolveTabDragCollisions(args, worktreeId, dragGeometryRef.current),
     [worktreeId]
   )
   const clearDragStateRef = useRef<() => void>(() => {})
