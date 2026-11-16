@@ -10,7 +10,8 @@ import { isFinalAutomationRunStatus } from '../../../shared/automations/history/
 import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import {
   addPersistedSessionWorktreeOwners,
-  createWorktreeOwnerCandidateCollector
+  createWorktreeOwnerCandidateCollector,
+  type WorktreeOwnerCandidateCollector
 } from '../restoring-sessions/session-worktree-ownership'
 import {
   indexMetadataAliasesForWorktreeIds,
@@ -33,6 +34,15 @@ function collectPersistedWorkspaceOwners(
 ): Set<string> {
   const collector = createWorktreeOwnerCandidateCollector(candidateIds, platform)
   addPersistedSessionWorktreeOwners(state, collector)
+  addNonSessionWorkspaceOwners(state, collector)
+  return collector.owners
+}
+
+/** Owners outside saved session layout: a live lease, automation or phone selection still uses the workspace. */
+export function addNonSessionWorkspaceOwners(
+  state: PersistedState,
+  collector: WorktreeOwnerCandidateCollector
+): void {
   const add = collector.addOwner
   add(state.ui.lastActiveWorktreeId)
   for (const selections of Object.values(state.mobileClientTabSelectionsByDeviceId ?? {})) {
@@ -60,10 +70,9 @@ function collectPersistedWorkspaceOwners(
       add(run.workspaceId)
     }
   }
-  return collector.owners
 }
 
-function repoStillMatches(
+export function repoStillMatches(
   state: PersistedState,
   expected: NativeLocalWorktreeMetadataScanExpectation['repo']
 ): boolean {
@@ -83,7 +92,7 @@ function repoStillMatches(
   )
 }
 
-function routingStillMatches(
+export function routingStillMatches(
   state: PersistedState,
   expected: NativeLocalWorktreeMetadataScanExpectation
 ): boolean {
@@ -97,7 +106,7 @@ function routingStillMatches(
   )
 }
 
-function isValidCandidateId(
+export function isValidCandidateId(
   repoId: string,
   worktreeId: string,
   platform: NodeJS.Platform

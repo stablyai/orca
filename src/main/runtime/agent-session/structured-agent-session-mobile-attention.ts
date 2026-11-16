@@ -14,13 +14,13 @@ import { isCoordinatorOnlyChatNews } from '../../../shared/orchestration/workers
 import type {
   NotificationDispatchRequest,
   NotificationSettings
-} from '../../../shared/notification-settings-types'
+} from '../../../shared/notifications/notification-settings-types'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { isNotificationSourceEnabled } from '../../../shared/notification-source-gate'
+import { isNotificationSourceEnabled } from '../../../shared/notifications/notification-source-gate'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { buildNotificationOptions } from '../../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from '../push/notifications/runtime-mobile-notification-controller'

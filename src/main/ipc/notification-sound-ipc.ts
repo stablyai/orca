@@ -5,7 +5,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type {
   NotificationSoundDataResult,
   NotificationSoundPathResult
-} from '../../shared/notification-settings-types'
+} from '../../shared/notifications/notification-settings-types'
 import {
   getSelectedNotificationSoundPath,
   NOTIFICATION_SOUND_MIME_BY_EXTENSION

@@ -26,6 +26,8 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       | undefined
     if (row?.paneSleep) {
       this.dropStatusEntry(paneKey, { preserveResumeIdentity: false })
+      // The sleep-time exit belongs to the process that the spawn replaces.
+      this.forgetAgentExit(paneKey)
       this.emitPaneStatusCleared({ paneKey })
     }
   }

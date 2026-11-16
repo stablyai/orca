@@ -1,7 +1,7 @@
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
-} from '../../editor-save-events'
+} from '../../editor/saving/editor-save-events'
 import {
   consumeShutdownCheckpointFailureReason,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,

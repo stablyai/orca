@@ -1,49 +1,50 @@
-import { expect, it } from 'vitest'
-import fixture from '../fixtures/antigravity-v1.4.3-options.json'
-import {
-  NewSessionResponseSchema,
-  SessionConfigOptionSchema
-} from '../generated/acp-protocol.generated'
-import { acpSelectChoices } from '../options/acp-select-choices'
-import { AcpStructuredOptions } from '../options/acp-structured-options'
+import { describe, expect, it } from 'vitest'
 import { ANTIGRAVITY_ACP_DIALECT } from './antigravity-dialect'
 
-it("reads other model families' efforts from the variants the session advertises", () => {
-  const options = new AcpStructuredOptions(ANTIGRAVITY_ACP_DIALECT)
-  const efforts = () =>
-    Object.fromEntries(
-      options
-        .read()
-        .models.map((model) => [
-          model.id,
-          model.effortsKnown === false
-            ? 'unknown'
-            : model.efforts.map(({ value, label }) => `${value}:${label}`)
-        ])
+// Shape captured from the server's ask_question when the client advertises form elicitation.
+const question = { type: 'string', title: 'Pick a color', oneOf: [{ const: '1', title: 'Red' }] }
+const writeIn = { type: 'string', title: 'Other', description: 'Optional free-form answer' }
+const form = (message: string, properties: Record<string, unknown>) => ({
+  sessionId: 's1',
+  toolCallId: 'call_1',
+  mode: 'form',
+  message,
+  requestedSchema: { type: 'object', properties }
+})
+const present = (params: unknown) => ANTIGRAVITY_ACP_DIALECT.request?.('elicitation/create', params)
+
+describe('Antigravity ask_question forms', () => {
+  it('shows the question with a write-in field and returns typed text as the answer', () => {
+    const presentation = present(
+      form('The agent has a question.', { q1: question, q1_other: writeIn })
     )
-  const flash = ['low:Low', 'medium:Medium', 'high:High']
-  options.adoptSession(NewSessionResponseSchema.parse(fixture.session), 'new')
-  expect(efforts()).toEqual({
-    'gemini-3.8-flash': flash,
-    'gemini-3.7-flash': flash,
-    'gemini-3.6-flash': flash,
-    'gemini-3.5-flash': flash,
-    'gemini-3.1-pro': ['low:Low', 'high:High']
+    expect(presentation?.body).toMatchObject({
+      kind: 'question',
+      question: 'Pick a color',
+      options: [{ id: 'o1', label: 'Red' }],
+      freeTextQuestionId: 'q1'
+    })
+    expect(
+      presentation?.reply({
+        kind: 'answers',
+        answers: [{ questionId: 'q1', optionIds: [], other: 'Green please' }]
+      })
+    ).toEqual({ action: 'accept', content: { q1_other: 'Green please' } })
+    expect(presentation?.reply({ kind: 'option', optionId: 'o1' })).toEqual({
+      action: 'accept',
+      content: { q1: '1' }
+    })
+    expect(presentation?.reply(null)).toEqual({ action: 'cancel' })
   })
-  // The running model's live menu outranks its family's variants, even when it withdraws a level.
-  options.adoptConfigOptions(
-    SessionConfigOptionSchema.array()
-      .parse(fixture.pro.configOptions)
-      .map((option) =>
-        option.type === 'select' && option.category === 'thought_level'
-          ? {
-              ...option,
-              currentValue: 'high',
-              options: acpSelectChoices(option).filter(({ value }) => value === 'high')
-            }
-          : option
-      )
-  )
-  expect(efforts()['gemini-3.1-pro']).toEqual(['high:High'])
-  expect(efforts()['gemini-3.8-flash']).toEqual(flash)
+
+  it('keeps the question as the heading of a lone multi-select card', () => {
+    const toppings = { type: 'array', title: 'Pick toppings', items: { anyOf: question.oneOf } }
+    expect(present(form('The agent has a question.', { q1: toppings }))?.body).toMatchObject({
+      question: 'Pick toppings'
+    })
+  })
+
+  it('leaves other forms, such as forwarded MCP requests, to the shared presentation', () => {
+    expect(present(form('Choose a deployment target', { q1: question }))).toBeUndefined()
+  })
 })

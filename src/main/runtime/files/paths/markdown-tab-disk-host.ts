@@ -14,7 +14,7 @@ import {
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../../shared/file-write/file-write-disk-precondition'
-import { utf8ByteLength } from '../../../../shared/mobile-markdown-document'
+import { utf8ByteLength } from '../../../../shared/editor/markdown/mobile-markdown-document'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
 import type { PersistedOpenFile } from '../../../../shared/workspace-session/workspace-session-state-types'

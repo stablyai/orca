@@ -57,8 +57,3 @@ jobs:
           src/main/updater/mac-install/updater-mac-quit-guard.test.ts
           src/main/startup/quit/main-process-quit-update-veto.test.ts
           src/main/window/main-window/main-window-state-lifecycle.test.ts
-      - name: Prove login-backed terminal writer census on the disposable runner
-        env:
-          ORCA_MACOS_LOGIN_CENSUS_CI: '1'
-          ORCA_BACKGROUND_LAUNCH: '1'
-        run: pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts

@@ -33,7 +33,7 @@ import {
   filePreviewExtension,
   filePreviewForPath
 } from '../../../shared/file-preview/file-preview-kind'
-import { detectImageFileSignature } from '../../../shared/image-file-signature'
+import { detectImageFileSignature } from '../../../shared/file-content/image-file-signature'
 import {
   extraRootsForPersistedOpenFile,
   resolveRuntimeAuthorizedPath

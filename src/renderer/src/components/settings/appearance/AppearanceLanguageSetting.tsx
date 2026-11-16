@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { normalizeUiLanguage, type UiLanguage } from '../../../../../shared/ui-language'
+import { normalizeUiLanguage, type UiLanguage } from '../../../../../shared/i18n/ui-language'
 import { UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { useTranslate } from '@/i18n/use-translate'

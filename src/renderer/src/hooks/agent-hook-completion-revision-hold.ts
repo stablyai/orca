@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
-import { NOTIFICATION_COOLDOWN_MS } from '../../../shared/notification-burst-cooldown'
-import type { NotificationDispatchResult } from '../../../shared/notification-settings-types'
+import { NOTIFICATION_COOLDOWN_MS } from '../../../shared/notifications/notification-burst-cooldown'
+import type { NotificationDispatchResult } from '../../../shared/notifications/notification-settings-types'
 import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 
 export type HookLaneCompletionSubmit = (

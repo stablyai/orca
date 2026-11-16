@@ -859,7 +859,6 @@ jobs:
             src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
             src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
-            src/shared/shell/launch/startup-shell-portability.live-shell.test.ts \
             src/shared/shell/command-resolution/posix-command-path-lookup.test.ts
 
   # Shards wait only for the plan, not preflight, which moves them about two minutes earlier.

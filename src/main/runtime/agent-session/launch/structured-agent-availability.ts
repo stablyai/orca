@@ -11,6 +11,7 @@ import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-
 import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostAlternativeReady,
   type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
@@ -50,10 +51,16 @@ const HOST_LOCATION: AgentSessionExecutionLocation = {
 type HealthRuntime = Parameters<typeof observeStructuredAgentLaunch>[2]
 
 async function observeHostAgent(
-  { definition: { agent }, supportsLocation }: StructuredAgentRuntimeMetadata,
+  { definition: { agent }, supportsLocation, chatProgram }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
 ): Promise<AgentSessionAgentAvailability> {
-  if (!supportsLocation(HOST_LOCATION)) {
+  if (chatProgram?.onlyHostAlternative?.() && supportsLocation(HOST_LOCATION)) {
+    const ready = await structuredAgentHostAlternativeReady(agent, runtime).catch(() => null)
+    if (ready !== false) {
+      return { agent, state: ready ? 'available' : 'unknown' }
+    }
+  }
+  if (!supportsLocation(HOST_LOCATION) || chatProgram?.onlyHostAlternative?.()) {
     const reason = structuredChatUnavailableOnPlatform(agent, process.platform)
       ? 'windows'
       : 'agent'
