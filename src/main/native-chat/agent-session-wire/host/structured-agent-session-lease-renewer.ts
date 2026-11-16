@@ -66,7 +66,7 @@ export class StructuredAgentSessionLeaseRenewer {
   }
 
   private async renewOnce(): Promise<void> {
-    const records = this.input.store.listRecords().filter(
+    const records = this.input.store.listLeaseHolders().filter(
       (record) =>
         !record.lease.unreconciled &&
         record.lease.claimStatus === 'live' &&
@@ -74,6 +74,9 @@ export class StructuredAgentSessionLeaseRenewer {
         // Recovery has no owned transport; renewing would make an orphan PID appear healthy.
         record.lease.handoffStage !== 'recovering'
     )
+    if (records.length === 0) {
+      return
+    }
     // Held children prove ownership even when PID probes lack start-time/token evidence.
     const holds = (record: AgentSessionRecord): boolean =>
       this.input.holdsLiveChild(record.sessionId, record.lease.runtimeFence)

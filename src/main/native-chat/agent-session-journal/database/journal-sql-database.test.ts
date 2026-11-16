@@ -67,7 +67,7 @@ const identity = (sessionId: string) => ({
 })
 const history = (sessionId: string) => ({ sessionId, direction: 'tail' as const })
 
-it('marks only readable pending authority and preserves saved metadata without normalizing it', async () => {
+it('marks only readable leases that may be held and preserves saved metadata without normalizing it', async () => {
   const { root, database } = await fixture()
   const saved = {
     ...storedTestAgentSessionRecord(agentSessionRecordFixture()),
@@ -84,6 +84,18 @@ it('marks only readable pending authority and preserves saved metadata without n
     }
   }
   const alreadyJson = JSON.stringify(already, null, 2)
+  const released = {
+    ...saved,
+    sessionId: 'released',
+    lease: {
+      ...saved.lease,
+      sessionId: 'released',
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null
+    }
+  }
+  const releasedJson = JSON.stringify(released, null, 2)
   const unreadable = '{ "schemaVersion": 999 }'
   await withTestAgentSessionDatabase(root, (db) => {
     const insert = db.prepare(
@@ -91,6 +103,7 @@ it('marks only readable pending authority and preserves saved metadata without n
     )
     insert.run(saved.sessionId, JSON.stringify(saved))
     insert.run('already', alreadyJson)
+    insert.run('released', releasedJson)
     insert.run('unreadable', unreadable)
   })
   await database.installRecords()
@@ -99,6 +112,7 @@ it('marks only readable pending authority and preserves saved metadata without n
       .prepare('SELECT session_id,record_json FROM agent_session_records ORDER BY session_id')
       .all()
     expect(rows.find((row) => row.session_id === 'already')?.record_json).toBe(alreadyJson)
+    expect(rows.find((row) => row.session_id === 'released')?.record_json).toBe(releasedJson)
     expect(rows.find((row) => row.session_id === 'unreadable')?.record_json).toBe(unreadable)
     const marked = rows.find((row) => row.session_id === saved.sessionId)
     expect(JSON.parse(String(marked?.record_json))).toEqual({

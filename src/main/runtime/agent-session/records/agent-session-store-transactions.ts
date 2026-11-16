@@ -1,4 +1,6 @@
 import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
+import { AgentSessionLeaseHolderIndex } from './agent-session-lease-holder-index'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   applyAgentSessionStoreCommand,
   type AgentSessionStoreCommand,
@@ -56,6 +58,7 @@ export class AgentSessionStoreTransactions {
   /** Lineage survives admission and lease writes; membership and committed clear invalidate it. */
   private lineage: object = {}
   private providerAliases: AgentSessionProviderAliasIndex | null = null
+  private readonly leaseHolders: AgentSessionLeaseHolderIndex
   private readonly receiptCommits = new WeakMap<
     JournalReceiptStage,
     { remaining: number; results: (readonly JournalWriterEffectResult[])[]; failed: boolean }
@@ -72,6 +75,7 @@ export class AgentSessionStoreTransactions {
       ...loaded,
       runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
     }
+    this.leaseHolders = new AgentSessionLeaseHolderIndex(this.published)
     this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
       hostId,
       incarnation: agentSessionRuntimeIncarnation()
@@ -95,6 +99,10 @@ export class AgentSessionStoreTransactions {
   providerAliasOwner(nativeId: string): string | null {
     this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
     return this.providerAliases.owner(nativeId)
+  }
+
+  listLeaseHolders(): AgentSessionRecord[] {
+    return this.leaseHolders.list(this.published)
   }
 
   get readOnly(): boolean {
@@ -298,6 +306,7 @@ export class AgentSessionStoreTransactions {
       } else {
         this.published = draft
       }
+      this.leaseHolders.applyCommitted(this.published, writes.records)
       if (published.unreadableRecords !== draft.unreadableRecords) {
         this.providerAliases = null
       } else {
