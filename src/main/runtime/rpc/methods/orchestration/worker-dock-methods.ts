@@ -50,8 +50,15 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     params: WorkerDockRead,
     handler: (request, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      refreshWorkerDockActivity(db, request.party, runtime)
-      return readWorkerDock(db, request)
+      const source = workerDockSession(request.party)
+      if (request.seed && !db.workerDockSources.needsSeed(source)) {
+        return { revision: 0, expired: false, identities: [], rows: [], results: [], anchor: null }
+      }
+      if (!request.seed) {
+        refreshWorkerDockActivity(db, request.party, runtime)
+      }
+      const result = readWorkerDock(db, request)
+      return result
     }
   }),
   defineOrchestrationMethod({
@@ -133,6 +140,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
         .prepare(`UPDATE worker_dock_owner_stops SET receipt = ?, confirmed = ?, settlement =
         (SELECT settlement FROM worker_dock_facts WHERE dispatch_id = ?) WHERE request_id = ?`)
         .run(JSON.stringify(receipt), Number(confirmed), dispatch, requestId)
+      db.workerDockSources.invalidate(source)
       db.crewChanges.notify(new Set(['topology']))
       return receipt
     }

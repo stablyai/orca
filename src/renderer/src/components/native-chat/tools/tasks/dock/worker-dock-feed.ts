@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -249,4 +249,37 @@ export function useWorkerDockResults(
 ) {
   const source = useWorkerDockSource(target, sessionId, visible, presence, false, readResults)
   return { results: source.value, party: source.party }
+}
+
+const seededSources = new Set<string>()
+/** One visible cold read per source; steady empty sources allocate no feed or watcher. */
+export function useWorkerDockColdSeed(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  visible: boolean,
+  presence?: WorkerDockPresence
+) {
+  const windowVisible = useSyncExternalStore(
+    subscribeWindowParkVisibility,
+    getWindowParkVisible,
+    getWindowParkVisible
+  )
+  const key = `${target.kind === 'local' ? 'local' : target.environmentId}\0${sessionId}`
+  useEffect(() => {
+    if (
+      !visible ||
+      !windowVisible ||
+      presence ||
+      !isOrcaSessionId(sessionId) ||
+      seededSources.has(key)
+    ) {
+      return
+    }
+    seededSources.add(key)
+    void callRuntimeRpc(target, 'orchestration.workerDockRead', {
+      party: formatOrcaSessionAddress(sessionId),
+      seed: true,
+      includeRows: false
+    }).catch(() => {})
+  }, [target, sessionId, visible, windowVisible, presence, key])
 }

@@ -136,10 +136,7 @@ export function readWorkerDock(
         )
       )
     }
-    if (identities.length === 0) {
-      db.workerDockSources.rememberEmpty(source)
-    }
-    return {
+    const snapshot = {
       revision,
       results: readWorkerDockResultRefs(db, request.party),
       expired: request.revision !== undefined && request.revision !== revision,
@@ -147,6 +144,8 @@ export function readWorkerDock(
       rows,
       anchor: identities[center]?.id ?? null
     }
+    db.workerDockSources.rememberSnapshot(source, snapshot)
+    return snapshot
   })
 }
 

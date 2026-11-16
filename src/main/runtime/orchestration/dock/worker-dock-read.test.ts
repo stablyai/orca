@@ -8,6 +8,8 @@ import {
   readWorkerDockResultRefs
 } from './worker-dock-read'
 import { oldestWorkerDockResultRef } from '../../../../shared/orchestration/dock/worker-dock'
+import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
+import { subscribeWorkerDock } from './worker-dock-stream'
 import { refreshWorkerDockActivity } from './worker-dock-activity'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { installWorkerDockSchema } from '../db/schema/worker-dock-schema'
@@ -262,5 +264,43 @@ describe('worker dock lifecycle projection', () => {
       )
       .run(id)
     expect(read().rows[0].changedAt).toBe(before.rows[0].changedAt)
+  })
+
+  it('updates a visible source through lifecycle settlement, Clear and restore', async () => {
+    if (!isOrcaSessionId(session)) {
+      throw new Error('Invalid source session')
+    }
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'Verify the journal' })
+    const { dispatch } = db.createStartingWorkerDispatch({
+      creator: { kind: 'session', orcaSessionId: session },
+      maxDepth: 10,
+      taskId: task.id,
+      startOptions: { agent: 'codex' }
+    })
+    const snapshots: ReturnType<typeof read>[] = []
+    const stop = subscribeWorkerDock(db, party, (snapshot) => snapshots.push(snapshot))
+    try {
+      db.failWorkerStart(dispatch.id, 'verification', 'Verification exited with code 1.')
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(snapshots.at(-1)?.rows[0]).toMatchObject({
+        dispatchId: dispatch.id,
+        state: 'failed',
+        reason: 'Verification exited with code 1.'
+      })
+      const settlements = snapshots
+        .at(-1)!
+        .identities.map((row) => ({ dispatchId: row.dispatchId, settlement: row.settlement! }))
+      acknowledgeWorkerDock(db, { party, settlements, acknowledged: true })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(snapshots.at(-1)?.identities).toEqual([])
+      acknowledgeWorkerDock(db, { party, settlements, acknowledged: false })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(snapshots.at(-1)?.rows[0]).toMatchObject({ dispatchId: dispatch.id, state: 'failed' })
+    } finally {
+      stop()
+    }
   })
 })

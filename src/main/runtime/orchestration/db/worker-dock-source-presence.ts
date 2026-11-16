@@ -1,83 +1,145 @@
 import { randomUUID } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
 import type { WorkerDockPresence } from '../../../../shared/agent-session/agent-session-background-task-wire'
-import { workerDockEligibleSql } from './worker-dock-eligibility'
+import type { WorkerDockSnapshot } from '../../../../shared/orchestration/dock/worker-dock'
+import type { DispatchContextRow, RunRow } from './orchestration-records'
 
-/** A source hint rides the existing chat stream; empty chats never open a dock stream. */
+const sources = new WeakMap<Database.Database, WorkerDockSourcePresence>()
+export function workerDockSourcesFor(db: Database.Database) {
+  return sources.get(db)
+}
+
+/** Presence and invalidation use existing write receipts; this class never reads SQLite. */
 export class WorkerDockSourcePresence {
   private readonly epoch = randomUUID()
   private sequence = 0
-  private readonly known = new Set<string>()
   private readonly changed = new Set<string>()
   private readonly versions = new Map<string, number>()
-  private readonly values = new Map<string, WorkerDockPresence | null>()
+  private readonly values = new Map<string, WorkerDockPresence>()
+  private readonly seeded = new Set<string>()
   private readonly providerSources = new Set<string>()
-  private readonly openProviderSources = new Set<string>()
+  private listener: (() => void) | undefined
+  private readonly dispatchSources = new Map<string, string>()
+  private readonly fallbackByRun = new Map<string, Set<string>>()
+  private readonly runs = new Map<string, string | null>()
 
-  constructor(private readonly db: Database.Database) {
-    for (const row of db
-      .prepare(`SELECT DISTINCT source, 0 AS provider FROM worker_dock_facts WHERE source IS NOT NULL
-        UNION SELECT DISTINCT source, 1 AS provider FROM worker_dock_provider_failures`)
-      .all()) {
-      if (typeof row.source === 'string') {
-        if (row.provider === 1) {
-          this.providerSources.add(row.source)
-          this.openProviderSources.add(row.source)
-        }
-        this.invalidate(row.source, true)
+  constructor(db: Database.Database) {
+    sources.set(db, this)
+  }
+
+  watch(listener: () => void): () => void {
+    this.listener = listener
+    return () => {
+      if (this.listener === listener) {
+        this.listener = undefined
       }
-    }
-    db.function('worker_dock_source_changed', (source, membership) => {
-      if (typeof source === 'string') {
-        this.invalidate(source, membership === 1)
-      }
-      return null
-    })
-    db.function('worker_dock_provider_failed', (source) => {
-      if (typeof source === 'string') {
-        this.providerSources.add(source)
-        this.openProviderSources.add(source)
-        this.invalidate(source, true)
-      }
-      return null
-    })
-    db.function('worker_dock_provider_ack_changed', (source) => {
-      if (typeof source === 'string' && this.providerSources.has(source)) {
-        this.openProviderSources.add(source)
-      }
-      return null
-    })
-    db.exec(`CREATE TEMP TRIGGER worker_dock_provider_failed AFTER INSERT ON main.worker_dock_provider_failures BEGIN
-      SELECT worker_dock_provider_failed(NEW.source);
-    END;`)
-    for (const event of ['INSERT', 'UPDATE', 'DELETE']) {
-      const source = event === 'DELETE' ? 'OLD' : 'NEW'
-      const membership =
-        event === 'UPDATE'
-          ? `(OLD.source IS NOT NEW.source OR (OLD.state = 'succeeded' AND OLD.report_id IS NOT NULL) <> (NEW.state = 'succeeded' AND NEW.report_id IS NOT NULL))`
-          : '1'
-      db.exec(`CREATE TEMP TRIGGER worker_dock_source_facts_${event} AFTER ${event} ON main.worker_dock_facts BEGIN
-        SELECT worker_dock_source_changed(${source}.source, ${membership});
-        ${event === 'UPDATE' ? 'SELECT worker_dock_source_changed(OLD.source, 1) WHERE OLD.source IS NOT NEW.source;' : ''}
-      END;`)
-      for (const table of ['worker_dock_acknowledgments', 'worker_dock_owner_stops']) {
-        db.exec(`CREATE TEMP TRIGGER worker_dock_source_${table}_${event} AFTER ${event} ON main.${table} BEGIN
-          SELECT worker_dock_source_changed(${source}.source, 1);
-          ${table === 'worker_dock_acknowledgments' ? `SELECT worker_dock_provider_ack_changed(${source}.source);` : ''}
-        END;`)
-      }
-      db.exec(`CREATE TEMP TRIGGER worker_dock_source_activity_${event} AFTER ${event} ON main.worker_dock_activity BEGIN
-        SELECT worker_dock_source_changed(source, 0) FROM worker_dock_facts WHERE dispatch_id = ${source}.dispatch_id;
-      END;`)
     }
   }
 
-  private invalidate(source: string, membership: boolean): void {
-    this.known.add(source)
+  needsSeed(source: string): boolean {
+    return !this.seeded.has(source)
+  }
+
+  rememberDispatch(row: DispatchContextRow | undefined): void {
+    if (!row) {
+      return
+    }
+    if (!row.creator_orca_session_id && !row.creator_dispatch_id) {
+      let fallback = this.fallbackByRun.get(row.run_id)
+      if (!fallback) {
+        fallback = new Set()
+        this.fallbackByRun.set(row.run_id, fallback)
+      }
+      fallback.add(row.id)
+    } else {
+      this.fallbackByRun.get(row.run_id)?.delete(row.id)
+    }
+    const source =
+      row.creator_orca_session_id ??
+      (row.creator_dispatch_id === null ? this.runs.get(row.run_id) : null)
+    if (source) {
+      this.dispatchSources.set(row.id, source)
+    }
+  }
+
+  rememberRun(row: RunRow | undefined): void {
+    if (!row) {
+      return
+    }
+    const previous = this.runs.get(row.id)
+    const source = row.coordinator_orca_session_id
+    this.runs.set(row.id, source)
+    if (previous === source) {
+      return
+    }
+    for (const id of this.fallbackByRun.get(row.id) ?? []) {
+      const before = this.dispatchSources.get(id)
+      if (source) {
+        this.dispatchSources.set(id, source)
+      } else {
+        this.dispatchSources.delete(id)
+      }
+      if (before) {
+        this.invalidate(before)
+      }
+      if (source) {
+        this.invalidate(source)
+      }
+    }
+  }
+
+  changedDispatch(id: string): void {
+    const source = this.dispatchSources.get(id)
+    if (source) {
+      this.invalidate(source)
+    }
+  }
+
+  forgetWorkers(): void {
+    this.changedHistory()
+    this.dispatchSources.clear()
+    this.fallbackByRun.clear()
+  }
+
+  changedHistory(): void {
+    for (const source of this.values.keys()) {
+      this.invalidate(source)
+    }
+  }
+
+  invalidate(source: string, membership = true): void {
     this.versions.set(source, ++this.sequence)
     if (membership) {
-      this.dirty.add(source)
+      const previous = this.values.get(source)
+      this.values.set(
+        source,
+        previous?.open ? previous : { revision: `${this.epoch}:${this.sequence}`, open: true }
+      )
       this.changed.add(source)
+      this.listener?.()
+    }
+  }
+
+  rememberSnapshot(source: string, snapshot: WorkerDockSnapshot): void {
+    this.seeded.add(source)
+    const open = snapshot.identities.length > 0
+    const previous = this.values.get(source)
+    if (open || snapshot.results.length || previous) {
+      const next =
+        previous?.open === open
+          ? previous
+          : { revision: `${this.epoch}:${this.version(source)}`, open }
+      this.values.set(source, next)
+      if (next !== previous) {
+        this.changed.add(source)
+        this.listener?.()
+      }
+    }
+    for (const row of [...snapshot.identities, ...snapshot.results]) {
+      this.dispatchSources.set(row.dispatchId, source)
+    }
+    if (snapshot.identities.some((row) => row.kind && row.kind !== 'worker')) {
+      this.providerSources.add(source)
     }
   }
 
@@ -86,71 +148,36 @@ export class WorkerDockSourcePresence {
   }
 
   hasProviderFailures(source: string): boolean {
-    return this.openProviderSources.has(source)
+    return !this.seeded.has(source) || this.providerSources.has(source)
+  }
+
+  providerFailed(source: string): void {
+    this.providerSources.add(source)
+    this.invalidate(source)
+  }
+
+  acknowledgmentChanged(source: string, restoring: boolean): void {
+    if (restoring) {
+      this.providerSources.add(source)
+    }
+    this.invalidate(source)
   }
 
   rememberNoProviderFailures(source: string): void {
-    this.openProviderSources.delete(source)
+    this.providerSources.delete(source)
   }
 
   get hasChanges(): boolean {
     return this.changed.size > 0
   }
 
-  rememberEmpty(source: string): void {
-    const previous = this.values.get(source)
-    if (previous?.open) {
-      this.values.set(source, { ...previous, open: false })
-    }
-  }
-
   changedSources(): readonly string[] {
-    const sources = [...this.changed]
-    for (const source of sources) {
-      // Keep the old hint to avoid publishing a new chat frame while membership stays open.
-      this.dirty.add(source)
-    }
+    const changed = [...this.changed]
     this.changed.clear()
-    return sources
+    return changed
   }
 
-  private readonly dirty = new Set<string>()
   read(source: string): WorkerDockPresence | undefined {
-    if (!this.known.has(source)) {
-      return undefined
-    }
-    const previous = this.values.get(source)
-    if (this.db.isTransaction) {
-      return previous ?? undefined
-    }
-    if (this.values.has(source) && !this.dirty.has(source)) {
-      return previous ?? undefined
-    }
-    const row = this.db
-      .prepare(`SELECT
-      EXISTS(SELECT 1 FROM worker_dock_facts f WHERE f.source = ?) AS history,
-      EXISTS(SELECT 1 FROM worker_dock_facts f INDEXED BY worker_dock_eligible WHERE ${workerDockEligibleSql}) AS open`)
-      .get(source, source)
-    const providerOpen =
-      this.openProviderSources.has(source) &&
-      this.db
-        .prepare(`SELECT 1
-      FROM worker_dock_provider_failures f WHERE f.source = ? AND NOT EXISTS (
-        SELECT 1 FROM worker_dock_acknowledgments a WHERE a.source = f.source
-          AND a.dispatch_id = f.id AND a.settlement = f.settlement) LIMIT 1`)
-        .get(source)
-    if (!providerOpen) {
-      this.openProviderSources.delete(source)
-    }
-    const open = row?.open === 1 || Boolean(providerOpen)
-    const next =
-      row?.history !== 1 && !this.providerSources.has(source)
-        ? null
-        : open && previous?.open
-          ? previous
-          : { revision: `${this.epoch}:${this.version(source)}`, open }
-    this.values.set(source, next)
-    this.dirty.delete(source)
-    return next ?? undefined
+    return this.values.get(source)
   }
 }

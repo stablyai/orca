@@ -5,6 +5,7 @@ import type { StructuredSessionBackgroundTasksView } from '../../../../../shared
 import { NativeChatStructuredSessionStatus } from '../tools/tasks/NativeChatStructuredSessionStatus'
 import { useStructuredSessionTaskStop } from '../tools/tasks/use-structured-session-task-stop'
 import { useTranslate } from '@/i18n/use-translate'
+import { useWorkerDockColdSeed } from '../tools/tasks/dock/worker-dock-feed'
 import { NativeChatWorkerDockFrame } from '../tools/tasks/dock/NativeChatWorkerDockFrame'
 import {
   backFromNativeChatSubagent,
@@ -41,6 +42,7 @@ export function useStructuredNativeChatSubagents({
   const parentId = open?.parentId ?? null
   const stop = useStructuredSessionTaskStop(sessionId, controller)
   const background = controller.backgroundTasks
+  useWorkerDockColdSeed(target, sessionId, isVisible, background.workerDock)
   const hasWork = Boolean(
     background.workerDock?.open ||
     background.tasks.length ||

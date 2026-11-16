@@ -106,7 +106,9 @@ export function refreshWorkerDockActivity(
       const episode = fresh
         ? JSON.stringify([row.process_incarnation, status.stateStartedAt, state])
         : 'unavailable'
-      upsert.run(row.id, episode, state, now)
+      if (upsert.run(row.id, episode, state, now).changes) {
+        db.workerDockSources.invalidate(source, false)
+      }
     }
   })
   return expiresAt

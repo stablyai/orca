@@ -12,6 +12,7 @@ export function retainProviderFailures(
   source: string,
   failures: NonNullable<AgentChildWorkReconcileOutcome['failures']>
 ): void {
+  let changed = false
   runLifecycleWriteTransaction(db.db, 'worker_dock_provider_failure', () => {
     for (const { child, providerId } of failures) {
       const id = JSON.stringify(['provider', child.childWorkId, child.invocation])
@@ -33,12 +34,16 @@ export function retainProviderFailures(
         resultId: null,
         stoppable: false
       })
-      db.db
+      const saved = db.db
         .prepare(`INSERT OR IGNORE INTO worker_dock_provider_failures
         (id, source, settlement, changed_at, entry) VALUES (?, ?, ?, ?, ?)`)
         .run(id, source, id, at, JSON.stringify(entry))
+      changed ||= saved.changes > 0
     }
   })
+  if (changed) {
+    db.workerDockSources.providerFailed(source)
+  }
   db.crewChanges.notify(new Set(['topology']))
 }
 

@@ -45,11 +45,16 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
         }
       })
     }
-    this.unwatchCrewDb = db.crewChanges.subscribe((facets) => {
+    const unwatchSources = db.workerDockSources.watch(publishSources)
+    const unwatchDb = db.crewChanges.subscribe((facets) => {
       publishSources()
       this.orchestrationDbChanges.notify(facets)
       this.crewChanges.notify(facets)
     })
+    this.unwatchCrewDb = () => {
+      unwatchSources()
+      unwatchDb()
+    }
     this.orchestrationDbChanges.notify()
     this.crewChanges.notify()
     publishSources()

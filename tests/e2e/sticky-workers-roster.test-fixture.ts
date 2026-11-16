@@ -35,7 +35,7 @@ export function seedStickyWorkerRecords(
       .prepare('UPDATE tasks SET display_name = ?, task_title = ? WHERE id = ?')
       .run(`ORCA-${index + 1}`, `Review journal writes ${index + 1}`, task.id)
     const { dispatch } = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
+      creator: { kind: 'session', orcaSessionId: session },
       maxDepth: 10,
       taskId: task.id,
       startOptions: {
@@ -60,9 +60,6 @@ export function seedStickyWorkerRecords(
         .run(dispatch.id)
     }
     db.markWorkerDispatchReady(dispatch.id)
-    db.db
-      .prepare('UPDATE dispatch_contexts SET creator_orca_session_id = ? WHERE id = ?')
-      .run(session, dispatch.id)
     if (asks) {
       const approvalId = `apr_sticky_${index}`
       db.insertMessage({

@@ -1,4 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
+import { workerDockSourcesFor } from './worker-dock-source-presence'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrchestrationDb } from './orchestration-db'
 import { notifyPeerMailQueued } from '../federation/peer-mail/peer-mail-waiters'
@@ -192,6 +193,9 @@ export function transitionLifecycleWithDb(
       'lifecycle_conflict',
       `${params.entity} ${params.id} changed while transitioning.`
     )
+  }
+  if (params.entity === 'worker' && current.state !== params.to) {
+    workerDockSourcesFor(db)?.changedDispatch(params.id)
   }
   // A peer Run's change is queued home by trigger in this statement.
   notifyPeerMailQueued(db)

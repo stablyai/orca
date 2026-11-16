@@ -84,6 +84,7 @@ export const WorkerDockSnapshot = z.object({
 })
 export type WorkerDockSnapshot = z.infer<typeof WorkerDockSnapshot>
 export const WorkerDockRead = WorkerDockSource.extend({
+  seed: z.boolean().optional(),
   includeRows: z.boolean().optional(),
   revision: z.number().optional(),
   anchor: z.string().optional(),
