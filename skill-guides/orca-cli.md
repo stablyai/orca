@@ -48,19 +48,19 @@ gh pr create --body-file "<body-file>"
 File paths belong to the CLI's execution host. For a remote command that only
 accepts stdin, use its documented file copy/redirect mechanism, never a heredoc.
 Keep each input file unchanged until the operation and any recovery are resolved.
-Keep the mutation UUID separate from the answered-to `msg_…` id. If an orchestration
-result is unknown, check its receipt before retrying:
+Keep the mutation UUID separate from the answered-to `msg_…` id. If send, reply,
+or worker-start fails or times out, follow the recovery commands the CLI prints,
+exactly, with the same request UUID and unchanged body or spec file. To check,
+use the CLI's query (`worker-show` for dispatch-scoped work):
 
 ```text
 ORCA orchestration request-show --request <mutation-UUID> --json
+ORCA orchestration worker-show --dispatch <dispatch-id> --json
 ```
 
 Use the same caller and receipt host; retain any `--on <server>` shown by the CLI's
-recovery query. Retry only if the receipt positively confirms the operation had no
-effect; use the same `--retry-request` UUID and unchanged input file from the same
-terminal. An absent, expired, or inconclusive receipt is not proof that nothing was
-saved. Without positive confirmation of no effect, do not resend; inspect the
-affected state and escalate.
+recovery query. If the receipt is absent, expired, or inconclusive, do not resend;
+tell your owner. Never resend with a fresh UUID.
 
 Agent launches and terminal sends have no prompt file option: keep their argv
 short and point the agent at a brief saved on its execution host.
