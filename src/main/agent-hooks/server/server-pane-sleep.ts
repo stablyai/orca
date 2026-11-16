@@ -153,11 +153,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
             ...(identity.status.sessionBoundary ? { sessionBoundary: true } : {})
           },
       paneSleep: { ptyId, ...(incarnationId ? { incarnationId } : {}) },
-      agentPresence: {
-        agent: previous.payload.agentType ?? 'unknown',
-        ...previous.agentPresence,
-        ended: true
-      }
+      agentPresence: endedPresenceOf(previous)
     }
     if (midTurn) {
       // The cut-off turn's producer records belong to the stopped process.

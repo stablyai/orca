@@ -134,6 +134,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
       this.scheduleStatusPersist()
     }
   }
+  /** An exit recorded before a launch belongs to the process that launch replaced. */
+  forgetAgentExitBefore(paneKey: string, launchedAt: number): void {
+    if ((this.agentExitedAtByPaneKey.get(paneKey)?.at ?? Infinity) < launchedAt) {
+      this.forgetAgentExit(paneKey)
+    }
+  }
   protected readonly canonicalSubjectsByPane = new Map<string, Map<string, AgentStatusSubject>>()
   private statusListingOrder = 0
   protected nextStatusListingOrder = (): number => ++this.statusListingOrder

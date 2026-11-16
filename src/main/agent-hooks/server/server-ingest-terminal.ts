@@ -26,6 +26,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     if (!parsedPaneKey || paneKey.length > MAX_PANE_KEY_LEN) {
       return
     }
+    this.forgetAgentExitBefore(paneKey, event.launchedAt)
     const previous = this.state.lastStatusByPaneKey.get(paneKey)
     if (
       previous &&
