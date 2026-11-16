@@ -20769,7 +20769,11 @@
         "turnDiffsTitle": "Différences des tours",
         "turnDiffsCopy": "Affiche sous la réponse les fichiers modifiés à chaque tour, avec les nombres de lignes.",
         "turnDiffsSearchChangedFiles": "fichiers modifiés",
-        "turnDiffsSearchEdits": "modifications"
+        "turnDiffsSearchEdits": "modifications",
+        "promptSuggestionsTitle": "Prompts suggérés",
+        "promptSuggestionsCopy": "Après une réponse de Claude, sa suggestion pour votre prochain message s’affiche dans la zone de message vide. Appuyez sur Tab pour l’utiliser. Chaque suggestion est une requête supplémentaire qui compte dans votre utilisation de Claude.",
+        "promptSuggestionsSearchNext": "prochain prompt",
+        "promptSuggestionsSearchGhost": "texte fantôme"
       },
       "voice": {
         "dictationLanguage": {

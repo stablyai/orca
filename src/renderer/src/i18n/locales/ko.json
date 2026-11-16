@@ -19913,7 +19913,11 @@
         "turnDiffsTitle": "턴 변경 사항",
         "turnDiffsCopy": "각 턴에서 변경한 파일을 줄 수와 함께 응답 아래에 표시합니다.",
         "turnDiffsSearchChangedFiles": "변경된 파일",
-        "turnDiffsSearchEdits": "편집"
+        "turnDiffsSearchEdits": "편집",
+        "promptSuggestionsTitle": "추천 프롬프트",
+        "promptSuggestionsCopy": "Claude가 답한 뒤, 다음 메시지로 추측한 내용이 빈 메시지 입력란에 표시됩니다. Tab 키를 눌러 사용하세요. 추천마다 요청이 하나 더 발생하며 Claude 사용량에 포함됩니다.",
+        "promptSuggestionsSearchNext": "다음 프롬프트",
+        "promptSuggestionsSearchGhost": "고스트 텍스트"
       },
       "voice": {
         "dictationLanguage": {

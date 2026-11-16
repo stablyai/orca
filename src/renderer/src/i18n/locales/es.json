@@ -20390,7 +20390,11 @@
         "turnDiffsTitle": "Diferencias de turnos",
         "turnDiffsCopy": "Muestra debajo de la respuesta los archivos modificados en cada turno, con el número de líneas.",
         "turnDiffsSearchChangedFiles": "archivos modificados",
-        "turnDiffsSearchEdits": "ediciones"
+        "turnDiffsSearchEdits": "ediciones",
+        "promptSuggestionsTitle": "Prompts sugeridos",
+        "promptSuggestionsCopy": "Cuando Claude responde, su sugerencia para tu próximo mensaje aparece en el cuadro de mensaje vacío. Pulsa Tab para usarla. Cada sugerencia es una solicitud adicional que cuenta para tu uso de Claude.",
+        "promptSuggestionsSearchNext": "siguiente prompt",
+        "promptSuggestionsSearchGhost": "texto fantasma"
       },
       "TerminalInteraction": {
         "copyTrimsGutterDescription": "Elimina el margen izquierdo tras el que se dibuja la salida del agente, para que el texto copiado no quede indentado. Solo se quita la indentación que comparten todas las líneas seleccionadas.",

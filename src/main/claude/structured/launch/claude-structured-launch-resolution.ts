@@ -79,7 +79,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'resumeSessionAt'
   | 'forkSession'
 > &
-  ClaudePermissionOptions
+  ClaudePermissionOptions & { promptSuggestions?: boolean }
 
 /** Replay acknowledgements require an explicit flag; the SDK supplies the other transport flags. */
 export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
@@ -144,6 +144,8 @@ export type ClaudeStructuredLaunchPartDeps = {
   attachmentDirectory?: string
   /** Omit version-gated flags when support cannot be checked. */
   cliFlags?: Pick<ClaudeCliFlagSupport, 'check'>
+  /** This host's setting for suggested next prompts, read at each spawn; absent means off. */
+  promptSuggestions?: () => boolean
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
   hasTranscript?: (input: {
     providerSessionId: string
@@ -226,13 +228,13 @@ export function claudeStructuredLaunchPart(
       env: claudeProbeEnv(sources)
     }
     const launchFlags = resolveClaudeLaunchFlags(
-      { ...(deps.cliFlags ? { cliFlags: deps.cliFlags } : {}), prepareVisuals: basis.visuals },
+      { ...deps, prepareVisuals: basis.visuals },
       record.sessionId,
       probeLaunch
     )
     const launchArgs = await deps.resolveLaunchArgs()
     const configured = claudeStructuredLaunchArgs(launchArgs)
-    const { thinkingDisplayArgs, visuals } = await launchFlags
+    const { thinkingDisplayArgs, visuals, promptSuggestions } = await launchFlags
     const additionalDirectories = [
       ...configured.additionalDirectories,
       ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
@@ -300,6 +302,7 @@ export function claudeStructuredLaunchPart(
           ...permission,
           ...(additionalDirectories.length ? { additionalDirectories } : {}),
           ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
+          ...(promptSuggestions ? { promptSuggestions } : {}),
           extraArgs: {
             ...configured.extraArgs,
             ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
