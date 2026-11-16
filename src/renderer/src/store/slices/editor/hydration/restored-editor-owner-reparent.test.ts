@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session'
+import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session-editor-files'
 import '@/hooks/editor-external-watch-targets'
 import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
