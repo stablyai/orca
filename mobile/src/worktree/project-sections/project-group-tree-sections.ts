@@ -5,6 +5,7 @@ import { getProjectGroupHeaderKey } from '../../../../src/shared/sidebar-list/se
 import { withRepoSectionDisplayLabels } from '../../../../src/shared/sidebar-list/sections/project-section-order'
 import { getFolderBoundGroupingRoots } from '../../../../src/shared/sidebar-list/folders/folder-workspace-occurrences'
 import { walkProjectGroupTree } from '../../../../src/shared/sidebar-list/sections/project-group-tree'
+import { orderUmbrellaProjectSections } from '../../../../src/shared/sidebar-list/sections/umbrella-subfolder-groups'
 import { getWorktreeRowIdentity } from '../row-presentation/worktree-host-row-identity'
 import type { ProjectSectionCatalog } from '../workspace-list/workspace-list-sections'
 import type {
@@ -16,7 +17,10 @@ import type {
 
 type ProjectEntry = [string, ProjectSectionEntry<Worktree, SectionRepo>]
 
-type TreeSection = Pick<Section, 'isProjectGroup' | 'projectGroupDepth' | 'count'>
+type TreeSection = Pick<
+  Section,
+  'isProjectGroup' | 'projectGroupDepth' | 'parentSectionKey' | 'count'
+>
 
 // Where a section sits in the tree: the groups that hide it and its rows' indent.
 export type GroupTreePlacement = {
@@ -89,12 +93,6 @@ export function planProjectGroupTree<S extends object>(args: {
   projectSection: (entry: ProjectEntry) => S
   groupSection: (key: string, title: string, folderRows: readonly Worktree[]) => S
 }): { sections: (S & TreeSection)[]; placements: Map<string, GroupTreePlacement> } {
-  if (args.catalog.projectGroups.length === 0) {
-    return {
-      sections: withRepoSectionDisplayLabels(args.entries).map(args.projectSection),
-      placements: new Map()
-    }
-  }
   const folderScanGroupIds = new Set(
     args.catalog.projectGroups
       .filter((group) => group.createdFrom === 'folder-scan')
@@ -106,6 +104,42 @@ export function planProjectGroupTree<S extends object>(args: {
   const atDepth = (depth: number) => (depth > 0 ? { projectGroupDepth: depth } : {})
   const placements = new Map<string, GroupTreePlacement>()
   const groupPath: string[] = []
+  const appendProjectEntries = (
+    projectEntries: readonly ProjectEntry[],
+    baseDepth: number
+  ): void => {
+    for (const ordered of orderUmbrellaProjectSections(projectEntries)) {
+      const totalDepth = baseDepth + (ordered.decoration.projectGroupDepth ?? 0)
+      const ancestorKeys = [...groupPath, ...ordered.ancestorKeys]
+      const sectionPayload = ordered.isSubfolderGroup
+        ? {
+            ...args.groupSection(ordered.key, ordered.section.label, []),
+            isProjectGroup: true
+          }
+        : args.projectSection([ordered.key, ordered.section])
+      if (totalDepth > 0 || ancestorKeys.length > 0) {
+        placements.set(ordered.key, {
+          ancestorKeys,
+          rowView: {
+            ...atDepth(totalDepth),
+            ...inFolderScanGroup(ordered.section.repo?.projectGroupId)
+          }
+        })
+      }
+      sections.push({
+        ...sectionPayload,
+        ...(ordered.decoration.parentSectionKey
+          ? { parentSectionKey: ordered.decoration.parentSectionKey }
+          : {}),
+        ...(ordered.decoration.count !== undefined ? { count: ordered.decoration.count } : {}),
+        ...atDepth(totalDepth)
+      })
+    }
+  }
+  if (args.catalog.projectGroups.length === 0) {
+    appendProjectEntries(withRepoSectionDisplayLabels(args.entries), 0)
+    return { sections, placements }
+  }
   walkProjectGroupTree(
     {
       entries: args.entries,
@@ -142,16 +176,7 @@ export function planProjectGroupTree<S extends object>(args: {
       },
       projects: (entries, depth) => {
         groupPath.length = depth
-        for (const entry of entries) {
-          // A root project sits in no group, so it lists as it would without groups.
-          if (depth > 0) {
-            placements.set(entry[0], {
-              ancestorKeys: [...groupPath],
-              rowView: { ...atDepth(depth), ...inFolderScanGroup(entry[1].repo?.projectGroupId) }
-            })
-          }
-          sections.push({ ...args.projectSection(entry), ...atDepth(depth) })
-        }
+        appendProjectEntries(entries, depth)
       }
     }
   )

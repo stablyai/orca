@@ -31,6 +31,7 @@ import {
   appendProjectGroupSections,
   getProjectGroupOccurrencePaths
 } from './sections/project-group-sections'
+import { buildUmbrellaRevealParent } from './sections/umbrella-subfolder-groups'
 import { getSidebarLineageChildren } from './lineage/pinned-section-worktrees'
 import { emitPinnedGroup } from './sections/pinned-group-rows'
 import { appendWorktreeRows, buildPendingCreationRow } from './sections/row-builders'
@@ -181,8 +182,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       }
       const sections = groups.map(([key, group]): SidebarOccurrenceSection => {
         const revealPath =
-          groupBy === 'repo' && key !== PINNED_GROUP_KEY && group.repo?.projectGroupId
-            ? projectGroupPaths.get(group.repo.projectGroupId)
+          groupBy === 'repo' && key !== PINNED_GROUP_KEY
+            ? buildUmbrellaRevealParent(groups, projectGroupPaths, key, group.repo?.projectGroupId)
             : undefined
         const items = (
           groupBy === 'repo' && key !== PINNED_GROUP_KEY

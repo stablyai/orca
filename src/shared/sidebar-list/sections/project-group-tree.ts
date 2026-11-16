@@ -16,6 +16,10 @@ import {
 } from './project-section-order'
 import { compareRootProjectEntries } from '../../root-project-order'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
+import {
+  buildUmbrellaSubfolderHierarchy,
+  isUmbrellaBackedProjectGroup
+} from './umbrella-subfolder-groups'
 
 type GroupedProjectEntry = ProjectSectionEntry<
   ActivityItem,
@@ -99,9 +103,23 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
 
   const walkProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
+    const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
+    const folderWorkspaceCount = folderCountByGroupId.get(projectGroup.id) ?? 0
+    if (
+      isUmbrellaBackedProjectGroup(
+        projectGroup,
+        repoEntries,
+        childGroups.length,
+        folderWorkspaceCount
+      )
+    ) {
+      visit.projects(withRepoSectionDisplayLabels(repoEntries), depth)
+      groupByProjectGroupId.delete(projectGroup.id)
+      return
+    }
     if (visit.group(projectGroup, depth, getProjectGroupSubtreeCount(projectGroup.id))) {
       visit.projects(withRepoSectionDisplayLabels(repoEntries), depth + 1)
-      for (const childGroup of childGroupsByParentId.get(projectGroup.id) ?? []) {
+      for (const childGroup of childGroups) {
         walkProjectGroup(childGroup, depth + 1)
       }
     }
@@ -116,11 +134,28 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     // Keep repos visible while host project-group metadata is still loading.
     remainingRepoEntries.push(...list)
   }
+  const labeledRemainingEntries = withRepoSectionDisplayLabels(
+    sortRepoEntriesWithinGroup(remainingRepoEntries)
+  )
+  const remainingUmbrellaHierarchy = buildUmbrellaSubfolderHierarchy(
+    labeledRemainingEntries,
+    ([key]) => key,
+    ([, group]) => group.repo
+  )
+  const collectSubtreeEntries = (root: [string, V]): [string, V][] => {
+    const out: [string, V][] = []
+    const visitSubtree = (entry: [string, V]): void => {
+      out.push(entry)
+      for (const child of remainingUmbrellaHierarchy.childrenByParentKey.get(entry[0]) ?? []) {
+        visitSubtree(child)
+      }
+    }
+    visitSubtree(root)
+    return out
+  }
   const rootEntries: ({ projectGroup: ProjectGroup } | { repoEntry: [string, V] })[] = [
     ...(childGroupsByParentId.get(null) ?? []).map((projectGroup) => ({ projectGroup })),
-    ...withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)).map(
-      (repoEntry) => ({ repoEntry })
-    )
+    ...remainingUmbrellaHierarchy.rootEntries.map((repoEntry) => ({ repoEntry }))
   ]
   if (projectOrderBy === 'manual') {
     rootEntries.sort((left, right) => {
@@ -145,7 +180,7 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     if ('projectGroup' in entry) {
       walkProjectGroup(entry.projectGroup, 0)
     } else {
-      visit.projects([entry.repoEntry], 0)
+      visit.projects(collectSubtreeEntries(entry.repoEntry), 0)
     }
   }
 }
