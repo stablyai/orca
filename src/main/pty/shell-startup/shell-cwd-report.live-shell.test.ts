@@ -106,10 +106,10 @@ fish_prompt
     }
   )
 
-  it.skipIf(process.platform !== 'win32')(
-    'PowerShell reports the filesystem folder before the next prompt',
-    () => {
-      const sub = join(home, 'sub é%41#')
+  it.skipIf(process.platform !== 'win32').each(['', '\\\\?\\', '\\\\.\\'])(
+    'PowerShell reports the filesystem folder before the next prompt with prefix %s',
+    (prefix) => {
+      const sub = prefix + join(home, 'sub é%41#')
       const result = spawnSync(
         'powershell.exe',
         [

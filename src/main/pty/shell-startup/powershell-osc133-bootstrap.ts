@@ -47,7 +47,7 @@ ${getPowerShellAgentWrappers()}
             $cwdPath = $PWD.ProviderPath
             if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
                 $cwdPath = $cwdPath.Replace([char]92, [char]47)
-                $cwdPath = $cwdPath -replace '^//[?]/UNC/', '//' -replace '^//[?]/(?=[A-Za-z]:/)', ''
+                $cwdPath = $cwdPath -replace '^//[?.]/UNC/', '//' -replace '^//[?.]/(?=[A-Za-z]:/)', ''
             }
             if ($cwdPath -match '^[A-Za-z]:/') { $cwdPath = '/' + $cwdPath }
             $cwdPath = ($cwdPath.Split('/') | ForEach-Object { [System.Uri]::EscapeDataString($_) }) -join '/'
