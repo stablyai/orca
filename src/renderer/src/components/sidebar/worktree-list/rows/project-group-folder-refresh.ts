@@ -8,7 +8,7 @@ import {
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import '@/store/project-groups/project-group-owner-routing'

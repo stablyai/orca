@@ -1,7 +1,7 @@
 import { resolveQualifiedFolderWorkspaceResult } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { stat as statLocalPath } from 'node:fs/promises'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest

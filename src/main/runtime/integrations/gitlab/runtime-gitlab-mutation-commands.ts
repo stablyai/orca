@@ -3,7 +3,7 @@ import type {
   GitLabMRInlineCommentInput,
   GitLabMRUpdate,
   GitLabProjectRef
-} from '../../../../shared/gitlab-types'
+} from '../../../../shared/gitlab/gitlab-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { addIssueComment, createIssue } from '../../../gitlab/issues/gitlab-issue-queries'
 import {

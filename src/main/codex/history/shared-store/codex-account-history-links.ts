@@ -1,6 +1,6 @@
 import { mkdir, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, join, relative } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import {
   DirectoryLinkError,

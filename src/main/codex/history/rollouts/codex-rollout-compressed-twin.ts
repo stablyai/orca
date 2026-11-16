@@ -1,7 +1,7 @@
 import type { BigIntStats, Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { parseCodexRolloutThreadId } from './codex-rollout-thread-id'
 

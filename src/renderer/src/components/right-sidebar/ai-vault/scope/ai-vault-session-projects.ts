@@ -12,7 +12,7 @@ import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts
 import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   aiVaultSessionProjectCwdKey,
   matchAiVaultSessionCwdCandidates

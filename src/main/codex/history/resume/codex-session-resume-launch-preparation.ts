@@ -18,7 +18,7 @@ import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 

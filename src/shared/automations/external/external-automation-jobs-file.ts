@@ -1,11 +1,11 @@
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
-} from './file-content/node-bounded-file-reader'
+} from '../../file-content/node-bounded-file-reader'
 import {
   assertJsonTextStructureWithinLimits,
   type JsonTextStructureLimits
-} from './json-stream/json-text-structure-limit'
+} from '../../json-stream/json-text-structure-limit'
 
 export const EXTERNAL_AUTOMATION_JOBS_FILE_MAX_BYTES = 8 * 1024 * 1024
 export const EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES = 10_000

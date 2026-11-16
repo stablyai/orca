@@ -4,7 +4,7 @@ import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../../../shared/worktree/base-refs/base-ref-drift-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { createCoalescingKeyedRunner } from '../../../../shared/concurrency/coalescing-keyed-runner'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import {

@@ -1,4 +1,4 @@
-import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../file-access/cross-platform-path'
 import { routeNativeChatHref } from '../../native-chat/native-chat-href-routing'
 import { parseExplicitFileLinkTarget } from '../../file-links/explicit-file-link-target'
 import { detectTerminalFileUriLinks } from './terminal-file-uri-link'

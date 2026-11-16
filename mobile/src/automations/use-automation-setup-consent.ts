@@ -1,7 +1,7 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type {
   OrcaHookTrustDrawer,
   OrcaHookTrustPrompt

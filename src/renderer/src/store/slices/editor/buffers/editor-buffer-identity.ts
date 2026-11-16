@@ -7,7 +7,7 @@ import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   isCaseInsensitiveRuntimeRoot,
   normalizeRuntimePathSeparators
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 
 /** The physical file an edit tab shows. Renderer-local; the workspace is never part of it. */
 export type EditorBufferIdentity = {

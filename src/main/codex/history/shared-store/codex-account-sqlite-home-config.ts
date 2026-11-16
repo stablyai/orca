@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { applyCodexSharedSqliteHome } from '../../configuration/toml/config-toml-shared-sqlite-home'
 
 async function readConfig(configPath: string): Promise<string> {

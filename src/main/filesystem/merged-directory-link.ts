@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises'
 import type { BigIntStats } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
 
 /** Where a folder waits while its entries move into the shared one; conflicts stay here. */

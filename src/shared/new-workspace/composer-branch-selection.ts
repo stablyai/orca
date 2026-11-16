@@ -1,5 +1,5 @@
-import type { GitPushTarget } from './worktree/types'
-import { branchRefLabel } from './git/refs/branch-ref-label'
+import type { GitPushTarget } from '../worktree/types'
+import { branchRefLabel } from '../git/refs/branch-ref-label'
 
 export type ComposerBranchSelection = {
   baseBranch: string

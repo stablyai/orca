@@ -21,7 +21,10 @@ export type ComposerProviderRuntimeSyncInput = Pick<
 >
 
 import { useEffect, useCallback, useRef } from 'react'
-import type { SetupAgentStartupPolicy, OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type {
+  SetupAgentStartupPolicy,
+  OrcaHooks
+} from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { toast } from 'sonner'

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, type Dirent } from 'node:fs'
 import { readdir, rm } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS

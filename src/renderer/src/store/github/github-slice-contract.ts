@@ -1,6 +1,6 @@
 import type { GitHubSourceCollections } from './sources/source-collections'
 import type { GitHubTaskRecordCache } from './task-records/task-record-cache'
-import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { ClassifiedError } from '../../../../shared/errors/classified-error'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/checks/check-types'
 import type {
   GitHubCommentResult,
