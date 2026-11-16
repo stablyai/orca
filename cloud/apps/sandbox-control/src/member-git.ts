@@ -24,15 +24,20 @@ export type MemberGitDeps = {
 }
 
 /**
- * The identity rule: the owner always acts as themselves (a transferred workspace's new owner included, with or
- * without a device grant). No one else ever does.
+ * The identity rule: the owner always acts as themselves, and no one else ever does. Except a workspace that ever
+ * changed hands (OWNER-TRANSFER): its disk is the previous owner's, and whatever they left there runs at every
+ * boot, so it never acts as the new owner on GitHub either; git and gh go out as the App (the same reasoning as
+ * shared credential mode, shared-workspace.ts).
  */
-export function memberMayAct(row: Pick<SandboxRow, 'user_id'>, userId: string): boolean {
-  return userId === row.user_id
+export function memberMayAct(row: Pick<SandboxRow, 'user_id' | 'ownership_transferred_at'>, userId: string): boolean {
+  return userId === row.user_id && row.ownership_transferred_at == null
 }
 
-/** Whose GitHub identity this workspace may use: its owner, once connected (else none). */
+/** Whose GitHub identity this workspace may use: its owner, once connected (else none; none after a transfer). */
 export async function connectedMembers(db: D1Database, row: SandboxRow): Promise<string[]> {
+  if (row.ownership_transferred_at != null) {
+    return []
+  }
   const token = await db
     .prepare('SELECT user_id FROM github_user_tokens WHERE account_id = ? AND user_id = ?')
     .bind(row.account_id, row.user_id)

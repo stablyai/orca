@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mintApiKey, WORKSPACE_TOKEN_SCOPES } from '../src/api/keys'
 import { connectedMembers, memberMayAct } from '../src/member-git'
+import { MEMBERS_COMMAND } from '../src/lifecycle'
 import { ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import { ownersForSandbox } from '../src/secrets'
 import { createStepTimer, ownerTransferTimingLine } from '../src/owner-transfer-timing'
@@ -466,7 +467,7 @@ describe('what acted for the previous owner', () => {
     }
   })
 
-  it("scope fix: a transferred workspace's new owner acts as themselves, grant or not; the previous owner never", async () => {
+  it('a transferred workspace never acts as anyone on GitHub (the App does): not the new owner, not the previous', async () => {
     const t = await setup()
     const db = t.h.env.SANDBOX_DB
     const connect = (userId: string) =>
@@ -478,10 +479,16 @@ describe('what acted for the previous owner', () => {
     expect(await connectedMembers(db, await t.row())).toEqual(['mallory'])
     expect(memberMayAct(await t.row(), 'mallory')).toBe(true)
     await t.transfer(t.mallory, 'mia')
-    // Before the fix: no grant meant `no_send` (nobody acted). Now the new owner always does.
-    expect(await connectedMembers(db, await t.row())).toEqual(['mia'])
-    expect(memberMayAct(await t.row(), 'mia')).toBe(true)
+    // The disk is the previous owner's: whatever they left there must not act as the new owner (same as D13).
+    expect(await connectedMembers(db, await t.row())).toEqual([])
+    expect(memberMayAct(await t.row(), 'mia')).toBe(false)
     expect(memberMayAct(await t.row(), 'mallory')).toBe(false)
+    // Its next boot installs no member identity and no solo mark: git and gh are the App's.
+    t.h.vercel.commands.length = 0
+    expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/resume`, { bearer: t.mia })).status).toBe(200)
+    const sync = t.h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND).at(-1)
+    expect(sync?.env.ORCA_SOLO_MEMBER).toBeUndefined()
+    expect(sync ? JSON.parse(Buffer.from(sync.env.ORCA_MEMBERS_B64!, 'base64').toString()) : []).toEqual([])
   })
 })
 

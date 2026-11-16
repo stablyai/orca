@@ -88,6 +88,7 @@ export const CloudWorkspaceSchema = z.object({
           .enum([
             'not_github',
             'off',
+            'transferred',
             'no_sender_yet',
             'sender_not_connected',
             'reconnect',
