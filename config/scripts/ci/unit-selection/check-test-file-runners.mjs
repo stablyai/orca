@@ -50,36 +50,9 @@ const NON_UNIT_TEST_RUNNERS = [
     mirrors: ["include: ['src/**/*.test.ts']"]
   })),
   {
-    name: 'cloud chatgpt-relay',
-    include: ['cloud/apps/chatgpt-relay/test/**/*.test.ts'],
-    sources: ['cloud/apps/chatgpt-relay/vitest.config.ts'],
-    mirrors: ["include: ['test/**/*.test.ts']"]
-  },
-  {
     name: 'cloud relay-edge',
     include: ['cloud/apps/relay-edge/test/**/*.test.ts'],
     sources: ['cloud/apps/relay-edge/vitest.config.ts'],
-    mirrors: ["include: ['test/**/*.test.ts']"]
-  },
-  {
-    name: 'cloud sandbox-control',
-    include: [
-      'cloud/apps/sandbox-control/test/**/*.test.ts',
-      'cloud/apps/sandbox-control/image/**/*.test.ts'
-    ],
-    sources: ['cloud/apps/sandbox-control/vitest.config.ts'],
-    mirrors: ["include: ['test/**/*.test.ts', 'image/**/*.test.ts']"]
-  },
-  {
-    name: 'cloud acceptance',
-    include: ['cloud/apps/acceptance/test/**/*.test.ts'],
-    sources: ['cloud/apps/acceptance/vitest.config.ts'],
-    mirrors: ["include: ['test/**/*.test.ts']"]
-  },
-  {
-    name: 'cloud billing',
-    include: ['cloud/apps/billing/test/**/*.test.ts'],
-    sources: ['cloud/apps/billing/vitest.config.ts'],
     mirrors: ["include: ['test/**/*.test.ts']"]
   },
   ...[
