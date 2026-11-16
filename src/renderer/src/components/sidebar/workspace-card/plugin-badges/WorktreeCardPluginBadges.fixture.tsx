@@ -1,4 +1,4 @@
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type { PluginHostListEntry } from '../../../../../../shared/plugins/plugin-list-entry'
 import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'

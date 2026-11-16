@@ -8,8 +8,8 @@ import {
 import {
   getSshTargetIdForExecutionHost,
   getWorktreeExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { findPluginBadgeFolders, type PluginBadgeSearchRoot } from './plugin-badge-folder-search'
 
