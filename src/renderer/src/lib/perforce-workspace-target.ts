@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import {
+  resolveOwnerOrLocal,
+  runtimeEnvironmentIdOrLocalUnlessTwin
+} from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
@@ -119,6 +122,20 @@ type FileWorkspace = {
   repo: Repo | null
 }
 
+/** The paired server that owns this row, or null for this app; the row's host tells twins apart. */
+function runtimeEnvironmentIdOfRow(
+  state: AppState,
+  worktree: Pick<Worktree, 'id' | 'hostId'>
+): string | null {
+  const match = resolveOwnerOrLocal(state, {
+    workspaceId: worktree.id,
+    ...(worktree.hostId ? { hostId: worktree.hostId } : {})
+  })
+  return match.kind === 'resolved' && match.owner.endpoint.kind === 'environment'
+    ? match.owner.endpoint.environmentId
+    : null
+}
+
 function folderRepoOf(state: AppState, worktree: Pick<Worktree, 'repoId' | 'hostId'>) {
   const repo = findRepoForHost(state.repos, worktree.repoId, {
     hostId: worktree.hostId,
@@ -168,7 +185,7 @@ function workspaceOfFile(
     ) {
       continue
     }
-    const worktreeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktree.id)
+    const worktreeEnvironmentId = runtimeEnvironmentIdOfRow(state, worktree)
     // Why: the save writes on the context's host, so checking out a same-path file elsewhere is wrong.
     if (
       worktreeEnvironmentId !== environmentId ||

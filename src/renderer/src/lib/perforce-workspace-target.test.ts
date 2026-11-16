@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { perforceProjectTarget, perforceTargetForFile } from './perforce-workspace-target'
 
-type Row = { id: string; repoId: string; path: string }
+type Row = { id: string; repoId: string; path: string; hostId?: `runtime:${string}` }
 
 const store = vi.hoisted((): { repos: Repo[]; worktrees: Row[]; detected: boolean } => ({
   repos: [],
@@ -22,7 +22,15 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
-  runtimeEnvironmentIdOrLocalUnlessTwin: () => null
+  runtimeEnvironmentIdOrLocalUnlessTwin: () => null,
+  // Like the real resolver, an id shared by twins resolves only when the row names its host.
+  resolveOwnerOrLocal: (_state: unknown, ref: { hostId?: string }) =>
+    ref.hostId?.startsWith('runtime:')
+      ? {
+          kind: 'resolved',
+          owner: { endpoint: { kind: 'environment', environmentId: ref.hostId.slice(8) } }
+        }
+      : { kind: 'ambiguous' }
 }))
 vi.mock('./perforce-workspace-detection', () => ({ isPerforceWorkspaceForFiles: detect }))
 
@@ -68,6 +76,21 @@ describe('perforceTargetForFile', () => {
     await expect(
       perforceTargetForFile(context('git::/git', '/git'), '/remote/a.cs')
     ).resolves.toBeNull()
+  })
+
+  it("checks out a twin workspace's file on the host the save runs on", async () => {
+    store.repos.push(
+      repo('p4', { path: '/ws', kind: 'folder', vcs: 'perforce', executionHostId: 'runtime:box' })
+    )
+    store.worktrees.push({ id: 'p4::/ws', repoId: 'p4', path: '/ws', hostId: 'runtime:box' })
+    const onBox = {
+      ...context('git::/git', '/git'),
+      target: { kind: 'environment' as const, environmentId: 'box' }
+    }
+    await expect(perforceTargetForFile(onBox, '/ws/a.cs')).resolves.toMatchObject({
+      worktreeId: 'p4::/ws',
+      target: { kind: 'environment', environmentId: 'box' }
+    })
   })
 
   it('detects a folder project not yet marked Perforce, and leaves Git projects alone', async () => {
