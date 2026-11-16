@@ -16206,13 +16206,6 @@
                       "skillNotInstalled": "Orca CLI 技能尚未安装"
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "无法隐藏移动模拟器"
-                    }
-                  }
                 }
               }
             }
@@ -16237,17 +16230,6 @@
             "5789936d9a": "在代理控制屏幕时预览 iOS 模拟器",
             "8014b4b80b": "保留",
             "6e051a40b7": "隐藏"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "移动模拟器已隐藏",
-                  "c46c979c1d": "随时重新启用移动模拟器",
-                  "600f9a745a": "设置 › 移动模拟器"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模拟器键盘输入的粘贴内容过大",

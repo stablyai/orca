@@ -16184,13 +16184,6 @@
                       "c94ff11e91": "Kurulum durumu yeniden kontrol edilemedi."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Mobil Emülatör gizlenemedi."
-                    }
-                  }
                 }
               }
             }
@@ -16215,17 +16208,6 @@
             "5789936d9a": "Ajanlar ekranı kullanırken iOS simülatörlerini önizleyin.",
             "8014b4b80b": "Tut",
             "6e051a40b7": "Gizle"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobil Emülatör gizlendi",
-                  "c46c979c1d": "Mobil Emülatörü istediğiniz zaman şurada yeniden etkinleştirin:",
-                  "600f9a745a": "Ayarlar › Mobil Emülatör"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Yapıştırılan içerik emülatör klavye girişi için çok büyük.",

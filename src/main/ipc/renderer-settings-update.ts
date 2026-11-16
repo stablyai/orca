@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { normalizeNewTabMenuLayout } from '../../shared/new-tab-menu/new-tab-menu-layout'
 
 type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
   terminalScrollbackBytes?: unknown
@@ -28,6 +29,9 @@ export function sanitizeRendererSettingsUpdate(
     typeof sanitizedArgs.browserPasswordsFillRequiresReauth !== 'boolean'
   ) {
     delete sanitizedArgs.browserPasswordsFillRequiresReauth
+  }
+  if ('newTabMenuLayout' in sanitizedArgs) {
+    sanitizedArgs.newTabMenuLayout = normalizeNewTabMenuLayout(sanitizedArgs.newTabMenuLayout)
   }
   return sanitizedArgs
 }

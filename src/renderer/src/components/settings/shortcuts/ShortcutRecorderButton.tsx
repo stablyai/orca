@@ -1,5 +1,8 @@
 import React, { useEffect, useEffectEvent, useRef } from 'react'
-import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
+import {
+  formatKeybinding,
+  formatKeybindingList
+} from '../../../../../shared/keybindings/formatting'
 import { isDoubleTapBinding } from '../../../../../shared/keybindings/normalization'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
 import {
@@ -23,6 +26,8 @@ type ShortcutRecorderButtonProps = {
   bindingCount: number
   recording: boolean
   isAppendSlot?: boolean
+  /** Menu-row sizing: plain-text keys instead of key caps. */
+  compact?: boolean
   onStartRecording: (actionId: KeybindingActionId, index: number) => void
   onCancelRecording: () => void
   onCapture: (actionId: KeybindingActionId, input: KeybindingInput) => void
@@ -48,6 +53,7 @@ export function ShortcutRecorderButton({
   bindingCount,
   recording,
   isAppendSlot = false,
+  compact = false,
   onStartRecording,
   onCancelRecording,
   onCapture,
@@ -212,16 +218,27 @@ export function ShortcutRecorderButton({
           onKeyDown={handleRecordKeyDown}
           onKeyUp={handleRecordKeyUp}
           className={cn(
-            'flex min-h-7 min-w-[5.5rem] max-w-[14rem] items-center justify-end gap-1.5 overflow-hidden rounded-md border px-2 py-1 text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            'flex items-center justify-end overflow-hidden rounded-md border text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            compact
+              ? 'h-5 min-w-9 shrink-0 px-1.5 text-[11px] text-muted-foreground'
+              : 'min-h-7 min-w-[5.5rem] max-w-[14rem] gap-1.5 px-2 py-1',
             recording
               ? 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
-              : 'border-transparent hover:border-border/70 hover:bg-background'
+              : compact
+                ? binding === null
+                  ? 'border-dashed border-border hover:border-muted-foreground/60 hover:text-foreground focus-visible:text-foreground'
+                  : 'border-border/80 hover:border-muted-foreground/60 hover:text-foreground focus-visible:text-foreground'
+                : 'border-transparent hover:border-border/70 hover:bg-background'
           )}
         >
           {recording || binding === null ? (
-            <span className="px-1 text-muted-foreground">
-              {t('auto.components.settings.ShortcutRecorderButton.f5ed5dcbf6', 'Press keys…')}
+            <span className={compact ? 'whitespace-nowrap' : 'px-1 text-muted-foreground'}>
+              {recording || !compact
+                ? t('auto.components.settings.ShortcutRecorderButton.f5ed5dcbf6', 'Press keys…')
+                : t('auto.components.settings.ShortcutRecorderButton.152e0bcd64', 'Add shortcut')}
             </span>
+          ) : compact ? (
+            <span className="whitespace-nowrap">{formatKeybindingList([binding], platform)}</span>
           ) : (
             <span className="flex flex-wrap items-center justify-end gap-1.5 overflow-hidden">
               <ShortcutKeyCombo
