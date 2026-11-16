@@ -240,7 +240,7 @@ describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail
     }) as D1Database
     const row = (await getSandbox(db, t.id))!
     // Four rows of the same owner (ids differ): a list of any size.
-    const results = [row, ...[1, 2, 3].map((n) => ({ ...row, id: `${row.id.slice(0, -1)}${n}` }))]
+    const results = [row, ...[1, 2, 3].map((n) => ({ ...row, id: `${row.id}-copy${n}` }))]
     const options = { enabled: () => true, sharedMaxMs: 60 * 60_000 }
     const views = await githubActingViews(counting, results as never, 'alice', t.h.now(), options)
     expect([...views.values()].map((v) => v.githubActing)).toEqual(Array(4).fill({ actingAs: 'member', userId: 'alice', login: 'alice-gh' }))
