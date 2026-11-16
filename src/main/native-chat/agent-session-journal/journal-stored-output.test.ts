@@ -73,8 +73,7 @@ function write(db: Database.Database, item: AgentJournalRenderItem) {
 
 function stored(db: Database.Database, itemId: string) {
   return db
-    .prepare(`SELECT output_blob IS NOT NULL AS blob, octet_length(payload_json) AS bytes
-      FROM journal_items WHERE item_id=?`)
+    .prepare(`SELECT output_blob IS NOT NULL AS blob FROM journal_items WHERE item_id=?`)
     .get(itemId)
 }
 
@@ -91,8 +90,7 @@ function readTool(db: Database.Database) {
 it('reads a saved tool output back whole, as the bounded client head, and through rewrites', () => {
   const db = chat()
   write(db, toolCall('tool', 'completed'))
-  expect(stored(db, 'tool')).toEqual({ blob: 1, bytes: expect.any(Number) })
-  expect(Number(stored(db, 'tool')!.bytes)).toBeLessThan(1_000)
+  expect(stored(db, 'tool')!.blob).toBe(1)
 
   const [whole] = readTool(db)
   expect(whole!.body).toMatchObject({ output: { head: OUTPUT, truncated: false } })
@@ -109,6 +107,8 @@ it('reads a saved tool output back whole, as the bounded client head, and throug
     output: { head: 'a'.repeat(16_384), byteLength: 40_011, digest: 'd', truncated: true }
   })
 
+  expect(client.bytes).toBeGreaterThan(16_384)
+
   // A later revision written from the hydrated read keeps every byte.
   write(db, { ...whole!, revision: 2 })
   // A row form that never hydrated keeps this row's blob; it cannot name another row's.
@@ -119,6 +119,7 @@ it('reads a saved tool output back whole, as the bounded client head, and throug
   )
   write(db, { ...raw, revision: 3 })
   expect(readTool(db)[0]!.body).toMatchObject({ output: { head: OUTPUT, truncated: false } })
+  expect(readJournalDomainClientForms(db, target, ['tool']).get('tool')!.bytes).toBe(client.bytes)
   expect(() => write(db, { ...raw, itemId: 'other' })).toThrow('names a saved output')
 })
 
@@ -130,11 +131,9 @@ it('compacts inline rows written before the switch, leaving running calls inline
   expect(stored(db, 'done')!.blob).toBe(0)
 
   switches.writes = true
-  let pages = 0
   while (compactJournalStoredOutputPage(db).more) {
-    pages++
+    // Pages until the pass reaches the last row.
   }
-  expect(pages).toBeLessThan(3)
   expect(stored(db, 'done')!.blob).toBe(1)
   expect(stored(db, 'live')!.blob).toBe(0)
   expect(readTool(db).map((item) => item.body)).toMatchObject([

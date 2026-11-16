@@ -27,7 +27,11 @@ import {
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { readAgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
-import { journalStoredItemRow, readJournalStoredItem } from './journal-stored-output-rows'
+import {
+  hydrateJournalStoredItem,
+  journalStoredItemRow,
+  readJournalStoredItem
+} from './journal-stored-output-rows'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -60,10 +64,15 @@ function nextJournalDomainItemOrdinal(
 export function writeJournalDomainCurrentItem(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  input: JournalDomainCurrentItemWrite
+  write: JournalDomainCurrentItemWrite
 ): AgentJournalRenderItem[] {
   if (!db.isTransaction) {
     throw new Error('journal item persistence requires its writer transaction')
+  }
+  // A stored form handed back is written from its text, so every derived column stays exact.
+  const input = {
+    ...write,
+    item: hydrateJournalStoredItem(db, [target.sessionId, target.epoch], write.item)
   }
   const body = normalizeJournalDomainItemBody(
     db,

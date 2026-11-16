@@ -96,7 +96,8 @@ export class JournalForkCapture {
         this.db.prepare('INSERT OR IGNORE INTO temp.fork_omitted(id) VALUES(?)').run(item.itemId)
       }
       this.after = Number(row.rank)
-      account(journalForkRowBytes(row))
+      // The staged body is the restored text, not the row's stored form.
+      account(journalForkRowBytes({ ...row, payload_json: payload }))
       drainEdges()
       if (!budget()) {
         exhausted = false

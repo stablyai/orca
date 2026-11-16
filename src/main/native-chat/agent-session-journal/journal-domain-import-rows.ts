@@ -10,7 +10,7 @@ import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-do
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { recordJournalLegacyChatRevision } from './database/journal-legacy-source'
-import { journalStoredItemRow } from './journal-stored-output-rows'
+import { hydrateJournalStoredItem, journalStoredItemRow } from './journal-stored-output-rows'
 
 export type JournalDomainImportState =
   | { state: 'converting'; epoch: null }
@@ -238,8 +238,8 @@ export function insertJournalDomainItemRows(
     ownerFence,
     executionOwner,
     hidden,
-    item,
-    displayed,
+    item: given,
+    displayed: shown,
     originalStopNoteJson,
     queueCommandTurn,
     queueFailedOutcome,
@@ -247,7 +247,11 @@ export function insertJournalDomainItemRows(
     queueFailureWitnessedThrough,
     queueFailureReportTurnItemId
   } of rows) {
-    const encoded = prepared ?? prepareJournalDomainItemRow(item, displayed)
+    const item = hydrateJournalStoredItem(db, prefix, given)
+    const displayed = shown && hydrateJournalStoredItem(db, prefix, shown)
+    const encoded =
+      (item === given && displayed === shown ? prepared : undefined) ??
+      prepareJournalDomainItemRow(item, displayed)
     const { metadata, placement } = encoded
     const row = journalStoredItemRow(db, prefix, item, encoded.payload, encoded.values)
     const result = insert.run(

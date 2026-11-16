@@ -1,9 +1,11 @@
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import { journalStoredItemRow } from './journal-stored-output-rows'
 import { JOURNAL_DOMAIN_ITEM_COLUMNS } from './journal-domain-item-read-columns'
 import { hydrateJournalItemOutput, JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 
+/** `<rowid>` mid-pass, or `done:<ms>` once a pass reached the last row. */
 export const JOURNAL_STORED_OUTPUT_CURSOR = 'journal.stored-output.cursor'
 
 // Each page is one writer transaction: bounded rows scanned, rows rewritten, bytes and time.
@@ -12,7 +14,8 @@ const PAGE_ROWS = 32
 const PAGE_BYTES = 512 * 1024
 const PAGE_MS = 5
 const MIN_ROW_BYTES = 512
-const WIRE_JSON = JOURNAL_DOMAIN_ITEM_COLUMNS.indexOf('wire_json')
+// A later pass picks up rows an older build rewrote inline, or rowids reused after deletes.
+const PASS_INTERVAL_MS = 24 * 60 * 60 * 1000
 const WIRE_BYTES = JOURNAL_DOMAIN_ITEM_COLUMNS.indexOf('wire_bytes')
 
 export type JournalStoredOutputCompaction = { kind: 'stored-output-compaction'; more: boolean }
@@ -26,10 +29,33 @@ function payloadText(item: AgentJournalRenderItem): string | undefined {
       : undefined
 }
 
+function compactRow(db: Database.Database, rowid: number, writes: boolean): void {
+  const row = db
+    .prepare('SELECT session_id, epoch, payload_json, wire_bytes FROM journal_items WHERE rowid=?')
+    .get(rowid)!
+  const payload = String(row.payload_json)
+  const item: AgentJournalRenderItem = JSON.parse(payload)
+  const values: (number | null)[] = JOURNAL_DOMAIN_ITEM_COLUMNS.map(() => null)
+  values[WIRE_BYTES] = row.wire_bytes === null ? null : Number(row.wire_bytes)
+  const prefix = [String(row.session_id), String(row.epoch)] as const
+  const stored = journalStoredItemRow(db, prefix, item, payload, values, writes)
+  if (!stored.blob) {
+    return
+  }
+  const restored = hydrateJournalItemOutput(JSON.parse(stored.payload), stored.blob)
+  if (payloadText(restored) !== payloadText(item)) {
+    throw new Error('stored tool output did not read back as written')
+  }
+  db.prepare(
+    'UPDATE journal_items SET payload_json=?, wire_bytes=?, output_blob=? WHERE rowid=?'
+  ).run(stored.payload, stored.values[WIRE_BYTES] ?? null, stored.blob, rowid)
+}
+
 /** Moves saved tool output and diff text written inline into compressed row blobs, oldest rows first. */
 export function compactJournalStoredOutputPage(
   db: Database.Database,
-  writes = JOURNAL_STORED_OUTPUT_WRITES
+  writes = JOURNAL_STORED_OUTPUT_WRITES,
+  now = Date.now()
 ): JournalStoredOutputCompaction {
   if (!writes) {
     return { kind: 'stored-output-compaction', more: false }
@@ -38,67 +64,50 @@ export function compactJournalStoredOutputPage(
   const saved = db
     .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
     .get(JOURNAL_STORED_OUTPUT_CURSOR)
-  let cursor = saved ? Number(saved.value) : 0
+  const value = saved ? String(saved.value) : '0'
+  if (value.startsWith('done:') && now - Number(value.slice(5)) < PASS_INTERVAL_MS) {
+    return { kind: 'stored-output-compaction', more: false }
+  }
+  let cursor = value.startsWith('done:') ? 0 : Number(value)
   // Lengths and NULL tests come from record headers, so skipped rows never load their text.
   const scanned = db
-    .prepare(`SELECT rowid, kind, output_blob IS NULL AS inline, octet_length(payload_json) AS bytes
-      FROM journal_items WHERE rowid>? ORDER BY rowid LIMIT ?`)
+    .prepare(`SELECT rowid, kind, wire_version, output_blob IS NULL AS inline,
+      octet_length(payload_json) AS bytes FROM journal_items WHERE rowid>? ORDER BY rowid LIMIT ?`)
     .all(cursor, SCAN_ROWS)
-  const read = db.prepare(`SELECT session_id, epoch, payload_json, wire_json, wire_bytes
-    FROM journal_items WHERE rowid=?`)
-  const update = db.prepare(`UPDATE journal_items SET payload_json=?, wire_json=?, wire_bytes=?,
-    output_blob=? WHERE rowid=?`)
   let rows = 0
   let bytes = 0
   let more = scanned.length === SCAN_ROWS
   for (const header of scanned) {
-    if (rows >= PAGE_ROWS || (rows > 0 && bytes + Number(header.bytes) > PAGE_BYTES)) {
-      more = true
-      break
-    }
-    if (rows > 0 && performance.now() - started >= PAGE_MS) {
+    const size = Number(header.bytes)
+    if (
+      rows >= PAGE_ROWS ||
+      (rows > 0 && (bytes + size > PAGE_BYTES || performance.now() - started >= PAGE_MS))
+    ) {
       more = true
       break
     }
     cursor = Number(header.rowid)
     if (
       (header.kind !== 'tool-call' && header.kind !== 'diff') ||
+      header.wire_version !== AGENT_SESSION_ITEM_WIRE_VERSION ||
       !header.inline ||
-      Number(header.bytes) < MIN_ROW_BYTES
+      size < MIN_ROW_BYTES
     ) {
       continue
     }
-    const row = read.get(cursor)!
-    const payload = String(row.payload_json)
-    const item: AgentJournalRenderItem = JSON.parse(payload)
-    const values: (string | number | null)[] = JOURNAL_DOMAIN_ITEM_COLUMNS.map(() => null)
-    values[WIRE_JSON] = row.wire_json === null ? null : String(row.wire_json)
-    values[WIRE_BYTES] = row.wire_bytes === null ? null : Number(row.wire_bytes)
-    const prefix = [String(row.session_id), String(row.epoch)] as const
-    const stored = journalStoredItemRow(db, prefix, item, payload, values, writes)
     rows++
-    bytes += Number(header.bytes)
-    if (!stored.blob) {
-      continue
+    bytes += size
+    try {
+      compactRow(db, cursor, writes)
+    } catch (error) {
+      // A row that can't be stored exactly stays inline; rethrowing would retry this page forever.
+      console.warn('[agent-session-journal] kept a saved tool output inline', error)
     }
-    // A row that would not read back exactly stays inline; throwing would retry this page forever.
-    const restored = hydrateJournalItemOutput(JSON.parse(stored.payload), stored.blob)
-    if (payloadText(restored) !== payloadText(item)) {
-      console.warn('[agent-session-journal] kept a tool output inline that did not read back')
-      continue
-    }
-    update.run(
-      stored.payload,
-      stored.values[WIRE_JSON] as string | null,
-      stored.values[WIRE_BYTES] as number | null,
-      stored.blob,
-      cursor
-    )
   }
   db.prepare(`INSERT INTO agent_session_store_meta(key,value) VALUES(?,?)
     ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
     JOURNAL_STORED_OUTPUT_CURSOR,
-    String(cursor)
+    more ? String(cursor) : `done:${now}`
   )
   return { kind: 'stored-output-compaction', more }
 }
