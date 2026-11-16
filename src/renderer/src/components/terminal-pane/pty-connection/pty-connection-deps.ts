@@ -36,6 +36,8 @@ export type PtyConnectionDeps = {
   startup?: PtyPaneStartup
   /** The pane's previous PTY; main stops it before this connection's first fresh spawn. */
   replacesPtyId?: string
+  /** Ownership acquired before clearing the old binding; released on spawn settlement or disposal. */
+  releaseResumeInPlace?: () => void
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   /** Render-time park intent survives watcher disposal and is consumed once after layout replay. */

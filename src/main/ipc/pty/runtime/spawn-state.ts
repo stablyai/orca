@@ -26,7 +26,7 @@ import type { StartupCommandDelivery } from '../../../../shared/agent-launch/sta
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'

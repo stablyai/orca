@@ -6,14 +6,14 @@ import {
 import { NativeChatJumpToLatest } from './viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
-import { withoutPullRequestEventRows } from '../../../../shared/native-chat/native-chat-pull-request-event'
+import { withoutPullRequestEventRows } from '../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
   nativeChatShowsCiResultLines,
   nativeChatShowsTurnDiffSummary
-} from '../../../../shared/native-chat/native-chat-appearance-settings'
+} from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
 import { useNativeChatQuestionReceipts } from './conversation/projection/use-native-chat-question-receipts'
@@ -74,7 +74,7 @@ import { useNativeChatTurnDiffs } from './tools/diffs/use-native-chat-turn-diffs
 import { useNativeChatTurnOpenedPullRequests } from './tools/pull-requests/use-native-chat-turn-opened-pull-requests'
 import { NativeChatPullRequestChangeContext } from './tools/pull-requests/NativeChatOpenedPullRequestCard'
 import { transcriptTailRow } from './conversation/slots/native-chat-transcript-tail-row'
-import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
+import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/transcript/turns/native-chat-terminal-turn'
 
 const NO_SLOTS: readonly NativeChatTranscriptSlot[] = []
 

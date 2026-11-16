@@ -7,7 +7,7 @@ import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAttentionRead } from '../../../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionRead } from '../../../../shared/agent-session/view/agent-session-attention'
 import * as providerSupport from '../providers/structured-agent-session-provider-support'
 import type {
   SetUserConversationName,

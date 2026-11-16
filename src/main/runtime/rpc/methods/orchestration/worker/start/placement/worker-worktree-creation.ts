@@ -1,7 +1,7 @@
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
-import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { suggestCreatureNameForPaths } from '../../../../../../../../shared/worktree/naming/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'

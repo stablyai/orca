@@ -7,7 +7,7 @@ import type {
   RuntimeAgentSessionRpcCaller,
   RuntimeEnsureAgentSessionRequest,
   RuntimeEnsureAgentSessionResult
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import {
   canonicalizeAgentSessionIdentity,
   type ProviderExecutionNamespace

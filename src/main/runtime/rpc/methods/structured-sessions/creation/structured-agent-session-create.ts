@@ -25,7 +25,7 @@ import type { StructuredAgentSessionCaller } from '../../../../../native-chat/ag
 import type {
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
-} from '../../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import '../../../../../native-chat/agent-session-wire/options/structured-agent-session-options-read'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-intent'
 import type { StructuredAgentSessionCreateOptions } from '../../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-create'
