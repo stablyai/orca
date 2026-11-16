@@ -290,6 +290,7 @@ it.each(['claude', 'codex'] as const)(
       prompt: 'Finished work',
       paneSleep: { ptyId: 'pty-1' }
     })
+    expect(emitted.mock.calls.filter(([row]) => !row.isReplay)).toHaveLength(0)
     server.retireSleepingPaneOnSpawn(PANE, {
       agentType: agent,
       providerSession: { key: 'session_id', id: `${agent}-session` }
@@ -305,6 +306,7 @@ it.each(['claude', 'codex'] as const)(
       await agentHook(agent, 'SessionStart', 4002)
     }
     expect(read()).toMatchObject({ state: 'done', interrupted: true })
+    emitted.mockClear()
     await sleepPane(agent, 'pty-2', 4002)
     expect(read()).toMatchObject({
       state: 'done',
