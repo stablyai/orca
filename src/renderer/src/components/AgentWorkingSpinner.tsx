@@ -32,7 +32,7 @@ function observeSpinner(el: HTMLSpanElement): () => void {
   return observeOffscreenAnimation(el)
 }
 
-// CSS compositor rotation avoids JS input-thread work; callers provide size.
+// CSS rotation avoids JS style writes; callers provide size.
 export function AgentWorkingSpinner({ className }: { className?: string }): React.JSX.Element {
   return (
     <span

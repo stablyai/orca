@@ -2094,7 +2094,7 @@ html.native-shell .app-layout {
   grid-template-rows: 1fr;
 }
 
-/* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
+/* Keep rotation in CSS: JS style writes caused typing stalls (#12359). */
 /* One day per iteration avoids per-second React animation events; still 12 steps/second. */
 @keyframes agent-spinner-rotate {
   to {

@@ -50,6 +50,7 @@ import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-val
 import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
+import { MAIN_THREAD_ANIMATION_ARGUMENTS } from './presentation/main-thread-animation-arguments'
 
 // Node warns past this many listeners per event name. Headroom above normal subsystem fan-out,
 // still low enough that a real leak warns. Per-request listeners belong on addFanoutListener,
@@ -169,6 +170,7 @@ export function createMainWindow(
       webviewTag: true,
       // Pass host identity at birth so the renderer has it before first snapshot, without waiting for IPC registration.
       additionalArguments: [
+        ...MAIN_THREAD_ANIMATION_ARGUMENTS,
         formatBrowserClientHostIdArgument(getBrowserClientHostId()),
         ...(windowMaterial === 'off' ? [] : [formatWindowMaterialArgument(windowMaterial)]),
         ...(pumpHiddenFrames ? [formatHiddenWindowFramePumpArgument()] : []),

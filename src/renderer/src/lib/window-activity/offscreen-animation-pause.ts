@@ -1,4 +1,4 @@
-// Running CSS animations make the compositor tick every refresh even when scrolled out of view or clipped.
+// Running CSS animations make the renderer produce a frame every refresh even when scrolled out of view or clipped.
 export const OFFSCREEN_ANIMATION_ATTRIBUTE = 'data-animation-offscreen'
 
 let observer: IntersectionObserver | null = null
