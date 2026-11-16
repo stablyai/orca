@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { seedNativeChatAppliedSessionOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-cache'
+import { seedNativeChatAppliedSessionOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/workspace/creation/setup/hook-command-delayed-delivery'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'

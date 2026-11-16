@@ -8,11 +8,11 @@ import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearanc
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal/appearance/terminal-theme'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
-import { syncPreviewTerminalLigatures } from '@/components/dashboard-popout/preview-terminal-ligatures'
+import { syncPreviewTerminalLigatures } from '@/components/standalone-terminal/rendering/preview-terminal-ligatures'
 import {
   buildPreviewAppearanceOptions,
   buildPreviewTerminalOptions
-} from '@/components/dashboard-popout/preview-terminal-options'
+} from '@/components/standalone-terminal/rendering/preview-terminal-options'
 import { openStandaloneTerminal } from '@/components/standalone-terminal/open-standalone-terminal'
 import { removePlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
 import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
@@ -21,7 +21,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult
-} from '../../../../shared/plain-ssh-terminal'
+} from '../../../../shared/terminal/runtime/plain-ssh-terminal'
 
 export type PlainSshTerminalPhase =
   | { kind: 'opening' }

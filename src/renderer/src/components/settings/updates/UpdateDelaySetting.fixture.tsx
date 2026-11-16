@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { UpdateStatus } from '../../../../../shared/update-status-types'
+import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 
 const DAY_MS = 24 * 60 * 60 * 1000

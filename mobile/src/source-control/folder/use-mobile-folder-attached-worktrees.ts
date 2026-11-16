@@ -1,20 +1,20 @@
 import { useContext, useMemo, useState } from 'react'
 import { replaceEqualDeep } from '@tanstack/react-query'
 import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
-import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import {
   HOST_LIST_POLL_MS,
   HOST_LIST_TARGET,
   hostServerWorkspacesQuery,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../../host-screen/host-list-queries'
+} from '../../host-screen/catalog/host-list-queries'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { useHostQuery } from '../../query/host-query'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
-import { relaysToServers } from '../../worktree/execution-host-scoped-rpc-client'
-import type { MobileLineageStores } from '../../worktree/mobile-workspace-lineage'
-import { WorkspaceServerContext } from '../../worktree/workspace-server-context'
+import { relaysToServers } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
+import type { MobileLineageStores } from '../../worktree/agent-lineage/mobile-workspace-lineage'
+import { WorkspaceServerContext } from '../../worktree/execution-hosts/workspace-server-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
@@ -24,7 +24,7 @@ import {
   toFolderListRow,
   type FolderListRow
 } from './mobile-folder-attached-worktrees'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 
 type FolderLineage = {
   /** The catalog rows last seen. */

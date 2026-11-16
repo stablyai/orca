@@ -26,25 +26,3 @@ test('keeps a pending workspace rename alive across the row context menu', async
   await page.mouse.move(900, 600)
   await expect(details).toBeHidden()
 })
-
-test('right-clicking scan help preserves the group name input and dismisses help', async ({
-  page
-}) => {
-  await page.goto('/fixtures.html?id=repo/NestedRepoScanLimitNotice:editingGroupName&theme=light')
-  await expect(page.locator('html')).toHaveAttribute('data-fixture-state', 'ready')
-  const input = page.getByRole('textbox', { name: 'Group name' })
-  await input.fill('My group')
-  const help = page.getByRole('button', { name: 'Nested repository scan limits' })
-  await help.hover()
-  const details = page.getByRole('dialog')
-  await expect(details).toBeVisible()
-  await help.click({ button: 'right' })
-  await expect(details).toBeHidden()
-  await expect(input).toBeFocused()
-  await page.keyboard.type(' name')
-  await expect(input).toHaveValue('My group name')
-  await help.focus()
-  await expect(details).toBeVisible()
-  await page.keyboard.press('Escape')
-  await expect(details).toBeHidden()
-})

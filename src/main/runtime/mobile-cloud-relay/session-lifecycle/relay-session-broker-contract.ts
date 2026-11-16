@@ -3,7 +3,7 @@ import type { OrcaCloudAuthConfig } from '../../../orca-profiles/cloud-auth/prof
 import type { MobileRelayStatusPublisher } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { E2EEKeypair } from '../../rpc/server/pairing/e2ee-keypair'
 import type { MobileSocketWiring } from '../../rpc/mobile/mobile-socket-wiring'
-import type { RelayHostCloseReason } from '../../../../shared/relay-host-close-reason'
+import type { RelayHostCloseReason } from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import type { RelayRegion } from '../region-selection/relay-region-probe'
 import type {
   RelayRegionDecision,
@@ -30,6 +30,8 @@ export type RelaySessionBrokerOptions = {
   mobileSocketWiring: MobileSocketWiring
   isCurrent: () => boolean
   refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
+  /** The broker gave up on token refresh and closed; its owner should reconcile now, not at a tick. */
+  onSelfClose?: () => void
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
   measureRegionDecision?: (window: RelayRegionWindow) => Promise<RelayRegionDecision>
   onAssignedCellActive?: (cellUrl: string) => void

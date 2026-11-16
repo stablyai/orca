@@ -1,10 +1,10 @@
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
   withAcquiredAgentSessionAccount,
   type ClaudeAccountRecipe
-} from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { proveAgentSessionOwner } from './agent-session-lease-transitions'
 
 /** Construction observation and owner proof share the record's existing transaction. */

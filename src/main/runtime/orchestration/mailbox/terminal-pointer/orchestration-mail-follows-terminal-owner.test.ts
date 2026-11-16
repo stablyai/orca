@@ -67,7 +67,7 @@ describe('Run mail follows the terminal that owns its mailbox', () => {
       leaves
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, showing([aliasB, paneA]))
+    await runtime.syncWindowGraph(1, showing([aliasB, paneA]))
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
     const run = db.createRun({
@@ -89,8 +89,8 @@ describe('Run mail follows the terminal that owns its mailbox', () => {
     expect(pointerCount(write)).toBe(1)
 
     // The alias unmounts and remounts ahead of A before the delayed Enter rechecks ownership.
-    runtime.syncWindowGraph(1, showing([paneA]))
-    runtime.syncWindowGraph(1, showing([aliasB, paneA]))
+    await runtime.syncWindowGraph(1, showing([paneA]))
+    await runtime.syncWindowGraph(1, showing([aliasB, paneA]))
     await vi.advanceTimersByTimeAsync(600)
     expect(write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
     expect(db.getMessageById(message.id)?.delivered_at).not.toBeNull()
@@ -127,7 +127,7 @@ describe.each(['pane-issued', 'preallocated'] as const)('a %s handle across a re
       runtime.registerPreAllocatedHandleForPty(RENDERER_PTY_ID, 'term_preallocated')
     }
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, GRAPH)
+    await runtime.syncWindowGraph(1, GRAPH)
     const [terminal] = (await runtime.listTerminals()).terminals
     return { runtime, write, handle: terminal.handle }
   }
@@ -163,7 +163,7 @@ describe.each(['pane-issued', 'preallocated'] as const)('a %s handle across a re
       (error: Error) => (outcome = error.message)
     )
     runtime.markRendererReloading(1)
-    runtime.syncWindowGraph(1, GRAPH)
+    await runtime.syncWindowGraph(1, GRAPH)
     await vi.advanceTimersByTimeAsync(0)
     expect(outcome).toBeNull()
 
@@ -181,8 +181,8 @@ describe.each(['pane-issued', 'preallocated'] as const)('a %s handle across a re
       (error: Error) => (outcome = error.message)
     )
     // Opening a workspace remounts the pane, which briefly publishes no terminal.
-    runtime.syncWindowGraph(1, { ...GRAPH, leaves: [{ ...GRAPH.leaves[0]!, ptyId: null }] })
-    runtime.syncWindowGraph(1, GRAPH)
+    await runtime.syncWindowGraph(1, { ...GRAPH, leaves: [{ ...GRAPH.leaves[0]!, ptyId: null }] })
+    await runtime.syncWindowGraph(1, GRAPH)
     await vi.advanceTimersByTimeAsync(0)
     expect(outcome).toBeNull()
 

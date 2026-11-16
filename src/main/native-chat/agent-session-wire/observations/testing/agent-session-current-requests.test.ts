@@ -4,7 +4,10 @@ import { createAgentSessionCurrentRequestsReader } from '../../../../../shared/a
 import type { AgentSessionCurrentRequestsMarker } from '../../../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../../shared/agent-session/requests/agent-session-current-requests-capability'
 
-import { readCurrentRequestsPiece } from '../agent-session-current-requests'
+import {
+  currentRequestsProjection,
+  readCurrentRequestsPiece
+} from '../agent-session-current-requests'
 
 const marker: AgentSessionCurrentRequestsMarker = {
   contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
@@ -56,4 +59,27 @@ it('pulls a greater-than-frame record and greater-than-window collection lossles
   expect(maximum).toBe(1)
   expect(error).not.toHaveBeenCalled()
   reader.invalidate()
+})
+
+it('keeps a request pull valid across decoded snapshots without stamping it with a later epoch', () => {
+  const items: AgentJournalRenderItem[] = [
+    {
+      ...prompt,
+      body: {
+        kind: 'approval',
+        title: 'Continue?',
+        detail: 'Inspect the files',
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      }
+    }
+  ]
+  const journal = { cursor: () => ({ epoch: 'later', sequence: 9 }) }
+  const work = { actionablePrompts: () => structuredClone(items), viewKey: () => '1' }
+  const first = currentRequestsProjection(journal, 's', work, { epoch: 'snapshot', sequence: 3 })
+  const next = currentRequestsProjection(journal, 's', work, { epoch: 'snapshot', sequence: 4 })
+  const piece = readCurrentRequestsPiece(next, { sessionId: 's', version: first.marker.version })
+  expect(piece.marker.epoch).toBe('snapshot')
+  expect(piece.nextCursor).toBeNull()
+  expect(JSON.parse(piece.json)).toMatchObject([{ itemId: 'child', body: { title: 'Continue?' } }])
 })

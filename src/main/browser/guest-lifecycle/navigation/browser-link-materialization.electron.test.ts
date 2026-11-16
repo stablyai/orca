@@ -41,9 +41,10 @@ beforeAll(async () => {
     `
 import { contextBridge, ipcRenderer } from 'electron'
 import { browserPageInteractionAndSessionsApi } from ${JSON.stringify(join(process.cwd(), 'src/preload/api/browser/browser-bridge-page-interaction-and-sessions.ts'))}
+import { browserGuestRegistrationAndDownloadsApi } from ${JSON.stringify(join(process.cwd(), 'src/preload/api/browser/browser-bridge-guest-registration-and-downloads.ts'))}
 let heldOpen = null
 contextBridge.exposeInMainWorld('probeApi', {
-  browser: { ...browserPageInteractionAndSessionsApi, onOpenLinkInOrcaTab: (callback) => browserPageInteractionAndSessionsApi.onOpenLinkInOrcaTab((event) => { heldOpen = () => callback(event) }), registerGuest: (args) => ipcRenderer.invoke('link-probe:register', args) },
+  browser: { ...browserPageInteractionAndSessionsApi, preparePageAttach: browserGuestRegistrationAndDownloadsApi.preparePageAttach, onOpenLinkInOrcaTab: (callback) => browserPageInteractionAndSessionsApi.onOpenLinkInOrcaTab((event) => { heldOpen = () => callback(event) }), registerGuest: (args) => ipcRenderer.invoke('link-probe:register', args) },
   fixture: {
     open: (event) => ipcRenderer.invoke('link-probe:open', event),
     pending: () => heldOpen !== null,

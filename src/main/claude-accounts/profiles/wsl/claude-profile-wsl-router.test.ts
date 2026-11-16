@@ -13,9 +13,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ClaudeManagedAccount } from '../../../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type { WslSpec } from '../../../wsl/execution/wsl-runner'
-import type * as WslPaths from '../../../../shared/wsl-paths'
+import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 
 const guest = vi.hoisted(
   (): { home: string; failure: { code: number; stdout: string } | null } => ({
@@ -24,7 +24,7 @@ const guest = vi.hoisted(
   })
 )
 // Emulate the guest with local POSIX paths and /bin/sh.
-vi.mock('../../../../shared/wsl-paths', async (original) => ({
+vi.mock('../../../../shared/file-access/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
   toWindowsWslPath: (linuxPath: string) => linuxPath
 }))

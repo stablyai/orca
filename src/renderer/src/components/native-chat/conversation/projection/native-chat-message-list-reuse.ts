@@ -3,19 +3,19 @@ import {
   sameNativeChatRowPlacement,
   type NativeChatSubagentRow
 } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {
   compareNativeChatDisplayMessages as compareMessages,
   nativeChatDisplaySortRank
-} from '../../../../../../shared/native-chat/transcript/native-chat-message-order'
+} from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 import {
   buildNativeChatFoldUnit,
   groupNativeChatFoldUnitMembers,
   type NativeChatFoldUnit
-} from '../../../../../../shared/native-chat/transcript/native-chat-fold-units'
+} from '../../../../../../shared/native-chat/transcript/folding/native-chat-fold-units'
 import { nativeChatToolFoldKind } from '../../../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { isOrphanRowId } from '../../../../../../shared/native-chat/tools/native-chat-folded-tool-results'
-import { subagentItemBlock } from '../../../../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { subagentItemBlock } from '../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import { stripNoiseMessages } from '../../../../../../shared/native-chat/native-chat-noise'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { appendedSubagentTurnKey, appendedTurnNeutralItems } from './native-chat-message-list-turns'

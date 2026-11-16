@@ -6,7 +6,7 @@ import {
   type EditorPathMutationTarget
 } from '../../autosave/editor-autosave'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { buildCombinedGitStatusSnapshot } from '../resolve-changes/combined-diff-git-status-signature'
 import {
   getCombinedDiffFileTreeSectionKey,

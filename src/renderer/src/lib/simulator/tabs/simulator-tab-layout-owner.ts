@@ -1,6 +1,6 @@
 // Send opens under proposed tab IDs used by emulator attach; surface only after main’s frame draws the tab.
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
 import {
   afterPendingTab,

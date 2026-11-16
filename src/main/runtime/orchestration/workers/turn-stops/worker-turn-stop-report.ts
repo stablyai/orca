@@ -11,7 +11,7 @@ import type {
 import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { describeApprovalClosed, describeCoordinatorAnswer } from './worker-approval-text'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.

@@ -9,7 +9,7 @@ import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
 } from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
-import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
+import { openNewTerminalTabInWorkspace } from '@/store/terminals/tabs/creation/terminal-active-workspace-creation'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
 import {
@@ -17,7 +17,7 @@ import {
   getSimulatorTabForWorktree
 } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
-import { useMeasuredWidth } from '@/components/right-sidebar/right-sidebar-measured-width'
+import { useMeasuredWidth } from '@/components/right-sidebar/layout/right-sidebar-measured-width'
 import { Button } from '@/components/ui/button'
 import {
   Command,

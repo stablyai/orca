@@ -5,7 +5,7 @@ import {
   makePaneKey,
   parseLegacyNumericPaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectPersistedTerminalLeafIds } from '../../terminal/surface/mobile-session-layout-projection'

@@ -1,7 +1,10 @@
 /** Real Win32-OpenSSH cells provisioned by config/ci/windows-ssh-provider/ and run by ssh-windows-hosts.yml. */
 import { readFileSync } from 'node:fs'
-import { isWindowsServerTarget, type WindowsServerTarget } from '../../../shared/node-runtime-pin'
-import type { SshTarget } from '../../../shared/ssh-types'
+import {
+  isWindowsServerTarget,
+  type WindowsServerTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 /** Pinned node.exe lifecycle under each DefaultShell. */
 const WINDOWS_ORCAD_CELL_IDS = ['orcad-cmd', 'orcad-powershell'] as const

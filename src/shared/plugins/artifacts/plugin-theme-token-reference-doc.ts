@@ -57,7 +57,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--tab-bar': 'Strip behind tabs, including the title bar when tabs sit in it',
   '--tab-active': 'Active tab',
   '--tab-active-foreground': 'Active tab text, and inactive tab text on hover',
-  '--tab-active-indicator': 'Line under the active tab',
+  '--tab-active-indicator': 'Line marking the active tab and the active right sidebar tool',
   '--tab-inactive': 'Inactive tabs',
   '--tab-inactive-foreground': 'Inactive tab text',
   '--split-divider': 'Divider between split tab groups',
@@ -73,6 +73,8 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--chat-selection': 'Selected text in chat; may be translucent, it paints over the chat',
   '--chat-selection-foreground': 'Text inside a chat selection',
   '--text-link': 'Links in Markdown previews, editors and agent chat',
+  '--editor-selection':
+    'Selected text in the code editor; keep it translucent so find matches show through. An unfocused editor shows it at half its opacity',
   '--diff-added': 'Added-line hue: Monaco overview ruler and chat diff text',
   '--diff-added-background': 'Added lines in diffs',
   '--diff-added-emphasis': 'Added characters within a changed line',
@@ -90,11 +92,14 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--git-decoration-ignored': 'Git-ignored files'
 }
 
-// Why: these mix per mode in main.css, or from chat-internal colors that authors cannot set.
+// Why: these mix per mode in main.css, come from chat-internal colors that authors cannot set,
+// or fall back differently per surface.
 const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
+  '--tab-active-indicator':
+    'tab line: same as `--tab-active-foreground`; right sidebar tool line: same as `--foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
   '--chat-user-message': '`--foreground` mixed lightly into the chat background',
-  '--chat-bold-foreground': 'the color of chat headings',
+  '--chat-bold-foreground': 'the chat text color around it',
   '--chat-muted-foreground': '`--muted-foreground` as chat paints it',
   '--chat-inline-code': '`--foreground` mixed lightly into the chat background',
   '--chat-inline-code-foreground': '`--foreground` mixed 85% into the chat background',

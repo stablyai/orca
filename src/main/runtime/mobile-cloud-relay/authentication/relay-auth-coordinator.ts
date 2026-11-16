@@ -1,7 +1,7 @@
 import {
   RELAY_HOST_CLOSE_REASON,
   type RelayHostCloseReason
-} from '../../../../shared/relay-host-close-reason'
+} from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { relayStatusCellUrl } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type * as RelayStatus from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { RelayAccessTokenRefresh } from '../session-lifecycle/relay-session-broker-contract'
@@ -20,6 +20,8 @@ import { relayIdentityKey, type RelayAuthContext } from './relay-auth-identity'
 export type CoordinatedRelayBroker = {
   closeNow(hostCloseReason?: RelayHostCloseReason): void
   isLive?(): boolean
+  /** A dead control whose own retry is already re-asking the director. */
+  isRecovering?(): boolean
   readonly endpoint?: { cellUrl: string } | null
 }
 
@@ -119,12 +121,13 @@ export class RelayAuthCoordinator {
   }
 
   // Revive untimed failures without disturbing live brokers, scheduled retries or in-flight opens.
+  // A recovering pool retries against the director alone; a rebuild would add an API round trip.
   ensureLive(): void {
     if (this.stopped || this.retry.pending || this.pendingOwnerships.size > 0) {
       return
     }
-    const ownership = this.ownership
-    if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
+    const broker = this.getActiveBroker()
+    if (broker && ((broker.isLive?.() ?? true) || broker.isRecovering?.())) {
       return
     }
     this.beginReconcile(false)

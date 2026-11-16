@@ -12,7 +12,7 @@ import {
 import {
   getFirstIncompleteFeatureWallSetupStepId,
   type FeatureWallSetupStepId
-} from '../../../../shared/feature-wall-setup-steps'
+} from '../../../../shared/feature-education/explore/feature-wall-setup-steps'
 import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'

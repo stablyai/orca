@@ -1,5 +1,5 @@
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
@@ -7,10 +7,10 @@ import type {
 import {
   assertFolderParentSetSupported,
   supportsCrossStoreLineage
-} from '../../shared/worktree-runtime-capabilities'
+} from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { resolveWorktreeCreateCwdContext } from '../workspace-selection/workspace-selector'
 import { mayNameFolderWorkspace } from '../workspace-selection/folder-workspace-selector'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from './worktree-selector-recovery'
@@ -162,7 +162,7 @@ export async function resolveSetParentFields(
   parentWorktree?: string
   matchFolderWorkspaces?: true
 }> {
-  const environment = resolveParentEnvironment(flags, client)
+  const environment = await resolveParentEnvironment(flags, client)
   if (environment) {
     return {
       crossStoreParent: await resolveCrossEnvironmentParent(client, { flags, cwd, environment })

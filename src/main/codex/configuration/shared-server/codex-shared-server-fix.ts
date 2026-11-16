@@ -5,7 +5,7 @@ import {
   CODEX_DISABLE_SHARED_SERVER_ARGS,
   CODEX_SHARED_SERVER_FEATURE_KEY,
   CODEX_STOP_SHARED_SERVER_ARGS
-} from '../../../../shared/codex-shared-server-command'
+} from '../../../../shared/agent-launch/startup/codex-shared-server-command'
 import { probeCodexSharedServer } from './codex-shared-server-probe'
 
 const COMMAND_TIMEOUT_MS = 15_000

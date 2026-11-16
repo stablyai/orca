@@ -1,12 +1,12 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   getRepoHostIdentityForParts,
   type HostScopedRepoKey
-} from '../../../../shared/repo-host-identity'
+} from '../../../../shared/repository/repo-host-identity'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey

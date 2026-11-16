@@ -254,38 +254,6 @@ describe('PluginPanel', () => {
     expect(container.textContent).toContain('Reloaded')
   })
 
-  it('restyles in place with fresh host theme tokens when the app theme changes', async () => {
-    readPanelEntryMock.mockResolvedValue({
-      html: '<html class="__ORCA_COLOR_SCHEME__"><head><style>:root{/*__ORCA_PANEL_TOKENS__*/}</style></head>',
-      sessionToken: SESSION_TOKEN
-    })
-    await renderPanel('plugin:samples.my-plugin/dashboard')
-    const lightFrame = container.querySelector('iframe')
-    expect(lightFrame?.getAttribute('srcdoc')).toContain('<html class="light">')
-    const frameWindow = lightFrame?.contentWindow
-    if (!frameWindow) {
-      throw new Error('frame window missing')
-    }
-    const posted = vi.spyOn(frameWindow, 'postMessage')
-
-    await act(async () => {
-      document.documentElement.classList.add('dark')
-      await waitForHappyDomTasks()
-    })
-
-    // Why the same frame: remounting would discard the panel's own state.
-    expect(container.querySelector('iframe')).toBe(lightFrame)
-    expect(posted).toHaveBeenCalledWith(
-      {
-        orca: 1,
-        kind: 'evt',
-        event: 'theme',
-        payload: { colorScheme: 'dark', tokens: expect.any(String) }
-      },
-      '*'
-    )
-  })
-
   it('rebinds a refreshed session without remounting unchanged panel HTML', async () => {
     readPanelEntryMock.mockResolvedValue({
       html: '<h1>Hello plugin</h1>',

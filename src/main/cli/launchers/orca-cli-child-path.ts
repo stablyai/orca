@@ -1,6 +1,6 @@
 // PTY and structured children must reach this app's CLI regardless of global registration.
 import { delimiter, dirname, join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { readInheritedPath } from '../../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import { ensureLinuxTerminalOrcaCliShimDir } from './linux-terminal-orca-cli-shim'

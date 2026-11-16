@@ -2,11 +2,11 @@ import { canonicalWorktreePath } from '../../git/worktrees/catalog/worktree-path
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../shared/cross-platform-path'
+} from '../../../shared/file-access/cross-platform-path'
 import {
   TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE,
   WATCHER_REMOVAL_IN_PROGRESS_MESSAGE
-} from '../../../shared/worktree/removal-fence-error'
+} from '../../../shared/worktree/removal/removal-fence-error'
 
 // Identity tokens let timed-out removals abandon exact installs without late completions releasing newer fences.
 type WatcherInstallToken = symbol

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher } from '../publication/dispatcher'
 import { encodeJsonRpcFrame, MessageType, type JsonRpcResponse } from '../wire/protocol'
 import type { TerminalUnavailableCause } from '../../../shared/terminal/runtime-policy/terminal-unavailable-cause'
-import { TERMINAL_UNAVAILABLE_ERROR_CODE as TERMINAL_UNAVAILABLE_RPC_ERROR_CODE } from '../../../shared/runtime-capability-degradation'
+import { TERMINAL_UNAVAILABLE_ERROR_CODE as TERMINAL_UNAVAILABLE_RPC_ERROR_CODE } from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 
 function decodeResponse(frame: Buffer): JsonRpcResponse | null {
   if (frame[0] !== MessageType.Regular) {

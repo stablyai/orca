@@ -1,5 +1,5 @@
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
-import { WorktreeJumpPaletteTaskSearchStatus } from './worktree-jump-palette-task-search-status'
+import { WorktreeJumpPaletteTaskSearchStatus } from './tasks/worktree-jump-palette-task-search-status'
 import type React from 'react'
 import { CommandDialog, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -10,12 +10,12 @@ import { getPaletteFilterSelectionCount } from '@/components/cmd-j/palette-filte
 import { useTranslate } from '@/i18n/use-translate'
 import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
-import { WorktreeJumpPaletteEntry } from './worktree-jump-palette-entry'
-import { FooterKey, PaletteState } from './worktree-jump-palette-primitives'
+import { WorktreeJumpPaletteEntry } from './rows/worktree-jump-palette-entry'
+import { FooterKey, PaletteState } from './rows/worktree-jump-palette-row-content'
 import {
   getWorktreeJumpPaletteEmptyState,
   getWorktreeJumpPaletteResultCount
-} from './worktree-jump-palette-empty-state'
+} from './results/worktree-jump-palette-empty-state'
 
 export function WorktreeJumpPaletteSurface({
   controller

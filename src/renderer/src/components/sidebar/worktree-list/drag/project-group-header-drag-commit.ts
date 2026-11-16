@@ -1,6 +1,6 @@
 import { getProjectGroupTabOrderUpdatesForSidebarDrop } from './project-group-header-drop'
 import type { ProjectGroupHeaderDragSession } from './project-group-header-drag-contract'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
 export function commitProjectGroupHeaderDragDrop(
