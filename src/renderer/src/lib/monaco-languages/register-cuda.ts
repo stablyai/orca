@@ -3,6 +3,8 @@ import {
   conf as cppLanguageConfiguration,
   language as cppMonarchLanguage
 } from 'monaco-editor/esm/vs/basic-languages/cpp/cpp.js'
+import { CONTROL_KEYWORD_LANGUAGES } from './monarch-control-keyword-languages'
+import { withControlKeywords } from './monarch-control-keywords'
 
 type MonacoModule = typeof Monaco
 
@@ -56,9 +58,15 @@ export function registerCudaLanguage(monaco: MonacoModule): void {
   })
   monaco.languages.setLanguageConfiguration(CUDA_LANGUAGE_ID, cppLanguageConfiguration)
   // CUDA is a C++ superset, so reuse Monaco's C++ grammar with CUDA identifiers as keywords.
-  monaco.languages.setMonarchTokensProvider(CUDA_LANGUAGE_ID, {
-    ...cppMonarchLanguage,
-    tokenPostfix: '.cuda',
-    keywords: [...cppMonarchLanguage.keywords, ...CUDA_KEYWORDS, ...CUDA_VECTOR_TYPES]
-  })
+  monaco.languages.setMonarchTokensProvider(
+    CUDA_LANGUAGE_ID,
+    withControlKeywords(
+      {
+        ...cppMonarchLanguage,
+        tokenPostfix: '.cuda',
+        keywords: [...cppMonarchLanguage.keywords, ...CUDA_KEYWORDS, ...CUDA_VECTOR_TYPES]
+      },
+      CONTROL_KEYWORD_LANGUAGES.cpp
+    )
+  )
 }
