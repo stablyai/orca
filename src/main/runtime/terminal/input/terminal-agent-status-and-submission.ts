@@ -106,8 +106,10 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
         return
       }
       // No identified owner keeps legacy rules; an unverifiable owned process cannot be declared exited from silence.
-      if (verdict === null || verdict === 'unverifiable') {
-        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
+      if (verdict === null) {
+        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, false)
+      } else if (verdict === 'unverifiable') {
+        this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       } else if (verdict === 'exited' && !recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
       } else if (verdict === 'live') {

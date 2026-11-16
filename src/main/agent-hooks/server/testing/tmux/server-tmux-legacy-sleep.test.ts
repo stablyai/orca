@@ -22,6 +22,7 @@ import {
   readPaneTmuxHost
 } from '../../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import { captureWorktreeSleepResumeRecords } from '../../../../runtime/terminal/stop/worktree-sleep-resume-records'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
@@ -96,3 +97,65 @@ it.each([
     expect(server.row()).toBeUndefined()
   }
 )
+
+it('does not recapture a detached tmux writer from its remaining live checkpoint', async () => {
+  const server = await createServer()
+  server.setHookRootEvidenceReader(
+    (request) => readHookRootEvidence(request, io),
+    (request) => readPaneTmuxHost(io, request)
+  )
+  const identities = new AgentStatusObservedPaneIdentities()
+  const observed = new AgentStatusObservedPaneIdentityCapture(identities)
+  const runtime = {
+    getAgentStatusTerminalHandleForPaneKey: () => 'terminal-a',
+    getTerminalProcessIncarnation: () => 'execution-a',
+    getAgentStatusOrchestrationContextForPaneKey: () => undefined
+  }
+  observed.attach(runtime)
+  server.subscribeEnrichedStatus((row) => observed.observe(row))
+  server.setCliWriterExecutionMatcher(identities, runtime)
+  runningPane(4050, CLIENT, ...TMUX)
+  await hook(server, 'UserPromptSubmit', {
+    session: 'detached-session',
+    pid: 4043,
+    tmuxPane: TMUX_HINT,
+    prompt: 'In tmux'
+  })
+  await server.checkAgentPresenceSince(PANE, 0)
+  const saved: SleepingAgentSessionRecord = {
+    paneKey: PANE,
+    worktreeId: 'wt-1',
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'detached-session' },
+    prompt: 'In tmux',
+    state: 'done',
+    capturedAt: NOW,
+    updatedAt: NOW,
+    origin: 'live'
+  }
+  const retireSavedRecord = vi.fn()
+  server.setTerminalPaneLifecycle({
+    ownsProcess: () => true,
+    isStopping: () => false,
+    isReversibleStop: () => false,
+    isPlaced: () => true,
+    readSavedRecord: () => saved,
+    retireSavedRecord
+  })
+  // Detach ends the outer command, while the original agent remains under its server.
+  runningPane(101, ...TMUX)
+  server.retireProcessAuthority(PANE, { confirmedExit: true })
+  expect(retireSavedRecord).not.toHaveBeenCalled()
+  expect(server.row()).toBeUndefined()
+  const capture = await captureWorktreeSleepResumeRecords({
+    worktreeId: 'wt-1',
+    paneKeysByPtyId: new Map([['pty', [PANE]]]),
+    launchByPtyId: new Map(),
+    readRowsForPane: (key) => server.getStatusSnapshotForPane(key),
+    readSavedRecord: async () => saved,
+    readIdentity: (key, record) => server.paneAgentIdentity(key, record),
+    checkAgentPresence: (key, since) => server.checkAgentPresenceSince(key, since ?? 0),
+    capturedAt: NOW + 1_000
+  })
+  expect(capture.get('pty')).toEqual({ records: [], retiredPaneKeys: [PANE] })
+})

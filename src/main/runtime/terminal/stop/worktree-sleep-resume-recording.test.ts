@@ -16,6 +16,7 @@ const {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   deferred,
+  syncSinglePty,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
@@ -240,7 +241,9 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
   it.each([
     ['quit', ['0'], false],
     ['suspended', ['148'], true],
-    ['suspended, then another command', ['148', '0'], true]
+    ['macOS suspended', ['146'], true],
+    ['suspended, then another command', ['148', '0'], true],
+    ['macOS suspended, then another command', ['146', '0'], true]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000)
@@ -324,7 +327,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       await wake('pty-3')
       for (const status of finishes) {
         tick()
-        runtime.onPtyData('pty-3', `\x1b]133;D;${status}\x07`, Date.now())
+        runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${status}\x07`, Date.now())
       }
       // A quit retires the saved conversation itself, before its exit evidence can expire.
       expect(await saved()).toEqual(keepsRecovery ? expect.objectContaining(resumable) : undefined)
@@ -341,4 +344,34 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       vi.useRealTimers()
     }
   })
+})
+
+it('does not declare an identified stopped process ended when its title returns to the shell', async () => {
+  const fixture = makeRuntimeStoreWithWorkspaceSession(makeWorkspaceSessionWithHeadlessTerminal())
+  const exits: string[] = []
+  const checked = deferred<void>()
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
+    checkHookAgentPresence: async () => {
+      checked.resolve()
+      return 'unverifiable'
+    },
+    onTerminalSideEffects: (batch) => {
+      for (const fact of batch.facts) {
+        if (fact.kind === 'agent-exited') {
+          exits.push(fact.kind)
+        }
+      }
+    }
+  })
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => false,
+    getForegroundProcess: async () => 'zsh'
+  })
+  await syncSinglePty(runtime)
+  runtime.onPtyData('pty-1', '\x1b]0;✳ Claude Code\x07', 100)
+  runtime.onPtyData('pty-1', '\x1b]0;zsh\x07\x1b]133;D;146\x07', 101)
+  await checked.promise
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(exits).toEqual([])
 })
