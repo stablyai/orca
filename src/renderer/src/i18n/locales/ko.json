@@ -508,9 +508,13 @@
       "proxyUrlErrors": {
         "tooLong": "프록시 URL이 너무 깁니다.",
         "invalid": "유효한 프록시 URL을 입력하세요.",
-        "unsupportedProtocol": "http, https, socks, socks4 또는 socks5 프록시 URL을 사용하세요.",
+        "unsupportedProtocol": "http, https, socks, socks4 또는 socks5/socks5h 프록시 URL을 사용하세요.",
         "missingHost": "프록시 URL에는 호스트가 포함되어야 합니다."
-      }
+      },
+      "caCertificate": "사용자 지정 CA 인증서(PEM)",
+      "caDescription": "개인 키를 제외한 회사 CA 인증서를 붙여 넣으세요. Cloud 로그인, Relay 및 기타 앱 연동에 적용됩니다. 내장 브라우저와 터미널 명령은 자체 TLS 설정을 유지합니다.",
+      "ignoreSsl": "SSL 인증서 오류 무시",
+      "ignoreSslDescription": "이 연결의 인증서 검증을 비활성화합니다. 인증 정보가 가로채질 수 있습니다. 신뢰할 수 있는 CA 인증서를 사용하면 이 설정을 끄세요."
     },
     "diagnostics": {
       "errors": {
@@ -7442,7 +7446,7 @@
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "선택 사항. 쉼표, 세미콜론 또는 새 줄로 호스트를 구분합니다.",
-          "0adfce9fa7": "http, https, SOCKS, SOCKS4, SOCKS5 URL을 지원합니다.",
+          "0adfce9fa7": "앱 및 Relay 연결에 http, https, socks, socks4, socks5, socks5h URL을 지원합니다.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "시스템 프록시 설정 및 상속된 프록시 환경 변수를 사용하려면 비워 두세요.",
           "823e0f15b1": "Orca 네트워크 요청 및 로컬 터미널의 자식 프로세스에 사용할 프록시 URL입니다.",

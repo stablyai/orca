@@ -1,4 +1,6 @@
-import WebSocket, { type RawData } from 'ws'
+import { relayWebSocketOrigin } from '../../mobile-cloud-relay/relay-websocket-origin'
+import { createProxyWebSocket } from '../../../network/proxy-websocket'
+import type WebSocket from 'ws'
 import { forEachWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { RpcTransport } from '../transport'
 import type {
@@ -39,21 +41,6 @@ type CloudRelayTransportOptions = {
   ) => void
 }
 
-function relayWebSocketOrigin(cellUrl: string): string {
-  const url = new URL(cellUrl)
-  if (url.pathname !== '/' || url.search || url.hash) {
-    throw new Error('relay_cell_url_must_be_an_origin')
-  }
-  if (url.protocol === 'https:') {
-    url.protocol = 'wss:'
-  } else if (url.protocol === 'http:') {
-    url.protocol = 'ws:'
-  } else {
-    throw new Error('relay_cell_url_must_use_http')
-  }
-  return url.origin
-}
-
 export class CloudRelayTransport implements RpcTransport, MobileSocketTransport {
   private readonly cellWebSocketOrigin: string
   private readonly relayHostId: string
@@ -79,7 +66,10 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.createSocket =
       options.createSocket ??
       ((url) =>
-        new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES }))
+        createProxyWebSocket(url, {
+          perMessageDeflate: false,
+          maxPayload: MAX_RELAY_MESSAGE_BYTES
+        }))
   }
 
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {
@@ -190,7 +180,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
         }
         this.finalizeConnection(connection.connId, socket)
       }
-      const onMessage = (raw: RawData, isBinary: boolean): void => {
+      const onMessage = (raw: WebSocket.RawData, isBinary: boolean): void => {
         if (this.stopped || finalized) {
           return
         }

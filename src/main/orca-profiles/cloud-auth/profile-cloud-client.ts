@@ -3,6 +3,7 @@ import type {
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary
 } from '../../../shared/orca-profiles/orca-profiles'
+import { getMainHttpClient } from '../../network/http-client'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from '../cloud-session/profile-cloud-session-exchange'
@@ -187,7 +188,7 @@ async function readCloudErrorCode(response: Response): Promise<string | undefine
 }
 
 async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions): Promise<T> {
-  const response = await fetch(url, {
+  const response = await getMainHttpClient().fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',

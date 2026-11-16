@@ -1,3 +1,4 @@
+import { sanitizeProxyTlsSettingsUpdate } from '../network/proxy-tls-settings'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { normalizeNodeDistMirrorUrl } from '../../shared/node-runtime/node-dist-mirror'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network/network-proxy'
@@ -7,6 +8,7 @@ export function sanitizeNetworkSettings(
   args: Partial<GlobalSettings>,
   sanitized: Partial<GlobalSettings>
 ): void {
+  Object.assign(sanitized, sanitizeProxyTlsSettingsUpdate(args))
   if ('httpProxyUrl' in args) {
     const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
     sanitized.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''

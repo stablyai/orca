@@ -5,6 +5,14 @@ import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
 export const getAdvancedNetworkSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
+    title: translate('settings.network.caCertificate', 'Custom CA certificate (PEM)'),
+    keywords: ['ssl', 'tls', 'ca', 'pem']
+  },
+  {
+    title: translate('settings.network.ignoreSsl', 'Ignore SSL certificate errors'),
+    keywords: ['ssl', 'tls']
+  },
+  {
     title: translate(
       'auto.components.settings.AdvancedNetworkSettingsSection.c46cdbbd4e',
       'Network'

@@ -22,6 +22,7 @@ type AdvancedPaneProps = {
 
 export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): React.JSX.Element {
   const t = useTranslate()
+  const updateNetworkSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const mountedRef = useMountedRef()
   const http1CompatibilityInitialRef = useRef(Boolean(settings.electronHttp1CompatibilityMode))
@@ -140,7 +141,10 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
           'App-level network routing for proxies and corporate environments.'
         )}
       >
-        <AdvancedNetworkSettingsSection settings={settings} updateSettings={updateSettings} />
+        <AdvancedNetworkSettingsSection
+          settings={settings}
+          updateSettings={updateNetworkSettings}
+        />
       </SettingsGroup>
 
       {/* Hidden, not unmounted, so filtering mid-run keeps the run's progress. */}

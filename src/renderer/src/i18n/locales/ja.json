@@ -784,9 +784,13 @@
       "proxyUrlErrors": {
         "tooLong": "プロキシ URL が長すぎます。",
         "invalid": "有効なプロキシ URL を入力してください。",
-        "unsupportedProtocol": "http、https、socks、socks4、socks5 のいずれかのプロキシ URL を使用してください。",
+        "unsupportedProtocol": "http、https、socks、socks4、socks5/socks5h のいずれかのプロキシ URL を使用してください。",
         "missingHost": "プロキシ URL にはホストが必要です。"
-      }
+      },
+      "caCertificate": "カスタム CA 証明書（PEM）",
+      "caDescription": "秘密鍵を含めずに、企業の CA 証明書を貼り付けてください。Cloud ログイン、Relay、その他のアプリ連携に適用されます。組み込みブラウザーとターミナルコマンドはそれぞれの TLS 設定を使用します。",
+      "ignoreSsl": "SSL 証明書エラーを無視",
+      "ignoreSslDescription": "これらの接続の証明書検証を無効にします。認証情報が傍受されるおそれがあります。信頼された CA 証明書を使用する場合はオフにしてください。"
     },
     "diagnostics": {
       "errors": {
@@ -8061,7 +8065,7 @@
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "オプション。ホストはカンマ、セミコロン、または改行で区切ります。",
-          "0adfce9fa7": "http、https、socks、socks4、socks5 の URL をサポートします。",
+          "0adfce9fa7": "アプリと Relay の接続で http、https、socks、socks4、socks5、socks5h の URL をサポートします。",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "システムのプロキシ設定と継承されたプロキシ環境変数を使用するには、空のままにします。",
           "823e0f15b1": "Orca ネットワークリクエストとローカルターミナルの子のプロキシ URL。",

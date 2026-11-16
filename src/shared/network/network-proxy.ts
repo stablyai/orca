@@ -1,4 +1,11 @@
-export type NetworkProxySettings = {
+export type NetworkProxyTlsSettings = {
+  /** Additional PEM CA certificates for Cloud, Relay, and app integrations. */
+  httpProxyCaCertificate?: string
+  /** Explicit certificate verification bypass; disabled by default. */
+  httpProxyIgnoreCertificateErrors?: boolean
+}
+
+export type NetworkProxySettings = NetworkProxyTlsSettings & {
   httpProxyUrl?: string | null
   httpProxyBypassRules?: string | null
 }
@@ -7,7 +14,7 @@ export type NetworkProxySettings = {
 export const PROXY_URL_FAILURE_COPY = {
   tooLong: 'Proxy URL is too long.',
   invalid: 'Enter a valid proxy URL.',
-  unsupportedProtocol: 'Use an http, https, socks, socks4, or socks5 proxy URL.',
+  unsupportedProtocol: 'Use an http, https, socks, socks4, socks5, or socks5h proxy URL.',
   missingHost: 'Proxy URL must include a host.'
 } as const
 
@@ -23,7 +30,7 @@ function proxyUrlFailure(code: ProxyUrlFailureCode): ProxyUrlValidationResult {
 
 const PROXY_URL_MAX_LENGTH = 2048
 const PROXY_BYPASS_RULES_MAX_LENGTH = 4096
-const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:'])
+const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:', 'socks5h:'])
 const PROXY_ENV_KEYS = [
   'HTTPS_PROXY',
   'https_proxy',

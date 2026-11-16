@@ -1,5 +1,7 @@
 import { net, session, type Session } from 'electron'
 import type { MainHttpClient } from '../network/http-client'
+import { getProxySessionTlsSettings } from '../network/proxy-tls-settings'
+import { fetchWithProxyTls } from '../network/proxy-tls-fetch'
 import { hasElectronProxyCredentialsForSession } from '../network/electron-proxy-credentials'
 import { getProxySessionApplicationReadiness } from '../network/proxy-settings'
 import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
@@ -26,11 +28,23 @@ async function hasConfiguredProxyCredentials(
 }
 
 async function fetchFromDefaultSession(url: string, init?: RequestInit): Promise<Response> {
+  if (!isHttpUrl(url)) {
+    return net.fetch(url, init)
+  }
   const proxySession = session.defaultSession
-  if (
-    isHttpUrl(url) &&
-    (await hasConfiguredProxyCredentials(proxySession, init?.signal ?? undefined))
-  ) {
+  const hasCredentials = await hasConfiguredProxyCredentials(
+    proxySession,
+    init?.signal ?? undefined
+  )
+  const tls = getProxySessionTlsSettings(proxySession)
+  if (tls && (tls.certificate || tls.ignoreErrors)) {
+    const headers = new Headers(init?.headers)
+    if (!headers.has('user-agent')) {
+      headers.set('user-agent', proxySession.getUserAgent())
+    }
+    return fetchWithProxyTls(proxySession, tls, url, { ...init, headers })
+  }
+  if (hasCredentials) {
     return fetchWithProxyLogin(new Request(url, init), proxySession)
   }
   // Not ready falls through too: the default-session request guard cancels it.

@@ -696,9 +696,13 @@
       "proxyUrlErrors": {
         "tooLong": "代理 URL 过长",
         "invalid": "请输入有效的代理 URL",
-        "unsupportedProtocol": "请使用 http、https、socks、socks4 或 socks5 代理 URL",
+        "unsupportedProtocol": "请使用 http、https、socks、socks4 或 socks5/socks5h 代理 URL",
         "missingHost": "代理 URL 必须包含主机"
-      }
+      },
+      "caCertificate": "自定义 CA 证书（PEM）",
+      "caDescription": "粘贴企业 CA 证书，请勿包含私钥。适用于 Cloud 登录、Relay 和其他应用集成。内嵌浏览器与终端命令保留各自的 TLS 设置。",
+      "ignoreSsl": "忽略 SSL 证书错误",
+      "ignoreSslDescription": "禁用这些连接的证书验证，可能导致凭据被截获。使用受信任的 CA 证书时请保持关闭。"
     },
     "diagnostics": {
       "errors": {
@@ -8101,7 +8105,7 @@
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "可选，用逗号、分号或换行符分隔主机",
-          "0adfce9fa7": "支持HTTP、HTTP(s)、SOCKS、SOCKS5 和SOCKS5h",
+          "0adfce9fa7": "应用和 Relay 连接支持 http、https、socks、socks4、socks5 和 socks5h URL。",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "留空以使用系统代理设置和继承的代理环境变量",
           "823e0f15b1": "用于 Orca 网络请求和本地终端子进程的代理 URL",

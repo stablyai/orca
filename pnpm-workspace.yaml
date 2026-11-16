@@ -113,6 +113,7 @@ patchedDependencies:
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
   '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch
   i18next-cli@1.74.2: config/patches/i18next-cli@1.74.2.patch
+  node-fetch@3.3.2: config/patches/node-fetch@3.3.2.patch
   ws@8.22.0: config/patches/ws@8.22.0.patch
   oxlint-plugin-anti-slop@0.1.2: config/patches/oxlint-plugin-anti-slop@0.1.2.patch
   monaco-editor@0.55.1: config/patches/monaco-editor@0.55.1.patch

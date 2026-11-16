@@ -1387,9 +1387,13 @@
       "proxyUrlErrors": {
         "tooLong": "Proxy URL is too long.",
         "invalid": "Enter a valid proxy URL.",
-        "unsupportedProtocol": "Use an http, https, socks, socks4, or socks5 proxy URL.",
+        "unsupportedProtocol": "Use an http, https, socks, socks4, or socks5/socks5h proxy URL.",
         "missingHost": "Proxy URL must include a host."
-      }
+      },
+      "caCertificate": "Custom CA certificate (PEM)",
+      "caDescription": "Paste your corporate CA certificates, without private keys. Applies to Cloud sign-in, Relay, and other app integrations. Embedded browsing and terminal commands keep their own TLS settings.",
+      "ignoreSsl": "Ignore SSL certificate errors",
+      "ignoreSslDescription": "Disables certificate verification for these connections. This can expose your credentials to interception. Leave off when using a trusted CA certificate."
     },
     "diagnostics": {
       "errors": {
@@ -8937,7 +8941,7 @@
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "Optional. Separate hosts with commas, semicolons, or new lines.",
-          "0adfce9fa7": "Supports http, https, socks, socks4, and socks5 URLs.",
+          "0adfce9fa7": "Supports http, https, socks, socks4, socks5, and socks5h URLs for app and Relay connections.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "Leave empty to use system proxy settings and inherited proxy environment variables.",
           "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",

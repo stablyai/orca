@@ -22,6 +22,7 @@ import { useSettingsTargetReveal } from '../../section-layout/settings-target-hi
 import { NODE_DIST_MIRROR_SETTINGS_TARGET_ID } from '../../navigation/settings-navigation-types'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
+import { ProxyTlsSettingsFields } from './ProxyTlsSettingsFields'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
@@ -36,6 +37,8 @@ export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
   return Boolean(
     settings.httpProxyUrl?.trim() ||
     settings.httpProxyBypassRules?.trim() ||
+    settings.httpProxyCaCertificate?.trim() ||
+    settings.httpProxyIgnoreCertificateErrors ||
     settings.nodeDistMirrorUrl?.trim()
   )
 }
@@ -144,7 +147,7 @@ export function updateHttpProxyBypassRulesDraftState(
 
 type AdvancedNetworkSettingsSectionProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
 export function AdvancedNetworkSettingsSection({
@@ -241,7 +244,11 @@ export function AdvancedNetworkSettingsSection({
         'bypass',
         'localhost',
         'mirror',
-        'nodejs'
+        'nodejs',
+        'ssl',
+        'tls',
+        'ca',
+        'pem'
       ]}
       className="space-y-3 py-3"
     >
@@ -321,7 +328,7 @@ export function AdvancedNetworkSettingsSection({
                 <p className="text-xs text-muted-foreground">
                   {t(
                     'auto.components.settings.AdvancedNetworkSettingsSection.0adfce9fa7',
-                    'Supports http, https, socks, socks4, and socks5 URLs.'
+                    'Supports http, https, socks, socks4, socks5, and socks5h URLs for app and Relay connections.'
                   )}
                 </p>
               )}
@@ -357,6 +364,7 @@ export function AdvancedNetworkSettingsSection({
                 )}
               </p>
             </div>
+            <ProxyTlsSettingsFields settings={settings} updateSettings={updateSettings} />
 
             <div id={NODE_DIST_MIRROR_SETTINGS_TARGET_ID}>
               <NodeDistMirrorSettingField

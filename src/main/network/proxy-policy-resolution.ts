@@ -12,6 +12,12 @@ export type ProxyApplyResult =
   | { source: 'env'; proxyRules: string; proxyBypassRules?: string }
   | { source: 'system' | 'none' | 'invalid-settings' | 'invalid-env' }
 
+export function proxyMemoKey(result: ProxyApplyResult): string {
+  return result.source === 'settings' || result.source === 'env'
+    ? `${result.source}\0${result.proxyRules}\0${result.proxyBypassRules ?? ''}`
+    : result.source
+}
+
 export function resolveProxyPolicyWithoutSession(
   settings: NetworkProxySettings,
   env: Record<string, string | undefined>

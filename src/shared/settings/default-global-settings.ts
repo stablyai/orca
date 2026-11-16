@@ -140,6 +140,8 @@ export function buildDefaultSettings(args: {
     terminalScrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     httpProxyUrl: '',
     httpProxyBypassRules: '',
+    httpProxyCaCertificate: '',
+    httpProxyIgnoreCertificateErrors: false,
     nodeDistMirrorUrl: '',
     electronHttp1CompatibilityMode: false,
     openLinksInApp: false,

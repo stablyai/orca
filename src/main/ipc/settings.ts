@@ -20,10 +20,7 @@ import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { recordManagedHookInstallFailure } from '../agent-hooks/installation/install-telemetry'
-import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/sessions/proxy/browser-session-proxy'
-import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
-import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
+import { applyNetworkSettings } from './network-settings-application'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../shared/i18n/ui-language'
@@ -186,7 +183,10 @@ export function registerSettingsHandlers(
     const before = store.getSettings()
     const updateOptions = {
       notifyListeners: true,
-      originWebContentsId: event.sender.id
+      ...('httpProxyCaCertificate' in sanitizedArgs ||
+      'httpProxyIgnoreCertificateErrors' in sanitizedArgs
+        ? {}
+        : { originWebContentsId: event.sender.id })
     }
     const result =
       'alwaysForceDeleteWorktrees' in sanitizedArgs ||
@@ -201,24 +201,7 @@ export function registerSettingsHandlers(
         enabled: result.experimentalAgentDashboardPopout === true
       })
     }
-    const proxySettingsChanged =
-      ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
-      ('httpProxyBypassRules' in sanitizedArgs &&
-        before.httpProxyBypassRules !== result.httpProxyBypassRules)
-    if (proxySettingsChanged) {
-      // Start every authority before yielding so requests cannot enter between their barriers.
-      const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        applyElectronProxySettings(result),
-        applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), result),
-        applyProxyToElectronUpdaterSession(result)
-      ])
-      if (defaultSessionResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings')
-      }
-      if (browserSessionsResult.status === 'rejected') {
-        console.warn('[settings] failed to apply network proxy settings to browser sessions')
-      }
-    }
+    const networkSettingsError = await applyNetworkSettings(before, result, sanitizedArgs)
     if (
       'computerAwakeMode' in sanitizedArgs ||
       'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
@@ -287,6 +270,9 @@ export function registerSettingsHandlers(
       })
     }
 
+    if (networkSettingsError) {
+      throw networkSettingsError
+    }
     return store.getSettings()
   })
 

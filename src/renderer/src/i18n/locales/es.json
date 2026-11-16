@@ -514,9 +514,13 @@
       "proxyUrlErrors": {
         "tooLong": "La URL de proxy es demasiado larga.",
         "invalid": "Introduce una URL de proxy válida.",
-        "unsupportedProtocol": "Usa una URL de proxy http, https, socks, socks4 o socks5.",
+        "unsupportedProtocol": "Usa una URL de proxy http, https, socks, socks4 o socks5/socks5h.",
         "missingHost": "La URL de proxy debe incluir un host."
-      }
+      },
+      "caCertificate": "Certificado CA personalizado (PEM)",
+      "caDescription": "Pegue los certificados CA de su empresa, sin claves privadas. Se aplica al inicio de sesión de Cloud, a Relay y a otras integraciones de la aplicación. El navegador integrado y los comandos del terminal conservan su propia configuración TLS.",
+      "ignoreSsl": "Ignorar errores de certificados SSL",
+      "ignoreSslDescription": "Desactiva la verificación de certificados para estas conexiones. Sus credenciales podrían ser interceptadas. Mantenga esta opción desactivada si utiliza un certificado CA de confianza."
     },
     "diagnostics": {
       "errors": {
@@ -7730,7 +7734,7 @@
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "Opcional. Separa hosts con comas, punto y coma o líneas nuevas.",
-          "0adfce9fa7": "Admite URLs http, https, socks, socks4 y socks5.",
+          "0adfce9fa7": "Admite URLs http, https, socks, socks4, socks5 y socks5h para conexiones de la aplicación y Relay.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "Déjalo vacío para usar la configuración de proxy del sistema y las variables de entorno de proxy heredadas.",
           "823e0f15b1": "URL de proxy para requests de red de Orca y procesos de terminal locales hijos.",

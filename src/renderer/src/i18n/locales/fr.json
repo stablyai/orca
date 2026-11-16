@@ -768,9 +768,13 @@
       "proxyUrlErrors": {
         "tooLong": "L’URL du proxy est trop longue.",
         "invalid": "Saisissez une URL de proxy valide.",
-        "unsupportedProtocol": "Utilisez une URL de proxy http, https, socks, socks4 ou socks5.",
+        "unsupportedProtocol": "Utilisez une URL de proxy http, https, socks, socks4 ou socks5/socks5h.",
         "missingHost": "L’URL du proxy doit inclure un hôte."
-      }
+      },
+      "caCertificate": "Certificat CA personnalisé (PEM)",
+      "caDescription": "Collez les certificats CA de votre entreprise, sans clés privées. S’applique à la connexion Cloud, à Relay et aux autres intégrations de l’application. Le navigateur intégré et les commandes du terminal conservent leurs propres paramètres TLS.",
+      "ignoreSsl": "Ignorer les erreurs de certificat SSL",
+      "ignoreSslDescription": "Désactive la vérification des certificats pour ces connexions. Vos identifiants pourraient être interceptés. Laissez cette option désactivée si vous utilisez un certificat CA de confiance."
     },
     "diagnostics": {
       "errors": {
@@ -8001,7 +8005,7 @@
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "Facultatif. Séparez les hôtes par des virgules, des points-virgules ou des sauts de ligne.",
-          "0adfce9fa7": "Prend en charge les URL http, https, socks, socks4 et socks5.",
+          "0adfce9fa7": "Prend en charge les URL http, https, socks, socks4, socks5 et socks5h pour les connexions de l’application et de Relay.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "Laissez vide pour utiliser les réglages de proxy du système et les variables d'environnement de proxy héritées.",
           "823e0f15b1": "URL de proxy pour les requêtes réseau d'Orca et les processus enfants des terminaux locaux.",

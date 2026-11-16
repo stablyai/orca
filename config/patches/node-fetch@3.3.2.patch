@@ -1,0 +1,31 @@
+diff --git a/src/index.js b/src/index.js
+index 7c4aee87b68f7b3613ce7dad4a570c17ec3630b9..5dcce0b95dcb980104ced99d1f25b5f58e63b08b 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -22,7 +22,6 @@ import {FetchError} from './errors/fetch-error.js';
+ import {AbortError} from './errors/abort-error.js';
+ import {isRedirect} from './utils/is-redirect.js';
+ import {FormData} from 'formdata-polyfill/esm.min.js';
+-import {isDomainOrSubdomain, isSameProtocol} from './utils/is.js';
+ import {parseReferrerPolicyFromHeader} from './utils/referrer.js';
+ import {
+ 	Blob,
+@@ -197,16 +196,8 @@ export default async function fetch(url, options_) {
+ 							referrerPolicy: request.referrerPolicy
+ 						};
+ 
+-						// when forwarding sensitive headers like "Authorization",
+-						// "WWW-Authenticate", and "Cookie" to untrusted targets,
+-						// headers will be ignored when following a redirect to a domain
+-						// that is not a subdomain match or exact match of the initial domain.
+-						// For example, a redirect from "foo.com" to either "foo.com" or "sub.foo.com"
+-						// will forward the sensitive headers, but a redirect to "bar.com" will not.
+-						// headers will also be ignored when following a redirect to a domain using
+-						// a different protocol. For example, a redirect from "https://foo.com" to "http://foo.com"
+-						// will not forward the sensitive headers
+-						if (!isDomainOrSubdomain(request.url, locationURL) || !isSameProtocol(request.url, locationURL)) {
++						// Preserve Chromium's credential boundary across redirects, including port and subdomain changes.
++						if (new URL(request.url).origin !== locationURL.origin) {
+ 							for (const name of ['authorization', 'www-authenticate', 'cookie', 'cookie2']) {
+ 								requestOptions.headers.delete(name);
+ 							}
