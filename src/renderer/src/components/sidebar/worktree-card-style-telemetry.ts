@@ -12,7 +12,6 @@ export function trackWorktreeCardsIntroAction(
   track('worktree_cards_intro_action', { action, switch_position: switchPosition })
 }
 
-/** Call only for a real change, so counts mean switches rather than re-picks of the same style. */
 export function trackWorktreeCardStyleChanged(
   experimental: boolean,
   source: WorktreeCardStyleChangeSource
