@@ -44,7 +44,7 @@ export function patchDetectedWorktreeHeadIdentities(
     ? null
     : {
         detectedWorktreesByRepo: {
-          ...state.detectedWorktreesByRepo,
+          ...detectedByRepo,
           [repoId]: { ...detected, worktrees }
         }
       }
