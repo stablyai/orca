@@ -1,6 +1,6 @@
 // Derive hold labels on the client; the wire carries queue state, not presentation wording.
 
-import { agentMessageDisplayText } from '../agent-message-display-text'
+import { agentMessageDisplayText } from './messages/agent-message-display-text'
 import {
   readWholeAgentSessionFailureFact,
   type AgentSessionFailureFact,
@@ -15,20 +15,23 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { pendingPromptsAllUnanswerableHere } from '../agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage,
   type AgentSessionQueuePause
 } from '../requests/agent-session-queued-message-wire'
-import { readAgentMessageSource, type AgentMessageSource } from '../agent-session-message-source'
+import {
+  readAgentMessageSource,
+  type AgentMessageSource
+} from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
   type NativeChatImageLabelCopy
-} from '../../native-chat/native-chat-image-label'
+} from '../../native-chat/attachments/native-chat-image-label'
 
 export type QueuedMessageCardHold =
   /** Plainly queued, also behind an open question: the question already says the agent waits. */

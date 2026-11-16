@@ -120,6 +120,7 @@ export const SettingsUpdate = z
     experimentalConnectors: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     codexShareHistoryAcrossAccounts: z.boolean().optional(),
+    deleteChatHistoryWithWorkspace: z.boolean().optional(),
     claudeSubagentNavigationEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

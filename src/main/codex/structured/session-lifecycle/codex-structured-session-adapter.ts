@@ -3,7 +3,7 @@ import { readCodexSessionAccountUsage } from './codex-session-account-usage'
 import { manageCodexSessionMcp } from './codex-session-mcp'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
-import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,

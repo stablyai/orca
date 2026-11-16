@@ -31,7 +31,7 @@ beforeAll(async () => {
     return
   }
   const { buildNativeChatVisualDocument } =
-    await import('../../../../src/shared/native-chat/native-chat-visual-shell')
+    await import('../../../../src/shared/native-chat/visuals/native-chat-visual-shell')
   const contract =
     await import('../../../../mobile/src/session/native-chat/visual/mobile-native-chat-visual-frame-contract')
   framePath = contract.MOBILE_NATIVE_CHAT_VISUAL_FRAME_PATH

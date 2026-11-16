@@ -1,7 +1,7 @@
 import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/claude-model-fallback'
+} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { NativeChatUsageLimitAutoContinue } from '../../usage/NativeChatUsageLimitAutoContinue'
 import { NativeChatUsageLimitActions } from '../../usage/NativeChatUsageLimitActions'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
-import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,10 +27,10 @@ import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
-} from '../../../../../../shared/native-chat/native-chat-notice'
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
-import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/native-chat-orca-stop-words'
+import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
 import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import {

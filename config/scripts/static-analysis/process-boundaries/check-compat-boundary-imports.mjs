@@ -14,7 +14,7 @@ export const COMPAT_FOLDERS = [
       'old-client-session-tabs-projection'
     ],
     importers: [
-      'src/main/runtime/session-tabs/main-layout-session-tab-move.ts',
+      'src/main/runtime/session-tabs/layout/main-layout-session-tab-move.ts',
       'src/main/runtime/terminal/launch/mobile-terminal-chat-fork-create.ts',
       'src/main/runtime/terminal/surface/terminal-surface-index.ts'
     ]

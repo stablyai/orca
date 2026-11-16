@@ -7,8 +7,8 @@ import {
   isValidAgentSessionQuestionAnswers,
   legacyAgentSessionSelectedOptionId,
   type AgentSessionQuestionAnswer
-} from '../../../../../../src/shared/agent-session/agent-session-question-answer'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-question-answer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion

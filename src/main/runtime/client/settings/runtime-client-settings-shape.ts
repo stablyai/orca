@@ -16,6 +16,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
   | 'codexShareHistoryAcrossAccounts'
+  | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'

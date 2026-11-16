@@ -473,7 +473,7 @@
 8 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
 7 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
-1 src/main/runtime/agent-session/structured-agent-session-attachment-wiring.ts
+1 src/main/runtime/agent-session/installation/structured-agent-session-attachment-wiring.ts
 1 src/main/runtime/client/navigation/desktop-chat-creation-history.ts
 9 src/main/runtime/host-instance-identity.ts
 4 src/main/runtime/hosts/platform-probe/host-descriptor.ts

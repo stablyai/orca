@@ -217,4 +217,26 @@ describe('useMobileNativeChatSessionOptions', () => {
     await expect(first).resolves.toBe(true)
     await expect(queued).resolves.toBe(false)
   })
+
+  it('switches to Terminal after a sent command that opens a TUI dialog', () => {
+    mount({ agent: 'opencode' })
+    act(() => {
+      api!.recordCommand('/clear')
+    })
+    expect(onAgentPicker).not.toHaveBeenCalled()
+    act(() => {
+      api!.recordCommand('/models')
+    })
+    expect(onAgentPicker).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not switch another chat when a TUI dialog command lands after the phone moved on', () => {
+    mount({ agent: 'opencode', scopeKey: scopeKey('a') })
+    const recordFromA = api!.recordCommand
+    update({ scopeKey: scopeKey('b') })
+    act(() => {
+      recordFromA('/models')
+    })
+    expect(onAgentPicker).not.toHaveBeenCalled()
+  })
 })

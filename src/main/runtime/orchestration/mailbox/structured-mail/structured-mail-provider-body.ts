@@ -1,7 +1,7 @@
 import {
   orchestrationMailNotice,
   readAgentMessageSource
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   localOrchestrationCliCommand,

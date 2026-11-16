@@ -6,8 +6,8 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/re
 import {
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock
-} from '../../../shared/agent-session/structured-agent-session-tool-call-block'
-import { nativeChatStatusRequestOutcome } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+} from '../../../shared/agent-session/view/messages/structured-agent-session-tool-call-block'
+import { nativeChatStatusRequestOutcome } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import { structuredAgentSessionStatusStartedAt } from '../../../shared/agent-session/view/structured-agent-session-status-started-at'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
