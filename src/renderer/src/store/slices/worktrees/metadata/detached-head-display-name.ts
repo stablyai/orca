@@ -34,6 +34,7 @@ export function deriveGitIdentityDisplayName(
       worktree.cliProvenance?.kind !== 'created-by-cli' &&
       worktree.displayName === currentBranchName)
   const wasDetachedAutoDerived =
+    worktree.displayNameMode !== 'fixed' &&
     worktree.branch === '' &&
     nextBranch !== '' &&
     detachedHeadAutoDerivedDisplayNames.get(worktreeId) === worktree.displayName

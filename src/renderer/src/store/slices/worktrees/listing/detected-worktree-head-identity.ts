@@ -57,7 +57,7 @@ export function preserveConcurrentDetectedHeads(
   current: readonly DetectedWorktree[] | undefined,
   matchesRefreshHost: (worktree: DetectedWorktree) => boolean
 ): DetectedWorktree[] {
-  if (!requestStarted || !current) {
+  if (!requestStarted || !current || requestStarted === current) {
     return merged
   }
   const startedById = new Map(
