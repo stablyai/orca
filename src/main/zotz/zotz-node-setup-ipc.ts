@@ -30,7 +30,7 @@ async function pathExists(path: string): Promise<boolean> {
 async function resolveSetupScriptPath(): Promise<string | null> {
   for (const candidate of [
     join(process.resourcesPath ?? '', 'zotz', 'zotz-node-setup.ps1'),
-    join(app.getAppPath(), 'scripts', 'windows', 'zotz-node-setup.ps1')
+    join(app.getAppPath(), 'resources', 'win32', 'zotz', 'zotz-node-setup.ps1')
   ]) {
     if (await pathExists(candidate)) {
       return candidate

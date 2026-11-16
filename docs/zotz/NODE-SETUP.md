@@ -24,7 +24,7 @@ El asistente muestra cada paso con su estado (hecho / omitido / falló + motivo)
 | Enlace de acceso            | Enlace para otra computadora, enlace de navegador y QR para la app móvil, todos con la IP de Tailscale.                                                                                                | Igual.                                                                                                 | Igual.                                                                                       |
 | Inicio de sesión automático | Solo instrucciones: [Sysinternals Autologon](https://learn.microsoft.com/sysinternals/downloads/autologon). Zotz nunca pide ni guarda la contraseña.                                                   | —                                                                                                      | —                                                                                            |
 
-En Windows todo lo de administrador lo hace `zotz-node-setup.ps1`, que viene dentro del instalador (`resources\zotz\zotz-node-setup.ps1`). El asistente lo lanza elevado y oculto, y deja:
+En Windows todo lo de administrador lo hace `zotz-node-setup.ps1`, que viene dentro del instalador (`resources\zotz\zotz-node-setup.ps1`; en el repo está en `resources/win32/zotz/`). El asistente lo lanza elevado y oculto, y deja:
 
 - `%APPDATA%\zotz\zotz-node-setup.log`: transcripción completa del script.
 - `%APPDATA%\zotz\zotz-node-setup-result.json`: resultado por paso.

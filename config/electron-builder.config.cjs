@@ -267,8 +267,6 @@ module.exports = {
     '!**/.vscode/*',
     // Repo inputs already bundled/copied through extraResources would bloat app.asar.
     '!src{,/**/*}',
-    // Zotz: node setup scripts ship through extraResources.
-    '!scripts{,/**/*}',
     '!out/orcad{,/**/*}',
     // Never in app.asar: the template ships via orcadTemplateExtraResource; prebuilds are build inputs.
     '!out/orcad-*{,/**/*}',
@@ -600,7 +598,7 @@ module.exports = {
       },
       // Zotz: the first-run wizard runs this with one UAC prompt.
       {
-        from: 'scripts/windows/zotz-node-setup.ps1',
+        from: 'resources/win32/zotz/zotz-node-setup.ps1',
         to: 'zotz/zotz-node-setup.ps1'
       },
       featureWallResources

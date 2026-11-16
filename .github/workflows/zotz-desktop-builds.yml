@@ -10,7 +10,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/zotz-desktop-builds.yml'
-      - 'scripts/windows/**'
+      - 'resources/win32/zotz/**'
   workflow_dispatch:
 
 concurrency:
@@ -62,7 +62,7 @@ jobs:
         shell: pwsh
         run: |
           $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/windows/zotz-node-setup.ps1", [ref]$null, [ref]$errors) | Out-Null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/resources/win32/zotz/zotz-node-setup.ps1", [ref]$null, [ref]$errors) | Out-Null
           if ($errors) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store.
