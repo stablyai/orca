@@ -31,7 +31,8 @@ export function batchAiVaultTitleRequests(
 export async function settleAiVaultTitleRequestBatches(
   requests: AiVaultTitleRequest[],
   resolveBatch: (batch: AiVaultTitleRequest[]) => Promise<void>,
-  currentRequests: () => AiVaultTitleRequest[] = () => requests
+  currentRequestsByKey: () => ReadonlyMap<string, AiVaultTitleRequest> = () =>
+    new Map(requests.map((request) => [aiVaultTitleRequestKey(request), request]))
 ): Promise<void> {
   const batchesByHost = new Map<ExecutionHostId, AiVaultTitleRequest[][]>()
   for (const batch of batchAiVaultTitleRequests(requests)) {
@@ -44,9 +45,7 @@ export async function settleAiVaultTitleRequestBatches(
     [...batchesByHost.values()].map(async (hostBatches) => {
       for (const batch of hostBatches) {
         try {
-          const current = new Map(
-            currentRequests().map((request) => [aiVaultTitleRequestKey(request), request])
-          )
+          const current = currentRequestsByKey()
           const owned = batch.filter((request) => {
             const live = current.get(aiVaultTitleRequestKey(request))
             return live && (!request.refresh || live.refresh)

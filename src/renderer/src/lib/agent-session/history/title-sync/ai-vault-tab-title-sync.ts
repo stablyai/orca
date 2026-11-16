@@ -9,7 +9,10 @@ import {
   type AiVaultTitleRequest
 } from './ai-vault-tab-title-requests'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
-import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
+import {
+  aiVaultTitleRequestInputsChanged,
+  aiVaultTitleSyncInputsChanged
+} from './ai-vault-tab-title-sync-inputs'
 
 import {
   aiVaultTitleRequestKey,
@@ -21,6 +24,13 @@ import {
 
 function requestIdentity(request: AiVaultTitleRequest): string {
   return `${request.executionHostId}\0${request.agent}\0${request.providerSession.id}`
+}
+
+type RequestSnapshot = {
+  state: AppState
+  requests: AiVaultTitleRequest[]
+  byKey: Map<string, AiVaultTitleRequest>
+  byTabId: Map<string, AiVaultTitleRequest>
 }
 
 type SyncDependencies = {
@@ -59,6 +69,23 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
   let writing = false
   const lastSettledAttemptAt = new Map<string, number>()
   const dirty = new Set<string>()
+  // Why: rebuilding requests walks every tab and conversation; a pass and its batches reuse them until an input changes.
+  let snapshot: RequestSnapshot | null = null
+
+  const currentRequests = (state = dependencies.getState()): RequestSnapshot => {
+    if (snapshot && !aiVaultTitleRequestInputsChanged(state, snapshot.state)) {
+      snapshot.state = state
+      return snapshot
+    }
+    const requests = collectAiVaultTitleRequests(state)
+    snapshot = {
+      state,
+      requests,
+      byKey: new Map(requests.map((request) => [aiVaultTitleRequestKey(request), request])),
+      byTabId: new Map(requests.map((request) => [request.tabId, request]))
+    }
+    return snapshot
+  }
 
   const writeTitle = (
     request: AiVaultTitleRequest,
@@ -106,12 +133,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         })
       }
     }
-    const currentByTabId = new Map(
-      collectAiVaultTitleRequests(dependencies.getState()).map((request) => [
-        request.tabId,
-        request
-      ])
-    )
+    const currentByTabId = currentRequests().byTabId
     for (const request of requests) {
       const current = currentByTabId.get(request.tabId)
       const title = titleByIdentity.get(requestIdentity(request))
@@ -136,13 +158,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
 
     const state = dependencies.getState()
-    const tabsById = new Map(
-      Object.values(state.tabsByWorktree)
-        .flat()
-        .map((tab) => [tab.id, tab] as const)
-    )
-    const requests = collectAiVaultTitleRequests(state)
-    const currentKeys = new Set(requests.map(aiVaultTitleRequestKey))
+    const { requests, byKey: currentKeys } = currentRequests(state)
     for (const key of lastSettledAttemptAt.keys()) {
       if (!currentKeys.has(key)) {
         lastSettledAttemptAt.delete(key)
@@ -155,7 +171,9 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
     const now = Date.now()
     const requestsToScan = requests.filter((request) => {
-      const stored = tabsById.get(request.tabId)?.aiVaultTitle
+      const stored = state.tabsByWorktree[request.worktreeId]?.find(
+        (tab) => tab.id === request.tabId
+      )?.aiVaultTitle
       const identityMatches =
         stored?.agent === request.agent && stored.sessionId === request.providerSession.id
       if (stored && !identityMatches) {
@@ -193,7 +211,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
             }
           }
         },
-        () => (stopped ? [] : collectAiVaultTitleRequests(dependencies.getState()))
+        () => (stopped ? new Map() : currentRequests().byKey)
       )
       scanInFlight = false
     }
@@ -203,9 +221,8 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       schedule()
     } else if (!stopped) {
       const currentState = dependencies.getState()
-      const currentRequests = collectAiVaultTitleRequests(currentState)
-      const delays = currentRequests
-        .filter((request) => request.refresh)
+      const delays = currentRequests(currentState)
+        .requests.filter((request) => request.refresh)
         .map((request) =>
           Math.max(
             0,
@@ -216,6 +233,9 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         )
       if (delays.length > 0) {
         refreshTimer = setTimer(schedule, Math.min(...delays))
+      } else {
+        // Nothing comes back on a timer, so don't hold an old store snapshot until the next change.
+        snapshot = null
       }
     }
   }
@@ -260,6 +280,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
 
   return () => {
     stopped = true
+    snapshot = null
     unsubscribe()
     cancelScheduled?.()
     cancelScheduled = null
