@@ -39,7 +39,7 @@ type LineEndingModel = Pick<
 
 // Models that held line breaks the user did not type (loaded or written in); their ending is the file's.
 // Why per model: retained models outlive editor mounts and are shared by split panes.
-const existingFileModels = new WeakMap<LineEndingModel, true>()
+const existingFileModels = new WeakMap<Pick<editor.ITextModel, 'getEOL'>, true>()
 
 /**
  * Sets the ending of a model that has at most one line. A model with line breaks is never
@@ -65,6 +65,21 @@ export function applyNewModelLineEnding(
     model.setEOL(lineEnding === '\r\n' ? 1 : 0)
   } finally {
     endProgrammaticContentSync(modelKey)
+  }
+}
+
+/** A replacement model for the same buffer keeps its ending and existing-file status. */
+export function carryNewModelLineEndingState(
+  from: Pick<editor.ITextModel, 'getEOL'>,
+  to: Pick<editor.ITextModel, 'getLineCount' | 'getEOL' | 'setEOL'>
+): void {
+  // Why one line only: a multi-line replacement already carries its text's ending.
+  if (to.getLineCount() <= 1 && to.getEOL() !== from.getEOL()) {
+    // Literal EndOfLineSequence values (LF = 0, CRLF = 1) keep this free of the Monaco runtime.
+    to.setEOL(from.getEOL() === '\r\n' ? 1 : 0)
+  }
+  if (existingFileModels.has(from)) {
+    existingFileModels.set(to, true)
   }
 }
 
