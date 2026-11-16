@@ -10,6 +10,7 @@ import { registerNativeMessagingNamespace } from './api/native-messaging'
 import { registerNotificationsNamespace } from './api/notifications'
 import { registerPermissionsNamespace } from './api/permissions'
 import { registerPrivacyNamespace } from './api/privacy'
+import { registerProxyNamespace } from './api/proxy'
 import { registerScriptingNamespaces } from './api/scripting'
 import { registerStorageRelayNamespace } from './api/storage-relay'
 import { registerStorageSyncNamespace } from './api/storage-sync'
@@ -32,6 +33,7 @@ export function registerBrowserExtensionNamespaces(): void {
   registerContextMenusNamespace()
   registerCommandsNamespace()
   registerPrivacyNamespace()
+  registerProxyNamespace()
   registerCookiesNamespace()
   registerScriptingNamespaces()
   registerWebRequestNamespace()

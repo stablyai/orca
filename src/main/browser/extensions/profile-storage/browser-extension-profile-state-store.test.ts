@@ -1,4 +1,4 @@
-import { mkdtempSync, renameSync, rmSync } from 'node:fs'
+import { mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import type * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -37,6 +37,29 @@ const menu = {
 }
 
 describe('BrowserExtensionProfileStateStore', () => {
+  it('keeps existing extension data when a saved proxy configuration is invalid', () => {
+    writeFileSync(
+      join(root, 'profile-state.json'),
+      JSON.stringify({
+        default: {
+          [EXTENSION]: {
+            grantedPermissions: ['proxy'],
+            contextMenus: [menu],
+            proxy: {
+              mode: 'fixed_servers',
+              rules: { singleProxy: { host: 'proxy.test', port: -1 } }
+            }
+          }
+        }
+      })
+    )
+    const reopened = new BrowserExtensionProfileStateStore(root)
+    expect(reopened.read('default', EXTENSION)).toMatchObject({
+      grantedPermissions: ['proxy'],
+      contextMenus: [menu],
+      proxy: undefined
+    })
+  })
   it('retries a failed rename and flushes pending changes before the debounce', () => {
     const store = new BrowserExtensionProfileStateStore(root)
     store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 3 }))

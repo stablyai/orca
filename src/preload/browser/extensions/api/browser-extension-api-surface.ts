@@ -179,6 +179,11 @@ export const BROWSER_EXTENSION_API_SURFACE: BrowserExtensionSurface = {
   },
   commands: { methods: { getAll: {} }, events: ['onCommand'] },
   privacy: PRIVACY_SURFACE,
+  proxy: {
+    permission: 'proxy',
+    methods: { 'settings.get': {}, 'settings.set': {}, 'settings.clear': {} },
+    events: ['settings.onChange', 'onProxyError']
+  },
   cookies: {
     permission: 'cookies',
     methods: { get: {}, getAll: {}, set: {}, remove: {}, getAllCookieStores: {} },

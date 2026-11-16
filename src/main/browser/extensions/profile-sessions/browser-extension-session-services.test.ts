@@ -34,6 +34,11 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { setUnownedDownloadOwnerResolver: vi.fn() }
 }))
 vi.mock('../api/cookies', () => ({ observeBrowserExtensionCookieChanges: vi.fn() }))
+vi.mock('../proxy/browser-extension-proxy-session', () => ({
+  observeBrowserExtensionProxySession: vi.fn(),
+  whenBrowserExtensionProxyReady: vi.fn(),
+  browserExtensionProxyRequestReadiness: () => true
+}))
 vi.mock('../api-runtime/browser-extension-content-scripts', () => ({
   forgetBrowserExtensionContentScriptRestore: vi.fn(),
   restoreBrowserExtensionContentScripts: vi.fn()

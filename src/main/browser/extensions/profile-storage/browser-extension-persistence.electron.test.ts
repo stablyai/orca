@@ -13,6 +13,7 @@ vi.setConfig({ expect: { poll: { timeout: 45_000, interval: 200 } } })
 
 // Creates its menus and script only on the first run, as extensions that use onInstalled do.
 const WORKER_SCRIPT = `
+const proxyChange = new Promise((resolve) => chrome.proxy.settings.onChange.addListener(resolve));
 chrome.commands.onCommand.addListener(function(name, tab) {
   'use strict';
   console.log('ORCA_EXT_COMMAND ' + JSON.stringify({ name, hasTab: Boolean(tab && tab.id), globalReceiver: this === globalThis }));
@@ -32,6 +33,11 @@ chrome.storage.local.get('setup').then(async ({ setup }) => {
     void chrome.runtime.lastError;
     this === globalThis ? resolve() : reject(new Error('Invalid failed callback receiver'));
   }));
+  if (!setup) await chrome.proxy.settings.set({ value: {
+    mode: 'pac_script', pacScript: { data: 'function FindProxyForURL() { return "DIRECT"; }', mandatory: true }
+  }, scope: 'regular' });
+  if (!setup) console.log('ORCA_EXT_PROXY_CHANGE ' + JSON.stringify(await proxyChange));
+  console.log('ORCA_EXT_PROXY ' + JSON.stringify(await chrome.proxy.settings.get({})));
   if (setup) return;
   await chrome.storage.sync.set({ remembered: { dark: true } });
   chrome.contextMenus.create({ id: 'fill', title: 'Fill field', contexts: ['editable'] });
@@ -52,6 +58,8 @@ type FixtureStatus = {
   contentScript?: { path: string }
   webRequest?: Record<string, unknown>
   sync?: Record<string, unknown>
+  proxy?: unknown
+  proxyChange?: unknown
   menu?: unknown
   commands?: unknown[]
   windowsHidden?: boolean
@@ -136,7 +144,7 @@ beforeAll(async () => {
       manifest_version: 3,
       name: 'Orca persistence probe',
       version: '1.0.0',
-      permissions: ['contextMenus', 'scripting', 'storage', 'webRequest'],
+      permissions: ['contextMenus', 'scripting', 'storage', 'webRequest', 'proxy'],
       host_permissions: ['http://127.0.0.1/*'],
       background: { service_worker: 'worker.js' },
       commands: {
@@ -184,6 +192,13 @@ describe('browser extension state across a restart', () => {
     await pollStatus('first', (status) => Boolean(status.setup))
     expect(readStatus('first').added).toEqual({ ok: true })
     expect(readStatus('first').setup).toEqual({ registered: ['marker'] })
+    expect(readStatus('first').proxyChange).toEqual({
+      value: {
+        mode: 'pac_script',
+        pacScript: { data: 'function FindProxyForURL() { return "DIRECT"; }', mandatory: true }
+      },
+      levelOfControl: 'controlled_by_this_extension'
+    })
     await firstExited
 
     launch('second')
@@ -194,6 +209,14 @@ describe('browser extension state across a restart', () => {
     // Orca keeps sync storage across a restart (Electron disables the native area).
     await pollStatus('second', (current) => Boolean(current.sync))
     expect(readStatus('second').sync).toEqual({ remembered: { dark: true } })
+    await pollStatus('second', (current) => Boolean(current.proxy))
+    expect(readStatus('second').proxy).toEqual({
+      value: {
+        mode: 'pac_script',
+        pacScript: { data: 'function FindProxyForURL() { return "DIRECT"; }', mandatory: true }
+      },
+      levelOfControl: 'controlled_by_this_extension'
+    })
     // Electron forgot the script; Orca re-registered it before the tab's first load.
     expect(status.contentScript).toEqual({ path: '/login' })
     expect(status.webRequest).toEqual({

@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { getBrowserExtensionProfileDataDirectory } from './browser-extension-profile-data-directory'
+import { browserExtensionProxyConfigSchema } from '../proxy/browser-extension-proxy-config'
 
 const STATE_FILE_NAME = 'profile-state.json'
 const PERSIST_DELAY_MS = 250
@@ -30,6 +31,7 @@ const extensionStateSchema = z.object({
   /** scripting.RegisteredContentScript records, kept as Chrome shaped them. */
   contentScripts: z.array(z.record(z.string(), z.unknown())).default([]),
   privacy: z.record(z.string(), privacySettingSchema).default({}),
+  proxy: browserExtensionProxyConfigSchema.optional().catch(undefined),
   /** Scripts this profile's worker registration was made from; a mismatch re-registers it. */
   workerSignature: z.string().optional(),
   /** Versions at the last load; absent means runtime.onInstalled has not fired in this profile. */

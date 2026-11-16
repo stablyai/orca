@@ -76,7 +76,9 @@ function capture(message: string): void {
     ['ORCA_EXT_WEBREQUEST ', 'webRequest'],
     ['ORCA_EXT_CONTENT_SCRIPT ', 'contentScript'],
     ['ORCA_EXT_COMMAND ', 'commands'],
-    ['ORCA_EXT_SYNC ', 'sync']
+    ['ORCA_EXT_SYNC ', 'sync'],
+    ['ORCA_EXT_PROXY ', 'proxy'],
+    ['ORCA_EXT_PROXY_CHANGE ', 'proxyChange']
   ] as const) {
     if (message.startsWith(prefix)) {
       const value: unknown = JSON.parse(message.slice(prefix.length))

@@ -27,6 +27,7 @@ import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
 import { getDnrSessionRuntime } from '../declarative-net-request/session/browser-extension-dnr-session'
 import { observeBrowserExtensionWebRequests } from '../requests/browser-extension-web-request-observer'
+import { reconcileBrowserExtensionProxyPermissions } from '../proxy/browser-extension-proxy-session'
 
 const pendingRequests = new Set<string>()
 
@@ -97,8 +98,15 @@ async function request(
     getBrowserExtensionProfileStateStore().update(browserProfileId, extension.id, (state) =>
       withGrantedPermissions(state, plan.add)
     )
-    if (plan.add.permissions.includes('webRequest')) {
+    if (
+      plan.add.permissions.some(
+        (permission) => permission === 'webRequest' || permission === 'proxy'
+      )
+    ) {
       observeBrowserExtensionWebRequests(caller.session)
+    }
+    if (plan.add.permissions.includes('proxy')) {
+      await reconcileBrowserExtensionProxyPermissions(caller.session)
     }
     await getDnrSessionRuntime(caller.session)?.reconcilePermissions(extension)
     emitChange(caller, 'onAdded', plan.add)
@@ -125,6 +133,9 @@ async function remove(
     withoutGrantedPermissions(state, plan.removed)
   )
   await getDnrSessionRuntime(caller.session)?.reconcilePermissions(extension)
+  if (plan.removed.permissions.includes('proxy')) {
+    await reconcileBrowserExtensionProxyPermissions(caller.session)
+  }
   emitChange(caller, 'onRemoved', plan.removed)
   return true
 }
