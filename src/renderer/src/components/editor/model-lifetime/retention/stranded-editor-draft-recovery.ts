@@ -4,6 +4,7 @@ import type { ClosedUnsavedFile } from '@/store/slices/worktrees/teardown/remove
 import { reopenClosedUnsavedFiles } from './closed-unsaved-files-toast'
 
 let moving = false
+let rerunRequested = false
 let unsubscribe: (() => void) | null = null
 
 /** Moves drafts of workspaces gone at startup into dirty untitled tabs of the active workspace, the common hot-exit pattern; failures stay stranded and retry when the active workspace or a host connection changes. */
@@ -16,7 +17,8 @@ export function recoverStrandedEditorDrafts(): void {
     unsubscribe = useAppStore.subscribe((state, prev) => {
       if (
         state.activeWorktreeId !== prev.activeWorktreeId ||
-        state.sshConnectionStates !== prev.sshConnectionStates
+        state.sshConnectionStates !== prev.sshConnectionStates ||
+        state.sshStateByEnvironment !== prev.sshStateByEnvironment
       ) {
         void moveStrandedDrafts()
       }
@@ -26,11 +28,15 @@ export function recoverStrandedEditorDrafts(): void {
 
 async function moveStrandedDrafts(): Promise<void> {
   const state = useAppStore.getState()
-  if (moving || !state.activeWorktreeId) {
+  if (moving) {
+    rerunRequested = true
+    return
+  }
+  if (!state.activeWorktreeId) {
     return
   }
   moving = true
-  const startedIn = state.activeWorktreeId
+  rerunRequested = false
   try {
     const drafted = new Map<ClosedUnsavedFile, PersistedOpenFile>()
     for (const [ownerKey, drafts] of Object.entries(state.strandedEditorDrafts)) {
@@ -61,8 +67,8 @@ async function moveStrandedDrafts(): Promise<void> {
   if (Object.keys(after.strandedEditorDrafts).length === 0) {
     unsubscribe?.()
     unsubscribe = null
-  } else if (after.activeWorktreeId !== startedIn) {
-    // A switch during the move was dropped by the in-flight guard.
+  } else if (rerunRequested) {
+    // A switch or connection change during the move was dropped by the in-flight guard.
     void moveStrandedDrafts()
   }
 }
