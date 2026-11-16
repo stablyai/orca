@@ -6,6 +6,7 @@ import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
+  WORKER_CHILD_ABANDONED_CODE,
   WorkerThreadChildProcessHost,
   type WorkerThreadChildProcess
 } from './worker-thread-child-process'
@@ -194,6 +195,27 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
 })
 
 // Real thread death closes child pipes; abandoned probes depend on that graceful stop instead of PID-addressed killing.
+describe('WorkerThreadChildProcessHost availability', () => {
+  it('stops offering a worker that died before answering, so callers can spawn locally', async () => {
+    let created = 0
+    const host = new WorkerThreadChildProcessHost(() => {
+      created += 1
+      const transport = new EventEmitter()
+      return Object.assign(transport, {
+        postMessage: () => setImmediate(() => transport.emit('exit', 1)),
+        unref: () => {},
+        terminate: async () => 0
+      })
+    })
+    expect(host.available()).toBe(true)
+    const child = host.spawn({ program: 'git', args: ['status'] })
+    const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
+    expect(host.available()).toBe(false)
+    expect(created).toBe(1)
+  })
+})
+
 describe('WorkerThreadChildProcessHost on a real worker thread', () => {
   let directory = ''
   let entryPath = ''

@@ -148,6 +148,9 @@ export class WorkerThreadChildProcessHost {
   private readonly host: LazyWorkerThreadHost<WorkerThreadChildEvent>
   private readonly children = new Map<number, WorkerThreadChildProcess>()
   private nextId = 1
+  private workerAnswered = false
+  // A worker that dies before answering anything is broken here (e.g. an unloadable chunk); stop offering it.
+  private failedToStart = false
 
   constructor(factory: WorkerThreadFactory) {
     this.host = new LazyWorkerThreadHost<WorkerThreadChildEvent>({
@@ -164,15 +167,23 @@ export class WorkerThreadChildProcessHost {
     })
   }
 
-  /** Starts or reuses the worker; false while it cannot run, including during an idle retirement. */
+  /** Starts or reuses the worker; false while it cannot run, including during an idle retirement or after it failed to start. */
   available(): boolean {
+    return !this.failedToStart && this.ensureWorker()
+  }
+
+  private ensureWorker(): boolean {
+    if (!this.host.current) {
+      // A fresh worker (first use or after idle teardown) has not proven it starts yet.
+      this.workerAnswered = false
+    }
     return this.host.ensure() !== null
   }
 
   spawn(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
     const id = this.nextId++
     const child = new WorkerThreadChildProcess(id, (request) => this.post(request))
-    if (this.host.ensure()) {
+    if (this.ensureWorker()) {
       this.host.clearIdleTimer()
       this.children.set(id, child)
       if (this.post({ type: 'spawn', id, spec })) {
@@ -205,6 +216,7 @@ export class WorkerThreadChildProcessHost {
   }
 
   private route(event: WorkerThreadChildEvent): void {
+    this.workerAnswered = true
     const child = this.children.get(event.id)
     if (!child) {
       return
@@ -230,6 +242,11 @@ export class WorkerThreadChildProcessHost {
 
   // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.
   private abandonAll(message: string): void {
+    if (!this.workerAnswered && this.children.size > 0 && !this.failedToStart) {
+      this.failedToStart = true
+      console.warn(`[worker-thread-child-process] worker died before answering. ${message}`)
+    }
+    this.workerAnswered = false
     const abandoned = [...this.children.values()]
     this.children.clear()
     this.host.destroy()
