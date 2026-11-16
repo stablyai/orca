@@ -385,11 +385,8 @@ it('retires a hookless resumed Codex quit to its shell, and keeps a later relaun
   vi.useFakeTimers({ toFake: ['Date'] })
   launch()
   vi.setSystemTime(Date.now() + 1000)
-  // The renderer's confirmed shell return, as the IPC handler reconciles it.
-  server.reconcileEndedProcessForPaneKeys([PANE], {
-    preserveResumeIdentity: true,
-    confirmedExit: true
-  })
+  // The launched command's shell-confirmed finish, which clears the pane's row.
+  server.retireProcessAuthority(PANE, { confirmedExit: true })
   expect((await sleep()).sleepingAgentSessionsByPaneKey?.[PANE]).toBeUndefined()
 
   vi.setSystemTime(Date.now() + 1000)

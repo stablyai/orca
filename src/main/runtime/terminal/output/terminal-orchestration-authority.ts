@@ -180,7 +180,8 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     }
   }
 
-  protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+  /** `confirmedExit`: the launched command finished at the shell, so its agent ended. */
+  protected retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit = false): void {
     const pty = this.retireHeldLaunch(ptyId)
     if (!pty) {
       return
@@ -199,7 +200,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
     pty.launchAgent = null
     pty.launchCommandAgent = null
     for (const paneKey of paneKeys) {
-      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey)
+      this.retireAgentHookCompatibilityAuthorityFn?.(paneKey, { confirmedExit })
     }
     if (changed) {
       void this.refreshAgentSenderAssociations().catch(console.warn)
