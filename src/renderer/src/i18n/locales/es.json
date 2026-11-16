@@ -19096,6 +19096,7 @@
         "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
         "historyUnusable": "No se puede cargar este chat.",
         "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
+        "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
         "savedByNewerOrca": "Los chats se guardaron con una versión más reciente de Orca.",
         "updateOrcaToKeepUsing": "Actualice Orca para seguir usándolos.",
         "chatSavedByNewerOrca": "Este chat se guardó con una versión más reciente de Orca.",

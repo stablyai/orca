@@ -2672,6 +2672,7 @@
       "conversationCleared": "この会話はクリアされました。",
       "goalsUnsupported": "この Agent は目標に対応していません。",
       "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
       "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
       "historyUnusable": "このチャットを読み込めません。",
       "hostReconciling": "Orca は再起動後、このチャットをまだ確認しています。",

@@ -2746,6 +2746,7 @@
       "conversationCleared": "Esta conversación se borró.",
       "goalsUnsupported": "Este agente no admite objetivos.",
       "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
+      "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
       "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
       "historyUnusable": "No se puede cargar este chat.",
       "hostReconciling": "Orca todavía está comprobando este chat después de reiniciarse.",

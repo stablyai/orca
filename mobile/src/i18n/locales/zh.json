@@ -3133,6 +3133,7 @@
       "conversationCleared": "此对话已被清除",
       "goalsUnsupported": "此智能体不支持目标",
       "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+      "savedInOtherFolder": "此对话保存在另一个文件夹中",
       "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
       "historyUnusable": "无法加载此聊天",
       "hostReconciling": "Orca 重启后仍在检查此聊天",
