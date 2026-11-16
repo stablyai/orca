@@ -41,17 +41,16 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   }
   const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
-  if (unchanged && readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined) {
+  const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
+  if (unchanged && kept) {
     return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { changed: !unchanged, baselines: [] }
+  const pass: Pass = { changed: !unchanged, kept, baselines: [] }
   const source = openJournalLegacySource(sourcePath)
+  let complete: boolean
   try {
-    if (!absorbChats(source, db, pass)) {
-      // A failed chat leaves the original unabsorbed, so the next launch retries it.
-      return
-    }
+    complete = absorbChats(source, db, pass)
   } finally {
     source.close()
   }
@@ -67,14 +66,19 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     for (const [id, revision] of pass.baselines) {
       recordJournalLegacyChatRevision(db, id, revision)
     }
-    writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
-    writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+    // A failed chat leaves the original unabsorbed, so the next launch retries it.
+    if (complete) {
+      writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
+      writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+    }
   })
 }
 
 /** What one pass knows about the original, and the chats it takes as already shown here. */
 type Pass = {
   changed: boolean
+  /** Every chat in the original at the copy was given a revision here. */
+  kept: boolean
   baselines: [string, string][]
 }
 
@@ -158,12 +162,14 @@ function absorbChat(
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
   // A file copied before revisions were kept has none to compare. An original as copied wrote
   // nothing since; otherwise a chat this file holds but hasn't converted converts from the current
-  // original, so nothing is hidden. One it doesn't know is new.
+  // original, so nothing is hidden. Its copy cataloged every chat with history, so one it doesn't
+  // know is new, unless it has none: then it may have been deleted here.
   if (
     shown === undefined &&
     (!pass.changed ||
       (!converted &&
         (chat !== undefined ||
+          (!pass.kept && revision === 'null') ||
           db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id))))
   ) {
     pass.baselines.push([id, revision])
@@ -291,21 +297,28 @@ function keepContinuedChat(
   })
 }
 
-/** Removing an item here leaves its tombstone, so every item this chat converted stays held. */
+/**
+ * Removing an item here leaves its tombstone, so every item this chat converted stays held, at
+ * its converted revision or a later one.
+ */
 function heldEveryItem(
   db: Database.Database,
   id: string,
   pages: readonly JournalDomainImportPage[]
 ): boolean {
-  const held = new Set(
+  const held = new Map(
     db
-      .prepare(`SELECT item_id AS id FROM journal_items WHERE session_id=?1
-        UNION SELECT item_id FROM journal_item_tombstones WHERE session_id=?1`)
-      .all(id)
-      .map((row) => String(row.id))
+      .prepare(`SELECT item_id AS id, MAX(revision) AS revision FROM (
+          SELECT item_id, revision FROM journal_items WHERE session_id=?1
+          UNION ALL SELECT item_id, ?2 FROM journal_item_tombstones WHERE session_id=?1)
+        GROUP BY item_id`)
+      .all(id, Number.MAX_SAFE_INTEGER)
+      .map((row) => [String(row.id), Number(row.revision)])
   )
   return pages.every(
-    (page) => page.kind !== 'items' || page.rows.every(({ item }) => held.has(item.itemId))
+    (page) =>
+      page.kind !== 'items' ||
+      page.rows.every(({ item }) => (held.get(item.itemId) ?? -1) >= item.revision)
   )
 }
 

@@ -284,10 +284,15 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   olderOrcaChat(original, 'closed', rows)
   olderOrcaChat(original, 'idle', rows)
   olderOrcaChat(original, 'converted', rows)
+  original
+    .prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id!='open'").run()
   const first = await upgrade(root)
   expect(await first.convert('idle')).toBe('epoch')
   expect(await first.convert('converted')).toBe('epoch')
+  // Deleted here: a chat with no history the older Orca didn't write stays deleted.
+  first.db.prepare("DELETE FROM agent_session_records WHERE session_id='empty'").run()
   asOlderChatStore(first.db)
   await first.close()
 
