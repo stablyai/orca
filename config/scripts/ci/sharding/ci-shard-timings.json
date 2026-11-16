@@ -2642,7 +2642,6 @@
       "src/main/runtime/browser/client-pages/runtime-browser-page-registry.test.ts": 52,
       "src/main/runtime/client/settings/runtime-client-agent-launch-rollback.test.ts": 1577,
       "src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts": 3333,
-      "src/main/runtime/session-tabs/runtime-desktop-pane-title-forwarding.test.ts": 6114,
       "src/main/runtime/workspaces/removal/runtime-failed-local-worktree-removal.test.ts": 1333,
       "src/main/runtime/workspaces/startup/runtime-folder-workspace-wsl-failed-start-pane.test.ts": 4472,
       "src/main/runtime/workspaces/creation/runtime-folder-workspace-wsl-launch-scope.test.ts": 3705,
