@@ -33,10 +33,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        // A suspended (Ctrl-Z) agent still holds its launch; only a real finish ends it.
-        if (!isJobStopStatus(fact.exitCode)) {
-          this.retirePtyAgentLaunchAuthority(ptyId, true)
-        }
+        this.retirePtyAgentLaunchAuthority(ptyId, !isJobStopStatus(fact.exitCode))
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode
