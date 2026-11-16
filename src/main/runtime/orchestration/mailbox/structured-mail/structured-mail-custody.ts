@@ -6,7 +6,6 @@ import type { StructuredMailSendRow } from '../../db/messages/structured-mail-se
 import type { StructuredMailboxPointerHost } from '../structured-pointer/structured-mailbox-pointer-host-contract'
 import type { StructuredPointerTarget } from '../structured-pointer/structured-mailbox-pointer-delivery'
 import { structuredMailboxCustody } from '../routing/structured-session-mail-target'
-import { structuredMailWasDeliveredWhole } from './structured-mail-whole'
 import type { JournalMailObservation } from '../../../../native-chat/agent-session-journal/journal-mail-observation'
 import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
@@ -234,16 +233,19 @@ export function settleStructuredMailAttempt(
       if (message) {
         reconcileLifecycleMessage(db, message)
       }
-      const corrected = db.getMessageById(row.message_id)
-      retire(
-        !!corrected &&
-          !corrected.read &&
-          structuredMailWasDeliveredWhole(row, corrected, observation)
-      )
+      // The agent was sent a pointer, not the mail: it stays unread until `check` takes it.
+      retire(false)
+      if (owed === 'stale') {
+        // A chat that lost the mailbox cannot `check` it: the new owner is pointed at it.
+        db.markAsUndelivered([row.message_id])
+      }
       break
     }
     case 'unknown':
       retire(false)
+      if (owed === 'stale') {
+        db.markAsUndelivered([row.message_id])
+      }
       break
     case 'refused':
       release()

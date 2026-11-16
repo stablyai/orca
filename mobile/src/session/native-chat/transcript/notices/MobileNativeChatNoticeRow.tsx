@@ -130,7 +130,8 @@ export function MobileNativeChatNoticeRow({
       : null
   const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
-  const diagnosticText = look.kind === 'settled-permission' ? notice.text : detail
+  const reviewed = look.kind === 'settled-permission' || look.kind === 'auto-review-denied'
+  const diagnosticText = reviewed ? notice.text : detail
   const payload = notice.providerFrame?.payload
   const diagnosticBody = (
     <MobileNativeChatOwnedScrollView
@@ -144,7 +145,8 @@ export function MobileNativeChatNoticeRow({
         style={[
           toolStyles.codeText,
           scaledType(MONO_SIZE, fontScale),
-          look.kind === 'settled-permission' && { color: toneColor(look.tone) }
+          look.kind === 'settled-permission' && { color: toneColor(look.tone) },
+          look.kind === 'auto-review-denied' && { color: toneColor('warning') }
         ]}
       >
         {diagnosticText}
@@ -161,24 +163,34 @@ export function MobileNativeChatNoticeRow({
     </MobileNativeChatOwnedScrollView>
   )
   switch (look.kind) {
+    case 'auto-review-denied':
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
       const summary =
-        look.decision === 'approved'
-          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
-              agent
+        look.kind === 'auto-review-denied'
+          ? t('chat.notice.autoReviewDenied', "{{agent}}'s automatic review denied: {{action}}", {
+              agent,
+              action: look.denial.summary
             })
-          : look.decision === 'denied'
-            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
-                agent
-              })
-            : t(
-                'chat.notice.safetyReview',
-                '{{agent}} reported a safety review warning. View details.',
+          : look.decision === 'approved'
+            ? t(
+                'chat.notice.safetyReviewApproved',
+                '{{agent}} approved this action. View details.',
                 {
                   agent
                 }
               )
+            : look.decision === 'denied'
+              ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
+                  agent
+                })
+              : t(
+                  'chat.notice.safetyReview',
+                  '{{agent}} reported a safety review warning. View details.',
+                  {
+                    agent
+                  }
+                )
       return (
         <View>
           <MobileNativeChatNoticeDisclosure

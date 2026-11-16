@@ -87,6 +87,20 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
   manageMcp = manageCodexSessionMcp(this.sessions, () => this.deps.providerInvocation)
 
+  approveAutoReviewDenial: NonNullable<SessionAdapter['approveAutoReviewDenial']> = async ({
+    sessionId,
+    threadId,
+    event
+  }) => {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.ended || session.connection.closed || session.threadId !== threadId) {
+      return false
+    }
+    // Codex's own approval of a denied action: its model sees it as the person's, and still reviews the retry.
+    await session.connection.request('thread/approveGuardianDeniedAction', { threadId, event })
+    return true
+  }
+
   supportsLocation = supportsCodexStructuredLocation
 
   readCommands: NonNullable<SessionAdapter['readCommands']> = (sessionId) =>

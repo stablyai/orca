@@ -185,6 +185,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     record: AgentSessionRecord,
     operation: AgentSessionMcpOperation
   ): Promise<AgentSessionMcpResult>
+  /** Records the person's approval of one action the agent's automatic review denied; the retry is
+   *  still reviewed. False: no running agent to record it. */
+  approveAutoReviewDenial?(input: {
+    sessionId: string
+    threadId: string
+    event: Record<string, unknown>
+  }): Promise<boolean>
   open: StructuredAgentSessionProviderOpen
   supportsCreate?(location: AgentSessionExecutionLocation, agent: string): boolean
   /** Keep runtime/location support in adapter data for remote enablement. */

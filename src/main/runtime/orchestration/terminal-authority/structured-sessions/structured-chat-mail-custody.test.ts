@@ -26,7 +26,7 @@ import {
   db,
   finishWorker,
   host,
-  isWholeMail,
+  isMailPointer,
   openChat,
   root,
   runtime,
@@ -116,13 +116,16 @@ describe('a queued mail card runs only while its chat still owes it', () => {
 
     await call('orchestration.runUse', { id: runId }, { sessionId: PEER_CHAT })
     await vi.waitFor(() => expect(next.turns).toHaveLength(1), WAIT)
-    expect(isWholeMail(turnText(next.turns[0]!))).toBe(true)
-    expect(turnText(next.turns[0]!)).toContain('(worker_done)')
+    expect(isMailPointer(turnText(next.turns[0]!))).toBe(true)
     await vi.waitFor(async () => expect(await queuedCardTexts()).toEqual([]), WAIT)
     await settleTurn(COORDINATOR, 0)
     await settleTurn(PEER_CHAT, 0)
-    expect(old.turns.map(turnText).join('\n')).not.toContain('(worker_done)')
-    await vi.waitFor(() => expect(db.getUnreadMessages(`run:${runId}`)).toEqual([]), WAIT)
+    expect(old.turns).toHaveLength(1)
+    await expect(call('orchestration.check', {}, { sessionId: PEER_CHAT })).resolves.toMatchObject({
+      runId,
+      count: 1,
+      messages: [{ type: 'worker_done' }]
+    })
   })
 
   it('refuses an explicit Send of a card no longer owed, removing it without a turn', async () => {
@@ -288,7 +291,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
       await settleTurn(COORDINATOR, 1)
       // Readable again: the older report goes before the person's later card.
       await vi.waitFor(() => expect(chat.turns).toHaveLength(3), WAIT)
-      expect(isWholeMail(turnText(chat.turns[2]!))).toBe(true)
+      expect(isMailPointer(turnText(chat.turns[2]!))).toBe(true)
       await settleTurn(COORDINATOR, 2)
       await vi.waitFor(() => expect(chat.turns).toHaveLength(4), WAIT)
       expect(turnText(chat.turns[3]!)).toContain('second question of mine')
@@ -394,7 +397,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     unreadable.mockRestore()
     runtime.withdrawStaleChatMail()
     await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-    expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
+    expect(isMailPointer(turnText(chat.turns[1]!))).toBe(true)
   })
 
   it('sends a report refused for queue room once the queue frees room', async () => {
@@ -458,7 +461,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
       reply.resolve()
       await settleTurn(COORDINATOR, 0)
       await vi.waitFor(() => expect(chat.turns).toHaveLength(2), WAIT)
-      expect(isWholeMail(turnText(chat.turns[1]!))).toBe(true)
+      expect(isMailPointer(turnText(chat.turns[1]!))).toBe(true)
     } finally {
       reply.resolve()
     }
