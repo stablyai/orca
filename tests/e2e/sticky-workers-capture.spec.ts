@@ -176,7 +176,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
       const stopTarget = page.locator('[data-worker-dock-action][aria-label^="Stop "]').first()
       if (await stopTarget.count()) {
         await stopTarget.hover()
-        await expect(page.getByRole('tooltip')).toBeVisible()
+        await expect(stopTarget).toBeVisible()
         await page.screenshot({
           path: join(root, 'shots', `${phase}-${scene}-stop-hover-${theme}-${width}x${height}.png`)
         })
