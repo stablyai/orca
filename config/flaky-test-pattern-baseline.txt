@@ -209,7 +209,6 @@
 1 test-no-real-time-wait:tests/e2e/fixtures/daemon-generation-reconnect-client.ts
 4 test-no-real-time-wait:tests/e2e/floating-workspace-reopen-webgl-recovery.spec.ts
 4 test-no-real-time-wait:tests/e2e/floating-workspace-shared-glyph-atlas.spec.ts
-2 test-no-real-time-wait:tests/e2e/github-project-board.spec.ts
 1 test-no-real-time-wait:tests/e2e/headless-paired-remote-terminal-reveal-grid.spec.ts
 1 test-no-real-time-wait:tests/e2e/headless-paired-remote-terminal-viewer-size.spec.ts
 2 test-no-real-time-wait:tests/e2e/helpers/computer-cli-driver.ts
