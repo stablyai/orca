@@ -1,0 +1,11 @@
+{
+  "capturedAt": "2026-11-16T00:00:00.000Z",
+  "platform": "linux",
+  "command": [
+    "kimi-code"
+  ],
+  "cols": 120,
+  "rows": 32,
+  "note": "kimi-code 2.6.2, Linux, xterm-256color, KIMI_CODE_HOME isolated, untrusted folder, trust dialog answered, TERM=xterm-256color. ?2004h at t=1878, trust dialog at t=1914, composer input row at t=1937.",
+  "exitCode": 0
+}

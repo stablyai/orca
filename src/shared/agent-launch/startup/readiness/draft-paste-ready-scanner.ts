@@ -29,6 +29,10 @@ const ANTIGRAVITY_COMPOSER_READY = new RegExp(
 const COPILOT_COMPOSER_READY = new RegExp(`─{8}${SGR_RUN}\\r*\\n${SGR_RUN}❯`)
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
+// Why: Kimi's composer is a box whose input row is `| >`. pi-tui draws on the main screen, so
+// there is no alt-screen entry to anchor on, and it never shows the cursor (only ?25l, 10 times
+// in a cold boot), so a cursor signal cannot work either.
+const KIMI_COMPOSER_PROMPT = '\u2502 >'
 
 type DraftPasteReadySignalSpec = {
   /** Bytes that must precede `marker` for it to count; null when there is no marker. */
@@ -106,6 +110,15 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     marker: COPILOT_COMPOSER_READY,
     // Keep the quiet fallback for a build or platform whose composer row differs.
     quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // Capture of a cold boot (trust already answered): ?2004h at byte 22, first `| >` at byte 1696,
+  // byte-identical across all five repaints. A bracketed paste fired at that first box lands in
+  // the input box. No quiet anchor: the quiet window is the failure mode this signal replaces.
+  'kimi-composer-prompt': {
+    markerAnchor: DECSET_BRACKETED_PASTE,
+    markerAnchorEnd: DECRST_BRACKETED_PASTE,
+    marker: KIMI_COMPOSER_PROMPT,
+    quietAnchor: null
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
