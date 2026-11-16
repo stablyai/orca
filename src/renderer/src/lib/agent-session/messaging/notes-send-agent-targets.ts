@@ -140,7 +140,10 @@ function deriveTitleHintAgentTarget(
     // Launch metadata can precede actual TUI startup; require current matching title evidence for discovery.
     return null
   }
-  const agentType = tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title)
+  // launchAgent names only the tab's original PTY; a split sibling is named by its own title.
+  const agentType =
+    (ptyId === tab.ptyId ? tab.launchAgent : null) ??
+    resolveTerminalTitleAgentType(titleEvidence.title)
   // Without the agent's own turn-end report, a title cannot rule out an approval menu its hooks hide.
   const disabledReason =
     titleEvidence.status === 'permission'

@@ -10,7 +10,7 @@ import { isStructuredTab } from '../../../../../shared/agent-session/view/struct
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
-import { agentHidesApprovalsFromHooks } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
+import { hookSilentPaneSendState } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 import {
   ptyHostGuardsSendApprovals,
@@ -210,13 +210,12 @@ export function hookSilentAgentSendRefusal(
   entry: Pick<AgentStatusEntry, 'state' | 'agentType'> | null | undefined,
   leafTitle: string | null
 ): string | undefined {
-  // Any one identity is enough: a row another agent left behind can't vouch for the agent now running. launchAgent names only the tab's original PTY.
-  const agent = [
-    entry?.agentType,
+  // Every identity counts: a row another agent left behind can't vouch for the one running now. launchAgent names only the tab's original PTY.
+  const sendState = hookSilentPaneSendState(entry, [
     ptyId === tab.ptyId ? tab.launchAgent : null,
     leafTitle === null ? null : resolveTerminalTitleAgentType(leafTitle)
-  ].find(agentHidesApprovalsFromHooks)
-  if (!agent) {
+  ])
+  if (sendState === 'none') {
     return undefined
   }
   const guardedHosts =
@@ -227,9 +226,7 @@ export function hookSilentAgentSendRefusal(
   if (!ptyHostGuardsSendApprovals(guardedHosts, ptyId)) {
     return 'Update Orca on this host to send to this agent'
   }
-  return entry?.state === 'done' && entry.agentType === agent
-    ? undefined
-    : 'Agent may be waiting for approval'
+  return sendState === 'unproven' ? 'Agent may be waiting for approval' : undefined
 }
 
 /** The pane's refusal for a send that bypasses the target list, such as the focused terminal. */
