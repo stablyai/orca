@@ -8,6 +8,7 @@ import {
 } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { createUntitledMarkdownFile } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 
 function closedUnsavedFilesToastTitle(count: number, workspace: string): string {
   return translate(
@@ -79,6 +80,8 @@ export async function reopenClosedUnsavedFiles(
       const store = useAppStore.getState()
       const fileId = store.openFile(fileInfo, { preview: false, focusEditor: !asDirtyDrafts })
       if (asDirtyDrafts) {
+        // Why: this create made the file empty; without that baseline every save is refused as stale.
+        store.setLastKnownDiskSignature(fileId, getDiskBaselineSignature(''))
         store.setEditorDraft(fileId, file.content)
         store.markFileDirty(fileId, true)
       }
