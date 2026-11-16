@@ -29,6 +29,7 @@ export function useNativeChatToolRunWindow({
   marks,
   onMeasure = ignoreMeasurement,
   estimateSize = estimateRowSize,
+  scrollMargin = 0,
   enabled = true
 }: {
   rows: readonly Pick<NativeChatToolRunRow, 'key'>[]
@@ -45,6 +46,7 @@ export function useNativeChatToolRunWindow({
   /** Every real measurement, attach and resize alike, so the cap and follow see them all. */
   onMeasure?: (element: HTMLDivElement) => void
   estimateSize?: (index: number) => number
+  scrollMargin?: number
   enabled?: boolean
 }) {
   const onMeasured = useLatestHandler(onMeasure)
@@ -54,6 +56,7 @@ export function useNativeChatToolRunWindow({
     count: rows.length,
     getScrollElement: () => scrollerRef.current,
     estimateSize,
+    scrollMargin,
     enabled,
     getItemKey,
     overscan: VIRTUALIZED_LIST_OVERSCAN,

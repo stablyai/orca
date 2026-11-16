@@ -36,8 +36,8 @@ import {
   WorkerDockRead,
   WorkerDockResultRead,
   WorkerDockResultsRead,
-  WorkerDockSource,
-  WorkerDockStop
+  WorkerDockStop,
+  WorkerDockSubscribe
 } from '../orchestration/dock/worker-dock'
 import {
   CrewSubscribeParams,
@@ -1450,7 +1450,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerDockResult': WorkerDockResultRead,
   'orchestration.workerDockResultsRead': WorkerDockResultsRead,
   'orchestration.workerDockStop': WorkerDockStop,
-  'orchestration.workerDockSubscribe': WorkerDockSource,
+  'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
   'orchestration.workerList': WorkerListParams,
   'orchestration.workerRead': WorkerReadParams,

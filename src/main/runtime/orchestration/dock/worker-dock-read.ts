@@ -1,3 +1,5 @@
+export { workerDockSession } from './worker-dock-source'
+import { workerDockSession } from './worker-dock-source'
 export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
 import { workerLaunchModel } from '../workers/launch/worker-launch-observation'
@@ -12,22 +14,13 @@ import {
   compareWorkerDockEntries,
   type WorkerDockSnapshot
 } from '../../../../shared/orchestration/dock/worker-dock'
-import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
-import { OrchestrationError } from '../orchestration-error'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
+import { OrchestrationError } from '../orchestration-error'
 import {
   readProviderFailureIdentities,
   readProviderFailureRows
 } from './worker-dock-provider-failures'
 import { workerDockEligibleSql as eligible } from '../db/worker-dock-eligibility'
-
-export function workerDockSession(party: string): string {
-  const session = parseOrcaSessionAddress(party)
-  if (!session) {
-    throw new OrchestrationError('invalid_argument', 'A worker dock needs a source session.')
-  }
-  return session
-}
 
 const stateSql = `CASE f.state
   WHEN 'ready' THEN COALESCE((SELECT state FROM worker_dock_activity WHERE dispatch_id = f.dispatch_id), 'unavailable') WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
@@ -37,7 +30,6 @@ const stateSql = `CASE f.state
 const changedSql = `CASE WHEN f.state = 'ready' THEN COALESCE((SELECT changed_at FROM worker_dock_activity WHERE dispatch_id = f.dispatch_id), f.changed_at) ELSE f.changed_at END`
 const identitySql = `json_array(f.home, f.source, 'worker', f.dispatch_id)`
 const Metadata = z.object({
-  kind: WorkerDockEntry.shape.kind,
   id: z.string(),
   dispatchId: z.string(),
   state: WorkerDockEntry.shape.state,
@@ -79,7 +71,7 @@ export function readWorkerDock(
     const revision = z
       .object({ revision: z.number() })
       .parse(db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get()).revision
-    const identities = db.db
+    const identities: WorkerDockSnapshot['identities'] = db.db
       .prepare(`SELECT ${identitySql} AS id, f.dispatch_id AS dispatchId,
       ${stateSql} AS state, ${changedSql} AS changedAt, f.settlement, (f.model IS NOT NULL AND length(trim(f.model)) > 0) AS hasModel,
       NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS ownerActionsAvailable FROM worker_dock_facts f INDEXED BY worker_dock_eligible
@@ -101,7 +93,7 @@ export function readWorkerDock(
         : Math.max(0, center - (request.direction === 'before' ? 49 : 10))
     const selected = request.includeRows === false ? [] : identities.slice(start, start + 50)
     const workers = providerFailures?.length
-      ? selected.filter((row) => row.kind === 'worker')
+      ? selected.filter((row) => !row.kind || row.kind === 'worker')
       : selected
     const details = new Map(
       workers.length
@@ -140,7 +132,7 @@ export function readWorkerDock(
       rows.push(
         ...readProviderFailureRows(
           db,
-          selected.filter((row) => row.kind !== 'worker').map((row) => row.id)
+          selected.filter((row) => row.kind && row.kind !== 'worker').map((row) => row.id)
         )
       )
     }

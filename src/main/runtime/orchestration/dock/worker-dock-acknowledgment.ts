@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { WorkerDockAcknowledge } from '../../../../shared/orchestration/dock/worker-dock'
 import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
-import { workerDockSession } from './worker-dock-read'
+import { workerDockSession } from './worker-dock-source'
 import { OrchestrationError } from '../orchestration-error'
 
 export function acknowledgeWorkerDock(

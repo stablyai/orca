@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { CrewParty } from '../orchestration-crew'
 
-export const WorkerDockSource = z.object({ party: CrewParty, includeRows: z.boolean().optional() })
+export const WorkerDockSource = z.object({ party: CrewParty })
+export const WorkerDockSubscribe = WorkerDockSource.extend({ includeRows: z.boolean().optional() })
 export const WorkerDockState = z.enum([
   'starting',
   'running',
@@ -35,14 +36,13 @@ export const WorkerDockEntry = z.object({
 })
 export type WorkerDockEntry = z.infer<typeof WorkerDockEntry>
 export const WorkerDockIdentity = WorkerDockEntry.pick({
-  kind: true,
   id: true,
   dispatchId: true,
   state: true,
   changedAt: true,
   ownerActionsAvailable: true,
   settlement: true
-}).extend({ hasModel: z.boolean().default(false) })
+}).extend({ kind: WorkerDockEntry.shape.kind.optional(), hasModel: z.boolean().default(false) })
 export const WorkerDockResultRef = z.object({
   name: z.string().default('Worker'),
   title: z.string().default(''),

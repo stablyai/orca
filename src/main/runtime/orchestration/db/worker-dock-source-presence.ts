@@ -12,6 +12,7 @@ export class WorkerDockSourcePresence {
   private readonly versions = new Map<string, number>()
   private readonly values = new Map<string, WorkerDockPresence | null>()
   private readonly providerSources = new Set<string>()
+  private readonly openProviderSources = new Set<string>()
 
   constructor(private readonly db: Database.Database) {
     for (const row of db
@@ -21,6 +22,7 @@ export class WorkerDockSourcePresence {
       if (typeof row.source === 'string') {
         if (row.provider === 1) {
           this.providerSources.add(row.source)
+          this.openProviderSources.add(row.source)
         }
         this.invalidate(row.source, true)
       }
@@ -34,7 +36,14 @@ export class WorkerDockSourcePresence {
     db.function('worker_dock_provider_failed', (source) => {
       if (typeof source === 'string') {
         this.providerSources.add(source)
+        this.openProviderSources.add(source)
         this.invalidate(source, true)
+      }
+      return null
+    })
+    db.function('worker_dock_provider_ack_changed', (source) => {
+      if (typeof source === 'string' && this.providerSources.has(source)) {
+        this.openProviderSources.add(source)
       }
       return null
     })
@@ -54,6 +63,7 @@ export class WorkerDockSourcePresence {
       for (const table of ['worker_dock_acknowledgments', 'worker_dock_owner_stops']) {
         db.exec(`CREATE TEMP TRIGGER worker_dock_source_${table}_${event} AFTER ${event} ON main.${table} BEGIN
           SELECT worker_dock_source_changed(${source}.source, 1);
+          ${table === 'worker_dock_acknowledgments' ? `SELECT worker_dock_provider_ack_changed(${source}.source);` : ''}
         END;`)
       }
       db.exec(`CREATE TEMP TRIGGER worker_dock_source_activity_${event} AFTER ${event} ON main.worker_dock_activity BEGIN
@@ -76,7 +86,11 @@ export class WorkerDockSourcePresence {
   }
 
   hasProviderFailures(source: string): boolean {
-    return this.providerSources.has(source)
+    return this.openProviderSources.has(source)
+  }
+
+  rememberNoProviderFailures(source: string): void {
+    this.openProviderSources.delete(source)
   }
 
   get hasChanges(): boolean {
@@ -118,13 +132,16 @@ export class WorkerDockSourcePresence {
       EXISTS(SELECT 1 FROM worker_dock_facts f INDEXED BY worker_dock_eligible WHERE ${workerDockEligibleSql}) AS open`)
       .get(source, source)
     const providerOpen =
-      this.providerSources.has(source) &&
+      this.openProviderSources.has(source) &&
       this.db
         .prepare(`SELECT 1
       FROM worker_dock_provider_failures f WHERE f.source = ? AND NOT EXISTS (
         SELECT 1 FROM worker_dock_acknowledgments a WHERE a.source = f.source
           AND a.dispatch_id = f.id AND a.settlement = f.settlement) LIMIT 1`)
         .get(source)
+    if (!providerOpen) {
+      this.openProviderSources.delete(source)
+    }
     const open = row?.open === 1 || Boolean(providerOpen)
     const next =
       row?.history !== 1 && !this.providerSources.has(source)

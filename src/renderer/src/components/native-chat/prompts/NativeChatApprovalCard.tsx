@@ -181,8 +181,8 @@ export function NativeChatApprovalCard({
                 data-native-chat-approval-content="true"
                 tabIndex={0}
                 className={cn(
-                  'min-h-0 shrink space-y-2 overflow-auto text-sm text-muted-foreground scrollbar-sleek focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  joined ? 'max-h-40' : 'max-h-72'
+                  'min-h-0 space-y-2 text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  joined ? 'shrink-0' : 'max-h-72 shrink overflow-auto scrollbar-sleek'
                 )}
               >
                 {countdown ? <p className="tabular-nums">{countdown}</p> : null}

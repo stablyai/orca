@@ -220,7 +220,7 @@ export function settleAgentChildWork(
     lifetime: 'current'
   })
   counted(ctx, handleId, result, 'settled')
-  if (result.accepted && outcome === 'failed' && existing.outcome !== 'failed') {
+  if (result.accepted && outcome === 'failed') {
     const child = ctx.store.getChild(result.childWorkId)
     if (child?.outcome === 'failed') {
       ;(ctx.outcome.failures ??= []).push({ child, providerId: handleId })

@@ -11,7 +11,12 @@ export async function measureStickyPerformance(page: Page, composer: Locator, tr
       ])
     )
   )
-  if (Object.values(instrumentation).some((count) => count === 0)) {
+  const stripPresent = (await page.locator('[data-native-chat-background-tasks]').count()) > 0
+  if (
+    Object.entries(instrumentation).some(
+      ([name, count]) => count === 0 && (name !== 'strip' || stripPresent)
+    )
+  ) {
     throw new Error('This build lacks the required renderer measurement marks.')
   }
   const client = await page.context().newCDPSession(page)

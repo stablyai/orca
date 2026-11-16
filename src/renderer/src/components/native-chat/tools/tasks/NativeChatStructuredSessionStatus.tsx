@@ -21,6 +21,11 @@ const WorkerDockResultDialog = lazy(() =>
     default: module.WorkerDockResultDialog
   }))
 )
+const WorkerDockCommandDialog = lazy(() =>
+  import('./dock/WorkerDockCommandDialog').then((module) => ({
+    default: module.WorkerDockCommandDialog
+  }))
+)
 
 export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
@@ -127,6 +132,9 @@ export function NativeChatStructuredSessionStatus(props: {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<WorkerDockResult | null>(null)
   const [opened, setOpened] = useState<{ row: WorkerDockRowView; opener: HTMLElement } | null>(null)
+  const [command, setCommand] = useState<{ row: WorkerDockRowView; opener: HTMLElement } | null>(
+    null
+  )
   const workerOpen = useCallback(
     (row: WorkerDockRowView) =>
       void openOrchestrationCrewAgent(
@@ -275,7 +283,19 @@ export function NativeChatStructuredSessionStatus(props: {
         onStop={stop.onStop}
         currentAgentId={props.currentAgentId ?? null}
         onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
+        onShowCommand={(row, opener) => setCommand({ row, opener })}
       />
+      {command ? (
+        <Suspense fallback={null}>
+          <WorkerDockCommandDialog
+            row={command.row}
+            opener={command.opener}
+            sessionId={props.sessionId}
+            target={target}
+            onClose={() => setCommand(null)}
+          />
+        </Suspense>
+      ) : null}
       {error && !opened ? (
         <div role="alert" className="px-4 py-1 text-xs text-muted-foreground">
           {error}

@@ -12,6 +12,7 @@ import { WorkerDockHeader } from './WorkerDockHeader'
 import { useWorkerDockScroll } from './use-worker-dock-scroll'
 import { useWorkerDockRowCache } from './use-worker-dock-row-cache'
 import { workerDockAnchorIndex, type WorkerDockScrollAnchor } from './worker-dock-scroll-anchor'
+import { useWorkerDockScrollViewport } from './NativeChatWorkerDockFrame'
 
 export function WorkerDockRoster(props: {
   identities: readonly {
@@ -23,8 +24,10 @@ export function WorkerDockRoster(props: {
   countIdentities?: readonly { id: string; state: WorkerDockRowView['state']; kind?: string }[]
   rows: ReadonlyMap<string, WorkerDockRowView>
   narrow: boolean
+  compact?: boolean
   visible: boolean
   incomplete?: boolean
+  stopAll?: { pending: boolean; onStop: () => void }
   expanded: boolean
   onExpandedChange: (value: boolean) => void
   pending: ReadonlySet<string>
@@ -39,6 +42,11 @@ export function WorkerDockRoster(props: {
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
+  const { scroller, scrollMargin } = useWorkerDockScrollViewport(
+    viewport,
+    props.narrow,
+    props.expanded
+  )
   const summary = useRef<HTMLButtonElement>(null)
   const anchor = useRef<WorkerDockScrollAnchor | null>(null)
   const [held, setHeld] = useState<
@@ -117,7 +125,8 @@ export function WorkerDockRoster(props: {
   )
   const rowWindow = useNativeChatToolRunWindow({
     rows: rowKeys,
-    scrollerRef: viewport,
+    scrollerRef: scroller,
+    scrollMargin,
     isVisible: props.visible,
     drawsEveryRow: small,
     estimateSize,
@@ -182,7 +191,7 @@ export function WorkerDockRoster(props: {
     return () => observer.disconnect()
   }, [resize])
   const loadVisibleWindow = useLatestHandler(() => {
-    const first = visibleItems.find((item) => item.end > (viewport.current?.scrollTop ?? 0))
+    const first = visibleItems.find((item) => item.end > (scroller.current?.scrollTop ?? 0))
     const key = first ? items[first.index]?.id : undefined
     if (key && !props.rows.has(key)) {
       void props.loadWindow?.(key)
@@ -251,7 +260,7 @@ export function WorkerDockRoster(props: {
     <div
       ref={root}
       data-native-chat-background-tasks="true"
-      className="min-w-0 text-xs text-muted-foreground"
+      className="min-h-0 min-w-0 text-xs text-muted-foreground group-has-[[data-native-chat-worker-approvals]]/worker-dock:contents"
       onPointerEnter={hold}
       onPointerOverCapture={(event) => {
         const row =
@@ -304,6 +313,7 @@ export function WorkerDockRoster(props: {
           props.onExpandedChange(!props.expanded)
         }}
         onClear={props.onClearAll}
+        stopAll={props.stopAll}
       />
       <span className="sr-only" role="status" aria-live="polite">
         {count}
@@ -336,15 +346,15 @@ export function WorkerDockRoster(props: {
                 : t('components.native-chat.workerDock.workersRegion', 'Workers')
             }
             tabIndex={0}
-            className="scrollbar-sleek overflow-y-auto border-t border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="scrollbar-sleek overflow-y-auto border-t border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-has-[[data-native-chat-worker-approvals]]/worker-dock:h-auto! group-has-[[data-native-chat-worker-approvals]]/worker-dock:overflow-visible"
             style={{ height }}
             onScroll={scrollHandlers.onScroll}
             onKeyDown={scrollHandlers.onKeyDown}
           >
             <div
               style={{
-                height: small ? 'auto' : rowWindow.totalSize + height,
-                paddingBottom: small ? height : undefined,
+                height: small ? 'auto' : rowWindow.totalSize,
+                paddingBottom: undefined,
                 position: 'relative'
               }}
             >
@@ -360,9 +370,10 @@ export function WorkerDockRoster(props: {
                     row={row}
                     retired={retired}
                     small={small}
-                    start={item.start}
+                    start={item.start - scrollMargin}
                     measure={rowWindow.measureRow}
                     narrow={props.narrow}
+                    compact={props.compact}
                     mixed={mixed}
                     modelColumn={modelColumn}
                     visible={props.visible}
@@ -375,8 +386,8 @@ export function WorkerDockRoster(props: {
               })}
             </div>
           </div>
-          {more ? (
-            <div className="flex h-6 items-center justify-center bg-gradient-to-b from-muted/30 to-muted text-2xs">
+          {more && !props.compact ? (
+            <div className="flex h-6 items-center justify-center bg-gradient-to-b from-muted/30 to-muted text-2xs group-has-[[data-native-chat-worker-approvals]]/worker-dock:hidden">
               {t('components.native-chat.workerDock.moreBelow', 'More below')}
             </div>
           ) : null}

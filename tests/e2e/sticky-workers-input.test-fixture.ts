@@ -6,7 +6,8 @@ export async function verifyStickyInput(
   page: Page,
   composer: Locator,
   database: string,
-  session: string
+  session: string,
+  fail?: () => Promise<string>
 ) {
   await composer.fill('Review this draft with a backward selection in the middle.')
   await composer.focus()
@@ -25,7 +26,7 @@ export async function verifyStickyInput(
     }
   })
   const wake = async () => {
-    const dispatch = failStickyWorker(database, session)
+    const dispatch = fail ? await fail() : failStickyWorker(database, session)
     await page.evaluate(async (session) => {
       await window.api.runtime.call({
         method: 'orchestration.workerDockAcknowledge',

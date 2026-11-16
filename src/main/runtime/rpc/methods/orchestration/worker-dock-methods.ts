@@ -1,5 +1,5 @@
 import {
-  WorkerDockSource,
+  WorkerDockSubscribe,
   WorkerDockRead,
   WorkerDockAcknowledge,
   WorkerDockResultRead,
@@ -22,7 +22,6 @@ import { subscribeWorkerDock } from '../../../orchestration/dock/worker-dock-str
 import { stopWorkerAndHelpers } from './worker/worker-stop'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import type { RpcContext } from '../../core'
-import { z } from 'zod'
 
 function requireOwner({ ctx }: { ctx: RpcContext }): void {
   const caller = ctx.caller
@@ -142,7 +141,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     name: 'orchestration.workerDockSubscribe',
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
-    params: WorkerDockSource.extend({ includeRows: z.boolean().optional() }),
+    params: WorkerDockSubscribe,
     handler: ({ party, includeRows }, { runtime, signal, connectionId }, emit) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted) {

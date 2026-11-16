@@ -69,7 +69,7 @@ export function readProviderFailureIdentities(db: OrchestrationDb, source: strin
   if (!db.workerDockSources.hasProviderFailures(source)) {
     return null
   }
-  return db.db
+  const rows = db.db
     .prepare(`SELECT id, id AS dispatchId, settlement, changed_at AS changedAt,
     json_extract(entry, '$.kind') AS kind, 'failed' AS state, 1 AS ownerActionsAvailable,
     json_extract(entry, '$.model') IS NOT NULL AS hasModel FROM worker_dock_provider_failures f
@@ -82,6 +82,10 @@ export function readProviderFailureIdentities(db: OrchestrationDb, source: strin
         hasModel: row.hasModel === 1
       })
     )
+  if (!rows.length) {
+    db.workerDockSources.rememberNoProviderFailures(source)
+  }
+  return rows
 }
 
 export function readProviderFailureRows(db: OrchestrationDb, ids: string[]): WorkerDockEntry[] {

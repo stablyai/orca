@@ -16,6 +16,50 @@ export async function measureStickyLayout(page: Page, askCount: number) {
       const rect = (element: Element | null | undefined) =>
         element?.getBoundingClientRect().toJSON()
       const frameRect = frame?.getBoundingClientRect()
+      const header = document.querySelector('[data-worker-dock-header]')?.getBoundingClientRect()
+      const workerRows = [...document.querySelectorAll<HTMLElement>('[data-worker-dock-row]')].map(
+        (row) => {
+          const bounds = row.getBoundingClientRect()
+          const region = row.closest('[role="region"]')!.getBoundingClientRect()
+          const top = Math.max(frameRect?.top ?? 0, header?.bottom ?? 0, region.top)
+          const bottom = Math.min(frameRect?.bottom ?? 0, region.bottom)
+          return {
+            id: row.dataset.workerDockRow,
+            bounds: bounds.toJSON(),
+            top,
+            bottom,
+            intersects: bounds.bottom > top + 1 && bounds.top < bottom - 1,
+            complete: bounds.top >= top - 1 && bounds.bottom <= bottom + 1
+          }
+        }
+      )
+      const floating = document
+        .querySelector('[data-floating-terminal-toggle]')
+        ?.getBoundingClientRect()
+      const send = document
+        .querySelector('[data-composer-primary-icon]')
+        ?.closest('button')
+        ?.getBoundingClientRect()
+      const sendCovered = Boolean(
+        floating &&
+        send &&
+        floating.left < send.right &&
+        floating.right > send.left &&
+        floating.top < send.bottom &&
+        floating.bottom > send.top
+      )
+      const scrollers = [...(frame?.querySelectorAll<HTMLElement>('*') ?? [])]
+        .filter(
+          (node) =>
+            /auto|scroll/.test(getComputedStyle(node).overflowY) &&
+            node.scrollHeight > node.clientHeight + 1
+        )
+        .map((node) => ({
+          tag: node.tagName,
+          role: node.getAttribute('role'),
+          label: node.getAttribute('aria-label'),
+          bounds: rect(node)
+        }))
       const frameBorder = frame ? Number.parseFloat(getComputedStyle(frame).borderBottomWidth) : 0
       const queueRect = queue?.getBoundingClientRect()
       const top = Math.max(frameRect?.top ?? 0, queueRect?.top ?? 0)
@@ -55,6 +99,14 @@ export async function measureStickyLayout(page: Page, askCount: number) {
         }
       )
       return {
+        expandedQuestion: Boolean(document.querySelector('[data-native-chat-worker-approval]')),
+        expanded: Boolean(
+          document.querySelector('[data-native-chat-background-tasks] [aria-expanded="true"]')
+        ),
+        workerRows,
+        sendCovered,
+        scrollers,
+        header: header?.toJSON(),
         reasons,
         viewport: [innerWidth, innerHeight],
         frame: rect(frame),
@@ -67,12 +119,27 @@ export async function measureStickyLayout(page: Page, askCount: number) {
   await expect
     .poll(async () => {
       const layout = await readLayout()
-      return askCount
-        ? layout.rows.filter((row) => row.intersectsFrame && !row.completeInFrame)
-        : []
+      return {
+        questions: askCount
+          ? layout.rows.filter((row) => row.intersectsFrame && !row.completeInFrame)
+          : [],
+        workers: layout.workerRows.filter((row) => row.intersects && !row.complete),
+        visible:
+          !layout.expanded ||
+          !layout.workerRows.length ||
+          layout.workerRows.some((row) => row.intersects)
+      }
     })
-    .toEqual([])
+    .toEqual({ questions: [], workers: [], visible: true })
   const layout = await readLayout()
+  expect(layout.sendCovered).toBe(false)
+  if (layout.expanded && layout.workerRows.length) {
+    expect(layout.workerRows.some((row) => row.intersects)).toBe(true)
+  }
+  expect(
+    layout.workerRows.filter((row) => row.intersects && !row.complete),
+    JSON.stringify(layout.workerRows)
+  ).toEqual([])
   if (layout.viewport[0] === 320) {
     for (const reason of layout.reasons) {
       expect(reason.gap).toBeLessThanOrEqual(1)
@@ -84,7 +151,9 @@ export async function measureStickyLayout(page: Page, askCount: number) {
     expect(layout.frame.height).toBeLessThanOrEqual(layout.pane.height * 0.4 + 1)
   }
   if (askCount) {
-    await expect(page.getByRole('button', { name: /^Show .* question$/ })).toHaveCount(askCount)
+    await expect(page.getByRole('button', { name: /^Show .* question$/ })).toHaveCount(
+      askCount - (layout.expandedQuestion ? 1 : 0)
+    )
     // The viewport's settled boundary must not cut a target in half.
     expect(
       layout.rows.filter((row) => row.intersectsFrame && !row.completeInFrame),

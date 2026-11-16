@@ -2,13 +2,13 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
 import { memo, useRef, useState } from 'react'
 import {
-  Bot,
+  Circle,
   CircleAlert,
+  CircleDashed,
   CircleHelp,
   CirclePause,
   Loader2,
   Square,
-  SquareTerminal,
   X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { formatCompactDuration } from '../../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { cn } from '@/lib/class-names'
 import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import { subagentModelLabel } from '../../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
 
 function Age({ at, visible }: { at: number | null; visible: boolean }) {
   const t = useTranslate()
@@ -29,7 +30,7 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
   )
   return (
     <span
-      className="shrink-0 text-xs tabular-nums text-muted-foreground"
+      className="w-11 shrink-0 text-right text-xs tabular-nums text-muted-foreground"
       title={
         at === null
           ? t('components.native-chat.workerDock.timeUnavailable', 'Status time unavailable')
@@ -48,6 +49,7 @@ export type WorkerDockRowView = WorkerDockEntry & {
 export const WorkerDockRow = memo(function WorkerDockRow({
   row,
   narrow,
+  compact = false,
   mixed,
   modelColumn,
   visible,
@@ -57,6 +59,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
 }: {
   row: WorkerDockRowView
   narrow: boolean
+  compact?: boolean
   mixed: boolean
   modelColumn: boolean
   visible: boolean
@@ -69,7 +72,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const elapsed = useNowSnapshot(
     30_000,
     (now) => (row.startedAt === null ? '' : formatCompactDuration(now - row.startedAt)),
-    visible && row.startedAt !== null
+    visible && row.startedAt !== null && row.state === 'running'
   )
   const gesture = useRef<{
     row: WorkerDockRowView
@@ -90,6 +93,11 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   const state = row.retired
     ? t('components.native-chat.workerDock.doneResult', 'Done · open result')
     : workerDockStateLabel(t, row.state)
+  const stateTone = failed
+    ? 'text-destructive'
+    : row.state === 'needs-you'
+      ? 'text-chat-warning'
+      : 'text-muted-foreground'
   const Icon = failed
     ? CircleAlert
     : row.state === 'needs-you'
@@ -101,9 +109,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
             row.state === 'stopping' ||
             row.state === 'saving'
           ? Loader2
-          : row.kind === 'command'
-            ? SquareTerminal
-            : Bot
+          : row.state === 'unavailable'
+            ? CircleDashed
+            : Circle
   return (
     <div
       data-worker-dock-row={row.id}
@@ -124,39 +132,74 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           aria-hidden="true"
           className={cn(
             'mt-0.5 size-4 shrink-0',
+            stateTone,
             (row.state === 'running' || row.state === 'starting' || row.state === 'stopping') &&
               !row.retired &&
               'animate-spin motion-reduce:animate-none'
           )}
         />
-        <span className="min-w-0 flex-1">
-          <span className={cn('flex min-w-0 gap-x-2', narrow ? 'flex-col' : 'items-baseline')}>
+        <span
+          className={cn(
+            'min-w-0 flex-1',
+            !narrow && 'flex items-center gap-2',
+            compact && narrow && 'flex flex-wrap items-baseline gap-x-2'
+          )}
+        >
+          <span
+            className={cn(
+              'flex min-w-0 gap-x-2',
+              narrow ? (compact ? 'contents' : 'flex-col') : 'flex-1 items-baseline'
+            )}
+          >
             <span className="max-w-30 truncate text-sm font-medium">{row.name}</span>
-            <span className={cn('min-w-0 text-sm', narrow ? 'line-clamp-1' : 'truncate')}>
+            <span
+              className={cn(
+                'min-w-0 text-sm',
+                narrow ? (compact ? 'hidden' : 'line-clamp-1') : 'truncate'
+              )}
+            >
               {row.title}
             </span>
           </span>
-          {mixed || row.state !== 'running' || row.retired ? (
-            <span data-worker-dock-state="" className="block text-xs text-muted-foreground">
-              {mixed ? `${workerDockKindLabel(t, row.kind)} · ` : ''}
-              {row.state === 'running' && !row.retired ? '' : state}
-            </span>
-          ) : null}
-          {(failed || row.state === 'unavailable' || row.state === 'stopping') && row.reason ? (
-            <span
-              data-worker-dock-reason=""
-              className={cn(
-                'block text-xs text-muted-foreground',
-                narrow ? 'line-clamp-2' : 'line-clamp-1'
-              )}
-            >
-              {row.reason}
-            </span>
-          ) : null}
+          <span
+            className={cn(
+              compact && !narrow && 'flex min-w-0 items-baseline gap-2',
+              compact && narrow && 'contents'
+            )}
+          >
+            {mixed || row.state !== 'running' || row.retired ? (
+              <span
+                data-worker-dock-state=""
+                className={cn(
+                  'text-xs',
+                  stateTone,
+                  narrow ? (compact ? 'shrink-0' : 'block') : 'max-w-40 truncate'
+                )}
+              >
+                {mixed ? `${workerDockKindLabel(t, row.kind)} · ` : ''}
+                {row.state === 'running' && !row.retired ? '' : state}
+              </span>
+            ) : null}
+            {(failed || row.state === 'unavailable' || row.state === 'stopping') && row.reason ? (
+              <span
+                data-worker-dock-reason=""
+                className={cn(
+                  'text-xs text-muted-foreground',
+                  narrow
+                    ? compact
+                      ? 'w-full line-clamp-2'
+                      : 'block line-clamp-2'
+                    : 'min-w-0 max-w-48 truncate'
+                )}
+              >
+                {row.reason}
+              </span>
+            ) : null}
+          </span>
         </span>
         {modelColumn && !narrow ? (
           <span className="max-w-25 truncate text-xs text-muted-foreground">
-            {row.model ?? '—'}
+            {row.model ? subagentModelLabel(row.model) : '—'}
           </span>
         ) : null}
         <Age at={row.changedAt} visible={visible} />

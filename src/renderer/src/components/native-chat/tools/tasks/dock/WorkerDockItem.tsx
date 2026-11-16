@@ -11,6 +11,7 @@ export function WorkerDockItem({
   start,
   measure,
   narrow,
+  compact,
   mixed,
   modelColumn,
   visible,
@@ -27,6 +28,7 @@ export function WorkerDockItem({
   start: number
   measure: (element: HTMLDivElement | null) => void
   narrow: boolean
+  compact?: boolean
   mixed: boolean
   modelColumn: boolean
   visible: boolean
@@ -49,7 +51,7 @@ export function WorkerDockItem({
       }}
     >
       {identity.heading ? (
-        <div className="flex h-6 items-center justify-between bg-muted px-4 text-2xs">
+        <div className="flex h-6 items-center justify-between bg-muted px-4 pr-14 text-2xs text-muted-foreground">
           <h3 className="font-medium">
             {workerDockNeedsAttention(identity.state)
               ? t('components.native-chat.workerDock.attention', 'Needs attention')
@@ -67,6 +69,7 @@ export function WorkerDockItem({
         <WorkerDockRow
           row={retired ? { ...row, retired: true } : row}
           narrow={narrow}
+          compact={compact}
           mixed={mixed}
           modelColumn={modelColumn}
           visible={visible}

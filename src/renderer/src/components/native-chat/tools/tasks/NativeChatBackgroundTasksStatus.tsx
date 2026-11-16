@@ -10,7 +10,6 @@ import type {
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentChildRowName, agentChildRowDetailText } from '@/components/agent-child-row-text'
 import { compareWorkerDockEntries } from '../../../../../../shared/orchestration/dock/worker-dock'
-import { NARROW_BACKGROUND_TASKS_STRIP_REM } from '../../../../../../shared/background-task-header-content'
 import { backgroundTaskRowStopId } from '../../../../../../shared/background-task-roster'
 import { structuredSessionBackgroundTaskGroups } from './background-task-roster'
 import { useWorkerDockStructuralValue } from './dock/NativeChatWorkerDockFrame'
@@ -18,7 +17,7 @@ import { WorkerDockRoster } from './dock/WorkerDockRoster'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 
 /** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
-const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
+const NARROW_STRIP_REM = 27.5
 
 function rootFontSizePx(): number {
   const parsed = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
@@ -26,22 +25,34 @@ function rootFontSizePx(): number {
 }
 
 /** Measure the strip itself; viewport width is only the initial fallback. */
-function useNarrowStrip(ref: React.RefObject<HTMLDivElement | null>): boolean {
-  const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_STRIP_REM * 16)
+function useStripLayout(ref: React.RefObject<HTMLDivElement | null>) {
+  const [layout, setLayout] = useState(() => ({
+    narrow: window.innerWidth < NARROW_STRIP_REM * 16,
+    compact: window.innerHeight < 520
+  }))
   useEffect(() => {
-    const element = ref.current
+    const root = ref.current
+    const element = root?.closest('[data-native-chat-worker-dock]') ?? root
+    const pane = root?.closest('[data-native-chat-root]')
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver((observerEntries) => {
-      const width =
-        observerEntries[0]?.borderBoxSize?.[0]?.inlineSize ?? element.getBoundingClientRect().width
-      setNarrow(width < NARROW_STRIP_REM * rootFontSizePx())
-    })
-    observer.observe(element, { box: 'border-box' })
+    const measure = () => {
+      const narrow = element.getBoundingClientRect().width < NARROW_STRIP_REM * rootFontSizePx()
+      const compact = (pane?.getBoundingClientRect().height ?? window.innerHeight) < 520
+      setLayout((previous) =>
+        previous.narrow === narrow && previous.compact === compact ? previous : { narrow, compact }
+      )
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    if (pane) {
+      observer.observe(pane)
+    }
+    measure()
     return () => observer.disconnect()
   }, [ref])
-  return narrow
+  return layout
 }
 
 function workerChildren(row: AgentChildRowModel): AgentChildRowModel[] {
@@ -79,6 +90,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   onStop: (taskId?: string) => void
   /** Open a listed agent's own view. */
   onShowAgent?: (providerId: string) => void
+  onShowCommand?: (row: WorkerDockRowView, opener: HTMLElement) => void
   /** The agent whose view the pane shows. */
   currentAgentId?: string | null
   workerRows?: ReadonlyMap<string, WorkerDockRowView>
@@ -97,7 +109,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   const t = useTranslate()
   const props = useWorkerDockStructuralValue(liveProps)
   const root = useRef<HTMLDivElement>(null)
-  const narrow = useNarrowStrip(root)
+  const { narrow, compact } = useStripLayout(root)
   const groups = useMemo(
     () =>
       structuredSessionBackgroundTaskGroups(
@@ -187,7 +199,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
               agentChildRowDetailText(row, Date.now()),
             model: row.model ?? null,
             state,
-            changedAt: view?.settledAt ?? null,
+            changedAt: view?.settledAt ?? row.firstObservedAt ?? null,
             startedAt: row.firstObservedAt || null,
             reason:
               state === 'failed' || state === 'unexpected' ? (view?.lastMessage ?? null) : null,
@@ -218,14 +230,23 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
     [props.workerIdentities, providerRows]
   )
   return (
-    <div ref={root}>
+    <div
+      ref={root}
+      className="min-h-0 group-has-[[data-native-chat-worker-approvals]]/worker-dock:contents"
+    >
       <WorkerDockRoster
         rows={rows}
         identities={identities}
         countIdentities={countIdentities}
         narrow={narrow}
+        compact={compact}
         visible={props.isVisible}
         incomplete={props.incomplete}
+        stopAll={
+          props.offersStopAll
+            ? { pending: props.stoppingAll, onStop: () => props.onStop() }
+            : undefined
+        }
         expanded={props.expanded}
         onExpandedChange={props.onExpandedChange}
         pending={
@@ -239,12 +260,14 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
         onOpen={(row, opener) => {
           if (row.kind === 'worker') {
             props.onOpenWorker?.(row, opener)
+          } else if (row.kind === 'command') {
+            props.onShowCommand?.(row, opener)
           } else if (row.providerId) {
             props.onShowAgent?.(row.providerId)
           }
         }}
         onAction={(row, action) => {
-          if (row.kind === 'worker') {
+          if (row.kind === 'worker' || action === 'clear') {
             props.onWorkerAction?.(row, action)
           } else if (action === 'stop' && row.providerId) {
             props.onStop(row.providerId)

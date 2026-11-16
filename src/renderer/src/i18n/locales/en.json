@@ -21718,6 +21718,7 @@
         "finishedWith": "Sign-in finished · {{message}}"
       },
       "workerDock": {
+        "commandOutputPending": "Command output is not available yet.",
         "notNow": "Not now",
         "retry": "Retry",
         "dismiss": "Dismiss",

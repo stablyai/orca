@@ -2,9 +2,13 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { CircleHelp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  useWorkerDockRosterState,
-  useWorkerDockStructuralValue
-} from '../tools/tasks/dock/NativeChatWorkerDockFrame'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
+import { useWorkerDockStructuralValue } from '../tools/tasks/dock/NativeChatWorkerDockFrame'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -100,7 +104,6 @@ export function NativeChatWorkerApprovalStack({
     }
   }, [liveApprovals, t])
   const approvals = useWorkerDockStructuralValue(liveApprovals)
-  const roster = useWorkerDockRosterState()
   const root = useRef<HTMLDivElement>(null)
   const [short, setShort] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
@@ -115,7 +118,14 @@ export function NativeChatWorkerApprovalStack({
     observer.observe(pane)
     return () => observer.disconnect()
   }, [hasApprovals])
-  const open = approvals.filter(({ approval }) => approval.state === 'open')
+  const open = useMemo(
+    () =>
+      approvals
+        .filter(({ approval }) => approval.state === 'open')
+        .toReversed()
+        .sort((a, b) => Date.parse(b.askedAt ?? b.at) - Date.parse(a.askedAt ?? a.at)),
+    [approvals]
+  )
   // Each prompt being answered here, and with which decision: the card waits on the host's outcome.
   const [submitting, setSubmitting] = useState<ReadonlyMap<string, WorkerApprovalDecision>>(
     new Map()
@@ -174,11 +184,13 @@ export function NativeChatWorkerApprovalStack({
       </span>
     )
   }
-  const compact = roster.expanded || short
+  const compact = short
+  const selectedEntry = selected
+    ? open.find((entry) => entry.approval.approvalId === selected)
+    : undefined
   const shown = compact
     ? undefined
-    : (open.find((entry) => entry.approval.approvalId === selected) ??
-      open.find((entry) => !folded.has(entry.approval.approvalId)))
+    : (selectedEntry ?? open.find((entry) => !folded.has(entry.approval.approvalId)))
   const queued = open.filter((entry) => entry !== shown)
   const card = (entry: NativeChatWorkerApproval) => {
     const { approval } = entry
@@ -222,7 +234,7 @@ export function NativeChatWorkerApprovalStack({
       </span>
       {shown ? (
         <div data-native-chat-worker-approval={shown.approval.approvalId}>
-          <div className="flex min-h-8 items-center gap-2 px-4 pt-1 text-xs text-muted-foreground">
+          <div className="flex min-h-8 items-center gap-2 px-4 pt-1 text-xs text-chat-warning">
             <CircleHelp className="size-4" />
             <span>
               {t(
@@ -237,7 +249,7 @@ export function NativeChatWorkerApprovalStack({
       ) : null}
       {queued.length ? (
         <>
-          <p className="flex h-6 items-center px-4 text-xs text-muted-foreground">
+          <p className="flex h-6 items-center px-4 text-2xs text-muted-foreground">
             {shown
               ? t(
                   'components.native-chat.workerDock.moreQuestions',
@@ -254,17 +266,15 @@ export function NativeChatWorkerApprovalStack({
               'components.native-chat.workerDock.queuedQuestions',
               'Queued worker questions'
             )}
-            className="scrollbar-sleek max-h-22 overflow-y-auto overscroll-contain"
-            style={{ scrollSnapType: 'y mandatory' }}
+            className="min-h-0"
           >
             {queued.map((entry) => (
               <div
                 key={entry.approval.approvalId}
                 data-native-chat-worker-question-summary={entry.approval.approvalId}
-                className="flex h-11 min-w-0 shrink-0 items-center gap-2 px-4 text-xs"
-                style={{ scrollSnapAlign: 'start' }}
+                className="flex h-11 min-w-0 shrink-0 scroll-mt-11 items-center gap-2 px-4 text-xs"
               >
-                <CircleHelp aria-hidden="true" className="size-4 shrink-0" />
+                <CircleHelp aria-hidden="true" className="size-4 shrink-0 text-chat-warning" />
                 <span className="min-w-0 flex-1 truncate">
                   {entry.worker.label} · {entry.approval.summary.title}
                 </span>
@@ -283,16 +293,12 @@ export function NativeChatWorkerApprovalStack({
                       ?.scrollIntoView({ block: 'center' })
                   }
                   onClick={() => {
-                    if (compact) {
-                      void openOrchestrationCrewAgent(entry.worker, target)
-                    } else {
-                      setSelected(entry.approval.approvalId)
-                      setFolded((current) => {
-                        const next = new Set(current)
-                        next.delete(entry.approval.approvalId)
-                        return next
-                      })
-                    }
+                    setSelected(entry.approval.approvalId)
+                    setFolded((current) => {
+                      const next = new Set(current)
+                      next.delete(entry.approval.approvalId)
+                      return next
+                    })
                   }}
                 >
                   {t('components.native-chat.workerDock.show', 'Show')}
@@ -301,6 +307,24 @@ export function NativeChatWorkerApprovalStack({
             ))}
           </div>
         </>
+      ) : null}
+      {compact && selectedEntry ? (
+        <Dialog
+          open
+          onOpenChange={(value) => {
+            if (!value) {
+              setSelected(null)
+            }
+          }}
+        >
+          <DialogContent surface="security" scrollable>
+            <DialogHeader className="sr-only">
+              <DialogTitle>{selectedEntry.approval.summary.title}</DialogTitle>
+              <DialogDescription>{selectedEntry.worker.label}</DialogDescription>
+            </DialogHeader>
+            {card(selectedEntry)}
+          </DialogContent>
+        </Dialog>
       ) : null}
       {approvals
         .filter((entry) => entry.approval.state !== 'open')

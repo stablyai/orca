@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { verifyStickyInput } from './sticky-workers-input.test-fixture'
 import { measureStickyPerformance } from './sticky-workers-performance.test-fixture'
-import { seedStickyWorkers } from './sticky-workers-roster.test-fixture'
 import { homedir } from 'node:os'
 import { test, openStubChat } from './helpers/structured-claude-stub'
 import { expect } from './helpers/orca-app'
@@ -10,6 +9,20 @@ import {
   measureStickyLayout,
   verifyQuestionKeyboardReachability
 } from './sticky-workers-layout.test-fixture'
+
+declare global {
+  var __stickyWorkersHarness:
+    | {
+        seed: (
+          session: string,
+          count: number,
+          asks: boolean,
+          options: { failures?: number; remote?: boolean }
+        ) => void
+        fail: (session: string) => string
+      }
+    | undefined
+}
 
 const root = join(homedir(), '.orca/reports/sticky-workers/impl')
 const phase = process.env.STICKY_CAPTURE_PHASE ?? 'baseline'
@@ -21,7 +34,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
   claudeStub
 }) => {
   // Ten viewport/theme captures include a complete 20-question keyboard pass in each.
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
   const identity = await electronApp.evaluate(({ app, BrowserWindow }) => ({
     appPath: app.getAppPath(),
     windows: BrowserWindow.getAllWindows().map((window) => ({
@@ -50,7 +63,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
   const count = Number(process.env.STICKY_CAPTURE_COUNT ?? 20)
   const scene = `${scenario}-${count}`
   let seeded: { sessionId: string; database: string } | null = null
-  if (scenario !== 'providers') {
+  if (scenario !== 'providers' && scenario !== 'running') {
     const sessionId = await page.evaluate(
       () =>
         Object.values(window.__store?.getState().unifiedTabsByWorktree ?? {})
@@ -62,7 +75,29 @@ test('captures the worker strip in an isolated hidden native chat', async ({
       throw new Error('No capture source session.')
     }
     const database = join(profile, 'orchestration.db')
-    seedStickyWorkers(database, sessionId, count, scenario === 'asks-20')
+    await page.evaluate(
+      (session) =>
+        window.api.runtime.call({
+          method: 'orchestration.workerDockRead',
+          params: { party: `orca_session_id:${session}` }
+        }),
+      sessionId
+    )
+    await electronApp.evaluate(
+      (_electron, data) => {
+        const harness = globalThis.__stickyWorkersHarness
+        if (!harness) {
+          throw new Error(
+            'The current capture build must include the documented host harness instrumentation.'
+          )
+        }
+        harness.seed(data.sessionId, data.count, data.scenario === 'asks-20', {
+          failures: data.scenario === 'failures' ? Math.max(2, data.count) : undefined,
+          remote: data.scenario === 'remote'
+        })
+      },
+      { sessionId, count, scenario }
+    )
     seeded = { sessionId, database }
     await page.locator('[data-testid="sortable-tab"]').filter({ hasText: 'Terminal 1' }).click()
     await chat.tab.click()
@@ -70,7 +105,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
   await chat.composer.fill(
     scenario === 'mixed'
       ? 'sticky-mixed:2'
-      : scenario === 'providers'
+      : scenario === 'providers' || scenario === 'running'
         ? `sticky-roster:${count}`
         : 'Show the synthetic worker roster'
   )
@@ -80,10 +115,17 @@ test('captures the worker strip in an isolated hidden native chat', async ({
     timeout: 60_000
   })
   const strip = page.locator('[data-native-chat-background-tasks="true"]')
-  await expect(strip).toBeVisible({ timeout: 30_000 })
-  const disclosure = strip.getByRole('button', { expanded: false })
-  await disclosure.click()
-  await expect(strip.getByRole('region', { name: /^Workers/ })).toBeVisible()
+  if (count > 0) {
+    await expect(strip).toBeVisible({ timeout: 30_000 })
+    if (scenario !== 'asks-20') {
+      await strip.getByRole('button', { expanded: false }).click()
+      await expect(strip.getByRole('region', { name: /^Workers/ })).toBeVisible()
+    }
+  }
+  if (scenario === 'running') {
+    // ast-grep-ignore: test-no-real-time-wait -- Capture an actual observed running age, without a mocked clock.
+    await page.waitForTimeout(65_000)
+  }
   mkdirSync(join(root, 'shots'), { recursive: true })
   const measurements: unknown[] = []
   for (const theme of ['light', 'dark'] as const) {
@@ -111,29 +153,102 @@ test('captures the worker strip in an isolated hidden native chat', async ({
       await page.screenshot({
         path: join(root, 'shots', `${phase}-${scene}-native-${theme}-${width}x${height}.png`)
       })
-      const stopTarget = page.locator('[data-worker-dock-action][aria-label^="Stop "]').first()
-      if (await stopTarget.count()) {
-        await stopTarget.focus()
-        await expect(stopTarget).toBeFocused()
-      }
-      if (scenario === 'asks-20') {
+      if (scenario === 'workers' && count >= 20) {
+        const region = strip.getByRole('region', { name: /^Workers/ })
+        await region.evaluate((element) => {
+          element.scrollTop = element.scrollHeight
+        })
         measurements.push({
           theme,
           width,
           height,
-          keyboard: await verifyQuestionKeyboardReachability(page, count)
+          edge: 'end',
+          layout: await measureStickyLayout(page, 0)
+        })
+        await page.screenshot({
+          path: join(root, 'shots', `${phase}-${scene}-scroll-end-${theme}-${width}x${height}.png`)
+        })
+        await region.evaluate((element) => {
+          element.scrollTop = 0
+        })
+        await measureStickyLayout(page, 0)
+      }
+      const stopTarget = page.locator('[data-worker-dock-action][aria-label^="Stop "]').first()
+      if (await stopTarget.count()) {
+        await stopTarget.hover()
+        await expect(page.getByRole('tooltip')).toBeVisible()
+        await page.screenshot({
+          path: join(root, 'shots', `${phase}-${scene}-stop-hover-${theme}-${width}x${height}.png`)
+        })
+        await stopTarget.focus()
+        await expect(stopTarget).toBeFocused()
+      }
+      if (scenario === 'asks-20') {
+        const order = () =>
+          page
+            .locator('[data-native-chat-worker-question-summary]')
+            .evaluateAll((rows) =>
+              rows.map((row) => row.getAttribute('data-native-chat-worker-question-summary'))
+            )
+        const before = await order()
+        const expandedAsk = page.locator('[data-native-chat-worker-approval]')
+        const shown = (await expandedAsk.count())
+          ? await expandedAsk.getAttribute('data-native-chat-worker-approval')
+          : null
+        if (count === 20) {
+          expect(shown ?? before[0]).toBe('apr_sticky_19')
+        }
+        const keyboard = await verifyQuestionKeyboardReachability(
+          page,
+          await page.getByRole('button', { name: /^Show .* question$/ }).count()
+        )
+        const after = await order()
+        expect(after).toEqual(before)
+        measurements.push({
+          theme,
+          width,
+          height,
+          shown,
+          orderBefore: before,
+          orderAfter: after,
+          keyboard
         })
         await page.screenshot({
           path: join(root, 'shots', `${phase}-${scene}-focused-${theme}-${width}x${height}.png`)
         })
+        if (height < 520) {
+          await page
+            .getByRole('button', { name: /^Show .* question$/ })
+            .first()
+            .click()
+          await expect(page.getByRole('dialog')).toBeVisible()
+          await page.screenshot({
+            path: join(
+              root,
+              'shots',
+              `${phase}-${scene}-newest-ask-dialog-${theme}-${width}x${height}.png`
+            )
+          })
+          await page.keyboard.press('Escape')
+          await expect(page.getByRole('dialog')).toHaveCount(0)
+        }
       }
     }
   }
   await page.setViewportSize({ width: 900, height: 720 })
   await expect(page.getByText('Stub reply.', { exact: true }).last()).toBeVisible()
+  const source = seeded
   const input =
-    scenario === 'workers' && count >= 8 && seeded
-      ? await verifyStickyInput(page, chat.composer, seeded.database, seeded.sessionId)
+    process.env.STICKY_CAPTURE_PERF !== '1' && scenario === 'workers' && count >= 8 && source
+      ? await verifyStickyInput(page, chat.composer, source.database, source.sessionId, () =>
+          electronApp.evaluate((_electron, session) => {
+            const harness = globalThis.__stickyWorkersHarness
+            if (!harness) {
+              throw new Error('The capture host adapter is missing.')
+            }
+            return harness.fail(session)
+          }, source.sessionId)
+        )
       : null
   const performanceResults =
     process.env.STICKY_CAPTURE_PERF === '1'
@@ -143,6 +258,44 @@ test('captures the worker strip in an isolated hidden native chat', async ({
           join(root, 'perf', `${phase}-${scene}-renderer-trace.json`)
         )
       : null
+  let hidden: unknown = null
+  if (process.env.STICKY_CAPTURE_PERF === '1') {
+    await page.locator('[data-testid="sortable-tab"]').filter({ hasText: 'Terminal 1' }).click()
+    await expect(chat.composer).not.toBeVisible()
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    )
+    await page.evaluate(() => {
+      for (const mark of ['chat', 'composer', 'strip']) {
+        performance.clearMarks(`sticky-workers:${mark}:render`)
+      }
+    })
+    await electronApp.evaluate(() => {
+      const harness = globalThis.__stickyWorkersHarness
+      if (!harness) {
+        throw new Error('The capture host adapter is missing.')
+      }
+      harness.seed('22222222-2222-4222-8222-222222222222', 1, false, {})
+    })
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+    )
+    hidden = await page.evaluate(() =>
+      Object.fromEntries(
+        ['chat', 'composer', 'strip'].map((mark) => [
+          mark,
+          performance.getEntriesByName(`sticky-workers:${mark}:render`).length
+        ])
+      )
+    )
+    expect(hidden).toEqual({ chat: 0, composer: 0, strip: 0 })
+  }
   writeFileSync(
     join(root, `${phase}-${scene}-native.json`),
     JSON.stringify(
@@ -159,7 +312,8 @@ test('captures the worker strip in an isolated hidden native chat', async ({
         },
         measurements,
         performance: performanceResults,
-        input
+        input,
+        hidden
       },
       null,
       2
