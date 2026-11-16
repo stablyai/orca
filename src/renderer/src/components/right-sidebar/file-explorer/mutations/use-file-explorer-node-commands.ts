@@ -38,6 +38,7 @@ type UseFileExplorerNodeCommandsParams = {
   requestDeleteAll: (nodes: TreeNode[]) => void
   refreshDir: (dirPath: string) => Promise<void>
   handleClick: (node: TreeNode) => void
+  handleRowActivation: (node: TreeNode) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
   pathOwner: LocalPathOpenOwner
@@ -71,6 +72,7 @@ export function useFileExplorerNodeCommands({
   requestDeleteAll,
   refreshDir,
   handleClick,
+  handleRowActivation,
   toggleDir,
   scrollToIndex,
   pathOwner
@@ -125,9 +127,9 @@ export function useFileExplorerNodeCommands({
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
-      selectRowWithModifiers(node, event, handleClick)
+      selectRowWithModifiers(node, event, handleRowActivation)
     },
-    [handleClick, selectRowWithModifiers]
+    [handleRowActivation, selectRowWithModifiers]
   )
   const handleCollapseFolderSubtree = useCallback(
     (node: TreeNode) => {

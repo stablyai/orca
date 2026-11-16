@@ -27,6 +27,7 @@ import {
 } from './appearance-usage-percentage-search'
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { FileOpenClickModeSetting } from './FileOpenClickModeSetting'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
@@ -350,6 +351,7 @@ export function AppearanceWindowSidebarSection({
             <SettingsGroupSubsection
               title={t('auto.components.settings.AppearancePane.8e374ce9a3', 'File explorer')}
             >
+              <FileOpenClickModeSetting settings={settings} updateSettings={updateSettings} />
               <SearchableSetting
                 title={
                   layoutEntries[0]?.title ??

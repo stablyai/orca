@@ -12,6 +12,7 @@ import {
 } from '../navigation/file-explorer-operation-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
+import { useAppStore } from '@/store/index'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
@@ -47,6 +48,7 @@ type UseFileExplorerHandlersParams = {
 
 type UseFileExplorerHandlersReturn = {
   handleClick: (node: TreeNode) => void
+  handleRowClick: (node: TreeNode) => void
   handleDoubleClick: (node: TreeNode) => void
   handleWheelCapture: (e: React.WheelEvent<HTMLDivElement>) => void
 }
@@ -65,6 +67,7 @@ export async function activateFileExplorerNode(args: {
   statPath: UseFileExplorerHandlersParams['statPath']
   markPathAsDirectory: (path: string) => void
   setSelectedPath: (path: string) => void
+  preview?: boolean
 }): Promise<void> {
   const {
     node,
@@ -140,7 +143,7 @@ export async function activateFileExplorerNode(args: {
       mode: 'edit'
     },
     {
-      preview: true,
+      preview: args.preview ?? true,
       // Hand focus to the editor even if rich-editor mounting finishes after the row takes browser focus.
       focusEditor: true,
       // Suppress runtime fallback for explicit local opens.
@@ -162,9 +165,10 @@ export function useFileExplorerHandlers({
   setSelectedPath,
   scrollRef
 }: UseFileExplorerHandlersParams): UseFileExplorerHandlersReturn {
-  const handleClick = useCallback(
-    (node: TreeNode) => {
-      void activateFileExplorerNode({
+  const fileOpenClickMode = useAppStore((state) => state.settings?.fileOpenClickMode ?? 'single')
+  const activateNode = useCallback(
+    (node: TreeNode, preview = true) => {
+      return activateFileExplorerNode({
         node,
         activeWorktreeId,
         runtimeEnvironmentId,
@@ -174,7 +178,8 @@ export function useFileExplorerHandlers({
         loadDir,
         statPath,
         markPathAsDirectory,
-        setSelectedPath
+        setSelectedPath,
+        preview
       })
     },
     [
@@ -190,14 +195,31 @@ export function useFileExplorerHandlers({
     ]
   )
 
+  const handleClick = useCallback((node: TreeNode) => void activateNode(node), [activateNode])
+
+  const handleRowClick = useCallback(
+    (node: TreeNode) => {
+      if (node.isDirectory || fileOpenClickMode === 'single') {
+        handleClick(node)
+      } else if (activeWorktreeId) {
+        setSelectedPath(node.path)
+      }
+    },
+    [activeWorktreeId, fileOpenClickMode, handleClick, setSelectedPath]
+  )
+
   const handleDoubleClick = useCallback(
     (node: TreeNode) => {
       if (!activeWorktreeId || node.isDirectory) {
         return
       }
-      makePreviewFilePermanent(node.path)
+      if (fileOpenClickMode === 'single') {
+        makePreviewFilePermanent(node.path)
+      } else {
+        void activateNode(node, false)
+      }
     },
-    [activeWorktreeId, makePreviewFilePermanent]
+    [activeWorktreeId, activateNode, fileOpenClickMode, makePreviewFilePermanent]
   )
 
   const handleWheelCapture = useCallback(
@@ -219,5 +241,5 @@ export function useFileExplorerHandlers({
     [scrollRef]
   )
 
-  return { handleClick, handleDoubleClick, handleWheelCapture }
+  return { handleClick, handleRowClick, handleDoubleClick, handleWheelCapture }
 }
