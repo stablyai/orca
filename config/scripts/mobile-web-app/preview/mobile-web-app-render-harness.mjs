@@ -37,27 +37,56 @@ export async function readShellCsp() {
   return parseCspDirectives(source, 'listOf(', ').joinToString')
 }
 
-// Read the shipped Kotlin chat visual frame: its policy and the fixed document the shell serves.
-export async function readChatVisualFrame() {
-  const source = await readFile(
-    join(
-      projectDir,
-      'mobile/modules/orca-mobile-web-shell/android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellChatVisualFrame.kt'
-    ),
-    'utf8'
-  )
-  const cspStart = source.indexOf('MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP = listOf(')
-  const csp = parseCspDirectives(source.slice(cspStart), 'listOf(', ').joinToString')
-  const documentMatch =
-    /MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_DOCUMENT = """\n([\s\S]*?)\n""".trimIndent\(\)/.exec(source)
-  if (!documentMatch) {
+function readFrameDocument(source, pattern, indent) {
+  const match = pattern.exec(source)
+  if (!match) {
     throw new Error('could not parse the chat visual frame document')
   }
-  const document = documentMatch[1]
+  return match[1]
     .split('\n')
-    .map((line) => line.replace(/^ {2}/, ''))
+    .map((line) => line.replace(indent, ''))
     .join('\n')
-  return { csp, document }
+}
+
+// Read the shipped chat visual frame (policy and fixed document); the iOS copy must match Kotlin's.
+export async function readChatVisualFrame() {
+  const shellDir = join(projectDir, 'mobile/modules/orca-mobile-web-shell')
+  const [kotlin, swift] = await Promise.all([
+    readFile(
+      join(
+        shellDir,
+        'android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellChatVisualFrame.kt'
+      ),
+      'utf8'
+    ),
+    readFile(join(shellDir, 'ios/MobileWebShellChatVisualFrame.swift'), 'utf8')
+  ])
+  const frame = {
+    csp: parseCspDirectives(
+      kotlin.slice(kotlin.indexOf('MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP = listOf(')),
+      'listOf(',
+      ').joinToString'
+    ),
+    document: readFrameDocument(
+      kotlin,
+      /MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_DOCUMENT = """\n([\s\S]*?)\n""".trimIndent\(\)/,
+      /^ {2}/
+    )
+  }
+  const swiftCsp = parseCspDirectives(
+    swift.slice(swift.indexOf('static let csp = [')),
+    '[',
+    '].joined'
+  )
+  const swiftDocument = readFrameDocument(
+    swift,
+    /static let document = Data\("""\n([\s\S]*?)\n {4}""".utf8\)/,
+    /^ {4}/
+  )
+  if (swiftCsp !== frame.csp || swiftDocument !== frame.document) {
+    throw new Error('the iOS and Android chat visual frames differ')
+  }
+  return frame
 }
 
 // Read literal document headers from Kotlin; CSP constant stays readShellCsp’s job. Throw if none found or browser defaults could masquerade as shell guarantees.

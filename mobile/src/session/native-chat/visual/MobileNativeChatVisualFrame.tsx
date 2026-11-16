@@ -46,31 +46,21 @@ function ScriptedVisualFrame({ html, title }: { html: string; title: string }) {
   const colorScheme = useMobileColorScheme()
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const loadedRef = useRef(false)
-  // Built once per visual: the theme at build time paints first, later themes arrive by message.
-  const built = useMemo(() => {
-    const channel = newNativeChatVisualChannel()
-    return {
-      channel,
-      document: buildNativeChatVisualDocument({
-        html,
-        channel,
-        theme: MOBILE_NATIVE_CHAT_VISUAL_THEME
-      })
-    }
-  }, [html])
+  // One channel per visual; the document is built at handoff so it paints in the current theme.
+  const channel = useMemo(() => newNativeChatVisualChannel(), [html])
 
   useEffect(() => {
     if (loadedRef.current) {
       frameRef.current?.contentWindow?.postMessage(
-        nativeChatVisualThemeMessage(MOBILE_NATIVE_CHAT_VISUAL_THEME, built.channel),
+        nativeChatVisualThemeMessage(MOBILE_NATIVE_CHAT_VISUAL_THEME, channel),
         '*'
       )
     }
-  }, [built.channel, colorScheme])
+  }, [channel, colorScheme])
 
   return (
     <iframe
-      key={built.channel}
+      key={channel}
       ref={frameRef}
       title={title}
       src={MOBILE_NATIVE_CHAT_VISUAL_FRAME_PATH}
@@ -80,8 +70,13 @@ function ScriptedVisualFrame({ html, title }: { html: string; title: string }) {
       style={IFRAME_STYLE}
       onLoad={() => {
         loadedRef.current = true
+        const document = buildNativeChatVisualDocument({
+          html,
+          channel,
+          theme: MOBILE_NATIVE_CHAT_VISUAL_THEME
+        })
         frameRef.current?.contentWindow?.postMessage(
-          mobileNativeChatVisualDocumentMessage(built.document, title),
+          mobileNativeChatVisualDocumentMessage(document, title),
           '*'
         )
       }}

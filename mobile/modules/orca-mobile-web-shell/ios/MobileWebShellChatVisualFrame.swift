@@ -6,8 +6,8 @@ import Foundation
 enum MobileWebShellChatVisualFrame {
   static let path = "/chat-visual-frame"
 
-  /// NATIVE_CHAT_VISUAL_HOST_CSP without the CDN origins (the shell blocks the network), behind an
-  /// opaque-origin sandbox so the document never shares the page's origin, storage or bridge.
+  /// NATIVE_CHAT_VISUAL_HOST_CSP without the CDN origins, so visuals load nothing remote (WebRTC is outside
+  /// CSP, as on desktop), behind an opaque-origin sandbox that keeps the page's origin, storage and bridge out.
   static let csp = [
     "sandbox allow-scripts",
     "default-src 'none'",

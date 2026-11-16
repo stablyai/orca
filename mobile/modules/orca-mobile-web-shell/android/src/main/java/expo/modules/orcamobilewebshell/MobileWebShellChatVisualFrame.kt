@@ -5,8 +5,8 @@ package expo.modules.orcamobilewebshell
  * srcdoc child. Keep in sync with Swift and mobile-native-chat-visual-frame-contract.ts. */
 internal const val MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_PATH = "/chat-visual-frame"
 
-/** NATIVE_CHAT_VISUAL_HOST_CSP without the CDN origins (the shell blocks the network), behind an
- * opaque-origin sandbox so the document never shares the page's origin, storage or bridge. */
+/** NATIVE_CHAT_VISUAL_HOST_CSP without the CDN origins, so visuals load nothing remote (WebRTC is outside
+ * CSP, as on desktop), behind an opaque-origin sandbox that keeps the page's origin, storage and bridge out. */
 internal val MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP = listOf(
   "sandbox allow-scripts",
   "default-src 'none'",
