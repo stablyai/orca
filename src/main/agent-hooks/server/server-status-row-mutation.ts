@@ -10,7 +10,7 @@ import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-l
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusRowMutation extends AgentHookServerStatusApplication {
-  protected preserveResumedAcceptedTurn(
+  protected preserveAcceptedTurn(
     previous: EnrichedAgentHookEventPayload | undefined,
     incoming: AgentHookEventPayload,
     before: EnrichedAgentHookEventPayload | undefined,

@@ -315,20 +315,19 @@ export async function readPaneTmuxHost(
   if (!rows) {
     return false
   }
-  const byPid = new Map(rows.map((row) => [row.pid, row]))
-  const rootRow = byPid.get(root.pid)
+  const rootRow = rows.find((row) => row.pid === root.pid)
   if (!rootRow?.tpgid || rootRow.tpgid <= 0) {
     return false
   }
   const shown = rows.some(
     (row) => row.tty === rootRow.tty && row.pgid === rootRow.tpgid && isTmuxServer(row)
   )
-  let agent = request.process ? byPid.get(request.process.pid) : undefined
+  let agent = request.process ? rows.find((row) => row.pid === request.process?.pid) : undefined
   for (let depth = 0; shown && agent && depth < MAX_ANCESTRY_DEPTH; depth++) {
     if (agent.pid === root.pid) {
       return false
     }
-    agent = agent.ppid > 1 ? byPid.get(agent.ppid) : undefined
+    agent = agent.ppid > 1 ? rows.find((row) => row.pid === agent?.ppid) : undefined
   }
   return shown
 }
