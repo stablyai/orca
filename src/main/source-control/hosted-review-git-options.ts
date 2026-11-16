@@ -3,6 +3,8 @@ import type { GhAccountBinding } from '../../shared/github/accounts/account-bind
 
 export type HostedReviewLocalGitOptions = {
   wslDistro?: string
+  hostGit?: true
+  signal?: AbortSignal
   admissionTier?: GitAdmissionTier
   ghAccount?: GhAccountBinding
 }
@@ -19,8 +21,12 @@ export function getHostedReviewLocalGitOptions(
   const wslDistro = options.localGitExecOptions?.wslDistro
   const admissionTier = options.localGitExecOptions?.admissionTier
   const ghAccount = options.localGitExecOptions?.ghAccount
+  const hostGit = options.localGitExecOptions?.hostGit
+  const signal = options.localGitExecOptions?.signal
   return {
     ...(wslDistro ? { wslDistro } : {}),
+    ...(hostGit ? { hostGit } : {}),
+    ...(signal ? { signal } : {}),
     ...(admissionTier ? { admissionTier } : {}),
     ...(ghAccount ? { ghAccount } : {})
   }

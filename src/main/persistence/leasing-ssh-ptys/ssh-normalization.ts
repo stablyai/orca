@@ -12,6 +12,10 @@ import {
 } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { normalizeSshPendingPtyKill } from '../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
 import { getLegacyManagedOrcadOwnerEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import {
+  normalizeSshGitExecution,
+  normalizeSshGitExecutionProjects
+} from '../../../shared/remote-runtime/ssh/ssh-git-execution'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
@@ -29,6 +33,8 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   const systemSshConnectionReuse = target.systemSshConnectionReuse
   const systemSshProxyConnectionReuse = target.systemSshProxyConnectionReuse
   const remoteRuntime = target.remoteRuntime
+  const gitExecution = normalizeSshGitExecution(target.gitExecution)
+  const gitExecutionProjects = normalizeSshGitExecutionProjects(target.gitExecutionProjects)
   const remoteRuntimeResolution = normalizeSshRemoteRuntimeResolution(
     target.remoteRuntimeResolution
   )
@@ -39,6 +45,8 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.systemSshConnectionReuse
   delete target.systemSshProxyConnectionReuse
   delete target.remoteRuntime
+  delete target.gitExecution
+  delete target.gitExecutionProjects
   delete target.remoteRuntimeResolution
   delete target.experimentalPtySourceCreditV1
   delete target.allowRemoteCliControlReset
@@ -50,6 +58,12 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   const normalized: SshTarget = {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
+  }
+  if (gitExecution) {
+    normalized.gitExecution = gitExecution
+  }
+  if (gitExecutionProjects) {
+    normalized.gitExecutionProjects = gitExecutionProjects
   }
   // Old forms persisted the former default even without user choice; migrate it as implicit.
   if (

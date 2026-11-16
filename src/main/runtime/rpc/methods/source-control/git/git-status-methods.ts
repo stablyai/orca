@@ -3,6 +3,7 @@ import type { GitConflictOperation } from '../../../../../../shared/git/status/g
 import {
   GitStatusParams,
   GitSubmoduleStatus,
+  GitRecordBranchSwitched,
   WorktreeSelector
 } from '../../../../../../shared/rpc-contract/source-control/git-params'
 import { defineMethod } from '../../../core'
@@ -17,6 +18,20 @@ function projectConflictOperation(
 }
 
 export const GIT_STATUS_METHODS = [
+  defineMethod({
+    name: 'git.branchSwitchBlocker',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitBranchSwitchBlocker(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.recordBranchSwitched',
+    permission: 'workspace',
+    params: GitRecordBranchSwitched,
+    handler: async (params, { runtime }) =>
+      runtime.recordRuntimeGitBranchSwitched(params.worktree, params.detached)
+  }),
   defineMethod({
     name: 'git.submoduleStatus',
     permission: 'workspace',

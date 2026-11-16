@@ -77,6 +77,15 @@ export function getGitHubRuntimeRepoId(
   return sourceContext?.provider === 'github' ? (sourceContext.repoId ?? fallback) : fallback
 }
 
+export function getGitHubGitExecutionRepo(
+  sourceContext: TaskSourceContext | null | undefined,
+  fallbackRepoId: string | null | undefined,
+  repoPath?: string | null
+): string | undefined {
+  const repoId = getGitHubRuntimeRepoId(sourceContext, fallbackRepoId)
+  return repoId ? `id:${repoId}` : repoPath ? `path:${repoPath}` : undefined
+}
+
 export function resolveGitHubRepoOperationOwner(
   state: RepoRuntimeOwnerState<Repo>,
   args: {

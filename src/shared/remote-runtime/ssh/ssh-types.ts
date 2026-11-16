@@ -1,6 +1,7 @@
 import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
 import type { OrcadSshProvisioningIntent } from '../orcad-lifecycle/orcad-ssh-provisioning'
 import type { NodeDistMirrorAttempt } from '../../node-runtime/node-dist-mirror'
+import type { SshGitExecutionPolicy } from './ssh-git-execution'
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
@@ -29,7 +30,7 @@ export type SshRemoteRuntimeResolution = {
 /** Who created a hidden target as an implementation detail, and so owns its lifecycle. */
 export type SshTargetOwner = { type: 'on-demand-runtime'; runtimeId: string }
 
-export type SshTarget = {
+export type SshTarget = SshGitExecutionPolicy & {
   id: string
   label: string
   /** Internal targets are hidden from normal host management. */
@@ -345,10 +346,7 @@ export type SshManagedServerStatus =
 export type SshManagedServerNodeDownloadBlocked = { mirror: NodeDistMirrorAttempt }
 
 /** Plain SSH terminals and SFTP browsing only; `reason` is the ladder's classified cause. */
-export type SshPlainSshMode = {
-  reason: string
-  message: string
-}
+export type SshPlainSshMode = { reason: string; message: string }
 
 /** Non-secret mutation provenance. Both fields are required when an SSH provider is selected. */
 export type SshMutationExpectation = {

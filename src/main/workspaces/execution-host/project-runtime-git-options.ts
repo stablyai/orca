@@ -14,6 +14,7 @@ export type LocalProjectGitExecOptions = {
 
 export type LocalProjectWorktreeGitOptions = {
   wslDistro?: string
+  hostGit?: true
 }
 
 export type LocalProjectGhExecOptions = LocalProjectWorktreeGitOptions & {

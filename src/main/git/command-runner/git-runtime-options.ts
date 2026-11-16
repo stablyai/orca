@@ -2,6 +2,7 @@ import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-contr
 
 export type GitRuntimeOptions = {
   wslDistro?: string
+  hostGit?: true
   signal?: AbortSignal
   admissionTier?: GitAdmissionTier
 }
@@ -9,10 +10,11 @@ export type GitRuntimeOptions = {
 export function gitOptionsForWorktree(
   cwd: string,
   options: GitRuntimeOptions = {}
-): { cwd: string; wslDistro?: string; signal?: AbortSignal; admissionTier?: GitAdmissionTier } {
+): GitRuntimeOptions & { cwd: string } {
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
+    ...(options.hostGit ? { hostGit: true } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
   }
@@ -25,6 +27,7 @@ export function gitReadOptionsForWorktree(
 ): {
   cwd: string
   wslDistro?: string
+  hostGit?: true
   signal?: AbortSignal
   admissionTier?: GitAdmissionTier
   preferWslDirectGit: true

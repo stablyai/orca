@@ -39,6 +39,11 @@ export type GitHubRemoteIdentityProbeOptions = {
 }
 
 const operations = new AsyncLocalStorage<GitHubRepoContext>()
+const ambientAccounts = new AsyncLocalStorage<boolean>()
+
+export function withAmbientGitHubAccount<T>(operation: () => T): T {
+  return ambientAccounts.run(true, operation)
+}
 
 export async function withGitHubRepoExecution<T>(
   repoPath: string,
@@ -65,7 +70,11 @@ export async function withGitHubRepoExecution<T>(
 
 export function captureGitHubRepoExecution(): <T>(operation: () => Promise<T>) => Promise<T> {
   const context = operations.getStore()
-  return (operation) => (context ? operations.run(context, operation) : operation())
+  const ambientAccount = ambientAccounts.getStore()
+  return (operation) => {
+    const run = () => (context ? operations.run(context, operation) : operation())
+    return ambientAccount ? withAmbientGitHubAccount(run) : run()
+  }
 }
 
 export function outsideGitHubRepoExecution<T>(operation: () => T): T {
@@ -83,6 +92,9 @@ export function githubRepoContext(
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
     ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
     ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {})
+  }
+  if (ambientAccounts.getStore()) {
+    return Object.freeze({ ...context, ghAccount: undefined, ghAccountFromProject: true })
   }
   const scope = operations.getStore()
   const pinned =

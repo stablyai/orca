@@ -5,7 +5,10 @@ import type { TaskSourceContext } from '../../../../../../shared/work-items/task
 import React, { useMemo, useState, useCallback } from 'react'
 import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import {
+  getGitHubGitExecutionRepo,
+  getGitHubRepoRoutingTarget
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { translate } from '@/i18n/i18n'
@@ -54,7 +57,8 @@ export function GHAssigneesCell({
     open ? repoName : null,
     seedLogins,
     ownerTarget,
-    parsed?.slug.host
+    parsed?.slug.host,
+    { repoId: repo?.id ?? item.repoId, repoPath: repo?.path, sourceContext }
   )
   const toggleAssignee = useCallback(
     async (user: GitHubAssignableUser): Promise<void> => {
@@ -105,7 +109,10 @@ export function GHAssigneesCell({
                 number: item.number,
                 updates
               }
-              const res = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+              const res = await gitHubSlugApiForTarget(
+                target,
+                getGitHubGitExecutionRepo(sourceContext, repo?.id ?? item.repoId, repo?.path)
+              ).updateIssueBySlug({
                 ...args,
                 wakeWslDistro: true
               })

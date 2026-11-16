@@ -44,6 +44,22 @@ async function resolveGatedGitTarget(
 export class RuntimeGitStatusCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
+  async getRuntimeGitBranchSwitchBlocker(worktreeSelector: string): Promise<string | null> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    requireLocalRuntimeGitRoute(target)
+    return this.host.getAgentSwitchBlocker?.(target.worktree.path) ?? null
+  }
+
+  async recordRuntimeGitBranchSwitched(
+    worktreeSelector: string,
+    detached = false
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    requireLocalRuntimeGitRoute(target)
+    this.host.recordBranchSwitched?.(target.worktree, detached)
+    return { ok: true }
+  }
+
   async getRuntimeGitStatus(
     worktreeSelector: string,
     options?: GitProviderStatusOptions

@@ -3,6 +3,7 @@ import type {
   SshTarget
 } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { isRemoteCliControlAllowed } from '../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
+import type { SshGitExecution } from '../../../../shared/remote-runtime/ssh/ssh-git-execution'
 
 export type EditingTarget = {
   label: string
@@ -18,6 +19,7 @@ export type EditingTarget = {
   systemSshProxyConnectionReuse: boolean
   allowRemoteCliControl: boolean
   reconnectOnLaunch: boolean
+  gitExecution?: SshGitExecution
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -33,7 +35,8 @@ export const EMPTY_FORM: EditingTarget = {
   systemSshConnectionReuse: true,
   systemSshProxyConnectionReuse: false,
   allowRemoteCliControl: true,
-  reconnectOnLaunch: true
+  reconnectOnLaunch: true,
+  gitExecution: 'remote'
 }
 
 export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
@@ -52,7 +55,8 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     systemSshProxyConnectionReuse: target.systemSshProxyConnectionReuse === true,
     allowRemoteCliControl: isRemoteCliControlAllowed(target),
-    reconnectOnLaunch: target.reconnectOnLaunch !== false
+    reconnectOnLaunch: target.reconnectOnLaunch !== false,
+    gitExecution: target.gitExecution ?? 'remote'
   }
 }
 
@@ -155,7 +159,8 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
     form.jumpHost.trim().length > 0 ||
     !form.systemSshConnectionReuse ||
     !form.allowRemoteCliControl ||
-    !form.reconnectOnLaunch
+    !form.reconnectOnLaunch ||
+    form.gitExecution === 'local'
   )
 }
 
@@ -173,7 +178,8 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
     current.systemSshProxyConnectionReuse !== baseline.systemSshProxyConnectionReuse ||
     current.allowRemoteCliControl !== baseline.allowRemoteCliControl ||
-    current.reconnectOnLaunch !== baseline.reconnectOnLaunch
+    current.reconnectOnLaunch !== baseline.reconnectOnLaunch ||
+    (current.gitExecution ?? 'remote') !== (baseline.gitExecution ?? 'remote')
   )
 }
 

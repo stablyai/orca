@@ -195,6 +195,7 @@ export function TaskPageGitHubFilters({
           authorLogins={loadedGitHubAuthorLogins}
           primarySlug={primaryGithubFilterSlug}
           ownerTarget={primaryGithubFilterTarget}
+          metadataContext={{ repoId: primaryGithubFilterRepoId }}
           onChange={(change) => applyPRFilterChange(change)}
         />
         <div className="relative min-w-0 flex-1 basis-64">

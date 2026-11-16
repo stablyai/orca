@@ -1,6 +1,8 @@
 import type { RuntimeGitCommands } from './orca-runtime-git'
 
 type RuntimeGitCommandName =
+  | 'getRuntimeGitBranchSwitchBlocker'
+  | 'recordRuntimeGitBranchSwitched'
   | 'getRuntimeGitStatus'
   | 'getRuntimeGitSubmoduleStatus'
   | 'checkRuntimeGitIgnoredPaths'
@@ -55,6 +57,8 @@ export function installRuntimeGitCommandSurface(
   commands: RuntimeGitCommands
 ): void {
   Object.assign(target, {
+    getRuntimeGitBranchSwitchBlocker: commands.getRuntimeGitBranchSwitchBlocker.bind(commands),
+    recordRuntimeGitBranchSwitched: commands.recordRuntimeGitBranchSwitched.bind(commands),
     getRuntimeGitStatus: commands.getRuntimeGitStatus.bind(commands),
     getRuntimeGitSubmoduleStatus: commands.getRuntimeGitSubmoduleStatus.bind(commands),
     checkRuntimeGitIgnoredPaths: commands.checkRuntimeGitIgnoredPaths.bind(commands),

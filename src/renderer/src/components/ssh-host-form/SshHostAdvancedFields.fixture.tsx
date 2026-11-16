@@ -10,6 +10,7 @@ export const browserControlSetting = defineFixture({
   render: () => (
     <div className="grid grid-cols-2 gap-3 p-4">
       <SshHostAdvancedFields
+        offerGitExecution
         offerReconnectOnLaunch
         open
         onOpenChange={noop}

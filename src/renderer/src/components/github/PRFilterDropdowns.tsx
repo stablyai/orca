@@ -3,7 +3,11 @@ import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
-import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import {
+  useRepoLabelsBySlug,
+  useRepoAssigneesBySlug,
+  type GitHubSlugMetadataContext
+} from '@/hooks/useGitHubSlugMetadata'
 import type { PickerOption } from '@/components/github/PRFilterPickers'
 import { filterAuthorsValue, filterLabelsValue } from '@/components/github/pr-filter-value-summary'
 import {
@@ -29,6 +33,7 @@ type Props = {
   primarySlug: GitHubOwnerRepo | null
   /** Host that owns the repo the primary slug came from. */
   ownerTarget?: RuntimeClientTarget | null
+  metadataContext?: GitHubSlugMetadataContext
   onChange: (change: PRFilterChange) => void
 }
 
@@ -78,6 +83,7 @@ export default function PRFilterDropdowns({
   authorLogins,
   primarySlug,
   ownerTarget,
+  metadataContext,
   onChange
 }: Props): React.JSX.Element {
   const t = useTranslate()
@@ -92,14 +98,16 @@ export default function PRFilterDropdowns({
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
     ownerTarget,
-    primarySlug?.host
+    primarySlug?.host,
+    metadataContext
   )
   const assigneesState = useRepoAssigneesBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
     undefined,
     ownerTarget,
-    primarySlug?.host
+    primarySlug?.host,
+    metadataContext
   )
 
   // Offer @me because GitHub resolves it server-side to the authenticated user.

@@ -16,6 +16,7 @@ import { blobToBase64 } from '@/lib/clipboard/images/image-blob-png'
 export type GitHubImageUploadAddress = {
   runtime: RuntimeClientTarget
   target: GitHubAttachmentTarget
+  gitExecutionRepo?: string
 }
 
 export function captureGitHubImageUpload(
@@ -42,6 +43,12 @@ export function captureGitHubImageUpload(
     runtime.kind === 'local' && signal
       ? callAbortableGitHubImageUpload<T>(method, params, signal)
       : callRuntimeRpc<T>(runtime, method, params, { ...options, timeoutMs: 120_000, signal })
+  const executionRepo =
+    runtime.kind === 'environment' && address.gitExecutionRepo
+      ? { gitExecutionRepo: address.gitExecutionRepo }
+      : {}
+  const stagingTarget =
+    runtime.kind === 'environment' ? { ...executionRepo, gitExecutionTarget: target } : {}
   let supported: Promise<void> | undefined
   return async (file, signal) => {
     signal?.throwIfAborted()
@@ -58,6 +65,7 @@ export function captureGitHubImageUpload(
     signal?.throwIfAborted()
     // Keep the allocation response so retirement can release even a late staging ID.
     const { uploadId } = await call<{ uploadId: string }>('clipboard.startImageUpload', {
+      ...stagingTarget,
       expectedBase64Length: contentBase64.length,
       fileName: file.name
     })
@@ -71,6 +79,7 @@ export function captureGitHubImageUpload(
         await call(
           'clipboard.appendImageUploadChunk',
           {
+            ...stagingTarget,
             uploadId,
             offset,
             contentBase64: contentBase64.slice(
@@ -84,6 +93,7 @@ export function captureGitHubImageUpload(
       const result = await call<{ url: string }>(
         'github.uploadAttachment',
         {
+          ...executionRepo,
           uploadId,
           target,
           fileName: file.name || 'image.png',
@@ -93,7 +103,7 @@ export function captureGitHubImageUpload(
       )
       return result.url
     } catch (error) {
-      await call('clipboard.abortImageUpload', { uploadId }).catch(() => {})
+      await call('clipboard.abortImageUpload', { ...stagingTarget, uploadId }).catch(() => {})
       throw error
     }
   }

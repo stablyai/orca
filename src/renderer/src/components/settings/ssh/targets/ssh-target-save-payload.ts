@@ -60,7 +60,8 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
     ...(systemSshProxyConnectionReuse ? { systemSshProxyConnectionReuse } : {}),
     ...(reconnectOnLaunch === false ? { reconnectOnLaunch } : {}),
     // Send explicit true/false because older servers interpret absence as disabled.
-    allowRemoteCliControl: form.allowRemoteCliControl
+    allowRemoteCliControl: form.allowRemoteCliControl,
+    gitExecution: form.gitExecution ?? 'remote'
   }
 
   return {

@@ -26,6 +26,7 @@ import {
 } from './runtime-environment-support-routing'
 import { shouldUseSharedControlEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
+import { routeDesktopSshGitExecution } from '../git-execution/desktop-ssh-git-execution'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -71,6 +72,34 @@ export async function callRuntimeEnvironment(
     )
   }
   const environment = await resolveEnvironment(userDataPath, selector)
+  if (!envelope && !options?.prepareGuard && !options?.prepareRequest) {
+    const local = await routeDesktopSshGitExecution({
+      environment,
+      method,
+      params,
+      signal: options?.signal,
+      expectedPairingRevision: expectedEnvironmentPairingRevision,
+      expectedRuntimeId: options?.expectedEnvironmentRuntimeId,
+      getCurrentEnvironment: () => resolveEnvironment(userDataPath, environment.id),
+      readRemote: (metadataMethod, metadataParams) =>
+        callRuntimeEnvironment(
+          userDataPath,
+          environment.id,
+          metadataMethod,
+          metadataParams,
+          timeoutMs,
+          environment.pairingRevision ?? environment.createdAt,
+          undefined,
+          {
+            signal: options?.signal,
+            expectedEnvironmentRuntimeId: environment.runtimeId ?? undefined
+          }
+        )
+    })
+    if (local) {
+      return local
+    }
+  }
   // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {

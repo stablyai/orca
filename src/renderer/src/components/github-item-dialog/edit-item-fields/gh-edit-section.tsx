@@ -116,7 +116,8 @@ function GHEditSectionItem({
     slugOwner,
     slugRepo,
     ownerTarget,
-    projectOrigin?.host
+    projectOrigin?.host,
+    { repoId: item.repoId ?? repoId, repoPath, sourceContext }
   )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
@@ -130,7 +131,8 @@ function GHEditSectionItem({
     slugRepo,
     assignees,
     ownerTarget,
-    projectOrigin?.host
+    projectOrigin?.host,
+    { repoId: item.repoId ?? repoId, repoPath, sourceContext }
   )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
   const hasAttachedWorkspace =

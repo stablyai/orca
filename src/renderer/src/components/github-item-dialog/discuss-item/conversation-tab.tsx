@@ -18,7 +18,10 @@ import {
 } from '@/components/right-sidebar/checks-panel/comments/pr-comments-ai-launch-ack'
 import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body'
 import { useAppStore } from '@/store/index'
-import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
+import {
+  canUseGitHubRepoContext,
+  getGitHubGitExecutionRepo
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
 import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
@@ -301,6 +304,11 @@ export function ConversationTab({
                     sourceContext?.provider === 'github'
                       ? taskSourceRuntimeTarget(sourceContext)
                       : getGitHubMutationTarget(item.repoId, projectOrigin),
+                  gitExecutionRepo: getGitHubGitExecutionRepo(
+                    sourceContext,
+                    item.repoId ?? repoId,
+                    repoPath
+                  ),
                   target: { kind: 'slug', ...slug, wakeWslDistro: true }
                 }
               : githubCommentImageUploadAddress({

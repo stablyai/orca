@@ -132,6 +132,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 
 - SSH worktrees, targets, passphrases, default identity file.
 - Advanced: proxy / jump host; **Reuse SSH connection for faster setup** (system OpenSSH multiplexing; default on).
+- **Git execution host** — defaults to **SSH host**. Choose **This computer** to run Orca's source-control and GitHub UI actions (status, commit, fetch, pull, push, and pull requests) with this computer's credentials. The SSH workspace and this computer must share the same checkout at the same absolute path, such as an SBX sandbox with a directly mounted repository. Clone-mode sandboxes have a separate checkout and cannot use this option. Terminals, agents, worktree management, and cloning continue to run on the SSH host.
 - Kerberos hosts: `GSSAPIAuthentication` from OpenSSH config drives system OpenSSH auth (see [SSH worktrees](/docs/ssh)).
 
 ## Remote Orca Servers
@@ -156,6 +157,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 ## Repository
 
 - Per-repo base ref and hooks.
+- **Git execution host** — for projects on an SSH host, inherit that host's default or choose **SSH host** / **This computer** for this project. This preference is saved on this computer and overrides the SSH host default for Orca's source-control and GitHub UI. Terminals, agents, worktree management, and cloning keep using the SSH host.
 - Auto-run commands on worktree create.
 - Repo icons for the sidebar: choose an icon, full searchable emoji picker, uploaded image, website favicon, or GitHub avatar, then pick a preset or custom hex badge color.
 - Source Control AI overrides for commit messages, pull request details, and branch names.

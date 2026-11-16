@@ -80,7 +80,8 @@ export function PRAssigneesPanel({
     slugRepo,
     assigneeLogins,
     ownerTarget,
-    projectOrigin?.host ?? assigneeSlug?.host
+    projectOrigin?.host ?? assigneeSlug?.host,
+    { repoId: item.repoId, repoPath, sourceContext }
   )
   const usesSlug = Boolean(slugOwner && slugRepo)
   const repoAssigneesByPath = useRepoAssignees(

@@ -127,7 +127,8 @@ export function PRReviewCell({
     open && reviewRepo ? reviewRepo.repo : null,
     reviewerSeedUsers.map((user) => user.login),
     ownerTarget,
-    reviewRepo?.host
+    reviewRepo?.host,
+    { repoId: repo?.id ?? item.repoId, repoPath: repo?.path, sourceContext }
   )
   const authorLogin = item.author?.toLowerCase() ?? null
   const reviewerCandidates = useMemo(

@@ -33,6 +33,10 @@ import {
   setDesktopBrowserBridgeHostStopped
 } from '../browser/desktop-browser-bridge-reconcile'
 import { isRemoteCliControlAllowed } from '../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
+import {
+  normalizeSshGitExecution,
+  normalizeSshGitExecutionProjects
+} from '../../../shared/remote-runtime/ssh/ssh-git-execution'
 
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {
@@ -119,12 +123,14 @@ export function assertNotManagedServerHost(targetId: string): void {
 }
 
 function addSshTarget(input: SshTargetCreateInput): SshTargetAddResult {
+  validateGitExecutionPolicy(input)
   const target = getSshTargetRegistryStore()!.addTarget(omitRendererSshTargetGeneration(input))
   const repoReadoptions = takeRepoReadoptions()
   return { target, repoReadoptions }
 }
 
 function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget | null {
+  validateGitExecutionPolicy(updates)
   assertNotRuntimeOwned(id, 'edited')
   const before = getSshTargetRegistryStore()!.getTarget(id)
   // The fence and generation are stripped, so a managed host keeps its server binding.
@@ -138,7 +144,14 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
     setDesktopBrowserBridgeHostStopped(id, false)
   }
   const environmentId = getManagedOrcadFenceEnvironmentId(updated ?? undefined)
-  if (environmentId && updated) {
+  const gitPolicyUpdated = 'gitExecution' in updates || 'gitExecutionProjects' in updates
+  const onlyGitPolicy =
+    gitPolicyUpdated &&
+    before &&
+    updated &&
+    fingerprintRuntimeSshTarget(before) === fingerprintRuntimeSshTarget(updated) &&
+    before.remoteRuntime === updated.remoteRuntime
+  if (environmentId && updated && !onlyGitPolicy) {
     // Edited managed hosts need fresh tunnels and transports; unserved hosts have no managed route to redial.
     const redial =
       !allowsDirectSshRelay(updated) &&
@@ -150,7 +163,22 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
       }
     }).catch(() => undefined)
   }
+  if (updated && gitPolicyUpdated) {
+    notifyReposChanged(getCurrentMainWindow())
+  }
   return updated
+}
+
+function validateGitExecutionPolicy(input: SshTargetUpdateInput): void {
+  if (input.gitExecution !== undefined && !normalizeSshGitExecution(input.gitExecution)) {
+    throw new Error('Invalid Git execution host.')
+  }
+  if (
+    input.gitExecutionProjects !== undefined &&
+    !normalizeSshGitExecutionProjects(input.gitExecutionProjects)
+  ) {
+    throw new Error('Invalid project Git execution hosts. Project paths must be absolute.')
+  }
 }
 
 async function removeSshTarget(id: string): Promise<void> {

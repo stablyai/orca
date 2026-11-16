@@ -22681,6 +22681,26 @@
           "keywordCleanup": "cleanup",
           "keywordDelete": "delete",
           "keywordMerged": "merged"
+        },
+        "gitExecution": {
+          "hostUnavailable": "The SSH host is unavailable.",
+          "inherit": "Host default ({{host}})",
+          "help": "This computer uses its own credentials for source-control and GitHub UI actions, including push. Requires the same checkout at the same absolute path. Terminals, agents, worktree management, and cloning stay on the SSH host.",
+          "ambientCredentials": "Uses this computer’s Git credentials and active gh login. The SSH host’s GitHub account binding applies when using SSH execution.",
+          "description": "Choose where Orca runs source-control and GitHub UI actions for this project."
+        }
+      },
+      "ssh": {
+        "gitExecution": {
+          "local": "This computer",
+          "remote": "SSH host",
+          "title": "Git execution host",
+          "description": "Run Orca’s source-control and GitHub UI actions, including push, on This computer using its credentials. Requires the same checkout at the same absolute path. Terminals, agents, worktree management, and cloning stay on the SSH host.",
+          "keywordGit": "git",
+          "keywordGitHub": "github",
+          "keywordSbx": "sbx",
+          "keywordCredentials": "credentials",
+          "keywordPush": "push"
         }
       }
     },

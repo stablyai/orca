@@ -20812,6 +20812,28 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Verfügbare Umgebungsvariablen"
+      },
+      "ssh": {
+        "gitExecution": {
+          "local": "Dieser Computer",
+          "remote": "SSH-Host",
+          "title": "Git-Ausführungshost",
+          "description": "Dieser Computer führt Aktionen in Orcas Git- und GitHub-Oberfläche einschließlich Push mit seinen Zugangsdaten aus. Benötigt denselben Checkout unter demselben absoluten Pfad. Terminals, Agenten, Worktree-Verwaltung und Klonen bleiben auf dem SSH-Host.",
+          "keywordGit": "git",
+          "keywordGitHub": "github",
+          "keywordSbx": "sbx",
+          "keywordCredentials": "Zugangsdaten",
+          "keywordPush": "Push"
+        }
+      },
+      "repository": {
+        "gitExecution": {
+          "hostUnavailable": "Der SSH-Host ist nicht verfügbar.",
+          "inherit": "Host-Standard ({{host}})",
+          "help": "Dieser Computer nutzt seine Zugangsdaten für Aktionen in Orcas Git- und GitHub-Oberfläche einschließlich Push. Benötigt denselben Checkout unter demselben absoluten Pfad. Terminals, Agenten, Worktree-Verwaltung und Klonen bleiben auf dem SSH-Host.",
+          "ambientCredentials": "Verwendet die Git-Zugangsdaten und die aktive gh-Anmeldung dieses Computers. Die GitHub-Kontozuordnung des SSH-Hosts gilt bei Ausführung auf dem SSH-Host.",
+          "description": "Wähle, wo Orca Aktionen der Git- und GitHub-Oberfläche für dieses Projekt ausführt."
+        }
       }
     },
     "agentChildRow": {

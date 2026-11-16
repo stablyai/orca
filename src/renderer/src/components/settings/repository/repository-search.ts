@@ -20,6 +20,7 @@ import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 import { getRepositoryBrowserProfileSearchEntry } from './RepositoryBrowserProfileSection'
 import { getRepositoryWorkspaceCleanupSearchEntry } from './workspace-cleanup/repository-workspace-cleanup-search'
+import { getRepositoryGitExecutionSearchEntry } from './source-control/repository-git-execution-search'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -213,6 +214,10 @@ function getRepositorySearchParts(
     displayName,
     icon,
     github,
+    gitExecution:
+      !isFolder && getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
+        ? getRepositoryGitExecutionSearchEntry(repo, t)
+        : undefined,
     fork,
     projectRuntime,
     sidebarVisibility,
@@ -237,15 +242,11 @@ export function getRepositoryPaneSearchEntries(
     parts.displayName,
     parts.icon
   ]
-  if (parts.github) {
-    entries.push(parts.github)
-  }
-  if (parts.fork) {
-    entries.push(parts.fork)
-  }
-  if (parts.projectRuntime) {
-    entries.push(parts.projectRuntime)
-  }
+  entries.push(
+    ...[parts.github, parts.gitExecution, parts.fork, parts.projectRuntime].filter(
+      (entry) => entry !== undefined
+    )
+  )
   if (!isFolderRepo(repo)) {
     entries.push(...getRepositoryGitWorktreeSearchEntries(repo, t))
     entries.push(getRepositoryWorkspaceCleanupSearchEntry(repo, t))
@@ -277,15 +278,11 @@ export function getRepositoryPaneSearchMetadata(
     parts.displayName,
     parts.icon
   ]
-  if (parts.github) {
-    identity.push(parts.github)
-  }
-  if (parts.fork) {
-    identity.push(parts.fork)
-  }
-  if (parts.projectRuntime) {
-    identity.push(parts.projectRuntime)
-  }
+  identity.push(
+    ...[parts.github, parts.gitExecution, parts.fork, parts.projectRuntime].filter(
+      (entry) => entry !== undefined
+    )
+  )
   if (worktrees) {
     identity.push(...worktrees.identity)
   }

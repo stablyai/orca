@@ -25,6 +25,8 @@ import {
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment
 } from './runtime-environment-support-routing'
+import { routeDesktopSshGitExecution } from '../git-execution/desktop-ssh-git-execution'
+import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -77,6 +79,32 @@ export async function subscribeRuntimeEnvironment(
   throwIfSignalAborted(signal)
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)
+  }
+  const local = await routeDesktopSshGitExecution({
+    environment,
+    method,
+    params,
+    signal,
+    isCurrent,
+    getCurrentEnvironment: () => resolveEnvironment(userDataPath, environment.id),
+    readRemote: (metadataMethod, metadataParams) =>
+      callRuntimeEnvironment(
+        userDataPath,
+        environment.id,
+        metadataMethod,
+        metadataParams,
+        timeoutMs,
+        environment.pairingRevision ?? environment.createdAt,
+        undefined,
+        { signal, expectedEnvironmentRuntimeId: environment.runtimeId ?? undefined }
+      )
+  })
+  if (local) {
+    if (!signal?.aborted && isCurrent()) {
+      rawCallbacks.onEvent({ type: 'response', response: local })
+    }
+    rawCallbacks.onClose()
+    return { requestId: `desktop-git:${method}`, close: () => {}, sendBinary: () => false }
   }
   const pairedConnection = getPreferredPairedRuntimeConnection(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS

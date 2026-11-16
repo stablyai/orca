@@ -9,7 +9,8 @@ import { useAppStore } from '@/store/index'
 import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
-  getGitHubRepoRoutingTarget
+  getGitHubRepoRoutingTarget,
+  getGitHubGitExecutionRepo
 } from '@/lib/work-items/github/github-source-runtime-context'
 import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-author-overrides'
 import {
@@ -297,6 +298,11 @@ export function ConversationTab({
                     sourceContext?.provider === 'github'
                       ? taskSourceRuntimeTarget(sourceContext)
                       : getGitHubMutationTarget(item.repoId, projectOrigin),
+                  gitExecutionRepo: getGitHubGitExecutionRepo(
+                    sourceContext,
+                    item.repoId ?? repoId,
+                    repoPath
+                  ),
                   target: { kind: 'slug', ...slug, wakeWslDistro: true }
                 }
               : githubCommentImageUploadAddress({

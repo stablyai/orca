@@ -1,8 +1,10 @@
-import { useGitHubOperationScope } from './useGitHubOperationScope'
+import { useGitHubOperationOwner } from './useGitHubOperationScope'
 import { useMemo } from 'react'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { getGitHubGitExecutionRepo } from '@/lib/work-items/github/github-source-runtime-context'
 import { clearMetadataRequestStore, createMetadataRequestStore } from './metadata-request-cache'
 import { githubRepoIdentityKey } from '../../../shared/github/repositories/repository-identity-key'
 import { githubProjectHost } from '../../../shared/github/projects/project-identity'
@@ -10,6 +12,12 @@ import { useMetadataListRequest, type MetadataListState } from './useMetadataLis
 
 const slugLabelStore = createMetadataRequestStore<string[]>()
 const slugAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
+
+export type GitHubSlugMetadataContext = {
+  repoId?: string | null
+  repoPath?: string | null
+  sourceContext?: TaskSourceContext | null
+}
 
 export function clearGitHubSlugMetadataCache(): void {
   clearMetadataRequestStore(slugLabelStore)
@@ -20,10 +28,16 @@ export function useRepoLabelsBySlug(
   owner: string | null,
   repo: string | null,
   ownerTarget?: RuntimeClientTarget | null,
-  host?: string
+  host?: string,
+  context?: GitHubSlugMetadataContext
 ): MetadataListState<string> {
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
-  const authority = useGitHubOperationScope(target)
+  const authority = useGitHubOperationOwner({ ...context, target }).scope
+  const gitExecutionRepo = getGitHubGitExecutionRepo(
+    context?.sourceContext,
+    context?.repoId,
+    context?.repoPath
+  )
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
   const repositoryKey =
@@ -38,7 +52,7 @@ export function useRepoLabelsBySlug(
     store: slugLabelStore,
     errorFallback: 'Failed to load labels',
     load: () =>
-      gitHubSlugApiForTarget(target)
+      gitHubSlugApiForTarget(target, gitExecutionRepo)
         .listLabelsBySlug({
           owner: selectedOwner,
           repo: selectedRepo,
@@ -58,11 +72,17 @@ export function useRepoAssigneesBySlug(
   repo: string | null,
   seedLogins?: string[],
   ownerTarget?: RuntimeClientTarget | null,
-  host?: string
+  host?: string,
+  context?: GitHubSlugMetadataContext
 ): MetadataListState<GitHubAssignableUser> {
   const seedKey = (seedLogins ?? []).slice().sort().join(',')
   const target: RuntimeClientTarget = ownerTarget ?? { kind: 'local' }
-  const authority = useGitHubOperationScope(target)
+  const authority = useGitHubOperationOwner({ ...context, target }).scope
+  const gitExecutionRepo = getGitHubGitExecutionRepo(
+    context?.sourceContext,
+    context?.repoId,
+    context?.repoPath
+  )
   const selectedOwner = owner ?? ''
   const selectedRepo = repo ?? ''
   const repositoryKey =
@@ -83,7 +103,7 @@ export function useRepoAssigneesBySlug(
     store: slugAssigneeStore,
     errorFallback: 'Failed to load assignees',
     load: () =>
-      gitHubSlugApiForTarget(target)
+      gitHubSlugApiForTarget(target, gitExecutionRepo)
         .listAssignableUsersBySlug(args)
         .then((res) => {
           if (!res.ok) {

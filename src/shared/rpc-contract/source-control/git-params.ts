@@ -22,6 +22,10 @@ export const GitStatusParams = WorktreeSelector.extend({
   branchLineTotalMergeBase: z.string().optional()
 })
 
+export const GitRecordBranchSwitched = WorktreeSelector.extend({
+  detached: z.boolean().optional()
+})
+
 export const GitCheckIgnored = WorktreeSelector.extend({
   paths: z.array(z.string().min(1, 'Missing path')).max(2000)
 })

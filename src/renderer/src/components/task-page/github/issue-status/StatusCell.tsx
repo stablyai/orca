@@ -10,7 +10,10 @@ import {
 } from '@/components/task-page/github/issue-status/task-page-github-status-state'
 import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import {
+  getGitHubGitExecutionRepo,
+  getGitHubRepoRoutingTarget
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import {
   getTaskPageGitHubDuplicateCandidates,
@@ -137,7 +140,10 @@ export function GHStatusCell({
             const target = ownerTarget
             // URL-sourced rows need slug-aware writes to preserve close reasons and duplicates.
             if (parsedOwnerRepo) {
-              return gitHubSlugApiForTarget(target).updateIssueBySlug({
+              return gitHubSlugApiForTarget(
+                target,
+                getGitHubGitExecutionRepo(sourceContext, repo?.id ?? item.repoId, repo?.path)
+              ).updateIssueBySlug({
                 owner: parsedOwnerRepo.owner,
                 repo: parsedOwnerRepo.repo,
                 host: githubProjectHost(parsedOwnerRepo.host),

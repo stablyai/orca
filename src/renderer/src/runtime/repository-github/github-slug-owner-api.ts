@@ -1,5 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { GITHUB_WEB_RPC_METHODS } from '@/web/preload-api/web-github-routes'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import {
@@ -38,14 +39,17 @@ function withoutWslWake<T extends object>(args: T): Omit<T, 'wakeWslDistro'> {
   return params
 }
 
-function runtimeGitHubSlugApi(environmentId: string): GitHubSlugApi {
+function runtimeGitHubSlugApi(environmentId: string, gitExecutionRepo?: string): GitHubSlugApi {
   const target = { kind: 'environment', environmentId } as const
   const call =
     <K extends GitHubSlugMethod>(method: K) =>
     (args: SlugArgs<K>): Promise<SlugResult<K>> =>
-      callRuntimeRpc<SlugResult<K>>(target, GITHUB_WEB_RPC_METHODS[method], withoutWslWake(args), {
-        timeoutMs: GITHUB_SLUG_RPC_TIMEOUT_MS
-      })
+      callRuntimeRpc<SlugResult<K>>(
+        target,
+        GITHUB_WEB_RPC_METHODS[method],
+        { ...withoutWslWake(args), ...(gitExecutionRepo ? { gitExecutionRepo } : {}) },
+        { timeoutMs: GITHUB_SLUG_RPC_TIMEOUT_MS }
+      )
   return {
     projectWorkItemDetailsBySlug: call('projectWorkItemDetailsBySlug'),
     updateIssueBySlug: call('updateIssueBySlug'),
@@ -77,20 +81,34 @@ function rejectingGitHubSlugApi(error: unknown): GitHubSlugApi {
 }
 
 /** The slug-addressed `gh` API on an already-resolved credential target. */
-export function gitHubSlugApiForTarget(target: RuntimeClientTarget): GitHubSlugApi {
-  return target.kind === 'environment' ? runtimeGitHubSlugApi(target.environmentId) : window.api.gh
+export function gitHubSlugApiForTarget(
+  target: RuntimeClientTarget,
+  gitExecutionRepo?: string
+): GitHubSlugApi {
+  return target.kind === 'environment'
+    ? runtimeGitHubSlugApi(target.environmentId, gitExecutionRepo)
+    : window.api.gh
 }
 
 /** The slug-addressed `gh` API on the machine that owns this workspace's GitHub credentials. */
 export function gitHubSlugApiForWorkspace(
-  ...workspace: Parameters<typeof forgeOwnerHostIdForWorkspace>
+  repo: Parameters<typeof forgeOwnerHostIdForWorkspace>[0] & Partial<Pick<Repo, 'id' | 'path'>>,
+  worktree: Parameters<typeof forgeOwnerHostIdForWorkspace>[1]
 ): GitHubSlugApi {
-  return gitHubSlugApiResolving(() =>
-    forgeCredentialTarget({ repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(...workspace) })
+  const gitExecutionRepo = repo.id ? `id:${repo.id}` : repo.path ? `path:${repo.path}` : undefined
+  return gitHubSlugApiResolving(
+    () =>
+      forgeCredentialTarget({
+        repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, worktree)
+      }),
+    gitExecutionRepo
   )
 }
 
-function gitHubSlugApiResolving(resolveTarget: () => RuntimeClientTarget): GitHubSlugApi {
+function gitHubSlugApiResolving(
+  resolveTarget: () => RuntimeClientTarget,
+  gitExecutionRepo?: string
+): GitHubSlugApi {
   let target: RuntimeClientTarget
   try {
     target = resolveTarget()
@@ -98,5 +116,5 @@ function gitHubSlugApiResolving(resolveTarget: () => RuntimeClientTarget): GitHu
     // Why: callers await the call; an unknown owner must reject, never fall back to this computer.
     return rejectingGitHubSlugApi(error)
   }
-  return gitHubSlugApiForTarget(target)
+  return gitHubSlugApiForTarget(target, gitExecutionRepo)
 }

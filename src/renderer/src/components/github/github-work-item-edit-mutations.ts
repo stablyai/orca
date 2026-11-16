@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import {
+  getGitHubGitExecutionRepo,
   getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
@@ -44,7 +45,10 @@ export async function runIssueUpdate(args: {
       number: args.number,
       updates: args.updates
     }
-    const res = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+    const res = await gitHubSlugApiForTarget(
+      target,
+      getGitHubGitExecutionRepo(args.sourceContext, args.repoId, args.repoPath)
+    ).updateIssueBySlug({
       ...updateArgs,
       wakeWslDistro: true
     })
@@ -133,7 +137,10 @@ export async function runWorkItemBodyUpdate(args: {
       number: args.item.number,
       updates: { body: args.body }
     }
-    const res = await gitHubSlugApiForTarget(target).updatePullRequestBySlug({
+    const res = await gitHubSlugApiForTarget(
+      target,
+      getGitHubGitExecutionRepo(args.sourceContext, args.item.repoId, args.repoPath)
+    ).updatePullRequestBySlug({
       ...updateArgs,
       wakeWslDistro: true
     })
@@ -187,7 +194,10 @@ export async function runPullRequestStateUpdate(args: {
       number: args.number,
       updates: args.updates
     }
-    const res = await gitHubSlugApiForTarget(target).updatePullRequestBySlug({
+    const res = await gitHubSlugApiForTarget(
+      target,
+      getGitHubGitExecutionRepo(args.sourceContext, args.repoId, args.repoPath)
+    ).updatePullRequestBySlug({
       ...updateArgs,
       wakeWslDistro: true
     })

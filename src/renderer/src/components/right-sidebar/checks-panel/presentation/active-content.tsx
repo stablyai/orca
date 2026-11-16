@@ -277,6 +277,7 @@ export function ChecksPanelActiveContent({
                     activeWorktree
                   )
                 }),
+                gitExecutionRepo: `id:${model.repo!.id}`,
                 target: { kind: 'slug', ...pr.prRepo!, wakeWslDistro: true }
               })
             : undefined

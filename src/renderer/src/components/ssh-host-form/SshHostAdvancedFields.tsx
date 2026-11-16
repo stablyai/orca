@@ -5,6 +5,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/class-names'
 import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import type { EditingTarget } from './ssh-target-draft'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -16,7 +23,8 @@ export function SshHostAdvancedFields({
   disabled,
   onFormChange,
   offerProxyConnectionReuse = false,
-  offerReconnectOnLaunch = false
+  offerReconnectOnLaunch = false,
+  offerGitExecution = false
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -27,6 +35,7 @@ export function SshHostAdvancedFields({
   offerProxyConnectionReuse?: boolean
   /** Only for hosts this desktop restores at launch; a paired server keeps its own hosts. */
   offerReconnectOnLaunch?: boolean
+  offerGitExecution?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -40,6 +49,41 @@ export function SshHostAdvancedFields({
       </CollapsibleTrigger>
       <CollapsibleContent className="collapsible-height-content">
         <div className="space-y-4 pt-3">
+          {offerGitExecution ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="ssh-git-execution">
+                {t('components.settings.ssh.gitExecution.title', 'Git execution host')}
+              </Label>
+              <Select
+                value={form.gitExecution ?? 'remote'}
+                disabled={disabled}
+                onValueChange={(value) =>
+                  onFormChange((previous) => ({
+                    ...previous,
+                    gitExecution: value === 'local' ? 'local' : 'remote'
+                  }))
+                }
+              >
+                <SelectTrigger id="ssh-git-execution" size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="remote">
+                    {t('components.settings.ssh.gitExecution.remote', 'SSH host')}
+                  </SelectItem>
+                  <SelectItem value="local">
+                    {t('components.settings.ssh.gitExecution.local', 'This computer')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'components.settings.ssh.gitExecution.description',
+                  'Run Orca’s source-control and GitHub UI actions, including push, on This computer using its credentials. Requires the same checkout at the same absolute path. Terminals, agents, worktree management, and cloning stay on the SSH host.'
+                )}
+              </p>
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <Label htmlFor="add-ssh-proxy-command">
               {t('auto.components.settings.SshTargetForm.c7d0e18ecb', 'Proxy Command')}

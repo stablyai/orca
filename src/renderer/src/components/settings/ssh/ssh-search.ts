@@ -17,7 +17,15 @@ export const getSshPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.ssh.search.d4bcd497c7', 'remote'),
       ...translateSearchKeyword('auto.components.settings.ssh.search.f9493b80c0', 'server'),
       ...translateSearchKeyword('auto.components.settings.ssh.search.237b391f7c', 'connection'),
-      ...translateSearchKeyword('auto.components.settings.ssh.search.8fb1cc87cc', 'host')
+      ...translateSearchKeyword('auto.components.settings.ssh.search.8fb1cc87cc', 'host'),
+      ...translateSearchKeyword('components.settings.ssh.gitExecution.keywordGit', 'git'),
+      ...translateSearchKeyword('components.settings.ssh.gitExecution.keywordGitHub', 'github'),
+      ...translateSearchKeyword('components.settings.ssh.gitExecution.keywordSbx', 'sbx'),
+      ...translateSearchKeyword(
+        'components.settings.ssh.gitExecution.keywordCredentials',
+        'credentials'
+      ),
+      ...translateSearchKeyword('components.settings.ssh.gitExecution.keywordPush', 'push')
     ]
   },
   {

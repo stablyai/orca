@@ -135,7 +135,8 @@ export function PRReviewersPanel({
     open && reviewRepo ? reviewRepo.repo : null,
     reviewerSeedUsers.map((user) => user.login),
     ownerTarget,
-    reviewRepo?.host
+    reviewRepo?.host,
+    { repoId: item.repoId, repoPath, sourceContext }
   )
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewRepo ? repoPath : null,

@@ -80,7 +80,8 @@ export function GHEditSection({
     slugOwner,
     slugRepo,
     ownerTarget,
-    projectOrigin?.host
+    projectOrigin?.host,
+    { repoId: item.repoId ?? repoId, repoPath, sourceContext }
   )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
@@ -93,7 +94,8 @@ export function GHEditSection({
     slugRepo,
     assignees,
     ownerTarget,
-    projectOrigin?.host
+    projectOrigin?.host,
+    { repoId: item.repoId ?? repoId, repoPath, sourceContext }
   )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 

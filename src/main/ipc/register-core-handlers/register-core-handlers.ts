@@ -27,6 +27,7 @@ import { registerStatsHandlers } from '../stats'
 import { registerMemoryHandlers } from '../memory'
 import { registerRateLimitHandlers } from '../rate-limits'
 import { registerRuntimeHandlers } from '../runtime'
+import { installDesktopSshGitExecution } from '../runtime-environments/git-execution/desktop-ssh-git-execution'
 import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault/ai-vault'
@@ -219,6 +220,7 @@ export async function registerCoreHandlers(
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)
+    installDesktopSshGitExecution(store, runtime)
     const hostsReady = registerRuntimeHostHandlers(store, lifecycleOptions.hostInitialization)
     registerWslMoveWiring(store, runtime)
     registerWslDriveProjectHandlers(store, runtime)
