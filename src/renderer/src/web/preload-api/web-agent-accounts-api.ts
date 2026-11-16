@@ -7,6 +7,7 @@ import type {
 import { callRuntimeResult } from './web-runtime-calls'
 import { fetchAccountsSnapshot } from './web-rate-limits-api'
 import { renameUnsupportedOnOldHost } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { claudeRemovalUnsupportedOnOldHost } from '@/runtime/provider-accounts/observations/claude-account-removal-client'
 
 export function createMiniMaxCredentialsApi(): NonNullable<
   Partial<PreloadApi>['minimaxCredentials']
@@ -121,12 +122,20 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: rejectHostOnlySignIn,
     waitForSignInLink: () => Promise.resolve(null),
-    remove: ({ accountId, deleteRetainedHistory }) =>
-      callRuntimeResult<ClaudeRateLimitAccountsState>(
-        'accounts.removeClaude',
-        { accountId, deleteRetainedHistory },
-        ACCOUNT_MUTATION_TIMEOUT_MS
-      ),
+    remove: ({ accountId, deleteRetainedHistory = false, hostDeletesHistory }) =>
+      hostDeletesHistory
+        ? callRuntimeResult<ClaudeRateLimitAccountsState>(
+            'accounts.removeClaude',
+            { accountId },
+            ACCOUNT_MUTATION_TIMEOUT_MS
+          )
+        : callRuntimeResult<ClaudeRateLimitAccountsState>(
+            'accounts.removeClaudeWithHistoryChoice',
+            { accountId, deleteRetainedHistory },
+            ACCOUNT_MUTATION_TIMEOUT_MS
+          ).catch((error: unknown) => {
+            throw claudeRemovalUnsupportedOnOldHost(error, servingHostLabel())
+          }),
     measureRetainedHistory: ({ accountId }) =>
       callRuntimeResult<{ bytes: number }>('accounts.measureClaudeRetainedHistory', { accountId }),
     rename: ({ accountId, displayName }) =>

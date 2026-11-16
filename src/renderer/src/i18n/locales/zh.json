@@ -23465,6 +23465,9 @@
       "cancel": "取消",
       "save": "保存",
       "unsupportedHost": "请更新 {{host}} 上的 Orca 以在那里更改此设置"
+    },
+    "claudeRemoval": {
+      "unsupportedHost": "请更新 {{host}} 上的 Orca，以移除此账户并保留其对话"
     }
   },
   "osDocumentOpen": {

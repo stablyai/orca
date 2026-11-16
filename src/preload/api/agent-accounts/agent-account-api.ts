@@ -68,6 +68,8 @@ export type ClaudeAccountsApi = {
   remove: (args: {
     accountId: string
     deleteRetainedHistory?: boolean
+    /** Web clients only: the serving host predates the choice and deletes them anyway. */
+    hostDeletesHistory?: boolean
   }) => Promise<ClaudeRateLimitAccountsState>
   measureRetainedHistory: (args: { accountId: string }) => Promise<{ bytes: number }>
   rename: (args: {

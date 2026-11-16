@@ -50,9 +50,8 @@ export const RemoveAccountParams = z.object({
   accountId: z.string().min(1, 'Missing accountId')
 })
 
-// Older hosts strip the flag and delete everything; clients learn that from the missing measure method.
 export const RemoveClaudeAccountParams = RemoveAccountParams.extend({
-  deleteRetainedHistory: z.boolean().optional()
+  deleteRetainedHistory: z.boolean()
 })
 
 // Blank clears the name; the service enforces the length limit with a readable error.

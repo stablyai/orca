@@ -24065,6 +24065,9 @@
       "cancel": "Cancel",
       "save": "Save",
       "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    },
+    "claudeRemoval": {
+      "unsupportedHost": "Update Orca on {{host}} to remove this account and keep its conversations."
     }
   },
   "fileSearch": {

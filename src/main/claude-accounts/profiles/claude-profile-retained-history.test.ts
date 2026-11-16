@@ -8,6 +8,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -38,6 +39,13 @@ function linkFolder(target: string, path: string): void {
   symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
+// Orca records the shared file's identity when it hardlinks prompt history on Windows.
+function linkPromptHistory(systemDefault: string, home: string): void {
+  linkSync(join(systemDefault, 'history.jsonl'), join(home, 'history.jsonl'))
+  const { dev, ino } = statSync(join(systemDefault, 'history.jsonl'), { bigint: true })
+  writeFileSync(join(home, 'history.jsonl.orca-profile-link'), `${dev}:${ino}\n`)
+}
+
 // The guest scripts take paths as arguments; quotes and spaces must not split or expand them.
 function fixture(name = process.platform === 'win32' ? "it's a folder" : `it's a "folder"`) {
   const root = mkdtempSync(join(tmpdir(), 'claude-retained-'))
@@ -56,7 +64,7 @@ function fixture(name = process.platform === 'win32' ? "it's a folder" : `it's a
   write(join(home, 'history.jsonl.orca-profile-merge-1'), 'prompt\n')
   linkFolder(join(systemDefault, 'projects'), join(home, 'projects'))
   if (process.platform === 'win32') {
-    linkSync(join(systemDefault, 'history.jsonl'), join(home, 'history.jsonl'))
+    linkPromptHistory(systemDefault, home)
   } else {
     symlinkSync(join(systemDefault, 'history.jsonl'), join(home, 'history.jsonl'))
   }
@@ -87,7 +95,11 @@ function runGuestScript(script: string, args: string[]) {
 
 type Fixture = ReturnType<typeof fixture>
 
-function expectKept(f: Fixture, sharedBefore: Record<string, string>, otherBefore: object) {
+function expectKept(
+  f: Fixture,
+  sharedBefore: Record<string, string>,
+  otherBefore: Record<string, string>
+) {
   expect(readdirSync(f.folder)).toEqual(['home'])
   expect(readdirSync(f.home).sort()).toEqual([
     'history.jsonl.orca-profile-merge-1',
@@ -101,7 +113,11 @@ function expectKept(f: Fixture, sharedBefore: Record<string, string>, otherBefor
   expect(snapshot(f.other)).toEqual(otherBefore)
 }
 
-function expectDeleted(f: Fixture, sharedBefore: Record<string, string>, otherBefore: object) {
+function expectDeleted(
+  f: Fixture,
+  sharedBefore: Record<string, string>,
+  otherBefore: Record<string, string>
+) {
   expect(existsSync(f.folder)).toBe(false)
   expect(snapshot(f.systemDefault)).toEqual(sharedBefore)
   expect(snapshot(f.other)).toEqual(otherBefore)
@@ -129,14 +145,36 @@ describe('Claude account retained history', () => {
     expectDeleted(f, shared, other)
   })
 
-  it('treats a hardlink to the shared prompt history as shared', async () => {
+  it('keeps a private prompt history unless Orca linked it to the shared one', async () => {
     const f = fixture()
     rmSync(join(f.home, 'history.jsonl'))
-    linkSync(join(f.systemDefault, 'history.jsonl'), join(f.home, 'history.jsonl'))
+    linkPromptHistory(f.systemDefault, f.home)
     await expect(measureRetainedClaudeHistory(f.folder)).resolves.toBe(22)
     await removeClaudeProfileFolder(f.folder, { deleteRetainedHistory: false })
     expect(existsSync(join(f.home, 'history.jsonl'))).toBe(false)
     expect(readFileSync(join(f.systemDefault, 'history.jsonl'), 'utf8')).toBe('shared prompts\n')
+
+    const g = fixture()
+    rmSync(join(g.home, 'history.jsonl'))
+    write(join(g.home, 'history.jsonl'), 'mine\n')
+    linkSync(join(g.home, 'history.jsonl'), join(g.root, 'backup.jsonl'))
+    await expect(measureRetainedClaudeHistory(g.folder)).resolves.toBe(27)
+    await removeClaudeProfileFolder(g.folder, { deleteRetainedHistory: false })
+    expect(readFileSync(join(g.home, 'history.jsonl'), 'utf8')).toBe('mine\n')
+  })
+
+  it('removes the whole folder when the history it kept holds nothing', async () => {
+    const f = fixture()
+    for (const name of [
+      'projects.orca-profile-merge',
+      'todos',
+      'history.jsonl.orca-profile-merge-1'
+    ]) {
+      rmSync(join(f.home, name), { recursive: true })
+    }
+    mkdirSync(join(f.home, 'session-env'))
+    await removeClaudeProfileFolder(f.folder, { deleteRetainedHistory: false })
+    expect(existsSync(f.folder)).toBe(false)
   })
 
   // Windows ignores the mode, and root reads anything.
@@ -153,7 +191,7 @@ describe('Claude account retained history', () => {
     }
   )
 
-  // The guest scripts need GNU find and stat.
+  // The guest scripts need GNU find.
   describe.skipIf(process.platform !== 'linux')('in a WSL guest', () => {
     it('measures the same bytes', () => {
       const f = fixture()
@@ -168,6 +206,23 @@ describe('Claude account retained history', () => {
       const other = snapshot(f.other)
       expect(runGuestScript(GUEST_REMOVE_KEEPING_HISTORY_SCRIPT, [f.folder, 'keep']).status).toBe(0)
       expectKept(f, shared, other)
+    })
+
+    it.skipIf(process.getuid?.() === 0)('fails instead of reporting a partial result', () => {
+      const f = fixture()
+      chmodSync(f.home, 0o300)
+      try {
+        expect(runGuestScript(GUEST_MEASURE_HISTORY_SCRIPT, [f.folder]).status).not.toBe(0)
+      } finally {
+        chmodSync(f.home, 0o700)
+      }
+      chmodSync(f.home, 0o500)
+      try {
+        const removal = runGuestScript(GUEST_REMOVE_KEEPING_HISTORY_SCRIPT, [f.folder, 'keep'])
+        expect(removal.status).not.toBe(0)
+      } finally {
+        chmodSync(f.home, 0o700)
+      }
     })
 
     it('deletes them only when asked', () => {

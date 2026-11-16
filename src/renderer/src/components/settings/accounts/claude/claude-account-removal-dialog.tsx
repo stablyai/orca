@@ -1,8 +1,10 @@
 import { useEffect, useEffectEvent, useId, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { measureClaudeRetainedHistory } from '@/runtime/provider-accounts/observations/claude-retained-history-client'
-import { removeClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import {
+  measureClaudeRetainedHistory,
+  removeClaudeProviderAccount
+} from '@/runtime/provider-accounts/observations/claude-account-removal-client'
 import { Button } from '../../../ui/button'
 import { Checkbox } from '../../../ui/checkbox'
 import {
@@ -19,6 +21,16 @@ import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { getManagedAccountInlineLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 
+type ClaudeRemovalModel = Pick<
+  AccountsPaneSectionModel,
+  | 'accountOwner'
+  | 'accountRuntimeSentenceLabel'
+  | 'setRemoveClaudeTarget'
+  | 'runClaudeAccountAction'
+> & {
+  claudeAccounts: { accounts: readonly { id: string; email: string; displayName?: string }[] }
+}
+
 type RetainedHistory =
   | { status: 'measuring' }
   | { status: 'measured'; bytes: number }
@@ -27,7 +39,7 @@ type RetainedHistory =
   | { status: 'deletedByHost' }
 
 function useClaudeRetainedHistory(
-  model: AccountsPaneSectionModel,
+  model: ClaudeRemovalModel,
   accountId: string
 ): { history: RetainedHistory; retry: () => void } {
   const [attempt, setAttempt] = useState(0)
@@ -74,7 +86,7 @@ function RetainedHistoryChoice({
   const checkboxId = useId()
   // One fixed-height slot for every state so the dialog never moves while measuring.
   const slot =
-    'flex min-h-12 items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-xs'
+    'flex min-h-14 items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm'
   if (history.status === 'failed') {
     return (
       <div className={`${slot} items-center justify-between`}>
@@ -126,13 +138,13 @@ function RetainedHistoryChoice({
         className="mt-0.5"
       />
       <span className="min-w-0 flex-1">
-        <Label htmlFor={checkboxId} className="block cursor-pointer text-xs leading-4 font-medium">
+        <Label htmlFor={checkboxId} className="cursor-pointer">
           {t(
             'settings.accounts.claudeRemoveHistoryDelete',
             'Also delete conversations kept only for this account'
           )}
         </Label>
-        <span id={`${checkboxId}-size`} className="mt-0.5 block text-muted-foreground">
+        <span id={`${checkboxId}-size`} className="mt-1 block text-xs text-muted-foreground">
           {history.status === 'measured' ? formatBytes(history.bytes) : ' '}
         </span>
       </span>
@@ -146,7 +158,7 @@ function ClaudeAccountRemovalContent({
   accountLabel,
   t
 }: {
-  model: AccountsPaneSectionModel
+  model: ClaudeRemovalModel
   target: RemoveAccountTarget
   accountLabel: string
   t: Translate
@@ -187,7 +199,16 @@ function ClaudeAccountRemovalContent({
             model.setRemoveClaudeTarget(null)
             void model.runClaudeAccountAction(
               `remove:${target.id}`,
-              () => removeClaudeProviderAccount(model.accountOwner, target.id, deletes),
+              () =>
+                removeClaudeProviderAccount(
+                  model.accountOwner,
+                  target.id,
+                  {
+                    deleteRetainedHistory: deletes,
+                    hostDeletesHistory: history.status === 'deletedByHost'
+                  },
+                  model.accountRuntimeSentenceLabel
+                ),
               target.runtime
             )
           }}
@@ -206,7 +227,7 @@ export function ClaudeAccountRemovalDialog({
   target,
   t = translate
 }: {
-  model: AccountsPaneSectionModel
+  model: ClaudeRemovalModel
   target: RemoveAccountTarget | null
   t?: Translate
 }): React.JSX.Element {

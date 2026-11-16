@@ -35,7 +35,7 @@ import {
   type ClaudeAccountSelectionTarget
 } from '../../selection/runtime-selection'
 import { wslClaudeProfilePointer } from '../wsl/claude-profile-wsl-paths'
-import { isDirectory, listClaudeProfileHomes } from '../claude-profile-homes'
+import { isDirectory, listClaudeProfileHistoryHomes } from '../claude-profile-homes'
 import {
   claudeStateFile,
   readClaudeFolderLogin,
@@ -347,8 +347,8 @@ export class ClaudeProfileRouter {
     return claudeProfileSelectionHomes(this, this.args.getSettings(), this.envReady, launchEnv)
   }
 
-  /** Every account folder on this host, selected or not. */
+  /** Every account folder on this host, selected or not, and history kept from removed ones. */
   accountHomes(): string[] {
-    return listClaudeProfileHomes(this.args.dataRoot)
+    return listClaudeProfileHistoryHomes(this.args.dataRoot)
   }
 }

@@ -24,6 +24,7 @@ export class ClaudeRuntimeAuthService {
   private readonly wslRouter?: ClaudeWslProfileRouter
   private readonly dataRoot = getAppEnvironment().getPath('userData')
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly measurements = new Map<string, Promise<number>>()
 
   constructor(
     private readonly store: Pick<Store, 'getSettings'>,
@@ -132,15 +133,24 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  /** Bytes of conversations only this account's folder holds. */
+  /** Bytes of conversations only this account's folder holds; repeated opens share one walk. */
   measureAccountRetainedHistory(
     accountId: string,
     target: ClaudeAccountSelectionTarget
   ): Promise<number> {
     const wsl = this.wslRouteFor(target)
-    return wsl
-      ? wsl.router.measureRetainedHistory(wsl.distro, accountId)
-      : this.router.measureRetainedHistory(accountId)
+    const key = wsl ? `${wsl.distro}\0${accountId}` : accountId
+    const running = this.measurements.get(key)
+    if (running) {
+      return running
+    }
+    const measurement = (
+      wsl
+        ? wsl.router.measureRetainedHistory(wsl.distro, accountId)
+        : this.router.measureRetainedHistory(accountId)
+    ).finally(() => this.measurements.delete(key))
+    this.measurements.set(key, measurement)
+    return measurement
   }
 
   /** Install skills and plugins in System default so accounts can share them. */

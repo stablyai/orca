@@ -30,7 +30,7 @@ import {
 const HISTORY = 'history.jsonl'
 const PENDING = `${HISTORY}${MERGE_PENDING_SUFFIX}`
 // Track Windows hardlink identity to detect replacement of the shared file.
-const LINK_RECORD = `${HISTORY}.orca-profile-link`
+export const PROMPT_HISTORY_LINK_RECORD = `${HISTORY}.orca-profile-link`
 
 export function lstatIfPresent(file: string): Stats | undefined {
   try {
@@ -117,7 +117,7 @@ function nextFreePath(base: string): string {
   }
 }
 
-function fileIdentity(stats: BigIntStats): string {
+export function fileIdentity(stats: BigIntStats): string {
   return `${stats.dev}:${stats.ino}`
 }
 
@@ -131,7 +131,7 @@ export function crossFilesystem(): ClaudeProfileSurfaceError {
 // Treating an unreadable record as absent could restore history the user deleted.
 function readLinkRecord(profile: string): string | null {
   try {
-    return readFileSync(join(profile, LINK_RECORD), 'utf8').trim()
+    return readFileSync(join(profile, PROMPT_HISTORY_LINK_RECORD), 'utf8').trim()
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       return null
@@ -186,7 +186,7 @@ export function mergeClaudeProfilePromptHistory(
   if (current && !current.isFile()) {
     return 'user-owned'
   }
-  const record = join(profile, LINK_RECORD)
+  const record = join(profile, PROMPT_HISTORY_LINK_RECORD)
   let sharedIdentity: string | undefined
   let replaced = false
   if (platform === 'win32') {

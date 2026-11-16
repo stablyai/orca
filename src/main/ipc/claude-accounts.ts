@@ -20,6 +20,7 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
   ipcMain.handle('claudeAccounts:waitForSignInLink', () => claudeAccounts.waitForSignInLink())
   ipcMain.handle(
     'claudeAccounts:remove',
+    // The desktop's own host always offers the choice; `hostDeletesHistory` is for web clients.
     (_event, args: { accountId: string; deleteRetainedHistory?: boolean }) =>
       claudeAccounts.removeAccount(args.accountId, {
         deleteRetainedHistory: args.deleteRetainedHistory

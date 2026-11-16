@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AccountsPaneSectionModel } from '../accounts-pane-types'
+import type { ComponentProps } from 'react'
 import { ClaudeAccountRemovalDialog } from './claude-account-removal-dialog'
 
 vi.mock('@/i18n/i18n', async (importOriginal) => ({
@@ -15,7 +15,7 @@ const api = {
   remove: vi.fn(async () => ({ accounts: [] }))
 }
 
-function model(): AccountsPaneSectionModel {
+function model(): ComponentProps<typeof ClaudeAccountRemovalDialog>['model'] {
   return {
     accountOwner: { kind: 'local' },
     accountRuntimeSentenceLabel: 'this computer',
@@ -24,7 +24,7 @@ function model(): AccountsPaneSectionModel {
     runClaudeAccountAction: vi.fn(async (_action: string, operation: () => Promise<unknown>) => {
       await operation()
     })
-  } as unknown as AccountsPaneSectionModel
+  }
 }
 
 async function openDialog(): Promise<void> {
@@ -51,7 +51,11 @@ describe('Claude account removal dialog', () => {
     expect(screen.getByText('3.00 MB')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Remove account' }))
     await act(async () => {})
-    expect(api.remove).toHaveBeenCalledWith({ accountId: 'a', deleteRetainedHistory: false })
+    expect(api.remove).toHaveBeenCalledWith({
+      accountId: 'a',
+      deleteRetainedHistory: false,
+      hostDeletesHistory: false
+    })
 
     cleanup()
     api.remove.mockClear()
@@ -59,7 +63,48 @@ describe('Claude account removal dialog', () => {
     fireEvent.click(screen.getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: 'Remove account and conversations' }))
     await act(async () => {})
-    expect(api.remove).toHaveBeenCalledWith({ accountId: 'a', deleteRetainedHistory: true })
+    expect(api.remove).toHaveBeenCalledWith({
+      accountId: 'a',
+      deleteRetainedHistory: true,
+      hostDeletesHistory: false
+    })
+  })
+
+  it('starts each opening over at keep, with a fresh size', async () => {
+    api.measureRetainedHistory.mockResolvedValueOnce({ bytes: 512 })
+    api.measureRetainedHistory.mockResolvedValueOnce({ bytes: 2048 })
+    const props = { model: model() }
+    const view = render(
+      <ClaudeAccountRemovalDialog {...props} target={{ id: 'a', runtime: { runtime: 'host' } }} />
+    )
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('checkbox'))
+    view.rerender(<ClaudeAccountRemovalDialog {...props} target={null} />)
+    view.rerender(
+      <ClaudeAccountRemovalDialog {...props} target={{ id: 'a', runtime: { runtime: 'host' } }} />
+    )
+    await act(async () => {})
+    expect(screen.getByText('2.00 KB')).toBeTruthy()
+    expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('says an older host deletes the conversations, and removes the old way there', async () => {
+    api.measureRetainedHistory.mockRejectedValueOnce(
+      Object.assign(new Error('Unknown method'), { code: 'method_not_found' })
+    )
+    await openDialog()
+    expect(
+      screen.getByText(
+        'Orca on this computer also deletes the conversations kept only for this account. Update Orca there to keep them.'
+      )
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove account' }))
+    await act(async () => {})
+    expect(api.remove).toHaveBeenCalledWith({
+      accountId: 'a',
+      deleteRetainedHistory: false,
+      hostDeletesHistory: true
+    })
   })
 
   it('never offers deletion when the size could not be measured, and can retry', async () => {
@@ -68,7 +113,11 @@ describe('Claude account removal dialog', () => {
     expect(screen.queryByRole('checkbox')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Remove account' }))
     await act(async () => {})
-    expect(api.remove).toHaveBeenCalledWith({ accountId: 'a', deleteRetainedHistory: false })
+    expect(api.remove).toHaveBeenCalledWith({
+      accountId: 'a',
+      deleteRetainedHistory: false,
+      hostDeletesHistory: false
+    })
 
     cleanup()
     api.measureRetainedHistory.mockRejectedValueOnce(new Error('EACCES'))
