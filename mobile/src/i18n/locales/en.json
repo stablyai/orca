@@ -1369,7 +1369,10 @@
       "newArchiveScriptLabel": "New archive script",
       "runOnce": "Run once",
       "alwaysTrust": "Always trust",
-      "alwaysTrustScope": "Always trust runs future orca.yaml changes in {{repoName}} without asking."
+      "alwaysTrustScope": "Always trust runs future orca.yaml changes in {{repoName}} without asking.",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersDescription": "The workspace was created, but its setup didn't run: its branch's orca.yaml differs from what you approved. Run it in this workspace only if you trust this repository.",
+      "branchSetupLabel": "Branch's setup script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",
@@ -4173,6 +4176,11 @@
       "loading": "Loading",
       "downloading": "Downloading",
       "downloadProgress": "Downloading… {{progress}}"
+    },
+    "createdSetupReview": {
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
+      "runFailed": "Could not start setup."
     }
   },
   "tasks": {

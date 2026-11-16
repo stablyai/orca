@@ -106,7 +106,8 @@ export async function prepareAutomationSetup(args: {
     return { ...draft, setupDecision: decision ?? 'inherit' }
   }
   let trust: PersistedTrustedOrcaHooks = {}
-  if (parseExecutionHostId(args.executionHost)?.kind !== 'runtime') {
+  const runtimeHost = parseExecutionHostId(args.executionHost)?.kind === 'runtime'
+  if (!runtimeHost) {
     try {
       const reply = newWorkspaceUiStateRead.interpret(await newWorkspaceUiStateRead.request(client))
       if (reply.accepted) {
@@ -134,5 +135,11 @@ export async function prepareAutomationSetup(args: {
     trust,
     repos
   )
-  return approved && current() ? { ...draft, setupDecision: approved } : null
+  if (!approved || !current()) {
+    return null
+  }
+  // A runtime host can't save repo trust, so later runs may only run the content approved here.
+  return approved === 'run' && runtimeHost
+    ? { ...draft, setupDecision: 'run', setupTrustHash: setupTrust.contentHash }
+    : { ...draft, setupDecision: approved }
 }

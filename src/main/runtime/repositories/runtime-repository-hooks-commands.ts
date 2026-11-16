@@ -77,9 +77,7 @@ export class RuntimeRepositoryHooksCommands<TRepo extends WorkspaceHookOwner = R
           ? hookTrust(getSetupTrustContent(sharedHooks))
           : undefined,
       // As desktop's archive prompt: only a shared orca.yaml script needs trust. null tells clients none is needed; older hosts omit it.
-      archiveTrust: archiveTrust(repo, sharedHooks),
-      // Only then can a client pin the run to setupTrust's hash; a checkout read may differ from the created branch.
-      ...(created ? { createSourceRead: true as const } : {})
+      archiveTrust: archiveTrust(repo, sharedHooks)
     }
   }
 

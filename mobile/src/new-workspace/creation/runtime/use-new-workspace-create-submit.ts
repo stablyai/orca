@@ -8,16 +8,18 @@ import { triggerError, triggerSuccess } from '../../../platform/haptics/haptics'
 import type { WorktreeCreateParent } from '../worktree-create-retry'
 import { createBlankWorkspace } from '../blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../../../agents/mobile-tui-agents'
-import {
-  approvedCreateSetup,
-  persistSetupHookTrustApproval,
-  resolveCreateSetupApproval,
-  type CreateSetupApproval
-} from '../setup-hook-trust'
+import { createMayRunSetup, resolveCreateSetupApproval } from '../setup-hook-trust'
 import {
   composerSetupHooksCreateSource,
-  createWorkspaceFromComposerSource
+  createWorkspaceFromComposerSource,
+  resolveComposerSelectionBase
 } from '../source-workspace-create'
+import { createdSetupReviewPrompt } from '../created-worktree-setup-review'
+import {
+  useNewWorkspaceSetupTrust,
+  type CreateOptions,
+  type SheetSetupTrustPrompt
+} from './use-new-workspace-setup-trust'
 import { normalizeWorkspaceAgent } from '../workspace-agent-selection'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { AgentLaunchSupport } from '../../../session/agent-launch/agent-launch-request'
@@ -40,14 +42,8 @@ import {
   type ExecutionHostId
 } from '../../../../../src/shared/execution-host/execution-host'
 import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambiguity'
-import type { OrcaHookTrustPrompt } from '../../../components/hook-trust/OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from '../modal/use-new-worktree-drawer-navigation'
 import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../../../../src/shared/worktree/naming/worktree-name-suggestion'
-
-type CreateOptions = {
-  setupOverride?: Exclude<WorkspaceCreateSetupDecision, 'inherit'>
-  setupApproval?: CreateSetupApproval
-}
 
 type Composer = ReturnType<typeof useMobileComposerSource>
 
@@ -86,16 +82,28 @@ export function useNewWorkspaceCreateSubmit(args: {
   }
 }): {
   creating: boolean
-  setupTrustPrompt: OrcaHookTrustPrompt | null
+  setupTrustPrompt: SheetSetupTrustPrompt | null
   create: () => Promise<void>
   approveSetupTrust: (alwaysTrust: boolean) => Promise<void>
   closeSetupTrust: () => void
   skipSetupTrust: () => void
 } {
   const createInFlightRef = useRef(false)
-  const setupTrustActionInFlightRef = useRef(false)
   const [creating, setCreating] = useState(false)
-  const [setupTrustPrompt, setSetupTrustPrompt] = useState<OrcaHookTrustPrompt | null>(null)
+  const setupTrust = useNewWorkspaceSetupTrust({
+    ...args,
+    createInFlight: () => createInFlightRef.current,
+    setCreating,
+    create: (options) => create(options),
+    finishCreated: (created, notice) => {
+      args.onClose()
+      args.onCreated(
+        created.worktreeId,
+        created.name,
+        [created.warning, notice].filter(Boolean).join(' ') || undefined
+      )
+    }
+  })
 
   async function create(options: CreateOptions = {}): Promise<void> {
     const { client, selectedRepo } = args
@@ -156,10 +164,10 @@ export function useNewWorkspaceCreateSubmit(args: {
           args.retiredWorktreeNames
         )
       let setupDecision: WorkspaceCreateSetupDecision = 'inherit'
-      if (args.setupCommand) {
-        if (options.setupOverride) {
-          setupDecision = options.setupOverride
-        } else if (args.setupRunPolicy === 'ask') {
+      if (options.setupOverride) {
+        setupDecision = options.setupOverride
+      } else if (args.setupCommand) {
+        if (args.setupRunPolicy === 'ask') {
           if (!args.setupDecisionChoice) {
             args.setError('Choose whether to run the setup script.')
             return
@@ -169,9 +177,14 @@ export function useNewWorkspaceCreateSubmit(args: {
           setupDecision = args.runSetup ? 'run' : 'skip'
         }
       }
-      const selection = args.composer.createSelection
+      const composed = args.composer.createSelection
+      // Resolve a PR/MR start point once, so the create checks out the source whose setup was shown.
+      const selection =
+        options.selection ??
+        (composed && (await resolveComposerSelectionBase(client, composed, selectedRepo.id)))
       let setupApproval = options.setupApproval
-      if (setupDecision === 'run' && !setupApproval) {
+      // The checkout may lack setup the created branch has, so check whenever setup isn't skipped.
+      if (createMayRunSetup(setupDecision, args.setupRunPolicy) && !setupApproval) {
         const resolved = await resolveCreateSetupApproval({
           client,
           trust: args.trustedOrcaHooks,
@@ -180,8 +193,7 @@ export function useNewWorkspaceCreateSubmit(args: {
           createSource: selection ? composerSetupHooksCreateSource(selection) : { kind: 'base' }
         })
         if ('ask' in resolved) {
-          setSetupTrustPrompt(resolved.ask)
-          args.transitionDrawer('trust')
+          setupTrust.ask({ ...resolved.ask, ...(selection ? { selection } : {}) })
           return
         }
         setupApproval = resolved.approved
@@ -238,8 +250,22 @@ export function useNewWorkspaceCreateSubmit(args: {
       if (presenting()) {
         triggerSuccess()
       }
+      const { setupTrustMismatch: mismatch, ...created } = result
+      if (mismatch) {
+        // The host skipped setup because the created branch's differs from what was approved.
+        setupTrust.ask({
+          ...createdSetupReviewPrompt({
+            repo: selectedRepo,
+            repos: args.repos,
+            trust: args.trustedOrcaHooks,
+            mismatch
+          }),
+          created
+        })
+        return
+      }
       args.onClose()
-      args.onCreated(result.worktreeId, result.name, result.warning)
+      args.onCreated(created.worktreeId, created.name, created.warning)
     } catch (error) {
       // A lost reply may still have created it.
       outcome = isRpcDeliveryUnknown(error) ? 'uncertain' : 'failed'
@@ -259,59 +285,12 @@ export function useNewWorkspaceCreateSubmit(args: {
     }
   }
 
-  async function approveSetupTrust(alwaysTrust: boolean): Promise<void> {
-    if (
-      !args.client ||
-      !setupTrustPrompt ||
-      setupTrustActionInFlightRef.current ||
-      createInFlightRef.current
-    ) {
-      return
-    }
-    setupTrustActionInFlightRef.current = true
-    setCreating(true)
-    try {
-      const prompt = setupTrustPrompt
-      const nextTrust = await persistSetupHookTrustApproval({
-        client: args.client,
-        trust: args.trustedOrcaHooks,
-        repos: args.repos,
-        repoId: prompt.repoId,
-        contentHash: prompt.contentHash,
-        alwaysTrust
-      })
-      args.setTrustedOrcaHooks(nextTrust)
-      setSetupTrustPrompt(null)
-      args.transitionDrawer('form')
-      await create({
-        setupOverride: 'run',
-        setupApproval: approvedCreateSetup(args.repos, prompt, alwaysTrust)
-      })
-    } catch (error) {
-      args.setError(error instanceof Error ? error.message : 'Failed to trust setup script.')
-    } finally {
-      setupTrustActionInFlightRef.current = false
-      if (!createInFlightRef.current) {
-        setCreating(false)
-      }
-    }
+  return {
+    creating,
+    setupTrustPrompt: setupTrust.prompt,
+    create,
+    approveSetupTrust: setupTrust.approve,
+    closeSetupTrust: setupTrust.close,
+    skipSetupTrust: setupTrust.skip
   }
-
-  function closeSetupTrust(): void {
-    if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
-      return
-    }
-    setSetupTrustPrompt(null)
-    args.transitionDrawer('form')
-  }
-
-  function skipSetupTrust(): void {
-    if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
-      return
-    }
-    closeSetupTrust()
-    void create({ setupOverride: 'skip' })
-  }
-
-  return { creating, setupTrustPrompt, create, approveSetupTrust, closeSetupTrust, skipSetupTrust }
 }

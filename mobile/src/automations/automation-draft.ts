@@ -29,6 +29,8 @@ export type AutomationDraft = {
   timezone: string
   baseBranch: string
   setupDecision: 'inherit' | 'run' | 'skip'
+  /** Set only by an approval that can't trust the repo; the host runs only this setup content. */
+  setupTrustHash?: string
   reuseSession: boolean
   extraAgentArgs: string
   precheckCommand: string
@@ -182,6 +184,9 @@ function editableFields(draft: AutomationDraft): UpdateFields {
     timezone: draft.timezone,
     baseBranch: draft.baseBranch || null,
     setupDecision: draft.setupDecision,
+    ...(draft.setupDecision === 'run' && draft.setupTrustHash
+      ? { setupTrustHash: draft.setupTrustHash }
+      : {}),
     reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
     extraAgentArgs: draft.extraAgentArgs,
     precheck: draft.precheckCommand.trim()

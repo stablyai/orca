@@ -3,6 +3,7 @@ import type {
   GitHubWorkItem,
   GitLabWorkItem,
   GitLabTodo,
+  GitPushTarget,
   SetupDecision
 } from './mobile-tasks-provider-detail-types'
 import type { LinearMobileIssue as LinearIssue } from './providers/linear/linear-mobile-issue-read'
@@ -112,9 +113,17 @@ export type WorkspaceCreateArgs = {
   baseBranchOverride?: string
   branchNameOverride?: string
   sparseCheckoutOverride?: { directories: string[]; presetId?: string }
+  /** The PR/MR start point whose setup was shown, so approval doesn't resolve it again. */
+  hostedStartPoint?: HostedStartPoint
 }
 
-export type OrcaYamlTrustPrompt = WorkspaceCreateArgs & OrcaHookTrustPrompt
+export type HostedStartPoint = { baseBranch: string; pushTarget?: GitPushTarget }
+
+export type OrcaYamlTrustPrompt = WorkspaceCreateArgs &
+  OrcaHookTrustPrompt & {
+    /** The workspace exists; only its skipped setup is under review. Opening it ends the review. */
+    created?: { worktreeId: string; open: (notice?: string) => void }
+  }
 
 export type WorkspaceCreateDraft = {
   item: ActionableTaskItem

@@ -7,7 +7,11 @@ import {
   resolveWorkspaceAgentSelection
 } from '../../new-workspace/creation/workspace-agent-selection'
 import { useCallback, useEffect, useMemo } from 'react'
-import type { RepoSummary, SetupDecision } from '../mobile-tasks-provider-detail-types'
+import type {
+  RepoSummary,
+  SetupDecision,
+  SetupRunPolicy
+} from '../mobile-tasks-provider-detail-types'
 import {
   localAgentDetectionRead,
   remoteAgentDetectionRead,
@@ -181,7 +185,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       repo: RepoSummary,
       override?: Exclude<SetupDecision, 'inherit'>
     ): Promise<
-      | { kind: 'decision'; decision: SetupDecision }
+      | { kind: 'decision'; decision: SetupDecision; runPolicy?: SetupRunPolicy }
       | { kind: 'prompt'; command: string; source: string | null | undefined }
     > => {
       if (!client || !tasksSupported) {
@@ -190,11 +194,12 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       const reply = await repoSetupHooksRead.request(client, { repo: `id:${repo.id}` })
       const result = repoSetupHooksRead.interpret(reply)
       const setupCommand = readRepoHooksSetupCommand(result)
-      if (!setupCommand) {
-        return { kind: 'decision', decision: 'inherit' }
-      }
+      const runPolicy = result.setupRunPolicy
       if (override) {
-        return { kind: 'decision', decision: override }
+        return { kind: 'decision', decision: override, runPolicy }
+      }
+      if (!setupCommand) {
+        return { kind: 'decision', decision: 'inherit', runPolicy }
       }
       const decision = getDefaultSetupDecision(true, result.setupRunPolicy ?? 'run-by-default')
       if (!decision) {

@@ -11,14 +11,19 @@ import {
 } from '../../new-workspace/creation/workspace-agent-selection'
 import { buildTaskWorkspaceCreateParams } from '../../new-workspace/creation/workspace-create-params'
 import {
+  createMayRunSetup,
   resolveCreateSetupApproval,
   type CreateSetupApproval
 } from '../../new-workspace/creation/setup-hook-trust'
+import {
+  createdSetupReviewPrompt,
+  readSetupTrustMismatch
+} from '../../new-workspace/creation/created-worktree-setup-review'
 import { setupHooksCreateSource } from '../../../../src/shared/worktree/setup-hooks-create-source'
 import { shouldResolveHostedReviewStartPoint } from '../../new-workspace/creation/hosted-review-start-point'
 import { useCallback } from 'react'
-import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types'
-import type { GitPushTarget, SetupDecision } from '../mobile-tasks-provider-detail-types'
+import type { ActionableTaskItem, HostedStartPoint } from '../mobile-tasks-project-workspace-types'
+import type { SetupDecision } from '../mobile-tasks-provider-detail-types'
 import type { RuntimeTaskSettings } from '../mobile-tasks-view-state-types'
 import type { WorkspaceCreateParams } from '../../new-workspace/creation/workspace-create-params'
 import {
@@ -63,7 +68,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       baseBranchOverride?: string,
       branchNameOverride?: string,
       sparseCheckoutOverride?: { directories: string[]; presetId?: string },
-      setupApproval?: CreateSetupApproval
+      approved?: { setup?: CreateSetupApproval; hostedStartPoint?: HostedStartPoint }
     ): Promise<void> => {
       if (!client || !tasksSupported || !taskStateHydrated) {
         return
@@ -131,10 +136,11 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         const nameIsAutoManaged =
           !trimmedWorkspaceName || trimmedWorkspaceName === workspaceLastAutoName
         let params: WorkspaceCreateParams
+        let hostedStartPoint = approved?.hostedStartPoint
         if (item.provider === 'github') {
           const source = item.source
-          let prStartPoint: { baseBranch: string; pushTarget?: GitPushTarget } | undefined
           if (
+            !hostedStartPoint &&
             shouldResolveHostedReviewStartPoint({
               type: source.type,
               baseBranchOverride
@@ -157,7 +163,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               throw new Error(result.error)
             }
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolved arm requires `baseBranch` and passes the rest of the start point through, because the create params spread the record and the host reads what it recognises.
-            prStartPoint = result as { baseBranch: string; pushTarget?: GitPushTarget }
+            hostedStartPoint = result as HostedStartPoint
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -169,13 +175,13 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             baseBranch: baseBranchOverride,
             branchNameOverride,
             sparseCheckout: sparseCheckoutOverride,
-            hostedStartPoint: prStartPoint,
+            hostedStartPoint,
             nameIsAutoManaged
           })
         } else if (item.provider === 'gitlab') {
           const source = item.source
-          let mrStartPoint: { baseBranch: string; pushTarget?: GitPushTarget } | undefined
           if (
+            !hostedStartPoint &&
             shouldResolveHostedReviewStartPoint({
               type: source.type,
               baseBranchOverride
@@ -198,7 +204,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               throw new Error(result.error)
             }
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as the PR arm above.
-            mrStartPoint = result as { baseBranch: string; pushTarget?: GitPushTarget }
+            hostedStartPoint = result as HostedStartPoint
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -210,7 +216,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             baseBranch: baseBranchOverride,
             branchNameOverride,
             sparseCheckout: sparseCheckoutOverride,
-            hostedStartPoint: mrStartPoint,
+            hostedStartPoint,
             nameIsAutoManaged
           })
         } else {
@@ -227,8 +233,9 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             nameIsAutoManaged
           })
         }
-        let approvedSetup = setupApproval
-        if (setupDecision === 'run' && !approvedSetup) {
+        let approvedSetup = approved?.setup
+        // The checkout may lack setup the created branch has, so check whenever setup isn't skipped.
+        if (createMayRunSetup(setupDecision, setupResolution.runPolicy) && !approvedSetup) {
           const resolved = await resolveCreateSetupApproval({
             client,
             trust: trustedOrcaHooks,
@@ -248,6 +255,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               ...(baseBranchOverride ? { baseBranchOverride } : {}),
               ...(branchNameOverride ? { branchNameOverride } : {}),
               ...(sparseCheckoutOverride ? { sparseCheckoutOverride } : {}),
+              ...(hostedStartPoint ? { hostedStartPoint } : {}),
               ...resolved.ask
             })
             return
@@ -264,18 +272,35 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         setActionItem(null)
         setWorkspaceCreateDraft(null)
         setSetupPrompt(null)
-        // Use the shared route builder so special characters in host ids are encoded for bridge validation.
-        router.push(
-          workspaceRouteHref(
-            hostNewWorktreeSessionRoute(
-              hostId,
-              result.worktree.id,
-              result.worktree.displayName ?? item.title,
-              result.warning
-            ),
-            taskRepoServer(targetRepo)
+        const open = (notice?: string) =>
+          // Use the shared route builder so special characters in host ids are encoded for bridge validation.
+          router.push(
+            workspaceRouteHref(
+              hostNewWorktreeSessionRoute(
+                hostId,
+                result.worktree.id,
+                result.worktree.displayName ?? item.title,
+                [result.warning, notice].filter(Boolean).join(' ') || undefined
+              ),
+              taskRepoServer(targetRepo)
+            )
           )
-        )
+        const mismatch = readSetupTrustMismatch(result)
+        if (!mismatch) {
+          open()
+          return
+        }
+        // The host skipped setup because the created branch's differs from what was approved.
+        setOrcaYamlTrustPrompt({
+          item,
+          ...createdSetupReviewPrompt({
+            repo: targetRepo,
+            repos,
+            trust: trustedOrcaHooks,
+            mismatch
+          }),
+          created: { worktreeId: result.worktree.id, open }
+        })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to create workspace')
       } finally {

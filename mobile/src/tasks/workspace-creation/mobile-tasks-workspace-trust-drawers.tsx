@@ -12,6 +12,7 @@ import { styles } from '../mobile-tasks-legacy-styles'
 import { translate } from '../../i18n/mobile-i18n'
 import { OrcaHookTrustDrawer } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import type { CreateSetupApproval } from '../../new-workspace/creation/setup-hook-trust'
+import { runReviewedCreatedSetup } from '../../new-workspace/creation/created-worktree-setup-review'
 import type { OrcaYamlTrustPrompt } from '../mobile-tasks-project-workspace-types'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
@@ -212,6 +213,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
 
 export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentationModel) {
   const {
+    client,
     createWorkspace,
     creatingKey,
     orcaYamlTrustPrompt,
@@ -220,18 +222,18 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     setOrcaYamlTrustPrompt,
     taskUiReady
   } = model
-  const createWithSetup = (prompt: OrcaYamlTrustPrompt, setupApproval?: CreateSetupApproval) =>
+  const createWithSetup = (prompt: OrcaYamlTrustPrompt, setup?: CreateSetupApproval) =>
     createWorkspace(
       prompt.item,
       prompt.repoIdOverride,
-      setupApproval ? 'run' : 'skip',
+      setup ? 'run' : 'skip',
       prompt.agentOverride,
       prompt.workspaceNameOverride,
       prompt.noteOverride,
       prompt.baseBranchOverride,
       prompt.branchNameOverride,
       prompt.sparseCheckoutOverride,
-      setupApproval
+      { setup, hostedStartPoint: prompt.hostedStartPoint }
     )
   const approve = (alwaysTrust: boolean) => {
     const prompt = orcaYamlTrustPrompt
@@ -242,7 +244,11 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
       try {
         const setupApproval = await persistSetupHookTrust(prompt, alwaysTrust)
         setOrcaYamlTrustPrompt(null)
-        if (setupApproval) {
+        if (prompt.created && client) {
+          prompt.created.open(
+            await runReviewedCreatedSetup(client, prompt.created.worktreeId, prompt.contentHash)
+          )
+        } else if (setupApproval) {
           await createWithSetup(prompt, setupApproval)
         }
       } catch (err) {
@@ -254,6 +260,16 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
       }
     })()
   }
+  // Declining a created workspace's setup leaves it as is and opens it.
+  const decline = (create: boolean) => {
+    const prompt = orcaYamlTrustPrompt
+    setOrcaYamlTrustPrompt(null)
+    if (prompt?.created) {
+      prompt.created.open()
+    } else if (prompt && create) {
+      void createWithSetup(prompt)
+    }
+  }
   return (
     <OrcaHookTrustDrawer
       visible={taskUiReady && orcaYamlTrustPrompt != null}
@@ -262,14 +278,8 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       onRunOnce={() => approve(false)}
       onAlwaysTrust={() => approve(true)}
-      onDontRun={() => {
-        const prompt = orcaYamlTrustPrompt
-        setOrcaYamlTrustPrompt(null)
-        if (prompt) {
-          void createWithSetup(prompt)
-        }
-      }}
-      onClose={() => setOrcaYamlTrustPrompt(null)}
+      onDontRun={() => decline(true)}
+      onClose={() => decline(false)}
     />
   )
 }

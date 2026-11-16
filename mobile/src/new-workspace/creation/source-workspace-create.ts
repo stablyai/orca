@@ -57,6 +57,35 @@ export async function createWorkspaceFromComposerSource(
   return createWorkItemWorkspace({ ...args, selection: args.selection })
 }
 
+/** Reuse select-time PR/MR base resolution; resolve again only when a linked item lacks it. */
+export async function resolveComposerSelectionBase<Selection extends MobileComposerCreateSelection>(
+  client: RpcClient,
+  selection: Selection,
+  targetRepoId: string
+): Promise<Selection> {
+  if (selection.kind !== 'work-item' || selection.baseBranch) {
+    return selection
+  }
+  const item = selection.item
+  if (item.provider === 'linear' || (item.type !== 'pr' && item.type !== 'mr')) {
+    return selection
+  }
+  const repoId = item.repoId ?? targetRepoId
+  const resolved =
+    item.type === 'pr'
+      ? await resolveComposerPrBase({ client, repoId, prNumber: item.number }).catch(() => null)
+      : await resolveComposerMrBase({ client, repoId, mrIid: item.number }).catch(() => null)
+  return resolved
+    ? {
+        ...selection,
+        baseBranch: resolved.baseBranch,
+        compareBaseRef: resolved.compareBaseRef,
+        pushTarget: resolved.pushTarget,
+        branchNameOverride: resolved.branchNameOverride ?? selection.branchNameOverride
+      }
+    : selection
+}
+
 /** The ref the create checks out, so its setup prompt shows that ref's orca.yaml. */
 export function composerSetupHooksCreateSource(
   selection: MobileComposerCreateSelection
@@ -93,28 +122,11 @@ async function createWorkItemWorkspace(args: {
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   parent?: WorktreeCreateParent
 }): Promise<WorktreeCreateResult> {
-  const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
+  const { client, targetRepoId, setupDecision, agent, workspaceName, note } = args
+  const selection = await resolveComposerSelectionBase(client, args.selection, targetRepoId)
   const item = selection.item
   const taskItem = toTaskItem(item, targetRepoId)
-
-  // Reuse select-time PR/MR base resolution; resolve again only when a linked item lacks it.
-  let baseBranch = selection.baseBranch
-  let compareBaseRef = selection.compareBaseRef
-  let pushTarget = selection.pushTarget
-  let branchNameOverride = selection.branchNameOverride
-  if (!baseBranch && item.provider !== 'linear' && (item.type === 'pr' || item.type === 'mr')) {
-    const repoId = item.repoId ?? targetRepoId
-    const resolved =
-      item.type === 'pr'
-        ? await resolveComposerPrBase({ client, repoId, prNumber: item.number }).catch(() => null)
-        : await resolveComposerMrBase({ client, repoId, mrIid: item.number }).catch(() => null)
-    if (resolved) {
-      baseBranch = resolved.baseBranch
-      compareBaseRef = resolved.compareBaseRef
-      pushTarget = resolved.pushTarget
-      branchNameOverride = resolved.branchNameOverride ?? branchNameOverride
-    }
-  }
+  const { baseBranch, compareBaseRef, pushTarget, branchNameOverride } = selection
 
   const params = buildTaskWorkspaceCreateParams({
     item: taskItem,

@@ -1,3 +1,5 @@
+import type { SetupTrustMismatch } from '../../../../src/shared/worktree/create-types'
+import { readSetupTrustMismatch } from './created-worktree-setup-review'
 import { translate } from '../../i18n/mobile-i18n'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -34,7 +36,7 @@ import {
 
 // Branches and remote PRs outlive worktrees and escape local preflight dedupe; retry host collision errors with numeric suffixes.
 export type WorktreeCreateResult =
-  | { worktreeId: string; name: string; warning?: string }
+  | { worktreeId: string; name: string; warning?: string; setupTrustMismatch?: SetupTrustMismatch }
   /** `replayed`: the refusal answered a resend after a lost reply, so the first send may have created it. */
   | { error: string; replayed?: true }
 
@@ -132,7 +134,8 @@ export async function createWorktreeWithNameRetry(
         return {
           worktreeId: created.worktreeId,
           name: created.displayName?.trim() ? created.displayName : candidateName,
-          ...(created.warning ? { warning: created.warning } : {})
+          ...(created.warning ? { warning: created.warning } : {}),
+          ...(created.setupTrustMismatch ? { setupTrustMismatch: created.setupTrustMismatch } : {})
         }
       }
       lastError = translate('tasks.worktreeCreateRetry.createFailed', 'Failed to create workspace')
@@ -172,12 +175,21 @@ async function resolveAgentLaunchRoute(
 function readCreateResult(
   response: RpcResponse,
   launch: { replay: boolean } | null
-): { worktreeId: string; displayName?: string; warning?: string } | null {
+): {
+  worktreeId: string
+  displayName?: string
+  warning?: string
+  setupTrustMismatch?: SetupTrustMismatch
+} | null {
   if (launch) {
     const operation = launch.replay ? agentLaunchReplayRun : agentLaunchRun
-    return readAgentLaunchCreateOutcome(operation.interpret(response))
+    const result = operation.interpret(response)
+    const outcome = readAgentLaunchCreateOutcome(result)
+    const setupTrustMismatch = readSetupTrustMismatch(result)
+    return outcome && setupTrustMismatch ? { ...outcome, setupTrustMismatch } : outcome
   }
   const created = worktreeCreateRun.interpret(response)
+  const setupTrustMismatch = readSetupTrustMismatch(created)
   const worktreeId = created.worktree.id
   if (!worktreeId) {
     return null
@@ -188,7 +200,8 @@ function readCreateResult(
   return {
     worktreeId,
     ...(typeof displayName === 'string' ? { displayName } : {}),
-    ...(warning ? { warning } : {})
+    ...(warning ? { warning } : {}),
+    ...(setupTrustMismatch ? { setupTrustMismatch } : {})
   }
 }
 

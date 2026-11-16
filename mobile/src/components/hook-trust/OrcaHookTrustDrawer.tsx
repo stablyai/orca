@@ -16,8 +16,8 @@ export type OrcaHookTrustPrompt = {
   previouslyApproved: boolean
   /** Same-id repos on several hosts: approvals stay per version and Always trust can't cover them. */
   versionOnly: boolean
-  /** Read from the create's branch, so a run may be pinned to this hash; older hosts read the checkout. */
-  pinnable?: true
+  /** The workspace exists but its create skipped this branch's setup, which differs from what was approved. */
+  review?: 'created-branch'
 }
 
 type Props = {
@@ -138,6 +138,19 @@ function hookTrustCopy(
 ): { title: string; description: string; scriptLabel: string } {
   const repoName = { repoName: prompt.repoName }
   const changed = prompt.versionOnly && prompt.previouslyApproved
+  if (prompt.review === 'created-branch') {
+    return {
+      title: t(
+        'components.setupHookTrustDrawer.branchDiffersTitle',
+        "This workspace's branch has different setup commands"
+      ),
+      description: t(
+        'components.setupHookTrustDrawer.branchDiffersDescription',
+        "The workspace was created, but its setup didn't run: its branch's orca.yaml differs from what you approved. Run it in this workspace only if you trust this repository."
+      ),
+      scriptLabel: t('components.setupHookTrustDrawer.branchSetupLabel', "Branch's setup script")
+    }
+  }
   if (prompt.kind === 'archive') {
     return {
       title: changed

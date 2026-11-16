@@ -210,7 +210,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
 
   const persistSetupHookTrust = useCallback(
     async (
-      prompt: Pick<OrcaHookTrustPrompt, 'repoId' | 'contentHash' | 'pinnable'>,
+      prompt: Pick<OrcaHookTrustPrompt, 'repoId' | 'contentHash'>,
       alwaysTrust: boolean
     ): Promise<CreateSetupApproval | null> => {
       if (!client) {
