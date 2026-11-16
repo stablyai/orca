@@ -1,4 +1,4 @@
-import type { BridgeHapticsKind } from '../../mobile-web-shell/bridge/bridge-haptics-notify'
+import type { BridgeHapticsKind } from '../../mobile-web-shell/bridge/native-capabilities/bridge-haptics-notify'
 
 // Ask native through a notify: Expo’s web fallback clicks a hidden checkbox on iOS, disrupting long presses. No reply slot is needed.
 // Publish outside React for plain-function callers; ungranted haptics stay quiet to avoid logging every list tap.

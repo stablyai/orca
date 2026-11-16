@@ -4,7 +4,7 @@ import { withReceiptNext } from '../receipt-next-text'
 import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import type { RuntimeClient } from '../../runtime/client'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_ROLE_ROUTING_RUNTIME_CAPABILITY

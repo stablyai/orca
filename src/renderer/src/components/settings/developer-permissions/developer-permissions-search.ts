@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import type { DeveloperPermissionId } from '../../../../../shared/developer-permissions-types'
+import type { DeveloperPermissionId } from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 export const DEVELOPER_PERMISSIONS_OVERVIEW_ID = 'developer-permissions-overview'
 

@@ -9,7 +9,7 @@ import {
   resumeWorktreeListRead
 } from './mobile-agent-history-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { AiVaultResumeLaunchSettings } from '../../../src/shared/ai-vault/resume/ai-vault-resume-startup'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { MobileAiVaultResumeCatalog } from './agent-history-resume-target'

@@ -5,7 +5,7 @@ import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/
 import { agentSessionRefusalCauseParts } from '../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { joinSentences } from '../../../../../../shared/sentence-joining'
+import { joinSentences } from '../../../../../../shared/text/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
   nativeChatSetupAction,

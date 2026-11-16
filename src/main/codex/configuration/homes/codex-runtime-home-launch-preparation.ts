@@ -1,5 +1,5 @@
 import type { CodexHomeLaunchContext } from '../../../ipc/pty/host-env/types'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { codexHookService } from '../../hooks/installation/hook-service'

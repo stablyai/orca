@@ -12,7 +12,7 @@ import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import { Button } from '../ui/button'
 import { WorkerRoleProfileEditor } from './WorkerRoleProfileEditor'
-import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 
 export function WorkerRoleSettings({
   settings,

@@ -8,10 +8,10 @@ import { setStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { scaleDirectory, scaleRecord } from './agent-session-scale.test-fixture'
 import { createReferenceAgentIndex } from '../../workspaces/references/runtime-reference-agents'
 import {
-  seedTestAgentSessionRecordStore,
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-persistence.test-fixture'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import '../../orchestration/db/contract-constants'
 import '../../orchestration/db/messages/mailbox-routing-page'
@@ -19,7 +19,7 @@ import '../../orchestration/db/dispatch-row-writer'
 import '../../orchestration/db/attempt-outcome-projection'
 import { structuredSessionMailReach } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 import { resolveOrcaSessionParty } from '../../orchestration/addressing/orchestration-party'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

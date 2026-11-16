@@ -237,7 +237,15 @@ export function createAcpModelCatalogProbe(
         if (models.length === 0) {
           throw new Error(`${spec.agent} listed no models`)
         }
-        return { models, origin: 'probe' as const, ...(attemptedModels ? { attemptedModels } : {}) }
+        const fastModeSupport = models.some((model) => model.supportsFastMode === true)
+          ? { supported: true as const }
+          : undefined
+        return {
+          models,
+          origin: 'probe' as const,
+          ...(fastModeSupport ? { fastModeSupport } : {}),
+          ...(attemptedModels ? { attemptedModels } : {})
+        }
       }
     }
   }

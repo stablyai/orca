@@ -1,4 +1,4 @@
-import { storageCapacityErrorCode } from '../storage-capacity-error'
+import { storageCapacityErrorCode } from '../errors/storage-capacity-error'
 
 export const TERMINAL_SESSION_STATE_SAVE_FAILED_CODE = 'ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED'
 

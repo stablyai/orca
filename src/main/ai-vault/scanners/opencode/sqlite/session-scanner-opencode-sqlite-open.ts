@@ -1,13 +1,13 @@
 import { basename } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import {
   aiVaultScanIssueText,
   type AiVaultScanIssueText
 } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import SyncDatabase from '../../../../sqlite/sync-database'
 import { classifySqliteReadFailure } from '../../../../sqlite/sqlite-read-failure'
-import { errorMessage } from '../../../../../shared/error-message'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 
 // Allow bounded contention waits for native reads without adding retries atop SQLite’s busy handler (#15036).
 const OPENCODE_SQLITE_BUSY_TIMEOUT_MS = 1_500

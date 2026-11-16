@@ -5,11 +5,11 @@ import {
   type WorktreeLineageResolution
 } from '../lineage/runtime-worktree-lineage-resolution'
 import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from '../lineage/runtime-lineage-error'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { OrcaRuntimeWithGroupFolderSetup } from './runtime-group-folder-setup-host'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { notifyLineageRepos } from '../../../workspaces/catalog/worktree-lineage-change-notification'
 import { resolveWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
 import { ExecutionHostNotDispatchableError } from '../../../providers/execution-host-provider-dispatch'

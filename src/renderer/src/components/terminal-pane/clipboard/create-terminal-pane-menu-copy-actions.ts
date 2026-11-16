@@ -1,6 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import {
-  copyTerminalPaneMenuAgentSessionId,
+  copyTerminalPaneAgentSessionId,
   copyTerminalPaneMenuPaneId,
   copyTerminalPaneMenuSelection,
   copyTerminalPaneMenuTerminalId
@@ -8,7 +8,6 @@ import {
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toHostSessionPaneKey } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import type {
   TerminalPaneAgentIdCopy,
   UseTerminalPaneContextMenuDeps
@@ -45,13 +44,8 @@ export function createTerminalPaneMenuCopyActions({
     return copyTerminalPaneMenuTerminalId(pane, tabId, ptyId)
   }
 
-  const onCopyAgentSessionId = async (): Promise<void> => {
-    const pane = resolveMenuPane()
-    const sessionId = pane
-      ? resolvePaneAgentSessionId(useAppStore.getState(), makePaneKey(tabId, pane.leafId))
-      : null
-    return copyTerminalPaneMenuAgentSessionId(pane, sessionId)
-  }
+  const onCopyAgentSessionId = async (): Promise<void> =>
+    copyTerminalPaneAgentSessionId(resolveMenuPane(), tabId)
   let agentIdPane: ManagedPane | null = null
   const agentIdCopy: TerminalPaneAgentIdCopy = {
     // The pane's execution host names its agents, so ask the owner; a failed commit retries there.

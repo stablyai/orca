@@ -1,7 +1,7 @@
 import { preflightFederatedWorkerLaunch } from '../../rpc/methods/orchestration/federation/federated-worker-launch-preflight'
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
@@ -71,7 +71,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     fastMode: params.fastMode,
     role: params.role
   })
-  const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
+  const server = await runtime.resolveOrchestrationWorkerServer(params.on as string)
   const pairingFence = { expectedEnvironmentPairingRevision: server.pairingRevision }
   const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
   const status = (await runtime.callOrchestrationWorkerServer(

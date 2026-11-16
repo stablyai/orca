@@ -1,4 +1,4 @@
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
@@ -7,6 +7,7 @@ import {
 import { orchestrationMigrationData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import type { OrchestrationWorkerServer } from '../../../../orchestration/federation/environment-transport'
 import type { WorkerStartInput } from '../worker/start/worker-start-input'
 import {
   assertWorkerLaunchPreferencesRuntimeSupported,
@@ -17,7 +18,7 @@ import {
 export async function preflightFederatedWorkerLaunch(args: {
   params: WorkerStartInput
   runtime: OrcaRuntimeService
-  server: ReturnType<OrcaRuntimeService['resolveOrchestrationWorkerServer']>
+  server: OrchestrationWorkerServer
   status: RuntimeStatus
   worktree: string
   preflightTimeoutMs: number

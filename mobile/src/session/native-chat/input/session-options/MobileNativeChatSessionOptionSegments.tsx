@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { MobileSegmentedControl } from '../../../../components/MobileSegmentedControl'
+import { MobileSegmentedControl } from '../../../../components/controls/MobileSegmentedControl'
 import { SectionHeader } from '../../../../components/list/ListGroup'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import {

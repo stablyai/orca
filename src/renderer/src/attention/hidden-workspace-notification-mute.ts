@@ -2,12 +2,12 @@ import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/controls/sidebar-filter-actions'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
 import { NO_HIDDEN_PROJECTS } from '../../../shared/hidden-projects'
-import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-creator-visibility'
+import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-view/workspace-creator-visibility'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

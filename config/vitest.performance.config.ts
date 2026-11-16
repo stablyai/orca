@@ -7,7 +7,6 @@ import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-
 const contracts = [
   'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',
   'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
-  'src/shared/native-chat/tools/native-chat-tool-pairing.performance.test.ts',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts',

@@ -12,12 +12,12 @@ import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo,
   type ProjectGroupingModel
-} from '../../../../../../shared/project-section-grouping'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { getHostContextLabel } from '../../../../../../shared/worktree/row-display/host-context-labels'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
-import type { SshConnectionState } from '../../../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
 export type ProjectHeaderHostContext = {
   hostId: ExecutionHostId

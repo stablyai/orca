@@ -8,7 +8,7 @@ import type {
   MuseUsageSessionRow,
   MuseUsageSnapshot,
   MuseUsageSummary
-} from '../../shared/muse-usage-types'
+} from '../../shared/agent-usage/analytics/muse-usage-types'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'

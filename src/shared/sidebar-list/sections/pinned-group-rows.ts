@@ -1,4 +1,4 @@
-import type { WorktreeOccurrencePlan } from '../../worktree-occurrence-plan'
+import type { WorktreeOccurrencePlan } from '../lineage/worktree-occurrence-plan'
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeExecutionHostId } from '../../execution-host'
 import type { ExecutionHostId } from '../../execution-host'

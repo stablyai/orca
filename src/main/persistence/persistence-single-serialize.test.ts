@@ -37,7 +37,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 
 async function createStore() {
-  const { setSecretStore } = await import('../../shared/secret-store')
+  const { setSecretStore } = await import('../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => cipherState.encryptionAvailable,
     encryptString: (plaintext) =>

@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'

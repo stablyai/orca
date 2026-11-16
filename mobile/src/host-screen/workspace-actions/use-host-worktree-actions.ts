@@ -12,17 +12,17 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   rpcClientForExecutionHost,
   workspaceRouteExecutionHost
-} from '../../worktree/execution-host-scoped-rpc-client'
+} from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { serverUpdateNeededNotice } from '../../host-route-notice'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { leaveHostRoute } from '../../host-route-exit'
 import {
   getWorktreeRowIdentity,
   isSameWorktreeRow
-} from '../../worktree/worktree-host-row-identity'
-import { noteLastVisitedWorktree } from '../../worktree/last-visited-worktree-by-host'
-import { isWorktreePinned } from '../../worktree/workspace-list-sections'
-import type { Worktree } from '../../worktree/workspace-list-types'
+} from '../../worktree/row-presentation/worktree-host-row-identity'
+import { noteLastVisitedWorktree } from '../../worktree/navigation/last-visited-worktree-by-host'
+import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'

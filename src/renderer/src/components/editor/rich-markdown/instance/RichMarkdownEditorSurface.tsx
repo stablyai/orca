@@ -23,7 +23,7 @@ import type { NotesSendMenuScope } from '../../review-note-delivery/NotesSendMen
 import type { MarkdownReviewNote } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { RichMarkdownAnnotationTarget } from '../review/rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from '../review/rich-markdown-review-note-layout'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { focusRichMarkdownEditorFromSearch } from '../search/rich-markdown-search-focus'
 
 function shouldFocusEmptyEditorFromSurfaceClick(

@@ -7,11 +7,11 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import {
   isOrcaSessionId,
   parseOrcaSessionAddress
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type {

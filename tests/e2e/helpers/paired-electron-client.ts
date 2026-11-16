@@ -9,7 +9,7 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 
-import type { ContextualTourId } from '../../../src/shared/contextual-tours'
+import type { ContextualTourId } from '../../../src/shared/feature-education/contextual-tours/contextual-tours'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'

@@ -1,5 +1,5 @@
 import type { DetailCommentRenderersModel } from '../item-detail/use-mobile-tasks-detail-comment-renderers'
-import type { PickerOption } from '../../components/PickerModal'
+import type { PickerOption } from '../../components/sheets/PickerModal'
 import { View } from 'react-native'
 import { useMemo } from 'react'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

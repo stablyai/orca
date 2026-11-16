@@ -4,7 +4,7 @@ import {
   createNdjsonParser,
   NdjsonLineTooLongError,
   createIncrementalNdjsonFramer
-} from '../../../../../shared/main-process-ndjson-framer'
+} from '../../../../../shared/json-stream/main-process-ndjson-framer'
 
 describe('encodeNdjson', () => {
   it('measures multibyte payloads in UTF-8 bytes, not characters', () => {

@@ -9,7 +9,7 @@ import {
   runtimeTargetEnvironmentId
 } from './runtime-client-target'
 import '../../provider-accounts/ownership/wsl-host-account-owner'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Target the workspace owner rather than the focused host or port scans hit the wrong machine. Direct-SSH owners return null. */
 export function useWorktreeRuntimeTarget(

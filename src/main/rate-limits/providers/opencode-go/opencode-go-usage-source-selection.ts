@@ -2,7 +2,7 @@ import type { NetworkProxySettings } from '../../../../shared/network-proxy'
 import type {
   ProviderRateLimits,
   UsageRateLimitMetadata
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   resolveOpenCodeGoApiKey,
   type OpenCodeGoApiKeyResolution

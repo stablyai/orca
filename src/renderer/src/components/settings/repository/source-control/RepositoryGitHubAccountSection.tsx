@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { GhAccountBinding } from '../../../../../../shared/github/accounts/account-binding'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { GhAccountBindingInventory } from '../../../../../../shared/github/accounts/auth-types'
 import { Button } from '../../../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'

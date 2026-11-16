@@ -340,7 +340,7 @@ function remoteCalls(
   capabilities: string[],
   response?: (method: string, params: unknown) => Promise<unknown>
 ) {
-  vi.spyOn(state.runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+  vi.spyOn(state.runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
     environmentId: 'environment_remote',
     name: 'remote',
     peerFingerprint: 'peer',

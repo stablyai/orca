@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react'
-import { escapeRegex } from '../../../../../../shared/string-utils'
+import { escapeRegex } from '../../../../../../shared/text/regex-escaping'
 
 const WINDOWS_PATH_ROOT = /(?:[A-Za-z]:[\\/]+|\\\\[^\s\\/:*?"<>|]+\\+)/
 // Separator runs cover escaped paths; spaced folders must be backslash-delimited so "C:\App and docs/README.md" stays rich.

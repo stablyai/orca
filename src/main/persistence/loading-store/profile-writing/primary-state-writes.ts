@@ -1,8 +1,8 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
-} from '../../../../shared/codex-reset-credit-attempt-ledger'
+} from '../../../../shared/agent-accounts/codex/codex-reset-credit-attempt-ledger'
 import {
   stopAfterFailedPrimaryStateMutation,
   type PrimaryStateWriteOperationsRuntime

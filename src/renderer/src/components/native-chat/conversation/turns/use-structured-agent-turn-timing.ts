@@ -10,7 +10,7 @@ import { selectStructuredAgentTurnBars } from '../../../../../../shared/agent-se
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
-} from '../../../../../../shared/structured-agent-turn-clock-anchor'
+} from '../../../../../../shared/native-chat/transcript/turns/structured-agent-turn-clock-anchor'
 
 /** Use journal durations and latch host-to-client clock conversion once per live turn to avoid clock skew. */
 export function useStructuredAgentTurnTiming(

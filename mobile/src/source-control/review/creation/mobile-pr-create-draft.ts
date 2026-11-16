@@ -1,4 +1,4 @@
-import { legacyBaseRefSearchResult } from '../../../../../src/shared/base-ref-search-result'
+import { legacyBaseRefSearchResult } from '../../../../../src/shared/worktree/base-refs/base-ref-search-result'
 import { translate } from '../../../i18n/mobile-i18n'
 import { refusedRpcMessageOrFallback } from '../../../transport/rpc/rpc-refusal-message'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'

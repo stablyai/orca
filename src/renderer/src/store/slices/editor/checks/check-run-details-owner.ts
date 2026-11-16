@@ -32,10 +32,10 @@ import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
-import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor-tab-view-types'
+import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor/views/editor-tab-view-types'
 
 export type CheckRunDetailsOwnership = Pick<
   OpenFile,

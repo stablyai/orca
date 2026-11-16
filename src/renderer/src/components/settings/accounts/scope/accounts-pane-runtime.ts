@@ -3,8 +3,8 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
-} from '../../../../../../shared/managed-account-types'
-import { resolveLocalAccountRuntimeTarget } from '../../../../../../shared/local-account-runtime'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
+import { resolveLocalAccountRuntimeTarget } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -105,4 +105,9 @@ export function formatAccountTimestamp(
     hour: 'numeric',
     minute: '2-digit'
   })
+}
+
+/** One secondary line from whichever account details are known. */
+export function joinAccountDetails(parts: readonly (string | null | undefined)[]): string {
+  return parts.filter(Boolean).join(' · ')
 }

@@ -2,13 +2,13 @@ import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   type RuntimeBrowserPlacement,
   sameRuntimeBrowserPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { sameStringArray } from './state-equality-core'
 import { sameAiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 

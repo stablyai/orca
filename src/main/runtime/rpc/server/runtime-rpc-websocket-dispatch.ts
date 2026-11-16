@@ -9,7 +9,7 @@ import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchan
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'

@@ -8,7 +8,10 @@ import { registerWorktreeActivation } from '@/lib/workspace/activation/worktree-
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import { notifyBlockedFolderWorkspacePath } from '../paths/folder-workspace-path-status'
 import { blocksFolderWorkspaceActivation } from '../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import {
@@ -32,7 +35,7 @@ import {
   liftSidebarFiltersHidingWorktree
 } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
 import {
   buildActivationStateTransition,

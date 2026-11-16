@@ -21,7 +21,7 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { testOrcaSessionId } from '../../../../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import * as placement from '../start/placement/worker-start-agent-placement'
 
 export const receipt = z.object({

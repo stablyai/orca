@@ -6,7 +6,7 @@ import type {
   NativeChatSendFollowUp
 } from '../../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import type { NativeChatSteerChordPreview } from '../../../../../../src/shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
-import { ActionSheetModal } from '../../../../components/ActionSheetModal'
+import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { ComposerSendButton } from '../../../../components/composer-input/ComposerSendButton'
 import {
   COMPOSER_CONTROL_HIT_SLOP,

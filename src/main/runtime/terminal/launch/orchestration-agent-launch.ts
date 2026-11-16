@@ -6,7 +6,7 @@ import { resolveAgentLaunchCommand } from '../../../../shared/agent-launch/start
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import {
   resolveStartupShell,
   type AgentStartupShell
@@ -14,7 +14,7 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from '../../orchestration/workers/launch/configured-worker-agent-selector'
 import { newWorktreeLaunchScope, resolveAgentLaunchRuntime } from './agent-launch-scope-runtime'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { resolveOpenCodeModelLaunchRoute } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'

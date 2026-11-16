@@ -21,7 +21,7 @@ import {
   resolveRuntimePaneTitleLeafIdFromRoot,
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
-} from '../../../../../../shared/runtime-pane-title-leaf-id'
+} from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import {
   isTerminalLeafId,
   makePaneKey

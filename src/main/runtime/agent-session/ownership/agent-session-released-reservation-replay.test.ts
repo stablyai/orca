@@ -13,9 +13,9 @@ import type { AgentSessionLease } from '../../../../shared/agent-session/lifecyc
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
-  closeTestAgentSessionRecordStores,
-  withTestAgentSessionDatabase
+  closeTestAgentSessionRecordStores
 } from '../records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../records/agent-session-record-store-persistence.test-fixture'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 

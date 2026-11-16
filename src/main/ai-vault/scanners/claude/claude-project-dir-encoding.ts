@@ -1,4 +1,4 @@
-import { normalizeRuntimePathSeparators } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathSeparators } from '../../../../shared/file-access/cross-platform-path'
 
 /** Encode case-preserving raw paths and NFC variants; comparison keys lose Windows case and macOS can supply NFD. */
 export function encodeClaudeProjectPaths(pathValue: string): string[] {

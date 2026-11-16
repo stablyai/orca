@@ -1,6 +1,6 @@
 import { REGISTER_DEVICE_KEY_METHOD } from '../../../shared/remote-runtime/pairing/device-key-capability'
 import { encodeDeviceProofMessage } from '../../../shared/remote-runtime/pairing/device-key-proof'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import type {
   WebRuntimeAuthPlan,
