@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { agentForksConversations } from '../../../../../../shared/agent-launch/startup/agent-resume-argv'
-import type { NativeChatTabSession } from '../../../tab-bar/tab-session-history-switch'
+import type { NativeChatTabSession } from '../../../tab-bar/session-actions/tab-session-history-switch'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'

@@ -134,6 +134,18 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
   return null
 }
 
+/** Re-encodes the decoded target so equivalent spellings (e.g. `runtime:wsl:x` and `runtime:wsl%3Ax`) match catalog ids. */
+export function canonicalExecutionHostId(value: string | null | undefined): ExecutionHostId | null {
+  const parsed = parseExecutionHostId(value)
+  if (parsed?.kind === 'ssh') {
+    return toSshExecutionHostId(parsed.targetId)
+  }
+  if (parsed?.kind === 'runtime') {
+    return toRuntimeExecutionHostId(parsed.environmentId)
+  }
+  return parsed?.id ?? null
+}
+
 /** True only for an explicit local host id; absent or unparsable ids return false. */
 export function isLocalExecutionHost(value: string | null | undefined): boolean {
   return parseExecutionHostId(value)?.kind === 'local'

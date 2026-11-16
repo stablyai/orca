@@ -12,7 +12,7 @@ import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/nati
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getTabRootStateClasses
-} from '@/components/tab-bar/drop-indicator'
+} from '@/components/tab-bar/strip/drop-indicator'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
