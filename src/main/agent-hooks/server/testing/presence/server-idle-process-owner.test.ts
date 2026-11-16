@@ -266,23 +266,29 @@ describe('idle foreground process owns its provider session', () => {
     })
   })
 
-  it('keeps a verifiable owner when its shell takes the foreground', async () => {
-    const server = await start()
-    await idleClaude(server)
-    const before = server.getStatusSnapshot()
-    const confirmProcessExit = vi.fn(async () => true)
-    server.setTerminalPaneLifecycle({
-      ownsProcess: () => true,
-      isStopping: () => false,
-      isReversibleStop: () => false,
-      isPlaced: () => true,
-      confirmProcessExit
-    })
-    // Ctrl-Z returns the shell; the stopped process still answers for itself.
-    await server.reconcilePaneProcessExit(PANE)
-    expect(server.getStatusSnapshot()).toEqual(before)
-    expect(confirmProcessExit).not.toHaveBeenCalled()
-  })
+  it.each([
+    ['stopped', 'unverifiable', true],
+    ['still running', 'live', true],
+    ['exited without a session end', 'exited', false]
+  ] as const)(
+    'lets a verifiable owner answer when its shell takes the foreground: %s',
+    async (_, verdict, keepsOwner) => {
+      const server = await start()
+      await idleClaude(server)
+      const confirmProcessExit = vi.fn(async () => true)
+      server.setTerminalPaneLifecycle({
+        ownsProcess: () => true,
+        isStopping: () => false,
+        isReversibleStop: () => false,
+        isPlaced: () => true,
+        confirmProcessExit
+      })
+      probe.mockResolvedValue(verdict)
+      await server.reconcilePaneProcessExit(PANE)
+      expect(server.hasVerifiableAgentProcess(PANE)).toBe(keepsOwner)
+      expect(confirmProcessExit).not.toHaveBeenCalled()
+    }
+  )
 
   it.each(['live', 'unverifiable'] as const)(
     'retains mobile and resume selection after turn completion when owner is %s',
