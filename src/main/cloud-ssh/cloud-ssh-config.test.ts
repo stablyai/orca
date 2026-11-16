@@ -35,8 +35,8 @@ describe('cloudSshAlias', () => {
 
 describe('cloudSshKeyComment', () => {
   it('names device and workspace in a form the VM accepts', () => {
-    const comment = cloudSshKeyComment("Neil's MacBook Pro", 'orca-fix-login-bug-4f2a')
-    expect(comment).toBe('orca:neil-s-macbook-pro:orca-fix-login-bug-4f2a')
+    const comment = cloudSshKeyComment("Alex's MacBook Pro", 'orca-fix-login-bug-4f2a')
+    expect(comment).toBe('orca:alex-s-macbook-pro:orca-fix-login-bug-4f2a')
     expect(`ssh-ed25519 ${'A'.repeat(68)} ${comment}`).toMatch(HOSTED_SANDBOX_SSH_PUBLIC_KEY)
   })
 })

@@ -61,8 +61,8 @@ const SessionBody = z.object({
 /** What this Mac is called on the setup page ("Orca on MacBook Pro is waiting for you"). */
 /**
  * The name the web setup page shows ("Orca on <name> is waiting for you"). On macOS that's the
- * Computer Name exactly as System Settings shows it ("Neil's MacBook Air"), not the hostname,
- * which drops the apostrophe ("Neils-MacBook-Air"). Elsewhere, or if scutil can't answer, the
+ * Computer Name exactly as System Settings shows it ("Alex's MacBook Air"), not the hostname,
+ * which drops the apostrophe ("Alexs-MacBook-Air"). Elsewhere, or if scutil can't answer, the
  * cleaned-up hostname.
  */
 export async function cloudSetupDeviceLabel(

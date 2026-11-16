@@ -163,7 +163,7 @@ img{max-width:260px;border:1px solid var(--border);border-radius:4px}.kpi span{d
 <h1>Orca Cloud evaluation report</h1>
 <p class="sub">Generated ${esc(new Date().toISOString().slice(0, 16).replace('T', ' '))}Z by <code>cloud/apps/acceptance</code> from ${runs.length} run(s) in <code>acceptance-runs/</code>.
 Real Vercel Sandbox VMs (team lovecast, Pro, iad1) via the DEV control plane <code>${esc(config.controlPlaneUrl)}</code> and DEV billing <code>${esc(config.billingUrl)}</code>; Stripe TEST mode only.
-Parity bar: <a href="conductor-parity-matrix.html">conductor-parity-matrix.html</a>. Each row shows the most recent result for that feature and the run it came from.</p>
+Each row shows the most recent result for that feature and the run it came from.</p>
 <div class="callout kpi"><b>Status (${CATALOG.length} features):</b>
 <span class="g" style="background:var(--good-bg);color:var(--good-fg)">✅ ${counts.pass} pass</span>
 <span style="background:var(--warn-bg);color:var(--warn-fg)">⚠️ ${counts.partial} partial</span>

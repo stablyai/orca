@@ -19,7 +19,7 @@ async function setup() {
   h.billing.features = { auditLog: true }
   const key = await deviceKey()
   const enroll = (bearer?: string, publicKeyB64 = key.publicKeyB64) =>
-    h.call('POST', '/v1/device-sessions', { body: { label: 'Neil’s iPhone', platform: 'ios', publicKeyB64 }, bearer })
+    h.call('POST', '/v1/device-sessions', { body: { label: 'Alex’s iPhone', platform: 'ios', publicKeyB64 }, bearer })
   const deviceToken = async (sessionId: string, privateKey = key.privateKey, opts: { iss?: string; ttl?: number } = {}) => {
     const iat = Math.floor(h.now() / 1000)
     return new SignJWT({})
@@ -54,7 +54,7 @@ describe('device sessions', () => {
     expect(list.body.sandboxes.map((s: { workspaceId: string }) => s.workspaceId)).toEqual(['ws-1'])
 
     const sessions = await h.call('GET', '/v1/device-sessions', { bearer: phone })
-    expect(sessions.body.deviceSessions).toEqual([expect.objectContaining({ id, label: 'Neil’s iPhone', platform: 'ios', current: true })])
+    expect(sessions.body.deviceSessions).toEqual([expect.objectContaining({ id, label: 'Alex’s iPhone', platform: 'ios', current: true })])
 
     const revoked = await h.call('DELETE', `/v1/device-sessions/${id}`, { bearer: await h.token('alice', 'acme') })
     expect(revoked.status).toBe(200)

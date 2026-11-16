@@ -2,7 +2,7 @@
 
 Status: design + mock-tested code in `nwparker/orca-private` (integration branch `nwparker/vercel-driver`).
 Nothing here has touched a real Vercel or Cloudflare resource. Inputs: bake-off (`reports/provider-bakeoff.md`),
-`conductor-parity-matrix.html` (Vercel-first, 24h cap), `vm-just-works.html`, `reports/credentials.md`,
+a peer parity review (Vercel-first, 24h cap), `vm-just-works.html`, `reports/credentials.md`,
 stablyai/orca#20777 (recipe that talks to Vercel with the user's own account), billing design
 (`cloud/docs/accounts-billing-design.md`).
 
