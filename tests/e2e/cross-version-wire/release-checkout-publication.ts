@@ -5,7 +5,7 @@ import { lock } from 'proper-lockfile'
 import { scavengeReleaseCheckoutStaging } from './release-checkout-tree.ts'
 import { releaseModuleLocation } from './release-module-locations.ts'
 
-export const CHECKOUT_FORMAT = 9
+export const CHECKOUT_FORMAT = 10
 
 export type CheckoutLockOptions = {
   realpath: false

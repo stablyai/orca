@@ -5,7 +5,7 @@ import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
 } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { phoneWakeReport } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'

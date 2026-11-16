@@ -11,7 +11,7 @@ import { createTerminalTabNavigationActions } from './tabs/terminal-tab-navigati
 import { createTerminalTabPresentationActions } from './tabs/presentation/terminal-tab-presentation'
 import { createTerminalTabAppearanceActions } from './tabs/presentation/terminal-tab-appearance'
 import { routeTerminalTabChangesThroughLayoutOwner } from './tabs/presentation/terminal-tab-layout-owner-actions'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { createTerminalPtyBindingActions } from './pty/terminal-pty-bindings'
 import { createTerminalPtyReleaseActions } from './pty/terminal-pty-release'
 import { createTerminalUnverifiedPtyLossActions } from './pty/terminal-unverified-pty-loss'

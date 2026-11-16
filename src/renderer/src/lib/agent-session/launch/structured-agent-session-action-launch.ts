@@ -9,7 +9,7 @@ import {
 import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { insertUnifiedTabAfterAnchor } from '../../workspace/tabs/unified-tab-anchor-insertion'
 import { useAppStore } from '@/store/index'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import {
   declinedTerminalCanOpen,
@@ -24,7 +24,7 @@ import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-
 import type { StructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'
 import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
 import type { OpenedAgentSessionTab } from './pane/structured-agent-session-tab-open-through-layout-owner'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function openDeclinedTerminal(

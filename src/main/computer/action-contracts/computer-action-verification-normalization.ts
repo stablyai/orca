@@ -1,4 +1,4 @@
-import type { ComputerActionResult } from '../../../shared/computer-use-runtime-types'
+import type { ComputerActionResult } from '../../../shared/computer/computer-use-runtime-types'
 import { RuntimeClientError } from '../runtime-client-error'
 
 export function normalizeComputerActionResult(result: ComputerActionResult): ComputerActionResult {

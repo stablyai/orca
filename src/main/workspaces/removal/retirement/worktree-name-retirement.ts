@@ -3,7 +3,7 @@ import {
   isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   EMPTY_RETIRED_NAME_REGISTRY,
   isEmptyRetiredNameRegistry,
@@ -11,7 +11,7 @@ import {
   type RetiredNameRegistry
 } from '../../../../shared/worktree/naming/retired-name-registry'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   computeRemoteWorktreePath,

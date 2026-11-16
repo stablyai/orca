@@ -1,5 +1,5 @@
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
-import { isNativeLocalLocation } from '../execution-host'
+import { isNativeLocalLocation } from '../execution-host/execution-host'
 import type { ProviderRateLimits } from '../agent-usage/rate-limits/rate-limit-types'
 import type { CodexResetCreditExpectedScope } from '../agent-accounts/codex/codex-reset-credit-scope'
 

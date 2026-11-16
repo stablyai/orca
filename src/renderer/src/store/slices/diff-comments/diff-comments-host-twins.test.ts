@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import '../../../../../shared/execution-host'
+import '../../../../../shared/execution-host/execution-host'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 
 vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({

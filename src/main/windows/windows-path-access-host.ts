@@ -1,4 +1,4 @@
-import { parseRoutableExecutionHostId } from '../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../shared/execution-host/execution-host'
 import {
   windowsPathAccess,
   type WindowsPathAccess

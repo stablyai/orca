@@ -1,7 +1,7 @@
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/remote-runtime/host-catalog/runtime-source-env'
 import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'

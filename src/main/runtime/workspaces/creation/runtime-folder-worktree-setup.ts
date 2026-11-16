@@ -1,4 +1,4 @@
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'

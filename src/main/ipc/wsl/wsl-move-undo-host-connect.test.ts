@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { wslMoveCutoverFixture } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 

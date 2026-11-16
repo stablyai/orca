@@ -14,7 +14,6 @@ import { FolderWorkspaceCreate } from '../workspaces/folder-workspace-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from '../terminal/agent-session-params'
 import { SessionId } from '../structured-agent-session/structured-agent-session-identifiers'
-import { isStructuredAgentSessionIdFor } from '../../agent-session/structured-agent-session-create'
 import { AgentLaunchAccountEnv } from '../../agent-launch/startup/agent-launch-account-env'
 
 const LaunchAgent = z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown TUI agent' })
@@ -25,7 +24,7 @@ const tolerantTabLayoutId = z
   .transform((value): string | undefined => (typeof value === 'string' ? value : undefined))
   .optional()
 
-export const AgentLaunchFields = z.object({
+export const AgentLaunch = z.object({
   agent: LaunchAgent,
   /** Caller-minted retry identity; optional forever for shipped clients. Never mint after an ambiguous launch:
    * a fresh ID on retry would create another operation instead of replaying. */
@@ -111,25 +110,7 @@ export const AgentLaunchFields = z.object({
   surface: z.enum(AGENT_LAUNCH_SURFACES).optional()
 })
 
-/** Caller IDs must retain the agent lane encoded by host-minted IDs. */
-function refuseSessionIdForAnotherAgent(
-  launch: { agent: string; sessionId?: string | undefined },
-  ctx: z.RefinementCtx
-): void {
-  if (launch.sessionId && !isStructuredAgentSessionIdFor(launch.agent, launch.sessionId)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['sessionId'],
-      message: 'Launch session id must be named for its agent'
-    })
-  }
-}
-
-export const AgentLaunch = AgentLaunchFields.superRefine(refuseSessionIdForAnotherAgent)
-
 export type AgentLaunchParams = z.infer<typeof AgentLaunch>
 
 // A distinct method prevents an older receiver from silently dropping the replay requirement.
-export const AgentLaunchReplay = AgentLaunchFields.required({ operationId: true }).superRefine(
-  refuseSessionIdForAnotherAgent
-)
+export const AgentLaunchReplay = AgentLaunch.required({ operationId: true })

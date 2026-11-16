@@ -10,10 +10,13 @@ import type {
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
 } from '../../../shared/project/project-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import { findProjectHostSetup } from '../../../shared/project/host-setup/project-host-setup-target'
 import { makeProjectHostSetupId } from './project-host-compatibility'

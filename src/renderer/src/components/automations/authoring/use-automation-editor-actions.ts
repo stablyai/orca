@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { buildAutomationEditDraft } from './automation-edit-draft'
 import { AUTOMATION_DEFAULT_TIME, getDefaultWorktree } from './automation-draft-model'

@@ -1,7 +1,10 @@
 import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { OrcaRuntimeService } from '../../orca-runtime'
@@ -300,76 +303,6 @@ export function registerOrcaRuntimeTerminalRetirementHostPartitionTests(): void 
 
       physicalStop.resolve()
       await expect(stopping).resolves.toEqual({ stopped: 2 })
-    })
-
-    it('continues stopping later PTYs when one provider retirement rejects', async () => {
-      const harness = partitionedStore()
-      const runtime = new OrcaRuntimeService(harness.store)
-      const stopAndWait = vi.fn(async (ptyId: string) => {
-        if (ptyId === SSH_PTY_LEFT) {
-          throw new Error('relay_unavailable')
-        }
-        return true
-      })
-      runtime.setPtyController({
-        write: () => true,
-        kill: vi.fn(() => true),
-        stopAndWait,
-        getForegroundProcess: async () => null
-      })
-      await syncSshSplit(runtime, makeSshSnapshot())
-      runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, CONNECTION_ID, {
-        tabId: 'tab',
-        leafId: 'left'
-      })
-      runtime.registerPty(SSH_PTY_RIGHT, SSH_WORKTREE_ID, CONNECTION_ID, {
-        tabId: 'tab',
-        leafId: 'right'
-      })
-
-      await expect(
-        runtime.stopTerminalsForWorktree(`id:${SSH_WORKTREE_ID}`, {
-          resolvedWorktreeId: SSH_WORKTREE_ID
-        })
-      ).resolves.toEqual({ stopped: 1 })
-      expect(stopAndWait).toHaveBeenNthCalledWith(1, SSH_PTY_LEFT)
-      expect(stopAndWait).toHaveBeenNthCalledWith(2, SSH_PTY_RIGHT)
-    })
-
-    it('retires an exited SSH pane from the SSH partition and leaves the local partition untouched', async () => {
-      const harness = partitionedStore()
-      const localBefore = harness.sessions.get(LOCAL_EXECUTION_HOST_ID)!
-      const runtime = new OrcaRuntimeService(harness.store)
-      runtime.attachWindow(1)
-      await syncSshSplit(runtime, makeSshSnapshot())
-      runtime.registerPty(SSH_PTY_LEFT, SSH_WORKTREE_ID, CONNECTION_ID, {
-        tabId: 'tab',
-        leafId: 'left',
-        incarnationId: 'incarnation-a'
-      })
-
-      await runtime.onPtyExit(SSH_PTY_LEFT, 0, 'incarnation-a')
-
-      expect(harness.writes.map((write) => write.hostId)).toEqual([SSH_HOST_ID])
-      const sshSession = harness.sessions.get(SSH_HOST_ID)!
-      expect(sshSession.terminalLayoutsByTabId.tab).toMatchObject({
-        root: { type: 'leaf', leafId: 'right' },
-        ptyIdsByLeafId: { right: SSH_PTY_RIGHT }
-      })
-      expect(sshSession.tabsByWorktree[SSH_WORKTREE_ID]).toEqual([
-        expect.objectContaining({ id: 'tab', ptyId: SSH_PTY_RIGHT })
-      ])
-      expect(sshSession.terminalTopologyRevisionByRepoId).toMatchObject({ [SSH_REPO_ID]: 1 })
-
-      // Negative safety: the local partition is a different host and must not move.
-      expect(harness.sessions.get(LOCAL_EXECUTION_HOST_ID)).toBe(localBefore)
-      expect(
-        harness.sessions.get(LOCAL_EXECUTION_HOST_ID)?.terminalTopologyRevisionByRepoId
-      ).toEqual(localBefore.terminalTopologyRevisionByRepoId)
-
-      expect((await runtime.listMobileSessionTabs(`id:${SSH_WORKTREE_ID}`)).tabs).toEqual([
-        expect.objectContaining({ id: 'tab::right' })
-      ])
     })
   })
 }

@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './pty-controller-inventory-refresh'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import type {
   RuntimeLeafRecord,

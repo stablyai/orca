@@ -24,6 +24,17 @@ import {
   textGenerationFailure,
   type TextGenerationFailureFields
 } from '../../../shared/text-generation/text-generation-failure-copy'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
+
+export function agentHostFailure(label: string): TextGenerationFailureFields {
+  return {
+    error: agentSessionFailureWords(agentSessionFailureFact('hostFault'), {
+      agentName: label,
+      surface: 'rejection'
+    }).reason
+  }
+}
 
 // Their stdout is a name or the user's own dictated words, not a diagnostic worth keeping in the error.
 const OPERATIONS_WITHOUT_STDOUT_DETAIL: ReadonlySet<TextGenerationOperation> = new Set([

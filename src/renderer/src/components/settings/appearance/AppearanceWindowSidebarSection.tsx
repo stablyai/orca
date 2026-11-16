@@ -1,7 +1,7 @@
 import type React from 'react'
 
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'

@@ -1,7 +1,7 @@
 import type { SessionOptionValue } from '../native-chat/input/native-chat-session-options'
 import type { AgentLaunchPreferences } from '../agent-session/agent-session-host-authority'
 import type { WorktreeCatalogVersion } from './catalog/catalog-version'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { ArchiveHookOverride } from './removal/archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace/creation/workspace-source'
 import type { TaskSourceContext } from '../work-items/task-source-context'

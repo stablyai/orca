@@ -15,7 +15,7 @@ import { findHttpLinkAtTerminalMouseEvent } from '@/components/terminal-pane/lin
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import {
   dashboardPreviewHttpActions,
   type DashboardPreviewLinkSource

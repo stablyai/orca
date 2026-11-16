@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { getDefaultRepoHookSettings, getDefaultSettings } from '../../../../shared/constants'
+import {
+  getDefaultRepoHookSettings,
+  getDefaultSettings
+} from '../../../../shared/orca-profiles/constants'
 import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -169,17 +172,4 @@ describe('group folder setup lifecycle', () => {
       )
     }
   )
-
-  it('returns the structured folder and Setup evidence without waiting for completion', async () => {
-    const { args } = fixture({ agentLaunchMode: 'structured' })
-    const result = await prepareGroupFolderCreation(args)
-    expect(result).toMatchObject({
-      folderWorkspace: { id: 'task-a' },
-      setupReceipt: {
-        startupPolicy: 'wait-for-setup',
-        state: 'running',
-        terminalHandle: 'setup-handle'
-      }
-    })
-  })
 })

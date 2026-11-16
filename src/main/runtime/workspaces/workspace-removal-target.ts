@@ -24,7 +24,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { dropOrcaCreatedAgentTrustForRemovedWorktree } from './removal/worktree-removal-agent-trust-cleanup'
 import {

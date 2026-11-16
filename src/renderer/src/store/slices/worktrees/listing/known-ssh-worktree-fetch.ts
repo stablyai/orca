@@ -20,7 +20,7 @@ import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { isDetectedWorktreeListResult } from './detected-worktree-provider-request'
 import { getAuthoritativelyRemovedWorktreeIds } from './authoritative-worktree-removal-memory'
 import type { WorktreeHostMatchOptions } from './worktree-slice-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function appendMissingWorktreesForHost<
   T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
 import { INITIAL_MODE_2031_REPLY_SCAN_STATE } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
 import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/sleep/terminal-sleep-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './output/hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './output/foreground-output-budgets'

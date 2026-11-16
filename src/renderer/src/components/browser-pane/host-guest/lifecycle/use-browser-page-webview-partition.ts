@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import '../../../../../../shared/constants'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import '../../../../../../shared/orca-profiles/constants'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { resolveBrowserPagePartition } from '../browser-page-partition'
 
 export function useBrowserPageWebviewPartition({

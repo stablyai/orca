@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { remoteFileContentBudget } from '../files/files-remote-content-budget'
 import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'

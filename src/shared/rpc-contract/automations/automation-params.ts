@@ -10,7 +10,7 @@ import {
   requiredNumber,
   requiredString
 } from '../rpc-param-primitives'
-import { normalizeExecutionHostId } from '../../execution-host'
+import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import { isValidAutomationSchedule } from '../../automations/scheduling/automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,

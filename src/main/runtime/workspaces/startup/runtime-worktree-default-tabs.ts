@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type {
   WorktreeTerminalProvisioningHost,

@@ -3,7 +3,7 @@ import { isAntigravityReferenceSession } from '../../../../../../shared/agent-se
 
 import { isWslStoredAiVaultSessionFile } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
-import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
   isAiVaultSessionResumableContent,
