@@ -18,8 +18,11 @@ import {
 } from './journal-legacy-source'
 import {
   captureJournalLegacySourceReceipt,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  journalLegacySourceWrittenAt,
+  sameJournalLegacySource
 } from './journal-legacy-source-receipt'
+import { parseJournalRow, type JournalRow } from '../durable-rows/journal-row-schema'
 
 /** Set after a pass absorbed every original chat, so each chat here carries its revision. */
 export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
@@ -38,33 +41,32 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   if (captured.disposition === 'no-source-at-initialization') {
     return
   }
-  const receipt = JSON.stringify(captured)
-  const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
-  const unchanged =
-    captured.disposition !== 'uncertifiable' &&
-    readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT) === receipt
-  if (unchanged && kept) {
+  const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
+  const unchanged = sameJournalLegacySource(saved, captured)
+  if (unchanged && readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined) {
     return
   }
+  const receipt = JSON.stringify(captured)
+  const pass: Pass = {
+    changed: !unchanged,
+    copiedSince: journalLegacySourceWrittenAt(saved),
+    baselines: []
+  }
   const source = openJournalLegacySource(sourcePath)
-  let current: [string, string][] = []
   try {
-    if (unchanged) {
-      // Converted before revisions were kept, and nothing written since: each chat is current.
-      current = missingRevisions(source, db)
-    } else if (!absorbChats(source, db)) {
+    if (!absorbChats(source, db, pass)) {
       // A failed chat leaves the original unabsorbed, so the next launch retries it.
       return
     }
   } finally {
     source.close()
   }
-  // Revisions read while another process wrote the original are not current; read them next launch.
-  if (unchanged && JSON.stringify(captureJournalLegacySourceReceipt(sourcePath)) !== receipt) {
+  // Baselines read while another process wrote the original are not current; read them next launch.
+  if (!sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))) {
     return
   }
   runJournalTransaction(db, () => {
-    for (const [id, revision] of current) {
+    for (const [id, revision] of pass.baselines) {
       recordJournalLegacyChatRevision(db, id, revision)
     }
     writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
@@ -72,13 +74,12 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   })
 }
 
-function missingRevisions(source: Database.Database, db: Database.Database): [string, string][] {
-  return source
-    .prepare('SELECT session_id FROM agent_session_records')
-    .all()
-    .map((row) => String(row.session_id))
-    .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
-    .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
+/** What one pass knows about the original, and the chats it takes as already shown here. */
+type Pass = {
+  changed: boolean
+  /** Rows saved before this were in the original when this file copied it. */
+  copiedSince: number
+  baselines: [string, string][]
 }
 
 type Claim = SqliteRow
@@ -94,7 +95,7 @@ type Adoption = {
 }
 
 /** True when every chat was absorbed; a failed chat is logged and retried next launch. */
-function absorbChats(source: Database.Database, db: Database.Database): boolean {
+function absorbChats(source: Database.Database, db: Database.Database, pass: Pass): boolean {
   let adoption = readAdoption(source, db)
   runJournalTransaction(db, () => {
     for (const [sessionId, claims] of adoption.claims) {
@@ -106,7 +107,7 @@ function absorbChats(source: Database.Database, db: Database.Database): boolean 
     .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
     .all()) {
     try {
-      absorbChat(source, db, String(id), adoption)
+      absorbChat(source, db, String(id), adoption, pass)
     } catch (error) {
       complete = false
       // The failed chat's transaction rolled back; reread what this file now holds.
@@ -148,15 +149,22 @@ function absorbChat(
   source: Database.Database,
   db: Database.Database,
   id: string,
-  adoption: Adoption
+  adoption: Adoption,
+  pass: Pass
 ): void {
   // A chat with no history still has a value, so one deleted here stays deleted.
   const revision = journalLegacyChatRevision(source, id) ?? 'null'
-  if (revision === readMeta(db, journalLegacyChatRevisionKey(id))) {
+  const shown = readMeta(db, journalLegacyChatRevisionKey(id))
+  if (revision === shown) {
     return
   }
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
-  if (chat?.epoch !== null && chat?.epoch !== undefined) {
+  const converted = chat?.epoch !== null && chat?.epoch !== undefined
+  if (shown === undefined && !writtenSinceCopy(source, db, id, chat !== undefined, converted, pass)) {
+    pass.baselines.push([id, revision])
+    return
+  }
+  if (converted) {
     keepContinuedChat(source, db, id, revision, adoption)
     return
   }
@@ -165,6 +173,66 @@ function absorbChat(
     adoptChat(source, db, id, id, adoption)
     recordJournalLegacyChatRevision(db, id, revision)
   })
+}
+
+/**
+ * A file copied before revisions were kept has none to compare, so only what it lacks shows the
+ * older Orca wrote a chat. A converted chat holds its history: it was continued only if the
+ * original has an item it never saw. One not converted yet converts from the current original, so
+ * nothing is hidden. One this file doesn't know is new, unless the original is as copied: then it
+ * was deleted here.
+ */
+function writtenSinceCopy(
+  source: Database.Database,
+  db: Database.Database,
+  id: string,
+  cataloged: boolean,
+  converted: boolean,
+  pass: Pass
+): boolean {
+  if (converted) {
+    return holdsUnseenItem(source, db, id, pass.copiedSince)
+  }
+  const known =
+    cataloged || db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id)
+  return pass.changed && !known
+}
+
+/** An item the chat holds, removed or aliases was seen; only rows saved since the copy can be new. */
+function holdsUnseenItem(
+  source: Database.Database,
+  db: Database.Database,
+  id: string,
+  since: number
+): boolean {
+  let seen: Set<string> | undefined
+  for (const { row_json: json } of source
+    .prepare('SELECT row_json FROM journal_rows WHERE session_id=? AND ts>=?')
+    .iterate(id, since)) {
+    const held = (seen ??= new Set(
+      db
+        .prepare(`SELECT item_id AS id FROM journal_items WHERE session_id=?1
+          UNION SELECT item_id FROM journal_item_tombstones WHERE session_id=?1
+          UNION SELECT provider_item_id FROM journal_item_aliases WHERE session_id=?1`)
+        .all(id)
+        .map((row) => String(row.id))
+    ))
+    const parsed = parseJournalRow(String(json), true)
+    if (parsed.ok && rowItemIds(parsed.row).some((item) => !held.has(item))) {
+      return true
+    }
+  }
+  return false
+}
+
+function rowItemIds(row: JournalRow): string[] {
+  if (row.kind === 'item') {
+    return [row.itemId]
+  }
+  if (row.kind === 'lifecycle-batch') {
+    return row.mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.itemId] : []))
+  }
+  return []
 }
 
 /** The original's record, a tab and a catalog row; history converts lazily as usual. */

@@ -86,3 +86,57 @@ function sourceReceipt(
         : { kind: 'empty' }
   }
 }
+
+/**
+ * Whether the original is still as a saved receipt recorded it, compared by meaning. A receipt
+ * saved before WAL identity was kept records a nonempty WAL by its size alone, so the fields
+ * added since are compared only when it has them: a newer receipt shape is never a write.
+ */
+export function sameJournalLegacySource(
+  saved: string | undefined,
+  current: JournalLegacySourceReceipt
+): boolean {
+  if (saved === undefined || current.disposition !== 'copied-source') {
+    return false
+  }
+  let stored: unknown
+  try {
+    stored = JSON.parse(saved)
+  } catch {
+    return false
+  }
+  if (!isRecord(stored) || !isRecord(stored.wal)) {
+    return false
+  }
+  const { wal, ...file } = current
+  const { wal: storedWal, ...storedFile } = stored
+  const walFields =
+    wal.kind === 'nonempty' && !('ino' in storedWal) ? { kind: wal.kind, size: wal.size } : wal
+  return sameJson(storedFile, file) && sameJson(storedWal, walFields)
+}
+
+/** When the original was last written before the copy a saved receipt describes; 0 if unknown. */
+export function journalLegacySourceWrittenAt(saved: string | undefined): number {
+  try {
+    const stored: unknown = saved === undefined ? undefined : JSON.parse(saved)
+    const main = isRecord(stored) && isRecord(stored.main) ? stored.main : undefined
+    return typeof main?.mtimeNs === 'string' ? Number(BigInt(main.mtimeNs) / 1_000_000n) : 0
+  } catch {
+    return 0
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function sameJson(saved: unknown, current: unknown): boolean {
+  if (!isRecord(saved) || !isRecord(current)) {
+    return saved === current
+  }
+  const keys = Object.keys(current)
+  return (
+    Object.keys(saved).length === keys.length &&
+    keys.every((key) => key in saved && sameJson(saved[key], current[key]))
+  )
+}

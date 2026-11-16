@@ -267,41 +267,48 @@ it('keeps closed chats closed and adds no copies when a file from before revisio
   await unchanged.close()
 })
 
-it('takes what a file from before revisions were kept shows as its baseline when the original changed', async () => {
+it('keeps only what an older Orca wrote after a file from before revisions were kept copied it', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const { db: original } = openJournalDatabase(journalDatabasePath(root))
   cleanup.push(() => original.close())
   olderOrcaChat(original, 'open', rows)
   olderOrcaChat(original, 'closed', rows)
+  olderOrcaChat(original, 'idle', rows)
   olderOrcaChat(original, 'converted', rows)
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id!='open'").run()
   const first = await upgrade(root)
+  expect(await first.convert('idle')).toBe('epoch')
   expect(await first.convert('converted')).toBe('epoch')
   asOlderChatStore(first.db)
   await first.close()
 
+  // The older Orca continues one converted chat and starts another.
+  insertJournalRow(original, 'converted', turn('older-turn', tip + 1), Date.now())
   olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
   const later = await upgrade(root)
   cleanup.push(later.close)
-  expect(tabbedChats(later.db)).toEqual(['open', 'started-older'])
-  expect(
-    later.db
-      .prepare('SELECT session_id FROM agent_session_records ORDER BY session_id')
-      .all()
-      .map((row) => String(row.session_id))
-  ).toEqual(['closed', 'converted', 'open', 'started-older'])
+  const known = ['closed', 'converted', 'idle', 'open', 'started-older']
+  const [copy] = later.db
+    .prepare(`SELECT session_id FROM agent_session_records WHERE session_id NOT IN (${known
+      .map(() => '?')
+      .join(',')})`)
+    .all(...known)
+    .map((row) => String(row.session_id))
+  expect(items(later.db, copy!)).toContain('older-turn')
+  expect(tabbedChats(later.db)).toEqual(['open', copy, 'started-older'])
+  expect(later.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
+    records: known.length + 1
+  })
 
-  // Baselines now exist, so a later write by the older Orca is still kept.
-  insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+  // Baselines now exist, so a later write by the older Orca is still kept, and nothing else moves.
+  insertJournalRow(original, 'idle', turn('older-idle-turn', tip + 1))
   await later.close()
   cleanup.pop()
   const again = await upgrade(root)
   cleanup.push(again.close)
-  const [copy] = again.db
-    .prepare(`SELECT session_id FROM agent_session_records
-      WHERE session_id NOT IN ('closed','converted','open','started-older')`)
-    .all()
-    .map((row) => String(row.session_id))
-  expect(items(again.db, copy!)).toContain('older-turn')
+  expect(tabbedChats(again.db)).toHaveLength(4)
+  expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
+    records: known.length + 2
+  })
 })
