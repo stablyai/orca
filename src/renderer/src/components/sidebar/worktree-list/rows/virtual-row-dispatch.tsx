@@ -185,10 +185,11 @@ export function renderWorktreeVirtualRow(
       ? getWorkspaceStatus(row.worktree, ctx.workspaceStatuses)
       : null
   const itemKey = folder ? null : getWorktreeHostIdentity(row.worktree)
+  const guidesInDraggedRange = ctx.hiddenDragRanges.some(
+    ({ start, end }) => vItem.index >= start && vItem.index <= end
+  )
   const sourceHidden =
-    itemKey !== null &&
-    ctx.worktreeDragState.draggingWorktreeId !== null &&
-    ctx.hiddenDragRanges.some(({ start, end }) => vItem.index >= start && vItem.index <= end)
+    itemKey !== null && ctx.worktreeDragState.draggingWorktreeId !== null && guidesInDraggedRange
   const itemPreviewOffset =
     (itemKey
       ? ctx.worktreeDragState.previewOffsetsByWorktreeId.get(
@@ -269,7 +270,7 @@ export function renderWorktreeVirtualRow(
           <LineageGuides
             guides={frame.guides}
             before={frame.before}
-            hidden={sourceHidden || familyHidden}
+            hidden={guidesInDraggedRange || familyHidden}
           />
         )}
         <div className={cn('relative', sourceHidden && 'pointer-events-none opacity-0')}>

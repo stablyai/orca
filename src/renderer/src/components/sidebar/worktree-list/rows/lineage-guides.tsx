@@ -1,5 +1,4 @@
 import React from 'react'
-import { cn } from '@/lib/class-names'
 import type { LineageRail, LineageRowGuides } from '../listing/lineage-row-projection'
 
 // Why: the card's title row center; single-line cards override it in CSS via :has().
@@ -24,14 +23,18 @@ export function LineageGuides({
   guides: LineageRowGuides
   before: number
   hidden: boolean
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  if (hidden) {
+    return null
+  }
+
   const titleCenter = `calc(${before}px + ${TITLE_CENTER})`
   const { branch } = guides
   return (
     <div
       aria-hidden="true"
       data-worktree-lineage-guides=""
-      className={cn('pointer-events-none absolute inset-0', hidden && 'opacity-0')}
+      className="pointer-events-none absolute inset-0"
     >
       {railXs(guides.rails).map((x) => (
         <span
