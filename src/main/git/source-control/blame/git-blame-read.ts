@@ -8,12 +8,14 @@ import {
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { isMaxBufferOverflowError } from '../../command-runner/process-capture/max-buffer-overflow'
-import { blobConversion, readGitBlobAtOidPath } from '../diffs/git-blob-read'
+import { readGitBlobAtOidPath, type BlobConversion } from '../diffs/git-blob-read'
 import { readGitCommandFailureStderr } from '../../../../shared/git/commands/git-command-failure-text'
 import { GitBlameResultCache } from './git-blame-result-cache'
 import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 
 const UNAVAILABLE: GitBlameResult = { kind: 'unavailable' }
+// No filter or textconv pass, and no attribute lookup to decide one.
+const RAW_BLOB: BlobConversion = { mode: 'checkout', hasDriver: Promise.resolve(false) }
 
 // Keyed by commit, so entries never go stale; HEAD moving produces a new key.
 const blameCache = new GitBlameResultCache()
@@ -142,15 +144,9 @@ async function readBlame(
   options: GitRuntimeOptions
 ): Promise<GitBlameResult> {
   const readOptions = { ...options, admissionTier: options.admissionTier ?? 'background' }
-  // Checkout mode matches the working-tree bytes the editor shows, so filters don't read as edits.
-  // `oid:path` is repo-root relative from any cwd; blame's path is relative to the cwd.
-  const blobRead = readGitBlobAtOidPath(
-    fileDir,
-    oid,
-    repoPath,
-    readOptions,
-    blobConversion(fileDir, fileName, readOptions, 'checkout')
-  )
+  // The raw blob, in the same line coordinates as `blame --no-textconv`; filtered lines read as
+  // edits rather than shifting attribution. `oid:path` is repo-root relative from any cwd.
+  const blobRead = readGitBlobAtOidPath(fileDir, oid, repoPath, readOptions, RAW_BLOB)
   const [blob, blameOutput] = await Promise.all([
     blobRead,
     runBlame(fileDir, fileName, oid, readOptions)

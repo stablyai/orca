@@ -240,12 +240,13 @@ export function useMonacoGitBlame(params: {
       })
     ]
     const unsubscribeHead = useAppStore.subscribe((state, previous) => {
-      if (
-        headKey &&
-        state.gitStatusHeadByWorktree[headKey] !== previous.gitStatusHeadByWorktree[headKey]
-      ) {
-        load(true)
+      const before = headKey ? previous.gitStatusHeadByWorktree[headKey] : undefined
+      const after = headKey ? state.gitStatusHeadByWorktree[headKey] : undefined
+      if (before === after) {
+        return
       }
+      // The first status after launch, or a failed status read, isn't HEAD moving: no flicker.
+      load(before !== undefined && after !== undefined)
     })
     update()
     load()
