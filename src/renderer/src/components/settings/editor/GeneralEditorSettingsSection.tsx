@@ -20,6 +20,7 @@ import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
 import { EditorInsertFinalNewlineSetting } from './EditorInsertFinalNewlineSetting'
+import { EditorEndOfLineSetting } from './EditorEndOfLineSetting'
 import { EditorTypographySettings } from './EditorTypographySettings'
 import {
   createAutoSaveDelayDraftState,
@@ -96,6 +97,7 @@ export function GeneralEditorSettingsSection({
       <SettingsGroup title={t('settings.general.editorGroups.saving', 'Saving')}>
         <EditorFormatOnSaveSetting settings={settings} updateSettings={updateSettings} />
         <EditorInsertFinalNewlineSetting settings={settings} updateSettings={updateSettings} />
+        <EditorEndOfLineSetting settings={settings} updateSettings={updateSettings} />
         <SearchableSetting
           id={GENERAL_SETTING_ANCHORS.autoSaveDelay}
           title={t(
