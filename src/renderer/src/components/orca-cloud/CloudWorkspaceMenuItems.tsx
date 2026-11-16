@@ -36,27 +36,39 @@ const noop = (): void => {}
  */
 export function CloudWorkspaceMenuItems({
   worktreeId,
-  hostId
+  hostId,
+  moveItem = null
 }: {
   worktreeId: string
   hostId?: string | null
+  /** "Move to this computer", in the top group right after Restart (the sidebar passes it). */
+  moveItem?: React.ReactNode
 }): React.JSX.Element | null {
   // PAIRED-ARCHIVE: a paired row gets the same lifecycle rows (each action decides for itself).
   const view = useCloudWorkspaceView(worktreeId, { pairedRows: true })
   if (!view.isCloud) {
     return null
   }
-  return <CloudMenuRows worktreeId={worktreeId} hostId={hostId ?? null} view={view} />
+  return (
+    <CloudMenuRows
+      worktreeId={worktreeId}
+      hostId={hostId ?? null}
+      view={view}
+      moveItem={moveItem}
+    />
+  )
 }
 
 function CloudMenuRows({
   worktreeId,
   hostId,
-  view
+  view,
+  moveItem
 }: {
   worktreeId: string
   hostId: string | null
   view: ReturnType<typeof useCloudWorkspaceView>
+  moveItem: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useCloudPanelActions(worktreeId, noop)
@@ -88,6 +100,7 @@ function CloudMenuRows({
           {t('orcaCloudWorkspace.restart', 'Restart')}
         </DropdownMenuItem>
       ) : null}
+      {moveItem}
       {has('archive') && actions.onArchive ? (
         <ArchiveSnapshotTooltip side="left">
           <DropdownMenuItem disabled={busy || view.state === 'waking'} onSelect={actions.onArchive}>
