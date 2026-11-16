@@ -1249,12 +1249,10 @@ html.native-shell .app-layout {
 /* Beside attached tab strips the gap continues the strip (fill, then its 1px bottom border), so no
    off-color sliver sits between two tab bars. 32px matches the strip height in TabGroupPanel. */
 .tab-group-split-resize-handle.is-wide.has-tab-band {
-  background-image: linear-gradient(
-    to bottom,
-    var(--tab-bar, var(--card)) 0 31px,
-    var(--border) 31px 32px,
-    transparent 32px
-  );
+  /* The border layer sits over the strip fill, as the strip's own translucent border does. */
+  background-image:
+    linear-gradient(to bottom, transparent 31px, var(--border) 31px 32px, transparent 32px),
+    linear-gradient(to bottom, var(--tab-bar, var(--card)) 0 32px, transparent 32px);
 }
 
 /* Fractional pane edges can leave a 1px row unpainted next to the gap; fill it beneath the panes. */
