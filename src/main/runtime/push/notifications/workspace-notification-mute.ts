@@ -12,7 +12,7 @@ import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   isWorkspaceOwnedBySomeoneElse
 } from '../../../../shared/workspace-view/workspace-creator-visibility'
-import type { NotificationSettings } from '../../../../shared/notification-settings-types'
+import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type WorkspaceNotificationMuteDeps = {

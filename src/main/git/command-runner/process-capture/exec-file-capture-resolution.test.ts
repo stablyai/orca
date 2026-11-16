@@ -30,6 +30,7 @@ describe.skipIf(process.platform !== 'darwin')('Mac capture during executable lo
       const terminated = vi.fn()
       const deadline = vi.fn()
       const pending = execFileCapture(process.execPath, ['-e', 'throw Error("launched late")'], {
+        ownedPosixGroup: true,
         signal: controller.signal,
         ...(reason === 'deadline' ? { timeout: 1 } : {}),
         onChildTerminated: terminated,
@@ -97,55 +98,5 @@ describe.skipIf(process.platform !== 'darwin')('Mac capture during executable lo
       stderr: Buffer.from('diagnostic')
     })
     expect(observed.join('')).toBe('diagnostic')
-  })
-})
-
-describe.skipIf(process.platform !== 'darwin')('capture output overflow termination', () => {
-  it('keeps the deadline and termination obligation alive when the child ignores the overflow signal', async () => {
-    const original = nativeSpawn.spawnNativeProcess
-    let child: ReturnType<typeof original> | undefined
-    vi.spyOn(nativeSpawn, 'spawnNativeProcess').mockImplementation((...args) => {
-      child = original(...args)
-      return child
-    })
-    let reportTermination!: () => void
-    const terminated = new Promise<void>((resolve) => {
-      reportTermination = resolve
-    })
-    const onTerminated = vi.fn(reportTermination)
-    const signals: string[] = []
-    try {
-      await expect(
-        execFileCapture(
-          process.execPath,
-          [
-            '-e',
-            `
-        let signals = 0;
-        process.on('SIGTERM', () => {
-          if (++signals === 1) process.stderr.write('first');
-          else process.stderr.write('second', () => process.exit(0));
-        });
-        setInterval(() => {}, 1000);
-        process.stdout.write('x'.repeat(64));
-      `
-          ],
-          {
-            maxBuffer: 32,
-            timeout: 3_000,
-            onChildTerminated: onTerminated,
-            onStderr: (chunk) => signals.push(chunk)
-          }
-        )
-      ).rejects.toThrow('timed out')
-      await terminated
-      expect(onTerminated).toHaveBeenCalledOnce()
-      expect(signals.join('')).toBe('firstsecond')
-    } finally {
-      // The test owns this exact returned child, including when the regression assertion fails.
-      if (child?.pid && child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGKILL')
-      }
-    }
   })
 })

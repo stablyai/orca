@@ -39,7 +39,13 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!normalizeBrowserNavigationUrl(url)) {
         // Initial-src validation does not cover later navigations.
         event.preventDefault()
-        this.requestExternalAppLaunch(guest, url, () => initiatingFrameUrl(event.initiator))
+        this.requestExternalAppLaunch(
+          guest,
+          url,
+          () => initiatingFrameUrl(event.initiator),
+          // A null initiator is a browser-started load, e.g. a typed URL that redirects.
+          Boolean(event.initiator)
+        )
         return false
       }
       return true

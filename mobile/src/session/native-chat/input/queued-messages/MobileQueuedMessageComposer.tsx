@@ -58,15 +58,17 @@ export function MobileQueuedMessageComposer({
   const reported = context?.structured?.catalog.reported
   // As on desktop, a host-set goal is an action, not text a queued message can hold.
   const hostSetsGoals = context?.structured?.threadGoal?.changes === 'host'
+  const opensMcpPanel = context?.structured?.mcpPanel != null
   const acceptsText = useMemo(
     () =>
       prepareQueuedMessageEditText(
         agent,
         reported,
         hostSetsGoals,
-        context?.interactionModeSupported === true
+        context?.interactionModeSupported === true,
+        opensMcpPanel
       ),
-    [agent, reported, hostSetsGoals, context?.interactionModeSupported]
+    [agent, reported, hostSetsGoals, context?.interactionModeSupported, opensMcpPanel]
   )
   const refuseCommand = (text: string): boolean => {
     if (acceptsText(text)) {

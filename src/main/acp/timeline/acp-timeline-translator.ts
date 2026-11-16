@@ -6,6 +6,7 @@ import {
   type AcpSessionEvent
 } from '../protocol/acp-session-events'
 import { AcpContextTimeline } from './acp-context-usage'
+import { AcpThreadGoalTimeline } from './acp-thread-goal-timeline'
 import { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import {
   GENERIC_ACP_DIALECT,
@@ -16,6 +17,7 @@ import type { AcpAgentError } from '../transport/acp-errors'
 import { acpTurnEndEvents, AcpPromptTurns } from './acp-prompt-turns'
 
 import { translateAcpRequest } from '../requests/acp-timeline-requests'
+import { AcpUrlElicitations } from '../requests/acp-url-elicitation'
 import { ACP_SUBSTANTIVE_UPDATES, acpSessionUpdate } from './acp-session-update'
 import { AcpSubagents } from './acp-subagents'
 import { AcpChildSessions } from './acp-child-sessions'
@@ -45,9 +47,11 @@ export class AcpTimelineTranslator {
   readonly children: AcpChildSessions
   private readonly ownership: AcpTimelineOwnership
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
+  readonly elicitations = new AcpUrlElicitations()
   private readonly failures: AcpTurnFailures
   private loading = false
   private readonly context = new AcpContextTimeline()
+  private readonly threadGoal = new AcpThreadGoalTimeline()
   protected activeTurn?: string
 
   constructor(private readonly options: AcpTimelineTranslatorOptions) {
@@ -163,6 +167,9 @@ export class AcpTimelineTranslator {
     if (this.ownership.disposed) {
       return []
     }
+    if (this.elicitations.completes(method, this.dialect)) {
+      return this.elicitations.complete(params, at)
+    }
     const extension = this.dialect.notification?.(method, params, at)
     const open = this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn
     const child = this.children.notification(method, params, extension, this.loading, open, at)
@@ -223,6 +230,7 @@ export class AcpTimelineTranslator {
     if (extension?.usage) {
       events.push(...this.context.update(extension.usage, join))
     }
+    events.push(...this.threadGoal.update(extension?.threadGoal, join, at))
     if (settledCommand || this.prompts.absorbCompaction(owner.turn, extension, update)) {
       return events
     }
@@ -268,11 +276,13 @@ export class AcpTimelineTranslator {
     params: unknown,
     id: string | number
   ): ReturnType<typeof translateAcpRequest> {
-    return translateAcpRequest(method, params, id, {
-      sessionId: this.options.sessionId,
-      dialect: this.dialect,
-      tools: this.ownership.tools
-    })
+    return this.elicitations.track(
+      translateAcpRequest(method, params, id, {
+        sessionId: this.options.sessionId,
+        dialect: this.dialect,
+        tools: this.ownership.tools
+      })
+    )
   }
 
   // Write failure reasons before ending the turn so their rows join it.

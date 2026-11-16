@@ -26,7 +26,7 @@ import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electro
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-lifecycle/identity/app-icon'
-import { normalizeUiLanguage } from '../../shared/ui-language'
+import { normalizeUiLanguage } from '../../shared/i18n/ui-language'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import { registerCustomAppIconHandlers } from './custom-app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'

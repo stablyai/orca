@@ -1,7 +1,7 @@
 import { completePluginAppThemeTokens } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginThemeTokenColorRule } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from '../../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
-import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
+import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { resolveTerminalPalette } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import type { TerminalPaletteSettings as TerminalAppThemeSettings } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { hashThemeContent } from '../../lib/editor/appearance/plugin-monaco-theme'

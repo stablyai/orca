@@ -59,6 +59,11 @@ export function registerCodexAccountHandlers(
     codexAccounts.removeAccount(args.accountId)
   )
   ipcMain.handle(
+    'codexAccounts:rename',
+    (_event, args: { accountId: string; displayName: string | null }) =>
+      codexAccounts.renameAccount(args.accountId, args.displayName)
+  )
+  ipcMain.handle(
     'codexAccounts:select',
     (_event, args: { accountId: string | null } & CodexAccountSelectionTarget) => {
       if (!args.runtime) {
