@@ -1,11 +1,11 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { SetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { OrcaHookTrustPrompt } from '../../../components/hook-trust/OrcaHookTrustDrawer'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { MobileComposerCreateSelection } from '../../source-selection/mobile-composer-source-types'
 import type { NewWorktreeDrawerView } from '../modal/use-new-worktree-drawer-navigation'
-import { runReviewedCreatedSetup } from '../created-worktree-setup-review'
+import { createdSetupRunFailed, runReviewedCreatedSetup } from '../created-worktree-setup-review'
 import {
   approvedCreateSetup,
   persistSetupHookTrustApproval,
@@ -80,6 +80,12 @@ export function useNewWorkspaceSetupTrust(args: {
         selection: prompt.selection
       })
     } catch (error) {
+      if (prompt.created) {
+        // The workspace exists; open it saying its setup didn't start.
+        setPrompt(null)
+        args.finishCreated(prompt.created, createdSetupRunFailed())
+        return
+      }
       args.setError(error instanceof Error ? error.message : 'Failed to trust setup script.')
     } finally {
       inFlightRef.current = false

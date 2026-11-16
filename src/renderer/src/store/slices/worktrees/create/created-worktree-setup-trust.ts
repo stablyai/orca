@@ -73,8 +73,6 @@ function reviewCreatedWorktreeSetup(
     if (outcome.status === 'mismatch') {
       // The file changed again after the review; offer the new content rather than run the old.
       showSetupSkippedToast(review, outcome.setupTrustMismatch.scriptContent, 'changed-again')
-    } else if (outcome.status === 'spawn_failed') {
-      toast.error(translate('worktree.setupTrust.runFailed', 'Could not start setup.'))
     } else if (outcome.status === 'unsupported') {
       toast.warning(
         translate(

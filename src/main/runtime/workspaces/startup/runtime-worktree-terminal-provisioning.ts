@@ -187,9 +187,9 @@ async function dressAsDefaultTab(
 export async function provisionWorktreeTerminals(
   host: WorktreeTerminalProvisioningHost,
   args: WorktreeTerminalProvisioningArgs
-): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; failed?: true }> {
   if (!host.canSpawn()) {
-    return { setupSpawned: false, setupTerminalHandle: null }
+    return { setupSpawned: false, setupTerminalHandle: null, failed: true }
   }
   const surfacing: TerminalSurfacing = {
     ...(args.surfaceOwner === false ? { surfaceOwner: false as const } : {}),
@@ -198,6 +198,7 @@ export async function provisionWorktreeTerminals(
   let setupSpawned = false
   let setupTerminalHandle: string | null = null
   let shellSkippedForSetup = false
+  let failed = false
   try {
     const setupOnly = args.setup !== undefined && args.setupOnly === true
     const defaultHandles = await createWorktreeDefaultTabTerminals(
@@ -259,6 +260,7 @@ export async function provisionWorktreeTerminals(
       }
     }
   } catch (error) {
+    failed = true
     const message = error instanceof Error ? error.message : String(error)
     console.warn(
       `[worktree-create] Failed to create setup/default terminals for ${args.worktreePath}: ${message}`
@@ -283,5 +285,5 @@ export async function provisionWorktreeTerminals(
         })
     }
   }
-  return { setupSpawned, setupTerminalHandle }
+  return { setupSpawned, setupTerminalHandle, ...(failed ? { failed: true as const } : {}) }
 }

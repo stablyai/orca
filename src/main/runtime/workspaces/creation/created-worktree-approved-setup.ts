@@ -32,7 +32,7 @@ type ApprovedSetupRuntime = {
   requireStore: () => Pick<RuntimeStore, 'getRepo' | 'getSettings' | 'getProjectGroups'>
   provisionManagedWorktreeTerminals: (
     args: WorktreeTerminalProvisioningArgs
-  ) => Promise<{ setupSpawned: boolean }>
+  ) => Promise<{ failed?: true }>
 }
 
 /**
@@ -94,5 +94,9 @@ export async function runApprovedCreatedWorktreeSetup(
     ),
     ...options
   })
-  return setup && !provisioned.setupSpawned ? { status: 'spawn_failed' } : { status: 'started' }
+  if (provisioned.failed) {
+    // An error reaches every client's existing failure handling; a new status would be ignored by older ones.
+    throw new Error('Could not start the approved setup commands in this workspace.')
+  }
+  return { status: 'started' }
 }

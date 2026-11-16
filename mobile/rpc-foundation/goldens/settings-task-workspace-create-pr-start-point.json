@@ -4,13 +4,6 @@
   "family": "settings.task-workspace-create",
   "namedDeltas": [],
   "values": {
-    "04c22d25fdc9": {
-      "name": "creatingKey",
-      "ordinal": 17,
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "05adb87d6ce7": {
       "name": "worktree.create#1",
       "ordinal": 10,
@@ -55,13 +48,6 @@
             }
           }
         }
-      }
-    },
-    "068ba5a6975a": {
-      "name": "creatingKey",
-      "ordinal": 15,
-      "value": {
-        "$rpc": "null"
       }
     },
     "309131e40068": {
@@ -139,6 +125,13 @@
         "disabledTuiAgents": ["claude"]
       }
     },
+    "7fd7aa8fcc86": {
+      "name": "creatingKey",
+      "ordinal": 16,
+      "value": {
+        "$rpc": "null"
+      }
+    },
     "8ac371cf7234": {
       "name": "settings.get#1",
       "ordinal": 3,
@@ -184,11 +177,6 @@
       "name": "settings.get#1",
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-    },
-    "ace4bbd03dac": {
-      "name": "navigation",
-      "ordinal": 16,
-      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone"
     },
     "b097945e1fcc": {
       "name": "repo.hooks#1",
@@ -274,6 +262,11 @@
           }
         }
       }
+    },
+    "d1326f406695": {
+      "name": "navigation",
+      "ordinal": 15,
+      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone"
     },
     "e32768eed86f": {
       "name": "worktree.resolvePrBase#1",
@@ -385,9 +378,8 @@
             "fbf2ffe3d253",
             "368fc7089e62",
             "309131e40068",
-            "068ba5a6975a",
-            "ace4bbd03dac",
-            "04c22d25fdc9"
+            "d1326f406695",
+            "7fd7aa8fcc86"
           ]
         }
       }

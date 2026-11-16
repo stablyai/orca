@@ -46,8 +46,8 @@ export type SetupTrustMismatch = { contentHash: string; scriptContent: string }
 export type RunApprovedWorktreeSetupArgs = { worktreeId: string; approvedSetupHash: string }
 
 export type RunApprovedWorktreeSetupResult =
-  // `unsupported`: the client's host predates the operation; `spawn_failed`: setup's terminal didn't start.
-  | { status: 'started' | 'not_configured' | 'unsupported' | 'spawn_failed' }
+  // `unsupported`: the client's host predates the operation.
+  | { status: 'started' | 'not_configured' | 'unsupported' }
   // The content changed again since the prompt; nothing ran.
   | { status: 'mismatch'; setupTrustMismatch: SetupTrustMismatch }
 

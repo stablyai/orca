@@ -12,7 +12,10 @@ import { styles } from '../mobile-tasks-legacy-styles'
 import { translate } from '../../i18n/mobile-i18n'
 import { OrcaHookTrustDrawer } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import type { CreateSetupApproval } from '../../new-workspace/creation/setup-hook-trust'
-import { runReviewedCreatedSetup } from '../../new-workspace/creation/created-worktree-setup-review'
+import {
+  createdSetupRunFailed,
+  runReviewedCreatedSetup
+} from '../../new-workspace/creation/created-worktree-setup-review'
 import type { OrcaYamlTrustPrompt } from '../mobile-tasks-project-workspace-types'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
@@ -248,11 +251,15 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
         if (prompt.created) {
           notice = client
             ? await runReviewedCreatedSetup(client, prompt.created.worktreeId, prompt.contentHash)
-            : undefined
+            : createdSetupRunFailed()
         } else if (setupApproval) {
           await createWithSetup(prompt, setupApproval)
         }
       } catch (err) {
+        if (prompt.created) {
+          notice = createdSetupRunFailed()
+          return
+        }
         setError(
           err instanceof Error
             ? err.message

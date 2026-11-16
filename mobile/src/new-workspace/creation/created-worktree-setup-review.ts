@@ -1,4 +1,4 @@
-import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY
@@ -80,19 +80,17 @@ export async function runReviewedCreatedSetup(
     if (!reply.ok && isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
       return unsupported
     }
-    const outcome = worktreeRunApprovedSetupRun.interpret(reply).status
-    if (outcome === 'mismatch') {
-      return translate(
-        'newWorkspace.createdSetupReview.changedAgain',
-        "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it."
-      )
-    }
-    return outcome === 'spawn_failed' ? runFailed() : undefined
+    return worktreeRunApprovedSetupRun.interpret(reply).status === 'mismatch'
+      ? translate(
+          'newWorkspace.createdSetupReview.changedAgain',
+          "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it."
+        )
+      : undefined
   } catch {
-    return runFailed()
+    return createdSetupRunFailed()
   }
 }
 
-function runFailed(): string {
+export function createdSetupRunFailed(): string {
   return translate('newWorkspace.createdSetupReview.runFailed', 'Could not start setup.')
 }

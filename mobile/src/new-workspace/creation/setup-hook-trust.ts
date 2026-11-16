@@ -7,7 +7,7 @@ import {
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed
 } from '../../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
-import { hashOrcaHookContent } from '../../../../src/shared/hashing/orca-hook-content-hash'
+import { EMPTY_ORCA_HOOK_CONTENT_HASH } from '../../../../src/shared/hashing/orca-hook-content-hash'
 import type { SetupHooksCreateSource } from '../../../../src/shared/worktree/setup-hooks-create-source'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
@@ -84,7 +84,7 @@ export async function resolveCreateSetupApproval(args: {
     // Hosts that didn't read hooks here (SSH, another host's folder) omit setupConfig and can't recover it.
     return {
       approved:
-        reply.setupConfig === undefined ? {} : { approvedSetupHash: hashOrcaHookContent('') }
+        reply.setupConfig === undefined ? {} : { approvedSetupHash: EMPTY_ORCA_HOOK_CONTENT_HASH }
     }
   }
   if (isOrcaHookContentApproved(args.trust, repoId, 'setup', setupTrust.contentHash)) {
