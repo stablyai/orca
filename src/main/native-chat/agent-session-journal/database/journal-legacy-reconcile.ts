@@ -18,6 +18,7 @@ import {
   type JournalLegacyForcedCopy
 } from './journal-legacy-copies'
 import {
+  JOURNAL_LEGACY_COMPARE,
   JOURNAL_LEGACY_COPY_DUE,
   metaKeys,
   readMeta,
@@ -63,7 +64,14 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { changed: !unchanged, kept, forced, baselines: [], failures: [] }
+  const pass: Pass = {
+    changed: !unchanged,
+    kept,
+    forced,
+    baselines: [],
+    compares: [],
+    failures: []
+  }
   const source = openJournalLegacySource(sourcePath)
   let complete: boolean
   try {
@@ -82,6 +90,9 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   runJournalTransaction(db, () => {
     for (const [id, revision] of pass.baselines) {
       recordJournalLegacyChatRevision(db, id, revision)
+    }
+    for (const [id, revision] of pass.compares) {
+      writeMeta(db, `${JOURNAL_LEGACY_COMPARE}${id}`, revision)
     }
     for (const failure of pass.failures) {
       recordJournalLegacyFailure(db, failure)
@@ -106,6 +117,8 @@ type Pass = {
   /** Chats that get a copy whatever their revision shows. */
   forced: ReadonlyMap<string, JournalLegacyForcedCopy>
   baselines: [string, string][]
+  /** Converted chats with no revision to compare, for the background compare. */
+  compares: [string, string][]
   failures: JournalLegacyFailure[]
 }
 
@@ -230,7 +243,7 @@ function absorbChat(
     return
   }
   if (converted) {
-    keepContinuedChat(db, id, revision, shown, adopt, pass.baselines)
+    keepContinuedChat(db, id, revision, shown, adopt, pass)
     return
   }
   // Not converted here yet: its conversion reads the current original, so it joins as itself.

@@ -18,6 +18,7 @@ import { JournalSqlConversions } from '../journal-sql-conversions'
 import { journalSqlReaderPath } from '../journal-sql-worker-bundle.test-fixture'
 import { applyJournalSqlMaintenance } from '../journal-sql-maintenance'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
+import { readJournalSqlDatabase } from '../journal-sql-database-read'
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -425,4 +426,45 @@ it('keeps a fresh copy when another build readied a copy before its history conv
   expect(copies(again.db)).toHaveLength(2)
   expect(await again.convert(kept!)).toBe('epoch')
   expect(items(again.db, kept!)).toContain('older-turn')
+})
+
+it('leaves a copy whose history failed to convert to an open, not to every idle pass', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'converted', rows)
+  const first = await upgrade(root)
+  expect(await first.convert('converted')).toBe('epoch')
+  await first.close()
+  insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  const { db } = later
+  const [copy] = db
+    .prepare("SELECT session_id FROM agent_session_records WHERE session_id!='converted'")
+    .all()
+    .map((row) => String(row.session_id))
+  const idle = () => {
+    const page = readJournalSqlDatabase(db, { kind: 'sessions', after: null })
+    return page.kind === 'sessions' ? page.sessionIds : []
+  }
+  expect(idle()).toContain(copy)
+
+  for (const sessionId of [copy!, 'converted']) {
+    runJournalTransaction(db, () =>
+      applyJournalSqlMaintenance(db, { kind: 'legacy-copy-failed', sessionId, error: 'damaged' })
+    )
+  }
+  expect(idle()).not.toContain(copy)
+  expect(idle()).toContain('converted')
+
+  expect(await later.convert(copy!)).toBe('epoch')
+  expect(items(db, copy!)).toContain('older-turn')
+  expect(
+    db
+      .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      .get(`journal.legacy-failed:${copy}`)
+  ).toBeUndefined()
 })

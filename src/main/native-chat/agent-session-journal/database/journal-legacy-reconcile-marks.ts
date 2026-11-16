@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
 import {
   journalLegacyCopySourceKey,
+  journalLegacyFailureKey,
   journalLegacyPendingCopyKey,
   recordJournalLegacyChatRevision
 } from './journal-legacy-source'
@@ -10,8 +11,6 @@ import {
 export const JOURNAL_LEGACY_COMPARE = 'journal.legacy-compare:'
 /** Compared and found to hold turns this file lacks; the next open keeps them as a copy. */
 export const JOURNAL_LEGACY_COPY_DUE = 'journal.legacy-copy-due:'
-/** A chat that could not be kept, with its error; absorbed until the original moves again. */
-export const JOURNAL_LEGACY_FAILED = 'journal.legacy-failed:'
 
 export type JournalLegacyFailure = {
   sessionId: string
@@ -25,16 +24,19 @@ export function recordJournalLegacyFailure(
   failure: JournalLegacyFailure
 ): void {
   console.warn('[agent-session-journal] keeping an older Orca chat failed', failure.error)
-  const message = failure.error instanceof Error ? failure.error.message : String(failure.error)
-  writeMeta(
-    db,
-    `${JOURNAL_LEGACY_FAILED}${failure.sessionId}`,
-    JSON.stringify({ revision: failure.revision ?? null, error: message.slice(0, 500) })
-  )
   if (failure.revision !== undefined) {
     recordJournalLegacyChatRevision(db, failure.sessionId, failure.revision)
   }
+  writeMeta(
+    db,
+    journalLegacyFailureKey(failure.sessionId),
+    JSON.stringify({ revision: failure.revision ?? null, error: failureMessage(failure.error) })
+  )
   deleteMeta(db, `${JOURNAL_LEGACY_COPY_DUE}${failure.sessionId}`)
+}
+
+export function failureMessage(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 500)
 }
 
 export function readMeta(db: Database.Database, key: string): string | undefined {

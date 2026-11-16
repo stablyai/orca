@@ -2,6 +2,7 @@ import type Database from '../../../sqlite/sync-database'
 import { runJournalTransaction } from './journal-database'
 import {
   journalLegacyCopySourceKey,
+  journalLegacyFailureKey,
   journalLegacyPendingCopyKey,
   recordJournalLegacyChatRevision,
   settleJournalLegacyCopy
@@ -10,7 +11,6 @@ import {
   continuedCopyId,
   deleteMeta,
   holdsPendingCopy,
-  JOURNAL_LEGACY_COMPARE,
   JOURNAL_LEGACY_COPY_DUE,
   revisionHoldsHistory,
   writeMeta
@@ -36,17 +36,32 @@ export function keepContinuedChat(
   revision: string,
   shown: string | undefined,
   adopt: Adopt,
-  baselines: [string, string][]
+  pass: { baselines: [string, string][]; compares: [string, string][] }
 ): void {
   if (shown === undefined && revisionHoldsHistory(revision)) {
-    writeMeta(db, `${JOURNAL_LEGACY_COMPARE}${id}`, revision)
+    pass.compares.push([id, revision])
     return
   }
   if (holdsPendingCopy(db, id)) {
-    baselines.push([id, revision])
+    pass.baselines.push([id, revision])
     return
   }
   runJournalTransaction(db, () => keepCopy(db, id, revision, adopt))
+}
+
+/** Background conversion skips a copy whose history failed to convert; opening it still retries. */
+export function recordJournalLegacyCopyFailure(
+  db: Database.Database,
+  copyId: string,
+  error: string
+): void {
+  if (
+    db
+      .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      .get(journalLegacyCopySourceKey(copyId))
+  ) {
+    writeMeta(db, journalLegacyFailureKey(copyId), JSON.stringify({ revision: null, error }))
+  }
 }
 
 /** In the caller's transaction. */

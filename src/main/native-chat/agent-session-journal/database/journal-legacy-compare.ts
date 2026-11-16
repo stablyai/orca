@@ -28,6 +28,9 @@ export function pendingJournalLegacyCompares(
     }))
 }
 
+/** The most original rows one background step restores to compare. */
+const JOURNAL_LEGACY_COMPARE_ROWS = 20_000
+
 /**
  * Whether this file already holds every item of the original chat. Runs on a reader, one chat at
  * a time, and stops at the first item this chat never held.
@@ -37,6 +40,15 @@ export function compareJournalLegacyChat(
   db: Database.Database,
   sessionId: string
 ): { revision: string; held: boolean } {
+  // Too long to restore in one bounded step: keep its turns as a copy rather than compare.
+  if (
+    source
+      .prepare(`SELECT 1 FROM journal_rows WHERE session_id=?1
+        AND epoch=(SELECT epoch FROM journal_sessions WHERE session_id=?1) LIMIT 1 OFFSET ?2`)
+      .get(sessionId, JOURNAL_LEGACY_COMPARE_ROWS)
+  ) {
+    return { revision: journalLegacyChatRevision(source, sessionId) ?? 'null', held: false }
+  }
   const imported = prepareJournalDomainImport(source, sessionId)
   if (!imported) {
     return { revision: journalLegacyChatRevision(source, sessionId) ?? 'null', held: true }

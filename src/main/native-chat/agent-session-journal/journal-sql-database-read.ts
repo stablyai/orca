@@ -9,6 +9,10 @@ import type { AgentSessionStoreState } from '../../runtime/agent-session/records
 import { readCommandReceipt } from './writing/command-receipt-table'
 import type { CommandReceiptScope } from './writing/command-receipt-schema'
 import {
+  journalLegacyCopySourceKey,
+  journalLegacyFailureKey
+} from './database/journal-legacy-source'
+import {
   pendingJournalLegacyCompares,
   type JournalLegacyCompare
 } from './database/journal-legacy-compare'
@@ -16,6 +20,12 @@ import {
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
 }
+
+/** Background conversion leaves a copy whose history failed to convert to an open. */
+const UNFAILED_COPY = `NOT EXISTS (SELECT 1 FROM agent_session_store_meta f
+  WHERE f.key='${journalLegacyFailureKey('')}'||c.session_id
+    AND EXISTS (SELECT 1 FROM agent_session_store_meta m
+      WHERE m.key='${journalLegacyCopySourceKey('')}'||c.session_id))`
 
 export type JournalSqlDatabaseRead =
   | { kind: 'pr-watch'; operation: PRWatchRead }
@@ -101,11 +111,13 @@ function read(
       const rows =
         operation.after === null
           ? db
-              .prepare('SELECT session_id FROM journal_chat_state ORDER BY session_id LIMIT 32')
+              .prepare(
+                `SELECT session_id FROM journal_chat_state c WHERE ${UNFAILED_COPY} ORDER BY session_id LIMIT 32`
+              )
               .all()
           : db
-              .prepare(`SELECT session_id FROM journal_chat_state
-                WHERE session_id>? ORDER BY session_id LIMIT 32`)
+              .prepare(`SELECT session_id FROM journal_chat_state c
+                WHERE session_id>? AND ${UNFAILED_COPY} ORDER BY session_id LIMIT 32`)
               .all(operation.after)
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
     }

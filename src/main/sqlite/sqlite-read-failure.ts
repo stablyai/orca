@@ -53,13 +53,14 @@ const STORAGE_ERRCODES = new Set([
   SQLITE_NOMEM,
   SQLITE_READONLY,
   SQLITE_IOERR,
-  SQLITE_CORRUPT,
   SQLITE_FULL,
-  SQLITE_CANTOPEN,
-  SQLITE_NOTADB
+  SQLITE_CANTOPEN
 ])
 
-/** The database or its disk failed, not the row being written: every other row would fail too. */
+/**
+ * The database or its disk failed, not the row being written: every other row would fail too.
+ * Corruption is the row's: a damaged page fails only the rows on it.
+ */
 export function isSqliteStorageFailure(error: unknown): boolean {
   const errcode = primaryErrcode(error)
   return (errcode !== null && STORAGE_ERRCODES.has(errcode)) || isTransientSqliteContention(error)

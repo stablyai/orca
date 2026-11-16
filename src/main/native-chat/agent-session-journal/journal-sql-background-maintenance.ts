@@ -5,6 +5,7 @@ import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalSqlMaintenance } from './journal-sql-maintenance'
 import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares'
+import { isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
@@ -271,6 +272,12 @@ export class JournalSqlBackgroundMaintenance {
       (error) => {
         complete = true
         this.report(error, sessionId)
+        if (!isSqliteStorageFailure(error)) {
+          const message = error instanceof Error ? error.message : String(error)
+          void this.writer
+            .maintain({ kind: 'legacy-copy-failed', sessionId, error: message.slice(0, 500) })
+            .catch((failure: unknown) => this.report(failure, sessionId))
+        }
       }
     )
     while (!complete && !this.stopped.signal.aborted) {

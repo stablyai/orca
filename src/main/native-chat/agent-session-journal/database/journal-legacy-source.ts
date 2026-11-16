@@ -90,6 +90,7 @@ export function journalLegacyChatRevisionKey(sessionId: string): string {
   return `journal.legacy-revision:${sessionId}`
 }
 
+/** Absorbing a revision clears any failure an earlier one recorded. */
 export function recordJournalLegacyChatRevision(
   db: Database.Database,
   sessionId: string,
@@ -99,6 +100,14 @@ export function recordJournalLegacyChatRevision(
     journalLegacyChatRevisionKey(sessionId),
     revision
   )
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(
+    journalLegacyFailureKey(sessionId)
+  )
+}
+
+/** A chat, or a copy's history, that could not be kept, with its error; not retried by itself. */
+export function journalLegacyFailureKey(sessionId: string): string {
+  return `journal.legacy-failed:${sessionId}`
 }
 
 /** A copy kept for an original chat an older Orca continued converts its history from that chat. */
@@ -126,7 +135,10 @@ export function settleJournalLegacyCopy(db: Database.Database, copyId: string): 
   if (original === undefined) {
     return
   }
-  db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(key)
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key IN (?,?)').run(
+    key,
+    journalLegacyFailureKey(copyId)
+  )
   db.prepare('DELETE FROM agent_session_store_meta WHERE key=? AND value=?').run(
     journalLegacyPendingCopyKey(String(original.value)),
     copyId
