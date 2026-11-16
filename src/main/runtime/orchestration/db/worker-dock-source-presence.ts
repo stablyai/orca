@@ -122,7 +122,9 @@ export class WorkerDockSourcePresence {
 
   rememberSnapshot(source: string, snapshot: WorkerDockSnapshot, providerFailures: boolean): void {
     const first = !this.seeded.has(source)
-    this.seeded.add(source)
+    if (first) {
+      this.seeded.add(source)
+    }
     const open = snapshot.identities.length > 0
     const previous = this.values.get(source)
     if (open || snapshot.results.length || previous) {
@@ -130,8 +132,8 @@ export class WorkerDockSourcePresence {
         previous?.open === open
           ? previous
           : { revision: `${this.epoch}:${this.version(source)}`, open }
-      this.values.set(source, next)
       if (next !== previous) {
+        this.values.set(source, next)
         this.changed.add(source)
         this.listener?.()
       }

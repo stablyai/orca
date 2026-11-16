@@ -22,7 +22,6 @@ export function retainProviderFailures(
         dispatchId: id,
         source,
         kind: child.kind,
-        providerId,
         name: child.name ?? child.agentType ?? child.kind,
         title: child.description ?? child.name ?? providerId,
         model: child.model ?? null,

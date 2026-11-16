@@ -18,7 +18,6 @@ export const WorkerDockState = z.enum([
 ])
 export const WorkerDockEntry = z.object({
   kind: z.enum(['worker', 'agent', 'command', 'workflow', 'monitor', 'unknown']).default('worker'),
-  providerId: z.string().optional(),
   id: z.string(),
   dispatchId: z.string(),
   source: z.string(),

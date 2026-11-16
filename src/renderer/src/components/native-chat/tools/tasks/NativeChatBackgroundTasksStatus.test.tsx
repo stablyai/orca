@@ -44,7 +44,7 @@ it('opens a command through its command route and retains capability-gated untar
   expect(stop).toHaveBeenCalledWith()
 })
 
-it('opens a retained agent invocation as captured details instead of a reused provider view', () => {
+it('opens captured invocation details for a retained provider failure', () => {
   const details = vi.fn()
   const agent = vi.fn()
   const row: WorkerDockRowView = {
@@ -52,7 +52,6 @@ it('opens a retained agent invocation as captured details instead of a reused pr
     dispatchId: 'invocation-1',
     source: 'source',
     kind: 'agent',
-    providerId: 'shell-7',
     name: 'Old agent',
     title: 'Verify the journal',
     model: null,

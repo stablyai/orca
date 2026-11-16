@@ -82,7 +82,6 @@ it.each(['agent', 'command'] as const)(
       const failure = readWorkerDock(db, { party, direction: 'around' }).rows[0]
       expect(failure).toMatchObject({
         kind,
-        providerId: 'shell-7',
         state: 'failed',
         reason: 'Verification exited with code 1.'
       })
