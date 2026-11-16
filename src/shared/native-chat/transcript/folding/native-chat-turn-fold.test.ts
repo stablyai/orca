@@ -175,11 +175,10 @@ describe('replies a settled turn keeps visible', () => {
   })
 
   it('judges back-to-back replies within their own turn when another turn’s rows interleave', () => {
-    const late = message('late', 'assistant', 'Other turn.')
     const { answers } = answersAndFolded(
-      [PROMPT, PREAMBLE, late, ANSWER],
+      [PROMPT, PREAMBLE, WORK, ANSWER],
       ['turn-1', 'turn-1', 'turn-2', 'turn-1']
     )
-    expect(answers).toEqual([1, 2, 3])
+    expect(answers).toEqual([1, 3])
   })
 })
