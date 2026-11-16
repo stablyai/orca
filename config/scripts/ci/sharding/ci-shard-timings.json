@@ -3536,7 +3536,6 @@
       "src/renderer/src/components/right-sidebar/source-control/commit/rename-mutation-paths.test.ts": 49,
       "src/renderer/src/components/right-sidebar/source-control/commit/source-control-entry-failure-toast.test.ts": 486,
       "src/renderer/src/components/right-sidebar/source-control/listing/open-uncommitted-entry.test.ts": 900,
-      "src/renderer/src/components/right-sidebar/source-control/review/create-pr-intent-operation-target.test.ts": 1735,
       "src/renderer/src/components/right-sidebar/source-control/sync/use-source-control-git-history.test.tsx": 1951,
       "src/renderer/src/components/right-sidebar/file-explorer/mutations/useFileDeletion.save-refusal.test.tsx": 840,
       "src/renderer/src/components/right-sidebar/file-explorer/mutations/useFileDeletion.trash-failure.test.tsx": 774,
