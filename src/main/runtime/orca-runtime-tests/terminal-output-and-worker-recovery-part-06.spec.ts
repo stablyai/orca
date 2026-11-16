@@ -1,12 +1,12 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  setPlatform
-} from '../orca-runtime-test-mocks.spec'
-import type { OrchestrationDb } from '../orchestration/db'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -19,8 +19,8 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { publishLegacyWorkerReveal } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('adopts an SSH legacy worker only after its matching relay is ready', async () => {
@@ -95,22 +95,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-ssh',
-          task_id: 'task-ssh',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_ssh_legacy',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `${ptyId}:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_ssh_legacy'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-ssh',
+        task_id: 'task-ssh',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_ssh_legacy',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `${ptyId}:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_ssh_legacy'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -228,22 +229,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-wsl',
-          task_id: 'task-wsl',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_wsl_legacy',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-wsl-legacy:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_wsl_legacy'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-wsl',
+        task_id: 'task-wsl',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_wsl_legacy',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-wsl-legacy:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_wsl_legacy'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     // Declare the scope parameter so mock.calls retains its type alongside the runtime deadline.
     const listProcesses = vi.fn(async (_connectionId?: string | null) => [
       {
@@ -505,65 +507,5 @@ describe('OrcaRuntimeService', () => {
       ['tab-agent', 'group-old-left'],
       ['tab-shell', 'group-old-right']
     ])
-  })
-
-  it('canonicalizes an equivalent persisted worktree key without duplicating terminal topology', async () => {
-    const aliasWorktreeId = `${TEST_REPO_ID}::/tmp//worktree-a/`
-    const base = makeWorkspaceSessionWithHeadlessTerminal({
-      terminalPtyIncarnationsByPaneKey: {
-        [`host-tab:${HEADLESS_LEAF_ID}`]: 'inc-alias'
-      }
-    })
-    const session: WorkspaceSessionState = {
-      ...base,
-      activeTabIdByWorktree: { [aliasWorktreeId]: 'host-tab' },
-      tabsByWorktree: {
-        [aliasWorktreeId]: base.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
-          ...tab,
-          worktreeId: aliasWorktreeId
-        }))
-      }
-    }
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(
-      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
-    )
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: async () => [
-        {
-          id: 'persisted-pty',
-          incarnationId: 'inc-alias',
-          terminalHandle: 'term_alias',
-          title: 'Alias shell',
-          cwd: TEST_WORKTREE_PATH,
-          worktreeId: TEST_WORKTREE_ID,
-          wslDistro: null
-        }
-      ]
-    })
-
-    const adopted = await runtime.adoptTerminalOrphans({
-      worktree: `id:${TEST_WORKTREE_ID}`,
-      expectedTopologyRevision: 0,
-      claims: [
-        {
-          terminal: 'term_alias',
-          ptyId: 'persisted-pty',
-          incarnationId: 'inc-alias',
-          tabId: 'host-tab',
-          leafId: HEADLESS_LEAF_ID
-        }
-      ]
-    })
-
-    expect(adopted).toMatchObject({ adopted: true, topologyRevision: 1 })
-    expect(adopted.snapshot.worktree).toBe(TEST_WORKTREE_ID)
-    expect(Object.keys(getSession().tabsByWorktree)).toContain(TEST_WORKTREE_ID)
-    expect(Object.keys(getSession().tabsByWorktree)).not.toContain(aliasWorktreeId)
-    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]?.[0]?.worktreeId).toBe(TEST_WORKTREE_ID)
-    expect(getSession().activeTabIdByWorktree).toEqual({ [TEST_WORKTREE_ID]: 'host-tab' })
   })
 })

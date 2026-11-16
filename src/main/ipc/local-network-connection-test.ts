@@ -1,10 +1,10 @@
 import { execFile, type ExecFileException, type ExecFileOptions } from 'node:child_process'
 import { isIP } from 'node:net'
-import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
+import { classifyRemotePairingHostname } from '../../shared/remote-runtime/pairing/remote-pairing-address'
 import type {
   LocalNetworkConnectionTestFailure,
   LocalNetworkConnectionTestResult
-} from '../../shared/developer-permissions-types'
+} from '../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 const CONNECT_TIMEOUT_MS = 4_000
 const CHILD_TIMEOUT_MS = CONNECT_TIMEOUT_MS + 1_000

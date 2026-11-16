@@ -1,5 +1,6 @@
+import { startRendererStatusPublication } from '../runtime/agent-status/renderer-status-publication'
 import { useEffect } from 'react'
-import { getSystemPrefersDarkSnapshot } from '../components/terminal-pane/use-system-prefers-dark'
+import { getSystemPrefersDarkSnapshot } from '../hooks/theme/use-system-prefers-dark'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
@@ -9,8 +10,9 @@ import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
-} from '../runtime/sync-runtime-graph'
+} from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
+import { isPairedWebClientWindow } from './chrome/desktop-window-chrome'
 
 /** Keeps the mobile runtime graph republished as the store's session-visible state changes. */
 export function useRuntimeGraphSync(): void {
@@ -59,9 +61,10 @@ export function useRuntimeGraphSync(): void {
         // Publish project-catalog changes to paired phones.
         if (
           state.repos !== previousState.repos ||
-          state.endpointProjects !== previousState.endpointProjects ||
-          state.endpointProjectHostSetups !== previousState.endpointProjectHostSetups ||
-          state.projectOrderBy !== previousState.projectOrderBy
+          state.projects !== previousState.projects ||
+          state.projectHostSetups !== previousState.projectHostSetups ||
+          state.projectOrderBy !== previousState.projectOrderBy ||
+          state.projectGroups !== previousState.projectGroups
         ) {
           scheduleRuntimeGraphSync()
         }
@@ -70,8 +73,14 @@ export function useRuntimeGraphSync(): void {
   )
 
   useEffect(() => {
+    // Why: a paired web client has no local main to publish status to.
+    const stopStatusPublication =
+      workspaceSessionReady && !isPairedWebClientWindow()
+        ? startRendererStatusPublication(useAppStore, scheduleRuntimeGraphSync)
+        : undefined
     setRuntimeGraphSyncEnabled(workspaceSessionReady)
     return () => {
+      stopStatusPublication?.()
       setRuntimeGraphSyncEnabled(false)
     }
   }, [workspaceSessionReady])

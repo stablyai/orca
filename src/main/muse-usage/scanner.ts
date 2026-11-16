@@ -1,12 +1,12 @@
 import { stat } from 'node:fs/promises'
-import { attributeUsageEvent } from '../usage/usage-event-attribution'
-import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
-import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
-import type { UsageScanWorktreeRef } from '../usage/usage-provider-contract'
+import { attributeUsageEvent } from '../usage/worktree-attribution/usage-event-attribution'
+import { createUsageEventAggregation } from '../usage/rollups/usage-event-aggregation'
+import { readJsonlLinesFromOffset } from '../usage/source-input/jsonl/jsonl-line-offsets'
+import type { UsageScanWorktreeRef } from '../usage/provider-lifecycle/usage-provider-contract'
 import {
   createUsageWorktreeResolver,
   type UsageWorktreeResolver
-} from '../usage/usage-worktree-resolver'
+} from '../usage/worktree-attribution/usage-worktree-resolver'
 import { listMuseSessionLogFiles, type MuseSessionLogRef } from './muse-session-log-discovery'
 import { parseMuseUsageLine, type MuseUsageParseContext } from './muse-usage-record-parser'
 import type {

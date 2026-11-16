@@ -1,11 +1,51 @@
+import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
+import { preserveTerminalRetirementProofs } from '../terminal/surface/mobile-session-terminal-retirement-proof'
+import { stampMobileSnapshotVersion } from './mobile-session-snapshot-version'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import {
+  headlessMobileSnapshotContentUnchanged,
+  mobileSnapshotIdentityUnchanged,
+  mobileSnapshotInventoryOnlyChanged
+} from './mobile-session-snapshot-equality'
 import type { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs as MergePreservedHeadlessMobileSessionTabsMethods } from './mobile-session-preservation'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orchestration/terminal-authority/write-orchestration-pointer-pty'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
+import type {
+  RuntimeMobileSessionTabsPublication,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { withAcceptedBrowserPageInventory } from './mobile-session-inventory-base'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/projection/mobile-session-tab-merge'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
+  storeMobileSessionSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    snapshot = reconcileChatTabIdentities(snapshot, existing)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
+      // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.
+      if (
+        existing &&
+        mobileSnapshotIdentityUnchanged(existing, snapshot) &&
+        headlessMobileSnapshotContentUnchanged(existing, merged) &&
+        !headlessMobileSnapshotContentUnchanged(snapshot, merged)
+      ) {
+        return existing
+      }
+      snapshot = merged
+    }
+    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
+    const stamped = stampMobileSnapshotVersion(snapshot, existing)
+    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    return stamped
+  }
+
   protected abstract buildPreservedHeadlessMobileSessionSnapshot(
     ...args: Parameters<
       MergePreservedHeadlessMobileSessionTabsMethods['buildPreservedHeadlessMobileSessionSnapshot']
@@ -41,10 +81,11 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
   // Returns the worktrees whose stored snapshot object changed during this
   // sync, so the caller can fan out only actually-changed worktrees.
   protected syncMobileSessionTabs(
-    snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined,
+    snapshots: RuntimeMobileSessionTabsPublication[] | undefined,
     unchangedWorktreeIds?: string[],
     resyncWorktreeIds = new Set<string>(),
-    rendererGeneration?: string | null
+    rendererGeneration?: string | null,
+    publishedSnapshots?: RuntimeMobileSessionTabsPublication[]
   ): Set<string> {
     const changedWorktreeIds = new Set<string>()
     if (snapshots === undefined) {
@@ -146,22 +187,29 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       // Clear accepted pairs before republish or the still-retained accept gate rejects its frame.
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
     }
-    for (const snapshot of acceptedSnapshots) {
-      nextWorktrees.add(snapshot.worktree)
-      const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
+    for (const frame of acceptedSnapshots) {
+      nextWorktrees.add(frame.worktree)
+      const existing = this.mobileSessionTabsByWorktree.get(frame.worktree)
       // Order renderer frames by their own accepted pair; main-local version bumps must not reject newer renderer revisions.
-      const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+      const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(frame.worktree)
       if (
         accepted &&
-        accepted.publicationEpoch === snapshot.publicationEpoch &&
-        snapshot.snapshotVersion <= accepted.rendererVersion &&
+        accepted.publicationEpoch === frame.publicationEpoch &&
+        frame.snapshotVersion <= accepted.rendererVersion &&
         // Re-merge the exact accepted revision to prune stale host-only preservation; skip strictly older frames until a current resend.
         !(
           existing &&
-          snapshot.snapshotVersion === accepted.rendererVersion &&
+          frame.snapshotVersion === accepted.rendererVersion &&
           this.storedMobileSnapshotHasStalePreservedTab(existing, accepted.rendererTabIdentityKeys)
         )
       ) {
+        continue
+      }
+      const snapshot = withAcceptedBrowserPageInventory(frame, accepted)
+      if (!snapshot) {
+        // Keep the stored snapshot (and its inventory) until the full resend; the dropped pair lets that resend through.
+        resyncWorktreeIds.add(frame.worktree)
+        this.acceptedRendererMobileSnapshotByWorktree.delete(frame.worktree)
         continue
       }
       this.nativeChatDraftResolutions.reconcile(snapshot)
@@ -185,7 +233,31 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
         rendererTabCount: fencedSnapshot.tabs.length,
         rendererTabIdentityKeys: new Set(
           fencedSnapshot.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab))
-        )
+        ),
+        ...(snapshot.worktreeInstanceId !== undefined
+          ? { worktreeInstanceId: snapshot.worktreeInstanceId }
+          : {}),
+        ...(snapshot.browserPageInventory !== undefined
+          ? { browserPageInventory: snapshot.browserPageInventory }
+          : {}),
+        ...(this.authoritativeWindowId !== null &&
+        this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+        typeof rendererGeneration === 'string'
+          ? {
+              titlePublisher: {
+                windowId: this.authoritativeWindowId,
+                rendererGeneration,
+                // Main's merge can add rows the window never published or resolved.
+                surfaceIds: new Set(
+                  publishedSnapshots
+                    ?.find((published) => published.worktree === snapshot.worktree)
+                    ?.tabs.flatMap((tab) =>
+                      tab.type === 'terminal' && tab.resolvesSessionTitle ? [tab.id] : []
+                    ) ?? []
+                )
+              }
+            }
+          : {})
       })
     }
     for (const [worktreeId, existing] of Array.from(this.mobileSessionTabsByWorktree)) {
@@ -196,7 +268,8 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
           const preservedIsNoOp =
             preserved.publicationEpoch === existing.publicationEpoch &&
             preserved.tabs.length === existing.tabs.length &&
-            preserved.tabs.every((tab, index) => tab === existing.tabs[index])
+            preserved.tabs.every((tab, index) => tab === existing.tabs[index]) &&
+            headlessMobileSnapshotContentUnchanged(existing, preserved)
           if (!preservedIsNoOp) {
             this.storeMobileSessionSnapshot(worktreeId, preserved)
           }
@@ -214,7 +287,11 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       }
     }
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      if (before.get(worktreeId) !== snapshot) {
+      const previous = before.get(worktreeId)
+      if (
+        previous !== snapshot &&
+        (!previous || !mobileSnapshotInventoryOnlyChanged(previous, snapshot))
+      ) {
         changedWorktreeIds.add(worktreeId)
       }
     }

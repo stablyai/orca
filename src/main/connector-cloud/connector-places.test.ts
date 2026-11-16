@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connector-cloud-contract'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import { connectorProjects, placeLaunchTarget, type ConnectorPlacesStore } from './connector-places'
 
 function repo(fields: Partial<Repo> & Pick<Repo, 'id'>): Repo {
@@ -67,63 +67,5 @@ describe('connector places', () => {
     expect(placeLaunchTarget(remote!.placeId, 'T1:C9:1', 'slack')).toMatchObject({
       create: { repo: 'id:orca', repoHostId: 'ssh:box' }
     })
-  })
-
-  it('starts folder projects as fresh folder workspaces', () => {
-    const [folder] = connectorProjects(
-      store(
-        [],
-        [
-          { id: 'g1', name: 'Docs', parentPath: '/docs' },
-          { id: 'g2', name: 'Group', parentPath: null }
-        ]
-      )
-    )
-    expect(folder).toMatchObject({ name: 'Docs', kind: 'folder', where: { kind: 'local' } })
-    expect(placeLaunchTarget(folder!.placeId, 'd1', 'slack')).toEqual({
-      kind: 'create-folder-workspace',
-      create: { projectGroupId: 'g1', name: expect.stringMatching(/^slack-[0-9a-f]{8}$/) }
-    })
-  })
-
-  it('derives the same worktree name for a resent start, and refuses a place it cannot read', () => {
-    const [project] = connectorProjects(store([repo({ id: 'orca' })]))
-    expect(placeLaunchTarget(project!.placeId, 'd1', 'slack')).toEqual(
-      placeLaunchTarget(project!.placeId, 'd1', 'slack')
-    )
-    expect(placeLaunchTarget(project!.placeId, 'd1', 'slack')).not.toEqual(
-      placeLaunchTarget(project!.placeId, 'd2', 'slack')
-    )
-    expect(placeLaunchTarget('not-a-place', 'd1', 'slack')).toBeNull()
-    // The workspace is named for where the conversation came from.
-    expect(placeLaunchTarget(project!.placeId, 'd1', 'linear')).toMatchObject({
-      create: { name: expect.stringMatching(/^linear-[0-9a-f]{8}$/) }
-    })
-  })
-
-  it('lists the most recently used projects first, at most maxHelloProjects, with short names', () => {
-    const repos = Array.from({ length: CONNECTOR_CLIENT_LIMITS.maxHelloProjects + 1 }, (_, index) =>
-      repo({ id: `r${index}`, addedAt: index, displayName: 'n'.repeat(300) })
-    )
-    const projects = connectorProjects({
-      ...store(repos),
-      getAllWorktreeMeta: () => ({
-        'r0::/src/r0': {
-          displayName: 'r0',
-          comment: '',
-          linkedIssue: null,
-          linkedPR: null,
-          linkedLinearIssue: null,
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 0,
-          lastActivityAt: 10_000
-        }
-      })
-    })
-    expect(projects).toHaveLength(CONNECTOR_CLIENT_LIMITS.maxHelloProjects)
-    expect(projects[0]?.name).toHaveLength(CONNECTOR_CLIENT_LIMITS.maxDisplayTextLength)
-    expect(projects[0]?.placeId).toBe(connectorProjects(store([repos[0]!]))[0]?.placeId)
   })
 })

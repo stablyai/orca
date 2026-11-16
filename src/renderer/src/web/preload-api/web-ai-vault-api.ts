@@ -1,75 +1,61 @@
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
-} from '../../../../shared/ai-vault-search-client'
+} from '../../../../shared/ai-vault/search/ai-vault-search-client'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
-} from '../../../../shared/ai-vault-resume-preparation'
-import type { AiVaultDeleteSessionArgs } from '../../../../shared/ai-vault-session-deletion'
+} from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { AiVaultDeleteSessionArgs } from '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import {
+  AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
+  readAiVaultSessionHandoffResult,
+  type AiVaultSessionHandoffArgs
+} from '../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../../../shared/ai-vault-session-title'
-import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import type {
+  AiVaultListArgs,
+  AiVaultListResult
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   normalizeExecutionHostId,
   normalizeExecutionHostScope,
-  toRuntimeExecutionHostId
+  toRuntimeExecutionHostId,
+  type ExecutionHostId,
+  type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../../shared/execution-host'
+
 import {
   assertEnvironmentPairing,
   callRuntimeEnvelope,
-  callRuntimeResult,
-  callEnvironmentEnvelope
+  callRuntimeResult
 } from './web-runtime-calls'
 import {
   readRuntimeAiVaultDeleteSessionResponse,
   runtimeAiVaultDeleteSessionParams
-} from '../../../../shared/ai-vault-runtime-session-delete'
+} from '../../../../shared/ai-vault/contracts/ai-vault-runtime-session-delete'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'
 
 export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  const search = createSessionSearchClient(
+    (method, params) => callRuntimeResult(method, params),
+    'relay'
+  )
   return {
     // A browser searches only its selected paired runtime.
-    searchSessions: (request, executionHostScope, isActive = () => true) => {
-      if (!addressesOwnRuntime(executionHostScope)) {
-        return Promise.resolve({ kind: 'unavailable', reason: 'no-service' })
-      }
-      const environment = requireActiveEnvironment()
-      const pairingRevision = environment.pairingRevision ?? environment.createdAt
-      const runtimeId = environment.runtimeId ?? undefined
-      const active = () => isActive() && requireActiveEnvironment().id === environment.id
-      const search = createSessionSearchClient(async (method, params) => {
-        if (!active()) {
-          throw new Error('Session search retired')
-        }
-        const response = await callEnvironmentEnvelope(
-          environment.id,
-          method,
-          params,
-          undefined,
-          pairingRevision,
-          runtimeId,
-          active
-        )
-        if (!response.ok) {
-          throw Object.assign(new Error(response.error.message), { code: response.error.code })
-        }
-        return response.result
-      }, 'relay')
-      return search.searchSessions(request, active)
-    },
+    searchSessions: (request, executionHostScope) =>
+      addressesOwnRuntime(executionHostScope)
+        ? search.searchSessions(request)
+        : Promise.resolve({ kind: 'unavailable', reason: 'no-service' }),
     searchStatus: (executionHostScope) =>
       addressesOwnRuntime(executionHostScope)
-        ? createSessionSearchClient(
-            (method, params) => callRuntimeResult(method, params),
-            'relay'
-          ).searchStatus()
+        ? search.searchStatus()
         : Promise.resolve(unavailableSessionSearchStatus()),
     // Host-index consent requires the desktop operator’s settings surface.
     setSearchEnabled: () => Promise.reject(new Error('unsupported')),
@@ -89,12 +75,13 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
         includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
         limit: args?.limit,
+        unlimited: args?.unlimited,
         force: args?.force,
         ...(requestedScope === executionHostId && args?.afterFingerprint !== undefined
           ? { afterFingerprint: args.afterFingerprint }
           : {}),
-        historyOwnership: args?.historyOwnership,
         scopePaths: args?.scopePaths,
+        ...(args?.scopeOnly === true ? { scopeOnly: true } : {}),
         executionHostId
       }).then((result) =>
         // Fence later host mutations on these rows to the pairing that listed them.
@@ -123,6 +110,18 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     cancelListSessions: () => Promise.resolve(),
     prepareSessionResume: (args: AiVaultPrepareSessionResumeRequest) =>
       callRuntimeResult<AiVaultPrepareSessionResumeResult>('aiVault.prepareSessionResume', args),
+    // A browser reaches only its own paired runtime; an older one leaves the preview hand-off.
+    prepareSessionHandoff: async (args: AiVaultSessionHandoffArgs) => {
+      if (!addressesOwnRuntime(args.executionHostId)) {
+        return {}
+      }
+      const result = await callRuntimeResult<unknown>(
+        'aiVault.prepareSessionHandoff',
+        { agent: args.agent, filePath: args.filePath, sessionId: args.sessionId },
+        AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS
+      ).catch(() => null)
+      return readAiVaultSessionHandoffResult(result)
+    },
     // Why: no server-side RPC for subagent transcript listing yet, so report an empty (not erroring) result.
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.

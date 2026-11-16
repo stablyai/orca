@@ -1,12 +1,20 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { parsePaneKey, makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
-import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
-import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
-import type { TerminalSurface, WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
-import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
-import { buildRetiredTerminalTabStateSweepPatch } from '../../store/slices/retired-terminal-tab-state-sweep'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import {
+  parsePaneKey,
+  makePaneKey,
+  isTerminalLeafId
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
+import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
+import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+
+import {
+  type RetiredTerminalTabSweepState,
+  buildRetiredTerminalTabStateSweepPatch
+} from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import { isAgentStatusFresh } from './state-equality-core'
 
@@ -22,7 +30,7 @@ export function isMirroredAgentStatusOwnedBy(
 }
 
 export function toMirroredPaneKey(
-  surface: TerminalSurface,
+  surface: RuntimeMobileSessionTerminalClientTab,
   leafId = surface.leafId
 ): string | null {
   if (!isTerminalLeafId(leafId)) {
@@ -31,9 +39,13 @@ export function toMirroredPaneKey(
   return makePaneKey(toWebTerminalSurfaceTabId(surface.parentTabId), leafId)
 }
 
+/** A host frame's agent status in this client's pane keys. `frameWorktreeId` is the worktree the
+ *  frame publishes: older hosts omit it on agents restored after a restart, and clients judge a
+ *  row's ownership (and retraction) by worktree, so every reader must see the same owner. */
 export function remapHostAgentStatus(
-  surface: TerminalSurface,
-  retainedSurface?: TerminalSurface
+  surface: RuntimeMobileSessionTerminalClientTab,
+  frameWorktreeId: string,
+  retainedSurface?: RuntimeMobileSessionTerminalClientTab
 ): AgentStatusEntry | null {
   if (!surface.agentStatus) {
     return null
@@ -46,12 +58,17 @@ export function remapHostAgentStatus(
     launchAgent: retainedSurface?.launchAgent ?? surface.launchAgent,
     hookAgent: surface.agentStatus.agentType
   })
+  const entry = normalizeCompatibleAgentStatusEntryForOwner(
+    surface.agentStatus,
+    ownerRecord?.agent,
+    { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
+  )
   return {
-    ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerRecord?.agent, {
-      ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
-    }),
+    ...entry,
+    worktreeId: entry.worktreeId || frameWorktreeId,
     paneKey,
-    tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
+    tabId: toWebTerminalSurfaceTabId(surface.parentTabId),
+    ...(surface.launchAttested !== undefined ? { launchAttested: surface.launchAttested } : {})
   }
 }
 
@@ -68,16 +85,23 @@ export function hostAgentStatusPiercesClientAuthority(entry: AgentStatusEntry): 
   // Why: a row restored across a host restart is unverifiable, so it never outranks live bytes.
   return (
     entry.restoredUnconfirmed !== true &&
-    (entry.state === 'blocked' || entry.interactivePrompt != null)
+    (entry.paneSleep !== undefined ||
+      hostOwnsCommandCodeStatus(entry) ||
+      entry.state === 'blocked' ||
+      entry.interactivePrompt != null)
   )
 }
 
-/** Byte-derived ownership requires transport claim plus a write; teardown releases it back to host. */
+/** Only the current byte-derived row can fence host snapshots; adopting a host row yields authority. */
 export function isClientOwnedAgentStatus(
   paneKey: string,
   existing: AgentStatusEntry | undefined
 ): existing is AgentStatusEntry {
-  return existing !== undefined && isClientAuthoritativeAgentStatusPane(paneKey)
+  return (
+    existing !== undefined &&
+    existing.mirroredEvidenceReceivedAt === undefined &&
+    isClientAuthoritativeAgentStatusPane(paneKey)
+  )
 }
 
 /** When host and client compete, stale client status yields to host; ownership alone still protects against host omission. */
@@ -89,50 +113,24 @@ export function isFencedClientAgentStatus(
   return isClientOwnedAgentStatus(paneKey, existing) && isAgentStatusFresh(existing, now)
 }
 
-export function batchAgentPaneKeysForTabs(
-  state: WebSessionTabsSyncState,
-  tabIds: ReadonlySet<string>,
-  batchContext?: WebSessionTabsBatchContext
-): string[] {
-  if (!batchContext) {
-    return Object.keys(state.agentStatusByPaneKey)
-  }
-  if (!batchContext.agentPaneKeysByTabId) {
-    batchContext.agentPaneKeysByTabId = new Map()
-    for (const paneKey of Object.keys(state.agentStatusByPaneKey)) {
-      const tabId = parsePaneKey(paneKey)?.tabId
-      if (!tabId) {
-        continue
-      }
-      const paneKeys = batchContext.agentPaneKeysByTabId.get(tabId) ?? new Set<string>()
-      paneKeys.add(paneKey)
-      batchContext.agentPaneKeysByTabId.set(tabId, paneKeys)
-    }
-  }
-  return [...tabIds].flatMap((tabId) => [...(batchContext.agentPaneKeysByTabId?.get(tabId) ?? [])])
+/** A fresh client byte writer keeps the pane unless the host carries a host-only state class. */
+export function clientAgentStatusFencesHost(
+  paneKey: string,
+  existing: AgentStatusEntry | undefined,
+  hostEntry: AgentStatusEntry | null | undefined,
+  now: number
+): boolean {
+  return (
+    isFencedClientAgentStatus(paneKey, existing, now) &&
+    !(hostEntry && hostAgentStatusPiercesClientAuthority(hostEntry))
+  )
 }
 
-export function updateBatchAgentPaneKey(
-  paneKey: string,
-  present: boolean,
-  batchContext?: WebSessionTabsBatchContext
-): void {
-  const tabId = parsePaneKey(paneKey)?.tabId
-  const index = batchContext?.agentPaneKeysByTabId
-  if (!tabId || !index) {
-    return
-  }
-  if (present) {
-    const paneKeys = index.get(tabId) ?? new Set<string>()
-    paneKeys.add(paneKey)
-    index.set(tabId, paneKeys)
-    return
-  }
-  const paneKeys = index.get(tabId)
-  paneKeys?.delete(paneKey)
-  if (paneKeys?.size === 0) {
-    index.delete(tabId)
-  }
+export function agentPaneKeysForTabs(
+  state: WebSessionTabsSyncState,
+  tabIds: ReadonlySet<string>
+): string[] {
+  return [...tabIds].flatMap((tabId) => [...state.agentStatusByPaneKey.keysForTab(tabId)])
 }
 
 // Closed-tab markers never expire and reject writes; returning stable IDs must lift them or status is lost permanently.
@@ -170,6 +168,7 @@ export function buildRetractedMirroredTabSweepPatch(
   let sweepState: RetiredTerminalTabSweepState = {
     acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey ?? {},
     activityClearedAtByPaneKey: state.activityClearedAtByPaneKey ?? {},
+    agentConversationsByPaneKey: state.agentConversationsByPaneKey ?? {},
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? {},
     agentStatusByPaneKey: agentStatusPatch?.agentStatusByPaneKey ?? state.agentStatusByPaneKey,
     agentStatusEpoch: agentStatusPatch?.agentStatusEpoch ?? state.agentStatusEpoch,
@@ -178,8 +177,6 @@ export function buildRetractedMirroredTabSweepPatch(
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? {},
     recentlyClosedAgentStatusTabIds: state.recentlyClosedAgentStatusTabIds ?? {},
     recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys ?? {},
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
-    retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
     sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
     // Keep the sweep state consistent with the accepted host inventory.
     tabsByWorktree: nextTabsByWorktree,
@@ -192,6 +189,7 @@ export function buildRetractedMirroredTabSweepPatch(
     const paneKeys = scopedPaneKeysByTabId.get(tabId)
     const patch = buildRetiredTerminalTabStateSweepPatch(sweepState, [tabId], undefined, {
       preserveActivityClearedState: true,
+      changedAgentPaneKeys: batchContext?.changedAgentPaneKeys,
       ...(paneKeys ? { paneKeys } : {})
     })
     if (patch) {
@@ -207,10 +205,13 @@ export function buildRetractedMirroredTabSweepPatch(
   const mutableState = state as unknown as Record<string, unknown>
   mutableState.agentStatusByPaneKey = sweep.agentStatusByPaneKey
   batchContext.changedRecords.add('agentStatusByPaneKey')
-  for (const paneKey of Object.keys(previousAgentStatuses)) {
-    if (!(paneKey in sweep.agentStatusByPaneKey)) {
-      updateBatchAgentPaneKey(paneKey, false, batchContext)
+  for (const tabId of retractedTabIds) {
+    for (const paneKey of previousAgentStatuses.keysForTab(tabId)) {
+      if (!sweep.agentStatusByPaneKey.has(paneKey)) {
+        batchContext.changedAgentPaneKeys?.add(paneKey)
+      }
     }
   }
   return sweep
 }
+import { hostOwnsCommandCodeStatus } from '@/lib/agent-status/evidence/renderer-agent-status-observations'

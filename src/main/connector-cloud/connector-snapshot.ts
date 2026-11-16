@@ -1,10 +1,10 @@
 // What a hello's snapshot tells the cloud: recently active cloud conversations, within the contract's caps.
-import type { PendingPrompt } from '../../shared/agent-pending-prompt'
+import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import {
   cloudConversation,
   CONNECTOR_CLIENT_LIMITS,
   type ConnectorEvent
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
 
 type Snapshot = Extract<ConnectorEvent, { kind: 'snapshot' }>

@@ -6,7 +6,7 @@ import {
   type NativeChatToolCategoryCall
 } from './native-chat-tool-icon'
 import { toolInputCommand } from './native-chat-tool-summary'
-import { isToolCallBlock, type NativeChatBlock } from '../../native-chat-types'
+import { isToolCallBlock, type NativeChatBlock } from '../native-chat-types'
 
 /** Shared singular/plural category copy; desktop translates and mobile formats directly. */
 export const NATIVE_CHAT_TOOL_RUN_SENTENCE_COPY: Record<
@@ -69,10 +69,20 @@ export function nativeChatToolRunClauses(
   return [...counts].map(([category, count]) => ({ category, count }))
 }
 
+// Only these languages start a mid-sentence clause lowercase; German nouns and others keep their casing.
+const LOWERCASE_CONTINUATION_LANGUAGES = new Set(['en', 'es', 'fr', 'pt', 'ru', 'tr'])
+
+export function continueNativeChatToolRunClause(clause: string, locale: string): string {
+  return LOWERCASE_CONTINUATION_LANGUAGES.has(locale.split('-')[0].toLowerCase())
+    ? `${clause.charAt(0).toLocaleLowerCase(locale)}${clause.slice(1)}`
+    : clause
+}
+
 /** Capitalize only the first clause; locale-lowercase later first characters while preserving internal acronyms. */
 export function joinNativeChatToolRunClauses(
   clauses: readonly string[],
   format: {
+    continuation?: (clause: string) => string
     pair: (first: string, second: string) => string
     list: (leading: readonly string[], last: string) => string
   }
@@ -80,7 +90,9 @@ export function joinNativeChatToolRunClauses(
   const continued = clauses.map((clause, index) =>
     index === 0 || clause.length === 0
       ? clause
-      : `${clause[0].toLocaleLowerCase()}${clause.slice(1)}`
+      : format.continuation
+        ? format.continuation(clause)
+        : `${clause[0].toLocaleLowerCase()}${clause.slice(1)}`
   )
   if (continued.length === 0) {
     return ''
@@ -95,6 +107,7 @@ export function joinNativeChatToolRunClauses(
 }
 
 export type NativeChatToolRunSentenceWords = {
+  continuation?: (clause: string) => string
   clause: (category: NativeChatToolCategory, count: number, live: boolean) => string
   pair: (first: string, second: string) => string
   list: (leading: readonly string[], last: string) => string

@@ -1,37 +1,31 @@
-import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Tab } from '../../../../shared/tab-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import { useAppStore } from '../../store'
-import { buildStatusMap } from '../right-sidebar/status-display'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import { useAppStore } from '../../store/index'
+import { buildStatusMap } from '../../lib/source-control/paths/git-path-decoration'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
-import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/messages/native-chat-transcript-readability'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getWindowsTerminalCapabilityOwnerKey,
-  useWindowsTerminalCapabilities,
-  type WindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
-import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
-import {
-  selectTabBarAgentProjections,
-  type TabBarAgentProjections
-} from './tab-agent-types-by-tab-id'
+  useWindowsTerminalCapabilities
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
+import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
+import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
+import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 
 const isWindows = navigator.userAgent.includes('Windows')
 export const isMacOs = navigator.userAgent.includes('Mac')
@@ -39,7 +33,7 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 type GitStatusEntries = AppStoreState['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
-const EMPTY_PROJECTS: AppStoreState['endpointProjects'] = []
+const EMPTY_PROJECTS: AppStoreState['projects'] = []
 const EMPTY_REPOS: AppStoreState['repos'] = []
 const EMPTY_WORKTREES_BY_REPO: AppStoreState['worktreesByRepo'] = {}
 
@@ -60,11 +54,6 @@ export function resolveWindowsPowerShellImplementationSetting(settings: GlobalSe
 }
 
 export type TabBarRuntimeModel = {
-  newTerminalShortcut: string
-  newBrowserShortcut: string
-  newSimulatorShortcut: string
-  newFileShortcut: string
-  openMarkdownShortcut: string | null
   generatedTabTitlesEnabled: boolean
   mobileEmulatorEnabled: boolean
   showMobileEmulatorIntroCallout: boolean
@@ -96,11 +85,6 @@ export function useTabBarRuntimeModel({
   worktreeId: string
   groupId?: string
 }): TabBarRuntimeModel {
-  const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
-  const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
-  const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
-  const newFileShortcut = useShortcutLabel('tab.newMarkdown')
-  const openMarkdownShortcut = useOptionalShortcutLabel('tab.openMarkdown')
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -125,8 +109,6 @@ export function useTabBarRuntimeModel({
   const defaultWindowsPowerShellImplementation = useAppStore((s) =>
     resolveWindowsPowerShellImplementationSetting(s.settings)
   )
-  const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore((s) =>
@@ -175,27 +157,22 @@ export function useTabBarRuntimeModel({
   // Subscribe to project/worktree maps only for the local shell menu; their routine writes otherwise repaint every retained strip.
   const needsLocalProjectRuntime =
     showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
-  const projectHostSetups = useAppStore(selectCanonicalProjectHostSetups)
-  const projects = useAppStore((s) =>
-    needsLocalProjectRuntime ? selectCanonicalProjects(s) : EMPTY_PROJECTS
-  )
+  const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))
   const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
   const worktreesByRepo = useAppStore((s) =>
     needsLocalProjectRuntime ? selectWorktreesByRepo(s) : EMPTY_WORKTREES_BY_REPO
+  )
+  // Gated like the maps above: every retained strip would otherwise re-render on each workspace switch.
+  const activeRepoId = useAppStore((s) => (needsLocalProjectRuntime ? s.activeRepoId : null))
+  const activeWorktreeId = useAppStore((s) =>
+    needsLocalProjectRuntime ? s.activeWorktreeId : null
   )
   const localProjectRuntime = useMemo(() => {
     if (!needsLocalProjectRuntime) {
       return undefined
     }
     return getLocalProjectExecutionRuntimeContext(
-      {
-        activeRepoId,
-        activeWorktreeId,
-        projectHostSetupProjection: { projects, setups: projectHostSetups },
-        repos,
-        settings,
-        worktreesByRepo
-      },
+      { activeRepoId, activeWorktreeId, projects, repos, settings, worktreesByRepo },
       worktreeId,
       'win32',
       {
@@ -212,7 +189,6 @@ export function useTabBarRuntimeModel({
     activeWorktreeId,
     needsLocalProjectRuntime,
     projects,
-    projectHostSetups,
     repos,
     settings,
     windowsTerminalCapabilities.isLoading,
@@ -244,18 +220,14 @@ export function useTabBarRuntimeModel({
   // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
   // Why: every retained TabBar observes the same hot maps; one selector shares their projections.
-  const { nativeChatEnabled, tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } =
-    useAppStore(useShallow(selectTabBarAgentProjections))
+  const { tabAgentTypesByTabId, nativeChatTabWideFallbackUnsafeTabsById } = useAppStore(
+    useShallow(selectTabBarAgentProjections)
+  )
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
     isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
   )
 
   return {
-    newTerminalShortcut,
-    newBrowserShortcut,
-    newSimulatorShortcut,
-    newFileShortcut,
-    openMarkdownShortcut,
     generatedTabTitlesEnabled,
     mobileEmulatorEnabled,
     showMobileEmulatorIntroCallout,
@@ -273,7 +245,6 @@ export function useTabBarRuntimeModel({
     unifiedTabByVisibleId,
     workspaceHasSimulatorTab,
     toggleTabViewMode,
-    nativeChatEnabled,
     tabAgentTypesByTabId,
     nativeChatTabWideFallbackUnsafeTabsById,
     nativeChatTranscriptIsLocalReadable,

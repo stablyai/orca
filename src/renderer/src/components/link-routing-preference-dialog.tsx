@@ -13,7 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   LinkRoutingPreferenceDialogContext,
   type LinkRoutingPreferenceDialogContextValue,
@@ -45,6 +45,7 @@ export function LinkRoutingPreferenceDialogProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const nextIdRef = useRef(0)
   const [queue, setQueue] = useState<LinkRoutingPreferenceDialogRequest[]>([])
   const activeRequest = queue[0] ?? null
@@ -62,7 +63,7 @@ export function LinkRoutingPreferenceDialogProvider({
   const displayHost = displayHostForUrl(displayedRequest?.options.url)
   const openLinksInAppDefault = displayedRequest?.options.openLinksInAppDefault === true
   const isMac = navigator.userAgent.includes('Mac')
-  const systemBrowserShortcutKeys = isMac ? ['⇧', '⌘'] : ['Shift', 'Ctrl']
+  const systemBrowserShortcutKeys = isMac ? ['⇧', '⌘'] : ['⇧', 'Ctrl']
 
   useEffect(() => {
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)
@@ -128,36 +129,33 @@ export function LinkRoutingPreferenceDialogProvider({
             <DialogHeader className="gap-3">
               <div className="flex items-center justify-between gap-3">
                 <Badge variant="outline" className="bg-background/70 text-muted-foreground">
-                  {translate(
-                    'auto.components.link.routing.preference.dialog.badge',
-                    'Terminal link'
-                  )}
+                  {t('auto.components.link.routing.preference.dialog.badge', 'Terminal link')}
                 </Badge>
                 {displayedRequest?.options.preview ? (
                   <Badge variant="secondary">
-                    {translate('auto.components.link.routing.preference.dialog.preview', 'Preview')}
+                    {t('auto.components.link.routing.preference.dialog.preview', 'Preview')}
                   </Badge>
                 ) : null}
               </div>
               <div className="space-y-2">
                 <DialogTitle className="text-xl leading-tight">
                   {openLinksInAppDefault
-                    ? translate(
+                    ? t(
                         'auto.components.link.routing.preference.dialog.keep.title',
                         "Keep terminal links in Orca's browser?"
                       )
-                    : translate(
+                    : t(
                         'auto.components.link.routing.preference.dialog.title',
                         "Open terminal links in Orca's browser?"
                       )}
                 </DialogTitle>
                 <DialogDescription className="text-sm leading-relaxed">
                   {openLinksInAppDefault
-                    ? translate(
+                    ? t(
                         'auto.components.link.routing.preference.dialog.keep.description',
                         'Or use your system browser by default.'
                       )
-                    : translate(
+                    : t(
                         'auto.components.link.routing.preference.dialog.description',
                         "Use Orca's browser for terminal links, or keep your system browser."
                       )}
@@ -170,7 +168,7 @@ export function LinkRoutingPreferenceDialogProvider({
             {displayHost ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>
-                  {translate('auto.components.link.routing.preference.dialog.link.label', 'Link')}
+                  {t('auto.components.link.routing.preference.dialog.link.label', 'Link')}
                 </span>
                 <span className="rounded-md border border-border bg-muted/30 px-2 py-1 font-mono">
                   {displayHost}
@@ -182,20 +180,20 @@ export function LinkRoutingPreferenceDialogProvider({
               <Settings className="mt-0.5 size-3.5 shrink-0" />
               <div className="space-y-1">
                 <p>
-                  {translate(
+                  {t(
                     'auto.components.link.routing.preference.dialog.orca.note',
                     'Orca can use imported cookies for logged-in sites.'
                   )}
                 </p>
                 <p>
-                  {translate(
+                  {t(
                     'auto.components.link.routing.preference.dialog.settings.note',
                     'Change this later in Settings → Browser.'
                   )}
                 </p>
                 <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                   <span>
-                    {translate(
+                    {t(
                       'auto.components.link.routing.preference.dialog.shortcut.note.prefix',
                       'When links open in Orca,'
                     )}
@@ -206,7 +204,7 @@ export function LinkRoutingPreferenceDialogProvider({
                     separatorClassName="text-[10px] text-muted-foreground"
                   />
                   <span>
-                    {translate(
+                    {t(
                       'auto.components.link.routing.preference.dialog.shortcut.note.suffix',
                       'click opens system browser once.'
                     )}
@@ -219,21 +217,15 @@ export function LinkRoutingPreferenceDialogProvider({
           <DialogFooter className="border-t border-border bg-muted/20 px-6 py-4 sm:justify-between">
             <Button variant="outline" onClick={() => settleActiveRequest(false)}>
               <ExternalLink className="size-4" />
-              {translate(
+              {t(
                 'auto.components.link.routing.preference.dialog.system.button',
                 'Use system browser'
               )}
             </Button>
             <Button autoFocus onClick={() => settleActiveRequest(true)}>
               {openLinksInAppDefault
-                ? translate(
-                    'auto.components.link.routing.preference.dialog.keep.orca.button',
-                    'Keep Orca'
-                  )
-                : translate(
-                    'auto.components.link.routing.preference.dialog.orca.button',
-                    'Open in Orca'
-                  )}
+                ? t('auto.components.link.routing.preference.dialog.keep.orca.button', 'Keep Orca')
+                : t('auto.components.link.routing.preference.dialog.orca.button', 'Open in Orca')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 import type { Worktree } from './worktree/types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
@@ -23,7 +23,7 @@ export type ParsedExecutionHost =
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
   | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
 
-function getCurrentLocalPlatform(): NodeJS.Platform | null {
+export function getCurrentLocalPlatform(): NodeJS.Platform | null {
   const globalNavigator = (globalThis as { navigator?: { userAgent?: string; platform?: string } })
     .navigator
   const userAgent = globalNavigator?.userAgent || globalNavigator?.platform || ''
@@ -225,6 +225,14 @@ export function isRepoOnCatalogHost(repo: {
   )
 }
 
+/** Legacy automation migration distinguishes an SSH stamp from a legacy dial target. */
+export function isRepoSshOnlyHost(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): boolean {
+  return (
+    normalizeHostPart(repo.connectionId) === null &&
+    parseExecutionHostId(repo.executionHostId)?.kind === 'ssh'
+  )
+}
+
 export function getSshTargetIdForExecutionHost(
   executionHostId: string | null | undefined
 ): string | null {
@@ -266,10 +274,15 @@ export function getWorktreeExecutionHostId(
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): ExecutionHostId {
   // Snapshots can identify a more precise owner than the repo; share precedence across sidebar decisions.
-  return (
-    worktree.hostId ??
-    (repo?.connectionId || repo?.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId)
-  )
+  return worktree.hostId ?? getRepoExecutionHostIdOrDefault(repo, defaultHostId)
+}
+
+/** A repo's explicit execution owner; repos without one belong to the focused/default host. */
+export function getRepoExecutionHostIdOrDefault(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  defaultHostId: ExecutionHostId
+): ExecutionHostId {
+  return repo?.connectionId || repo?.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
 }
 
 export function getSettingsFocusedExecutionHostId(

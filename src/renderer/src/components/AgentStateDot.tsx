@@ -1,6 +1,8 @@
 import React from 'react'
 import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import {
@@ -12,51 +14,37 @@ import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
 } from '@/components/StateIndicatorTooltip'
+import type { AgentListStatus } from '../../../shared/agent-status/presentation/agent-list-status'
 
 // Share state glyphs across agent surfaces. Keep the agent identity icon separate; completion uses a check while sidebar StatusIndicator uses an emerald dot/tooltip.
 
-export type AgentDotState =
-  | 'working'
-  | 'monitoring'
-  | 'blocked'
-  | 'waiting'
-  | 'interrupted'
-  // Transcript-derived failure is an outcome, distinct from live blocked attention.
-  | 'failed'
-  | 'done'
-  | 'idle'
-  // A live PTY with stale reporting proves only missing evidence, not idle/work/completion.
-  | 'unverifiable'
-  // The turn ended without a proven outcome; use the missing-evidence glyph, never completion.
-  | 'unconfirmed'
-  // Sidebar combines blocked/waiting as permission; retain its vocabulary with the shared question glyph/token.
-  | 'permission'
+export type AgentDotState = AgentListStatus
 
 /** Return the accessible label shared by every visual agent-state marker. */
 export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
-      return 'Working'
+      return translate('auto.components.AgentStateDot.working', 'Working')
     case 'monitoring':
-      return 'Monitoring background tasks'
+      return translate('auto.components.AgentStateDot.monitoring', 'Monitoring background tasks')
     case 'blocked':
-      return 'Blocked'
+      return translate('auto.components.AgentStateDot.blocked', 'Blocked')
     case 'waiting':
-      return 'Waiting for input'
+      return translate('auto.components.AgentStateDot.waiting', 'Waiting for input')
     case 'interrupted':
-      return 'Interrupted'
+      return translate('auto.components.AgentStateDot.interrupted', 'Interrupted')
     case 'failed':
-      return 'Failed'
+      return translate('auto.components.AgentStateDot.failed', 'Failed')
     case 'done':
-      return 'Done'
+      return translate('auto.components.AgentStateDot.done', 'Done')
     case 'idle':
-      return 'Idle'
+      return translate('auto.components.AgentStateDot.idle', 'Idle')
     case 'unverifiable':
-      return 'No recent update'
+      return translate('auto.components.AgentStateDot.unverifiable', 'No recent update')
     case 'unconfirmed':
-      return 'Couldn’t confirm'
+      return translate('auto.components.AgentStateDot.unconfirmed', 'Couldn’t confirm')
     case 'permission':
-      return 'Needs attention'
+      return translate('auto.components.AgentStateDot.permission', 'Needs attention')
   }
 }
 
@@ -69,6 +57,8 @@ type Props = {
   tooltipSide?: StateIndicatorTooltipSide
   /** Program-reported 0–100; live states then draw a filling ring instead of the spinner/glyph. */
   progress?: number
+  /** Unread completion is spoken in the label only; the card's status lane owns the one unread dot. */
+  unread?: boolean
 }
 
 type ProgressRing = { tone: AgentProgressRingTone; percent: number }
@@ -106,13 +96,20 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   className,
   title,
   tooltipSide,
-  progress
+  progress,
+  unread = false
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
   const ring = progressRing(state, progress)
-  const label = withRingPercent(agentStateLabel(state), ring)
+  const announceUnread = unread && state === 'done'
+  const label = announceUnread
+    ? t('workspace.activity.unreadLabel', '{{status}} · Unread', {
+        status: agentStateLabel(state)
+      })
+    : withRingPercent(agentStateLabel(state), ring)
   const tooltipLabel = title === null ? null : (title ?? label)
 
   let indicator: React.JSX.Element
@@ -147,7 +144,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
       </span>

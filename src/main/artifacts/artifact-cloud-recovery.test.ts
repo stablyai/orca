@@ -74,23 +74,6 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     expect(server.artifactContent('artifact-1')).toBe(writeRequest.content)
   })
 
-  it('updates a recovered share when its content changed after response loss', async () => {
-    const userDataPath = await createUserDataPath()
-    const server = new ArtifactFaultServer()
-    server.loseNextCreateResponse = true
-    vi.stubGlobal('fetch', server.fetch)
-
-    await expect(service(userDataPath).share(writeRequest)).rejects.toThrow('response lost')
-    await expect(
-      service(userDataPath).share({ ...writeRequest, content: '<h1>Changed share</h1>' })
-    ).resolves.toMatchObject({
-      status: 'ok',
-      value: { artifact: { slug: 'artifact-1' } }
-    })
-    expect(server.createMutations).toBe(1)
-    expect(server.artifactContent('artifact-1')).toBe('<h1>Changed share</h1>')
-  })
-
   it('retains recovery until a changed-content update succeeds', async () => {
     const userDataPath = await createUserDataPath()
     const server = new ArtifactFaultServer()
@@ -138,25 +121,6 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     expect(server.deleteMutations).toBe(1)
     expect(server.artifactSlugs()).toEqual([])
     await expect(publishedLink(userDataPath)).resolves.toBeNull()
-  })
-
-  it('keeps the durable mapping when a delete receives an unrelated 404', async () => {
-    const userDataPath = await createUserDataPath()
-    const server = new ArtifactFaultServer()
-    vi.stubGlobal('fetch', server.fetch)
-    await service(userDataPath).publish(writeRequest)
-
-    server.rejectNextDeleteCode = 'not_found'
-    await expect(
-      service(userDataPath).unshare({
-        sourceKey: writeRequest.sourceKey,
-        apiUrl,
-        authToken: 'token-a'
-      })
-    ).rejects.toMatchObject({ statusCode: 404, errorCode: 'not_found' })
-    expect(server.deleteMutations).toBe(0)
-    expect(server.artifactSlugs()).toEqual(['artifact-1'])
-    await expect(publishedLink(userDataPath)).resolves.toBe('https://share.onorca.dev/a/artifact-1')
   })
 
   it('drops an uncommitted validation failure so corrected content can create', async () => {

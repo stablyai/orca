@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 
 type PinnableItem = {
   unifiedTabId: string

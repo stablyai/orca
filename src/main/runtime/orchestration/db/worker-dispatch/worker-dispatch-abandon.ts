@@ -1,13 +1,13 @@
-import type { WorkerDispatchRow } from '../../types'
+import type { WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import {
   releaseContextOnlyDispatch,
   type ContextOnlyDispatchReleaseResult
-} from '../../context-only-dispatch-release'
+} from '../../workers/lifecycle/context-only-dispatch-release'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
+import { WORKER_SETTLED_STATES } from '../../terminal-authority/release/worker-terminal-ownership'
 import { isStopStrandedByAnotherRuntime } from './worker-dispatch-stop'
 import { retainTerminalResourceInTransaction } from '../worker-terminal/worker-terminal-archive'
 
@@ -82,7 +82,7 @@ export function abandonWorkerDispatch(
       reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
       this.closeQuestionsForDispatch(dispatchId)
       const terminal = this.getWorkerTerminalResourceByOwner(dispatchId)
-      // Abandon hands an owned terminal back instead of closing it, by the same rule as worker-retain.
+      // Abandon hands an owned terminal back instead of closing it, by the same rule as worker-keep-open.
       if (terminal?.ownership_state === 'owned') {
         retainTerminalResourceInTransaction(this, terminal.id, dispatchId)
       }

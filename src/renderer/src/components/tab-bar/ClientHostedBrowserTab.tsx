@@ -1,7 +1,7 @@
 import { Laptop, Loader2, X } from 'lucide-react'
 import { TabHoverCard } from './TabHoverCard'
-import { translate } from '@/i18n/i18n'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import { useTranslate } from '@/i18n/use-translate'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getTabRootStateClasses,
@@ -12,7 +12,7 @@ import {
   getClientHostedBrowserRowLabel
 } from './client-hosted-browser-row-label'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { TAB_LABEL_WIDTH_CLASSES, TAB_ROOT_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 
 /** Paired-client pages have no unified tab: expose presence and close without persisted ordering, pinning or drag actions. */
@@ -31,23 +31,24 @@ export default function ClientHostedBrowserTab({
   onClose: () => void
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const slotProps = useTabStripSlotProps(row.browserPageId, isActive)
   const loading = row.loading && !row.hostAbsent
   const PageIcon = loading ? Loader2 : Laptop
-  const label = getClientHostedBrowserRowLabel(row)
-  const hostDescription = describeClientHostedBrowserRowHost(row)
+  const label = getClientHostedBrowserRowLabel(row, t)
+  const hostDescription = describeClientHostedBrowserRowHost(row, t)
 
   return (
     <div {...slotProps}>
       <TabHoverCard
         title={label}
-        programName={translate('tabHoverCard.browser', 'Browser')}
+        programName={t('tabHoverCard.browser', 'Browser')}
         icon={<Laptop className="size-4" />}
         description={hostDescription}
       >
         <div
           data-client-hosted-browser-row-id={row.browserPageId}
-          className={`${TAB_ROOT_WIDTH_CLASSES} group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
+          className={`w-full group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
           onPointerDown={onActivate}
           onMouseDown={(event) => {
             if (event.button === 1) {
@@ -75,7 +76,7 @@ export default function ClientHostedBrowserTab({
           </span>
           <button
             type="button"
-            aria-label={translate('browser.clientHosted.hostRowClose', 'Close hosted page')}
+            aria-label={t('browser.clientHosted.hostRowClose', 'Close hosted page')}
             className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-sm ${
               isActive
                 ? 'text-muted-foreground hover:bg-muted hover:text-foreground'

@@ -1,4 +1,4 @@
-import { WorktreeSidebarDropIndicator } from '../../WorktreeSidebarDropIndicator'
+import { WorktreeSidebarDropIndicator } from '../drag/WorktreeSidebarDropIndicator'
 import type { useWorktreeDragRuntime } from '../drag/use-runtime'
 import type { useWorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 

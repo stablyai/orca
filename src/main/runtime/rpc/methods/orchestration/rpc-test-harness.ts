@@ -1,7 +1,11 @@
 import { vi } from 'vitest'
-import { ORCHESTRATION_METHODS } from '../orchestration'
-import { eraseRpcMethods, type RpcContext } from '../../core'
-import { OrchestrationDb } from '../../../orchestration/db'
+import { ORCHESTRATION_METHODS } from './orchestration'
+import { isStreamingMethod, eraseRpcMethods, type RpcContext, type RpcMethod } from '../../core'
+import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
+import '../../../orchestration/db/contract-constants'
+import '../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../orchestration/db/dispatch-row-writer'
+import '../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 
 export const COORDINATOR_PANE_KEY = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -19,14 +23,17 @@ export function createOrchestrationRpcHarness() {
   let dbOpen = false
   let runtime: OrcaRuntimeService
   let activeRunId: string | undefined
+  let databasePath = ':memory:'
 
   const coordinatorPaneKey = COORDINATOR_PANE_KEY
 
   function setup(
     withBoundRun = true,
-    store: ConstructorParameters<typeof OrcaRuntimeService>[0] = null
+    store: ConstructorParameters<typeof OrcaRuntimeService>[0] = null,
+    path = ':memory:'
   ): OrchestrationRpcState {
-    db = new OrchestrationDb(':memory:')
+    databasePath = path
+    db = new OrchestrationDb(path)
     dbOpen = true
     runtime = new OrcaRuntimeService(store)
     runtime.setOrchestrationDb(db)
@@ -67,9 +74,9 @@ export function createOrchestrationRpcHarness() {
     currentDb.close()
   }
 
-  function findMethod(name: string) {
+  function findMethod(name: string): RpcMethod {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((m) => m.name === name)
-    if (!method) {
+    if (!method || isStreamingMethod(method)) {
       throw new Error(`Method not found: ${name}`)
     }
     return method
@@ -101,5 +108,12 @@ export function createOrchestrationRpcHarness() {
     return method.handler(parsed, ctx)
   }
 
-  return { coordinatorPaneKey, setup, cleanup, findMethod, call }
+  function reopenDatabase(): OrchestrationDb {
+    db.close()
+    db = new OrchestrationDb(databasePath)
+    runtime.setOrchestrationDb(db)
+    return db
+  }
+
+  return { coordinatorPaneKey, setup, cleanup, findMethod, call, reopenDatabase }
 }

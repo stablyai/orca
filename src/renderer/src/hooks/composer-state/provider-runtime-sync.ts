@@ -21,14 +21,17 @@ export type ComposerProviderRuntimeSyncInput = Pick<
 >
 
 import { useEffect, useCallback, useRef } from 'react'
-import type { SetupAgentStartupPolicy, OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type {
+  SetupAgentStartupPolicy,
+  OrcaHooks
+} from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { useAppStore } from '@/store'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { type HookCheckResult, checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import { type HookCheckResult, checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import {
   getRepoSetupAgentStartupPolicy,
   buildSetupAgentStartupHookSettings
@@ -185,8 +188,14 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
   } | null>(null)
 
   const loadHookCheckForRepo = useCallback(
-    (targetRepoId: string): Promise<HookCheckResult> => {
-      const key = JSON.stringify([selectedRepoExecutionHostId ?? 'local', targetRepoId])
+    (targetRepoId: string, options?: { background?: boolean }): Promise<HookCheckResult> => {
+      const background = options?.background === true
+      // A submit must not reuse the open-time check's stopped-distro refusal.
+      const key = JSON.stringify([
+        selectedRepoExecutionHostId ?? 'local',
+        targetRepoId,
+        ...(background ? ['background'] : [])
+      ])
       const existing = hookCheckRef.current
       if (existing?.key === key) {
         return existing.promise
@@ -194,7 +203,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
       // Evict rejected checks so transient errors can retry; inspect only the repo’s known host.
       const promise: Promise<HookCheckResult> = (
         selectedRepoExecutionHostId
-          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId)
+          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId, { background })
           : Promise.reject(new Error('The project host is unknown.'))
       ).catch((error: unknown) => {
         if (hookCheckRef.current?.promise === promise) {

@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const REPO_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -11,8 +11,13 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['repo', 'add'],
     summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path']
+    usage: 'orca repo add --path <path> [--kind git|folder] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind'],
+    notes: [
+      'Defaults to git. Use --kind folder for an ordinary directory, including a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each.',
+      'With --environment, --path must be an absolute path on that Orca server.'
+    ],
+    examples: ['orca repo add --path /abs/path/to/folder --kind folder --json']
   },
   {
     path: ['repo', 'show'],
@@ -22,15 +27,38 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['repo', 'set'],
-    summary: 'Set whether non-Orca worktrees are shown for a repo',
+    summary: "Set a repo's non-Orca worktree visibility or browser profile",
     usage:
-      'orca repo set --repo <selector> --external-worktree-visibility show|hide|inherit [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility'],
+      'orca repo set --repo <selector> [--external-worktree-visibility show|hide|inherit] [--browser-profile <id>|inherit] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external-worktree-visibility', 'browser-profile'],
     notes: [
       'show and hide override the global non-Orca worktree visibility default for this repo; inherit clears the override.',
-      'Per-worktree visibility rules still apply.'
+      'Per-worktree visibility rules still apply.',
+      "--browser-profile picks the profile new browser tabs in this repo use, overriding the Browser setting's profile for new tabs; inherit clears it. Ids come from `orca tab profile list`; `default` is the Default profile."
     ],
-    examples: ['orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json']
+    examples: [
+      'orca repo set --repo path:/path/to/repo --external-worktree-visibility show --json',
+      'orca repo set --repo name:acme-web --browser-profile <profileId> --json'
+    ]
+  },
+  {
+    path: ['repo', 'hide'],
+    summary: "Hide a project from Orca's sidebar",
+    usage: 'orca repo hide --repo <selector> [--host <host>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'host'],
+    notes: [
+      'Only the view changes: open terminals, agents, automations and scripts keep running, and repo list still lists the repo with hiddenAt set.',
+      "Hiding applies to one host's copy; with --host, it picks which copy of a repo set up on several hosts.",
+      'On a paired Orca server the flag lives on that server, so it hides the project for everyone connected to it.'
+    ],
+    examples: ['orca repo hide --repo name:orca --json']
+  },
+  {
+    path: ['repo', 'unhide'],
+    summary: "Show a hidden project in Orca's sidebar again",
+    usage: 'orca repo unhide --repo <selector> [--host <host>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'host'],
+    notes: ["Shows one host's copy again; on a paired Orca server, for everyone connected to it."]
   },
   {
     path: ['repo', 'set-base-ref'],

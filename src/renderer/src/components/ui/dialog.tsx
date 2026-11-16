@@ -6,11 +6,13 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { Minus, XIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
-import { cn } from '@/lib/utils'
-import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
+import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -61,10 +63,11 @@ const dialogContentSurfaceVariants = cva('', {
 })
 
 function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }) {
+  const t = useTranslate()
   const label =
     variant === 'minimize'
-      ? translate('auto.components.ui.dialog.minimize', 'Minimize')
-      : translate('auto.components.ui.dialog.f26c4baeda', 'Close')
+      ? t('auto.components.ui.dialog.minimize', 'Minimize')
+      : t('auto.components.ui.dialog.f26c4baeda', 'Close')
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
@@ -106,6 +109,7 @@ function DialogContent({
     /** The whole dialog scrolls within the viewport instead of growing past it. */
     scrollable?: boolean
   }) {
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay className={overlayClassName} />
@@ -114,16 +118,20 @@ function DialogContent({
         data-size={size}
         // Match dropdown surface/border/shadow tokens for dark-mode contrast; minmax(0,1fr) prevents long tokens from widening the grid and pushing footers outside.
         className={cn(
-          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-background/96 p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm',
+          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] duration-200 outline-none dark:border-white/14 dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg data-[size=compact]:sm:max-w-sm',
           dialogContentSurfaceVariants({ surface }),
           scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
           className
         )}
         {...props}
+        ref={focusScopeRef}
+        onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
         onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       >
-        {children}
-        {showCloseButton && <DialogContentCloseButton variant={closeButtonVariant} />}
+        <OverlayFocusScope value={scope}>
+          {children}
+          {showCloseButton && <DialogContentCloseButton variant={closeButtonVariant} />}
+        </OverlayFocusScope>
       </DialogPrimitive.Content>
     </DialogPortal>
   )
@@ -147,6 +155,7 @@ function DialogFooter({
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean
 }) {
+  const t = useTranslate()
   return (
     <div
       data-slot="dialog-footer"
@@ -156,9 +165,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">
-            {translate('auto.components.ui.dialog.f26c4baeda', 'Close')}
-          </Button>
+          <Button variant="outline">{t('auto.components.ui.dialog.f26c4baeda', 'Close')}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

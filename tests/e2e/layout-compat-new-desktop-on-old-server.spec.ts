@@ -21,7 +21,7 @@ import {
 } from './helpers/layout-compat-baseline'
 import { setPaneTitleFromTerminalMenu } from './helpers/terminal-pane-title-actions'
 import { readTerminalAccessibilityText } from './helpers/terminal-accessibility-tree'
-import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../src/shared/workspace-layout/terminal-tab-types'
 
 const PANE = '.pane[data-leaf-id]:visible'
 // The default split-right binding, the same in the pinned release.

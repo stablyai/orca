@@ -3,11 +3,12 @@
 import type {
   AgentLaunchPrompt,
   AgentLaunchPromptDisposal,
-  AgentLaunchResult
-} from '../../shared/agent-launch-intent'
-import { agentPromptRidesLaunchCommand } from '../../shared/tui-agent-startup'
+  AgentLaunchResult,
+  AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-startup'
 import type { AgentLaunchExecution, AgentLaunchLegacyHostExecution } from './agent-launch-execution'
-import type { AgentLaunchModeReceipt } from './agent-launch-mode'
+
 import {
   HANDED_TO_TERMINAL,
   launchCommandPrompt,

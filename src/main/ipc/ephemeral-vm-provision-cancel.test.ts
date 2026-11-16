@@ -1,6 +1,7 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
@@ -11,6 +12,7 @@ const { getPathMock, handleMock, resolveProvisionedRootSourceMock } = vi.hoisted
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: { handle: handleMock, removeHandler: vi.fn() }
 }))
@@ -23,10 +25,8 @@ import { registerEphemeralVmHandlers } from './ephemeral-vm'
 
 const tempDirs: string[] = []
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
   vi.clearAllMocks()
 })
 
@@ -57,7 +57,13 @@ it('cancels source resolution before a provisioned-root recipe creates resources
   const result = await provision
 
   expect(cancelled).toEqual({ cancelled: true })
-  expect(result).toEqual({ ok: false, error: 'Provisioning cancelled.', stdout: '', stderr: '' })
+  expect(result).toEqual({
+    ok: false,
+    error: 'Provisioning cancelled.',
+    errorCode: 'provisionCancelled',
+    stdout: '',
+    stderr: ''
+  })
   expect(existsSync(createMarker)).toBe(false)
 })
 

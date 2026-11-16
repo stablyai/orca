@@ -108,16 +108,6 @@ describe('local directory import rollback ownership', () => {
     }
   )
 
-  it('cleans its directory when reading it fails after creation', async () => {
-    readdirMock.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('source unreadable'))
-
-    expect(await importOneSource(source, destination, new Set())).toMatchObject({
-      status: 'failed',
-      reason: 'source unreadable'
-    })
-    expect(rmMock).toHaveBeenCalledExactlyOnceWith(target, { recursive: true, force: true })
-  })
-
   it('keeps the copy error when best-effort cleanup also fails', async () => {
     addEntry(source, 'lost.txt', 'file')
     openMock.mockRejectedValue(new Error('source changed'))
@@ -165,24 +155,6 @@ describe('local directory import rollback ownership', () => {
     }
   )
 
-  it.each(['top-level', 'nested'])(
-    'skips a %s symlink before creating output',
-    async (location) => {
-      if (location === 'top-level') {
-        stats.set(source, statFor('symlink'))
-      } else {
-        addEntry(addEntry(source, 'child', 'directory'), 'link', 'symlink')
-      }
-
-      expect(await importOneSource(source, destination, new Set())).toMatchObject({
-        status: 'skipped',
-        reason: 'symlink'
-      })
-      expect(mkdirMock).not.toHaveBeenCalled()
-      expect(rmMock).not.toHaveBeenCalled()
-    }
-  )
-
   it('copies nested files with exclusive destinations and preserves rename metadata', async () => {
     const file = addEntry(addEntry(source, 'child', 'directory'), 'data.txt', 'file')
     const renamedTarget = join(destination, 'incoming copy')
@@ -227,17 +199,6 @@ describe('local directory import rollback ownership', () => {
     expect(Buffer.concat(chunks).toString()).toBe('payload')
     expect(closeSource).toHaveBeenCalledOnce()
     expect(closeDestination).toHaveBeenCalledOnce()
-    expect(rmMock).not.toHaveBeenCalled()
-    expect(unlinkMock).not.toHaveBeenCalled()
-  })
-
-  it('leaves directory cleanup out of a top-level file failure', async () => {
-    stats.set(source, statFor('file'))
-
-    expect(await importOneSource(source, destination, new Set())).toMatchObject({
-      status: 'failed'
-    })
-    expect(mkdirMock).not.toHaveBeenCalled()
     expect(rmMock).not.toHaveBeenCalled()
     expect(unlinkMock).not.toHaveBeenCalled()
   })

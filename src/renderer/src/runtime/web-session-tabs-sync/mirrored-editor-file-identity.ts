@@ -1,5 +1,5 @@
-import type { Tab } from '../../../../shared/tab-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import {
   buildOwnedEditorFileId,
   runtimeOwnerKey

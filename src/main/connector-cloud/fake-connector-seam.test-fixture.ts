@@ -1,6 +1,6 @@
 // A stand-in for the connector seam and the machine around it, recording each call a client makes.
 import { vi } from 'vitest'
-import type { ConnectorProject } from '../../shared/connector-cloud-contract'
+import type { ConnectorProject } from '../../shared/connectors/connector-cloud-contract'
 import type {
   ConversationEvent,
   ConversationWatchListener

@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from '../../../../../shared/browser-text-insertion-chunks'
+
 import { createHarness } from './remote-browser-stream-lifecycle-test-harness'
 import { useRemoteBrowserPageInputQueue } from './use-remote-browser-page-input'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn(async () => ({})))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
 vi.mock('@/hooks/useShortcutLabel', () => ({ getShortcutPlatform: () => 'linux' }))
 
 const { lifecycle } = createHarness()
@@ -71,17 +73,70 @@ describe('streamed browser page keyboard input', () => {
     ])
   })
 
-  it('splits a large paste so no request exceeds the runtime socket frame', async () => {
+  it('copies and cuts to the local clipboard, deleting only after the write', async () => {
+    const order: string[] = []
+    const ui = {
+      writeClipboardText: async (text: string) => {
+        order.push(`write ${text}`)
+      },
+      writeTerminalClipboardText: async (text: string) => {
+        order.push(`verified write ${text}`)
+      }
+    }
+    Object.defineProperty(window, 'api', { configurable: true, value: { ui } })
+    const evalResult = (text: string, cutPending: boolean) => async () => {
+      order.push(cutPending ? 'eval cut' : 'eval copy')
+      return { result: JSON.stringify({ text, cutPending }) }
+    }
+    callRuntimeRpc
+      .mockImplementationOnce(evalResult('copied', false))
+      .mockImplementationOnce(evalResult('', false))
+      .mockImplementationOnce(evalResult('cut text', true))
+      .mockImplementationOnce(async () => {
+        order.push('eval delete')
+        return {}
+      })
     render(<StreamedFrame />)
-    const text = 'x'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 1)
+    const frame = screen.getByTestId('frame')
 
-    fireEvent.paste(screen.getByTestId('frame'), { clipboardData: { getData: () => text } })
+    // A cancelled keydown keeps the chord from reaching the host page.
+    expect(fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })).toBe(false)
+    fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })
+    fireEvent.keyDown(frame, { key: 'x', code: 'KeyX', ctrlKey: true })
 
-    await waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(2))
-    const params = { worktree: 'worktree-a', page: 'page-a' }
-    expect(sentInput()).toEqual([
-      ['browser.keyboardInsertText', { ...params, text: text.slice(0, -1) }],
-      ['browser.keyboardInsertText', { ...params, text: 'x' }]
+    await waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(4))
+    expect(sentInput().every(([method]) => method === 'browser.eval')).toBe(true)
+    // The empty second copy must not clear what the first one wrote.
+    expect(order).toEqual([
+      'eval copy',
+      'write copied',
+      'eval copy',
+      'eval cut',
+      'verified write cut text',
+      'eval delete'
+    ])
+  })
+
+  it('pastes the just-copied text when paste is pressed before the copy finishes', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { ui: { writeClipboardText: vi.fn(async () => {}) } }
+    })
+    callRuntimeRpc
+      .mockResolvedValueOnce({ result: JSON.stringify({ text: 'NEW', cutPending: false }) })
+      .mockResolvedValueOnce({ result: JSON.stringify({ text: '', cutPending: false }) })
+    render(<StreamedFrame />)
+    const frame = screen.getByTestId('frame')
+
+    // The second copy has nothing selected, so NEW is still what the clipboard holds.
+    fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })
+    fireEvent.keyDown(frame, { key: 'c', code: 'KeyC', ctrlKey: true })
+    fireEvent.paste(frame, { clipboardData: { getData: () => 'OLD' } })
+
+    await waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(3))
+    expect(sentInput()[2]).toEqual([
+      'browser.keyboardInsertText',
+      { worktree: 'worktree-a', page: 'page-a', text: 'NEW' }
     ])
   })
 })

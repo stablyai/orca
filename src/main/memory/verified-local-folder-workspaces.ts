@@ -3,8 +3,8 @@ import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
-} from '../../shared/folder-workspace-execution-host'
-import { folderWorkspaceKey } from '../../shared/workspace-scope'
+} from '../../shared/folder-workspaces/folder-workspace-execution-host'
+import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 
 export function getVerifiedLocalFolderWorkspaceKeys(state: FolderWorkspaceHostState): Set<string> {
   const counts = new Map<string, number>()

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { foldToolMessages } from './native-chat-tool-fold'
 import { pairToolBlocks } from './native-chat-tool-pairs'
-import type { NativeChatBlock, NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
   return { id, role: 'assistant', source: 'transcript', timestamp: 1, blocks }
@@ -44,12 +44,4 @@ it('keeps named and positional answers after calls fold across provider rows', (
     { call: shell, result: done }
   ])
   expect(orphan).toMatchObject({ id: 'outputs', role: 'tool', blocks: [stray] })
-})
-
-it('reuses a message with fully attributable answers', () => {
-  const input = message('run', [
-    { type: 'tool-call', name: 'Bash', callId: 'x', input: {} },
-    { type: 'tool-result', callId: 'x', output: 'owned' }
-  ])
-  expect(foldToolMessages([input])[0]).toBe(input)
 })

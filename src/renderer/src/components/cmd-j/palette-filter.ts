@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getVisibleWorkspaceHostIdSet } from '../sidebar/visible-worktree-host-scope'
+import { getVisibleWorkspaceHostIdSet } from '../sidebar/worktree-list/listing/visible-worktree-host-scope'
 import { resolveWorktreeFilterHostId, type PaletteFilterModel } from './palette-filter-options'
 
 export type PaletteFilterField = 'host' | 'repository'

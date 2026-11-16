@@ -1,14 +1,14 @@
 /** orcadFence reserves a target for its managed tunnel and refuses direct relay access. Claim only empty targets; existing state requires catalog migration. */
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import {
   getManagedOrcadFenceEnvironmentId,
   isEphemeralRuntimeSshOwner
-} from '../../../shared/managed-orcad-ssh-owner'
+} from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import type {
   OrcadMigrationBlocker,
   OrcadMigrationPreflight
 } from '../../../shared/orcad-migration/orcad-migration-preflight'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   collectDependentStateBlockers,
   dependentStateMessage,

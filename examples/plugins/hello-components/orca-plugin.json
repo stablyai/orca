@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "hello-components",
+  "name": "Hello Components",
+  "version": "1.0.0",
+  "description": "Sample components panel: persisted state, a list, an input, a switch and buttons drawn with Orca's own controls.",
+  "engines": { "orca": ">=1.4.246" },
+  "pluginApi": 1,
+  "contributes": {
+    "panels": [
+      {
+        "id": "todos",
+        "title": "Hello Components",
+        "icon": "check",
+        "entry": "dist/panel.js",
+        "ui": "components"
+      }
+    ]
+  },
+  "capabilities": []
+}

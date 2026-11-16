@@ -1,7 +1,7 @@
 import { app, ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { DashboardSnapshot } from '../../shared/dashboard-snapshot'
+import type { DashboardSnapshot } from '../../shared/agent-status/presentation/dashboard-snapshot'
 import {
   createOrFocusDashboardPopout,
   closeDashboardPopout,
@@ -9,8 +9,8 @@ import {
   isDashboardPopoutRenderer,
   onDashboardPopoutOpenChanged
 } from '../window/dashboard-popout-window'
-import { safelyRevealWindow } from '../window/focus-existing-window'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 import {
   admitDashboardSnapshot,

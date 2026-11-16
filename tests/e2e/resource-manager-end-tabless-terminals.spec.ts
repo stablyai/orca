@@ -35,7 +35,7 @@ test('Resource Manager ends a tab-less terminal this run spawned', async ({
       cols: 80,
       rows: 24,
       cwd: folderPath,
-      worktreeId: `folder:${folder.id}`,
+      worktreeId: `folder:${folder.folderWorkspace.id}`,
       initiallyHidden: true
     })
     return spawned.id
@@ -46,12 +46,10 @@ test('Resource Manager ends a tab-less terminal this run spawned', async ({
   await orcaPage.getByRole('tab', { name: 'PTYs', exact: true }).click()
   const panel = orcaPage.getByRole('tabpanel', { name: /^PTYs/ })
   await expect(panel.getByText(/1 without a tab/)).toBeVisible()
-  await panel.getByRole('button', { name: /^End / }).click()
-  const dialog = orcaPage.getByRole('dialog', { name: /^End .*\?$/ })
-  await dialog.getByRole('button', { name: 'End terminal', exact: true }).click()
-  // The dialog closes only after End returns, so the row state below is End's result.
-  await expect(dialog).toBeHidden()
-  await expect(panel.getByRole('button', { name: /^End / })).toHaveCount(0)
+  const rows = panel.locator('[data-resource-pty-row]')
+  await rows.getByRole('button', { name: /^End / }).click()
+  await expect(orcaPage.getByRole('dialog', { name: /^End .*\?$/ })).toHaveCount(0)
+  await expect(rows).toHaveCount(0)
   await expect
     .poll(async () =>
       (await orcaPage.evaluate(() => window.api.pty.listSessions({ connectionId: null }))).map(

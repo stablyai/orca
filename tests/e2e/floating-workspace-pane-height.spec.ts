@@ -148,7 +148,7 @@ test('floating panel group bodies and panes own real pixels, single group and sp
   await expect(openPanel.locator(`[data-tab-id="${first.id}"]`)).toBeVisible()
 })
 
-test('tabs use spare room for titles, share crowded space, and scroll at the minimum', async ({
+test('floating tabs keep their preferred width and share constrained space before overflowing', async ({
   orcaPage
 }) => {
   const titles = [
@@ -161,7 +161,10 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
       ({ count, titles, worktreeId }) => {
         const store = window.__store!
         store.setState((state) => ({
-          settings: { ...state.settings!, floatingTerminalEnabled: true }
+          settings: {
+            ...state.settings!,
+            floatingTerminalEnabled: true
+          }
         }))
         const tabs = [...(store.getState().tabsByWorktree[worktreeId] ?? [])]
         while (tabs.length < count) {
@@ -183,18 +186,29 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
   await openFloatingPanel(orcaPage)
   const panel = orcaPage.locator(OPEN_PANEL_SELECTOR).first()
   await panel.evaluate((element) => {
-    element.style.maxWidth = '720px'
+    element.style.maxWidth = '660px'
   })
   const firstSlot = panel.locator(`[data-tab-strip-slot="${first}"]`)
   const width = (): Promise<number> =>
     firstSlot.evaluate((element) => element.getBoundingClientRect().width)
-  await expect.poll(width).toBeGreaterThan(384)
+  await expect.poll(width).toBeCloseTo(300, 0)
   const singleWidth = await width()
   const strip = panel.locator('.terminal-tab-strip').first()
 
   const [, second] = await seedFloatingTerminalTabs(2)
   await expect(panel.locator(`[data-tab-strip-slot="${second}"]`)).toContainText('Go')
-  await expect.poll(width).toBeCloseTo(singleWidth - 100, 0)
+  await expect.poll(width).toBeCloseTo((await strip.evaluate((el) => el.clientWidth)) / 2, 0)
+  expect(await width()).toBeLessThan(singleWidth)
+  const twoTabWidth = await width()
+  await panel.evaluate((element) => {
+    element.style.maxWidth = '540px'
+  })
+  await expect.poll(width).toBeLessThan(twoTabWidth)
+  expect(await width()).toBeCloseTo((await strip.evaluate((el) => el.clientWidth)) / 2, 0)
+  await panel.evaluate((element) => {
+    element.style.maxWidth = '660px'
+  })
+  await expect.poll(width).toBeCloseTo(twoTabWidth, 0)
 
   const [, , third] = await seedFloatingTerminalTabs(3)
   await expect(panel.locator(`[data-tab-strip-slot="${third}"]`)).toContainText(
@@ -208,16 +222,18 @@ test('tabs use spare room for titles, share crowded space, and scroll at the min
       .locator('[data-tab-strip-slot]')
       .evaluateAll((slots) => slots.map((element) => element.getBoundingClientRect().width))
   const crowdedWidths = await widths()
-  expect(crowdedWidths.every((value) => value >= 100)).toBe(true)
+  const stripWidth = await strip.evaluate((element) => element.clientWidth)
+  expect(crowdedWidths.every((value) => value >= 144)).toBe(true)
+  expect(crowdedWidths.reduce((sum, value) => sum + value, 0)).toBeCloseTo(stripWidth, 0)
   expect(crowdedWidths[0]).toBeCloseTo(crowdedWidths[2], 0)
-  expect(crowdedWidths[1]).toBe(100)
+  expect(crowdedWidths[1]).toBeCloseTo(crowdedWidths[0], 0)
 
-  await seedFloatingTerminalTabs(6)
-  await expect(panel.locator('[data-tab-strip-slot]')).toHaveCount(6)
+  await seedFloatingTerminalTabs(12)
+  await expect(panel.locator('[data-tab-strip-slot]')).toHaveCount(12)
   await expect
     .poll(() => strip.evaluate((element) => element.scrollWidth > element.clientWidth))
     .toBe(true)
-  expect(await widths()).toEqual([100, 100, 100, 100, 100, 100])
+  expect(await widths()).toEqual(Array(12).fill(144))
 })
 
 // Real pointer capture requires the isolated visible-window project.

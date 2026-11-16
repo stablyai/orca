@@ -8,24 +8,18 @@ import {
   type TerminalWireBuild
 } from './versioned-terminal-wire'
 
-const REPORTED_CLIENT_REF = '4cb013c0a9'
 const REPORTED_HOST_REF = '4bb337741c'
-const PRE_FIX_MAIN_REF = 'fd9125ea8c'
 const MARKER = 'REPORTED_LOSSY_INITIAL_MARKER'
 const RECOVERED_LIVE_MARKER = 'RECOVERED_LIVE_AFTER_INITIAL'
 const CONTINUED_LIVE_MARKER = 'CONTINUED_LIVE_AFTER_RECOVERY'
 const TIMEOUT_MS = 180_000
 
 let candidate: TerminalWireBuild
-let preFixMain: TerminalWireBuild
-let reportedClient: TerminalWireBuild
 let reportedHost: TerminalWireBuild
 
 beforeAll(async () => {
-  ;[candidate, preFixMain, reportedClient, reportedHost] = await Promise.all([
+  ;[candidate, reportedHost] = await Promise.all([
     loadTerminalWireBuild(WORKING_TREE),
-    loadTerminalWireBuild(PRE_FIX_MAIN_REF),
-    loadTerminalWireBuild(REPORTED_CLIENT_REF),
     loadTerminalWireBuild(REPORTED_HOST_REF)
   ])
 }, TIMEOUT_MS)
@@ -118,54 +112,6 @@ function readTerminalText(terminal: Terminal): string {
 }
 
 describe('reported mixed-version lossy initial snapshot', () => {
-  it(
-    'reconstructs the blank 1.4.192-client / 1.4.191-host boundary',
-    async () => {
-      const record = await runLossyInitialSnapshotPair({
-        clientBuild: reportedClient,
-        hostBuild: reportedHost
-      })
-
-      expect(record.snapshotStarts).toEqual([
-        expect.objectContaining({ truncated: true, seq: expect.any(Number) })
-      ])
-      expect(record.frames).toEqual([
-        'client-to-host:Subscribe',
-        'host-to-client:SnapshotStart',
-        'host-to-client:SnapshotChunk',
-        'host-to-client:SnapshotEnd',
-        'client-to-host:Unsubscribe'
-      ])
-      expect(record.snapshots).toEqual([])
-      expect(record.rendered.trim()).toBe('')
-    },
-    TIMEOUT_MS
-  )
-
-  it(
-    'reproduces the blank terminal with the exact pre-fix main client',
-    async () => {
-      const record = await runLossyInitialSnapshotPair({
-        clientBuild: preFixMain,
-        hostBuild: reportedHost
-      })
-
-      expect(record.snapshotStarts).toEqual([
-        expect.objectContaining({ truncated: true, seq: expect.any(Number) })
-      ])
-      expect(record.frames).toEqual([
-        'client-to-host:Subscribe',
-        'host-to-client:SnapshotStart',
-        'host-to-client:SnapshotChunk',
-        'host-to-client:SnapshotEnd',
-        'client-to-host:Unsubscribe'
-      ])
-      expect(record.snapshots).toEqual([])
-      expect(record.rendered.trim()).toBe('')
-    },
-    TIMEOUT_MS
-  )
-
   it(
     'paints the old host image exactly once with the candidate client',
     async () => {

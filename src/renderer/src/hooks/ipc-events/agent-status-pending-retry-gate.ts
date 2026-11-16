@@ -1,5 +1,5 @@
 import type { AppState } from '../../store/types'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type AgentStatusPendingRetryState = Pick<
   AppState,

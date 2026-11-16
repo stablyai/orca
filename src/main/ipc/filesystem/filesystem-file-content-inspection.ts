@@ -1,9 +1,13 @@
-import { extname } from 'node:path'
-import { localLogFileIdentity } from '../../ai-vault/local-log-tail-reader'
-import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/binary-buffer'
+import {
+  IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
+  filePreviewExtension
+} from '../../../shared/file-preview/file-preview-kind'
+import { localLogFileIdentity } from '../../ai-vault/transcripts/local-log-tail-reader'
+import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import {
   fileTooLargeError,
   openLocalRegularFile,
+  readImageFileSignature,
   readLocalFileBounded,
   readLocalFilePrefix
 } from './local-regular-file-read'
@@ -11,21 +15,11 @@ import {
 // Monaco degrades features on large files; a 5MB cap would reject ordinary logs and JSON.
 export const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024
 export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
-export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.avif': 'image/avif',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
-}
 
 export type LocalFileContent = {
   mediaUrl?: string
+  /** Bytes behind `mediaUrl`, for viewers that no longer see the content. */
+  size?: number
   content: string
   isBinary: boolean
   isImage?: boolean
@@ -34,10 +28,18 @@ export type LocalFileContent = {
 }
 
 /** One open, one handle: the size check, binary probe and read all see the same regular file. */
-export async function readLocalFileContent(filePath: string): Promise<LocalFileContent> {
+export async function readLocalFileContent(
+  filePath: string,
+  options: { imageBySignature?: boolean } = {}
+): Promise<LocalFileContent> {
   const { handle, stats } = await openLocalRegularFile(filePath)
   try {
-    const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
+    const extension = filePreviewExtension(filePath)
+    const mimeType =
+      IMAGE_AND_PDF_PREVIEW_MIME_TYPES[extension] ??
+      (options.imageBySignature && extension === ''
+        ? (await readImageFileSignature(handle))?.mimeType
+        : undefined)
     const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     if (stats.size > sizeLimit) {
       throw fileTooLargeError(stats.size, sizeLimit)

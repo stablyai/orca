@@ -23,10 +23,10 @@ type ComposerInitialTargetStateInput = Pick<
 >
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { isWorkspaceStatusId } from '../../../../shared/workspace-statuses'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
-import { findActionableFolderProjectGroup } from '@/lib/new-workspace-project-options'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { isWorkspaceStatusId } from '../../../../shared/workspace/status/workspace-statuses'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
+import { findActionableFolderProjectGroup } from '@/lib/workspace/creation/new-workspace-project-options'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 
 export function useComposerInitialTargetState(input: ComposerInitialTargetStateInput) {
   const {
@@ -153,11 +153,9 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     [actionableHostIds, projectGroups, selectedProjectGroupId]
   )
 
-  useEffect(() => {
-    if (selectedProjectGroupId && !selectedProjectGroup) {
-      setSelectedProjectGroupId(null)
-    }
-  }, [selectedProjectGroup, selectedProjectGroupId])
+  if (selectedProjectGroupId && !selectedProjectGroup) {
+    setSelectedProjectGroupId(null)
+  }
 
   useEffect(() => {
     if (

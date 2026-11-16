@@ -1,5 +1,6 @@
 import { Notification } from 'electron'
-import type { NotificationDeliveryProbeResult } from '../../shared/notification-settings-types'
+import { translateMain } from '../i18n/main-i18n'
+import type { NotificationDeliveryProbeResult } from '../../shared/notifications/notification-settings-types'
 import { activeNotifications } from './native-notification-lifecycle'
 
 const NOTIFICATION_PROBE_RESULT_TIMEOUT_MS = 3000
@@ -37,8 +38,11 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
   permissionDialogTriggeredThisSession = true
 
   const probe = new Notification({
-    title: 'Orca notifications are on',
-    body: 'Orca will alert you when agents finish or terminals need attention.',
+    title: translateMain('notifications.test.title', 'Orca notifications are on'),
+    body: translateMain(
+      'notifications.permissionProbe.body',
+      'Orca will alert you when agents finish or terminals need attention.'
+    ),
     silent: true
   })
   activeNotifications.add(probe)

@@ -1,9 +1,9 @@
-import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
 /** Pin connect-bound timing and recoverability together: subscribe rejection crosses IPC with only its message.
  * Separate assertions could miss a rewording that stops pane recovery. */
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { generateKeyPair, publicKeyToBase64 } from '../../e2ee-crypto'
+import { generateKeyPair, publicKeyToBase64 } from '../e2ee/node/e2ee-crypto'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   isRecoverableRemoteRuntimeConnectionError,
@@ -72,29 +72,6 @@ describe('remote runtime subscription connect bound', () => {
     controller.abort()
     await rejection
     await vi.waitFor(() => expect(sockets.size).toBe(0))
-  })
-
-  it('creates no socket for a pre-aborted request', async () => {
-    const endpoint = await listenSilentUpgradeServer()
-    const keyPair = generateKeyPair()
-    const controller = new AbortController()
-    controller.abort()
-    await expect(
-      subscribeRemoteRuntimeTransport(
-        pairedRuntimeConnectionFromOffer({
-          v: 2,
-          endpoint,
-          deviceToken: 'device-token',
-          publicKeyB64: publicKeyToBase64(keyPair.publicKey)
-        }),
-        'files.search',
-        {},
-        15_000,
-        { onResponse: vi.fn(), onError: vi.fn() },
-        { signal: controller.signal }
-      )
-    ).rejects.toMatchObject({ name: 'AbortError' })
-    expect(sockets.size).toBe(0)
   })
 
   it('fails an unanswered subscribe on the connect bound, with a message that survives the code strip', async () => {

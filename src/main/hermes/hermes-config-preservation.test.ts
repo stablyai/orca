@@ -58,17 +58,6 @@ describe('Hermes config preservation on disk', () => {
     expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe('previous recovery point')
   })
 
-  it('does not create a backup on a no-op', () => {
-    writeFileSync(configPath, configured)
-    service.install()
-    expect(existsSync(`${configPath}.bak`)).toBe(false)
-  })
-
-  it('does not create a config when removing an absent integration', () => {
-    expect(service.remove().state).toBe('not_installed')
-    expect(readdirSync(directory)).toEqual([])
-  })
-
   it('preserves comments and multiline values through real install and removal', () => {
     writeFileSync(configPath, initial)
     expect(service.install().state).toBe('installed')

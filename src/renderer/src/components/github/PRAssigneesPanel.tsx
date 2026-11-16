@@ -3,22 +3,23 @@ import { useShallow } from 'zustand/react/shallow'
 import { LoaderCircle, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { useImmediateMutation, useRepoAssignees } from '@/hooks/useIssueMetadata'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { useImmediateMutation } from '@/hooks/useIssueMetadata'
+import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import {
-  parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo,
   type GitHubWorkItemProjectOrigin
 } from '@/components/github/github-work-item-identity'
+import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../shared/github/work-items/work-item-target'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 
 export function PRAssigneesPanel({
   item,
@@ -33,6 +34,7 @@ export function PRAssigneesPanel({
   sourceContext?: TaskSourceContext | null
   onMutated: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
   const [localAssignees, setLocalAssignees] = useState<GitHubAssignableUser[]>(
     () => item.assignees ?? []
@@ -80,9 +82,14 @@ export function PRAssigneesPanel({
     ownerTarget,
     projectOrigin?.host ?? assigneeSlug?.host
   )
-  const repoAssigneesByPath = useRepoAssignees(repoPath, item.repoId, { target: ownerTarget })
-  const repoAssignees = slugOwner && slugRepo ? repoAssigneesBySlug : repoAssigneesByPath
-  const canEditAssignees = Boolean(projectOrigin || repoPath)
+  const usesSlug = Boolean(slugOwner && slugRepo)
+  const repoAssigneesByPath = useRepoAssignees(
+    usesSlug ? null : repoPath,
+    usesSlug ? null : item.repoId,
+    { target: ownerTarget, ownerRepo: prRepo }
+  )
+  const repoAssignees = usesSlug ? repoAssigneesBySlug : repoAssigneesByPath
+  const canEditAssignees = Boolean(projectOrigin || repoPath || ownerTarget.kind === 'environment')
   const assigneesByLogin = useMemo(
     () => new Map(repoAssignees.data.map((user) => [user.login.toLowerCase(), user])),
     [repoAssignees.data]
@@ -108,6 +115,7 @@ export function PRAssigneesPanel({
             sourceContext,
             projectOrigin,
             issueRepo: prRepo,
+            type: item.type,
             number: item.number,
             updates: isAssigned ? { removeAssignees: [login] } : { addAssignees: [login] }
           }),
@@ -131,11 +139,14 @@ export function PRAssigneesPanel({
           useAppStore.getState().recordFeatureInteraction('github-tasks')
           onMutated()
         },
-        onError: (err) => toast.error(err)
+        onError: (err) => {
+          toast.error(err)
+        }
       })
     },
     [
       assigneesByLogin,
+      item.type,
       item.id,
       item.number,
       item.repoId,
@@ -166,16 +177,13 @@ export function PRAssigneesPanel({
   return (
     <section>
       <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <span>{translate('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
+        <span>{t('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
         <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
           <PopoverTrigger asChild>
             <button
               type="button"
               disabled={!canEditAssignees || isPending('assignees') || repoAssignees.loading}
-              aria-label={translate(
-                'auto.components.GitHubItemDialog.76adcf5fe2',
-                'Edit assignees'
-              )}
+              aria-label={t('auto.components.GitHubItemDialog.76adcf5fe2', 'Edit assignees')}
               className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               {isPending('assignees') ? (
@@ -234,7 +242,7 @@ export function PRAssigneesPanel({
       </div>
       {localAssignees.length === 0 ? (
         <div className="text-[12px] text-muted-foreground">
-          {translate('auto.components.GitHubItemDialog.c67de9e2fe', 'No one assigned')}
+          {t('auto.components.GitHubItemDialog.c67de9e2fe', 'No one assigned')}
         </div>
       ) : (
         <ul className="flex flex-col gap-1.5">

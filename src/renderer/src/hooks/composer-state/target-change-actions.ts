@@ -1,4 +1,3 @@
-import { selectCanonicalProjectHostSetups } from '@/store/project-host-setup-selector'
 import type { ComposerModel } from './composer-model'
 
 type TargetChangeActionsInput = Pick<
@@ -41,16 +40,17 @@ import { useCallback } from 'react'
 import {
   isLinearLinkedWorkItem,
   getLinearLinkedWorkItemBranchName
-} from '@/lib/linear-linked-work-item'
+} from '@/lib/work-items/linear/linear-linked-work-item'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../shared/new-workspace/workspace-source'
 import {
   buildProjectHostSetupOptions,
   getProjectHostSetupSelectionKey,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { useAppStore } from '@/store'
-import { getComposerEligibleRepos } from '@/lib/new-workspace-composer-repo'
+import '@/lib/workspace/creation/new-workspace-composer-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace/new-workspace-dialog-repo'
 
 export function useTargetChangeActions(input: TargetChangeActionsInput) {
   const {
@@ -246,8 +246,8 @@ export function useTargetChangeActions(input: TargetChangeActionsInput) {
           ? option
           : buildProjectHostSetupOptions({
               projectId: selectedRepoProjectId,
-              projectHostSetups: selectCanonicalProjectHostSetups(useAppStore.getState()),
-              eligibleRepos: getComposerEligibleRepos(useAppStore.getState().repos),
+              projectHostSetups: useAppStore.getState().projectHostSetups,
+              eligibleRepos: getNewWorkspaceDialogEligibleRepos(useAppStore.getState().repos),
               hosts: hostOptions
             }).find(
               (candidate): candidate is ReadyProjectHostSetupOption =>

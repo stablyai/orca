@@ -5,9 +5,11 @@ import { XIcon } from 'lucide-react'
 import * as SheetPrimitive from 'radix-ui/dialog'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
-import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
+import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
+import { useTranslate } from '@/i18n/use-translate'
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -42,7 +44,7 @@ function SheetOverlay({
 
 const sheetContentVariants = cva(
   // Match dropdown/dialog surface/border/shadow tokens for a visible edge in either theme.
-  'fixed z-50 flex flex-col gap-0 bg-background/96 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none transition ease-in-out dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
+  'fixed z-50 flex flex-col gap-0 bg-dialog-surface text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] outline-none transition ease-in-out dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
   {
     variants: {
       side: {
@@ -75,30 +77,34 @@ function SheetContent({
     overlayClassName?: string
     overlayStyle?: React.CSSProperties
   }) {
+  const t = useTranslate()
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
   return (
     <SheetPortal>
       <SheetOverlay className={overlayClassName} style={overlayStyle} />
-      <SheetPrimitive.Content
-        data-slot="sheet-content"
-        className={cn(sheetContentVariants({ side }), className)}
-        // Disable native dragging where portaled sheet headers overlap the titlebar.
-        style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        {...props}
-        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
-      >
-        {children}
-        {showCloseButton && (
-          <SheetPrimitive.Close
-            data-slot="sheet-close"
-            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">
-              {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
-            </span>
-          </SheetPrimitive.Close>
-        )}
-      </SheetPrimitive.Content>
+      <OverlayFocusScope value={scope}>
+        <SheetPrimitive.Content
+          data-slot="sheet-content"
+          className={cn(sheetContentVariants({ side }), className)}
+          // Disable native dragging where portaled sheet headers overlap the titlebar.
+          style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          {...props}
+          ref={focusScopeRef}
+          onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
+          onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
+        >
+          {children}
+          {showCloseButton && (
+            <SheetPrimitive.Close
+              data-slot="sheet-close"
+              className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            >
+              <XIcon />
+              <span className="sr-only">{t('auto.components.ui.sheet.1189e9fe0a', 'Close')}</span>
+            </SheetPrimitive.Close>
+          )}
+        </SheetPrimitive.Content>
+      </OverlayFocusScope>
     </SheetPortal>
   )
 }

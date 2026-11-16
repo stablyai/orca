@@ -14,6 +14,7 @@ import {
   getEffectiveKeybindingsForAction,
   getEffectiveKeybindingsForDefinition,
   getDefaultBindings,
+  isDefaultKeybinding,
   keybindingConflictGroups,
   bindingsOverlap,
   isKeybindingInterceptedBeforeBrowserChords,
@@ -32,7 +33,7 @@ function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
     case 'Alt':
       return isMac ? '⌥' : 'Alt'
     case 'Shift':
-      return isMac ? '⇧' : 'Shift'
+      return '⇧'
   }
 }
 
@@ -60,7 +61,7 @@ export function formatKeybinding(binding: string, platform: NodeJS.Platform): st
     parts.push(isMac ? '⌥' : 'Alt')
   }
   if (parsed.shift) {
-    parts.push(isMac ? '⇧' : 'Shift')
+    parts.push('⇧')
   }
   parts.push(formatKeyToken(parsed.key, isMac))
   return parts
@@ -221,16 +222,13 @@ export function findKeybindingConflictsForDefinitions(
         const definition = byId.get(id)
         return (
           !definition?.implicitDefaultYields ||
-          Object.hasOwn(overrides ?? {}, id) ||
+          // Why: an override can carry the action's own default, which still shares that chord on purpose.
+          !getDefaultBindings(definition, platform).some((ownDefault) =>
+            bindingsOverlap(definition, binding, definition, ownDefault, platform)
+          ) ||
           !Array.from(actionIds).every((otherId) => {
             const other = byId.get(otherId)
-            return (
-              otherId === id ||
-              (other &&
-                getDefaultBindings(other, platform).some((ownDefault) =>
-                  bindingsOverlap(definition, binding, other, ownDefault, platform)
-                ))
-            )
+            return otherId === id || (other && isDefaultKeybinding(other, binding, platform))
           })
         )
       })

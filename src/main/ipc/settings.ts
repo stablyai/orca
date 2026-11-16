@@ -1,63 +1,57 @@
-import { getClaudeAgentViewService } from '../claude/agent-view-service'
+import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
+import { confirmBrowserPasswordOwner } from '../browser-passwords/browser-password-reauth'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
-import { listSystemFontFamilies } from '../system-fonts'
-import { previewGhosttyImport } from '../ghostty/index'
-import { previewWarpThemeImport } from '../warp-themes'
+import { listSystemFontFamilies } from '../window/desktop-integration/system-fonts'
+import { registerSettingsImportHandlers } from './settings-import-handlers'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { track } from '../telemetry/client'
-import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
-import type { AgentAwakeService } from '../agent-awake-service'
+import {
+  SETTINGS_CHANGED_WHITELIST,
+  type SettingsChangedKey
+} from '../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
-import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
-import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
+import { applyAgentStatusHooksEnabled } from '../agent-hooks/installation/managed-agent-hook-controls'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { recordManagedHookInstallFailure } from '../agent-hooks/installation/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/browser-session-proxy'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { applyBrowserSessionProxies } from '../browser/sessions/proxy/browser-session-proxy'
+import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
-import { normalizeAppIconId } from '../../shared/app-icon'
-import { normalizeUiLanguage } from '../../shared/ui-language'
-import { applyAppIcon } from '../app-icon'
-import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
-import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
-import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
-import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
-import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
-import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/runtime-environment-preference'
-import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { normalizeAppIconId } from '../../shared/app-lifecycle/identity/app-icon'
+import { normalizeUiLanguage } from '../../shared/i18n/ui-language'
+import { applyAppIcon } from '../window/desktop-integration/app-icon'
+import { registerCustomAppIconHandlers } from './custom-app-icon'
+import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
+import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
+import { normalizeTerminalLineHeight } from '../../shared/terminal/appearance/terminal-line-height-settings'
+import { prepareLocalWorktreeRootsForRepos } from '../workspaces/creation/worktree-root-preparation'
+import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktrees/creation/worktree-base-directory-watcher'
+import { applyPRBotAuthorOverride } from '../../shared/source-control/review-comments/pr-bot-author-overrides'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environments/catalog/runtime-environment-preference'
+import { haveSameDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../shared/mobile-pairing-custom-address'
+} from '../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
-} from '../../shared/computer-awake-mode'
-import { resolveAiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+} from '../../shared/app-lifecycle/computer-awake-mode'
+import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
-
-type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
-  terminalScrollbackBytes?: unknown
-}
-
-function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<GlobalSettings> {
-  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
-    args as LegacyTerminalScrollbackSettingsUpdate
-  void _legacyScrollbackBytes
-  // Plugin consent and enablement require main's reviewed-fingerprint handlers.
-  delete sanitizedArgs.pluginConsents
-  delete sanitizedArgs.disabledPlugins
-  return sanitizedArgs
-}
+const registryRoot = getRuntimeEnvironmentRegistryRoot
 
 // Electron menus do not react to settings; rebuild appearance checkboxes after writes.
 const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
@@ -71,6 +65,7 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  registerCustomAppIconHandlers(store)
   ipcMain.handle(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
@@ -93,8 +88,9 @@ export function registerSettingsHandlers(
     }
   })
 
-  ipcMain.handle('settings:get', () =>
-    readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+  ipcMain.handle(
+    'settings:get',
+    async () => await readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   )
 
   ipcMain.handle(
@@ -111,8 +107,8 @@ export function registerSettingsHandlers(
   )
 
   // PTYs can bind before hydration; transport authority selection needs persisted settings synchronously.
-  ipcMain.on('settings:get-sync', (event) => {
-    event.returnValue = readSettingsWithRuntimeEnvironmentPreference(store, app.getPath('userData'))
+  ipcMain.on('settings:get-sync', async (event) => {
+    event.returnValue = await readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
@@ -177,6 +173,15 @@ export function registerSettingsHandlers(
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
+    if (
+      sanitizedArgs.browserPasswordsFillRequiresReauth === false &&
+      (store.getSettings().browserPasswordsFillRequiresReauth !== true ||
+        !(await confirmBrowserPasswordOwner('turn off saved password fill authentication', {
+          always: true
+        })))
+    ) {
+      delete sanitizedArgs.browserPasswordsFillRequiresReauth
+    }
     // No-op UI saves must not inflate settings_changed adoption telemetry.
     const before = store.getSettings()
     const updateOptions = {
@@ -201,15 +206,11 @@ export function registerSettingsHandlers(
       ('httpProxyBypassRules' in sanitizedArgs &&
         before.httpProxyBypassRules !== result.httpProxyBypassRules)
     if (proxySettingsChanged) {
-      // Start both authorities before yielding so requests cannot enter between their barriers.
-      const defaultSessionApply = applyElectronProxySettings(result)
-      const browserSessionsApply = applyBrowserSessionProxies(
-        browserSessionRegistry.listProfiles(),
-        result
-      )
+      // Start every authority before yielding so requests cannot enter between their barriers.
       const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
-        defaultSessionApply,
-        browserSessionsApply
+        applyElectronProxySettings(result),
+        applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), result),
+        applyProxyToElectronUpdaterSession(result)
       ])
       if (defaultSessionResult.status === 'rejected') {
         console.warn('[settings] failed to apply network proxy settings')
@@ -291,14 +292,14 @@ export function registerSettingsHandlers(
 
   ipcMain.handle(
     'settings:set-active-runtime-environment-preference',
-    (event, args: { environmentId?: unknown }): GlobalSettings => {
+    async (event, args: { environmentId?: unknown }): Promise<GlobalSettings> => {
       const requestedEnvironmentId = args?.environmentId
       if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
         throw new Error('Invalid default host for new projects')
       }
       const requestedId = requestedEnvironmentId?.trim() || null
       const environmentId =
-        requestedId === null ? null : resolveEnvironment(app.getPath('userData'), requestedId).id
+        requestedId === null ? null : (await resolveEnvironment(registryRoot(), requestedId)).id
       return store.updateSettings(
         { activeRuntimeEnvironmentId: environmentId },
         { notifyListeners: true, originWebContentsId: event.sender.id }
@@ -308,14 +309,7 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:listFonts', () => listSystemFontFamilies())
 
-  ipcMain.handle('settings:previewGhosttyImport', () => {
-    return previewGhosttyImport(store)
-  })
-
-  ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
-    const source = args === undefined ? { kind: 'auto' } : args
-    return previewWarpThemeImport(store, source, event.sender)
-  })
+  registerSettingsImportHandlers(store)
 
   ipcMain.handle('cache:getGitHub', () => {
     return store.getGitHubCache()

@@ -1,9 +1,10 @@
 import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
-import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
+import TerminalPaneOverlayLayer from './terminal-pane/mounting/TerminalPaneOverlayLayer'
 import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
-import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
+import StructuredAgentSessionPaneOverlayLayer from './native-chat/pane/routing/StructuredAgentSessionPaneOverlayLayer'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
+import type { HiddenTerminalPrewarm } from './terminal-pane/controller/terminal-pane-types'
 
 /** Share retained pane hosts across group-tree hosts so retention, parking and browser paint have one lifecycle owner. */
 export function WorkspacePaneOverlayLayers({
@@ -11,6 +12,7 @@ export function WorkspacePaneOverlayLayers({
   worktreePath,
   isVisible,
   shouldMeasureHiddenWorktree,
+  hiddenTerminalPrewarm = null,
   shouldColdParkTerminalPanes,
   isForceParked,
   activityTerminalPortals,
@@ -24,6 +26,7 @@ export function WorkspacePaneOverlayLayers({
   worktreePath: string
   isVisible: boolean
   shouldMeasureHiddenWorktree: boolean
+  hiddenTerminalPrewarm?: HiddenTerminalPrewarm | null
   shouldColdParkTerminalPanes: boolean
   isForceParked: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
@@ -43,6 +46,7 @@ export function WorkspacePaneOverlayLayers({
         coldParkTerminalPanes={shouldColdParkTerminalPanes}
         isForceParked={isForceParked}
         shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+        hiddenTerminalPrewarm={hiddenTerminalPrewarm}
         activityTerminalPortals={activityTerminalPortals}
         backgroundMountTabIds={backgroundMountTabIds}
         activationDeferredMountTabIds={activationDeferredMountTabIds}

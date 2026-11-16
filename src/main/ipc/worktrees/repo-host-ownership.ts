@@ -3,9 +3,9 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Store } from '../../persistence/loading-store/store'
-import { resolveWorktreeRemovalRepoOwner } from '../../worktree-removal-repo-owner'
+import { resolveWorktreeRemovalRepoOwner } from '../../workspaces/removal/worktree-removal-repo-owner'
 
 export function resolveRepoForExecutionHost(
   store: Store,

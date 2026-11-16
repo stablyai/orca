@@ -1,17 +1,33 @@
+import { recordDraft, replaceRecordEntries, type RecordDraft } from '../../keyed-record-transitions'
+import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
+import { removePaneKeys } from './agent-status-pane-keyed-records'
+import {
+  applyAgentStatusBatchUpdate,
+  buildAgentStatusBatchPatch
+} from './agent-status-batch-update'
+import { projectAgentPaneConversation } from './agent-pane-conversation'
+import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/collections/structural-value-equality'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { AgentStatusBatchTransaction, AgentStatusBatchUpdate } from './agent-status-contract'
+import type {
+  AgentStatusBatchTransaction,
+  AgentStatusBatchUpdate,
+  AgentStatusChange,
+  AgentStatusChangeListener
+} from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
-import type { GeneratedTabTitleUpdate } from '../terminal-tab-title-batch'
+import type { GeneratedTabTitleUpdate } from '../../terminals/tabs/presentation/terminal-tab-title-batch'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 export type AgentStatusStateUpdate =
   | AppState
   | Partial<AppState>
-  | ((state: AppState) => AppState | Partial<AppState>)
+  | ((state: AppState, changedPaneKeys: Set<string>) => AppState | Partial<AppState>)
 
 export type AgentStatusRuntime = {
+  projectConversation: typeof projectAgentPaneConversation
   get: () => AppState
+  subscribeAgentStatusChanges: (listener: AgentStatusChangeListener) => () => void
   set: (update: AgentStatusStateUpdate) => void
   runAfterCommit: (effect: () => void) => void
   applyGeneratedTabTitleUpdate: (update: GeneratedTabTitleUpdate) => void
@@ -31,6 +47,72 @@ export function createAgentStatusRuntime(
     'setAgentStatus' | 'recordAgentProviderSession' | 'setAgentProgramStatus'
   >
 ): AgentStatusRuntime {
+  const listeners = new Set<AgentStatusChangeListener>()
+  const pendingChanges: AgentStatusChange[][] = []
+  let committing = 0
+  let notifying = false
+  let batchedPaneKeys: Set<string> | null = null
+  const subscribeAgentStatusChanges = (listener: AgentStatusChangeListener): (() => void) => {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
+  }
+  const flushChanges = (): void => {
+    if (committing || notifying) {
+      return
+    }
+    notifying = true
+    try {
+      for (const accepted of pendingChanges) {
+        if (!accepted?.length) {
+          continue
+        }
+        const currentListeners = [...listeners]
+        for (const listener of currentListeners) {
+          if (!listeners.has(listener)) {
+            continue
+          }
+          try {
+            listener(accepted)
+          } catch (error) {
+            console.error('Agent status observer failed', error)
+          }
+        }
+      }
+    } finally {
+      pendingChanges.length = 0
+      notifying = false
+    }
+  }
+  const commit = (
+    patch: AppState | Partial<AppState>,
+    before: AppState,
+    paneKeys: ReadonlySet<string>
+  ): void => {
+    const changes: AgentStatusChange[] = []
+    const rows = patch.agentStatusByPaneKey ?? before.agentStatusByPaneKey
+    for (const paneKey of paneKeys) {
+      const previous = before.agentStatusByPaneKey.get(paneKey)
+      const current = rows.get(paneKey)
+      if (!structuralValuesEqualIgnoringUndefined(previous, current)) {
+        changes.push({ paneKey, previous, current })
+      }
+    }
+    committing++
+    pendingChanges.push(changes)
+    try {
+      storeSet(patch, false)
+      if (storeGet() !== before) {
+        freshness.noteChanges(changes)
+      }
+    } finally {
+      // A middleware rejection before commit must never advertise accepted rows.
+      if (storeGet() === before) {
+        changes.length = 0
+      }
+      committing--
+      flushChanges()
+    }
+  }
   let batchedAgentStatusState: AppState | null = null
   let batchedAgentStatusTouchedKeys: Set<keyof AppState> | null = null
   // Staged in-place mutations cannot signal changes by identity; count every accepted write.
@@ -40,14 +122,41 @@ export function createAgentStatusRuntime(
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
 
-  // Omit replace from this write type so no slice call can request replacement the batch cannot express.
+  let conversationDraft: RecordDraft<AgentPaneConversationIdentity> | null = null
+  let conversationBuilt: AppState['agentConversationsByPaneKey'] | null = null
+  const projectConversation: typeof projectAgentPaneConversation = (
+    state,
+    entry,
+    _write,
+    ...sourceArgs
+  ) =>
+    projectAgentPaneConversation(
+      state,
+      entry,
+      (entries, key, value) => {
+        if (!batchedAgentStatusState) {
+          return replaceRecordEntries(entries, [[key, value]])
+        }
+        if (!conversationDraft || entries !== conversationBuilt) {
+          conversationDraft?.finish()
+          conversationDraft = recordDraft(entries)
+        }
+        conversationDraft.set(key, value)
+        conversationBuilt = conversationDraft.view()
+        return conversationBuilt
+      },
+      ...sourceArgs
+    )
+
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
+    const before = staged ?? storeGet()
+    const paneKeys = batchedPaneKeys ?? new Set<string>()
+    const nextState = typeof update === 'function' ? update(before, paneKeys) : update
     if (staged === null) {
-      storeSet(update, false)
+      commit(nextState, before, paneKeys)
       return
     }
-    const nextState = typeof update === 'function' ? update(staged) : update
     if (Object.is(nextState, staged)) {
       return
     }
@@ -58,7 +167,6 @@ export function createAgentStatusRuntime(
         touched.add(key as keyof AppState)
       }
     }
-    // The staged object is private until commit, so fold into it instead of cloning AppState per update.
     Object.assign(staged, nextState)
   }
 
@@ -95,28 +203,7 @@ export function createAgentStatusRuntime(
       return false
     }
     const revisionBeforeUpdate = batchedAgentStatusRevision
-    const actions = getActions()
-    if (update.kind === 'providerSession') {
-      actions.recordAgentProviderSession(
-        update.paneKey,
-        update.agent,
-        update.providerSession,
-        update.timing,
-        update.routing,
-        update.metadata
-      )
-    } else if (update.kind === 'programStatus') {
-      actions.setAgentProgramStatus(update.paneKey, update.programStatus)
-    } else {
-      actions.setAgentStatus(
-        update.paneKey,
-        update.payload,
-        update.terminalTitle,
-        update.timing,
-        update.routing,
-        update.metadata
-      )
-    }
+    applyAgentStatusBatchUpdate(getActions(), update)
     return batchedAgentStatusRevision !== revisionBeforeUpdate
   }
 
@@ -134,6 +221,8 @@ export function createAgentStatusRuntime(
     }
     const initialState = storeGet()
     const touchedKeys = new Set<keyof AppState>()
+    const paneKeys = new Set<string>()
+    batchedPaneKeys = paneKeys
     const revisionAtStart = batchedAgentStatusRevision
     batchedAgentStatusState = { ...initialState }
     batchedAgentStatusTouchedKeys = touchedKeys
@@ -146,13 +235,21 @@ export function createAgentStatusRuntime(
       const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
       const freshnessRequested = batchedAgentStatusFreshnessRequested
       const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
+      conversationDraft?.finish()
+      conversationDraft = null
+      conversationBuilt = null
+      batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
       batchedAgentStatusEffects = null
       batchedGeneratedTabTitleUpdates = null
       batchedAgentStatusFreshnessRequested = false
       if (hasStagedWrites) {
-        storeSet(buildAgentStatusBatchPatch(initialState, nextState, touchedKeys), false)
+        commit(
+          buildAgentStatusBatchPatch(initialState, nextState, touchedKeys),
+          initialState,
+          paneKeys
+        )
       }
       if (generatedTabTitleUpdates.length > 0) {
         storeGet().setGeneratedTabTitlesFromAgentPrompts(generatedTabTitleUpdates)
@@ -165,6 +262,9 @@ export function createAgentStatusRuntime(
       }
       return result
     } finally {
+      conversationDraft = null
+      conversationBuilt = null
+      batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
       batchedAgentStatusEffects = null
@@ -175,9 +275,10 @@ export function createAgentStatusRuntime(
 
   const freshness = createFreshnessScheduler({
     getStatusEntries: () => get().agentStatusByPaneKey,
-    bumpEpochs: () => {
+    bumpEpochs: (keys = []) => {
       // Time-based staleness changes ordering without output; bump freshness/sort epochs at boundaries.
       set((s) => ({
+        agentStatusByPaneKey: s.agentStatusByPaneKey.refresh(keys),
         agentStatusEpoch: s.agentStatusEpoch + 1,
         sortEpoch: s.sortEpoch + 1
       }))
@@ -191,23 +292,16 @@ export function createAgentStatusRuntime(
     }
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
-      let nextSleeping = s.sleepingAgentSessionsByPaneKey
-      for (const paneKey of uniquePaneKeys) {
-        if (paneKey in nextSleeping) {
-          if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
-            nextSleeping = { ...nextSleeping }
-          }
-          delete nextSleeping[paneKey]
-        }
-      }
-      if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
-        return s
-      }
-      return { sleepingAgentSessionsByPaneKey: nextSleeping }
+      const nextSleeping = removePaneKeys(s.sleepingAgentSessionsByPaneKey, uniquePaneKeys)
+      return nextSleeping === s.sleepingAgentSessionsByPaneKey
+        ? s
+        : { sleepingAgentSessionsByPaneKey: nextSleeping }
     })
   }
 
   return {
+    projectConversation,
+    subscribeAgentStatusChanges,
     get,
     set,
     runAfterCommit,
@@ -217,19 +311,4 @@ export function createAgentStatusRuntime(
     transactAgentStatuses,
     clearSleepingAgentSessionsByPaneKey
   }
-}
-
-function buildAgentStatusBatchPatch(
-  initialState: AppState,
-  nextState: AppState,
-  touchedKeys: ReadonlySet<keyof AppState>
-): Partial<AppState> {
-  const patch: Record<string, unknown> = {}
-  // Untouched slices cannot differ, so the patch stays proportional to what the fold actually wrote.
-  for (const key of touchedKeys) {
-    if (!Object.is(nextState[key], initialState[key])) {
-      patch[key as string] = nextState[key]
-    }
-  }
-  return patch as Partial<AppState>
 }

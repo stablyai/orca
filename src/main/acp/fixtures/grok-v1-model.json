@@ -1,0 +1,42 @@
+{
+  "modelId": "grok-4.7",
+  "name": "Grok 4.7",
+  "description": "SpaceXAI's latest frontier model",
+  "_meta": {
+    "totalContextTokens": 256000,
+    "agentType": "grok-build-plan",
+    "supportsReasoningEffort": true,
+    "reasoningEffort": "high",
+    "reasoningEfforts": [
+      {
+        "id": "xhigh",
+        "value": "xhigh",
+        "label": "Extra High",
+        "description": "Maximum reasoning for the hardest tasks.",
+        "default": false
+      },
+      {
+        "id": "high",
+        "value": "high",
+        "label": "High",
+        "description": "Thorough reasoning and quality. Recommended.",
+        "default": true
+      },
+      {
+        "id": "medium",
+        "value": "medium",
+        "label": "Medium",
+        "description": "Strong quality with a faster turnaround.",
+        "default": false
+      },
+      {
+        "id": "low",
+        "value": "low",
+        "label": "Low",
+        "description": "Fastest responses. Best for simple tasks.",
+        "default": false
+      }
+    ],
+    "contextWindows": [256000, 500000]
+  }
+}

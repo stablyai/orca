@@ -1,26 +1,33 @@
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import {
+  buildTaskPageGitHubWorkItemMutationPatch,
+  type TaskPageGitHubMutationIntent
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-patches'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { ParsedTaskQuery } from '../../../shared/task-query'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { ParsedTaskQuery } from '../../../shared/work-items/task-query'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { useAppStore } from '@/store'
 import {
   beginTaskPageGitHubWorkItemMutation,
   canStartTaskPageGitHubWorkItemMutation
-} from '@/components/task-page/github/task-page-github-work-item-mutations'
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutations'
 import {
   confirmTaskPageGitHubWorkItemMutation,
   rollbackTaskPageGitHubWorkItemMutation
-} from '@/components/task-page/github/task-page-github-work-item-mutation-lifecycle'
-import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
-import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/task-page-github-work-item-mutation-types'
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-lifecycle'
+
+import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-types'
 import {
   getTaskPageGitHubSoftHiddenItemKeys,
   subscribeTaskPageGitHubMutationRegistry,
   setTaskPageGitHubMutationQueryKey
-} from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-registry'
 import { useMountedRef } from './useMountedRef'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export type UseTaskPageGitHubWorkItemMutationArgs = {
   queryKey: string
@@ -105,7 +112,12 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       item: GitHubWorkItem
       intent: TaskPageGitHubMutationIntent
       sourceContext?: TaskSourceContext | null
-      mutate: () => Promise<{ ok?: boolean; error?: string | { message?: string } } | void>
+      mutate: () => Promise<{
+        ok?: boolean
+        error?: string | { message?: string }
+        errorCode?: unknown
+        errorDetail?: unknown
+      } | void>
       successToast?: string
       errorToast: string
       serverEntityFromResult?: (result: unknown) => Partial<GitHubWorkItem> | undefined
@@ -114,8 +126,25 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
         return 'stale'
       }
       const skipMeQualifiers = shouldSkipLocalViewerQualifiers(input.sourceContext)
+      const cache = useAppStore.getState().githubTaskCache
+      const binding = cache?.capture(
+        getWorkItemRepo(useAppStore.getState().repos ?? [], input.item),
+        input.sourceContext
+      )
+      const common =
+        input.item.type === 'issue' &&
+        (input.intent.type === 'setState' || input.intent.type === 'toggleAssignee')
+      // The user acts on what the row showed, pending edits included; this value is never stored.
+      const currentItem = cache?.projectItem(input.item) ?? input.item
+      const built = buildTaskPageGitHubWorkItemMutationPatch(currentItem, input.intent)
+      let settle: ((success: boolean) => GitHubWorkItem) | undefined
+      const settleAccepted =
+        common && binding && cache.canTrack(binding, input.item)
+          ? (success: boolean) => settle?.(success) ?? currentItem
+          : undefined
       const began = beginTaskPageGitHubWorkItemMutation({
-        item: input.item,
+        item: currentItem,
+        settleAccepted,
         intent: input.intent,
         sourceContext: input.sourceContext,
         query,
@@ -125,10 +154,29 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
         patchWorkItem
       })
 
+      if (settleAccepted && binding) {
+        const { listOp } = built.kind === 'list' ? built : { listOp: undefined }
+        settle = cache.operation(
+          currentItem,
+          binding,
+          listOp
+            ? {
+                assignees: Object.fromEntries(
+                  listOp.logins.map((login, index): [string, GitHubAssignableUser | null] => [
+                    login,
+                    listOp.kind === 'add'
+                      ? (listOp.users?.[index] ?? { login, name: null, avatarUrl: '' })
+                      : null
+                  ])
+                )
+              }
+            : { state: built.next.state }
+        )
+      }
       try {
         const result = await input.mutate()
         const activeQuery = activeQueryRef.current
-        const typed = result as { ok?: boolean; error?: string | { message?: string } } | void
+        const typed = result
         if (typed && typeof typed === 'object' && typed.ok === false) {
           const rolled = rollbackTaskPageGitHubWorkItemMutation({
             key: began.key,
@@ -143,7 +191,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           if (rolled === 'rolled_back' && mountedRef.current) {
             const message =
               typeof typed.error === 'string'
-                ? typed.error
+                ? codeHostErrorText({ ...typed, error: typed.error })
                 : (typed.error?.message ?? input.errorToast)
             toast.error(message)
           }

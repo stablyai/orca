@@ -1,33 +1,36 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeAll, beforeEach, expect } from 'vitest'
-import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { afterEach, beforeAll, beforeEach, expect, vi } from 'vitest'
+import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
+import {
+  openTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
-import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
-import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalCursor,
   type AgentJournalItemBody,
   type AgentJournalRenderItem,
   type AgentJournalTurnLifecycle
-} from '../../../src/shared/agent-session-journal-types'
-import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session-journal-schemas'
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type {
   AgentSessionHistoryPage,
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
-} from '../../../src/shared/agent-session-wire'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
+} from '../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   attachParams,
   NOW,
@@ -90,7 +93,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
       store,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestAgentSessionDatabase(root),
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger(),
       now: () => NOW,
@@ -132,6 +135,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     setStructuredAgentSessionHost(null)
     await host.flushAllStreamedEvents()
     await journal.close()
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
   function call(method: string, params: unknown) {
@@ -189,6 +193,23 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
         : event
     })
   }
+  /** Catch-up and live frames follow committed reads, so wait for a frame at the current cursor. */
+  async function delivered(replies: RpcReply[]): Promise<void> {
+    await vi.waitFor(() => {
+      const cursor = journal.cursor()
+      expect(
+        events(replies).some((event) => {
+          const reached =
+            event.type === 'batch'
+              ? event.batch.cursor
+              : event.type === 'snapshot'
+                ? (event.page.liveCursor ?? event.page.window.nextCursor)
+                : null
+          return reached?.epoch === cursor.epoch && reached.sequence === cursor.sequence
+        })
+      ).toBe(true)
+    })
+  }
   function reduce(state: StructuredAgentSessionState, replies: RpcReply[]) {
     return events(replies).reduce(
       (state, event) => client.reduceStructuredAgentSession(state, { type: 'event', event }),
@@ -239,6 +260,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     page,
     subscribe,
     events,
+    delivered,
     reduce,
     render,
     turn,
