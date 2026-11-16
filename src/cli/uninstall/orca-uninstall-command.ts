@@ -69,7 +69,7 @@ async function createCliHost(client: RuntimeClient): Promise<OrcaUninstallHost> 
     platform: process.platform,
     homeDir: homedir(),
     uid: process.getuid?.() ?? 0,
-    identity: resolveOrcaInstallIdentity({
+    identity: await resolveOrcaInstallIdentity({
       platform: process.platform,
       isPackaged: layout !== null,
       exePath: layout?.exePath ?? process.execPath,
@@ -180,7 +180,7 @@ export function formatRemoveAppLine(plan: OrcaUninstallPlan): string {
       return 'To delete the app, open Settings > Apps > Installed apps, find Orca and choose Uninstall.'
     case 'linux-appimage':
       return `To delete the app, delete ${plan.appPath}.`
-    default:
+    case 'unknown':
       return 'To delete the app, remove it the way you installed it.'
   }
 }

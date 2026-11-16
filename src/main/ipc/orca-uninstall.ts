@@ -24,13 +24,13 @@ import {
 } from '../uninstall/orca-uninstall-ssh-hosts'
 import { readLocalCliInstallStatus, removeLocalCliRegistration } from './cli'
 
-function createHost(store: Store): OrcaUninstallHost {
+async function createHost(store: Store): Promise<OrcaUninstallHost> {
   const userDataPath = app.getPath('userData')
   return {
     platform: process.platform,
     homeDir: homedir(),
     uid: process.getuid?.() ?? 0,
-    identity: resolveOrcaInstallIdentity({
+    identity: await resolveOrcaInstallIdentity({
       platform: process.platform,
       isPackaged: app.isPackaged,
       exePath: app.getPath('exe'),
@@ -51,9 +51,9 @@ function createHost(store: Store): OrcaUninstallHost {
   }
 }
 
-function openWindowsUninstaller(appPath: string | null): void {
+async function openWindowsUninstaller(appPath: string | null): Promise<void> {
   const uninstaller =
-    process.platform === 'win32' && appPath ? findWindowsUninstaller(appPath) : null
+    process.platform === 'win32' && appPath ? await findWindowsUninstaller(appPath) : null
   if (!appPath || !uninstaller) {
     throw new Error('The Orca uninstaller was not found.')
   }
@@ -65,7 +65,7 @@ export function registerOrcaUninstallHandlers(store: Store): void {
   let current: OrcaUninstallPlan | null = null
 
   ipcMain.handle('orcaUninstall:getPlan', async (): Promise<OrcaUninstallPlan> => {
-    current = await buildOrcaUninstallPlan(createHost(store))
+    current = await buildOrcaUninstallPlan(await createHost(store))
     return current
   })
 
@@ -78,7 +78,7 @@ export function registerOrcaUninstallHandlers(store: Store): void {
       const only = Array.isArray(args.only)
         ? args.only.filter((id): id is string => typeof id === 'string')
         : undefined
-      const host = createHost(store)
+      const host = await createHost(store)
       current = await runOrcaUninstallStep(
         current ?? (await buildOrcaUninstallPlan(host)),
         args.step,
@@ -92,7 +92,7 @@ export function registerOrcaUninstallHandlers(store: Store): void {
   ipcMain.handle(
     'orcaUninstall:finish',
     async (_event, action: OrcaUninstallFinishAction): Promise<void> => {
-      const appPath = current?.appPath ?? createHost(store).identity.appPath
+      const appPath = current?.appPath ?? (await createHost(store)).identity.appPath
       if (action === 'reveal-app') {
         if (appPath) {
           shell.showItemInFolder(appPath)
@@ -100,7 +100,7 @@ export function registerOrcaUninstallHandlers(store: Store): void {
         return
       }
       if (action === 'open-windows-uninstaller') {
-        openWindowsUninstaller(appPath)
+        await openWindowsUninstaller(appPath)
         app.quit()
         return
       }

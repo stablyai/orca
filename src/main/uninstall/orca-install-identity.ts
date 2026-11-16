@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { access, readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, join, posix, win32 } from 'node:path'
 import type { OrcaUninstallInstallKind } from '../../shared/uninstall/orca-uninstall-types'
 
@@ -18,9 +18,9 @@ export type OrcaInstallIdentityInput = {
   homeDir: string
   env: NodeJS.ProcessEnv
   linuxPackageType: 'deb' | 'rpm' | null
-  exists?: (path: string) => boolean
-  readText?: (path: string) => string | null
-  listDir?: (path: string) => string[]
+  exists?: (path: string) => Promise<boolean>
+  readText?: (path: string) => Promise<string | null>
+  listDir?: (path: string) => Promise<string[]>
 }
 
 // Every channel (stable, RC, dev builds) ships this bundle id; see config/electron-builder.config.cjs.
@@ -31,20 +31,19 @@ const CASKROOMS = ['/opt/homebrew/Caskroom', '/usr/local/Caskroom']
 const LINUX_PACKAGE_NAME = 'orca-ide'
 const LINUX_PACKAGE_EXECUTABLE = '/opt/Orca/orca-ide'
 
-function readTextOrNull(path: string): string | null {
-  try {
-    return readFileSync(path, 'utf8')
-  } catch {
-    return null
-  }
+function pathExists(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false
+  )
 }
 
-function listDirOrEmpty(path: string): string[] {
-  try {
-    return readdirSync(path)
-  } catch {
-    return []
-  }
+function readTextOrNull(path: string): Promise<string | null> {
+  return readFile(path, 'utf8').catch(() => null)
+}
+
+function listDirOrEmpty(path: string): Promise<string[]> {
+  return readdir(path).catch(() => [])
 }
 
 function macBundleOf(exePath: string): string | null {
@@ -52,17 +51,17 @@ function macBundleOf(exePath: string): string | null {
   return index === -1 ? null : exePath.slice(0, index + '.app'.length)
 }
 
-function otherMacBuild(
+async function otherMacBuild(
   input: Required<OrcaInstallIdentityInput>,
   own: string | null
-): string | null {
+): Promise<string | null> {
   for (const dir of ['/Applications', join(input.homeDir, 'Applications')]) {
-    for (const name of input.listDir(dir)) {
+    for (const name of await input.listDir(dir)) {
       const bundle = posix.join(dir, name)
       if (!name.endsWith('.app') || bundle === own) {
         continue
       }
-      const plist = input.readText(posix.join(bundle, 'Contents', 'Info.plist'))
+      const plist = await input.readText(posix.join(bundle, 'Contents', 'Info.plist'))
       if (plist?.includes(`<string>${ORCA_BUNDLE_ID}</string>`)) {
         return basename(name, '.app')
       }
@@ -79,26 +78,41 @@ function windowsInstallDirs(env: NodeJS.ProcessEnv): string[] {
 }
 
 // Mirrors config/nsis/orca-other-install-check.nsh: the other registration is the other install dir.
-function otherWindowsBuild(
+async function otherWindowsBuild(
   input: Required<OrcaInstallIdentityInput>,
   own: string | null
-): string | null {
-  const other = windowsInstallDirs(input.env).find(
-    (dir) => dir.toLowerCase() !== own?.toLowerCase() && input.exists(win32.join(dir, 'Orca.exe'))
-  )
-  return other ? `Orca in ${other}` : null
+): Promise<string | null> {
+  for (const dir of windowsInstallDirs(input.env)) {
+    if (
+      dir.toLowerCase() !== own?.toLowerCase() &&
+      (await input.exists(win32.join(dir, 'Orca.exe')))
+    ) {
+      return `Orca in ${dir}`
+    }
+  }
+  return null
 }
 
-function homebrewCask(input: Required<OrcaInstallIdentityInput>): string | null {
-  return (
-    ORCA_CASKS.find((cask) => CASKROOMS.some((root) => input.exists(posix.join(root, cask)))) ??
-    null
-  )
+async function homebrewCask(input: Required<OrcaInstallIdentityInput>): Promise<string | null> {
+  for (const cask of ORCA_CASKS) {
+    for (const root of CASKROOMS) {
+      if (await input.exists(posix.join(root, cask))) {
+        return cask
+      }
+    }
+  }
+  return null
 }
 
-export function resolveOrcaInstallIdentity(raw: OrcaInstallIdentityInput): OrcaInstallIdentity {
+async function hasLinuxPackage(input: Required<OrcaInstallIdentityInput>): Promise<string | null> {
+  return (await input.exists(LINUX_PACKAGE_EXECUTABLE)) ? 'Orca (system package)' : null
+}
+
+export async function resolveOrcaInstallIdentity(
+  raw: OrcaInstallIdentityInput
+): Promise<OrcaInstallIdentity> {
   const input: Required<OrcaInstallIdentityInput> = {
-    exists: existsSync,
+    exists: pathExists,
     readText: readTextOrNull,
     listDir: listDirOrEmpty,
     ...raw
@@ -106,12 +120,12 @@ export function resolveOrcaInstallIdentity(raw: OrcaInstallIdentityInput): OrcaI
   const none = { removeAppCommand: null, otherOrcaBuildName: null }
   if (input.platform === 'darwin') {
     const appPath = input.isPackaged ? macBundleOf(input.exePath) : null
-    const otherOrcaBuildName = otherMacBuild(input, appPath)
+    const otherOrcaBuildName = await otherMacBuild(input, appPath)
     if (!appPath) {
       return { ...none, installKind: 'unknown', appPath: null, otherOrcaBuildName }
     }
     // A cask installs into /Applications; a copy elsewhere is the user's own.
-    const cask = dirname(appPath) === '/Applications' ? homebrewCask(input) : null
+    const cask = dirname(appPath) === '/Applications' ? await homebrewCask(input) : null
     return cask
       ? {
           installKind: 'mac-homebrew',
@@ -127,7 +141,7 @@ export function resolveOrcaInstallIdentity(raw: OrcaInstallIdentityInput): OrcaI
       ...none,
       installKind: appPath ? 'windows-installer' : 'unknown',
       appPath,
-      otherOrcaBuildName: otherWindowsBuild(input, appPath)
+      otherOrcaBuildName: await otherWindowsBuild(input, appPath)
     }
   }
   if (input.platform === 'linux') {
@@ -137,7 +151,7 @@ export function resolveOrcaInstallIdentity(raw: OrcaInstallIdentityInput): OrcaI
         ...none,
         installKind: 'linux-appimage',
         appPath: appImage,
-        otherOrcaBuildName: input.exists(LINUX_PACKAGE_EXECUTABLE) ? 'Orca (system package)' : null
+        otherOrcaBuildName: await hasLinuxPackage(input)
       }
     }
     if (input.isPackaged && input.linuxPackageType) {
@@ -153,18 +167,17 @@ export function resolveOrcaInstallIdentity(raw: OrcaInstallIdentityInput): OrcaI
       ...none,
       installKind: 'unknown',
       appPath: null,
-      otherOrcaBuildName:
-        !input.isPackaged && input.exists(LINUX_PACKAGE_EXECUTABLE) ? 'Orca (system package)' : null
+      otherOrcaBuildName: input.isPackaged ? null : await hasLinuxPackage(input)
     }
   }
   return { ...none, installKind: 'unknown', appPath: null }
 }
 
 /** NSIS writes `Uninstall <product>.exe` beside the app. */
-export function findWindowsUninstaller(
+export async function findWindowsUninstaller(
   installDir: string,
-  listDir: (path: string) => string[] = listDirOrEmpty
-): string | null {
-  const file = listDir(installDir).find((name) => /^Uninstall .+\.exe$/i.test(name))
+  listDir: (path: string) => Promise<string[]> = listDirOrEmpty
+): Promise<string | null> {
+  const file = (await listDir(installDir)).find((name) => /^Uninstall .+\.exe$/i.test(name))
   return file ? win32.join(installDir, file) : null
 }

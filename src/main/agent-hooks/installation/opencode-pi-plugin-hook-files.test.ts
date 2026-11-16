@@ -25,18 +25,18 @@ afterEach(() => {
 })
 
 describe('removePluginHookFiles', () => {
-  it('removes Pi extensions carrying the Orca marker and keeps same-named user files', () => {
+  it('removes Pi extensions carrying the Orca marker and keeps same-named user files', async () => {
     const extensions = join(homeDir, '.pi', 'agent', 'extensions')
     write(join(extensions, 'orca-agent-status.ts'), '// @orca-managed-pi-extension\nexport {}\n')
     write(join(extensions, 'orca-prefill.ts'), '// my own prefill\n')
 
-    removePluginHookFiles({ homeDir, openCodeConfigDir })
+    await removePluginHookFiles({ homeDir, openCodeConfigDir })
 
     expect(existsSync(join(extensions, 'orca-agent-status.ts'))).toBe(false)
     expect(readFileSync(join(extensions, 'orca-prefill.ts'), 'utf8')).toBe('// my own prefill\n')
   })
 
-  it("removes Orca's OpenCode plugin and its TUI registration, keeping the user's plugins", () => {
+  it("removes Orca's OpenCode plugin and its TUI registration, keeping the user's plugins", async () => {
     const plugins = join(openCodeConfigDir, 'plugins')
     const tuiEntry = join(plugins, 'orca-opencode-status-tui', 'tui.js')
     write(join(plugins, 'orca-opencode-status.js'), 'process.env.ORCA_AGENT_HOOK_PORT\n')
@@ -47,7 +47,7 @@ describe('removePluginHookFiles', () => {
       JSON.stringify({ plugin: ['./mine.js', pathToFileURL(tuiEntry).href] }, null, 2)
     )
 
-    removePluginHookFiles({ homeDir, openCodeConfigDir })
+    await removePluginHookFiles({ homeDir, openCodeConfigDir })
 
     expect(existsSync(join(plugins, 'orca-opencode-status.js'))).toBe(false)
     expect(existsSync(dirname(tuiEntry))).toBe(false)

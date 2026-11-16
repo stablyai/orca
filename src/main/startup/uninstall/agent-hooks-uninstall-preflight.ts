@@ -71,7 +71,10 @@ export function runAgentHooksUninstallPreflight(argv: readonly string[] = proces
       import('../../agent-hooks/installation/managed-agent-hook-controls'),
       import('../../agent-hooks/installation/opencode-pi-plugin-hook-files')
     ])
-    return [...(await removeManagedAgentHooks()), ...pluginRemovalStatuses(removePluginHookFiles())]
+    return [
+      ...(await removeManagedAgentHooks()),
+      ...pluginRemovalStatuses(await removePluginHookFiles())
+    ]
   }).then((code) => {
     clearTimeout(timeout)
     app.exit(code)

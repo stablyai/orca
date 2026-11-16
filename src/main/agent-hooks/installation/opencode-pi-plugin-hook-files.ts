@@ -1,11 +1,4 @@
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  rmdirSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { readdir, readFile, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -35,53 +28,71 @@ const PI_EXTENSION_FILES = [
   ORCA_PI_PREFILL_EXTENSION_FILE,
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE
 ]
-const PI_HOME_DIRS: Record<Exclude<PluginHookAgent, 'opencode'>, string> = {
-  pi: '.pi',
-  omp: '.omp',
-  'prime-agent': '.prime'
-}
+const PI_HOMES: readonly { agent: PluginHookAgent; dir: string }[] = [
+  { agent: 'pi', dir: '.pi' },
+  { agent: 'omp', dir: '.omp' },
+  { agent: 'prime-agent', dir: '.prime' }
+]
 
-function hasMarker(path: string, marker: string): boolean {
+async function hasMarker(path: string, marker: string): Promise<boolean> {
   try {
-    return readFileSync(path, 'utf8').includes(marker)
+    return (await readFile(path, 'utf8')).includes(marker)
   } catch {
     return false
   }
 }
 
-function openCodeFiles(configDir: string): string[] {
+async function withMarker(paths: string[], marker: string): Promise<string[]> {
+  const marked = await Promise.all(paths.map((path) => hasMarker(path, marker)))
+  return paths.filter((_, index) => marked[index])
+}
+
+function openCodeCandidates(configDir: string): string[] {
   const pluginsDir = join(configDir, 'plugins')
   return OPENCODE_PLUGIN_FILES.flatMap((file) => [
     join(pluginsDir, file),
     join(pluginsDir, openCodeTuiPluginDirName(file), 'tui.js')
-  ]).filter((path) => hasMarker(path, OPENCODE_MARKER))
+  ])
 }
 
 /** Only files carrying Orca's marker; a user's file with the same name is never listed. */
-export function findPluginHookFiles(locations: Locations = {}): PluginHookFiles[] {
+export async function findPluginHookFiles(locations: Locations = {}): Promise<PluginHookFiles[]> {
   const home = locations.homeDir ?? homedir()
-  const openCode = openCodeFiles(locations.openCodeConfigDir ?? resolveOpenCodeConfigDirectory())
-  const pi = (Object.keys(PI_HOME_DIRS) as (keyof typeof PI_HOME_DIRS)[]).map((agent) => ({
-    agent,
-    paths: PI_EXTENSION_FILES.map((file) =>
-      join(home, PI_HOME_DIRS[agent], 'agent', 'extensions', file)
-    ).filter((path) => hasMarker(path, PI_MARKER))
-  }))
-  return [{ agent: 'opencode' as const, paths: openCode }, ...pi].filter(
-    (entry) => entry.paths.length > 0
-  )
+  const configDir = locations.openCodeConfigDir ?? resolveOpenCodeConfigDirectory()
+  const entries = await Promise.all([
+    withMarker(openCodeCandidates(configDir), OPENCODE_MARKER).then((paths): PluginHookFiles => ({
+      agent: 'opencode',
+      paths
+    })),
+    ...PI_HOMES.map(async ({ agent, dir }): Promise<PluginHookFiles> => ({
+      agent,
+      paths: await withMarker(
+        PI_EXTENSION_FILES.map((file) => join(home, dir, 'agent', 'extensions', file)),
+        PI_MARKER
+      )
+    }))
+  ])
+  return entries.filter((entry) => entry.paths.length > 0)
+}
+
+async function readTextOrNull(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch {
+    return null
+  }
 }
 
 // OpenCode 1.x lists the TUI copy in tui.json; a dangling entry would fail its plugin load.
-function unregisterOpenCodeTuiEntry(tuiEntry: string): void {
+async function unregisterOpenCodeTuiEntry(tuiEntry: string): Promise<void> {
   const configDir = dirname(dirname(dirname(tuiEntry)))
   const href = pathToFileURL(tuiEntry).href
   for (const name of ['tui.jsonc', 'tui.json']) {
     const configPath = join(configDir, name)
-    if (!existsSync(configPath)) {
+    const text = await readTextOrNull(configPath)
+    if (text === null) {
       continue
     }
-    const text = readFileSync(configPath, 'utf8')
     const errors: ParseError[] = []
     const config: unknown = parse(text, errors, { allowTrailingComma: true })
     if (errors.length || typeof config !== 'object' || !config || !('plugin' in config)) {
@@ -92,7 +103,7 @@ function unregisterOpenCodeTuiEntry(tuiEntry: string): void {
       continue
     }
     const next = plugins.filter((item) => item !== href)
-    writeFileSync(
+    await writeFile(
       configPath,
       applyEdits(
         text,
@@ -102,29 +113,34 @@ function unregisterOpenCodeTuiEntry(tuiEntry: string): void {
   }
 }
 
-function removeFile(path: string): void {
-  unlinkSync(path)
+async function removeFile(path: string): Promise<void> {
+  await unlink(path)
   if (path.endsWith(`${join('-tui', 'tui.js')}`)) {
-    unregisterOpenCodeTuiEntry(path)
+    await unregisterOpenCodeTuiEntry(path)
     const dir = dirname(path)
-    if (readdirSync(dir).length === 0) {
-      rmdirSync(dir)
+    if ((await readdir(dir)).length === 0) {
+      await rmdir(dir)
     }
   }
 }
 
-export function removePluginHookFiles(
+export async function removePluginHookFiles(
   options: Locations & { agents?: readonly string[] } = {}
-): PluginHookRemoval[] {
+): Promise<PluginHookRemoval[]> {
   const allowed = options.agents ? new Set(options.agents) : null
-  return findPluginHookFiles(options)
-    .filter((entry) => allowed === null || allowed.has(entry.agent))
-    .map((entry) => {
+  const found = (await findPluginHookFiles(options)).filter(
+    (entry) => allowed === null || allowed.has(entry.agent)
+  )
+  return Promise.all(
+    found.map(async (entry) => {
       try {
-        entry.paths.forEach(removeFile)
+        for (const path of entry.paths) {
+          await removeFile(path)
+        }
         return { ...entry, error: null }
       } catch (error) {
         return { ...entry, error: error instanceof Error ? error.message : String(error) }
       }
     })
+  )
 }
