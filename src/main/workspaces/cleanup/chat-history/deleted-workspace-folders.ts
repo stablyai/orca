@@ -12,11 +12,11 @@ import { listWorkspaceCleanupOwnedRepos } from '../workspace-cleanup-run-evidenc
 // Folders are compared by filesystem identity, so symlinks, case and Unicode spellings are the OS's call.
 type Identity = string
 
-/** Like identityOf, but an error other than absence is `'unknown'`: protection can't be derived from it. */
-async function provenIdentityOf(path: string): Promise<Identity | null | 'unknown'> {
+/** Like identityOf, but an error other than absence is `undefined`: protection can't be derived from it. */
+async function provenIdentityOf(path: string): Promise<Identity | null | undefined> {
   return stat(path, { bigint: true }).then(
     (stats) => (stats.isDirectory() && stats.ino !== 0n ? `${stats.dev}:${stats.ino}` : null),
-    (error: unknown) => (isPathAbsentError(error) ? null : 'unknown')
+    (error: unknown) => (isPathAbsentError(error) ? null : undefined)
   )
 }
 
@@ -160,7 +160,7 @@ async function linkTargets(path: string): Promise<{ targets: string[]; complete:
 
 export async function readListedFolders(store: RuntimeStore): Promise<ListedFolders> {
   const listed: ListedFolders = { present: new Set(), claims: new Set(), complete: true }
-  const identities = new Map<string, Promise<Identity | null | 'unknown'>>()
+  const identities = new Map<string, Promise<Identity | null | undefined>>()
   const cachedIdentity = async (path: string): Promise<Identity | null> => {
     let id = identities.get(path)
     if (!id) {
@@ -169,7 +169,7 @@ export async function readListedFolders(store: RuntimeStore): Promise<ListedFold
     }
     const proven = await id
     // A folder that couldn't be read may hold a listed path's claim: then nothing is proven.
-    if (proven === 'unknown') {
+    if (proven === undefined) {
       listed.complete = false
       return null
     }
