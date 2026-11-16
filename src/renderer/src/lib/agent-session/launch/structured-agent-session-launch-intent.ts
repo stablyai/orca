@@ -1,7 +1,5 @@
-import {
-  createStructuredAgentSessionId,
-  structuredAgentSessionCreateParams
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
+import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type {
   StructuredAgentSessionCreateParams,
   StructuredAgentSessionFirstMessage,
@@ -101,7 +99,7 @@ export function createStructuredAgentSessionLaunchIntent(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
-  const sessionId = createStructuredAgentSessionId(agent, createNonSecureContextUuid)
+  const sessionId = createOrcaSessionId(createNonSecureContextUuid)
   if (activate) {
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),
