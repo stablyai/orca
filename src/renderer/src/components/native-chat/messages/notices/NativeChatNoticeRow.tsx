@@ -9,6 +9,7 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSyncExternalStore } from 'react'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
+import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
@@ -159,6 +160,15 @@ export function NativeChatNoticeRow({
           />
         </CardContent>
       </Card>
+    )
+  }
+  if (look.kind === 'auto-review-denied') {
+    return (
+      <NativeChatAutoReviewDenialRow
+        denial={look.denial}
+        agent={agentName ?? look.agent}
+        itemId={messageId}
+      />
     )
   }
   if (look.kind === 'settled-permission') {
