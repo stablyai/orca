@@ -7,6 +7,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { JournalContinuationContext } from './journal-reads'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { SqliteBindings, SqliteRow } from '../../sqlite/sqlite-statement'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 const PAGE = 256
 
@@ -52,7 +53,7 @@ export function readJournalDomainContinuationContext(
       ORDER BY sequence, sequence_index, ordinal LIMIT ?`)
       .all(...prefix, clear, ...afterItem, PAGE)
     for (const row of rows) {
-      items.push(JSON.parse(String(row.payload_json)))
+      items.push(readJournalStoredItem(db, prefix, row.payload_json))
     }
     afterItem = nextPage(rows, ['sequence', 'sequence_index', 'ordinal'])
   } while (afterItem.length)

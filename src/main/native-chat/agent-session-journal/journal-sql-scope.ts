@@ -1,5 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { hydrateJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalSqlReadWork = { rows: number; decodedBytes: number }
 export type JournalSqlIndexValues = {
@@ -33,7 +35,10 @@ export class JournalSqlScope {
       throw new Error('Invalid journal projection value')
     }
     this.work.decodedBytes += Buffer.byteLength(json)
-    return this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
+    const value: T = this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
+    return isJournalItemShape(value)
+      ? (hydrateJournalStoredItem(this.db, this.prefix, value) as T)
+      : value
   }
 
   /** A projection row's own payload; never an index value pointer. */
@@ -71,4 +76,13 @@ export class JournalSqlScope {
       true
     )
   }
+}
+
+function isJournalItemShape(value: unknown): value is AgentJournalRenderItem {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { itemId?: unknown }).itemId === 'string' &&
+    typeof (value as { body?: { kind?: unknown } }).body?.kind === 'string'
+  )
 }

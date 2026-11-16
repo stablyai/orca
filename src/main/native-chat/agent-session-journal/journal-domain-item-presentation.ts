@@ -8,6 +8,7 @@ import {
 } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import type { HistoryItemForm } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { journalDomainItemWire } from './journal-domain-item-wire'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 import {
   journalDomainDisplayTurnState,
   readJournalDomainStopStates,
@@ -44,16 +45,18 @@ export function readJournalDomainClientForms(
     if (row.wire_version !== AGENT_SESSION_ITEM_WIRE_VERSION && states === undefined) {
       states = readJournalDomainStopStates(db, target, wanted, wantedJson)
     }
-    forms.set(String(row.item_id), readJournalDomainClientForm(row, states))
+    forms.set(String(row.item_id), readJournalDomainClientForm(db, target, row, states))
   }
   return forms
 }
 
 export function readJournalDomainClientForm(
+  db: Database.Database,
+  target: JournalDomainItemTarget,
   row: SqliteRow,
   states?: ReadonlyMap<string, unknown>
 ): HistoryItemForm {
-  const item: AgentJournalRenderItem = JSON.parse(String(row.client_json))
+  const item = readJournalStoredItem(db, [target.sessionId, target.epoch], row.client_json, 'wire')
   return row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
     ? rememberAgentJournalItemWireForm(item, Number(row.client_bytes))
     : agentJournalItemForWire(
@@ -91,7 +94,7 @@ export function readJournalDomainItemDetail(
   if (!row) {
     return null
   }
-  const item: AgentJournalRenderItem = JSON.parse(String(row.detail_json))
+  const item = readJournalStoredItem(db, [target.sessionId, target.epoch], row.detail_json)
   if (row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION) {
     return item
   }
@@ -102,6 +105,6 @@ export function readJournalDomainItemDetail(
     null,
     journalDomainDisplayTurnState(item, states)
   )
-  const wire = journalDomainItemWire(item, String(row.detail_json), displayed)
+  const wire = journalDomainItemWire(item, undefined, displayed)
   return wire.detailJson === null ? displayed : JSON.parse(wire.detailJson)
 }

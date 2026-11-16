@@ -3,6 +3,7 @@ import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import { projectJournalStopNoteForTurnState } from './context-epochs/journal-stop-note-projection'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalDomainItemTarget = { sessionId: string; epoch: string }
 
@@ -83,7 +84,11 @@ export function readJournalDomainDisplayedRow(
   row: SqliteRow,
   stopStates?: ReadonlyMap<string, unknown>
 ): { item: AgentJournalRenderItem; payload: string } {
-  const source: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+  const source: AgentJournalRenderItem = readJournalStoredItem(
+    db,
+    [target.sessionId, target.epoch],
+    row.payload_json
+  )
   const states =
     row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
       ? undefined

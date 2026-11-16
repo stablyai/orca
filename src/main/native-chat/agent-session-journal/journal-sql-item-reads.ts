@@ -1,3 +1,4 @@
+import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
   readJournalHistoryItems,
@@ -193,7 +194,7 @@ export function readJournalDomainItems(
         .all(JSON.stringify(chosen.map((header) => header.item_id)), ...prefix)
       return {
         kind: 'items-by-kind',
-        items: page.map(parseItem),
+        items: page.map((row) => readJournalStoredItem(db, prefix, row.payload_json)),
         nextOrdinal: headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
       }
     }
@@ -213,7 +214,10 @@ export function readJournalDomainItems(
       const row = db.prepare(`${TURNS_NEWEST_FIRST} LIMIT 1`).get(...prefix)
       return {
         kind: 'running-turn',
-        running: row ? runningStructuredAgentSessionTurnItemBySequence([parseItem(row)]) : null
+        // A turn row never stores tool output.
+        running: row
+          ? runningStructuredAgentSessionTurnItemBySequence([JSON.parse(String(row.payload_json))])
+          : null
       }
     }
     case 'context-usage':
@@ -251,7 +255,7 @@ function visibleItem(
     .prepare(`SELECT payload_json FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(...prefix, itemId)
-  return row ? parseItem(row) : null
+  return row ? readJournalStoredItem(db, prefix, row.payload_json) : null
 }
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */
@@ -265,7 +269,7 @@ export function newestJournalDomainTurnOrClear(
     WHERE session_id=? AND epoch=? AND hidden=0 AND turn_marker=1
     ORDER BY sequence DESC, sequence_index DESC`)
     .iterate(...prefix)) {
-    const item = parseItem(row)
+    const item = readJournalStoredItem(db, prefix, row.payload_json)
     if (
       newest &&
       (item.sequence !== newest.sequence ||
@@ -286,7 +290,7 @@ function readContextUsage(db: Database.Database, prefix: Prefix): AgentSessionCo
   let used: number | null = null
   let window: number | null = null
   for (const row of db.prepare(TURNS_NEWEST_FIRST).iterate(...prefix)) {
-    const item = parseItem(row)
+    const item = readJournalStoredItem(db, prefix, row.payload_json)
     if (used !== null && window !== null && item.sequence < Math.min(used, window)) {
       break
     }
@@ -308,13 +312,9 @@ export function readJournalSqlGoalRows(db: Database.Database, prefix: Prefix) {
     WHERE session_id=? AND epoch=? AND hidden=0 AND goal_transition=1
     ORDER BY sequence DESC, ordinal ASC LIMIT 1`)
     .get(...prefix)
-  return row ? [parseItem(row)] : []
+  return row ? [readJournalStoredItem(db, prefix, row.payload_json)] : []
 }
 
 function readThreadGoal(db: Database.Database, prefix: Prefix): JournalThreadGoalSource {
   return journalThreadGoalSource(readJournalSqlGoalRows(db, prefix))
-}
-
-function parseItem(row: Record<string, unknown>): AgentJournalRenderItem {
-  return JSON.parse(String(row.payload_json))
 }
