@@ -21585,7 +21585,22 @@
         "settings": "Open settings in Terminal",
         "extensions": "Open the extension dashboard in Terminal",
         "hotkeys": "Show keyboard shortcuts in Terminal",
-        "mcpManage": "Manage MCP servers"
+        "mcpManage": "Manage MCP servers",
+        "agentsTerminal": "Choose the agent in Terminal",
+        "sessionsTerminal": "Switch sessions in Terminal",
+        "skillsTerminal": "Browse skills in Terminal",
+        "mcpsTerminal": "Manage MCP servers in Terminal",
+        "connectTerminal": "Connect a provider in Terminal",
+        "statusTerminal": "View status in Terminal",
+        "themesTerminal": "Choose a theme in Terminal",
+        "diffTerminal": "Open the diff viewer in Terminal",
+        "editorTerminal": "Open your editor in Terminal",
+        "debugTerminal": "View debug info in Terminal",
+        "helpTerminal": "Show help in Terminal",
+        "forkSessionTerminal": "Fork the session in Terminal",
+        "renameSessionTerminal": "Rename the session in Terminal",
+        "timelineTerminal": "Browse the session timeline in Terminal",
+        "exportTerminal": "Export the session in Terminal"
       },
       "modelDescriptions": {
         "grok_4_7": "xAI's latest frontier model",
