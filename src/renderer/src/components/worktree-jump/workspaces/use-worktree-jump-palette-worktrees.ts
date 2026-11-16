@@ -170,7 +170,9 @@ export function useWorktreeJumpPaletteWorktrees({
   const reuseSortedWorktrees = useMemo(() => {
     let previous: readonly Worktree[] = EMPTY_SORTED_WORKTREES
     return (next: readonly Worktree[]) => {
-      if (!shallow(previous, next)) previous = next
+      if (!shallow(previous, next)) {
+        previous = next
+      }
       return previous
     }
   }, [])

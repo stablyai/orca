@@ -57,7 +57,9 @@ export function createWorkspaceTabPaletteIndex() {
       for (const field of ['terminalLayoutsByTabId', 'paneForegroundAgentByPaneKey'] as const) {
         const before = previous[field]
         const after = options[field]
-        if (before === after) continue
+        if (before === after) {
+          continue
+        }
         if (!before || !after) {
           addressed = false
           break
@@ -69,10 +71,13 @@ export function createWorkspaceTabPaletteIndex() {
         }
         for (const key of changes.keys) {
           const tabId = field === 'terminalLayoutsByTabId' ? key : getPaneKeyTabId(key)
-          if (tabId) dirtyTabs.add(tabId)
+          if (tabId) {
+            dirtyTabs.add(tabId)
+          }
         }
       }
     }
+    const previousInputs = new Map(previous ? Object.entries(previous) : [])
     const statusOnly =
       previous &&
       Object.keys(options).length === Object.keys(previous).length &&
@@ -82,7 +87,7 @@ export function createWorkspaceTabPaletteIndex() {
           key === 'sleepingAgentSessionsByPaneKey' ||
           key === 'terminalLayoutsByTabId' ||
           key === 'paneForegroundAgentByPaneKey' ||
-          value === previous![key as keyof BuildSearchableWorkspaceTabsOptions]
+          (previousInputs.has(key) && previousInputs.get(key) === value)
       )
     previous = options
     if (statusOnly && addressed && dirtyTabs !== null) {
@@ -111,7 +116,9 @@ export function createWorkspaceTabPaletteIndex() {
             })
           }
           if (!sameEntry(entry, updated)) {
-            if (next === entries) next = entries.slice()
+            if (next === entries) {
+              next = entries.slice()
+            }
             next[position] = updated
           }
         }
@@ -157,12 +164,16 @@ export function createWorkspaceTabPaletteIndex() {
       }
     }
     next.forEach((entry, position) => {
-      if (entry.tab.contentType !== 'terminal') return
+      if (entry.tab.contentType !== 'terminal') {
+        return
+      }
       const positions = terminalEntries.get(entry.tab.entityId) ?? []
       positions.push(position)
       terminalEntries.set(entry.tab.entityId, positions)
     })
-    if (!shallow(entries, next)) entries = next
+    if (!shallow(entries, next)) {
+      entries = next
+    }
     return entries
   }
 }

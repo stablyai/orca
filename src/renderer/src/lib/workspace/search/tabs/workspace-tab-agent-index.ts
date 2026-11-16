@@ -43,7 +43,9 @@ export function createWorkspaceTabAgentIndex() {
         if (sleeping?.kind === 'full-resync') {
           full = true
         } else if (sleeping) {
-          for (const key of sleeping.added) sleepingOrder.set(key, nextOrder++)
+          for (const key of sleeping.added) {
+            sleepingOrder.set(key, nextOrder++)
+          }
           sleeping.keys.forEach((key) => keys.add(key))
         }
       }
@@ -67,27 +69,42 @@ export function createWorkspaceTabAgentIndex() {
       const dirtyTabs = new Set<string>()
       for (const key of keys) {
         const paneTab = getPaneKeyTabId(key)
-        if (paneTab) dirtyTabs.add(paneTab)
+        if (paneTab) {
+          dirtyTabs.add(paneTab)
+        }
         const live = statuses.get(key)
         const sleeping = state.sleepingAgentSessionsByPaneKey[key]
         const priorRecords = records.get(key)
         if (priorRecords && priorRecords[0] === live && priorRecords[1] === sleeping) {
           const tabId = panes.get(key)?.tabId
-          if (tabId) dirtyTabs.add(tabId)
+          if (tabId) {
+            dirtyTabs.add(tabId)
+          }
           continue
         }
-        if (live || sleeping) records.set(key, [live, sleeping])
-        else records.delete(key)
+        if (live || sleeping) {
+          records.set(key, [live, sleeping])
+        } else {
+          records.delete(key)
+        }
         const before = panes.get(key)
         if (before) {
           buckets.get(before.tabId)?.delete(key)
           dirtyTabs.add(before.tabId)
           panes.delete(key)
         }
-        if (!live) liveOrder.delete(key)
-        if (!sleeping) sleepingOrder.delete(key)
-        if (live && !liveOrder.has(key)) liveOrder.set(key, nextOrder++)
-        if (sleeping && !sleepingOrder.has(key)) sleepingOrder.set(key, nextOrder++)
+        if (!live) {
+          liveOrder.delete(key)
+        }
+        if (!sleeping) {
+          sleepingOrder.delete(key)
+        }
+        if (live && !liveOrder.has(key)) {
+          liveOrder.set(key, nextOrder++)
+        }
+        if (sleeping && !sleepingOrder.has(key)) {
+          sleepingOrder.set(key, nextOrder++)
+        }
         const liveTabId = live && (live.tabId || paneTab)
         const record = liveTabId ? live : sleeping
         const tabId = liveTabId || (sleeping && (sleeping.tabId || paneTab))
@@ -110,7 +127,9 @@ export function createWorkspaceTabAgentIndex() {
         }
         panes.set(key, pane)
         let bucket = buckets.get(tabId)
-        if (!bucket) buckets.set(tabId, (bucket = new Map()))
+        if (!bucket) {
+          buckets.set(tabId, (bucket = new Map()))
+        }
         bucket.set(key, pane)
         dirtyTabs.add(tabId)
       }
@@ -125,7 +144,9 @@ export function createWorkspaceTabAgentIndex() {
           tabId,
           [...bucket.values()]
             .sort((a, b) => {
-              if (a.live !== b.live) return a.live ? -1 : 1
+              if (a.live !== b.live) {
+                return a.live ? -1 : 1
+              }
               if (!a.live) {
                 const aKey = a.entry.paneKey
                 const bKey = b.entry.paneKey
