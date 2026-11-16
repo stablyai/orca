@@ -148,12 +148,12 @@ export default function PluginCustomEditorFrame({
       onFrameProgress: (step) => progressRef.current(step),
       onMergesOutside: () => mergingRef.current(true),
       getViewState: () => pluginEditorViewStateCache.get(latestRef.current.viewStateKey) ?? null,
-      onViewState: (state) => {
+      onViewState: (json) => {
         const key = latestRef.current.viewStateKey
-        if (state === null) {
+        if (json === null) {
           pluginEditorViewStateCache.delete(key)
         } else {
-          setWithLRU(pluginEditorViewStateCache, key, state)
+          setWithLRU(pluginEditorViewStateCache, key, json)
         }
       },
       onKeyChord: (chord, context) => {

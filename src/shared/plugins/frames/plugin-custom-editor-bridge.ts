@@ -19,10 +19,10 @@ export const CUSTOM_EDITOR_EDIT_RATE_LIMIT = { maxMessages: 60, perMs: 10_000 }
 /** How long a save waits for the frame to post an edit still in its debounce window. */
 export const CUSTOM_EDITOR_FLUSH_TIMEOUT_MS = 1_000
 /** View posts have their own lane: an editor posts every change, since a tab switch unloads the
- *  frame before any debounce could fire, and only the last post counts. The shell refuses more
- *  JSON text than this, so the host's cap on the whole post never drops a view the frame kept. */
+ *  frame before any debounce could fire, and only the last post counts. A post carries JSON text;
+ *  the shell and the host both refuse more characters than this, so neither keeps what the other
+ *  drops. */
 export const CUSTOM_EDITOR_VIEW_STATE_MAX_CHARS = 16 * 1024
-export const CUSTOM_EDITOR_VIEW_STATE_MAX_BYTES = 64 * 1024
 
 /** `bytes` is an ArrayBuffer, never base64; an edit replaces the whole document. */
 export type CustomEditorContent =

@@ -51,7 +51,7 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       applyEdit: applyEdit,
       session: documentSession,
       getViewState: function () { return viewState },
-      // Why a JSON copy: Orca hands it back to a later frame, which only ever gets plain JSON.
+      // Why JSON text on the wire: the host keeps it as is, and one length rule holds on both sides.
       setViewState: function (state) {
         var json = state == null ? 'null' : JSON.stringify(state, function (key, value) {
           // JSON would store these as null, which silently forgets the view.
@@ -62,7 +62,7 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
         // Refused here, before it is kept, so getViewState never shows a view Orca would drop.
         if (json.length > C.viewStateMaxChars) throw new RangeError('view state is over ' + C.viewStateMaxChars + ' characters of JSON')
         viewState = JSON.parse(json)
-        post({ kind: 'evt', event: E.editorViewState, payload: viewState })
+        post({ kind: 'evt', event: E.editorViewState, payload: viewState === null ? null : json })
       }
     })
   }

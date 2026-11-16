@@ -158,19 +158,19 @@ describe('custom editor document channel', () => {
   })
 
   it('hands a remounted frame the view its last frame kept, before the document', () => {
-    let kept: unknown = null
+    let kept: string | null = null
     const doc = { text: 'a', readOnly: false }
     const options = {
       getDocument: () => doc,
       onEdit: vi.fn(),
       getViewState: () => kept,
-      onViewState: (state: unknown) => {
-        kept = state
+      onViewState: (json: string | null) => {
+        kept = json
       }
     }
     const first = harness(options)
     first.sendFromGuest(READY)
-    first.sendFromGuest({ orca: 1, kind: 'evt', event: 'editor.viewState', payload: { zoom: 2 } })
+    first.sendFromGuest({ orca: 1, kind: 'evt', event: 'editor.viewState', payload: '{"zoom":2}' })
     const second = harness(options)
     second.sendFromGuest(READY)
     const messages = second.posted.filter(isPluginJsonObject)
@@ -179,6 +179,6 @@ describe('custom editor document channel', () => {
       'editor.viewState',
       'editor.document'
     ])
-    expect(messages[1]?.payload).toEqual({ zoom: 2 })
+    expect(messages[1]?.payload).toBe('{"zoom":2}')
   })
 })

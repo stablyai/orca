@@ -182,7 +182,8 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     } else if (m.kind === 'evt' && m.event === E.push) {
       receivePush(m.payload)
     } else if (m.kind === 'evt' && m.event === E.editorViewState && C.surface === 'editor') {
-      viewState = m.payload === undefined ? null : m.payload
+      viewState = null
+      if (typeof m.payload === 'string') try { viewState = JSON.parse(m.payload) } catch (_) {}
     } else if (m.kind === 'evt' && m.event === E.editorDocument && C.surface === 'editor') {
       latest = Object.freeze(m.payload)
       waiting.splice(0).forEach(function (resolve) { resolve(latest) })
