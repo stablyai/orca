@@ -139,7 +139,11 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
 
   const tally = measurement.state === 'ready' ? measurement.tally : null
   const deletable = tally
-    ? tally.transcripts.matched - tally.transcripts.inUse + tally.chats.matched - tally.chats.inUse
+    ? tally.transcripts.matched -
+      tally.transcripts.inUse -
+      tally.transcripts.failed +
+      tally.chats.matched -
+      tally.chats.inUse
     : 0
 
   const confirmDelete = async (planId: string): Promise<void> => {
@@ -272,7 +276,11 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
                 "Deletes from this computer: agent sessions, {{sessions}} ({{size}}); Orca chats, {{chats}}. Anything in use is skipped. This can't be undone.",
                 {
                   sessions: confirmTally
-                    ? formatCount(confirmTally.transcripts.matched - confirmTally.transcripts.inUse)
+                    ? formatCount(
+                        confirmTally.transcripts.matched -
+                          confirmTally.transcripts.inUse -
+                          confirmTally.transcripts.failed
+                      )
                     : '0',
                   size: formatBytes(confirmTally?.transcripts.bytes ?? 0),
                   chats: confirmTally

@@ -41,7 +41,6 @@ export type WorkspaceHistoryResult = WorkspaceAgentHistoryTranscriptTally & {
 
 // Small batches keep each burst of unlinks short and let cancellation land between them.
 const DELETE_BATCH_SIZE = 32
-const OWNER_REFRESH_MS = 5_000
 const SQLITE_AGENTS = new Set<AiVaultSession['agent']>(['opencode', 'opencode2', 'zcode'])
 
 /** Scan this host's transcripts, keep only those a deleted workspace owns, then count or remove them. */
@@ -101,16 +100,9 @@ export async function runWorkspaceHistory(
   const context = { options: request.options, wslHomeDirs: request.options.wslHomeDirs ?? [] }
   const sqliteRows = new Map<string, Map<string, AiVaultSession>>()
   const countedInodes = new Set<string>()
-  let freshOwner = createWorkspaceHistoryOwner(request.ownership)
-  let freshOwnerAt = Date.now()
-  // Ownership is re-proved on fresh disk state: a volume can disconnect while the scan runs.
-  const ownsNow = (session: AiVaultSession): Promise<boolean> => {
-    if (Date.now() - freshOwnerAt > OWNER_REFRESH_MS) {
-      freshOwner = createWorkspaceHistoryOwner(request.ownership)
-      freshOwnerAt = Date.now()
-    }
-    return freshOwner(session)
-  }
+  // Re-proved uncached before each delete: a volume can disconnect or a folder come back at any time.
+  const ownsNow = (session: AiVaultSession): Promise<boolean> =>
+    createWorkspaceHistoryOwner(request.ownership)(session)
   for (const [index, session] of owned.entries()) {
     if (index % DELETE_BATCH_SIZE === 0) {
       await yieldToEventLoop()
