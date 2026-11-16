@@ -4,13 +4,17 @@ import { connect, type Socket } from 'node:net'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import {
+  PairingOfferSchema,
+  type PairingOffer
+} from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelFrame
 } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { RemoteRuntimeTransportSubscriptionCallbacks } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
+import type { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 
 const { subscribe } = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
@@ -20,14 +24,14 @@ vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-subscription-
 import { PairedRuntimeBrowserNetworkRoute } from './paired-runtime-browser-network-route'
 import { isWorkspaceLoopbackHost } from './workspace-loopback-host'
 
-const pairing = {
+const pairing: PairingOffer = PairingOfferSchema.parse({
   v: 2,
   endpoint: 'ws://127.0.0.1:6768',
   deviceToken: 't',
   publicKeyB64: 'k',
   pairedDeviceId: 'd',
   scope: 'runtime'
-} as PairingOffer
+})
 const lease = {
   authorityRuntimeId: 'runtime-a',
   authorityEpoch: 'epoch-a',
@@ -71,14 +75,16 @@ describe('Orca Cloud route (loopbackOnly)', () => {
   it('public sites are dialed from the desktop; localhost goes through the sandbox tunnel', async () => {
     const callbacks: RemoteRuntimeTransportSubscriptionCallbacks[] = []
     const sent: Uint8Array[] = []
-    subscribe.mockImplementation(async (...args: unknown[]) => {
-      callbacks.push(args[4] as RemoteRuntimeTransportSubscriptionCallbacks)
-      return {
-        requestId: 'r',
-        close: vi.fn(),
-        sendBinary: (bytes: Uint8Array) => (sent.push(bytes), true)
+    subscribe.mockImplementation(
+      async (...args: Parameters<typeof subscribeRemoteRuntimeTransport>) => {
+        callbacks.push(args[4])
+        return {
+          requestId: 'r',
+          close: vi.fn(),
+          sendBinary: (bytes: Uint8Array) => (sent.push(bytes), true)
+        }
       }
-    })
+    )
     const publicTargets: { host: string; port: number }[] = []
     const route = new PairedRuntimeBrowserNetworkRoute({
       connection: pairedRuntimeConnectionFromOffer(pairing),
@@ -152,7 +158,10 @@ async function readExact(socket: Socket, size: number): Promise<Uint8Array> {
   const chunks: Buffer[] = []
   let total = 0
   while (total < size) {
-    const [chunk] = (await once(socket, 'data')) as [Buffer]
+    const [chunk]: unknown[] = await once(socket, 'data')
+    if (!Buffer.isBuffer(chunk)) {
+      throw new Error('expected a buffer')
+    }
     chunks.push(chunk)
     total += chunk.byteLength
   }
