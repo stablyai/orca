@@ -5,6 +5,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
+import type { NewTabMenuSurface } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 
 export type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -28,7 +29,8 @@ export type TabBarProps = {
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
-  newTabMenuOrder?: 'default' | 'markdown-first'
+  /** Which + menu this is; the floating panel leads with Markdown and keeps its own layout. */
+  newTabMenuSurface?: NewTabMenuSurface
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void

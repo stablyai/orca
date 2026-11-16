@@ -15992,13 +15992,6 @@
                       "skillNotInstalled": "La skill Orca CLI n'est pas encore installée."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Impossible de masquer l'émulateur mobile."
-                    }
-                  }
                 }
               }
             }
@@ -16023,17 +16016,6 @@
             "5789936d9a": "Prévisualisez les simulateurs iOS pendant que des agents pilotent l'écran.",
             "8014b4b80b": "Conserver",
             "6e051a40b7": "Masquer"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Émulateur mobile masqué",
-                  "c46c979c1d": "Réactivez l'émulateur mobile à tout moment dans",
-                  "600f9a745a": "Paramètres › Émulateur mobile"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Le collage est trop volumineux pour la saisie clavier de l'émulateur.",
