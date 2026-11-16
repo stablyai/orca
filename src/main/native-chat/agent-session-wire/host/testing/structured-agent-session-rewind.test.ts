@@ -136,11 +136,33 @@ afterEach(async () => {
 
 /** Await startup reconciliation; unresolved rewind fails startup in its own stop step. */
 async function attachAndStart(fence: number | null) {
+  const settled = startupSettled()
   const attached = await host.attach(caller, hostTestAttachParams(fence))
-  const { serialize } = host.collaboratorsForTests()
-  await serialize(HOST_TEST_SESSION, async () => {})
-  await serialize(HOST_TEST_SESSION, async () => {})
+  await settled
   return attached
+}
+
+/** The start runs after attach returns and applies a pending rewind before its child is ready;
+ *  a start that fails drops the child. Both publish status after the new child's 'starting'. */
+function startupSettled(): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>()
+  let starting = false
+  const unsubscribe = host.subscribeStatus({
+    id: 'rewind-startup',
+    emit: (event) => {
+      if (event.type !== 'status' || event.session.sessionId !== HOST_TEST_SESSION) {
+        return
+      }
+      const phase = event.session.hostExecutionPhase
+      // Only a status after this start's 'starting' counts; an earlier child's 'ready' can still arrive.
+      if (phase === 'starting') {
+        starting = true
+      } else if (starting) {
+        resolve()
+      }
+    }
+  })
+  return promise.finally(unsubscribe)
 }
 
 async function seed(acceptedSubmissions = false) {

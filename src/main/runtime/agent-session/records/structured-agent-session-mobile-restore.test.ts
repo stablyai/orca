@@ -67,17 +67,23 @@ describe('prompt delivery after host recovery', () => {
     await attach()
     const original = new RuntimeMobileNotificationController()
     original.configureDismissalStore(h.root)
-    const sent: MobileNotificationEvent[] = []
-    original.onDispatched((event) => sent.push(event))
+    // The phone hears of the approval once its status read lands, which can follow seedApproval.
+    const notified = new Promise<MobileNotificationEvent>((resolve) =>
+      original.onDispatched((event) => {
+        if (event.type === 'notification') {
+          resolve(event)
+        }
+      })
+    )
     const unsubscribe = wire(h.host, original)
     const body = hostTestMessage('Work')
     expect(
       await h.host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
     ).toMatchObject({ ok: true })
     const prompt = await seedApproval()
-    const delivered = sent.find((event) => event.type === 'notification')
+    const delivered = await notified
     if (
-      !delivered?.notificationId ||
+      !delivered.notificationId ||
       !delivered.notificationEpoch ||
       delivered.notificationSeq === undefined
     ) {
