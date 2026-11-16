@@ -53,7 +53,7 @@ export const runComputerBatch: CommandHandler = async ({ flags, client, cwd, jso
     throw error
   }
   printResult(response, json, (result) => formatComputerBatch(result, steps))
-  if (response.result.batch.stoppedAt !== undefined) {
+  if (response.result.batch.stoppedAt !== undefined || response.result.finalStateError) {
     process.exitCode = 1
   }
 }
@@ -71,10 +71,11 @@ async function getComputerBatchSteps(flags: Map<string, string | boolean>): Prom
   let steps: unknown
   try {
     steps = JSON.parse(raw)
-  } catch (error) {
+  } catch {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Steps are not valid JSON: ${error instanceof Error ? error.message : String(error)}`
+      // Why: JSON.parse messages can quote nearby input, and steps may carry typed text or secrets.
+      'Steps are not valid JSON; pass an array such as [{"command":"click","elementIndex":3}]'
     )
   }
   if (!Array.isArray(steps) || steps.length === 0 || steps.length > COMPUTER_BATCH_MAX_STEPS) {

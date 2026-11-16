@@ -94,4 +94,41 @@ describe('orca computer batch', () => {
     expect(output).not.toContain('hunter2')
     expect(process.exitCode).toBe(1)
   })
+
+  it('exits 1 when the state after a finished batch cannot be read', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_1', {
+        steps: [{ step: 1, command: 'press-key', ok: true, elapsedMs: 10 }],
+        batch: { total: 1, completed: 1, stopOn: 'suspect', elapsedMs: 20 },
+        finalStateError: { code: 'window_not_found', message: 'The window closed' }
+      })
+    )
+
+    await main(
+      [
+        'computer',
+        'batch',
+        '--app',
+        'TextEdit',
+        '--steps',
+        '[{"command":"press-key","key":"Return"}]'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('does not echo the steps when they are not valid JSON', async () => {
+    await main(
+      ['computer', 'batch', '--app', 'TextEdit', '--steps', '[{"value":hunter2}]'],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    const errors = vi.mocked(console.error).mock.calls.flat().map(String).join('\n')
+    expect(errors).toContain('Steps are not valid JSON')
+    expect(errors).not.toContain('hunter2')
+  })
 })

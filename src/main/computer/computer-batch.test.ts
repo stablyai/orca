@@ -94,7 +94,8 @@ describe('runComputerBatch', () => {
       session: 's1',
       windowId: 7,
       noScreenshot: true,
-      treeDiff: true
+      treeDiff: true,
+      treeBaselineGraceMs: expect.any(Number)
     })
     expect(result.snapshot?.treeText).toBe('0 window Calculator\n\t1 text 56')
     expect(result.batch).toMatchObject({ total: 3, completed: 3, stopOn: 'suspect' })
@@ -133,6 +134,24 @@ describe('runComputerBatch', () => {
         d
       )
     ).rejects.toThrow('Batch step 2: click: Click requires --element-index or both --x and --y')
+    expect(d.runAction).not.toHaveBeenCalled()
+  })
+
+  it('refuses an oversized paste-text step before any step runs', async () => {
+    const d = deps([])
+
+    await expect(
+      runComputerBatch(
+        {
+          app: 'TextEdit',
+          steps: [
+            { command: 'press-key', key: 'Return' },
+            { command: 'paste-text', text: 'a'.repeat(17 * 1024 * 1024) }
+          ]
+        },
+        d
+      )
+    ).rejects.toThrow('Batch step 2: paste-text: Clipboard text is too large')
     expect(d.runAction).not.toHaveBeenCalled()
   })
 

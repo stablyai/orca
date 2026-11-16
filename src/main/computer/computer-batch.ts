@@ -26,6 +26,7 @@ import {
 } from '../../shared/rpc-contract/computer/computer-schemas-params'
 import type { ComputerSidecarActionMethod } from './sidecar-transport/sidecar-client'
 import { RuntimeClientError } from './runtime-client-error'
+import { validateBatchPasteSteps } from './computer-batch-paste-validation'
 
 export type ComputerBatchDeps = {
   runAction: (
@@ -88,7 +89,7 @@ const BATCH_LEVEL_FIELDS = new Set([
 // Results that suggest the step did not do what it should, so later steps would build on a wrong state.
 const SUSPECT_REASONS = new Set(['suspected_noop', 'text_mismatch', 'window_changed'])
 
-type ParsedStep =
+export type ParsedStep =
   | { kind: 'wait'; command: 'wait'; ms: number }
   | {
       kind: 'action'
@@ -116,6 +117,7 @@ export async function runComputerBatch(
   }
   // Why: check every step before the first one runs, so a typo in step 5 cannot leave steps 1-4 applied.
   const steps = params.steps.map((raw, index) => parseComputerBatchStep(raw, index + 1, stepTarget))
+  await validateBatchPasteSteps(steps)
 
   const results: ComputerBatchStepResult[] = []
   let stop: { step: number; reason: ComputerBatchStopOn } | undefined
@@ -183,7 +185,9 @@ export async function runComputerBatch(
       ...(params.screenshotMaxEdge !== undefined
         ? { screenshotMaxEdge: params.screenshotMaxEdge }
         : {}),
-      ...(params.treeDiff === true ? { treeDiff: true } : {})
+      ...(params.treeDiff === true ? { treeDiff: true } : {}),
+      // Why: a long batch can outlive the baseline's normal lifetime; the baseline from before it still applies.
+      treeBaselineGraceMs: Date.now() - startedAt
     })
     return { ...state, steps: results, batch: { ...batch, elapsedMs: Date.now() - startedAt } }
   } catch (error) {

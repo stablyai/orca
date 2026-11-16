@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComputerSnapshotResult } from '../../shared/computer-use-runtime-types'
 import { ComputerTreeBaselines } from './computer-snapshot-tree-diff'
 
@@ -41,5 +41,33 @@ describe('ComputerTreeBaselines', () => {
       removed: 0
     })
     expect(after.snapshot.treeText).toContain('~ \t1 text 56')
+  })
+
+  describe('baseline lifetime', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('keeps the pre-batch baseline for a batch that outlives the normal lifetime', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(0)
+      const baselines = new ComputerTreeBaselines()
+      const target = { app: 'Calculator', session: 's1' }
+      baselines.apply(target, read('before', '0'))
+      vi.setSystemTime(130_000)
+
+      const stale = baselines.apply({ ...target, treeDiff: true }, read('late', '7'))
+      expect(stale.snapshot.treeDiff).toBeUndefined()
+
+      vi.setSystemTime(0)
+      const fresh = new ComputerTreeBaselines()
+      fresh.apply(target, read('before', '0'))
+      vi.setSystemTime(130_000)
+      const after = fresh.apply(
+        { ...target, treeDiff: true, treeBaselineGraceMs: 130_000 },
+        read('after', '7')
+      )
+      expect(after.snapshot.treeDiff?.baseSnapshotId).toBe('before')
+    })
   })
 })

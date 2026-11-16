@@ -117,8 +117,14 @@ export class ComputerTreeBaselines {
     const { snapshot } = result
     const key = baselineKey(params, snapshot.app.pid)
     const windowKey = snapshotWindowKey(snapshot.window)
+    const graceMs = typeof params.treeBaselineGraceMs === 'number' ? params.treeBaselineGraceMs : 0
+    // Why: read before pruning so a batch's final read can still diff against the tree from before the batch.
+    const candidate = this.entries.get(key)
+    const previous =
+      candidate && candidate.createdAtMs >= Date.now() - MAX_BASELINE_AGE_MS - graceMs
+        ? candidate
+        : undefined
     this.prune()
-    const previous = this.entries.get(key)
     this.entries.delete(key)
     this.entries.set(key, {
       windowKey,
