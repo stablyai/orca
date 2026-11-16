@@ -159,8 +159,6 @@ export async function deleteChangelistWithFiles(
   changelist: number
 ): Promise<PerforceOperationResult> {
   const id = String(changelist)
-  // Why: the shelf must go first (p4 refuses to delete a changelist that has one); no shelf is not an error.
-  await runP4(['shelve', '-d', '-c', id], { cwd })
   const opened = await runP4(
     ['-ztag', 'fstat', '-Ro', '-e', id, '-T', 'clientFile,action', '//...'],
     {
@@ -179,6 +177,9 @@ export async function deleteChangelistWithFiles(
       deletable.push(absolute)
     }
   }
+  // Why after the checks above: a refused delete must keep the shelf. It goes before the changelist,
+  // which p4 refuses to delete while it has one; no shelf is not an error.
+  await runP4(['shelve', '-d', '-c', id], { cwd })
   const reverted = await runP4(['revert', '-c', id, '//...'], { cwd })
   // Why: "no file(s) to revert" is a non-zero exit for an already-empty changelist.
   if (reverted.code !== 0 && !/not opened|no file/i.test(reverted.stderr)) {
