@@ -6,7 +6,7 @@ import {
   createAiVaultScopeCwdMatcher,
   sessionFileExecutionNamespace
 } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { OrcaWorkspaceLayout } from '../../../shared/orca-workspace-layout'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'

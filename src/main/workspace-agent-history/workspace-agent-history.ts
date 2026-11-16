@@ -14,7 +14,7 @@ import type {
   WorkspaceAgentHistoryTally
 } from '../../shared/workspace-agent-history/workspace-agent-history-types'
 import { getRepoExecutionHostId, isLocalExecutionHost } from '../../shared/execution-host'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   splitWorktreeId,

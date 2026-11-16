@@ -10,7 +10,7 @@ import type {
   WorkspaceAgentHistoryTally
 } from '../../../../../shared/workspace-agent-history/workspace-agent-history-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { Button } from '../../ui/button'
 import {
   Dialog,

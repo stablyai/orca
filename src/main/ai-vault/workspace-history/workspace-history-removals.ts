@@ -6,7 +6,7 @@ import {
   isAiVaultSyntheticSessionPath,
   type AiVaultSessionDeleteRemoval
 } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import { sessionFileExecutionNamespace } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { AI_VAULT_AGENT_SOURCES } from '../discovery/session-scanner-agent-sources'
 import { isDiscoverableSessionFile } from '../discovery/session-file-discovery'
