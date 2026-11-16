@@ -9,8 +9,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../../store'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderPanel } from './provider-usage-panel'
 import { ProviderIdentityCard } from '../accounts/ProviderIdentityCard'
 import { UsageDisplayToggle } from './usage-meter'

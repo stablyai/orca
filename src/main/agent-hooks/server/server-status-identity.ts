@@ -57,6 +57,7 @@ export function toAgentStatusIpcPayload(
 ): AgentStatusIpcPayload {
   return {
     paneKey: entry.paneKey,
+    ...(entry.paneSleep ? { paneSleep: entry.paneSleep } : {}),
     ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
     tabId: entry.tabId,
     worktreeId: entry.worktreeId,

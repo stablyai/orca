@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 import type { ServerTarget } from '../../../../../shared/node-runtime/node-runtime-pin'
 import { OPENCODE_SQLITE_READER_FILENAME } from '../../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'

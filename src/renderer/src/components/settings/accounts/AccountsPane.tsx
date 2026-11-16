@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
-import type { CodexConfigSyncStatus } from '../../../../../shared/codex-config-sync-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
+import type { CodexConfigSyncStatus } from '../../../../../shared/agent-accounts/codex/codex-config-sync-types'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'

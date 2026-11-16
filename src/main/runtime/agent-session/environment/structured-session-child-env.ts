@@ -4,7 +4,10 @@
  * Empty remote selectors to mask the parent env; explicit flags still work, and login profiles can re-export selectors.
  * Omit pane identity: hooks and mobile status assume a live PTY leaf. Resolve worker identity at every spawn, including recovery and clear. */
 
-import { getAppEnvironment, hasAppEnvironment } from '../../../../shared/app-environment'
+import {
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../shared/app-lifecycle/app-environment'
 import {
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV

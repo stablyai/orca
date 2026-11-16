@@ -19,7 +19,7 @@ import {
   extractImageFilesFromDataTransfer,
   hasAttachableFeedbackImage
 } from '@/components/sidebar/sidebar-feedback/feedback-image-attachments'
-import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
+import { stripClientEnvironmentFooter } from '../../../../../shared/feedback/client-environment-info'
 import { FEEDBACK_PAYLOAD_TOO_LARGE_STATUS } from '../../../../../shared/feedback/feedback-image-limits'
 import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachments'
 import { useSidebarFeedbackEnvironmentPrefill } from './use-sidebar-feedback-environment-prefill'

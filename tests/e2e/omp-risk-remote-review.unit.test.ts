@@ -1,3 +1,5 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
@@ -72,23 +74,31 @@ it.each(
       otherHost,
       NOW
     )
-    const state = makeState({
-      ...(hydrated ? a : {}),
-      agentStatusByPaneKey: { ...a.agentStatusByPaneKey, ...b.agentStatusByPaneKey },
-      acknowledgedAgentsByPaneKey: { [ownPane]: 1, [sibling]: 2 },
-      paneForegroundAgentByPaneKey: {
-        [ownPane]: { agent: 'omp', shellForeground: false },
-        [sibling]: { agent: 'omp', shellForeground: false }
-      }
-    })
-    expect(state.agentStatusByPaneKey[sibling]).toBeDefined()
+    const store = createTestStore()
+    store.setState(
+      makeState({
+        ...(hydrated ? a : {}),
+        agentStatusByPaneKey: acceptedAgentStatuses([
+          ...(a.agentStatusByPaneKey ?? []),
+          ...(b.agentStatusByPaneKey ?? [])
+        ]),
+        acknowledgedAgentsByPaneKey: { [ownPane]: 1, [sibling]: 2 },
+        paneForegroundAgentByPaneKey: {
+          [ownPane]: { agent: 'omp', shellForeground: false },
+          [sibling]: { agent: 'omp', shellForeground: false }
+        }
+      })
+    )
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey.get(sibling)).toBeDefined()
     const empty = makeSnapshot([], { worktree: 'folder:same', snapshotVersion: 2 })
     const patch = batch
       ? applyWebSessionTabsSnapshots(state, [empty], 'host-a', NOW + 1)
       : applyWebSessionTabsSnapshot(state, empty, 'host-a', NOW + 1)
-    const after = { ...state, ...patch }
-    expect(after.agentStatusByPaneKey[ownPane]).toBeUndefined()
-    expect(after.agentStatusByPaneKey[sibling]).toEqual(state.agentStatusByPaneKey[sibling])
+    store.setState(patch)
+    const after = store.getState()
+    expect(after.agentStatusByPaneKey.get(ownPane)).toBeUndefined()
+    expect(after.agentStatusByPaneKey.get(sibling)).toEqual(state.agentStatusByPaneKey.get(sibling))
     expect(after.acknowledgedAgentsByPaneKey?.[ownPane]).toBeUndefined()
     expect(after.acknowledgedAgentsByPaneKey?.[sibling]).toBe(2)
     expect(after.paneForegroundAgentByPaneKey?.[ownPane]).toBeUndefined()
@@ -97,22 +107,22 @@ it.each(
     )
     expect(after.recentlyClosedAgentStatusTabIds?.[tabId]).toBeUndefined()
 
-    const next = {
-      ...after,
-      ...applyWebSessionTabsSnapshot(
+    store.setState(
+      applyWebSessionTabsSnapshot(
         after,
         snapshot(otherWorktree, SECOND_LEAF_ID, 2),
         otherHost,
         NOW + 2
       )
-    }
-    expect(next.agentStatusByPaneKey[sibling]).toBeDefined()
-    const reopened = {
-      ...next,
-      ...applyWebSessionTabsSnapshot(next, snapshot('folder:same', LEAF_ID, 3), 'host-a', NOW + 3)
-    }
-    expect(reopened.agentStatusByPaneKey[ownPane]).toBeDefined()
-    expect(reopened.agentStatusByPaneKey[sibling]).toBeDefined()
+    )
+    const next = store.getState()
+    expect(next.agentStatusByPaneKey.get(sibling)).toBeDefined()
+    store.setState(
+      applyWebSessionTabsSnapshot(next, snapshot('folder:same', LEAF_ID, 3), 'host-a', NOW + 3)
+    )
+    const reopened = store.getState()
+    expect(reopened.agentStatusByPaneKey.get(ownPane)).toBeDefined()
+    expect(reopened.agentStatusByPaneKey.get(sibling)).toBeDefined()
   }
 )
 
@@ -159,13 +169,13 @@ it.each(
   const own = applyWebSessionTabsSnapshot(initial, snapshot('folder:same', LEAF_ID), 'host-a', NOW)
   applyWebSessionTabsSnapshot(initial, snapshot('folder:other', SECOND_LEAF_ID), 'host-b', NOW)
   const state = makeState({ ...own, ...metadata })
-  expect(state.agentStatusByPaneKey[sibling]).toBeUndefined()
+  expect(state.agentStatusByPaneKey.get(sibling)).toBeUndefined()
   const empty = makeSnapshot([], { worktree: 'folder:same', snapshotVersion: 2 })
   const patch = batch
     ? applyWebSessionTabsSnapshots(state, [empty], 'host-a', NOW + 1)
     : applyWebSessionTabsSnapshot(state, empty, 'host-a', NOW + 1)
   const after = { ...state, ...patch }
   expect(after).toMatchObject(metadata)
-  expect(after.agentStatusByPaneKey[ownPane]).toBeUndefined()
+  expect(after.agentStatusByPaneKey.get(ownPane)).toBeUndefined()
   expect(after.recentlyClosedAgentStatusTabIds?.[tabId]).toBeUndefined()
 })

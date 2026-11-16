@@ -253,6 +253,7 @@
     "message": {
       "copyMessage": "Copiar mensaje",
       "forkFromResponse": "Crear una rama desde esta respuesta",
+      "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
       "forkFromResponseHint": "Un chat nuevo con esta respuesta completa, hasta el final de su turno"
     },
     "messageActionsSheet": {
@@ -2901,12 +2902,14 @@
       "title": "Apariencia"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Preguntar cada vez",
+      "askEachTimeDescription": "Elige cada vez entre el navegador de Orca, el del teléfono o copiar el enlace.",
       "desktopBrowser": "Navegador de Orca en el escritorio",
       "desktopBrowserDescription": "Abrir en el navegador de tu escritorio emparejado y verlo en el teléfono.",
-      "linksDescription": "Elige dónde se abren los enlaces HTTP(S) que tocas en la salida de la terminal.",
+      "terminalAndChatLinksDescription": "Elige dónde se abren los enlaces web que tocas en la salida de la terminal y en el chat.",
       "linksHeading": "ENLACES",
       "loadFailed": "No se pudieron cargar las preferencias del navegador. Vuelve a intentarlo.",
-      "openTerminalLinks": "Abrir enlaces de la terminal",
+      "openLinks": "Abrir enlaces",
       "phoneBrowser": "Navegador del teléfono",
       "phoneBrowserDescription": "Abrir en Safari, Chrome u otro navegador de este teléfono.",
       "saveFailed": "No se pudieron guardar las preferencias del navegador. Vuelve a intentarlo.",

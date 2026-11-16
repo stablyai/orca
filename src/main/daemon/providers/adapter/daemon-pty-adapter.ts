@@ -30,7 +30,7 @@ import type { AutomaticWorkRequestType } from '../../admission/daemon-automatic-
 import type {
   DaemonAsyncIoHealth,
   DaemonAsyncIoStatus
-} from '../../../../shared/daemon-async-io-health'
+} from '../../../../shared/terminal/daemon/daemon-async-io-health'
 import { observeDaemonAsyncIoHealth } from '../../observability/daemon-async-io-telemetry-event'
 import { sameEndpointIdentity } from '../../endpoint/identity/daemon-endpoint-incarnation'
 

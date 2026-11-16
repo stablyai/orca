@@ -1,5 +1,5 @@
 import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
+import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
@@ -46,7 +46,7 @@ import type { CodexSharedServerStatus } from '../../../shared/agent-launch/start
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
-} from '../../../shared/newer-daemon-hold'
+} from '../../../shared/terminal/daemon/newer-daemon-hold'
 
 export type PtyApi = {
   spawn: (opts: {

@@ -17,6 +17,7 @@ import {
   usesInstalledAgentModelCatalog,
   usesModelSpecificAcpEfforts
 } from './model-catalog/agent-model-catalog-ownership'
+import { dropStaleReportedFast, unpickedFastPolicy } from './selection/unpicked-fast-mode'
 import {
   fillUnknownCatalogEfforts,
   enrichStructuredAgentEfforts
@@ -161,7 +162,7 @@ export function applyStructuredAgentSessionModelCatalog(
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
       : {
-          fastMode: 'policy',
+          ...unpickedFastPolicy(state.record.agent),
           ...Object.fromEntries(
             Object.entries(state.acceptedInputSources ?? {}).filter(
               ([, source]) => source !== 'policy'
@@ -267,6 +268,7 @@ export function commitStructuredAgentSessionOption(
   }
   // Keep other picks after a model change; the host reconciles independent values.
   state.record.values[id] = { value: decoded, source: 'dispatched' }
+  dropStaleReportedFast(state, id)
   return {
     ...state,
     acceptedInputSources:

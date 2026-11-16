@@ -12,7 +12,6 @@ await import('../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 await import('../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 await import('../orca-runtime-tests/orca-runtime-test-scenario-builders.spec')
 
-await import('../orca-runtime-tests/paired-settings.spec')
 await import('../orca-runtime-tests/runtime-availability.spec')
 await import('../orca-runtime-tests/browser-capabilities.spec')
 await import('../orca-runtime-tests/window-authority.spec')

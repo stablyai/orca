@@ -33,7 +33,7 @@ export function createAgentStatusLaunchActions(
           existingRegistryEntry,
           nextRegistryEntry
         )
-        const existingEntry = s.agentStatusByPaneKey[paneKey]
+        const existingEntry = s.agentStatusByPaneKey.get(paneKey)
         const entryMatchesRegistry = registryEntryMatchesStatus({
           entry: nextRegistryEntry,
           paneKey,

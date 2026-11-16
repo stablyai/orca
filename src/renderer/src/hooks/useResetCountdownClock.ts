@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { getResetCountdownNextTickDelay } from '../../../shared/rate-limit-reset-format'
+import { getResetCountdownNextTickDelay } from '../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
 
 // Schedule one wake just after the next label boundary, then reschedule; badge/popover stay live without per-second ticks.
 

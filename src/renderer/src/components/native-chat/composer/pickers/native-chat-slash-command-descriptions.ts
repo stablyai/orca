@@ -64,6 +64,10 @@ const SHARED_SLASH_COMMAND_DESCRIPTIONS: SlashCommandDescriptionCopy = {
   effort: {
     'Choose reasoning effort': () =>
       translate('components.native-chat.slashCommandDescriptions.effort', 'Choose reasoning effort')
+  },
+  mcp: {
+    'Manage MCP servers': () =>
+      translate('components.native-chat.slashCommandDescriptions.mcpManage', 'Manage MCP servers')
   }
 }
 

@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { setAppEnvironment } from '../../../shared/app-environment'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { OpenCodeHookService } from './hook-service'
 import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 

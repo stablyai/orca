@@ -6,7 +6,7 @@ import {
   type Page,
   type TestInfo
 } from '@stablyai/playwright-test'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles/orca-profiles'
 
 import { forwardElectronProcessLogs, test, expect } from './helpers/orca-app'
 
@@ -24,7 +24,7 @@ import { readProfileStateSnapshot } from '../../src/main/persistence/profile-sta
 import { acquireProfileStateMaintenance } from '../../src/main/persistence/profile-state/access/profile-state-access'
 import { rollbackProfileState } from '../../src/main/persistence/profile-state/recovery/profile-state-recovery-command'
 import { profileStateJsonExportPaths } from '../../src/main/persistence/profile-state/legacy-json/profile-state-export-path'
-import type { ProfileStateRecoverySelector } from '../../src/shared/profile-state-recovery-command'
+import type { ProfileStateRecoverySelector } from '../../src/shared/orca-profiles/profile-state-recovery-command'
 
 // This fixture captures a legacy production schema boundary; the test runs the current build.
 

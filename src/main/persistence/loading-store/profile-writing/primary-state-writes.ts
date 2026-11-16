@@ -2,7 +2,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-s
 import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
-} from '../../../../shared/codex-reset-credit-attempt-ledger'
+} from '../../../../shared/agent-accounts/codex/codex-reset-credit-attempt-ledger'
 import {
   stopAfterFailedPrimaryStateMutation,
   type PrimaryStateWriteOperationsRuntime

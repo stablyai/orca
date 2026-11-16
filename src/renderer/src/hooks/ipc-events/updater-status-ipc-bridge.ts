@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '../../../../shared/update-status-types'
+import type { UpdateStatus } from '../../../../shared/updater/update-status-types'
 import { useAppStore } from '../../store'
 
 /** Installs updater listeners in their historical snapshot-before-push order. */

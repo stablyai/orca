@@ -5,7 +5,7 @@ import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-ag
 import type {
   ProviderRateLimits,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
 import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'

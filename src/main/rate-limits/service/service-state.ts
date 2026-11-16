@@ -1,11 +1,11 @@
-import type { LocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
+import type { LocalAccountRuntimeTarget } from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import type {
   AntigravityAccountUsage,
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitState
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
   type ActiveRateLimitProvider,
@@ -23,7 +23,7 @@ import {
   type GeminiCliOAuthEnabledResolver,
   DEFAULT_POLL_MS
 } from './service-types'
-import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
 import type { NetworkProxySettings } from '../../../shared/network-proxy'
