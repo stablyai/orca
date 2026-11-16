@@ -4,6 +4,7 @@ import { getAppEnvironment } from '../../../shared/app-environment'
 import { readFetchResponseTextWithinLimit } from '../../../shared/fetch-response-body'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/release-channel'
+import { isZotzCloudFeatureAllowed } from '../../../shared/zotz/zotz-network-policy'
 import { getMainHttpClient } from '../../network/http-client'
 import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 import {
@@ -113,7 +114,10 @@ export class AgentStateRulesLiveUpdater {
   async start(): Promise<void> {
     this.stop()
     const settings = this.deps.readSettings()
-    const live = this.deps.isPackaged && settings.agentStateRulesLiveUpdates !== false
+    const live =
+      this.deps.isPackaged &&
+      settings.agentStateRulesLiveUpdates !== false &&
+      isZotzCloudFeatureAllowed('agent-state-rules')
     const run = { channel: live ? agentStateRulesChannelForAppVersion(this.deps.appVersion) : null }
     this.run = run
     const overridePath = settings.agentStateRulesPath

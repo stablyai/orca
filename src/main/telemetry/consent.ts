@@ -2,6 +2,7 @@
 
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { TelemetryConsentState } from '../../shared/telemetry/telemetry-consent-types'
+import { isZotzCloudFeatureAllowed } from '../../shared/zotz/zotz-network-policy'
 
 // Retain pending-banner vs explicit-disabled reasons for UI; shared types cross IPC while this re-export preserves main callers.
 export type ConsentState = TelemetryConsentState
@@ -50,6 +51,9 @@ export function _resetMisconfigWarnCacheForTests(): void {
 }
 
 function resolveEnvOverride(): ConsentState | null {
+  if (!isZotzCloudFeatureAllowed('telemetry')) {
+    return { effective: 'disabled', reason: 'orca_disabled' }
+  }
   if (isEnvVarTruthy('DO_NOT_TRACK')) {
     return { effective: 'disabled', reason: 'do_not_track' }
   }

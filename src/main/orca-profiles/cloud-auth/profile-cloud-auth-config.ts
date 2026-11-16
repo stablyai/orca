@@ -3,6 +3,10 @@ import {
   cleanCloudServiceUrl as cleanUrl,
   cleanCloudServiceOrigin as cleanOrigin
 } from '../../../shared/cloud-service-url'
+import {
+  isZotzCloudFeatureAllowed,
+  ZOTZ_CLOUD_DISABLED_MESSAGE
+} from '../../../shared/zotz/zotz-network-policy'
 import { resolvePushGatewayOrigin } from '../../runtime/push/push-gateway-origin'
 
 export type OrcaCloudAuthConfig = {
@@ -43,6 +47,9 @@ export function getOrcaCloudAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()
 ): { configured: true; config: OrcaCloudAuthConfig } | { configured: false; setupMessage: string } {
+  if (!isZotzCloudFeatureAllowed('login')) {
+    return { configured: false, setupMessage: ZOTZ_CLOUD_DISABLED_MESSAGE }
+  }
   // Plain HTTP token endpoints are development-only.
   const allowLoopbackHttp = !packaged
   const cleanEndpointUrl = (value: string | undefined): string | null =>

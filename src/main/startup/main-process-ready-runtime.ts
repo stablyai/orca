@@ -18,6 +18,7 @@ import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-r
 import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
+import { isZotzCloudFeatureAllowed } from '../../shared/zotz/zotz-network-policy'
 import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -72,6 +73,9 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()
   await initializeMainProcessPlugins(runtime)
+  if (!isZotzCloudFeatureAllowed('github-star')) {
+    store.updateUI({ starNagCompleted: true })
+  }
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
   state.starNag.registerIpcHandlers()
