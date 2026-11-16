@@ -194,6 +194,9 @@ it('does not resume a checkpoint the pane reaches through its tmux client after 
       saved = undefined
     }
   })
+  // Ordinary presence reads (fleet status) don't pay for the tmux probe.
+  await server.checkAgentPresenceSince(PANE, 0)
+  expect(saved).toBeDefined()
   const capture = await captureWorktreeSleepResumeRecords({
     worktreeId: 'wt-1',
     paneKeysByPtyId: new Map([['pty', [PANE]]]),

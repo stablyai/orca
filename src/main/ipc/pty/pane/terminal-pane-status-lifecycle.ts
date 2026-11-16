@@ -8,6 +8,7 @@ import { paneKeyPtyId } from './key-state'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
+import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/execution-host/remote-execution-host-pty-id'
 
@@ -28,7 +29,7 @@ export function bindTerminalPaneStatusLifecycle(
         if (!pane.ptyId || isRemoteExecutionHostPtyId(pane.ptyId) || launch === null) {
           return false
         }
-        const shellAlone = await confirmShellAlone(pane.ptyId)
+        const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined)
         const current = runtime.resolveTerminalPane(paneKey)
         return (
           shellAlone === true &&
@@ -110,9 +111,9 @@ export function bindTerminalPaneStatusLifecycle(
 }
 
 /** The shell alone holds the PTY, with no stopped job behind it. The daemon's proof needs prompt
- *  marks, which cmd and Git Bash often lack; Windows shells stop no jobs, so their quiet foreground
- *  and childless tree suffice there. */
-async function confirmShellAlone(ptyId: string): Promise<boolean> {
+ *  marks, which cmd and Git Bash often lack; Windows shells stop no jobs, so the host's job census
+ *  finding no child beside a shell foreground suffices there. */
+async function confirmShellAlone(ptyId: string, incarnationId?: string): Promise<boolean> {
   const provider = getProviderForPty(ptyId)
   if ((await provider.confirmShellForeground?.(ptyId)) === true) {
     return true
@@ -120,9 +121,13 @@ async function confirmShellAlone(ptyId: string): Promise<boolean> {
   if (process.platform !== 'win32') {
     return false
   }
-  const [children, foreground] = await Promise.all([
-    provider.hasChildProcesses(ptyId),
-    provider.confirmForegroundProcess?.(ptyId)
-  ])
-  return children === false && typeof foreground === 'string' && isShellProcess(foreground)
+  const inspection = await inspectPtyProviderProcess(provider, ptyId, {
+    scanChildProcesses: true,
+    ...(incarnationId ? { expectedIncarnationId: incarnationId } : {})
+  })
+  return (
+    inspection.childProcessEvidence === 'no-children' &&
+    typeof inspection.foregroundProcess === 'string' &&
+    isShellProcess(inspection.foregroundProcess)
+  )
 }

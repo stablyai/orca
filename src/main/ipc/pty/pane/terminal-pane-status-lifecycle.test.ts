@@ -52,8 +52,12 @@ it.each([
         }
         return shellAlone
       },
-      hasChildProcesses: async () => foreground !== 'cmd.exe',
-      confirmForegroundProcess: async () => foreground
+      // Windows answers from its job census; a scan that names no agent is not that census.
+      inspectProcess: async () => ({
+        foregroundProcess: foreground,
+        hasChildProcesses: foreground !== 'cmd.exe',
+        childProcessEvidence: foreground === 'cmd.exe' ? 'no-children' : 'children'
+      })
     })
     // SAFETY: This binding's exit probe only reads these two runtime capabilities.
     const runtime = {
