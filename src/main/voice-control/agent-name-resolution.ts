@@ -1,4 +1,4 @@
-import { levenshtein } from '../../shared/edit-distance'
+import { levenshtein } from '../../shared/text/edit-distance'
 import type { VoiceRosterEntry } from './voice-control-roster'
 
 /**

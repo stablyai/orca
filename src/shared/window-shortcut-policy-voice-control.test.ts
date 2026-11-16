@@ -1,6 +1,9 @@
 // voice.control keybinding resolution in the main-process window-shortcut allowlist.
 import { describe, expect, it } from 'vitest'
-import { getWindowShortcutActionId, resolveWindowShortcutAction } from './window-shortcut-policy'
+import {
+  getWindowShortcutActionId,
+  resolveWindowShortcutAction
+} from './keybindings/window-shortcut-policy'
 
 describe('resolveWindowShortcutAction voice.control', () => {
   it('resolves the voice control toggle on Mod+Shift+V on macOS only', () => {
