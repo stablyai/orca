@@ -116,14 +116,19 @@ export function createClaudeStreamedBlockRegistry(
       return { ...started, text, parentToolUseId }
     },
     reconcile: (frame) => {
-      const streamed = messages.get(scopeKey(frame.sessionId, frame.parentToolUseId))
+      const scope = scopeKey(frame.sessionId, frame.parentToolUseId)
+      const streamed = messages.get(scope)
       if (
         !streamed ||
         (frame.messageId && streamed.messageId && frame.messageId !== streamed.messageId)
       ) {
         return null
       }
-      return streamed.awaitingFinal.shift() ?? null
+      const block = streamed.awaitingFinal.shift() ?? null
+      if (streamed.awaitingFinal.length === 0) {
+        messages.delete(scope)
+      }
+      return block
     },
     clearScope: (sessionId, parentToolUseId) => {
       messages.delete(scopeKey(sessionId, parentToolUseId))
