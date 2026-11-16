@@ -19,6 +19,7 @@ import {
   readWorkspaceParents,
   type GoneFolder
 } from './deleted-workspace-folders'
+import { isStillIdleInGoneFolder } from './transcript-last-cwd'
 
 export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
 
@@ -72,8 +73,9 @@ export async function sweepDeletedWorkspaceChatHistory(
     return result
   }
   const sessions = await listInScope(deps, parents.scopePaths)
-  // The scan can take minutes: a workspace archived meanwhile must still be protected.
+  // The scan can take minutes: a workspace archived or a folder project added meanwhile still protects.
   const listedNow = await readListedFolders(deps.store)
+  const parentsNow = await readWorkspaceParents(deps.store, listedNow)
   const goneByCwd = new Map<string, Promise<GoneFolder | null>>()
 
   const byFolder = new Map<string, { folder: GoneFolder; targets: ChatHistoryTarget[] }>()
@@ -94,7 +96,7 @@ export async function sweepDeletedWorkspaceChatHistory(
     const folder = await pending
     // Deleted means: the first missing folder sits directly in an Orca workspace parent, and Orca no
     // longer lists it or anything inside it. A missing parent (unmounted volume) never qualifies.
-    if (!folder || !parents.ids.has(folder.ancestorId)) {
+    if (!folder || !parents.ids.has(folder.ancestorId) || !parentsNow.ids.has(folder.ancestorId)) {
       continue
     }
     const key = goneFolderKey(folder)
@@ -111,7 +113,16 @@ export async function sweepDeletedWorkspaceChatHistory(
     if (deps.signal?.aborted || !deps.isEnabled() || !(await isStillGone(folder))) {
       continue
     }
-    const deleted = await deps.deleteSessions(targets)
+    const idle: ChatHistoryTarget[] = []
+    for (const target of targets) {
+      if (await isStillIdleInGoneFolder(target.filePath, goneFolderKey(folder), Date.now())) {
+        idle.push(target)
+      }
+    }
+    if (idle.length === 0) {
+      continue
+    }
+    const deleted = await deps.deleteSessions(idle)
     result.deleted += deleted.deleted
     result.failed += deleted.failed
     result.freedBytes += deleted.freedBytes

@@ -1,5 +1,5 @@
-import { lstat, readdir, realpath, stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { lstat, readdir, readlink, realpath, stat } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -92,17 +92,39 @@ export type ListedFolders = {
   gone: Set<string>
 }
 
+/** Follows a listed path's symlinks to where they point, so a dangling link still protects its target. */
+async function linkTargets(path: string): Promise<string[]> {
+  const targets = [path]
+  let current = path
+  // A few hops covers real setups; a loop just stops protecting further, never deletes more.
+  for (let hop = 0; hop < 8; hop += 1) {
+    const stats = await lstat(current).catch(() => null)
+    if (!stats?.isSymbolicLink()) {
+      break
+    }
+    const link = await readlink(current).catch(() => null)
+    if (link === null) {
+      break
+    }
+    current = resolve(dirname(current), link)
+    targets.push(current)
+  }
+  return targets
+}
+
 export async function readListedFolders(store: RuntimeStore): Promise<ListedFolders> {
   const listed: ListedFolders = { present: new Set(), gone: new Set() }
-  for (const path of new Set(listedPaths(store))) {
-    const id = await identityOf(path)
-    if (id) {
-      listed.present.add(id)
-      continue
-    }
-    const gone = await goneFolderOf(path)
-    if (gone) {
-      listed.gone.add(goneFolderKey(gone))
+  for (const listedPath of new Set(listedPaths(store))) {
+    for (const path of await linkTargets(listedPath)) {
+      const id = await identityOf(path)
+      if (id) {
+        listed.present.add(id)
+        continue
+      }
+      const gone = await goneFolderOf(path)
+      if (gone) {
+        listed.gone.add(goneFolderKey(gone))
+      }
     }
   }
   return listed

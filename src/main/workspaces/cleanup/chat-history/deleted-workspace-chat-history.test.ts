@@ -1,6 +1,14 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
@@ -19,15 +27,21 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
+/** A day-old transcript on disk; `lastCwd` is where it was last resumed. */
 function session(
-  filePath: string,
+  name: string,
   cwd: string,
-  overrides: Partial<AiVaultSession> = {}
+  overrides: Partial<AiVaultSession> = {},
+  lastCwd = cwd
 ): AiVaultSession {
+  const filePath = join(root, 'transcripts', name)
+  mkdirSync(join(root, 'transcripts'), { recursive: true })
+  writeFileSync(filePath, `${JSON.stringify({ cwd })}\n${JSON.stringify({ cwd: lastCwd })}\n`)
+  utimesSync(filePath, new Date(DAY_AGO), new Date(DAY_AGO))
   return {
     executionHostId: 'local',
     agent: 'claude',
-    sessionId: filePath,
+    sessionId: name,
     cwd,
     filePath,
     modifiedAt: DAY_AGO,
@@ -149,7 +163,13 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       session('unrelated-clone.jsonl', join(workspaces, 'api', 'old-package')),
       session('symlinked-folder-project.jsonl', join(workspaces, 'tools', 'old')),
       session('trimmed-cwd.jsonl', join(appWorkspaces, 'spaced')),
-      session('archived-mid-scan.jsonl', join(appWorkspaces, 'archived-mid-scan'))
+      session('archived-mid-scan.jsonl', join(appWorkspaces, 'archived-mid-scan')),
+      session(
+        'resumed-elsewhere.jsonl',
+        join(appWorkspaces, 'gone-three'),
+        {},
+        join(appWorkspaces, 'live')
+      )
     ]
 
     const result = await sweepDeletedWorkspaceChatHistory({
@@ -166,10 +186,10 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       }
     })
 
-    expect(deleted).toEqual([
-      { agent: 'claude', filePath: 'gone.jsonl' },
-      { agent: 'claude', filePath: 'gone-subfolder.jsonl' },
-      { agent: 'claude', filePath: 'gone-physical.jsonl' }
+    expect(deleted.map((target) => basename(target.filePath))).toEqual([
+      'gone.jsonl',
+      'gone-subfolder.jsonl',
+      'gone-physical.jsonl'
     ])
     expect(result).toEqual({ deleted: 3, failed: 0, freedBytes: 63 })
   })
