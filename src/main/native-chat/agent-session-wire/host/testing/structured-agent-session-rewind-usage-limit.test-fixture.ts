@@ -10,7 +10,7 @@ import {
   hostTestOperationId,
   hostTestMessage
 } from './structured-agent-session-host-test-data.test-fixture'
-import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { latestNativeChatUsageLimitCut } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'

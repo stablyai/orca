@@ -18,7 +18,7 @@ import { isAdmissibleAgentJournalMessageBody } from '../../../shared/agent-sessi
 import {
   orchestrationMailNotice,
   readAgentMessageSource
-} from '../../../shared/agent-session/agent-session-message-source'
+} from '../../../shared/agent-session/journal/agent-session-message-source'
 
 /** Outcome, immutable accepted source and deletion cause share the reader's one WAL snapshot. */
 export function readJournalDomainMailObservation(
