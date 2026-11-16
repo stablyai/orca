@@ -1,16 +1,16 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getRelativePathInsideWorktree,
   withSshMutationExpectation
-} from '@/runtime/runtime-file-routing'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { assertRemoteWriteFitsOneRequest } from '@/runtime/runtime-file-mutation-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+} from '@/runtime/files/runtime-file-routing'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { assertRemoteWriteFitsOneRequest } from '@/runtime/files/mutations/runtime-file-mutation-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
-import type { EditorFormatResult } from '../../../../../../shared/editor-formatter'
+import type { EditorFormatResult } from '../../../../../../shared/editor/formatting/editor-formatter'
 import type { AppStoreApi } from '../queue/editor-save-queue-contract'
 import type { EditorSaveTrigger } from '../queue/editor-save-disk-precondition'
 import { hasEditorBytesDraft } from '../bytes/editor-bytes-documents'

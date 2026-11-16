@@ -2,11 +2,11 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { createAgentSessionDeltaCoalescer } from '../../../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import { createAgentSessionDeltaCoalescer } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
 import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
-import { withJournalReasoningLifecycle } from '../../../native-chat/agent-session-journal/journal-reasoning-row'
+import { withJournalReasoningLifecycle } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 import {
   codexStructuredItemKey,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,

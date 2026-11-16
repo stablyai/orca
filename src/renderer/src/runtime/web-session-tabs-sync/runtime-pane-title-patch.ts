@@ -3,26 +3,26 @@ import {
   isRuntimePaneTitleOrphan,
   resolveRuntimePaneTitleLeafId,
   resolveRuntimePaneTitleLeafIdFromSparseSlots
-} from '../../../../shared/runtime-pane-title-leaf-id'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+} from '../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
-import { findRegisteredTerminalTab } from '../mounted-terminal-tab-registry'
+import { findRegisteredTerminalTab } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { clientAgentStatusFencesHost } from './agent-status-primitives'
-import { writableWebSessionTabsRecord } from './state-equality-core'
+import { presentationRecordDraft, finishPresentationRecord } from './presentation-record-drafts'
 import type {
   MirroredTerminalTab,
-  TerminalSurface,
   WebSessionTabsBatchContext,
   WebSessionTabsSyncState
 } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 /** Reconcile saved pane titles with the accepted host inventory, including inactive tabs. */
 export function buildMirroredRuntimePaneTitlePatch(
   state: WebSessionTabsSyncState,
   tabs: readonly MirroredTerminalTab[],
-  surfaces: readonly TerminalSurface[],
+  surfaces: readonly RuntimeMobileSessionTerminalClientTab[],
   now: number,
   batchContext?: WebSessionTabsBatchContext
 ): Partial<WebSessionTabsSyncState> | null {
@@ -37,13 +37,15 @@ export function buildMirroredRuntimePaneTitlePatch(
   if (titledTabs.length === 0) {
     return null
   }
-  const surfacesByTab = new Map<string, Map<string, TerminalSurface>>()
+  const surfacesByTab = new Map<string, Map<string, RuntimeMobileSessionTerminalClientTab>>()
   for (const surface of surfaces) {
-    const byLeaf = surfacesByTab.get(surface.parentTabId) ?? new Map<string, TerminalSurface>()
+    const byLeaf =
+      surfacesByTab.get(surface.parentTabId) ??
+      new Map<string, RuntimeMobileSessionTerminalClientTab>()
     byLeaf.set(surface.leafId, surface)
     surfacesByTab.set(surface.parentTabId, byLeaf)
   }
-  let nextTitles = titles
+  const draft = presentationRecordDraft(state, 'runtimePaneTitlesByTabId', batchContext)
   for (const { tab, hostTabId, layout, retainedSurfaceByPrunedLeafId, paneTitles } of titledTabs) {
     const leaves = new Set(collectRuntimePaneLeafIds(layout.root))
     const liveSlotIds = Object.keys(paneTitles)
@@ -92,7 +94,7 @@ export function buildMirroredRuntimePaneTitlePatch(
         if (
           clientAgentStatusFencesHost(
             paneKey,
-            state.agentStatusByPaneKey[paneKey],
+            state.agentStatusByPaneKey.get(paneKey),
             hostSurface.agentStatus,
             now
           )
@@ -129,10 +131,13 @@ export function buildMirroredRuntimePaneTitlePatch(
     if (nextPaneTitles === paneTitles) {
       continue
     }
-    if (nextTitles === titles) {
-      nextTitles = writableWebSessionTabsRecord(state, 'runtimePaneTitlesByTabId', batchContext)
-    }
-    nextTitles[tab.id] = nextPaneTitles
+    draft.set(tab.id, nextPaneTitles)
   }
+  const nextTitles = finishPresentationRecord(
+    state,
+    'runtimePaneTitlesByTabId',
+    draft,
+    batchContext
+  )
   return nextTitles === titles ? null : { runtimePaneTitlesByTabId: nextTitles }
 }

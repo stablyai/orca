@@ -1,22 +1,18 @@
-import {
-  orchestrationMailNotice,
-  type AgentMessageSender,
-  type AgentMessageSource
-} from './agent-session-message-source'
+import type { AgentMessageSender, AgentMessageSource } from './agent-session-message-source'
 import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
 import { agentMessageTranscriptText } from './agent-message-display-text'
 
 export function agentMessageIsCompact(
-  message: Pick<NativeChatMessage, 'agentStart' | 'from'>,
-  from = message.from
+  message: Pick<NativeChatMessage, 'agentStart' | 'from'>
 ): boolean {
-  return message.agentStart === true || orchestrationMailNotice(from) !== null
+  return message.agentStart === true || message.from?.kind === 'agent'
 }
 
-export const AGENT_MESSAGE_FOLDED_LINES = 3
 export type AgentMessageHeading =
   | 'started'
+  | 'reopened-worker'
+  | 'followed-up-worker'
   | 'handed-off'
   | 'started-agent'
   | 'task'
@@ -44,10 +40,13 @@ export type AgentMessageSenderView = Readonly<{
  *  creation card as a plain message, a handoff as a started worker, or a handoff with no task as work handed over. */
 export function agentMessageHeading(
   from: AgentMessageSource,
-  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'blocks'>
+  creation: Pick<NativeChatMessage, 'agentStart' | 'agentHandoff' | 'agentFollowUp' | 'blocks'>
 ): AgentMessageHeading {
   if (creation.agentStart) {
     if (!creation.agentHandoff) {
+      if (creation.agentFollowUp) {
+        return creation.agentFollowUp === 'reopened' ? 'reopened-worker' : 'followed-up-worker'
+      }
       return 'started'
     }
     return agentMessageTranscriptText(creation.blocks, from) ? 'handed-off' : 'started-agent'
@@ -91,7 +90,14 @@ export function agentMessageSavedKind(
 
 /** A Dispatch address names work, not a pane; every other sender address can be opened. */
 export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
-  return !sender.party.address.startsWith('dispatch:')
+  return (
+    !sender.party.address.startsWith('dispatch:') &&
+    !(
+      sender.party.address.startsWith('run:') &&
+      !sender.party.orcaSessionId &&
+      !sender.party.terminalHandle
+    )
+  )
 }
 
 export function agentMessagePrimarySender(
@@ -111,14 +117,6 @@ export function agentMessageSenderView(
   return senderType === undefined || row.agentType === senderType
     ? row
     : { ...row, agentType: senderType }
-}
-
-export function agentMessageOverflows(height: number, lineHeight: number): boolean {
-  return height > lineHeight * AGENT_MESSAGE_FOLDED_LINES + 1
-}
-
-export function agentMessageFoldLabel(open: boolean): 'expanded' | 'collapsed' {
-  return open ? 'expanded' : 'collapsed'
 }
 
 export function agentMessageCanCopy(text: string): boolean {

@@ -1,5 +1,5 @@
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 // Late dispatch settlements run outside their request, so report failures through the logger.
 
 type DispatchFollowUpHost = Pick<StructuredAgentSessionHost, 'settleLateDispatch'>

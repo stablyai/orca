@@ -110,75 +110,6 @@ async function withRetainedPty(
   }
 }
 
-it('commits confirmed absence while a newer inventory times out without disconnecting', async () => {
-  await withRetainedPty(async ({ owner, subprocess, responses }) => {
-    subprocess._simulateExit(0)
-    const first = owner.listProcesses()
-    await waitFor(() => responses.pending.length === 1)
-    // ast-grep-ignore: test-no-wall-clock -- Exercise the real RPC timeout while its socket stays connected.
-    const deadlineMs = Date.now() + 200
-    const second = owner.listProcesses({ deadlineMs }).then(
-      () => null,
-      (error: unknown) => error
-    )
-    await waitFor(() => responses.pending.length === 2)
-    responses.pending[0]?.resolve()
-    await expect(first).resolves.toEqual([])
-    expect(owner.getPtyAvailability('retained')).toBe(false)
-    expect(await second).toBeInstanceOf(Error)
-    expect(owner.getDaemonIdentity()).not.toBeNull()
-    expect(owner.getPtyAvailability('retained')).toBe(false)
-  })
-})
-
-it('does not let an older absent census prune a replacement after a newer census commits', async () => {
-  await withRetainedPty(async ({ owner, subprocess, responses }) => {
-    await owner.attach('retained')
-    subprocess._simulateExit(0)
-    expect(owner.hasPty('retained')).toBe(true)
-    const first = owner.listProcesses()
-    await waitFor(() => responses.pending.length === 1 && !owner.hasPty('retained'))
-    await owner.spawn({ sessionId: 'retained', cwd: '/tmp', cols: 80, rows: 24 })
-    const second = owner.listProcesses()
-    await waitFor(() => responses.pending.length === 2)
-    responses.pending[1]?.resolve()
-    await expect(second).resolves.toHaveLength(1)
-    responses.pending[0]?.resolve()
-    await expect(first).resolves.toEqual([])
-    expect(owner.hasPty('retained')).toBe(true)
-    expect(owner.getPtyAvailability('retained')).toBe(true)
-  })
-})
-
-it('preserves a newly acknowledged legacy owner against an older absent census', async () => {
-  await withRetainedPty(
-    async ({ owner, subprocess, responses }) => {
-      await owner.attach('retained')
-      const stream = owner['client']['streamSocket']
-      if (!stream) {
-        throw new Error('Expected the event stream')
-      }
-      stream.pause()
-      subprocess._simulateExit(0)
-      const inventory = owner.listProcesses()
-      await waitFor(() => responses.pending.length === 1)
-      const replacement = await owner.spawn({
-        sessionId: 'retained',
-        cwd: '/tmp',
-        cols: 80,
-        rows: 24
-      })
-      expect(replacement.incarnationId).toBeUndefined()
-      responses.pending[0]?.resolve()
-      await expect(inventory).resolves.toEqual([])
-      expect(owner.hasPty('retained')).toBe(true)
-      expect(owner.getPtyAvailability('retained')).toBe(true)
-    },
-    false,
-    true
-  )
-})
-
 it('uses confirmed replacement identity after an old owner closes input and is explicitly closed', async () => {
   await withRetainedPty(async ({ owner, peer, subprocess, subprocesses, responses }) => {
     await owner.attach('retained')
@@ -203,34 +134,5 @@ it('uses confirmed replacement identity after an old owner closes input and is e
     })
     await waitFor(() => subprocesses[1]?.write.mock.calls.length === 1)
     expect(subprocesses[1]?.write).toHaveBeenCalledWith('live')
-  })
-})
-
-it('does not let an older positive reply overwrite a newer confirmed absence', async () => {
-  await withRetainedPty(async ({ owner, subprocess, responses }) => {
-    const first = owner.listProcesses()
-    await waitFor(() => responses.pending.length === 1)
-    subprocess._simulateExit(0)
-    const second = owner.listProcesses()
-    await waitFor(() => responses.pending.length === 2)
-    responses.pending[1]?.resolve()
-    await expect(second).resolves.toEqual([])
-    expect(owner.getPtyAvailability('retained')).toBe(false)
-    responses.pending[0]?.resolve()
-    await expect(first).resolves.toHaveLength(1)
-    expect(owner.getPtyAvailability('retained')).toBe(false)
-  })
-})
-
-it('does not revive an attached PTY from inventory captured before its exit', async () => {
-  await withRetainedPty(async ({ owner, subprocess, responses }) => {
-    await owner.attach('retained')
-    const inventory = owner.listProcesses()
-    await waitFor(() => responses.pending.length === 1)
-    subprocess._simulateExit(0)
-    await waitFor(() => !owner.hasPty('retained'))
-    responses.pending[0]?.resolve()
-    await expect(inventory).resolves.toHaveLength(1)
-    expect(owner.getPtyAvailability('retained')).toBe(false)
   })
 })

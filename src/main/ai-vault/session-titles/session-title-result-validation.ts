@@ -34,6 +34,8 @@ function parseTitle(value: unknown): AiVaultSessionTitle {
   return {
     agent: record.agent,
     sessionId: record.sessionId,
-    title: record.title.trim()
+    title: record.title.trim(),
+    // Unknown kinds from a newer host stay unclassified rather than failing the whole result.
+    ...(record.kind === 'named' || record.kind === 'fallback' ? { kind: record.kind } : {})
   }
 }

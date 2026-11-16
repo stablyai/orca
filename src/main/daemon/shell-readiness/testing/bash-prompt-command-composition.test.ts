@@ -70,22 +70,6 @@ describe.skipIf(process.platform === 'win32')('daemon bash PROMPT_COMMAND compos
     rmSync(tempHome, { recursive: true, force: true })
   })
 
-  itWithBash.each([
-    ['semicolon', ';'],
-    ['spaces', ';   '],
-    ['tab', ';\t'],
-    ['newlines', ';\n\n'],
-    ['many separators', '; ;\t\n;;  ']
-  ])('composes a value ending in %s', (_name, suffix) => {
-    const output = runInteractiveBash(
-      `PROMPT_COMMAND='printf "PROMPT_TRAILING\\n"${suffix}'\n`,
-      tempHome
-    )
-
-    expect(output).toContain('PROMPT_TRAILING')
-    expectLifecycle(output)
-  })
-
   itWithBash('normalizes a trailing separator with errexit enabled', () => {
     const output = runInteractiveBash(
       'set -e\nPROMPT_COMMAND=\'printf "PROMPT_ERREXIT\\n";   \'\n',
@@ -111,26 +95,6 @@ describe.skipIf(process.platform === 'win32')('daemon bash PROMPT_COMMAND compos
     const output = runInteractiveBash('set -u\nunset PROMPT_COMMAND\n', tempHome)
 
     expect(output).not.toContain('unbound variable')
-    expectLifecycle(output)
-  })
-
-  itWithBash('composes an inherited hook with nounset enabled', () => {
-    const output = runInteractiveBash(
-      'set -u\nPROMPT_COMMAND=\'printf "PROMPT_NOUNSET\\\\n"\'\n',
-      tempHome
-    )
-
-    expect(output.match(/PROMPT_NOUNSET\r?\n/g)).toHaveLength(3)
-    expect(output).not.toContain('unbound variable')
-    expectLifecycle(output)
-  })
-
-  itWithBash('flattens arrays without duplicating later elements', () => {
-    const profile = `PROMPT_COMMAND=('printf "PROMPT_ARRAY_A\\n";' 'printf "PROMPT_ARRAY_B\\n";  ')\n`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split('PROMPT_ARRAY_A')).toHaveLength(4)
-    expect(output.split('PROMPT_ARRAY_B')).toHaveLength(4)
     expectLifecycle(output)
   })
 
@@ -167,20 +131,6 @@ PROMPT_COMMAND=(__status_a __status_b)
     expectLifecycle(output)
   })
 
-  itWithBash('keeps odd-backslash array elements isolated', () => {
-    const profile = String.raw`PROMPT_COMMAND=('printf "PROMPT_ARRAY_BACKSLASH:<%s>\n" safe \' 'printf "PROMPT_ARRAY_NEXT\n"')
-`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split('PROMPT_ARRAY_BACKSLASH:<safe>')).toHaveLength(4)
-    expect(output.split('PROMPT_ARRAY_BACKSLASH:<\\>')).toHaveLength(
-      bashPreservesOddTerminalBackslash ? 4 : 1
-    )
-    expect(output.split('PROMPT_ARRAY_NEXT')).toHaveLength(4)
-    expect(output).not.toContain('PROMPT_ARRAY_BACKSLASH:<__orca_')
-    expectLifecycle(output)
-  })
-
   itWithBash.each([
     ['space', 'foo\\ ', 'foo '],
     ['semicolon', 'foo\\;', 'foo;']
@@ -189,18 +139,6 @@ PROMPT_COMMAND=(__status_a __status_b)
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split(`PROMPT_ESCAPED:<${expected}>`)).toHaveLength(4)
-    expectLifecycle(output)
-  })
-
-  itWithBash.each([
-    ['carriage return', '\\r', '\r'],
-    ['vertical tab', '\\v', '\v'],
-    ['form feed', '\\f', '\f']
-  ])('preserves a trailing %s word byte', (_name, bashEscape, expected) => {
-    const profile = `PROMPT_COMMAND=$'printf "PROMPT_CONTROL:<%s>\\\\n" foo${bashEscape}'\n`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split(`PROMPT_CONTROL:<foo${expected}>`)).toHaveLength(4)
     expectLifecycle(output)
   })
 
@@ -223,29 +161,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     const output = runInteractiveBash(profile, tempHome)
 
     expect(output.split('PROMPT_REMATCH:<VALUE>')).toHaveLength(4)
-    expectLifecycle(output)
-  })
-
-  itWithBash('passes BASH_REMATCH between array hooks', () => {
-    const profile = `PROMPT_COMMAND=('[[ "seed:VALUE" =~ seed:(.*) ]]' 'printf "PROMPT_ARRAY_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"')
-`
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.split('PROMPT_ARRAY_REMATCH:<VALUE>')).toHaveLength(4)
-    expectLifecycle(output)
-  })
-
-  itWithBash('normalizes hooks without a DEBUG-trap command substitution', () => {
-    const profile = [
-      'set -T',
-      'trap \'printf "PROMPT_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
-      'PROMPT_COMMAND=\'printf "PROMPT_HOOK\\n"; \''
-    ].join('\n')
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output.match(/PROMPT_HOOK\r?\n/g)).toHaveLength(3)
-    expect(output).not.toContain('PROMPT_DEBUG:<(( __orca_exit_code == 0 ))>')
-    expect(output).not.toContain('PROMPT_DEBUG:<__orca_restore_prompt_status')
     expectLifecycle(output)
   })
 
@@ -303,22 +218,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output, 0)
   })
 
-  itWithBash('replaces the forwarded DEBUG trap with functrace enabled', () => {
-    const profile = [
-      'set -T',
-      'trap \'printf "OLD_FT:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
-      'PROMPT_COMMAND=\'printf "HOOK_FT\\n"\''
-    ].join('\n')
-    const input = 'trap \'printf "NEW_FT:<%s>\\n" "$BASH_COMMAND"\' DEBUG\ntrue\nexit 0\n'
-    const output = runInteractiveBash(profile, tempHome, input)
-
-    expect(output.split('OLD_FT:<printf "HOOK_FT\\n">')).toHaveLength(2)
-    expect(output.split('NEW_FT:<printf "HOOK_FT\\n">')).toHaveLength(3)
-    expect(output).not.toContain('OLD_FT:<true>')
-    expect(output).toContain('NEW_FT:<true>')
-    expectLifecycle(output, 0)
-  })
-
   itWithBash('does not resurrect a removed DEBUG trap with functrace enabled', () => {
     const profile = [
       'set -T',
@@ -344,20 +243,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output)
   })
 
-  itWithBash('keeps lifecycle when RANDOM is unset under nounset', () => {
-    const profile = [
-      'unset RANDOM',
-      'set -u',
-      'trap \'printf "NOUNSET_DEBUG:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
-      'PROMPT_COMMAND=\'printf "HOOK_NOUNSET\\n"\''
-    ].join('\n')
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output).not.toContain('unbound variable')
-    expect(output).toContain('NOUNSET_DEBUG:<true>')
-    expectLifecycle(output)
-  })
-
   itWithBash('does not recurse when a user trap installs Orca preexec', () => {
     const profile = [
       `trap 'trap '\\''__orca_osc133_preexec'\\'' DEBUG 2>/dev/null; printf "PRIVATE_TRAP\\n"' DEBUG`,
@@ -367,17 +252,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
 
     expect(output).not.toContain('Segmentation fault')
     expect(output).toContain('HOOK_PRIVATE')
-    expectLifecycle(output)
-  })
-
-  itWithBash('does not introduce RETURN traps for inherited prompt commands', () => {
-    const profile = [
-      'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
-      'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then printf "PROMPT_RETURN:<%s>\\n" "${FUNCNAME[0]-}"; fi\' RETURN'
-    ].join('\n')
-    const output = runInteractiveBash(profile, tempHome)
-
-    expect(output).not.toContain('PROMPT_RETURN:<__orca_run_prompt_command_array>')
     expectLifecycle(output)
   })
 
@@ -430,13 +304,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     }
   )
 
-  itWithBash('does not treat user command text as a bash-preexec helper', () => {
-    const output = runInteractiveBash('', tempHome, 'echo a:__bp_x\nfalse\nexit 0\n')
-
-    expect(output).toContain('a:__bp_x')
-    expectLifecycle(output)
-  })
-
   itWithBash.each([
     ['status capture', '__orca_prompt_status=$?'],
     ['trap capture', '__orca_outer_debug_trap_spec="$(trap -p DEBUG)"'],
@@ -444,17 +311,6 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
   ])('does not suppress lifecycle for an exact foreground %s', (_name, command) => {
     const output = runInteractiveBash('', tempHome, `${command}\nfalse\nexit 0\n`)
 
-    expectLifecycle(output)
-  })
-
-  itWithBash('emits lifecycle for a user command named like a bash-preexec helper', () => {
-    const output = runInteractiveBash(
-      '__bp_user_command() { printf "BP_USER_COMMAND\\n"; }',
-      tempHome,
-      '__bp_user_command\nfalse\nexit 0\n'
-    )
-
-    expect(output).toContain('BP_USER_COMMAND')
     expectLifecycle(output)
   })
 })

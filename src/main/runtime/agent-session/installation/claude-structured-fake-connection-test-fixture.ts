@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   type claudeInitialization,
   claudeInitializationScope
@@ -85,6 +85,10 @@ export function fakeClaude(providerSession: string) {
       cancelAsyncMessage: async () => false,
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
+      },
+      backgroundTask: async (toolUseId) => {
+        connection.calls.push({ subtype: 'background_tasks', params: { toolUseId } })
+        return false
       },
       send: async (message, beforeDispatch) => {
         await beforeDispatch?.()

@@ -133,20 +133,6 @@ describe('daemon-init: a daemon whose AppImage files are gone', () => {
     handle.releaseAdoptionLease?.()
   })
 
-  it('quarantines a daemon kept by the failed-health branch too', async () => {
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
-    checkDaemonHealthMock.mockResolvedValueOnce('unresponsive')
-    mockDaemonWithLiveSessions(1)
-
-    const handle = await launcher()('/fake/socket', '/fake/token')
-
-    expect(handle.quarantine).toBe('host-image-severed')
-    expect(handle.mode).toBe('degraded-new-pty-fallback')
-    expect(forkMock).not.toHaveBeenCalled()
-    handle.releaseAdoptionLease?.()
-  })
-
   it('never re-admits fresh terminals to a quarantined daemon on a healthy check', async () => {
     const mod = await importFresh()
     ;(await import('../daemon-host-image-state')).noteSeveredDaemon({

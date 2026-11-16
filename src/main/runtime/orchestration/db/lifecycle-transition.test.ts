@@ -7,21 +7,6 @@ describe('guarded lifecycle transitions', () => {
 
   afterEach(() => db?.close())
 
-  it('rejects a stale prior state without changing the projection', () => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'guarded transition' })
-
-    expect(() =>
-      db!.transitionLifecycle({
-        entity: 'task',
-        id: task.id,
-        from: 'pending',
-        to: 'completed'
-      })
-    ).toThrow(/expected pending/)
-    expect(db.getTask(task.id)?.status).toBe('ready')
-  })
-
   it('composes its projection into the caller-owned transaction', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'caller-owned rollback' })

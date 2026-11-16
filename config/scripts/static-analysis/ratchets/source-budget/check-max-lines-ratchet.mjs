@@ -17,8 +17,7 @@ const BASELINE_PATH = 'config/max-lines-baseline.txt'
 const MOBILE_CONFIG_PATH = 'mobile/.oxlintrc.json'
 // Exclude gate/fixtures containing directive text as data or scanning self-flags.
 const SELF_FILES = new Set([
-  'config/scripts/static-analysis/ratchets/source-budget/check-max-lines-ratchet.mjs',
-  'config/scripts/static-analysis/ratchets/source-budget/check-max-lines-ratchet.test.mjs'
+  'config/scripts/static-analysis/ratchets/source-budget/check-max-lines-ratchet.mjs'
 ])
 
 export function defaultLimitForPath(p) {

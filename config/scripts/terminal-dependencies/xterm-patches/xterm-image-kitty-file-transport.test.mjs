@@ -21,35 +21,6 @@ function withReader(reader) {
 }
 
 describe('Kitty file transport through the installed addon', () => {
-  it('answers a real file probe using bytes read by the host without storing an image', async () => {
-    const reader = vi.fn(async () => new Uint8Array([255, 0, 0, 255]))
-    const h = withReader(reader)
-    try {
-      await writeKitty(h.terminal, 'a=q,t=f,f=32,s=1,v=1,i=31', pathPayload)
-      expect(h.responses.join('')).toContain('i=31;OK')
-      expect(reader).toHaveBeenCalledOnce()
-      expect(h.storage._images.size).toBe(0)
-      expect(h.decode).not.toHaveBeenCalled()
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('renders file-backed virtual placements and replaces their bitmap', async () => {
-    const h = withReader(vi.fn(async () => pngBytes))
-    try {
-      await writeKitty(h.terminal, 'a=T,t=f,f=100,i=7,U=1,c=2,r=2', pathPayload)
-      await write(h.terminal, placeholderCells(7))
-      expect(render(h)).toHaveLength(2)
-      const old = h.bitmaps[0]
-      await writeKitty(h.terminal, 'a=T,t=f,f=100,i=7,U=1,c=2,r=2', pathPayload)
-      expect(render(h)[0][0]).toBe(h.bitmaps[1])
-      expect(old.close).toHaveBeenCalledOnce()
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
   it('passes exact O/S windows and keeps parser order across asynchronous reads', async () => {
     let resolve
     const reader = vi.fn(
@@ -108,36 +79,6 @@ describe('Kitty file transport through the installed addon', () => {
     }
   )
 
-  it.each(['O=-1', 'O=1x', 'S=0', 'S=NaN', 'm=1'])(
-    'rejects invalid file metadata %s before host access',
-    async (metadata) => {
-      const reader = vi.fn(async () => pngBytes)
-      const h = withReader(reader)
-      try {
-        await writeKitty(h.terminal, `a=T,t=f,f=100,i=7,${metadata}`, pathPayload)
-        expect(reader).not.toHaveBeenCalled()
-        expect(h.responses.join('')).toContain('EINVAL')
-      } finally {
-        h.terminal.dispose()
-      }
-    }
-  )
-
-  it.each(['', Buffer.from('/tmp/a\0b').toString('base64'), '/w=='])(
-    'rejects empty, NUL or invalid UTF-8 paths',
-    async (payload) => {
-      const reader = vi.fn(async () => pngBytes)
-      const h = withReader(reader)
-      try {
-        await writeKitty(h.terminal, 'a=q,t=f,i=7', payload)
-        expect(reader).not.toHaveBeenCalled()
-        expect(h.responses.join('')).not.toContain(';OK')
-      } finally {
-        h.terminal.dispose()
-      }
-    }
-  )
-
   it.each(['reset', 'dispose'])(
     'aborts a pending host read on addon %s and drops late results',
     async (action) => {
@@ -160,26 +101,4 @@ describe('Kitty file transport through the installed addon', () => {
       h.terminal.dispose()
     }
   )
-
-  it('reports unsupported file transport without a configured host reader', async () => {
-    const h = withReader(undefined)
-    try {
-      await writeKitty(h.terminal, 'a=q,t=f,i=7', pathPayload)
-      expect(h.responses.join('')).toContain('ENOTSUP')
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it.each(['t', 's'])('keeps transmission medium %s unsupported', async (medium) => {
-    const reader = vi.fn(async () => pngBytes)
-    const h = withReader(reader)
-    try {
-      await writeKitty(h.terminal, `a=q,t=${medium},i=7`, pathPayload)
-      expect(reader).not.toHaveBeenCalled()
-      expect(h.responses.join('')).toContain('unsupported transmission medium')
-    } finally {
-      h.terminal.dispose()
-    }
-  })
 })

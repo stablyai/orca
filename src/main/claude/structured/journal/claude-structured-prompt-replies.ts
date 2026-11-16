@@ -3,13 +3,13 @@ import type {
   AgentSessionPromptResponse,
   AgentSessionQuestionAnswer
 } from '../../../../shared/agent-session/agent-session-question-answer'
-import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import {
   claudePromptQuestions,
   isClaudePromptRecord,
   readClaudePromptString,
   type ClaudePendingPrompt
-} from '../../claude-prompt-registry'
+} from '../permissions/claude-prompt-registry'
 
 /** Keep `cancel` for older cards; it now means dismissal. */
 export const CLAUDE_APPROVAL_DECISIONS = ['allow', 'allowForSession', 'deny', 'cancel'] as const

@@ -1,13 +1,14 @@
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type {
-  FeatureInteractionId,
-  FeatureInteractionState
-} from '../../../../../shared/feature-interactions'
-import type { FeatureTipId } from '../../../../../shared/feature-tips'
+  FeatureTipId,
+  FeatureTipSeenId
+} from '../../../../../shared/feature-education/feature-tips'
 import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import type { ContextualTourId } from '../../../../../shared/contextual-tours'
-import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
-import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
+import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
+import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
 export type UISliceContextual = {
@@ -54,6 +55,7 @@ export type UISliceContextual = {
     | 'confirm-orca-yaml-hooks'
     | 'diagram-viewer'
     | 'agent-session-history'
+    | 'chat-account-usage'
     | 'node-dist-mirror'
   modalData: Record<string, unknown>
   /** The pane-hosted composer's data while another modal holds the slot; closing that modal restores it. */
@@ -62,7 +64,7 @@ export type UISliceContextual = {
   closeModal: () => void
   /** Closes the composer whether it holds the slot or is parked behind another modal. */
   closeWorkspaceComposer: () => void
-  featureTipsSeenIds: FeatureTipId[]
+  featureTipsSeenIds: FeatureTipSeenId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   /** Main's once-decided Chat UI launch tip variant; null until read. */
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
@@ -104,7 +106,7 @@ export type UISliceContextual = {
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
-    kind: OrcaHookScriptKind,
+    kind: OrcaHookTrustKind,
     contentHash: string
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
@@ -136,6 +138,8 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
+  worktreeCardsUpdateNoticeSeen: boolean
+  markWorktreeCardsUpdateNoticeSeen: () => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
 }

@@ -4,12 +4,12 @@ import {
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
-import type { AgentSessionCancelOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { AgentSessionCancelOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import {
   answerCodexPrompt,
   prepareCodexPromptAnswer,
@@ -56,7 +56,7 @@ async function cancelCodexConversation(
   const { request, sessions, requestTimeoutMs } = input
   const stoppedAt = request.stoppedAt ?? Date.now()
   const generation = session.acquisitionGeneration
-  const liveTurnId = request.resolveLiveTurnId?.() ?? null
+  const liveTurnId = (await request.resolveLiveTurnId?.()) ?? null
   // A command's journal turn can exist before its interruptible provider turn.
   const target = liveTurnId === null ? codexStopTarget(session) : { turnId: liveTurnId }
   // Opening waits can outlive their session; recheck ownership after awaiting.

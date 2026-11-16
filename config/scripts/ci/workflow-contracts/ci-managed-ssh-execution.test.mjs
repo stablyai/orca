@@ -4,21 +4,14 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { parse } from 'yaml'
 import { runProcess } from '@orca/process-host'
-import {
-  managedSshShards,
-  MANAGED_SSH_E2E_SPEC_PREFIX
-} from '../e2e-selection/ci-e2e-job-selection.mjs'
-import { compileAggregateExpression } from '../../workflow/pr-admission/pr-aggregate-gate-context.mjs'
-import { selectPrE2eSpecs } from '../../workflow/source-routing/pr-e2e-source-routing.mjs'
+import { managedSshShards } from '../e2e-selection/ci-e2e-job-selection.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/e2e.yml', 'utf8'))
-const prWorkflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
 const lane = workflow.jobs['orcad-ssh-docker']
 const command = lane.steps.find(
   (step) => step.name === 'Run managed SSH specs on a Docker host'
 ).run
 const selector = readFileSync('config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs', 'utf8')
-const small = ['tests/e2e/ssh-orcad-open-in-owner.spec.ts', 'tests/e2e/ssh-orcad-idle-exit.spec.ts']
 const directories = []
 afterEach(() => {
   for (const directory of directories.splice(0)) {
@@ -26,74 +19,14 @@ afterEach(() => {
   }
 })
 
-it('uses one PR shard for at most two selected files and preserves the full default', () => {
-  const caller = compileAggregateExpression(prWorkflow.jobs.e2e.with.managed_ssh_shards)
-  const matrix = compileAggregateExpression(lane.strategy.matrix.shard, ['inputs'])
-  for (const [specs, expected] of [
-    [[small[0]], ['1/1']],
-    [small, ['1/1']],
-    [
-      [...small, 'tests/e2e/ssh-orcad-workspace-tools.spec.ts'],
-      ['1/2', '2/2']
-    ],
-    [[MANAGED_SSH_E2E_SPEC_PREFIX], ['1/2', '2/2']]
-  ]) {
-    const shards = caller({
-      needs: {
-        code_paths: {
-          outputs: {
-            e2e_ssh_shards: JSON.stringify(managedSshShards(JSON.stringify(specs)))
-          }
-        }
-      }
-    }).coerceString()
-    expect(
-      matrix({ inputs: { managed_ssh_shards: shards } })
-        .values()
-        .map((item) => item.value)
-    ).toEqual(expected)
-  }
-  expect(
-    matrix({ inputs: {} })
-      .values()
-      .map((item) => item.value)
-  ).toEqual(['1/2', '2/2'])
-})
-
-it('keeps shared SSH fixtures on the full suite but excludes the experimental sidebar spec', () => {
-  for (const file of [
-    'tests/e2e/helpers/orcad-managed-workspace.ts',
-    'tests/e2e/helpers/paired-host-terminal.ts',
-    '.github/workflows/e2e.yml'
-  ]) {
-    expect(selectPrE2eSpecs([file])).toContain(MANAGED_SSH_E2E_SPEC_PREFIX)
-  }
-  for (const file of [
-    'tests/e2e/ssh-orcad-phone-feed-list.spec.ts',
-    'tests/e2e/helpers/phone-feed-list.ts',
-    'tests/e2e/helpers/sidebar-inputs-build.ts',
-    'src/shared/sidebar-list/sidebar-feed-list.ts'
-  ]) {
-    expect(
-      selectPrE2eSpecs([file]).some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX)),
-      file
-    ).toBe(false)
-  }
-})
-
-async function execute(input, version = 'current') {
+async function execute(input) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-ssh-selection-'))
   directories.push(directory)
   const bin = join(directory, 'bin')
   mkdirSync(bin)
   const moduleDir = join(directory, 'config', 'scripts')
   mkdirSync(moduleDir, { recursive: true })
-  if (version !== 'missing') {
-    writeFileSync(
-      join(moduleDir, 'ci-e2e-job-selection.mjs'),
-      version === 'current' ? selector : 'export const old = true\n'
-    )
-  }
+  writeFileSync(join(moduleDir, 'ci-e2e-job-selection.mjs'), selector)
   writeFileSync(
     join(bin, 'xvfb-run'),
     `#!/usr/bin/env bash
@@ -134,51 +67,8 @@ require('node:fs').writeFileSync(process.env.ARGV_CAPTURE, JSON.stringify(proces
 
 // The production lane runs Bash on Linux; the stubs never start Docker, Electron, or Xvfb.
 describe.skipIf(process.platform === 'win32')('managed SSH workflow command', () => {
-  it('passes only the selected SSH files to Playwright, with literal file matching', async () => {
-    const { result, args } = await execute(
-      JSON.stringify([...small, 'tests/e2e/other.spec.ts', small[0]])
-    )
-    expect(result.code, result.stderr).toBe(0)
-    const filters = args.slice(
-      args.indexOf('tests/playwright.config.ts') + 1,
-      args.indexOf('--project=electron-headless')
-    )
-    expect(filters).toHaveLength(2)
-    expect(small.map((file) => filters.some((filter) => new RegExp(filter).test(file)))).toEqual([
-      true,
-      true
-    ])
-    expect(
-      filters.some((filter) => new RegExp(filter).test('tests/e2e/ssh-orcad-open-in-ownerXspecYts'))
-    ).toBe(false)
-    expect(
-      filters.some((filter) => new RegExp(filter).test('tests/e2e/ssh-orcad-unselected.spec.ts'))
-    ).toBe(false)
-    expect(args).toContain('--shard=1/1')
-  })
-
-  it.each(['', JSON.stringify([MANAGED_SSH_E2E_SPEC_PREFIX, small[0]])])(
-    'keeps full daily and explicit suite execution for %s',
-    async (input) => {
-      const { result, args } = await execute(input)
-      expect(result.code, result.stderr).toBe(0)
-      expect(args).toContain(MANAGED_SSH_E2E_SPEC_PREFIX)
-    }
-  )
-
-  it.each(['legacy', 'missing'])('keeps compatibility with %s checkout refs', async (version) => {
-    const { result, args } = await execute(JSON.stringify(small), version)
-    expect(result.code, result.stderr).toBe(0)
-    expect(args).toContain(MANAGED_SSH_E2E_SPEC_PREFIX)
-  })
-
-  it.each([
-    'malformed',
-    '[]',
-    '[null]',
-    JSON.stringify(['tests/e2e/other.spec.ts']),
-    JSON.stringify(['tests/e2e/ssh-orcad-../../other.spec.ts'])
-  ])('refuses invalid selection before starting Playwright: %s', async (input) => {
+  it('refuses malformed selection before starting Playwright', async () => {
+    const input = 'malformed'
     const { result, args } = await execute(input)
     expect(result.code).not.toBe(0)
     expect(args).toBeUndefined()

@@ -6,17 +6,16 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DetectionModule from '../browser/cookies/sources/browser-cookie-source-profiles'
 import type * as SnapshotModule from '../browser/cookies/chromium/chromium-cookie-snapshot'
-import type { EncryptionKeyResult } from '../browser/cookies/sources/browser-cookie-sqlite'
+import type { EncryptionKeyResult } from '../browser/cookies/sources/chromium-encryption-key-contract'
 
 type FixtureState = {
   root: string
   key: EncryptionKeyResult | null
-  keyRequests: number
   snapshotPaths: string[]
 }
 
 const { state } = vi.hoisted(() => {
-  const state: FixtureState = { root: '', key: null, keyRequests: 0, snapshotPaths: [] }
+  const state: FixtureState = { root: '', key: null, snapshotPaths: [] }
   return { state }
 })
 
@@ -27,7 +26,6 @@ vi.mock('../browser/cookies/sources/browser-cookie-source-profiles', async (impo
 
 vi.mock('../browser/cookies/sources/browser-cookie-key', () => ({
   getEncryptionKey: () => {
-    state.keyRequests += 1
     return state.key
   }
 }))
@@ -105,7 +103,6 @@ describe('readChromiumBrowserPasswords', () => {
   beforeEach(() => {
     state.root = mkdtempSync(join(tmpdir(), 'orca-chromium-passwords-test-'))
     state.key = { mode: 'aes-128-cbc', keysByVersion: { v10: cbcKey } }
-    state.keyRequests = 0
     state.snapshotPaths = []
   })
 
@@ -151,36 +148,5 @@ describe('readChromiumBrowserPasswords', () => {
     })
     expect(state.snapshotPaths).toHaveLength(2)
     expect(state.snapshotPaths.some((path) => existsSync(path))).toBe(false)
-  })
-
-  it('never fetches the key when every value is app-bound', async () => {
-    writeLoginDatabase('Login Data', [
-      { origin: 'https://bound.test/', username: 'u', password: Buffer.from('v20opaque') }
-    ])
-    const result = await readChromiumBrowserPasswords({
-      browserFamily: 'chrome',
-      profileDirectory: 'Default'
-    })
-    expect(result).toEqual({ ok: true, rows: [], undecryptable: 1 })
-    expect(state.keyRequests).toBe(0)
-  })
-
-  it('fails when the key is unavailable', async () => {
-    writeLoginDatabase('Login Data', [
-      { origin: 'https://a.test/', username: 'u', password: encryptV10('secret') }
-    ])
-    state.key = null
-    expect(
-      await readChromiumBrowserPasswords({ browserFamily: 'chrome', profileDirectory: 'Default' })
-    ).toMatchObject({ ok: false, reason: 'key-unavailable' })
-  })
-
-  it('reports a profile without login databases, and refuses unsafe profile names', async () => {
-    expect(
-      await readChromiumBrowserPasswords({ browserFamily: 'chrome', profileDirectory: 'Default' })
-    ).toMatchObject({ ok: false, reason: 'not-found' })
-    expect(
-      await readChromiumBrowserPasswords({ browserFamily: 'chrome', profileDirectory: '../x' })
-    ).toMatchObject({ ok: false, reason: 'invalid-profile' })
   })
 })

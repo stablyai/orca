@@ -1,11 +1,9 @@
 import type { AppState } from '../types'
-import { FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
-} from '../../runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 
 export function getRuntimeEnvironmentDisplayName(state: AppState, environmentId: string): string {

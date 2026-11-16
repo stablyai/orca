@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useProjectHostSetupProjection } from '@/store/selectors'
-import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal/quick-commands/terminal-quick-command-project-scope'
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete

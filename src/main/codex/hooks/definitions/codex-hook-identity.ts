@@ -1,4 +1,7 @@
-import type { HookCommandConfig, HookDefinition } from '../../../agent-hooks/installer-utils'
+import type {
+  HookCommandConfig,
+  HookDefinition
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import type { CodexEventLabel, CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import { normalizeCodexHookTimeoutSec } from '../../trust/identity/codex-trust-identity'
 

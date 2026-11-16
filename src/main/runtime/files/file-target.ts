@@ -1,4 +1,7 @@
-import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from '../runtime-relative-paths'
+import {
+  joinWorktreeRelativePath,
+  normalizeRuntimeRelativePath
+} from './paths/runtime-relative-paths'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GitWorktreeInfo, Worktree } from '../../../shared/worktree/types'
 import {
@@ -10,7 +13,7 @@ import type {
   createLocalFilesystemProvider,
   LocalFilesystemProvider,
   LocalFilesystemProviderOptions
-} from '../../providers/local-filesystem-provider'
+} from '../../providers/filesystem/local-provider'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 
 export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }

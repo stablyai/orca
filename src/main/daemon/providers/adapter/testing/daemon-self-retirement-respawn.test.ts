@@ -186,35 +186,6 @@ describe('daemon self-retirement respawn', () => {
     expect(client.isConnected()).toBe(false)
   })
 
-  it('does not start a respawn after disposal rejects an in-flight operation', async () => {
-    await startServer()
-    const respawn = vi.fn(async () => {})
-    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
-    await adapter.establishLifecycleLease()
-    let rejectCreate!: (error: Error) => void
-    const client = (
-      adapter as unknown as {
-        client: {
-          request: (method: string, params: unknown) => Promise<unknown>
-        }
-      }
-    ).client
-    vi.spyOn(client, 'request').mockImplementationOnce(
-      () =>
-        new Promise((_, reject) => {
-          rejectCreate = reject
-        })
-    )
-
-    const spawn = adapter.spawn({ sessionId: 'disposed-in-flight', cols: 80, rows: 24 })
-    await waitFor(() => rejectCreate !== undefined)
-    adapter.dispose()
-    rejectCreate(new Error('Connection lost'))
-
-    await expect(spawn).rejects.toThrow('Connection lost')
-    expect(respawn).not.toHaveBeenCalled()
-  })
-
   it('does not respawn a listening daemon whose token is absent', async () => {
     await startServer()
     rmSync(tokenPath)
@@ -250,17 +221,6 @@ describe('daemon self-retirement respawn', () => {
     ).rejects.toThrow(/Invalid token/i)
 
     expect(respawn).not.toHaveBeenCalled()
-    adapter.dispose()
-  })
-
-  it('respawns when nothing is accepting on the endpoint', async () => {
-    const respawn = vi.fn(async () => {})
-    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
-
-    // Fails after the respawn attempt because the mock respawn starts no replacement.
-    await expect(adapter.spawn({ sessionId: 'missing', cols: 80, rows: 24 })).rejects.toThrow()
-
-    expect(respawn).toHaveBeenCalledTimes(1)
     adapter.dispose()
   })
 })

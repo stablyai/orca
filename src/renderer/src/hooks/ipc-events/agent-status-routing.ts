@@ -1,4 +1,4 @@
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
 import type { AppState } from '../../store/types'
 import { titleHasAgentName } from '../../../../shared/agent-status/title/agent-name-token-match'
 import type {
@@ -40,7 +40,10 @@ export function isSeenHostReplay(
   >,
   state: string,
   existing:
-    | Pick<AppState['agentStatusByPaneKey'][string], 'state' | 'stateStartedAt' | 'turnEndedAt'>
+    | Pick<
+        NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
+        'state' | 'stateStartedAt' | 'turnEndedAt'
+      >
     | undefined
 ): boolean {
   if (data.isReplay !== true) {
@@ -159,5 +162,3 @@ export function isInheritedFromActivePane(
     }).inheritedFromActivePane
   )
 }
-
-export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'

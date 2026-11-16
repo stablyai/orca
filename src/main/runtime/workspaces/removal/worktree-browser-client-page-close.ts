@@ -1,10 +1,10 @@
-import { getBrowserHostLeaseRegistry } from '../../browser-host/browser-host-lease-registry-instance'
-import { closeRuntimeBrowserClientPage } from '../../runtime-browser-client-page-creation'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import { closeRuntimeBrowserClientPage } from '../../browser/client-pages/runtime-browser-client-page-creation'
 import {
   releaseRuntimeBrowserClientPageRecord,
   type RuntimeBrowserClientPageReleaseHost
-} from '../../runtime-browser-client-page-release'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
+} from '../../browser/client-pages/runtime-browser-client-page-release'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 
 export type WorktreeBrowserClientPageCloseHost = {
   getRuntimeId(): string

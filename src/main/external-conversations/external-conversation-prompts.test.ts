@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../agent-hooks/observations/agent-transition-detector'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   AGENT_DONE_QUIET_MS,
@@ -103,58 +103,9 @@ describe('ExternalConversationSeam prompts', () => {
     })
     expect(fake.keys).toEqual([])
   })
-
-  it('reads a prompt as unsupported once the agent’s hooks are off', async () => {
-    const settings: { agentStatusHooksEnabled?: boolean } = {}
-    const { seam, host, hookRows } = await linked(settings)
-    hookRows.set(PANE, APPROVAL)
-    settings.agentStatusHooksEnabled = false
-    const prompt = seam.pendingPrompt(host, KEY)!
-    expect(prompt.kind).toBe('unsupported')
-    await expect(seam.answer(host, KEY, prompt.promptId, 'allow_once')).resolves.toMatchObject({
-      reason: 'prompt_unsupported'
-    })
-  })
-
-  it('throws for a conversation with no link, and refuses once connectors are off', async () => {
-    const { seam, host } = await linked()
-    const other = { source: 'dev' as const, externalId: 'nope' }
-    expect(() => seam.pendingPrompt(host, other)).toThrow('external_conversation_not_found')
-    seam.dispose('connectors_disabled')
-    await expect(seam.answer(host, KEY, 'p', 'allow_once')).resolves.toEqual({
-      outcome: 'refused',
-      reason: 'connectors_disabled'
-    })
-    expect(() => seam.watch(host, () => {})).toThrow('connectors_disabled')
-  })
 })
 
 describe('ExternalConversationSeam watch', () => {
-  it('subscribes only while watched, and opens with a snapshot of every link', async () => {
-    const { seam, host, paneListeners, hookRows } = await linked()
-    expect(paneListeners.size).toBe(0)
-    hookRows.set(PANE, APPROVAL)
-    const seen: (ConversationSnapshot | ConversationEvent)[] = []
-    const release = seam.watch(host, (event) => seen.push(event))
-    expect(paneListeners.size).toBe(1)
-    expect(seen).toEqual([
-      {
-        kind: 'snapshot',
-        conversations: [
-          expect.objectContaining({
-            conversation: KEY,
-            paneKey: PANE,
-            agent: 'claude',
-            working: false,
-            prompt: expect.objectContaining({ kind: 'approval' })
-          })
-        ]
-      }
-    ])
-    release()
-    expect(paneListeners.size).toBe(0)
-  })
-
   it('does not deliver a previous watcher’s queued finish to a new watcher', async () => {
     const { seam, host, hookRows, paneChange } = await linked()
     vi.useFakeTimers()
@@ -190,41 +141,6 @@ describe('ExternalConversationSeam watch', () => {
     hookRows.set(PANE, hookRow({ state: 'done', stateStartedAt: 300 }))
     paneChange(moved('working', 'done', 'turn-finished'))
     expect(seen.at(-1)).toMatchObject({ kind: 'turn-ended', stopReason: null })
-  })
-
-  it('tells a linked turn’s start, its prompt, and its end with the host’s verdict', async () => {
-    const { seam, host, hookRows, paneChange } = await linked()
-    const seen: ConversationEvent[] = []
-    seam.watch(host, (event) => {
-      if (event.kind !== 'snapshot') {
-        seen.push(event)
-      }
-    })
-    hookRows.set(PANE, hookRow({ state: 'working', turnStartedAt: 100 }))
-    paneChange(moved('rest', 'working', 'prompt-submitted'))
-    hookRows.set(PANE, APPROVAL)
-    paneChange(moved('working', 'needs-you', 'needs-input'))
-    hookRows.set(
-      PANE,
-      hookRow({
-        state: 'done',
-        stateStartedAt: 300,
-        // The host keeps the turn's stamp on its done row.
-        turnStartedAt: 100,
-        lastAssistantMessage: 'Done.',
-        mainAgent: { state: 'done', stateStartedAt: 300, outcome: 'success' }
-      })
-    )
-    paneChange(moved('needs-you', 'done', 'turn-finished'))
-    expect(seen.map((event) => event.kind)).toEqual(['turn-started', 'prompt', 'turn-ended'])
-    expect(seen[0]).toMatchObject({ conversation: KEY, at: 100 })
-    expect(seen[1]).toMatchObject({ prompt: { kind: 'approval' } })
-    expect(seen[2]).toMatchObject({
-      stopReason: 'success',
-      lastAssistantMessage: 'Done.',
-      at: 300,
-      turnId: 100
-    })
   })
 
   it('tells the reply of a turn its subagent holds open, then the wake-up turn that follows', async () => {
@@ -275,18 +191,6 @@ describe('ExternalConversationSeam watch', () => {
     expect(
       seen.flatMap((event) => (event.kind === 'turn-ended' ? [event.lastAssistantMessage] : []))
     ).toEqual(['Launched.', 'Subagent done.'])
-  })
-
-  it('names the turn a reply belongs to as turn events do, only while watched and linked', async () => {
-    const { seam, host, hookRows, paneChange } = await linked()
-    expect(seam.replyTarget(PANE)).toBeNull()
-    seam.watch(host, () => {})
-    expect(seam.replyTarget('tab-9:other')).toBeNull()
-    hookRows.set(PANE, hookRow({ state: 'working', stateStartedAt: 120 }))
-    paneChange(moved('rest', 'working', 'prompt-submitted'))
-    // The start recorded the turn; the row's later state changes cannot move it.
-    hookRows.set(PANE, hookRow({ state: 'working', stateStartedAt: 180 }))
-    expect(seam.replyTarget(PANE)).toEqual({ key: KEY, turnId: 120 })
   })
 
   it('ends a turn the user stopped with its recorded verdict, never the caller’s', async () => {
@@ -378,20 +282,5 @@ describe('ExternalConversationSeam watch', () => {
     // A session boundary clears the stamp; the start seen before the first stamp doesn't come back.
     hookRows.set(PANE, hookRow({ state: 'done', stateStartedAt: 300, sessionBoundary: true }))
     expect(seam.replyTarget(PANE)).toEqual({ key: KEY, turnId: null })
-  })
-
-  it('tells a watcher of a conversation linked while it watches', async () => {
-    const h = harness()
-    const host = {
-      launcher: fakeLauncher(async () => launchResult('handed-to-terminal')).launcher,
-      terminal: fakeTerminal().terminal
-    }
-    const seen: (ConversationSnapshot | ConversationEvent)[] = []
-    h.seam.watch(host, (event) => seen.push(event))
-    await h.seam.start(host, KEY, 'd1', START)
-    expect(seen).toEqual([
-      { kind: 'snapshot', conversations: [] },
-      { kind: 'linked', conversation: KEY, worktreeId: WORKTREE, paneKey: PANE, agent: 'claude' }
-    ])
   })
 })

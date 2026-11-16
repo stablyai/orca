@@ -1,9 +1,10 @@
 const { createHash } = require('node:crypto')
-const { lstatSync, readFileSync, readdirSync, statSync } = require('node:fs')
+const { existsSync, lstatSync, readFileSync, readdirSync, statSync } = require('node:fs')
 const { isAbsolute, join, relative, resolve, sep } = require('node:path')
 
 const MAX_PLUGIN_FILES = 2_000
 const MAX_PLUGIN_TOTAL_BYTES = 50 * 1024 * 1024
+const sourcePluginsDir = resolve(__dirname, '../../../..', 'resources', 'plugins')
 
 function hashLength(hash, length) {
   const framedLength = Buffer.allocUnsafe(8)
@@ -109,4 +110,20 @@ function verifyPackagedPluginResources(resourcesDir) {
   )
 }
 
-module.exports = { hashPackagedPluginTree, verifyPackagedPluginResources }
+/** Every author typing in the checkout must ship, or `orca plugin types` fails with ENOENT. */
+function verifyPackagedPluginTypings(resourcesDir) {
+  for (const dir of ['declarative', 'types']) {
+    for (const name of readdirSync(join(sourcePluginsDir, dir))) {
+      const packaged = join(resourcesDir, 'plugins', dir, name)
+      if (name.endsWith('.d.ts') && !existsSync(packaged)) {
+        throw new Error(`[verify-packaged-plugin-resources] missing plugin typings at ${packaged}`)
+      }
+    }
+  }
+}
+
+module.exports = {
+  hashPackagedPluginTree,
+  verifyPackagedPluginResources,
+  verifyPackagedPluginTypings
+}

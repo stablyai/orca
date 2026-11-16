@@ -8,14 +8,14 @@ import {
   remoteExecutionPlatform,
   type AgentLaunchRuntime
 } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution'
 import {
   buildExecutionHostAgentStartupPlan,
   planExecutionHostStartupWithPromptCandidate
-} from '../../../opencode/opencode-model-startup-plan'
+} from '../../../opencode/model-launch/opencode-model-startup-plan'
 import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import {
   launchHostProvesAgentInFront,

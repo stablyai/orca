@@ -5,11 +5,48 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
 
-test.describe('Tab visibility with closed sidebar', () => {
+test.describe('Sidebar boundaries beside terminal content', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+  })
+
+  test('sidebar resize handle owns the divider over a terminal', async ({ orcaPage }) => {
+    const handle = orcaPage.locator('[data-sidebar-resize-handle]')
+    const sidebar = orcaPage
+      .locator('[data-sidebar-resize-handle]')
+      .locator('xpath=preceding-sibling::div[last()]')
+    await expect(handle).toBeVisible()
+    await expect(orcaPage.locator('.xterm:visible').first()).toBeVisible()
+
+    const terminalBox = await orcaPage.locator('.xterm:visible').first().boundingBox()
+    const handleBox = await handle.boundingBox()
+    const sidebarBox = await sidebar.boundingBox()
+    expect(terminalBox).not.toBeNull()
+    expect(handleBox).not.toBeNull()
+    expect(sidebarBox).not.toBeNull()
+    const y = terminalBox!.y + terminalBox!.height / 2
+    const seamX = sidebarBox!.x + sidebarBox!.width
+
+    // The visible divider pixel and the area just right of it must resize, not scroll.
+    for (const x of [seamX + 0.5, handleBox!.x + handleBox!.width / 2]) {
+      const reachable = await handle.evaluate(
+        (element, point) => element.contains(document.elementFromPoint(point.x, point.y)),
+        { x, y }
+      )
+      expect(reachable).toBe(true)
+    }
+
+    const x = handleBox!.x + handleBox!.width / 2
+    await orcaPage.mouse.move(x, y)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(x + 40, y, { steps: 5 })
+    await orcaPage.mouse.up()
+
+    await expect
+      .poll(async () => Math.round((await handle.boundingBox())!.x - handleBox!.x))
+      .toBe(40)
   })
 
   test('first tab stays visible after Cmd+B collapses the sidebar', async ({ orcaPage }) => {
@@ -26,7 +63,10 @@ test.describe('Tab visibility with closed sidebar', () => {
               throw new Error('window.__store is not available — is the app in dev mode?')
             }
             const state = store.getState()
-            return { activeView: state.activeView, sidebarOpen: state.sidebarOpen }
+            return {
+              activeView: state.activeView,
+              sidebarOpen: state.sidebarOpen
+            }
           }),
         {
           timeout: 5_000,

@@ -1,6 +1,8 @@
-import { app } from 'electron'
 import { z } from 'zod'
-import { BrowserExtensionSyncStorageStore } from '../../profile-storage/browser-extension-sync-storage-store'
+import {
+  BrowserExtensionProfileDocumentStore,
+  closeBrowserExtensionProfileDocumentStoreOnQuit
+} from '../../profile-storage/browser-extension-profile-document-store'
 import { getBrowserExtensionProfileDataDirectory } from '../../profile-storage/browser-extension-profile-data-directory'
 
 /**
@@ -19,15 +21,15 @@ const dnrStateSchema = z.object({
 
 export type BrowserExtensionDnrState = z.infer<typeof dnrStateSchema>
 
-let store: BrowserExtensionSyncStorageStore | null = null
+let store: BrowserExtensionProfileDocumentStore | null = null
 
-export function getBrowserExtensionDnrStore(): BrowserExtensionSyncStorageStore {
+export function getBrowserExtensionDnrStore(): BrowserExtensionProfileDocumentStore {
   if (!store) {
-    const created = new BrowserExtensionSyncStorageStore(
+    const created = new BrowserExtensionProfileDocumentStore(
       getBrowserExtensionProfileDataDirectory(),
       'declarative-net-request'
     )
-    app.on('will-quit', () => created.flush())
+    closeBrowserExtensionProfileDocumentStoreOnQuit(created)
     store = created
   }
   return store

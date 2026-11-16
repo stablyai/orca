@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { withAiVaultSessionCwdAliases } from '../../../../../../shared/ai-vault/scanning/ai-vault-session-cwd-aliases'
+import type { AiVaultPanelListMode } from '../session-list/ai-vault-session-filters'
 
 export function aiVaultSearchHitToSession(
   hit: AiVaultSearchHit,
@@ -46,7 +48,7 @@ export function withAiVaultHistoryPreviews(
   if (hitSessions.length === 0 || history.length === 0) {
     return hitSessions
   }
-  // Relay hits are redacted of their transcript path, so join on host, agent and session id; skip ambiguous ones.
+  // Browser and phone hits are redacted of their transcript path, so join on host, agent and session id; skip ambiguous ones.
   const historyByIdentity = new Map<string, AiVaultSession | null>()
   for (const session of history) {
     const key = previewIdentity(session)
@@ -54,10 +56,15 @@ export function withAiVaultHistoryPreviews(
   }
   return hitSessions.map((hitSession) => {
     const row = historyByIdentity.get(previewIdentity(hitSession))
-    const hydrated =
-      row && (!hitSession.filePath || hitSession.filePath === row.filePath)
-        ? withAiVaultSessionCwdAliases(hitSession, row)
-        : hitSession
+    const sameFile = row && (!hitSession.filePath || hitSession.filePath === row.filePath)
+    const hydrated = sameFile
+      ? {
+          ...withAiVaultSessionCwdAliases(hitSession, row),
+          ...(row.antigravityArtifactPath
+            ? { antigravityArtifactPath: row.antigravityArtifactPath }
+            : {})
+        }
+      : hitSession
     return row && hitSession.previewMessages.length === 0
       ? {
           ...hydrated,
@@ -85,4 +92,38 @@ export function canResumeAiVaultSearchHit(hit: AiVaultSearchHit): boolean {
 
 export function hasAiVaultSearchHitPath(hit: AiVaultSearchHit): boolean {
   return hit.source.presence === 'present' && hit.source.filePath !== undefined
+}
+
+/** What the panel lists for the current search state, and which sessions feed its project and worktree lookups. */
+export function useAiVaultPanelSearchSessions(
+  search: {
+    searching: boolean
+    loading: boolean
+    answered: boolean
+    hits: readonly AiVaultSearchHit[]
+    sessions: AiVaultSession[]
+  },
+  history: readonly AiVaultSession[]
+) {
+  const searchSessions = useMemo(
+    () => withAiVaultHistoryPreviews(search.sessions, history),
+    [history, search.sessions]
+  )
+  // Until this query's first reply, older hits stay dimmed or, with none, title matches fill the wait.
+  const waitingForHits = search.searching && search.loading && !search.answered
+  const searchTitles = waitingForHits && search.hits.length === 0
+  const showHits = search.searching && !searchTitles
+  const listMode: AiVaultPanelListMode = search.searching
+    ? searchTitles
+      ? 'search-titles'
+      : 'search-hits'
+    : 'browse'
+  return {
+    listMode,
+    stale: waitingForHits && search.hits.length > 0,
+    sessions: showHits ? searchSessions : history,
+    // Project and worktree lookups scan sessions against every worktree. Keep them on history
+    // unless hits are on screen, so an empty reply doesn't rebuild them on every pause in typing.
+    resolverSessions: showHits && searchSessions.length > 0 ? searchSessions : history
+  }
 }

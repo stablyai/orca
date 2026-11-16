@@ -1,10 +1,10 @@
 import { PLUGIN_HOOK_SPECS } from '../../../shared/plugins/events/plugin-hook-payloads'
-import { isRestoreSpawnIntent } from '../../../shared/host-spawn-admission'
+import { isRestoreSpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { workspaceKindForWorktreeId } from '../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { pluginHookWanted, runPluginHook } from '../../plugins/hooks/plugin-hook-dispatch'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../ai-vault/structured-session-ownership'
-import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../ai-vault/structured-sessions/structured-session-ownership'
+import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 
 type AgentSpawnArgs = {
   launchAgent?: TuiAgent

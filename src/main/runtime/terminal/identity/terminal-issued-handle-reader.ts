@@ -1,6 +1,6 @@
-import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
-import type { AgentSenderHandleReads } from '../../runtime-agent-sender-associations'
-import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
+import type { PtyIncarnationHandleRecord, TerminalHandleRecord } from './terminal-handle-records'
+import type { AgentSenderHandleReads } from '../../agent-senders/runtime-agent-sender-associations'
+
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

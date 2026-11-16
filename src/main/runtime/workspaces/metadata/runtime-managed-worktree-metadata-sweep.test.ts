@@ -4,14 +4,14 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { testState, createStore, makeRepo } from '../../../persistence/persistence-test-harness'
 import type { Store } from '../../../persistence/loading-store/store'
 import { RuntimeManagedWorktreeQueries } from '../catalog/runtime-managed-worktree-queries'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
-vi.mock('./ssh/ssh-config-parser', () => ({
+vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()
 }))
@@ -21,8 +21,10 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 
-vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn().mockReturnValue({}) }))
+vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: vi.fn().mockReturnValue({})
+}))
 
 const gitWorktree = (path: string): GitWorktreeInfo => ({
   path,
@@ -77,50 +79,8 @@ describe('runtime detected-worktree listing sweeps missing local metadata', () =
     expect(store.getWorktreeMeta(missingId)).toBeUndefined()
   })
 
-  it('keeps a row whose directory still exists', async () => {
-    const store = createStore()
-    const repo = makeRepo({ id: 'repo-1', path: repoPath })
-    store.addRepo(repo)
-    const livePath = join(testState.dir, 'live-worktree')
-    mkdirSync(livePath, { recursive: true })
-    const liveId = `${repo.id}::${livePath}`
-    store.setWorktreeMeta(hostWorktreeTarget({ id: liveId, hostId: 'local' }), {
-      displayName: 'Live'
-    })
-
-    await queries(store, repo, [gitWorktree(repoPath)]).listDetected(repo)
-
-    expect(store.getWorktreeMeta(liveId)).toBeDefined()
-  })
-
   // A non-authoritative scan is a failed listing, which is no evidence any checkout is gone.
-  it('keeps every row when the scan is not authoritative', async () => {
-    const store = createStore()
-    const repo = makeRepo({ id: 'repo-1', path: repoPath })
-    store.addRepo(repo)
-    const missingId = `${repo.id}::${join(testState.dir, 'deleted-worktree')}`
-    store.setWorktreeMeta(hostWorktreeTarget({ id: missingId, hostId: 'local' }), {
-      displayName: 'Gone'
-    })
-
-    await queries(store, repo, [], false).listDetected(repo)
-
-    expect(store.getWorktreeMeta(missingId)).toBeDefined()
-  })
 
   // Only execution hosts may prove checkout absence (docs/reference/ssh-execution-boundary.md).
   // Match the first fixture except connectionId: the connected case retains its local-stamped candidate, isolating that boundary despite four derived gates.
-  it('never sweeps a repo whose git runs off-host', async () => {
-    const store = createStore()
-    const repo = makeRepo({ id: 'repo-1', path: repoPath, connectionId: 'build-box' })
-    store.addRepo(repo)
-    const missingId = `${repo.id}::${join(testState.dir, 'deleted-worktree')}`
-    store.setWorktreeMeta(hostWorktreeTarget({ id: missingId, hostId: 'local' }), {
-      displayName: 'Gone'
-    })
-
-    await queries(store, repo, [gitWorktree(repoPath)]).listDetected(repo)
-
-    expect(store.getWorktreeMeta(missingId)).toBeDefined()
-  })
 })

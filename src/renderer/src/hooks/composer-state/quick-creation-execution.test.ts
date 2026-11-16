@@ -7,7 +7,9 @@ import { useAppStore } from '@/store'
 import type { PreparedQuickSubmit } from './composer-submit-model'
 import { useQuickCreationExecution } from './quick-creation-execution'
 const background = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/worktree-creation-flow', () => ({ runBackgroundWorktreeCreation: background }))
+vi.mock('@/lib/workspace/creation/worktree-creation-flow', () => ({
+  runBackgroundWorktreeCreation: background
+}))
 afterEach(() => {
   cleanup()
   background.mockClear()

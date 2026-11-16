@@ -42,3 +42,18 @@ export const withProgress = defineFixture({
   width: 420,
   render: () => <StateGrid size="md" progress={42} />
 })
+
+// Unread swaps only the done check for the unread dot; live and needs-you glyphs keep precedence.
+export const unread = defineFixture({
+  width: 420,
+  render: () => (
+    <ul className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+      {(['done', 'working', 'waiting', 'failed'] as const).map((state) => (
+        <li key={state} className="flex items-center gap-2">
+          <AgentStateDot state={state} size="sm" unread title={null} />
+          <span className="text-muted-foreground">{agentStateLabel(state)} · unread</span>
+        </li>
+      ))}
+    </ul>
+  )
+})

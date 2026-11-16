@@ -2,16 +2,16 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { readNodeFileWithinLimit } from '../../../shared/node-bounded-file-reader'
-import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
+import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
+import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import {
   isConfiguredTerminalLimit,
   MAX_CONFIGURED_TERMINALS,
   terminalLimitInputMaximum,
   type TerminalLimitStatus
 } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
-import { profileStateAccessMachineIdentity } from '../../persistence/profile-state/profile-state-access-identity'
-import { isSafeOwnedDirectory } from '../../../shared/owned-private-directory'
+import { profileStateAccessMachineIdentity } from '../../persistence/profile-state/access/profile-state-access-identity'
+import { isSafeOwnedDirectory } from '../../../shared/secure-storage/owned-private-directory'
 import { awaitDaemonValueWithinCallerDeadline } from '../launch/daemon-request-deadline'
 import { DEFAULT_MAX_HOST_TERMINALS, resolveMaxHostTerminals } from './host-terminal-ledger'
 import { SystemPtyLimit } from './system-pty-limit'

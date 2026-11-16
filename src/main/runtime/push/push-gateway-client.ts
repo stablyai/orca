@@ -1,13 +1,13 @@
 // Return best-effort gateway outcomes instead of throwing through notification fan-out.
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import type {
   MobilePushAgentState,
   MobilePushApnsEnvironment,
   MobilePushPlatform,
   MobilePushSource
-} from '../../../shared/mobile-push-contract'
+} from '../../../shared/notifications/mobile-push-contract'
 import {
   PUSH_REQUEST_DEADLINE_MS,
   readPushGatewayJson,
@@ -16,8 +16,6 @@ import {
   type PushGatewayResult
 } from './push-gateway-response'
 import { PushGatewaySession } from './push-gateway-session'
-
-export type { PushGatewayFailure, PushGatewayResult }
 
 const RegisterResponseSchema = z.object({ registrationId: z.string().min(1).max(512) })
 

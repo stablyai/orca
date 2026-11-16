@@ -1,6 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { settleEvictedModalData } from '../modal-slot-dismissal'
-import { selectWorkspaceComposerPaneActive } from '@/lib/workspace-composer-pane-surface'
+import { settleEvictedModalData } from './modal-slot-dismissal'
+import { selectWorkspaceComposerPaneActive } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 
 export function createUiModalActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {

@@ -1,5 +1,5 @@
 import type { AgentModelCatalogRunningAccountDeps } from '../../../native-chat/agent-model-catalog/agent-model-catalog-running-account'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { agentSessionPinnedLaunchDirectory } from '../records/agent-session-record-launch-directory'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentModelCatalogProbe } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
@@ -18,8 +18,8 @@ import type {
   StructuredAgentModelCatalogContext,
   StructuredAgentRuntimeRegistration
 } from '../installation/structured-agent-runtime-registration-types'
-import type { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/structured-agent-registry'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-support'
+import type { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/providers/structured-agent-registry'
+import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import {
   STRUCTURED_AGENT_RUNTIME_METADATA,

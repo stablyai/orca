@@ -262,6 +262,18 @@ CREATE TABLE IF NOT EXISTS relay_assignment_region_preferences (
 CREATE INDEX IF NOT EXISTS relay_assignment_region_preferences_observed
   ON relay_assignment_region_preferences(observed_at);
 
+-- Relay edge fences that did not land (edge-relay-fence.ts). Small and short-lived: a row is
+-- deleted when its fence lands, the host has no row or is back on the edge, or after its last retry.
+CREATE TABLE IF NOT EXISTS relay_edge_fence_pending (
+  user_id TEXT NOT NULL,
+  relay_host_id TEXT NOT NULL,
+  cell_id TEXT NOT NULL,
+  assignment_epoch BIGINT NOT NULL,
+  attempts BIGINT NOT NULL,
+  next_attempt_at BIGINT NOT NULL,
+  PRIMARY KEY (user_id, relay_host_id)
+);
+
 CREATE TABLE IF NOT EXISTS relay_region_decisions (
   user_id TEXT NOT NULL, relay_host_id TEXT NOT NULL,
   generation BIGINT NOT NULL, expires_at BIGINT NOT NULL,

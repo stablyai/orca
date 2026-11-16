@@ -1,11 +1,15 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SshHostServerStatusLine } from './ssh-host-server-status-copy'
 
 /** A move took these automations but the server couldn't turn them back on. */
-export function automationsLeftDisabledLine(count: number): SshHostServerStatusLine {
+export function automationsLeftDisabledLine(
+  count: number,
+  t: Translate = translate
+): SshHostServerStatusLine {
   return {
     tone: 'warning',
-    text: translate(
+    text: t(
       'auto.components.settings.sshHostServer.automationsLeftDisabled',
       'This host’s Orca server took over {{count}} automations but couldn’t turn them back on. Turn them on in Automations.',
       {

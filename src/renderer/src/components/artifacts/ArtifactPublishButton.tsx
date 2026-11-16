@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { ArrowRight, Loader2, Share2 } from 'lucide-react'
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { ArtifactPublishedLinkPanel } from './ArtifactPublishedLinkPanel'
 import { getPublishedArtifactLink } from './artifact-published-link-client'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
@@ -44,6 +44,7 @@ export function ArtifactPublishButton({
       onOpenChange: (open: boolean) => void
     }
 )): React.JSX.Element {
+  const t = useTranslate()
   const [ownOpen, setOwnOpen] = useState(false)
   const open = controlledOpen ?? ownOpen
   const setOpen = onOpenChange ?? setOwnOpen
@@ -122,10 +123,7 @@ export function ArtifactPublishButton({
     openSettingsPage()
   }
 
-  const label = translate(
-    'auto.components.artifacts.ArtifactPublishButton.a4a49da6af',
-    'Share as artifact'
-  )
+  const label = t('auto.components.artifacts.ArtifactPublishButton.a4a49da6af', 'Share as artifact')
   return (
     <Popover open={open} onOpenChange={(nextOpen) => !busy && setOpen(nextOpen)}>
       {anchorRef ? (
@@ -175,18 +173,15 @@ export function ArtifactPublishButton({
       >
         <div className="space-y-1 border-b border-border/60 px-4 py-3.5">
           <h3 className="text-sm font-semibold">
-            {translate(
-              'auto.components.artifacts.ArtifactPublishButton.confirmTitle',
-              'Share as artifact'
-            )}
+            {t('auto.components.artifacts.ArtifactPublishButton.confirmTitle', 'Share as artifact')}
           </h3>
           <p className="text-xs leading-5 text-muted-foreground">
             {publishedLink
-              ? translate(
+              ? t(
                   'auto.components.artifacts.ArtifactPublishButton.publishedDescription',
                   'Anyone with this link can view the shared file.'
                 )
-              : translate(
+              : t(
                   'auto.components.artifacts.ArtifactPublishButton.confirmDescription',
                   'This publishes the current file at a link anyone with the URL can view.'
                 )}
@@ -198,13 +193,13 @@ export function ArtifactPublishButton({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 space-y-0.5">
                 <p className="text-xs font-medium">
-                  {translate(
+                  {t(
                     'auto.components.artifacts.ArtifactPublishButton.accountTitle',
                     'Orca account'
                   )}
                 </p>
                 <p className="text-[11px] leading-4 text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.artifacts.ArtifactPublishButton.accountDescription',
                     'Sign in to create and manage this link.'
                   )}
@@ -216,11 +211,11 @@ export function ArtifactPublishButton({
                 disabled={authStatus?.configured !== true}
               >
                 {authStatus?.state === 'reconnect-required'
-                  ? translate(
+                  ? t(
                       'auto.components.artifacts.ArtifactPublishButton.signInAgain',
                       'Sign in again'
                     )
-                  : translate('auto.components.artifacts.ArtifactPublishButton.signIn', 'Sign in')}
+                  : t('auto.components.artifacts.ArtifactPublishButton.signIn', 'Sign in')}
               </OrcaSignInButton>
             </div>
           ) : null}
@@ -230,13 +225,13 @@ export function ArtifactPublishButton({
             <div className={cn('space-y-2', !signedIn && 'border-t border-border/60 pt-3')}>
               <div className="space-y-0.5">
                 <p className="text-xs font-medium">
-                  {translate(
+                  {t(
                     'auto.components.artifacts.ArtifactPublishButton.publishingOffTitle',
                     'Artifact sharing is off'
                   )}
                 </p>
                 <p className="text-[11px] leading-4 text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.artifacts.ArtifactPublishButton.publishingOffDescription',
                     'Learn about public links and enable sharing in Settings.'
                   )}
@@ -249,7 +244,7 @@ export function ArtifactPublishButton({
                 className="w-full"
                 onClick={openArtifactsSettings}
               >
-                {translate(
+                {t(
                   'auto.components.artifacts.ArtifactPublishButton.openSettings',
                   'Open Artifacts settings'
                 )}
@@ -261,7 +256,7 @@ export function ArtifactPublishButton({
           {checkingLink ? (
             <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin" />
-              {translate(
+              {t(
                 'auto.components.artifacts.ArtifactPublishButton.checkingLink',
                 'Checking for an existing link…'
               )}
@@ -269,7 +264,7 @@ export function ArtifactPublishButton({
           ) : currentLookup?.status === 'error' ? (
             <div className="space-y-2">
               <p className="text-xs leading-5 text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.artifacts.ArtifactPublishButton.checkFailed',
                   'Could not check for an existing link.'
                 )}
@@ -281,7 +276,7 @@ export function ArtifactPublishButton({
                 className="w-full"
                 onClick={() => setLookupRevision((current) => current + 1)}
               >
-                {translate('auto.components.artifacts.ArtifactPublishButton.tryAgain', 'Try again')}
+                {t('auto.components.artifacts.ArtifactPublishButton.tryAgain', 'Try again')}
               </Button>
             </div>
           ) : publishedLink ? (
@@ -302,8 +297,8 @@ export function ArtifactPublishButton({
             >
               {publishing ? <Loader2 className="animate-spin" /> : <Share2 />}
               {publishing
-                ? translate('auto.components.artifacts.ArtifactPublishButton.sharing', 'Sharing…')
-                : translate(
+                ? t('auto.components.artifacts.ArtifactPublishButton.sharing', 'Sharing…')
+                : t(
                     'auto.components.artifacts.ArtifactPublishButton.sharePublicLink',
                     'Generate link'
                   )}

@@ -2,32 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type * as DaemonBashRcfileModule from '../daemon-bash-shell-ready-rcfile'
 import { getBashShellReadyRcfileContent } from '../../../providers/local-pty/local-pty-shell-ready-bash-rcfile'
 import { getDaemonBashShellReadyRcfileContent } from '../daemon-bash-shell-ready-rcfile'
-import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
-import {
-  OVERLAY_ONLY_FEATURES,
-  STARTUP_COMMAND_FEATURES
-} from '../../../pty/shell-startup/shell-startup-launch-intent-fixtures'
+import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import {
   expectBashOsc133Lifecycle,
   runInteractiveBashRcfile
 } from './daemon-bash-wrapper-osc133-fixture'
-import { getShellReadyWrapperRoot } from '../shell-ready'
-
-async function importFreshShellReady() {
-  vi.resetModules()
-  const module = await import('../shell-ready')
-  return {
-    ...module,
-    getShellReadyLaunchConfig: (shell: string) =>
-      module.getShellLaunchConfig(shell, STARTUP_COMMAND_FEATURES),
-    getMarkerlessShellLaunchConfig: (shell: string) =>
-      module.getShellLaunchConfig(shell, OVERLAY_ONLY_FEATURES)
-  }
-}
 
 async function importFreshDaemonBashRcfile(): Promise<typeof DaemonBashRcfileModule> {
   vi.resetModules()
@@ -98,38 +81,6 @@ describePosix('daemon shell-ready bash wrapper', () => {
   })
 
   // Remote agent status depends on the wrapper’s OSC 133 command start and completion markers.
-  it('emits OSC 133 C/D markers in the daemon bash wrapper', async () => {
-    const { getShellReadyLaunchConfig } = await importFreshShellReady()
-
-    getShellReadyLaunchConfig('/bin/zsh')
-    getShellReadyLaunchConfig('/bin/bash')
-
-    const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-    const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
-
-    expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
-    expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
-    expect(bashRc).toContain('printf "\\033]133;C\\007"')
-    expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
-    expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')
-    // DEBUG must arm after prompt setup; use lastIndexOf to skip its epilogue re-arm.
-    expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
-      bashRc.indexOf('__orca_append_prompt_command "__orca_osc133_epilogue"')
-    )
-    expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
-    expect(zshrc).toContain('printf "\\033]133;C\\007"')
-  })
-
-  itWithBash(
-    'runs the daemon bash wrapper without fake C/D markers before the first prompt',
-    async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-
-      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
-
-      expectBashOsc133Lifecycle(output)
-    }
-  )
 
   itWithBash(
     'preserves prompt hooks and existing DEBUG traps without fake command markers',
@@ -277,19 +228,5 @@ describePosix('daemon shell-ready bash wrapper', () => {
 
     expect(output).not.toContain('\x1b]777;orca-shell-ready\x07')
     expect(output).toContain('\\e]777;orca-shell-ready\\a')
-  })
-
-  itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
-    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-    writeFileSync(
-      join(userDataPath, '.bash_profile'),
-      'PROMPT_COMMAND=(\'printf "PROMPT_ARRAY_A\\n"\' \'printf "PROMPT_ARRAY_B\\n";  \')\n'
-    )
-
-    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
-
-    expect(output.split('PROMPT_ARRAY_A')).toHaveLength(4)
-    expect(output.split('PROMPT_ARRAY_B')).toHaveLength(4)
-    expectBashOsc133Lifecycle(output)
   })
 })

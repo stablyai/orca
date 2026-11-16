@@ -1,6 +1,6 @@
-import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { expect, it, vi } from 'vitest'
-import { AgentSessionPreDispatchError } from '../../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import { AgentSessionPreDispatchError } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-operation-settlement'
 import {
   type LateSettlement,
   acquiredCodexAdapter,

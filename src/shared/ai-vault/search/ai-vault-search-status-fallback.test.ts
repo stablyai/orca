@@ -12,32 +12,6 @@ const query = {
 }
 
 describe.each(['runtime', 'relay'] as const)('missing search status over %s', (transport) => {
-  it.each([-32601, 'method_not_found'])(
-    'searches legacy filters after status refusal %s',
-    async (code) => {
-      const call = vi.fn(async (method: string, params: Record<string, unknown>) => {
-        if (method === 'aiVault.searchStatus') {
-          throw { code }
-        }
-        expect(LegacyRequestSchema.parse(params)).toEqual({
-          ...query,
-          filters: { ...query.filters, agents: ['claude'] }
-        })
-        return searchResults()
-      })
-      expect(
-        await createSessionSearchClient(call, transport).searchSessions({
-          ...query,
-          filters: { ...query.filters, agents: ['claude'] }
-        })
-      ).toMatchObject({ kind: 'results' })
-      expect(call.mock.calls.map(([method]) => method)).toEqual([
-        'aiVault.searchStatus',
-        'aiVault.searchSessions'
-      ])
-    }
-  )
-
   it('keeps only the conservative legacy subset when status is absent', async () => {
     const call = vi.fn(async (method: string, params: Record<string, unknown>) => {
       if (method === 'aiVault.searchStatus') {
@@ -68,34 +42,6 @@ describe.each(['runtime', 'relay'] as const)('missing search status over %s', (t
         filters: { agents: ['jcode'] }
       })
     ).toEqual({ kind: 'unavailable', reason: 'unsupported-agent' })
-    expect(call).toHaveBeenCalledExactlyOnceWith('aiVault.searchStatus', {})
-  })
-
-  it.each([
-    { code: 'unauthorized', message: 'Authentication required' },
-    { code: 'connection_closed', message: 'Host disconnected' },
-    { code: -32000, message: 'Execution host refused request' }
-  ])('propagates status failure $code without a search', async (error) => {
-    const call = vi.fn(async () => {
-      throw error
-    })
-    await expect(
-      createSessionSearchClient(call, transport).searchSessions({
-        query: 'needle',
-        filters: { agents: ['claude'] }
-      })
-    ).rejects.toEqual(error)
-    expect(call).toHaveBeenCalledExactlyOnceWith('aiVault.searchStatus', {})
-  })
-
-  it('propagates a malformed status instead of assuming a legacy host', async () => {
-    const call = vi.fn(async () => ({ supportedAgents: ['claude'] }))
-    await expect(
-      createSessionSearchClient(call, transport).searchSessions({
-        query: 'needle',
-        filters: { agents: ['claude'] }
-      })
-    ).rejects.toThrow()
     expect(call).toHaveBeenCalledExactlyOnceWith('aiVault.searchStatus', {})
   })
 

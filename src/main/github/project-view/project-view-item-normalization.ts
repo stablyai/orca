@@ -5,8 +5,8 @@ import type {
   GitHubProjectRow,
   GitHubProjectRowItemType,
   GitHubProjectUser
-} from '../../../shared/github/project-types'
-import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
+} from '../../../shared/github/projects/project-types'
+import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
 import { driftError } from './project-error-classification'
 import {
   normalizeFieldValue,

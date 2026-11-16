@@ -1,58 +1,63 @@
 import { PanelsTopLeft, RefreshCw } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import { UsageRosterPanel } from './UsageRosterPanel'
+import { useTranslate } from '@/i18n/use-translate'
+import { UsageRosterPanel } from './usage/UsageRosterPanel'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
-} from './status-bar-context-menu-policy'
-import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { StatusBarUsageChangeNotices } from './StatusBarUsageChangeNotices'
-import { UpdateStatusSegment } from './UpdateStatusSegment'
-import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
+} from './composition/status-bar-context-menu-policy'
+import { StatusBarUsageEmptyCta } from './usage/StatusBarUsageEmptyCta'
+import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices'
+import { UpdateStatusSegment } from './updates/UpdateStatusSegment'
+import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
-import { PluginsStatusSegment } from './PluginsStatusSegment'
-import { PluginStatusBarItems } from './PluginStatusBarItems'
-import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
-import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
-import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import { ProviderDetailsMenu } from './ProviderDetailsMenu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
-import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
+import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
+import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
+import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
+import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/trigger/FloatingTerminalIconContextMenu'
+import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
+import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
+import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
+import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import { ProviderSegment, UsageOverflowChip, isUsageUrgent } from './usage/StatusBarProviderSegment'
 import {
   UsageUnitLabel,
   getUsageUnitLabelState,
   usageChipShowsPercentage
-} from './usage-unit-label'
-import { useStatusBarController } from './use-status-bar-controller'
-import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
-import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+} from './usage/usage-unit-label'
+import { useStatusBarController } from './composition/use-status-bar-controller'
+import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
-  import('./ResourceUsageStatusSegment').then((module) => ({
+  import('./resources/ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
   }))
 )
 const PortsStatusSegment = lazyWithRetry(() =>
-  import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
+  import('./host-connections/PortsStatusSegment').then((module) => ({
+    default: module.PortsStatusSegment
+  }))
 )
 const SshStatusSegment = lazyWithRetry(() =>
-  import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+  import('./host-connections/SshStatusSegment').then((module) => ({
+    default: module.SshStatusSegment
+  }))
 )
 
 export type StatusBarProps = {
@@ -62,6 +67,7 @@ export type StatusBarProps = {
 export function StatusBarSurface({
   floatingTerminalOpen
 }: StatusBarProps): React.JSX.Element | null {
+  const t = useTranslate()
   // Memoized labels still need to follow language changes.
   useTranslation()
   const controller = useStatusBarController(floatingTerminalOpen)
@@ -69,6 +75,7 @@ export function StatusBarSurface({
     return null
   }
   const {
+    antigravityAccounts,
     anyFetching,
     anyVisible,
     barRef,
@@ -109,7 +116,12 @@ export function StatusBarSurface({
     usageTightestOnly
   } = controller
   const usageMode = usageTightestOnly ? 'compact' : statusBarUsageMode
-  const unitLabelState = getUsageUnitLabelState(rosterProviders, collapsedUsageProviders, usageMode)
+  const unitLabelState = getUsageUnitLabelState(
+    rosterProviders,
+    collapsedUsageProviders,
+    usageMode,
+    t
+  )
 
   return (
     <div
@@ -150,10 +162,7 @@ export function StatusBarSurface({
                   <button
                     type="button"
                     className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
-                    aria-label={translate(
-                      'auto.components.status.bar.UsageRosterPanel.title',
-                      'Usage'
-                    )}
+                    aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
                   >
                     {unitLabelState !== 'absent' ? (
                       <UsageUnitLabel
@@ -166,8 +175,8 @@ export function StatusBarSurface({
                       <span
                         key={p.provider}
                         data-usage-chip={p.provider}
-                        data-usage-urgent={getUsageTone(p) === 'urgent'}
-                        data-usage-percentage={usageChipShowsPercentage(p, usageMode)}
+                        data-usage-urgent={isUsageUrgent(p)}
+                        data-usage-percentage={usageChipShowsPercentage(p, usageMode, t)}
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
                         className="inline-flex data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
@@ -198,7 +207,8 @@ export function StatusBarSurface({
                   sideOffset={8}
                   // Reserve footer height so the popover and drill-in submenus stay above the status bar.
                   collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
-                  className="w-[360px] p-0"
+                  variant="picker"
+                  className="w-[440px] max-w-[calc(100vw-1rem)]"
                   onPointerDownOutside={usageMenuFocusHandoff.onPointerDownOutside}
                   onCloseAutoFocus={usageMenuFocusHandoff.onCloseAutoFocus}
                 >
@@ -231,6 +241,17 @@ export function StatusBarSurface({
                           />
                         )
                       }
+                      if (p.provider === 'antigravity') {
+                        return (
+                          <AntigravityUsageMenu
+                            antigravity={p}
+                            accounts={antigravityAccounts}
+                            compact={compact}
+                            triggerContent={rowNode}
+                            onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
+                          />
+                        )
+                      }
                       if (p.provider === 'codex') {
                         return (
                           <CodexSwitcherMenu
@@ -249,7 +270,7 @@ export function StatusBarSurface({
                           iconOnly={false}
                           asSubmenu
                           triggerContent={rowNode}
-                          ariaLabel={translate(
+                          ariaLabel={t(
                             'auto.components.status.bar.UsageRosterPanel.openDetails',
                             'Open usage details'
                           )}
@@ -268,7 +289,7 @@ export function StatusBarSurface({
                   onClick={handleRefresh}
                   disabled={isRefreshing}
                   className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.status.bar.StatusBar.3325d996cb',
                     'Refresh rate limits'
                   )}
@@ -280,7 +301,7 @@ export function StatusBarSurface({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {translate('auto.components.status.bar.StatusBar.c8857b40f7', 'Refresh usage data')}
+                {t('auto.components.status.bar.StatusBar.c8857b40f7', 'Refresh usage data')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -323,7 +344,7 @@ export function StatusBarSurface({
                     className="relative inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
                     aria-label={
                       showFloatingWorkspaceAttentionDot
-                        ? translate(
+                        ? t(
                             'auto.components.status.bar.StatusBar.floatingTerminalNewActivity',
                             '{{label}}, new activity',
                             { label: floatingTerminalActionLabel }

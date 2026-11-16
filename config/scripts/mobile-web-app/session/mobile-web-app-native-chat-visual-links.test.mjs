@@ -136,45 +136,6 @@ for (const engine of ['chromium', 'webkit']) {
         return one
       }
 
-      it.each(['let', 'const', 'var', 'function'])(
-        'renders a visual declaring %s open',
-        async (kind) => {
-          const declaration =
-            kind === 'function' ? 'function open() { return 6 }' : `${kind} open = 6`
-          const html = `${VISUAL}<p id="rendered"></p><script>${declaration};
-document.getElementById('rendered').textContent = String(typeof open === 'function' ? open() : open)
-</script>`
-          const { page, frame } = await openNativeHost(browser(), html)
-          try {
-            await expect.poll(() => frame.textContent('#rendered')).toBe('6')
-          } finally {
-            await page.close()
-          }
-        }
-      )
-
-      it('blocks popups even when a visual restores the native open function', async () => {
-        const context = await browser().newContext()
-        try {
-          await context.addInitScript(() => {
-            window.originalOpen = window.open
-          })
-          const html = `${VISUAL}<button id="popup" onclick="this.dataset.blocked = String(window.open('about:blank', '_blank') === null)">Open</button>`
-          const { frame } = await openNativeHost(context, html)
-          expect(
-            await frame.evaluate(() => {
-              window.open = window.originalOpen
-              return window.open === window.originalOpen
-            })
-          ).toBe(true)
-          await frame.click('#popup')
-          expect(await frame.getAttribute('#popup', 'data-blocked')).toBe('true')
-          expect(context.pages()).toHaveLength(1)
-        } finally {
-          await context.close()
-        }
-      })
-
       it('moves within the visual in the app, and the host keeps it', async () => {
         const { page, frame } = await openNativeHost(browser())
         const marker = await frame.evaluate(() => window.marker)

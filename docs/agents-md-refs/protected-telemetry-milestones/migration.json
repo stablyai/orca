@@ -1,0 +1,1300 @@
+{
+  "project_id": 406068,
+  "prepared": "2026-11-08",
+  "event_contract": "implementation worktree /tmp/orca-protected-telemetry/event-contract.json version 3 (implemented-locally-not-deployed)",
+  "applied": {
+    "insights": [
+      {
+        "id": 9790198,
+        "url": "https://us.posthog.com/project/406068/insights/2M4eYB5Y",
+        "dashboards": [1795002],
+        "name": "D1/D3/D7/D30/D60/D90 active return: all vs agent_started",
+        "field": "description",
+        "before": "Fresh-install retention from first onboarding_started. Active means any app telemetry event on calendar days 1-N after start. D60/D90 show null until cohorts mature; telemetry opt-outs excluded. App-only; no website.",
+        "after": "Fresh-install retention from first onboarding_started. Active means any app telemetry event on calendar days 1-N after start. D60/D90 show null until cohorts mature; telemetry opt-outs excluded. App-only; no website. LEGACY: background-only and launch-only days count as active; not meaningful use. daemon_audit_eligibility is 0.1% sampled from 1.4.248 (2026-11-04).",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 8521005,
+        "url": "https://us.posthog.com/project/406068/insights/R7LdubT0",
+        "dashboards": [1570255],
+        "name": "D1/D3/D7 active return (any app event)",
+        "field": "description",
+        "before": "Fresh-install cohorts from first onboarding_started. Active means any app telemetry event on calendar day 1, days 1-3, or days 1-7 after start, including app_opened. Excludes telemetry opt-outs. App-only; no website.",
+        "after": "Fresh-install cohorts from first onboarding_started. Active means any app telemetry event on calendar day 1, days 1-3, or days 1-7 after start, including app_opened. Excludes telemetry opt-outs. App-only; no website. LEGACY: background-only and launch-only days count as active; not meaningful use. daemon_audit_eligibility is 0.1% sampled from 1.4.248 (2026-11-04).",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 11047236,
+        "url": "https://us.posthog.com/project/406068/insights/B4YE6JT8",
+        "dashboards": [1997904],
+        "name": "2-week / 30-day / 2-month window return (fresh installs)",
+        "field": "description",
+        "before": "Not any-return-by-day-N. Returned = any app event in days 8-14 / 24-30 / 54-60 after first onboarding_started (fresh_install). Eligible only after the window ends. Opt-outs excluded. Full UTC days through yesterday. App-only; no website.",
+        "after": "Not any-return-by-day-N. Returned = any app event in days 8-14 / 24-30 / 54-60 after first onboarding_started (fresh_install). Eligible only after the window ends. Opt-outs excluded. Full UTC days through yesterday. App-only; no website. LEGACY: background-only and launch-only days count as active; not meaningful use. daemon_audit_eligibility is 0.1% sampled from 1.4.248 (2026-11-04).",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 8418983,
+        "url": "https://us.posthog.com/project/406068/insights/bH1SnEQ0",
+        "dashboards": [1552346],
+        "name": "Any app activity daily active installs",
+        "field": "description",
+        "before": "Daily distinct installs with any Orca desktop app activity, including background app events. Requires install_id and orca_channel; website traffic and telemetry_opted_out events excluded. Not total installed base; telemetry-disabled installs are invisible.",
+        "after": "Daily distinct installs with any Orca desktop app activity, including background app events. Requires install_id and orca_channel; website traffic and telemetry_opted_out events excluded. Not total installed base; telemetry-disabled installs are invisible. Background events include daemon_audit_eligibility, 0.1% sampled from 1.4.248 (2026-11-04); not meaningful use.",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 13415841,
+        "url": "https://us.posthog.com/project/406068/insights/imWppJ9J",
+        "dashboards": [2258914],
+        "name": "LIVE: 24h confirmed agent prompt by randomized assignment",
+        "field": "description",
+        "before": "Fresh-install first onboarding since Oct 23 21:50 UTC; full 24h follow-up; event cutoff now minus 15 minutes. agent_prompt_sent is hook-confirmed input; count is installs with a prompt, not conversations. Unknown assignment excluded; opt-outs retained. Selector visibility is not directly tracked.",
+        "after": "Fresh-install first onboarding since Oct 23 21:50 UTC; full 24h follow-up; cutoff now minus 15 min. agent_prompt_sent is hook-confirmed input; counts installs with a prompt, not conversations. Unknown assignment excluded; opt-outs retained. Selector visibility not tracked. agent_prompt_sent is 1% sampled per event from 1.4.248 (2026-11-04 02:37 UTC); later rates undercount and are not rescalable.",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 9052828,
+        "url": "https://us.posthog.com/project/406068/insights/fXsB9Izz",
+        "dashboards": [1562016],
+        "name": "Onboarding funnel with user prompt sent",
+        "field": "description",
+        "before": "Fresh-install funnel after agent_prompt_sent appeared 2026-05-29 23:33 UTC. Code-verified: agent_prompt_sent means a non-empty user prompt was delivered/observed, not an assistant response. Current rows are hook-sourced launch_source=unknown. App-only; no website.",
+        "after": "Fresh-install funnel after agent_prompt_sent appeared 2026-05-29 23:33 UTC. Code-verified: agent_prompt_sent means a non-empty user prompt was delivered/observed, not an assistant response. Current rows are hook-sourced launch_source=unknown. App-only; no website. agent_prompt_sent is 1% sampled per event from 1.4.248 (2026-11-04 02:37 UTC); later rates undercount and are not rescalable.",
+        "refresh_check": "pre-existing out-of-memory on unchanged query (no cached result in pre-edit backup)"
+      },
+      {
+        "id": 9077994,
+        "url": "https://us.posthog.com/project/406068/insights/iqibpxMi",
+        "dashboards": [1552346],
+        "name": "Agent usage by tracked agent over time",
+        "field": "description",
+        "before": "Daily distinct installs that used each tracked agent_kind. Counts agent_started or agent_prompt_sent once per install/day/agent_kind with no rollup bucket. agent_prompt_sent starts 2026-05-29, so earlier days mostly reflect starts. App-only; no website.",
+        "after": "Daily distinct installs that used each tracked agent_kind. Counts agent_started or agent_prompt_sent once per install/day/agent_kind with no rollup bucket. agent_prompt_sent starts 2026-05-29, so earlier days mostly reflect starts. App-only; no website. agent_prompt_sent is 1% sampled per event from 1.4.248 (2026-11-04 02:37 UTC); later rates undercount and are not rescalable.",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 9860787,
+        "url": "https://us.posthog.com/project/406068/insights/9StQAkAI",
+        "dashboards": [1552346],
+        "name": "Prompt users using 2+ agent harnesses in trailing 7d",
+        "field": "description",
+        "before": "Rolling full-UTC 7d windows. Denominator = users with agent_prompt_sent to any agent_kind; numerator = users with prompts to >1 distinct agent_kind. Uses prompt_sent, not agent_started, to avoid auto-start inflation. agent_prompt_sent began late 2026-05-29 UTC, so chart starts 2026-06-05. App-only; no website.",
+        "after": "Rolling full-UTC 7d windows. Denominator = users with agent_prompt_sent to any agent_kind; numerator = users with prompts to >1 distinct agent_kind. Uses prompt_sent, not agent_started, to avoid auto-start inflation. agent_prompt_sent began late 2026-05-29 UTC, so chart starts 2026-06-05. App-only; no website. Prompts are 1% sampled per event from 1.4.248 (2026-11-04); later windows undercount.",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 13282177,
+        "url": "https://us.posthog.com/project/406068/insights/3JTv1Zyc",
+        "dashboards": [2258914],
+        "name": "D1 and D3 retention by assignment: agent prompts, native chat and app reopening",
+        "field": "description",
+        "before": "LIVE on refresh; cutoff=now minus 15m. D1=[24h,48h), D3=[72h,96h) after first fresh-install onboarding from Oct 23 21:50 UTC. All starters with a full window; opt-outs retained. Three independent signals, not conversation counts. D3 rates are NULL until eligible; first windows complete around Oct 27 21:50 UTC. Assignment is not a selector impression. See dashboard description for live and snapshot",
+        "after": "LIVE on refresh; cutoff=now minus 15m. D1=[24h,48h), D3=[72h,96h) after first fresh-install onboarding from Oct 23 21:50 UTC; starters with a full window; opt-outs retained. Three independent signals, not conversation counts. Assignment is not a selector impression. Prompt signal is 1% sampled per event from 1.4.248 (2026-11-04): later cohorts undercount it.",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 9104852,
+        "url": "https://us.posthog.com/project/406068/insights/ZtyZtRM1",
+        "dashboards": [1562016],
+        "name": "Fresh-install activation milestones over time",
+        "field": "description",
+        "before": "Daily fresh-install cohorts since 2026-05-09. 'Agent auto-started' fires automatically on worktree creation, so it tracks reaching a worktree, not engagement; 'Prompt sent' is the real activation line. agent_prompt_sent starts 2026-05-29; tour/setup lines start 2026-06-03 and are null before. Current day partial. App-only; no website.",
+        "after": "Daily fresh-install cohorts since 2026-05-09. 'Agent auto-started' fires on worktree creation, so it tracks reaching a worktree, not engagement. 'Prompt sent' starts 2026-05-29 and is 1% sampled per event from 1.4.248 (2026-11-04), so its later drop is sampling, not behavior. Tour/setup lines start 2026-06-03. Current day partial. App-only; no website.",
+        "refresh_check": "ok"
+      },
+      {
+        "id": 9108955,
+        "url": "https://us.posthog.com/project/406068/insights/MWGe77xd",
+        "dashboards": [1562016],
+        "name": "Fresh-install retention by first-session behavior (D1/D7)",
+        "field": "description",
+        "before": "D1/D7 return by first-session behavior. Fresh-install cohort, distinct_id, mature denominators. Buckets mutually exclusive by precedence: sent prompt > agent auto-started (no prompt) > project-ready (no agent) > abandoned. OBSERVATIONAL/self-selected, not causal. 'Sent prompt' D7 is survivorship-biased (agent_prompt_sent only since 2026-05-29); trust the D1 gradient. App-only; no website.",
+        "after": "D1/D7 return by first-session behavior; fresh installs, mature denominators. Buckets by precedence: sent prompt > agent auto-started > project-ready > abandoned. OBSERVATIONAL, not causal. 'Sent prompt' starts 2026-05-29 and is 1% sampled from 1.4.248 (2026-11-04), so later prompt senders fall into lower buckets. Trust the D1 gradient. App-only; no website.",
+        "refresh_check": "pre-existing out-of-memory on unchanged query (no cached result in pre-edit backup)"
+      }
+    ],
+    "dashboards": [
+      {
+        "id": 1795002,
+        "url": "https://us.posthog.com/project/406068/dashboard/1795002",
+        "name": "Orca detailed retention",
+        "field": "description",
+        "before": "Investor review dashboard for fresh-install retention: D1/D3/D7/D30/D60/D90 active return, weekly cohorts, platform split, and repo-cohort retention. D60/D90 are expected to show no eligible users until cohorts mature. Active means any app telemetry event after day 0; telemetry opt-outs excluded. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic.",
+        "after": "Investor review dashboard for fresh-install retention: D1/D3/D7/D30/D60/D90 active return, weekly cohorts, platform split, and repo-cohort retention. D60/D90 are expected to show no eligible users until cohorts mature. Active means any app telemetry event after day 0; telemetry opt-outs excluded. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic. LEGACY note (2026-11-08): 'any app telemetry/event' also counts background-only days (e.g. daemon_audit_eligibility, 0.1% sampled from 1.4.248 since 2026-11-04) and launch-only days, so this is not meaningful-use retention. No meaningful-activity retention metric is live yet. Comeback tiles' agent_prompt_sent input is 1% sampled from 1.4.248."
+      },
+      {
+        "id": 1997904,
+        "url": "https://us.posthog.com/project/406068/dashboard/1997904",
+        "name": "Orca 2-week / 30-day / 2-month retention",
+        "field": "description",
+        "before": "Fresh-install window retention by platform. 2-week = any app event on days 8-14, 30-day = 24-30, 2-month = 54-60. Not 'any return by day N'. Weekly trends are split macOS/Windows/Linux (20+ mature users per series). Volume tile is mix only. Anchored on first onboarding_started cohort=fresh_install from 2026-05-09; opt-outs excluded. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic.",
+        "after": "Fresh-install window retention by platform. 2-week = any app event on days 8-14, 30-day = 24-30, 2-month = 54-60. Not 'any return by day N'. Weekly trends are split macOS/Windows/Linux (20+ mature users per series). Volume tile is mix only. Anchored on first onboarding_started cohort=fresh_install from 2026-05-09; opt-outs excluded. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic. LEGACY note (2026-11-08): 'any app telemetry/event' also counts background-only days (e.g. daemon_audit_eligibility, 0.1% sampled from 1.4.248 since 2026-11-04) and launch-only days, so this is not meaningful-use retention. No meaningful-activity retention metric is live yet."
+      },
+      {
+        "id": 1570255,
+        "url": "https://us.posthog.com/project/406068/dashboard/1570255",
+        "name": "Orca retention",
+        "field": "description",
+        "before": "Fresh-install retention from first onboarding_started cohort=fresh_install. D1/D3/D7 active means any app telemetry event on the exact calendar day after start, including app_opened. Agent-started chart limits denominator to users who reached agent_started. All retention tiles exclude telemetry opt-outs. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic.",
+        "after": "Fresh-install retention from first onboarding_started cohort=fresh_install. D1/D3/D7 active means any app telemetry event on the exact calendar day after start, including app_opened. Agent-started chart limits denominator to users who reached agent_started. All retention tiles exclude telemetry opt-outs. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic. LEGACY note (2026-11-08): 'any app telemetry/event' also counts background-only days (e.g. daemon_audit_eligibility, 0.1% sampled from 1.4.248 since 2026-11-04) and launch-only days, so this is not meaningful-use retention. No meaningful-activity retention metric is live yet."
+      },
+      {
+        "id": 2258914,
+        "url": "https://us.posthog.com/project/406068/dashboard/2258914",
+        "name": "Onboarding language selector: agent usage, conversion and D1/D3 retention",
+        "field": "description",
+        "before": "Updated Oct 28: LIVE first-project conversion, confirmed prompt usage and D1/D3 retention use a 15-minute ingestion margin. Other tiles retain their Oct 25 snapshot; the original combined query timed out at the larger data volume. Randomized assignment is not a verified selector impression. D3 is activity during hours 72–96, among installs with complete follow-up.",
+        "after": "Updated Oct 28: LIVE first-project conversion, confirmed prompt usage and D1/D3 retention use a 15-minute ingestion margin. Other tiles retain their Oct 25 snapshot; the original combined query timed out at the larger data volume. Randomized assignment is not a verified selector impression. D3 is activity during hours 72–96, among installs with complete follow-up. Note (2026-11-08): agent_prompt_sent is randomly 1% sampled per event from 1.4.248 (first seen 2026-11-04 02:37 UTC); prompt-based rates for later cohorts undercount and cannot be rescaled to installs. native_chat_message_sent and app_opened are unsampled."
+      },
+      {
+        "id": 1562016,
+        "url": "https://us.posthog.com/project/406068/dashboard/1562016",
+        "name": "Orca onboarding funnel (new users)",
+        "field": "description",
+        "before": "Fresh-install onboarding analysis anchored on first onboarding_started where cohort=fresh_install, grouped by PostHog distinct_id as install identity. Completion is not workspace_created alone: corrected completion is repo workspace through onboarding + folder completion + git completion without onboarding workspace. Folder completion is a real success path; git-completed/no-onboarding-workspace is a separate handoff bucket. workspace_created source=onboarding is linked git worktree create success, not workspace availability. D1+/D3+ means app_opened >=24h/>=72h after start with mature denominators. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic.",
+        "after": "Fresh-install onboarding analysis anchored on first onboarding_started where cohort=fresh_install, grouped by PostHog distinct_id as install identity. Completion is not workspace_created alone: corrected completion is repo workspace through onboarding + folder completion + git completion without onboarding workspace. Folder completion is a real success path; git-completed/no-onboarding-workspace is a separate handoff bucket. workspace_created source=onboarding is linked git worktree create success, not workspace availability. D1+/D3+ means app_opened >=24h/>=72h after start with mature denominators. Scope: Orca Electron app events with install_id and orca_channel; excludes onorca.dev website traffic. Note (2026-11-08): agent_prompt_sent is randomly 1% sampled per event from 1.4.248 (first seen 2026-11-04 02:37 UTC); prompt-based rates for later cohorts undercount and cannot be rescaled to installs. onboarding_completed has not carried is_git_repo since 2026-06-11 (it moved to repo_added.is_git_repo); tiles splitting completion by that field miss later folder/git completions."
+      }
+    ],
+    "unchanged": "queries, names, tiles, filters, dashboard membership, experiments",
+    "checks": "PATCH responses matched new descriptions; query, name and dashboards byte-identical to backups; dashboard tiles and filters unchanged. Backups: /tmp/orca-protected-telemetry/dashboard-backups-2026-11-08/."
+  },
+  "staged_insights": [
+    {
+      "key": "daily_meaningful_installs",
+      "dashboard_ids": [1534940],
+      "gate_step": 4,
+      "name": "Daily explicit-activity installs vs launched installs (supporting builds)",
+      "description": "Distinct installs with meaningful_activity_day per complete UTC day: explicit desktop/mobile-chat actions incl. terminal typing; never launch, resume, hook-only prompt or background. Misses phone-terminal and paired remote-runtime-only days, so not complete retention. Launched = app_opened on supporting builds. Starts at measured first-seen; no backfill.",
+      "query": {
+        "kind": "DataVisualizationNode",
+        "display": "ActionsLineGraph",
+        "source_file": "queries/daily-meaningful-installs.sql",
+        "chartSettings": {
+          "xAxis": {
+            "column": "day"
+          },
+          "yAxis": [
+            {
+              "column": "meaningful_installs"
+            },
+            {
+              "column": "meaningful_fresh_installs"
+            },
+            {
+              "column": "launched_installs_on_supporting_builds"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "key": "activation_24h",
+      "dashboard_ids": [1562016],
+      "gate_step": 5,
+      "name": "Fresh installs: workspace available and first observed agent interaction within 24h, by platform",
+      "description": "Anchor = first onboarding_started fresh_install on a supporting build, opt-outs excluded, full 24h+15m follow-up. Interaction = first_agent_interaction install_cohort=fresh: observed prompt/message submission, not provider success or agent launch. unattributed_prompt (may be automation) shown separately. Workspace = create, default checkout opened, or any repo_added with is_git_repo=false within the activation window; this is distinct from the onboarding repair's legacy/first-repo git/folder classification.",
+      "query": {
+        "kind": "DataTableNode",
+        "source_file": "queries/activation-24h.sql"
+      }
+    },
+    {
+      "key": "activation_7d",
+      "dashboard_ids": [1562016],
+      "gate_step": 5,
+      "name": "Fresh installs: workspace available and first observed agent interaction within 7d, by platform",
+      "description": "Same definition as the 24h tile with a 7d window and full 7d+15m follow-up. install_cohort_mismatch counts fresh anchors whose first interaction is tagged existing (e.g. onboarding restarted after upgrade); they are not activations. Supporting builds are observed from data, not a hard-coded release.",
+      "query": {
+        "kind": "DataTableNode",
+        "source_file": "queries/activation-7d.sql"
+      }
+    },
+    {
+      "key": "launch_vs_meaningful_return",
+      "dashboard_ids": [1795002, 1997904],
+      "gate_step": 6,
+      "name": "Fresh-install launch return vs explicit-activity return by platform (D1, D3, D7, 2-week, 30-day window)",
+      "description": "Same fresh-install cohort and complete-follow-up denominators. Explicit = meaningful_activity_day (desktop/mobile-chat actions; misses phone-terminal and paired remote-runtime-only days, so not complete retention); launch = app_opened. UTC days after anchor day; D3/D7 = return by that day. NULL until eligible. Legacy any-event tiles stay as history; do not join lines.",
+      "query": {
+        "kind": "DataTableNode",
+        "source_file": "queries/launch-vs-meaningful-return.sql"
+      }
+    }
+  ],
+  "post_cutover_relabels": [
+    {
+      "id": 9790198,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 8521005,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047236,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9790246,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9790248,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9790612,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047427,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047428,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047238,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047421,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047422,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047423,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 8821536,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9026328,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9053637,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047425,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 11047426,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9790360,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9790608,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9790609,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    },
+    {
+      "id": 9790610,
+      "action": "prefix name with 'Legacy any-event: ' and append pointer to launch_vs_meaningful_return",
+      "gate_step": 7
+    }
+  ],
+  "gate_query": "queries/cutover-gate.sql",
+  "coverage_query": "queries/fresh-anchor-version-coverage.sql",
+  "inventory": {
+    "source": "GET /insights/?saved=true (168 insights, 2 pages) and GET /dashboards/ (14 dashboards), 2026-11-08",
+    "note": "depends_on is a text match on the saved query; any_event = HogQL event != 'telemetry_opted_out', RetentionQuery 'All events', or TrendsQuery all-events series.",
+    "insights": [
+      {
+        "id": 8417925,
+        "short_id": "3ANPcn7Z",
+        "name": "Deprecated: old event-local onboarding cohort funnel",
+        "dashboards": [],
+        "kind": "FunnelsQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 8417928,
+        "short_id": "x8s3DQ46",
+        "name": "Agent health: started vs error (by agent_kind)",
+        "dashboards": [],
+        "kind": "TrendsQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8417929,
+        "short_id": "PUSiijPG",
+        "name": "Daily active installs (by orca_channel)",
+        "dashboards": [],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8418984,
+        "short_id": "76Omnk6t",
+        "name": "Lifecycle: new vs returning vs dormant",
+        "dashboards": [],
+        "kind": "LifecycleQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8418991,
+        "short_id": "tBcaNJRH",
+        "name": "Activation gap: repo_added without agent_started by cohort",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8471929,
+        "short_id": "9r3roYHQ",
+        "name": "First-time-user workspace creation: success vs failure",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8471930,
+        "short_id": "o5scu9rP",
+        "name": "First-time-user agent_error by error_class",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8474106,
+        "short_id": "nFFKDzAT",
+        "name": "First repo -> agent activation by repo entry method",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8521002,
+        "short_id": "8SMrVf3T",
+        "name": "Retention: app_opened (all installs, daily)",
+        "dashboards": [],
+        "kind": "RetentionQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8521208,
+        "short_id": "t4EmcmK7",
+        "name": "Agents spawned per day, by agent_kind",
+        "dashboards": [],
+        "kind": "TrendsQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8521297,
+        "short_id": "Di97BXic",
+        "name": "Feature retention: D1 / D3 / D7 by feature (first-time anchored)",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8522315,
+        "short_id": "mcfl279F",
+        "name": "Event breadth vs no meaningful activity in 2d",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 8663728,
+        "short_id": "NG7ML4jW",
+        "name": "First repo users by repo entry method",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8712884,
+        "short_id": "zNMGJoKC",
+        "name": "Fresh installs D3-any return after onboarding decision",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8821531,
+        "short_id": "aTQUzcsu",
+        "name": "QA inline tour outcome + completion",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8845563,
+        "short_id": "uqz23Lpr",
+        "name": "Fast D3 estimate: D1 calendar-day return",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 9026641,
+        "short_id": "kANxeILs",
+        "name": "Fresh installs D3-any meaningful work after onboarding/platform",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent"]
+      },
+      {
+        "id": 9027034,
+        "short_id": "altQ3ADh",
+        "name": "Fresh installs D3-any return or work after onboarding decision",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started", "agent_prompt_sent"]
+      },
+      {
+        "id": 11047237,
+        "short_id": "0BabDjdq",
+        "name": "Weekly cohorts: 2-week / 30-day / 2-month window return",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 13128607,
+        "short_id": "cCAEiuKu",
+        "name": "Directional tab-close adoption — sampled installs — Oct 21, 2026",
+        "dashboards": [],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8320041,
+        "short_id": "L6Ram2oh",
+        "name": "Daily active installs (app_opened)",
+        "dashboards": [1534940],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8320042,
+        "short_id": "j6upDpBw",
+        "name": "Weekly active installs (calendar weeks, app_opened)",
+        "dashboards": [1534940],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8320043,
+        "short_id": "uZgKuV7O",
+        "name": "Desktop app retention (app_opened)",
+        "dashboards": [1534940],
+        "kind": "RetentionQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8320044,
+        "short_id": "vpQI0yxv",
+        "name": "App activity growth accounting",
+        "dashboards": [1534940],
+        "kind": "LifecycleQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8320045,
+        "short_id": "3fMXHgFP",
+        "name": "Active installs by platform (last 14 days)",
+        "dashboards": [1534940],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8418983,
+        "short_id": "bH1SnEQ0",
+        "name": "Any app activity daily active installs",
+        "dashboards": [1552346],
+        "kind": "TrendsQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 8418985,
+        "short_id": "vl3vR14W",
+        "name": "Stickiness: days active per week",
+        "dashboards": [1552346],
+        "kind": "StickinessQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8418986,
+        "short_id": "AIJVy8Xo",
+        "name": "Active installs by platform",
+        "dashboards": [1552346],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8418987,
+        "short_id": "TwguqKxo",
+        "name": "Daily active installs, stacked by app_version",
+        "dashboards": [1552346],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8521270,
+        "short_id": "5czjaMIK",
+        "name": "Distinct installs using each feature, per day",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8997693,
+        "short_id": "uK16O44a",
+        "name": "In-app repo stars by entry point",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 9077994,
+        "short_id": "iqibpxMi",
+        "name": "Agent usage by tracked agent over time",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent"]
+      },
+      {
+        "id": 9860787,
+        "short_id": "9StQAkAI",
+        "name": "Prompt users using 2+ agent harnesses in trailing 7d",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_prompt_sent"]
+      },
+      {
+        "id": 11047583,
+        "short_id": "UbAuGqUG",
+        "name": "Linux users by latest app_version",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047658,
+        "short_id": "z3hpN56W",
+        "name": "On latest version: Linux vs Mac vs Windows",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047659,
+        "short_id": "79Wr5uD7",
+        "name": "Version recency mix by platform (14d fleet %)",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047660,
+        "short_id": "PPNSi5cZ",
+        "name": "App version distribution % by platform (top 12)",
+        "dashboards": [1552346],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 12434947,
+        "short_id": "N3kKYYHt",
+        "name": "Monthly active installs (app_opened, rolling 30 days)",
+        "dashboards": [1552346],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8471904,
+        "short_id": "XGjEOVWr",
+        "name": "Accepted repo/folder outcomes",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 8471908,
+        "short_id": "MHjWVHlC",
+        "name": "First-time-user setup-step actions (post-rollout event)",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8471954,
+        "short_id": "mCbBnKPZ",
+        "name": "First-time users per day: opened-app vs added-first-repo",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 8797194,
+        "short_id": "o3qfzye3",
+        "name": "Git completed, no onboarding workspace: later behavior",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 8821536,
+        "short_id": "5NRXvb4z",
+        "name": "D3 active return by app version: all vs agent_started",
+        "dashboards": [1562016, 1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "any_event"]
+      },
+      {
+        "id": 8838695,
+        "short_id": "zyaXq4lJ",
+        "name": "Onboarding funnel: where users leave before completion",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 8923273,
+        "short_id": "3oewonyF",
+        "name": "Fresh-install high-level activation funnel",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 8923532,
+        "short_id": "zKoJri8Y",
+        "name": "What happened before project-ready endpoint?",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started"]
+      },
+      {
+        "id": 9052828,
+        "short_id": "fXsB9Izz",
+        "name": "Onboarding funnel with user prompt sent",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent"]
+      },
+      {
+        "id": 9104852,
+        "short_id": "ZtyZtRM1",
+        "name": "Fresh-install activation milestones over time",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent"]
+      },
+      {
+        "id": 9108955,
+        "short_id": "MWGe77xd",
+        "name": "Fresh-install retention by first-session behavior (D1/D7)",
+        "dashboards": [1562016],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started", "agent_prompt_sent"]
+      },
+      {
+        "id": 8521005,
+        "short_id": "R7LdubT0",
+        "name": "D1/D3/D7 active return (any app event)",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 8521007,
+        "short_id": "0ebU6rrv",
+        "name": "D1/D3/D7 active return after agent_started",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "any_event"]
+      },
+      {
+        "id": 8522294,
+        "short_id": "UWZ5RiOj",
+        "name": "Last meaningful event before churn (2d+ since last seen)",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 8840697,
+        "short_id": "1VVPYJ8k",
+        "name": "D3 retention proxy match by signal",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 8923127,
+        "short_id": "zeNCtwZf",
+        "name": "Fresh-install D3 non-returner drop-off reasons",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_started"]
+      },
+      {
+        "id": 9026328,
+        "short_id": "3KIyq846",
+        "name": "D7 active return by platform",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9053637,
+        "short_id": "jgoTtubW",
+        "name": "D7 active return across cohort signals",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent", "any_event"]
+      },
+      {
+        "id": 9104854,
+        "short_id": "z2HttOxb",
+        "name": "D1/D3/D7 active return after agent_started - 7d avg",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "any_event"]
+      },
+      {
+        "id": 9219687,
+        "short_id": "h6OUMmVC",
+        "name": "D7 active return by week-1 feature depth (fresh installs)",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047425,
+        "short_id": "ySfAJORT",
+        "name": "D1 active return by platform",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047426,
+        "short_id": "ptPrfniz",
+        "name": "D3 active return by platform",
+        "dashboards": [1570255],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790198,
+        "short_id": "2M4eYB5Y",
+        "name": "D1/D3/D7/D30/D60/D90 active return: all vs agent_started",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "any_event"]
+      },
+      {
+        "id": 9790246,
+        "short_id": "Cu0ugZU9",
+        "name": "Weekly fresh-install cohorts: D7/D30/D60/D90 active return",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790248,
+        "short_id": "CAB7tgTQ",
+        "name": "D30 active return by platform (fresh installs)",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790259,
+        "short_id": "yXWkyHkz",
+        "name": "Workspace retention by repo cohort (nth_repo_added)",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790360,
+        "short_id": "uhthznuN",
+        "name": "Native retention heatmap: fresh installs D0-D30",
+        "dashboards": [1795002],
+        "kind": "RetentionQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790608,
+        "short_id": "m7Y6tXay",
+        "name": "Native retention heatmap: macOS fresh installs D0-D30",
+        "dashboards": [1795002],
+        "kind": "RetentionQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790609,
+        "short_id": "7jkwDOyw",
+        "name": "Native retention heatmap: Windows fresh installs D0-D30",
+        "dashboards": [1795002],
+        "kind": "RetentionQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790610,
+        "short_id": "vAu1XSQV",
+        "name": "Native retention heatmap: Linux fresh installs D0-D30",
+        "dashboards": [1795002],
+        "kind": "RetentionQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9790612,
+        "short_id": "44sVkTWa",
+        "name": "Retention curve by platform: fresh installs D0-D30",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 9860667,
+        "short_id": "x0xzQZTk",
+        "name": "W2 productive comeback by repo cohort (weekly)",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent", "native_chat_message_sent"]
+      },
+      {
+        "id": 9860714,
+        "short_id": "4xA3LHO9",
+        "name": "D30-window productive comeback by repo cohort (weekly)",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent", "native_chat_message_sent"]
+      },
+      {
+        "id": 9862349,
+        "short_id": "LzvwreDS",
+        "name": "W2 productive comeback by platform (weekly)",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent", "native_chat_message_sent"]
+      },
+      {
+        "id": 9862360,
+        "short_id": "nMw2QDc4",
+        "name": "D30-window productive comeback by platform (weekly)",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent", "native_chat_message_sent"]
+      },
+      {
+        "id": 11047427,
+        "short_id": "dUL7qZX2",
+        "name": "Weekly any-return-by-D30 by platform",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047428,
+        "short_id": "gkIaeVKj",
+        "name": "Weekly any-return-by-D60 by platform",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047429,
+        "short_id": "AjnoOIgi",
+        "name": "D60-window productive comeback by platform (weekly)",
+        "dashboards": [1795002],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_started", "agent_prompt_sent", "native_chat_message_sent"]
+      },
+      {
+        "id": 11047236,
+        "short_id": "B4YE6JT8",
+        "name": "2-week / 30-day / 2-month window return (fresh installs)",
+        "dashboards": [1997904],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047238,
+        "short_id": "d8QEqrrw",
+        "name": "2-week / 30-day / 2-month window return by platform",
+        "dashboards": [1997904],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047421,
+        "short_id": "ssLoEqvW",
+        "name": "2-week window return by platform (weekly)",
+        "dashboards": [1997904],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047422,
+        "short_id": "sDWIHC8I",
+        "name": "30-day window return by platform (weekly)",
+        "dashboards": [1997904],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047423,
+        "short_id": "scpeujV9",
+        "name": "2-month window return by platform (weekly)",
+        "dashboards": [1997904],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 11047424,
+        "short_id": "lEnPXfTC",
+        "name": "Weekly fresh-install volume by platform",
+        "dashboards": [1997904],
+        "kind": "HogQLQuery",
+        "depends_on": ["any_event"]
+      },
+      {
+        "id": 13282176,
+        "short_id": "81tNxzVh",
+        "name": "[Oct 25 snapshot] 24h onboarding flow handoff and agent input by randomized assignment",
+        "dashboards": [2258914],
+        "kind": "HogQLQuery",
+        "depends_on": [
+          "app_opened",
+          "agent_started",
+          "agent_prompt_sent",
+          "native_chat_message_sent"
+        ]
+      },
+      {
+        "id": 13282177,
+        "short_id": "3JTv1Zyc",
+        "name": "D1 and D3 retention by assignment: agent prompts, native chat and app reopening",
+        "dashboards": [2258914],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened", "agent_prompt_sent", "native_chat_message_sent"]
+      },
+      {
+        "id": 13282178,
+        "short_id": "BnC7Gjk1",
+        "name": "[Oct 25 snapshot] Treatment minus control: input, flow and D1 differences with 95% intervals",
+        "dashboards": [2258914],
+        "kind": "HogQLQuery",
+        "depends_on": [
+          "app_opened",
+          "agent_started",
+          "agent_prompt_sent",
+          "native_chat_message_sent"
+        ]
+      },
+      {
+        "id": 13282179,
+        "short_id": "erBLlPW7",
+        "name": "[Oct 25 snapshot] Treatment-only picker use within 24h: opened and changed language",
+        "dashboards": [2258914],
+        "kind": "HogQLQuery",
+        "depends_on": [
+          "app_opened",
+          "agent_started",
+          "agent_prompt_sent",
+          "native_chat_message_sent"
+        ]
+      },
+      {
+        "id": 13282180,
+        "short_id": "dEy4wYBH",
+        "name": "[Oct 25 snapshot] Cohort audit: assignment coverage, mature denominators and opt-outs",
+        "dashboards": [2258914],
+        "kind": "HogQLQuery",
+        "depends_on": [
+          "app_opened",
+          "agent_started",
+          "agent_prompt_sent",
+          "native_chat_message_sent"
+        ]
+      },
+      {
+        "id": 13415841,
+        "short_id": "imWppJ9J",
+        "name": "LIVE: 24h confirmed agent prompt by randomized assignment",
+        "dashboards": [2258914],
+        "kind": "HogQLQuery",
+        "depends_on": ["agent_prompt_sent"]
+      },
+      {
+        "id": 13461539,
+        "short_id": "hBk3Vbgt",
+        "name": "macOS 12 (Monterey): active installs in 24h, 7d and 30d",
+        "dashboards": [2279180],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 13461540,
+        "short_id": "KGvPgbKY",
+        "name": "Active macOS installs by latest OS version (last 30 days)",
+        "dashboards": [2279180],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 13792080,
+        "short_id": "vZr7OUjK",
+        "name": "Intel (x64) vs Apple Silicon: active macOS installs in 24h, 7d and 30d",
+        "dashboards": [2279180],
+        "kind": "HogQLQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 13534247,
+        "short_id": "unQzKtZu",
+        "name": "App return after exposure — daily retention by placement arm",
+        "dashboards": [2287466],
+        "kind": "RetentionQuery",
+        "depends_on": ["app_opened"]
+      },
+      {
+        "id": 13534249,
+        "short_id": "Uo2BV932",
+        "name": "Terminal audience → chat default → chat message within 24h",
+        "dashboards": [2287466],
+        "kind": "FunnelsQuery",
+        "depends_on": ["native_chat_message_sent"]
+      },
+      {
+        "id": 13601867,
+        "short_id": "I44pQWTm",
+        "name": "1h chat adoption by placement — completed follow-up only",
+        "dashboards": [2287466],
+        "kind": "HogQLQuery",
+        "depends_on": ["native_chat_message_sent"]
+      },
+      {
+        "id": 13601868,
+        "short_id": "jsZb4q64",
+        "name": "24h chat adoption by placement — completed follow-up only",
+        "dashboards": [2287466],
+        "kind": "HogQLQuery",
+        "depends_on": ["native_chat_message_sent"]
+      },
+      {
+        "id": 13601877,
+        "short_id": "deRpnsB5",
+        "name": "7d chat adoption by placement — completed follow-up only",
+        "dashboards": [2287466],
+        "kind": "HogQLQuery",
+        "depends_on": ["native_chat_message_sent"]
+      },
+      {
+        "id": 13601879,
+        "short_id": "huhquLT0",
+        "name": "Button emphasis — 1h chat adoption within placement arms",
+        "dashboards": [2287466],
+        "kind": "HogQLQuery",
+        "depends_on": ["native_chat_message_sent"]
+      },
+      {
+        "id": 13601880,
+        "short_id": "pG7hGPox",
+        "name": "Targeting policy — 1h chat adoption within placement arms",
+        "dashboards": [2287466],
+        "kind": "HogQLQuery",
+        "depends_on": ["native_chat_message_sent"]
+      },
+      {
+        "id": 13601882,
+        "short_id": "uVetrCYw",
+        "name": "Guardrail — terminal-default switches within 24h",
+        "dashboards": [2287466],
+        "kind": "HogQLQuery",
+        "depends_on": ["native_chat_message_sent"]
+      },
+      {
+        "id": 13537446,
+        "short_id": "KUMIquWd",
+        "name": "Escape-hatch users per 1k daily active users",
+        "dashboards": [2287832],
+        "kind": "TrendsQuery",
+        "depends_on": ["app_opened"]
+      }
+    ]
+  },
+  "staged_validation": "All staged queries execute in production via /query/ and return no rows (events not deployed). Structural check substituting app_version 1.4.250 and 2026-11-05 bounds returned plausible launch and workspace values; this is not a production validation of the new events.",
+  "onboarding_git_repair_2026_11_08": {
+    "rules": "Legacy row = onboarding_completed path open_folder|clone_url and app_version <=1.4.45 (prerelease suffix allowed); its is_git_repo is trusted. Otherwise first repo_added after onboarding_started: is_git_repo true=git, false=plain folder, missing=unknown (never folder, never failure). Current-flow git readiness = add_repo_default_checkout_handoff result=opened_default_checkout (first seen 2026-06-04, 1.4.42).",
+    "evidence": {
+      "repo_added_is_git_repo_first_seen": "2026-06-11T02:35:28Z (1.4.60)",
+      "onboarding_completed_false_proxy_rows_1.4.46_plus": 1241,
+      "workspace_created_source_onboarding_last_seen": "2026-09-10T06:46:10Z",
+      "hogql_default_row_limit": 100
+    },
+    "validation": "Full-history async /query/ runs succeeded for every new query before save; legacy-window (2026-05-20..27) old vs new identical for 8838695, 8923273, 9050198 (old columns), 8923127 (label only); small legacy deltas on 8923532/9104872 come from legacy-start installs completing on current-flow builds. OOM equivalence on a 2h window (joins restricted to cohort ids on both sides): 9108955 and 8471904 identical; 9052828 identical to the LEFT JOIN reading of the original.",
+    "backups": "/tmp/orca-protected-telemetry/dashboard-backups-2026-11-08/onboarding-git-repair/",
+    "dashboard_1562016_description": "note replaced with the repaired git/folder rule",
+    "insights": [
+      {
+        "id": 8471904,
+        "url": "https://us.posthog.com/project/406068/insights/XGjEOVWr",
+        "dashboards": [1562016],
+        "name": "Accepted repo/folder outcomes",
+        "change": "Pre-aggregated per install (fixes OOM); git/folder via legacy boundary + first repo_added.is_git_repo; new buckets: 'Completed git: default checkout opened', 'Completed: project added, git/folder unknown'.",
+        "query_sha256_12_before": "67706127a53a",
+        "query_sha256_12_after": "3eb2c22ad086",
+        "description_before": "Denominator is fresh installs with repo/folder accepted. Chart shows % only; table includes users and later behavior. Git completed with no onboarding workspace marker is still onboarding_completed, not completion drop-off. App-only; no website.",
+        "description_after": "Denominator: fresh installs with repo/folder accepted. Chart % only; table adds later behavior. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. Default checkout = add_repo_default_checkout_handoff opened. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 9050198,
+        "url": "https://us.posthog.com/project/406068/insights/NFkAerEI",
+        "dashboards": [1562016],
+        "name": "Onboarding open-folder result: git repo vs plain folder",
+        "change": "Legacy open-folder columns guarded to <=1.4.45; added post_onboarding_folder_pick_{git,plain,unknown}_users from repo_added; LIMIT 1000 (was truncated at 100 rows/Aug 25).",
+        "query_sha256_12_before": "a09a6832aa74",
+        "query_sha256_12_after": "6397ed1516d6",
+        "description_before": "Fresh installs after 2026-05-20 source rollout. Splits successful onboarding open-folder completions by onboarding_completed.is_git_repo. This does not detect multiple nested repos; multiple-worktree telemetry is separate. App-only; no website.",
+        "description_after": "Legacy columns: in-onboarding open-folder path, <=1.4.45 only (step removed 2026-06-03). post_onboarding_folder_pick_* = first repo_added via folder picker after a current-flow completion, split by repo_added.is_git_repo (from 1.4.60, 2026-06-11); missing = unknown. Separate series, not one line. Today partial. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 8838695,
+        "url": "https://us.posthog.com/project/406068/insights/zyaXq4lJ",
+        "dashboards": [1562016],
+        "name": "Onboarding funnel: where users leave before completion",
+        "change": "Git/folder flags use legacy boundary + repo_added; removes 1.4.46+ is_git_repo=false proxies; stage order documented as legacy.",
+        "query_sha256_12_before": "7b11efa704a4",
+        "query_sha256_12_after": "5be38f2ef04e",
+        "description_before": "Sequential fresh-install funnel to onboarding_completed. Table adds agent_started users and a message-like launch proxy; no exact agent-message-sent event exists, so the proxy uses task/send launch sources. App-only; no website.",
+        "description_after": "Fresh-install funnel to onboarding_completed. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. Stage order is legacy: since 1.4.46 onboarding completes before project choice, so stage 4 can exceed stage 3. Launch proxy uses task/send sources. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 8923532,
+        "url": "https://us.posthog.com/project/406068/insights/zKoJri8Y",
+        "dashboards": [1562016],
+        "name": "What happened before project-ready endpoint?",
+        "change": "Endpoint adds current-flow folder completion and default checkout opened; unknown project type excluded and counted (excluded_project_type_unknown).",
+        "query_sha256_12_before": "c72460d2fb21",
+        "query_sha256_12_after": "3094657c64a6",
+        "description_before": "Fresh installs that accepted a repo/folder but did not hit the onboarding project-ready endpoint. Chart shows % of this lost group; table splits git-completed and folder-picker paths. Endpoint is onboarding workspace_created source=onboarding OR folder completion. App-only; no website.",
+        "description_after": "Accepted repo/folder but no project-ready endpoint: legacy onboarding workspace, folder completion, or current-flow default checkout opened. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. Unknown-type completions excluded (see excluded_project_type_unknown). App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 9104872,
+        "url": "https://us.posthog.com/project/406068/insights/6NQRUNxx",
+        "dashboards": [1562016],
+        "name": "Fresh-install onboarding completion - 7d avg",
+        "change": "Git/folder completion via legacy boundary + repo_added; LIMIT 1000 (was truncated at 100 rows/Aug 16).",
+        "query_sha256_12_before": "957b7d69c6fd",
+        "query_sha256_12_after": "9771e1f1c399",
+        "description_before": "Weighted trailing 7-cohort average of fresh-install onboarding completion, matching JlIt5J1N. Excludes telemetry opt-outs and current partial start day. App-only; no website.",
+        "description_after": "Weighted trailing 7-cohort fresh-install onboarding completion; opt-outs and current day excluded. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. Git + folder < completion when project type is unknown or no project was added. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 8797194,
+        "url": "https://us.posthog.com/project/406068/insights/o3qfzye3",
+        "dashboards": [1562016],
+        "name": "Git completed, no onboarding workspace: later behavior",
+        "change": "Current-flow git bucket = first repo_added git with no default checkout opened; started_at guard fixed (minIf returns 1970, not NULL).",
+        "query_sha256_12_before": "1f4c8538b28f",
+        "query_sha256_12_after": "1ad73123e897",
+        "description_before": "Fresh-install users who completed with a git repo but never emitted workspace_created source=onboarding. Folder success is excluded. Shows selected post-completion app/repo/workspace/agent signals; workspace_created is linked worktree create success, not availability. App-only; no website.",
+        "description_after": "Fresh installs (real fresh onboarding_started) with git completion and no project-ready marker: legacy onboarding workspace, or current-flow default checkout opened. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. Folder success excluded. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 8923127,
+        "url": "https://us.posthog.com/project/406068/insights/zeNCtwZf",
+        "dashboards": [1570255],
+        "name": "Fresh-install D3 non-returner drop-off reasons",
+        "change": "Git/folder flags via legacy boundary + repo_added; bucket 6 also requires no default checkout opened.",
+        "query_sha256_12_before": "7c4481dea7a2",
+        "query_sha256_12_after": "541340e31912",
+        "description_before": "D3-mature fresh installs excluding telemetry opt-outs with no app_opened on days 1-3, bucketed by deepest observed state in first 4 days. Chart shows % of non-returners only; heuristic, not causal proof. App-only; no website.",
+        "description_after": "D3-mature fresh installs (opt-outs excluded), no app_opened days 1-3, bucketed by deepest state in first 4 days. Heuristic, not causal. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. Bucket 6 also requires no default checkout. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 8923273,
+        "url": "https://us.posthog.com/project/406068/insights/3oewonyF",
+        "dashboards": [1562016],
+        "name": "Fresh-install high-level activation funnel",
+        "change": "Folder completion via repo_added; work surface adds current-flow default checkout opened.",
+        "query_sha256_12_before": "7106703e0e78",
+        "query_sha256_12_after": "01885d0a81f3",
+        "description_before": "Strict fresh-install activation funnel excluding telemetry opt-outs and cohorts newer than D3. Work surface = explicit workspace/open/create, agent start, or completed folder. Chart is activation only; table includes full-cohort D3 context. App-only; no website.",
+        "description_after": "Fresh-install activation funnel; opt-outs and cohorts newer than D3 excluded. Work surface = workspace/open/create, agent start, folder completion, or current-flow default checkout opened. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 9052828,
+        "url": "https://us.posthog.com/project/406068/insights/fXsB9Izz",
+        "dashboards": [1562016],
+        "name": "Onboarding funnel with user prompt sent",
+        "change": "Pre-aggregated per install (fixes OOM); git/folder via legacy boundary + repo_added; denominator now all fresh starters (original RIGHT JOIN dropped starters with no matching events).",
+        "query_sha256_12_before": "bd7b83c690f7",
+        "query_sha256_12_after": "f4b78eb79cda",
+        "description_before": "Fresh-install funnel after agent_prompt_sent appeared 2026-05-29 23:33 UTC. Code-verified: agent_prompt_sent means a non-empty user prompt was delivered/observed, not an assistant response. Current rows are hook-sourced launch_source=unknown. App-only; no website. agent_prompt_sent is 1% sampled per event from 1.4.248 (2026-11-04 02:37 UTC); later rates undercount and are not rescalable.",
+        "description_after": "Fresh-install funnel after agent_prompt_sent appeared 2026-05-29. Prompt is 1% sampled per event from 1.4.248 (2026-11-04), so later rates undercount. Git/folder: onboarding_completed.is_git_repo only on <=1.4.45 legacy rows; later, first repo_added.is_git_repo after start (1.4.60+, 2026-06-11); missing = unknown, not folder. Stage order is legacy: stage 4 can exceed stage 3. App-only.",
+        "refresh_check": "ok (last_refresh after save)"
+      },
+      {
+        "id": 9108955,
+        "url": "https://us.posthog.com/project/406068/insights/MWGe77xd",
+        "dashboards": [1562016],
+        "name": "Fresh-install retention by first-session behavior (D1/D7)",
+        "change": "OOM fix only: join restricted to the 5 events its aggregates read; description unchanged.",
+        "query_sha256_12_before": "57eacfbee986",
+        "query_sha256_12_after": "92260fa52aed",
+        "description_before": "D1/D7 return by first-session behavior; fresh installs, mature denominators. Buckets by precedence: sent prompt > agent auto-started > project-ready > abandoned. OBSERVATIONAL, not causal. 'Sent prompt' starts 2026-05-29 and is 1% sampled from 1.4.248 (2026-11-04), so later prompt senders fall into lower buckets. Trust the D1 gradient. App-only; no website.",
+        "description_after": "D1/D7 return by first-session behavior; fresh installs, mature denominators. Buckets by precedence: sent prompt > agent auto-started > project-ready > abandoned. OBSERVATIONAL, not causal. 'Sent prompt' starts 2026-05-29 and is 1% sampled from 1.4.248 (2026-11-04), so later prompt senders fall into lower buckets. Trust the D1 gradient. App-only; no website.",
+        "refresh_check": "ok (last_refresh after save)"
+      }
+    ],
+    "follow_up": [
+      "9076383 (reference tile) and 9104852 still truncate at the 100-row HogQL default; 9076383's legacy regex also misses prerelease versions.",
+      "8838695/9052828 stage order is legacy; a current-flow onboarding funnel would be a new metric, not an edit."
+    ]
+  }
+}

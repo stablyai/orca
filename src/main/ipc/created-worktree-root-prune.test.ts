@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RepoWorktrees from '../workspaces/catalog/repo-worktrees'
 import { listRepoWorktreeGraph } from '../workspaces/catalog/repo-worktrees'
 import type { Store } from '../persistence/loading-store/store'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,

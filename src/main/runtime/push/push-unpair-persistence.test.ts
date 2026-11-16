@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { DeviceRegistry } from '../device-registry'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { DesktopPushService } from './desktop-push-service'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'
-import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 
 describe('mobile revoke when the registry write fails', () => {
   it('preserves a live route after failed unpair and deletes it after durable removal', async () => {

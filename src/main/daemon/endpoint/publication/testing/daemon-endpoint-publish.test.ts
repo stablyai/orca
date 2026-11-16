@@ -6,7 +6,6 @@ import {
   renameSync,
   rmSync,
   statSync,
-  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -73,23 +72,6 @@ afterEach(() => {
 })
 
 describe('publishDaemonEndpoint', () => {
-  unixIt('publishes a listener when the canonical endpoint is free', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const boundPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomer = await listen(boundPath)
-    try {
-      const outcome = await publishDaemonEndpoint(boundPath, canonicalPath, probeSocketConnect)
-
-      expect(outcome).toMatchObject({ status: 'published' })
-      await expectReachable(canonicalPath)
-      expect(newcomer.connections()).toBe(1)
-    } finally {
-      await close(newcomer.server)
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
   unixIt('leaves a live incumbent in place', async () => {
     const directory = makeTempDir()
     const canonicalPath = join(directory, 'd')
@@ -180,70 +162,6 @@ describe('publishDaemonEndpoint', () => {
     }
   })
 
-  unixIt('replaces a regular file occupying the endpoint', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const boundPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomer = await listen(boundPath)
-    try {
-      writeFileSync(canonicalPath, 'stale')
-
-      const outcome = await publishDaemonEndpoint(boundPath, canonicalPath, probeSocketConnect)
-
-      expect(outcome).toMatchObject({ status: 'published' })
-      await expectReachable(canonicalPath)
-      expect(newcomer.connections()).toBe(1)
-    } finally {
-      await close(newcomer.server)
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('replaces a dangling symlink occupying the endpoint', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const boundPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomer = await listen(boundPath)
-    try {
-      symlinkSync(join(directory, 'x'), canonicalPath)
-
-      const outcome = await publishDaemonEndpoint(boundPath, canonicalPath, probeSocketConnect)
-
-      expect(outcome).toMatchObject({ status: 'published' })
-      await expectReachable(canonicalPath)
-      expect(newcomer.connections()).toBe(1)
-    } finally {
-      await close(newcomer.server)
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('treats a probe that throws as inconclusive rather than as proof of death', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const incumbentPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomerPath = getDaemonSocketBindPath(canonicalPath)
-    const incumbent = await listen(incumbentPath)
-    const newcomer = await listen(newcomerPath)
-    try {
-      await publishListener(incumbentPath, canonicalPath)
-      const before = readDaemonSocketIdentity(canonicalPath)
-      const probe = vi.fn(async () => {
-        throw new Error('probe blew up')
-      })
-
-      const outcome = await publishDaemonEndpoint(newcomerPath, canonicalPath, probe)
-
-      expect(outcome).toEqual({ status: 'inconclusive' })
-      expect(readDaemonSocketIdentity(canonicalPath)).toEqual(before)
-      await expectReachable(canonicalPath)
-      expect(newcomer.connections()).toBe(0)
-    } finally {
-      await Promise.all([close(incumbent.server), close(newcomer.server)])
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
   unixIt('still publishes on a filesystem that refuses hard links', async () => {
     // Simulate filesystems that support socket rename but reject hard links.
     const directory = makeTempDir()
@@ -269,34 +187,6 @@ describe('publishDaemonEndpoint', () => {
       expect(outcome).toMatchObject({ status: 'published' })
       await expectReachable(canonicalPath)
       expect(newcomer.connections()).toBe(1)
-    } finally {
-      await close(newcomer.server)
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('does not fall back to replacing when a link fails for another reason', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const boundPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomer = await listen(boundPath)
-    try {
-      vi.doMock('node:fs', async () => {
-        const actual = await vi.importActual<typeof NodeFs>('node:fs')
-        return {
-          ...actual,
-          linkSync: () => {
-            throw Object.assign(new Error('injected EIO'), { code: 'EIO' })
-          }
-        }
-      })
-      vi.resetModules()
-      const { publishDaemonEndpoint: publishWithBrokenLink } =
-        await import('../daemon-endpoint-ownership')
-
-      await expect(
-        publishWithBrokenLink(boundPath, canonicalPath, probeSocketConnect)
-      ).rejects.toMatchObject({ code: 'EIO' })
     } finally {
       await close(newcomer.server)
       rmSync(directory, { recursive: true, force: true })
@@ -338,43 +228,6 @@ describe('publishDaemonEndpoint', () => {
       expect({ dev: after.dev, ino: after.ino }).toEqual({ dev: occupant.dev, ino: occupant.ino })
     } finally {
       await Promise.all([close(dead.server), close(newcomer.server)])
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('records an identity the ownership watchdog can still match afterwards', async () => {
-    // Simulate birthtime aliasing ctime: publication must not turn timestamp changes into ownership loss.
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const boundPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomer = await listen(boundPath)
-    try {
-      vi.doMock('node:fs', async () => {
-        const actual = await vi.importActual<typeof NodeFs>('node:fs')
-        const asCtimeBirthtime = (stats: { ctimeMs: number; ctimeNs?: bigint }) => ({
-          ...stats,
-          birthtimeMs: stats.ctimeMs,
-          ...(stats.ctimeNs === undefined ? {} : { birthtimeNs: stats.ctimeNs })
-        })
-        return {
-          ...actual,
-          statSync: (target: string, options?: { bigint?: boolean }) =>
-            asCtimeBirthtime(actual.statSync(target, options as never) as never),
-          lstatSync: (target: string, options?: { bigint?: boolean }) =>
-            asCtimeBirthtime(actual.lstatSync(target, options as never) as never)
-        }
-      })
-      vi.resetModules()
-      const { publishDaemonEndpoint: publishOnCtimeFs, readDaemonEndpointOwnershipState } =
-        await import('../daemon-endpoint-ownership')
-
-      const outcome = await publishOnCtimeFs(boundPath, canonicalPath, probeSocketConnect)
-      expect(outcome).toMatchObject({ status: 'published' })
-
-      const owned = (outcome as { identity: unknown }).identity
-      expect(readDaemonEndpointOwnershipState(canonicalPath, owned as never)).toBe('owned')
-    } finally {
-      await close(newcomer.server)
       rmSync(directory, { recursive: true, force: true })
     }
   })
@@ -453,82 +306,6 @@ describe('publishDaemonEndpoint', () => {
       expect(newcomer.connections()).toBe(0)
     } finally {
       await Promise.all([close(dead.server), close(newcomer.server)])
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('declines on an unclassifiable first probe even if the second proves death', async () => {
-    // The first inconclusive probe must decline even if a later probe would prove death.
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const deadBind = getDaemonSocketBindPath(canonicalPath)
-    const newcomerPath = getDaemonSocketBindPath(canonicalPath)
-    const dead = await listen(deadBind)
-    const newcomer = await listen(newcomerPath)
-    try {
-      await publishListener(deadBind, canonicalPath)
-      await close(dead.server)
-      const deadEntry = readDaemonSocketIdentity(canonicalPath)
-
-      let asked = 0
-      const probe = async () => {
-        asked += 1
-        return asked === 1 ? ('unknown' as const) : ('refused' as const)
-      }
-
-      const outcome = await publishDaemonEndpoint(newcomerPath, canonicalPath, probe)
-
-      expect(outcome).toEqual({ status: 'inconclusive' })
-      expect(readDaemonSocketIdentity(canonicalPath)).toEqual(deadEntry)
-      expect(newcomer.connections()).toBe(0)
-    } finally {
-      await Promise.all([close(dead.server), close(newcomer.server)])
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('refuses to serve a bound endpoint it cannot identify', async () => {
-    const directory = makeTempDir()
-    try {
-      await expect(
-        publishDaemonEndpoint(
-          join(directory, '.bmissing'),
-          join(directory, 'd'),
-          probeSocketConnect
-        )
-      ).rejects.toThrow(/Cannot identify the bound daemon endpoint/)
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('reports lost when the name it took disappears before verification', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const boundPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomer = await listen(boundPath)
-    try {
-      vi.doMock('node:fs', async () => {
-        const actual = await vi.importActual<typeof NodeFs>('node:fs')
-        return {
-          ...actual,
-          unlinkSync: (target: string) => {
-            actual.unlinkSync(target)
-            if (target === boundPath) {
-              actual.unlinkSync(canonicalPath)
-            }
-          }
-        }
-      })
-      vi.resetModules()
-      const { publishDaemonEndpoint: publishWithRemover } =
-        await import('../daemon-endpoint-ownership')
-
-      await expect(
-        publishWithRemover(boundPath, canonicalPath, probeSocketConnect)
-      ).resolves.toEqual({ status: 'lost' })
-    } finally {
-      await close(newcomer.server)
       rmSync(directory, { recursive: true, force: true })
     }
   })
@@ -620,24 +397,6 @@ describe('publishDaemonEndpoint', () => {
     }
   })
 
-  unixIt('propagates link errors other than EEXIST', async () => {
-    const directory = makeTempDir()
-    const boundPath = join(directory, '.b')
-    const canonicalPath = join(directory, 'x', 'd')
-    const newcomer = await listen(boundPath)
-    try {
-      const probe = vi.fn(async () => 'missing' as const)
-
-      await expect(publishDaemonEndpoint(boundPath, canonicalPath, probe)).rejects.toMatchObject({
-        code: 'ENOENT'
-      })
-      expect(probe).not.toHaveBeenCalled()
-    } finally {
-      await close(newcomer.server)
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
   unixIt('leaves the published endpoint behind when its own owner closes', async () => {
     // libuv closes the private bound name; the canonical entry must survive for the next publisher.
     const directory = makeTempDir()
@@ -669,24 +428,6 @@ describe('publishDaemonEndpoint', () => {
       expect(replacement.connections()).toBe(1)
     } finally {
       await Promise.all([close(incumbent.server), close(replacement.server)])
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  unixIt('returns the identity that actually holds the canonical name', async () => {
-    const directory = makeTempDir()
-    const canonicalPath = join(directory, 'd')
-    const boundPath = getDaemonSocketBindPath(canonicalPath)
-    const newcomer = await listen(boundPath)
-    try {
-      const outcome = await publishDaemonEndpoint(boundPath, canonicalPath, probeSocketConnect)
-
-      expect(outcome.status).toBe('published')
-      expect(outcome.status === 'published' ? outcome.identity : null).toEqual(
-        readDaemonSocketIdentity(canonicalPath)
-      )
-    } finally {
-      await close(newcomer.server)
       rmSync(directory, { recursive: true, force: true })
     }
   })

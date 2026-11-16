@@ -1,5 +1,5 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import { isRuntimeMethodNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 

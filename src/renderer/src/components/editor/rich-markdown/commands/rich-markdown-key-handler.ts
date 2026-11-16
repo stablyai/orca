@@ -1,8 +1,8 @@
 import type { KeyHandlerContext } from './rich-markdown-key-handler-context'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 
 import type { Editor } from '@tiptap/react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store/index'
 import { isMarkdownPreviewFindShortcut } from '../../markdown-preview/search/markdown-preview-search'
 import { handleRichMarkdownAddReviewNoteShortcut } from '../review/rich-markdown-annotation-shortcut'
@@ -29,7 +29,7 @@ import {
   outdentRichMarkdownCodeBlock
 } from '../code-blocks/rich-markdown-code-block-indent'
 import { handleRichMarkdownCitationKey } from '../citations/rich-markdown-citation-keyboard'
-
+import { getRichMarkdownSelectionLinkBubble } from '../links/rich-markdown-selected-link-actions'
 import { handleRichMarkdownLinkShortcut } from '../links/rich-markdown-link-shortcut'
 import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
 import { flushPendingProseMirrorSelection } from '../review/rich-markdown-selection-flush'
@@ -58,7 +58,20 @@ export function createRichMarkdownKeyHandler(
         editor: ctx.editorRef.current,
         event,
         linkBubbleOwnerId: ctx.linkBubbleOwnerId,
-        onOpen: ctx.openSelectedHtmlSuperscriptLink
+        onOpen: ctx.openSelectedHtmlSuperscriptLink,
+        onOpenBubble: () => {
+          const ed = ctx.editorRef.current
+          if (!ed) {
+            return false
+          }
+          const bubble = getRichMarkdownSelectionLinkBubble(ed, ctx.rootRef.current)
+          if (!bubble) {
+            return false
+          }
+          ctx.setIsEditingLink(false)
+          ctx.setLinkBubble(bubble)
+          return true
+        }
       })
     ) {
       return true
@@ -89,7 +102,6 @@ export function createRichMarkdownKeyHandler(
       handleRichMarkdownLinkShortcut({
         editor: ctx.editorRef.current,
         event,
-        htmlSuperscriptLinkContext: ctx.htmlSuperscriptLinkContext,
         isEditing: ctx.isEditingLinkRef.current,
         isMac: ctx.isMac,
         root: ctx.rootRef.current,

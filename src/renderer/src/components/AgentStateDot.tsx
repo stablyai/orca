@@ -1,8 +1,8 @@
 import React from 'react'
 import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import {
@@ -14,25 +14,11 @@ import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
 } from '@/components/StateIndicatorTooltip'
+import type { AgentListStatus } from '../../../shared/agent-status/presentation/agent-list-status'
 
 // Share state glyphs across agent surfaces. Keep the agent identity icon separate; completion uses a check while sidebar StatusIndicator uses an emerald dot/tooltip.
 
-export type AgentDotState =
-  | 'working'
-  | 'monitoring'
-  | 'blocked'
-  | 'waiting'
-  | 'interrupted'
-  // Transcript-derived failure is an outcome, distinct from live blocked attention.
-  | 'failed'
-  | 'done'
-  | 'idle'
-  // A live PTY with stale reporting proves only missing evidence, not idle/work/completion.
-  | 'unverifiable'
-  // The turn ended without a proven outcome; use the missing-evidence glyph, never completion.
-  | 'unconfirmed'
-  // Sidebar combines blocked/waiting as permission; retain its vocabulary with the shared question glyph/token.
-  | 'permission'
+export type AgentDotState = AgentListStatus
 
 /** Return the accessible label shared by every visual agent-state marker. */
 export function agentStateLabel(state: AgentDotState): string {
@@ -71,6 +57,10 @@ type Props = {
   tooltipSide?: StateIndicatorTooltipSide
   /** Program-reported 0–100; live states then draw a filling ring instead of the spinner/glyph. */
   progress?: number
+  /** Unread completion swaps the check for the workspace unread dot; live and needs-you glyphs keep precedence. */
+  unread?: boolean
+  /** 'label' keeps the check and only speaks unread, for rows whose card already draws the one dot. */
+  unreadDisplay?: 'dot' | 'label'
 }
 
 type ProgressRing = { tone: AgentProgressRingTone; percent: number }
@@ -108,14 +98,22 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   className,
   title,
   tooltipSide,
-  progress
+  progress,
+  unread = false,
+  unreadDisplay = 'dot'
 }: Props): React.JSX.Element {
-  useUiLanguageRevision()
+  const t = useTranslate()
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
   const ring = progressRing(state, progress)
-  const label = withRingPercent(agentStateLabel(state), ring)
+  const announceUnread = unread && state === 'done'
+  const showUnreadDot = announceUnread && unreadDisplay === 'dot'
+  const label = announceUnread
+    ? t('workspace.activity.unreadLabel', '{{status}} · Unread', {
+        status: agentStateLabel(state)
+      })
+    : withRingPercent(agentStateLabel(state), ring)
   const tooltipLabel = title === null ? null : (title ?? label)
 
   let indicator: React.JSX.Element
@@ -145,12 +143,22 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         <Activity className={cn('text-agent-working', icon)} aria-hidden="true" />
       </span>
     )
+  } else if (showUnreadDot) {
+    // Same unread token as the workspace status lane, so one blue dot means unread everywhere.
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={label}
+      >
+        <span className={cn('block rounded-full bg-unread', inner)} />
+      </span>
+    )
   } else if (state === 'done') {
     // A check distinguishes reported completion from live/idle dots; sidebar StatusIndicator intentionally differs.
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
       </span>

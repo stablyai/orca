@@ -1,4 +1,4 @@
-import type { ProviderDiagnostic } from './agent-session-failure'
+import type { AgentSessionFailureFact, ProviderDiagnostic } from './agent-session-failure'
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues,
@@ -26,4 +26,17 @@ export function quotingPersonDetail(
 ): string {
   const quoted = detail?.audience === 'person' ? quotedProviderDetail(detail.text) : ''
   return quoted ? say(quotedLead, { ...values, detail: quoted }) : say(lead, values)
+}
+
+/** The detail behind a failure's Details: provider words, or a log tail such as a CLI's startup stderr.
+ *  A retry's log is the raw frame its row already shows. */
+export function agentSessionFailureDetailText(
+  fact: AgentSessionFailureFact | undefined
+): string | undefined {
+  const detail = fact?.detail
+  return detail &&
+    fact.kind !== 'pluginInputRequired' &&
+    !(detail.audience === 'log' && fact.kind === 'providerRetrying')
+    ? detail.text
+    : undefined
 }

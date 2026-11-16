@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { MessageSquare } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
-import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation/workspace-composer-initial-focus'
 import { WorkspaceComposerBody } from '@/components/NewWorkspaceComposerModal'
-import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
+import type { ComposerModalData } from '@/components/new-workspace/composer/composer-modal-data'
 
 function PaneComposerHeading({
   title,

@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react'
 import { DiffCommentPopover } from '../../../diff-comments/DiffCommentPopover'
 import type { RichMarkdownAnnotationTarget } from './rich-markdown-review-annotations'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RichMarkdownAnnotationOverlayProps = {
   target: RichMarkdownAnnotationTarget | null
@@ -20,6 +20,7 @@ export function RichMarkdownAnnotationOverlay({
   onCancelPopover,
   onSubmit
 }: RichMarkdownAnnotationOverlayProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {target ? (
@@ -30,11 +31,11 @@ export function RichMarkdownAnnotationOverlay({
             top: target.buttonTop ?? 56,
             left: target.buttonLeft ?? 16
           }}
-          title={translate(
+          title={t(
             'auto.components.editor.RichMarkdownAnnotationOverlay.6f2f3a6001',
             'Add review note'
           )}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.editor.RichMarkdownAnnotationOverlay.6f2f3a6001',
             'Add review note'
           )}
@@ -62,7 +63,7 @@ export function RichMarkdownAnnotationOverlay({
           }
           top={popover.top}
           left={popover.left}
-          title={translate(
+          title={t(
             'auto.components.editor.RichMarkdownAnnotationOverlay.069b5677b8',
             'Selected text'
           )}

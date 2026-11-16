@@ -15,7 +15,7 @@ export type WorktreeRowDragState = {
   dropIndicatorY: number | null
   previewOffsetsByWorktreeId: ReadonlyMap<string, number>
   pointerY: number | null
-  lineageDropTargetId: string | null
+  lineageDropTargetIdentity: string | null
 }
 
 export const EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS: ReadonlyMap<string, number> = new Map()
@@ -27,7 +27,7 @@ export const WORKTREE_ROW_DRAG_INITIAL_STATE: WorktreeRowDragState = {
   dropIndicatorY: null,
   previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
   pointerY: null,
-  lineageDropTargetId: null
+  lineageDropTargetIdentity: null
 }
 
 export type WorktreePointerDrag = {
@@ -41,6 +41,8 @@ export type WorktreePointerDrag = {
   /** Host identity of the pressed card. */
   worktreeKey: string
   draggedIds: readonly string[]
+  /** The cards picked up, before visible descendants join; a lineage drop nests only these. */
+  pickedCopies: DraggedWorktreeCopies
   draggedCopies: DraggedWorktreeCopies
   reorderDraggedIds: readonly string[]
   reorderDraggedKeys: readonly string[]
@@ -59,13 +61,13 @@ export type WorktreePointerDrag = {
 }
 
 export type WorktreeSidebarLineageDropTarget = WorktreeSidebarStatusDropTarget & {
-  lineageParentId: string | null
+  lineageParentIdentity: string | null
 }
 
 export const NO_WORKTREE_SIDEBAR_DROP_TARGET: WorktreeSidebarLineageDropTarget = {
   status: null,
   isPinDrop: false,
-  lineageParentId: null
+  lineageParentIdentity: null
 }
 
 export function areWorktreeDragPreviewOffsetsEqual(
@@ -92,7 +94,7 @@ export function updateLatestWorktreeStatusDropTarget(
   preview: WorktreeSidebarDropPreview | null
 ): void {
   drag.latestStatusDropTarget =
-    target.status || target.isPinDrop || target.lineageParentId
+    target.status || target.isPinDrop || target.lineageParentIdentity
       ? {
           target,
           preview,
@@ -108,7 +110,7 @@ export function clearWorktreeDropPreview(
   args: { pointerY: number | null; matchPointerY?: boolean; preserveOffsets?: boolean }
 ): WorktreeRowDragState {
   const unchanged =
-    previous.lineageDropTargetId === null &&
+    previous.lineageDropTargetIdentity === null &&
     previous.dropIndex === null &&
     previous.dropIndicatorY === null &&
     (args.preserveOffsets === true || previous.previewOffsetsByWorktreeId.size === 0) &&
@@ -117,7 +119,7 @@ export function clearWorktreeDropPreview(
     ? previous
     : {
         ...previous,
-        lineageDropTargetId: null,
+        lineageDropTargetIdentity: null,
         dropIndex: null,
         dropIndicatorY: null,
         previewOffsetsByWorktreeId: args.preserveOffsets
@@ -133,7 +135,7 @@ export function applyWorktreeDropPreview(
   args: { pointerY: number; matchPointerY?: boolean }
 ): WorktreeRowDragState {
   const unchanged =
-    previous.lineageDropTargetId === null &&
+    previous.lineageDropTargetIdentity === null &&
     previous.dropIndex === drop.dropIndex &&
     previous.dropIndicatorY === drop.dropIndicatorY &&
     (args.matchPointerY !== true || previous.pointerY === args.pointerY) &&
@@ -143,16 +145,16 @@ export function applyWorktreeDropPreview(
     )
   return unchanged
     ? previous
-    : { ...previous, ...drop, lineageDropTargetId: null, pointerY: args.pointerY }
+    : { ...previous, ...drop, lineageDropTargetIdentity: null, pointerY: args.pointerY }
 }
 
 export function applyWorktreeLineageDropPreview(
   previous: WorktreeRowDragState,
-  lineageDropTargetId: string,
+  lineageDropTargetIdentity: string,
   pointerY: number
 ): WorktreeRowDragState {
   if (
-    previous.lineageDropTargetId === lineageDropTargetId &&
+    previous.lineageDropTargetIdentity === lineageDropTargetIdentity &&
     previous.dropIndex === null &&
     previous.dropIndicatorY === null &&
     previous.pointerY === pointerY
@@ -162,7 +164,7 @@ export function applyWorktreeLineageDropPreview(
   // Keep the target under the pointer when switching from a reorder gap to nesting.
   return {
     ...previous,
-    lineageDropTargetId,
+    lineageDropTargetIdentity,
     dropIndex: null,
     dropIndicatorY: null,
     pointerY

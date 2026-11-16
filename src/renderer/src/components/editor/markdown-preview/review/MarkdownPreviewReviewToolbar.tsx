@@ -1,5 +1,5 @@
 import { Check, Copy, MessageSquare } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import type { MarkdownPreviewReviewActions } from './use-markdown-preview-review-actions'
@@ -13,6 +13,7 @@ export function MarkdownPreviewReviewToolbar({
   reviewActions: MarkdownPreviewReviewActions
   filePath: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     markdownReviewNotes,
     reviewNotesCopied,
@@ -36,19 +37,14 @@ export function MarkdownPreviewReviewToolbar({
           }
         }}
         disabled={markdownReviewNotes.length === 0}
-        title={translate(
-          'auto.components.editor.MarkdownPreview.0f9969a159',
-          'Jump to first review note'
-        )}
-        aria-label={translate(
+        title={t('auto.components.editor.MarkdownPreview.0f9969a159', 'Jump to first review note')}
+        aria-label={t(
           'auto.components.editor.MarkdownPreview.0f9969a159',
           'Jump to first review note'
         )}
       >
         <MessageSquare className="size-3.5" />
-        <span>
-          {translate('auto.components.editor.MarkdownPreview.322afab6ff', 'Review notes')}
-        </span>
+        <span>{t('auto.components.editor.MarkdownPreview.322afab6ff', 'Review notes')}</span>
         <span className="markdown-review-count">{markdownReviewNotes.length}</span>
       </button>
       <button
@@ -56,14 +52,8 @@ export function MarkdownPreviewReviewToolbar({
         className="markdown-review-icon-button"
         onClick={() => void handleCopyMarkdownReviewNotes()}
         disabled={markdownReviewNotes.length === 0}
-        title={translate(
-          'auto.components.editor.MarkdownPreview.bb629de58a',
-          'Copy notes for agent'
-        )}
-        aria-label={translate(
-          'auto.components.editor.MarkdownPreview.bb629de58a',
-          'Copy notes for agent'
-        )}
+        title={t('auto.components.editor.MarkdownPreview.bb629de58a', 'Copy notes for agent')}
+        aria-label={t('auto.components.editor.MarkdownPreview.bb629de58a', 'Copy notes for agent')}
       >
         {reviewNotesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </button>

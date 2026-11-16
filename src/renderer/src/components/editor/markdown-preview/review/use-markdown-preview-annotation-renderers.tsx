@@ -1,4 +1,4 @@
-import { diffCommentOwnerKey } from '@/store/diff-comment-owner'
+import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
 import { cloneElement, isValidElement, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
@@ -7,7 +7,7 @@ import {
   formatMarkdownReviewCardQuote,
   getMarkdownReviewCardQuote,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
 import {
   MarkdownPreviewAnnotationComposer,

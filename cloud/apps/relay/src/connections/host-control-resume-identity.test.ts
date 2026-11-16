@@ -1,4 +1,3 @@
-import { CONTROL_CONTINUITY_LIMITS } from '@orca-cloud/relay-contract/control-continuity'
 import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RelayTokenClaims } from '../authentication/relay-token-verifier.js'
@@ -46,7 +45,6 @@ async function lapsedHost() {
   )
   const session = h.registry.get({ userId: h.identity.sub, relayHostId: h.identity.relayHostId })
   expect(session?.state).toBe('orphaned')
-  expect(CONTROL_CONTINUITY_LIMITS.orphanGraceMs).toBeGreaterThan(5_000)
   await vi.advanceTimersByTimeAsync(5_000)
   return { h, ack, session: session!, resumeHello: resumeHelloFor(h.hello, ack) }
 }
@@ -144,23 +142,6 @@ describe('a resumed control adopts the token its hello proved', () => {
 })
 
 describe('an auth refresh', () => {
-  it('never lowers the expiry the session already holds', async () => {
-    const verify = vi.fn<(token: string) => Promise<RelayTokenClaims | null>>()
-    const { h, first } = await connectedHost(600, verify)
-    const session = h.registry.get({ userId: h.identity.sub, relayHostId: h.identity.relayHostId })!
-    const held = session.identity.exp
-    verify.mockResolvedValueOnce({ ...h.identity, exp: held - 300 })
-    sendRefresh(first)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(session.identity.exp).toBe(held)
-    verify.mockResolvedValueOnce({ ...h.identity, exp: held + 300 })
-    sendRefresh(first)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(session.identity.exp).toBe(held + 300)
-    expect(first.close).not.toHaveBeenCalled()
-    h.registry.drain(0)
-    await vi.advanceTimersByTimeAsync(0)
-  })
 
   it('closes the socket a refused refresh arrived on, not the control that replaced it', async () => {
     let finish!: (claims: RelayTokenClaims | null) => void

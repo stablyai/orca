@@ -1,15 +1,18 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hostRef: { current: unknown } = { current: null }
 
-vi.mock('../../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 
 const { OrcaRuntimeWithGetOrchestrationDispatchAuthority } =
   await import('../../../terminal/output/terminal-orchestration-authority')

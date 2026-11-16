@@ -1,7 +1,8 @@
 import type { JSX } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function DeleteWorktreeWarningPanels({
   isMainWorktree,
@@ -12,6 +13,7 @@ export function DeleteWorktreeWarningPanels({
   mainWorktreeBlocker: string
   deleteError: string | null
 }): JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {isMainWorktree && (
@@ -21,7 +23,7 @@ export function DeleteWorktreeWarningPanels({
             <div className="min-w-0 flex-1">
               <Trans
                 i18n={i18n}
-                defaults={translate(
+                defaults={t(
                   'auto.components.sidebar.DeleteWorktreeWarningPanels.mainWorktreeNotice',
                   'This is the <strong>main worktree</strong> (the original clone directory).'
                 )}

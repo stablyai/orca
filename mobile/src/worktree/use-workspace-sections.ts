@@ -9,14 +9,17 @@ import type {
 import {
   buildSectionRepoMap,
   buildMobileWorkspacePlan,
-  type FilterState,
-  type ProjectSectionCatalog,
-  type Section,
-  type SectionRepo,
-  type Worktree
-} from './workspace-list-sections'
-import { buildFilterRepos, type WorkspaceSectionRepo } from './workspace-filter-repos'
-import type { WorktreeHostContextOf } from './worktree-host-context-labels'
+  type ProjectSectionCatalog
+} from './workspace-list/workspace-list-sections'
+import type {
+  FilterState,
+  Section,
+  SectionRepo,
+  Worktree
+} from './workspace-list/workspace-list-types'
+import { buildFilterRepos, type WorkspaceSectionRepo } from './repositories/workspace-filter-repos'
+import type { WorktreeHostContextOf } from './row-presentation/worktree-host-context-labels'
+import type { MobileLineageStores } from './agent-lineage/mobile-workspace-lineage'
 
 export function useWorkspaceSections(args: {
   displayWorktrees: Worktree[]
@@ -34,6 +37,8 @@ export function useWorkspaceSections(args: {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   /** Each repo's host, for rows that predate their own hostId. */
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
+  /** The stores the list spans, so a parent on another machine nests its children. */
+  lineageStores?: MobileLineageStores
 }): {
   sections: Section[]
   rawSections: Section[]
@@ -54,7 +59,8 @@ export function useWorkspaceSections(args: {
     filterCatalogRepos,
     collapsedGroups,
     workspaceStatuses,
-    repoHostIdByRepoId
+    repoHostIdByRepoId,
+    lineageStores
   } = args
 
   const uniqueRepos = useMemo(
@@ -80,10 +86,12 @@ export function useWorkspaceSections(args: {
         workspaceStatuses,
         undefined,
         showPinnedInGroups,
-        repoHostIdByRepoId
+        repoHostIdByRepoId,
+        lineageStores
       ),
     [
       repoHostIdByRepoId,
+      lineageStores,
       displayWorktrees,
       sortMode,
       filters,

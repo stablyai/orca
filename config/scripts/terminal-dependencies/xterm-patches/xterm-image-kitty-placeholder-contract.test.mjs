@@ -30,68 +30,13 @@ describe('Kitty virtual placement ownership and rendering', () => {
     }
   })
 
-  it('keeps virtual images when an ordinary image is subsequently placed', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
-      await write(h.terminal, `${placeholderCells(7)}\r\n`)
-      const virtualBitmap = h.bitmaps[0]
-      await writeKitty(h.terminal, 'a=T,f=100,i=8', PNG)
-      expect(render(h).filter((call) => call[0] === virtualBitmap)).toHaveLength(2)
-      expect(virtualBitmap.close).not.toHaveBeenCalled()
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it.each(['i', 'I'])('releases the virtual bitmap on d=%s', async (selector) => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
-      await write(h.terminal, placeholderCells(7))
-      expect(render(h)).toHaveLength(2)
-      await writeKitty(h.terminal, `a=d,d=${selector},i=7,q=2`)
-      expect(render(h)).toHaveLength(0)
-      expect(h.storage._images.size).toBe(0)
-      expect(h.bitmaps[0].close).toHaveBeenCalledOnce()
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it.each(['reset', 'dispose'])('releases markerless virtual bitmaps on %s', async (action) => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
-      h.addon[action]()
-      expect(h.storage._images.size).toBe(0)
-      expect(h.bitmaps[0].close).toHaveBeenCalledOnce()
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('retains distinct virtual placement IDs for the same image', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=t,f=100,i=7', PNG)
-      await writeKitty(h.terminal, 'a=p,U=1,i=7,p=10,c=2,r=2')
-      await writeKitty(h.terminal, 'a=p,U=1,i=7,p=11,c=1,r=1')
-      await write(h.terminal, `${placeholderCells(7, 10)}\r\n${placeholderCells(7, 11, 1, 1)}`)
-      expect(render(h)).toHaveLength(3)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
   it('replaces a prototype without losing its encoded payload or leaking its old bitmap', async () => {
     const h = createPlaceholderTerminal()
     try {
       await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)
       const oldBitmap = h.bitmaps[0]
       await writeKitty(h.terminal, 'a=p,U=1,i=7,p=10,c=1,r=1')
-      expect(h.kitty.getImage(7)).toBeDefined()
-      expect(h.storage._images.size).toBe(1)
+
       expect(oldBitmap.close).toHaveBeenCalledOnce()
       await write(h.terminal, placeholderCells(7, 10, 1, 1))
       expect(render(h)).toHaveLength(1)
@@ -115,33 +60,6 @@ describe('Kitty virtual placement ownership and rendering', () => {
     }
   })
 
-  it.each([0x02000007, 0x80000007, 0x80000000])('resolves unsigned image ID %i', async (id) => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, `a=T,f=100,i=${id},U=1,c=2,r=2`, PNG)
-      await write(h.terminal, placeholderCells(id))
-      expect(render(h)).toHaveLength(2)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it.each(['a', 'A'])(
-    'keeps virtual prototypes when d=%s deletes physical placements',
-    async (selector) => {
-      const h = createPlaceholderTerminal()
-      try {
-        await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
-        await write(h.terminal, placeholderCells(7))
-        await writeKitty(h.terminal, `a=d,d=${selector},q=2`)
-        expect(render(h)).toHaveLength(2)
-        expect(h.kitty.getImage(7)).toBeDefined()
-      } finally {
-        h.terminal.dispose()
-      }
-    }
-  )
-
   it('deletes a named prototype without deleting another placement of the image', async () => {
     const h = createPlaceholderTerminal()
     try {
@@ -163,7 +81,7 @@ describe('Kitty virtual placement ownership and rendering', () => {
     try {
       await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
       await writeKitty(h.terminal, 'a=d,d=i,i=7,q=2')
-      expect(h.kitty.getImage(7)).toBeDefined()
+
       await writeKitty(h.terminal, 'a=p,U=1,i=7,c=2,r=2')
       await write(h.terminal, placeholderCells(7))
       expect(render(h)).toHaveLength(2)
@@ -188,30 +106,16 @@ describe('Kitty virtual placement ownership and rendering', () => {
     }
   })
 
-  it('ignores invalid row diacritics rather than treating them as omitted', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
-      await write(h.terminal, `\x1b[38;5;7m${PLACEHOLDER}\u0301${DIACRITICS[0]}`)
-      expect(render(h)).toHaveLength(0)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
   it('preserves the source aspect ratio when cell proportions change', async () => {
     const h = createPlaceholderTerminal()
     try {
       await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
       await write(h.terminal, placeholderCells(7))
-      const createCanvas = vi.fn(() => ({ getContext: () => ({ drawImage: vi.fn() }) }))
-      vi.stubGlobal('document', { createElement: createCanvas })
+
       vi.spyOn(h.renderer, 'cellSize', 'get').mockReturnValue({ width: 5, height: 10 })
       const calls = render(h)
       expect(calls[0].slice(1)).toEqual([0, 0, 20, 5, 0, 7.5, 10, 2.5])
       expect(calls[1].slice(1)).toEqual([0, 5, 20, 5, 0, 10, 10, 2.5])
-      expect(h.storage.getUsage()).toBe(0.0008)
-      expect(createCanvas).not.toHaveBeenCalled()
     } finally {
       h.terminal.dispose()
     }

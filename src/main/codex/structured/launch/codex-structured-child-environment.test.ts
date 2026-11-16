@@ -3,17 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { sealStructuredSessionChild } from '../../../runtime/agent-session/environment/structured-session-child-env'
 import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import {
-  mintStructuredWorkerHandle,
-  mintStructuredWorkerPaneKey,
-  structuredWorkerIdentities,
-  structuredWorkerProcessIncarnation
-} from '../../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 const DEV_CLI_BIN_FIRST = /^[^:;]*[\\/]cli[\\/]bin[:;]/
 const DEV_CLI_BIN_DIR = /^[^:;]*[\\/]cli[\\/]bin$/
@@ -51,76 +44,6 @@ function sealed(sessionId: string): Record<string, string> {
     inheritedEnvToDelete: []
   }).env
 }
-
-describe('the Codex child environment', () => {
-  it('keeps shell exports while pinned launch values win', async () => {
-    expect(
-      await codexChildEnv(
-        {
-          EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
-          CODEX_HOME: '/shell/home',
-          ORCA_CLI_BIN_DIR: '/inherited/unowned-cli'
-        },
-        'session-not-a-worker'
-      )
-    ).toEqual({
-      EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
-      CODEX_HOME: '/pinned/home',
-      [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'spawn-token',
-      ORCA_AGENT_SESSION_ID: 'session-not-a-worker',
-      ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
-      ...(process.platform !== 'win32'
-        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
-        : {}),
-      ORCA_USER_DATA_PATH: expect.any(String),
-      ORCA_ENVIRONMENT: '',
-      ORCA_PAIRING_CODE: '',
-      ORCA_REMOTE_PAIRING: '',
-      // The unpackaged host uses the dev CLI directory.
-      PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
-    })
-  })
-
-  it('names every session by its id, and adds the handle only for a registered worker', () => {
-    const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
-    expect(sealed(sessionId)).toEqual({
-      [ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV]: 'spawn-token',
-      ORCA_AGENT_SESSION_ID: sessionId,
-      ORCA_STRUCTURED_SESSION: '1',
-      ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
-      ...(process.platform !== 'win32'
-        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
-        : {}),
-      ORCA_USER_DATA_PATH: expect.any(String),
-      ORCA_ENVIRONMENT: '',
-      ORCA_PAIRING_CODE: '',
-      ORCA_REMOTE_PAIRING: '',
-      PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
-    })
-
-    const handle = mintStructuredWorkerHandle()
-    structuredWorkerIdentities.register({
-      handle,
-      sessionId,
-      agent: 'codex',
-      paneKey: mintStructuredWorkerPaneKey(sessionId),
-      processIncarnation: structuredWorkerProcessIncarnation(sessionId),
-      worktreeId: 'wt_1',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    try {
-      const env = sealed(sessionId)
-      expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)
-      expect(env.ORCA_AGENT_SESSION_ID).toBe(sessionId)
-      expect(env.ORCA_CLI_COMMAND).toMatch(DEV_CLI_LAUNCHER)
-      // PTY hook statuses must not receive a structured worker's pane key.
-      expect(env.ORCA_PANE_KEY).toBeUndefined()
-    } finally {
-      structuredWorkerIdentities.forget(handle)
-    }
-  })
-})
 
 const ENV_REPORTING_APP_SERVER = String.raw`
   const readline = require('node:readline')

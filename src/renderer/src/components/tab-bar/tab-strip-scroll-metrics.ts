@@ -6,6 +6,22 @@ export type TabStripOverflowState = {
   canScrollEnd: boolean
 }
 
+export const EMPTY_TAB_STRIP_OVERFLOW_STATE: TabStripOverflowState = {
+  hasOverflow: false,
+  canScrollStart: false,
+  canScrollEnd: false
+}
+
+/** A mouse wheel only scrolls vertically; turn it sideways on a horizontal strip. */
+export function scrollStripSidewaysOnWheel(el: HTMLElement, event: WheelEvent): boolean {
+  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+    return false
+  }
+  event.preventDefault()
+  el.scrollLeft += event.deltaY
+  return true
+}
+
 export type TabStripThumbLayout = {
   widthPx: number
   leftPx: number

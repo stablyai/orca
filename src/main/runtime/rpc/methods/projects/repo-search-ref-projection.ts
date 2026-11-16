@@ -1,0 +1,35 @@
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { RuntimeRepoSearchRefs } from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
+
+import { isQualifiedBaseRef } from '../../../../git/refs/resolution/base-ref-search-selector'
+
+export function includesQualifiedSearchRefs(
+  clientCapabilities: readonly RuntimeCapability[] | undefined
+): boolean {
+  return (
+    clientCapabilities === undefined ||
+    clientCapabilities.includes(REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY)
+  )
+}
+
+export function projectRepoSearchRefsForClient(
+  result: RuntimeRepoSearchRefs,
+  clientCapabilities: readonly RuntimeCapability[] | undefined
+): RuntimeRepoSearchRefs {
+  // In-process callers have no capability array; legacy remote clients have an empty one.
+  if (includesQualifiedSearchRefs(clientCapabilities)) {
+    return result
+  }
+  // Legacy clients could mistake a qualified selector for an ordinary branch name.
+  return {
+    ...result,
+    refs: result.refs.filter((refName) => !isQualifiedBaseRef(refName)),
+    ...(result.refDetails
+      ? {
+          refDetails: result.refDetails.filter(({ refName }) => !isQualifiedBaseRef(refName))
+        }
+      : {})
+  }
+}

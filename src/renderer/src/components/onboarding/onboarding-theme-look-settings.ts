@@ -3,12 +3,12 @@ import type { PluginTerminalThemeRegistration } from '../../../../shared/plugins
 import {
   MATCH_TERMINAL_APP_THEME,
   pluginAppThemeSlotUpdate
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING
 } from '../../../../shared/terminal-themes/terminal-color-overrides'
-import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
+import { withTerminalPluginPalettes } from '@/lib/terminal/themes/terminal-plugin-palettes'
 import { terminalThemeUpdate } from '../plugins/state/plugin-theme-apply'
 import { builtInThemeLookId, type ThemeLook, type ThemeLookBase } from './onboarding-theme-looks'
 

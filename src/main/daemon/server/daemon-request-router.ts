@@ -1,3 +1,4 @@
+import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
@@ -146,11 +147,21 @@ export class DaemonRequestRouter {
         return {
           confirmed: await this.options.host.confirmShellForeground(request.payload.sessionId)
         }
+      case 'setLaunchNote': {
+        const change = parseDaemonLaunchNoteChange(request.payload.change)
+        if (change) {
+          this.options.host.setLaunchNote(request.payload.sessionId, change)
+        }
+        return {}
+      }
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
         return {}
       case 'resetInputModes':
         this.options.host.resetInputModes(request.payload.sessionId)
+        return {}
+      case 'reportFocusLost':
+        this.options.host.reportFocusLost(request.payload.sessionId)
         return {}
       case 'listSessions':
         return { sessions: this.options.host.listSessions() }

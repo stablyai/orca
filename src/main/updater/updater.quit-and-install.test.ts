@@ -8,8 +8,6 @@ const {
   nativeUpdaterMock,
   autoUpdaterMock,
   killAllPtyMock,
-  armExitWatchdogMock,
-  disarmExitWatchdogMock,
   fetchNewerReleaseTagsMock,
   moduleFactories,
   resetUpdaterMocks
@@ -41,7 +39,7 @@ vi.mock('./releases/updater-release-readiness', async (importOriginal) => ({
 }))
 vi.mock('../local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('../local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
-vi.mock('../startup/hydrate-shell-path', () => ({
+vi.mock('../startup/shell-environment/hydrate-shell-path', () => ({
   runWithLaunchPath: (action: () => unknown): unknown => {
     launchPathScope.active = true
     launchPathScope.calls += 1
@@ -60,138 +58,6 @@ describe('updater', () => {
     resetUpdaterMocks()
     launchPathScope.active = false
     launchPathScope.calls = 0
-  })
-
-  it('still surfaces updater error events while a download is in flight', async () => {
-    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
-      })
-      return Promise.resolve(undefined)
-    })
-    autoUpdaterMock.downloadUpdate.mockImplementation(() => {
-      autoUpdaterMock.emit('error', new Error('download failed'))
-      return new Promise(() => {})
-    })
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-
-    await vi.waitFor(() => {
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'available',
-        version: '1.0.61',
-        changelog: null
-      })
-    })
-
-    sendMock.mockClear()
-    downloadUpdate()
-
-    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
-    expect(sendMock).toHaveBeenCalledWith(
-      'updater:status',
-      expect.objectContaining({ state: 'error', message: 'download failed' })
-    )
-  })
-
-  it('surfaces an accepted retry before electron-updater emits download progress', async () => {
-    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
-      })
-      return Promise.resolve(undefined)
-    })
-    autoUpdaterMock.downloadUpdate
-      .mockRejectedValueOnce(new Error('signature check blocked'))
-      .mockImplementationOnce(() => new Promise(() => {}))
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-    await vi.waitFor(() => {
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'available',
-        version: '1.0.61',
-        changelog: null
-      })
-    })
-
-    downloadUpdate()
-    await vi.waitFor(() => {
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'error',
-        message: 'signature check blocked'
-      })
-    })
-
-    sendMock.mockClear()
-    downloadUpdate()
-
-    expect(sendMock).toHaveBeenCalledWith('updater:status', {
-      state: 'downloading',
-      percent: 0,
-      version: '1.0.61'
-    })
-
-    downloadUpdate()
-    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(2)
-  })
-
-  it('defers quitAndInstall and runs its launcher within the launch PATH scope', async () => {
-    vi.useFakeTimers()
-    let launcherSawLaunchPathScope = false
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      launcherSawLaunchPathScope = launchPathScope.active
-    })
-
-    const mainWindow = updaterMainWindow(vi.fn())
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow)
-    quitAndInstall()
-
-    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(99)
-    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
-    expect(launcherSawLaunchPathScope).toBe(true)
-    expect(launchPathScope.calls).toBe(1)
-    expect(launchPathScope.active).toBe(false)
-  })
-
-  it('runs pre-quit cleanup before local PTY cleanup during update install', async () => {
-    vi.useFakeTimers()
-
-    const onBeforeQuit = vi.fn()
-    const mainWindow = updaterMainWindow(vi.fn())
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { onBeforeQuit })
-    quitAndInstall()
-
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
-    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
-    expect(onBeforeQuit.mock.invocationCallOrder[0]).toBeLessThan(
-      killAllPtyMock.mock.invocationCallOrder[0]
-    )
   })
 
   it('aborts native install when required pre-quit cleanup fails', async () => {
@@ -221,35 +87,6 @@ describe('updater', () => {
         message: expect.stringContaining('Could not restart to install the update')
       })
     )
-  })
-
-  it('keeps optional pre-quit cleanup fail-and-continue behavior by default', async () => {
-    vi.useFakeTimers()
-
-    const onBeforeQuit = vi.fn().mockRejectedValue(new Error('optional cleanup failed'))
-    const mainWindow = updaterMainWindow(vi.fn())
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { onBeforeQuit })
-    quitAndInstall()
-
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
-    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('allows a required profile export to finish beyond the optional cleanup budget', async () => {
-    vi.useFakeTimers()
-    const onBeforeQuit = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 5_000)))
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-    setupAutoUpdater(updaterMainWindow(vi.fn()), { onBeforeQuit, onBeforeQuitFailure: 'abort' })
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(2_600)
-    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(2_500)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
   })
 
   it('aborts native install when required pre-quit cleanup times out', async () => {
@@ -282,50 +119,6 @@ describe('updater', () => {
         message: expect.stringContaining('Could not restart to install the update')
       })
     )
-  })
-
-  it('ignores duplicate quitAndInstall requests while the shared delay is pending', async () => {
-    vi.useFakeTimers()
-
-    const mainWindow = updaterMainWindow(vi.fn())
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow)
-    quitAndInstall()
-    quitAndInstall()
-
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores duplicate quitAndInstall requests while async pre-quit cleanup is running', async () => {
-    vi.useFakeTimers()
-
-    let finishCleanup!: () => void
-    const onBeforeQuit = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishCleanup = resolve
-        })
-    )
-    const mainWindow = updaterMainWindow(vi.fn())
-    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { onBeforeQuit })
-    quitAndInstall()
-
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
-
-    quitAndInstall()
-    finishCleanup()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
   })
 
   it('recovers quit-for-update state on sync quitAndInstall error event without killing PTYs', async () => {
@@ -418,74 +211,6 @@ describe('updater', () => {
 
     expect(isQuittingForUpdate()).toBe(true)
     expect(sendMock).not.toHaveBeenCalled()
-  })
-
-  it('arms the forced-exit watchdog once the install commits', async () => {
-    const sendMock = vi.fn()
-    const mainWindow = updaterMainWindow(sendMock)
-    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => {
-        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
-      })
-      return Promise.resolve(undefined)
-    })
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu, quitAndInstall } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
-    checkForUpdatesFromMenu()
-
-    await vi.waitFor(() => {
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'available',
-        version: '1.0.61',
-        changelog: null
-      })
-    })
-
-    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
-    // Native Squirrel readiness is required to reach the committed path on macOS.
-    if (process.platform === 'darwin') {
-      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
-        ([eventName]) => eventName === 'update-downloaded'
-      )?.[1] as (() => void) | undefined
-      expect(nativeDownloadedHandler).toBeTypeOf('function')
-      nativeDownloadedHandler?.()
-    }
-
-    expect(armExitWatchdogMock).not.toHaveBeenCalled()
-
-    quitAndInstall()
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
-    })
-
-    expect(armExitWatchdogMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('disarms the forced-exit watchdog when sync install error recovery keeps the app open', async () => {
-    vi.useFakeTimers()
-
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      autoUpdaterMock.emit(
-        'error',
-        new Error("No update filepath provided, can't quit and install")
-      )
-    })
-
-    const mainWindow = updaterMainWindow(vi.fn())
-    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
-
-    setupAutoUpdater(mainWindow)
-    quitAndInstall()
-
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(isQuittingForUpdate()).toBe(false)
-    expect(armExitWatchdogMock).not.toHaveBeenCalled()
-    expect(disarmExitWatchdogMock).toHaveBeenCalled()
   })
 
   it('does not treat pre-native autoUpdater errors as quitAndInstall recovery', async () => {

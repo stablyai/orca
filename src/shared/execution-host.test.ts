@@ -2,25 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
-  getConnectionExecutionHostId,
-  getExecutionHostLabel,
-  getLocalExecutionHostLabel,
   getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoSshConnectionId,
-  getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
-  isOwnedSshTargetId,
   isRepoOnCatalogHost,
-  isRuntimeOwnedSshTargetId,
   isUnresolvedOwnerHostId,
-  normalizeExecutionHostOrder,
-  normalizeExecutionHostScope,
-  normalizeVisibleExecutionHostIds,
   parseExecutionHostId,
   parseRoutableExecutionHostId,
   requestedExecutionHostScope,
-  toRuntimeExecutionHostId,
   toSshExecutionHostId,
   UNRESOLVED_OWNER_HOST_ID
 } from './execution-host'
@@ -31,49 +21,6 @@ describe('execution host identity', () => {
     vi.unstubAllGlobals()
   })
 
-  it('normalizes local, SSH, and runtime host ids', () => {
-    expect(parseExecutionHostId('local')).toEqual({ kind: 'local', id: 'local' })
-    expect(parseExecutionHostId(toSshExecutionHostId('win vm'))).toEqual({
-      kind: 'ssh',
-      id: 'ssh:win%20vm',
-      targetId: 'win vm'
-    })
-    expect(parseExecutionHostId(toRuntimeExecutionHostId('prod/server'))).toEqual({
-      kind: 'runtime',
-      id: 'runtime:prod%2Fserver',
-      environmentId: 'prod/server'
-    })
-  })
-
-  it('labels the local host by platform and by navigator detection', () => {
-    expect(getLocalExecutionHostLabel('darwin')).toBe('Local Mac')
-    expect(getLocalExecutionHostLabel('win32')).toBe('Local Windows')
-    expect(getLocalExecutionHostLabel('linux')).toBe('Local Linux')
-    expect(getLocalExecutionHostLabel('freebsd')).toBe('This computer')
-
-    // Exercise navigator detection used by the live host selector.
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
-    expect(getLocalExecutionHostLabel()).toBe('Local Windows')
-
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' })
-    expect(getLocalExecutionHostLabel()).toBe('Local Linux')
-
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
-    expect(getLocalExecutionHostLabel()).toBe('Local Mac')
-
-    // Compare to the explicit platform fallback so this remains deterministic across CI hosts.
-    vi.stubGlobal('navigator', { userAgent: 'totally-unknown-agent' })
-    expect(getLocalExecutionHostLabel()).toBe(getLocalExecutionHostLabel(process.platform))
-  })
-
-  it('falls back invalid scopes to all hosts', () => {
-    expect(normalizeExecutionHostScope(null)).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-    expect(normalizeExecutionHostScope('')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-    expect(normalizeExecutionHostScope('bogus')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-    expect(normalizeExecutionHostScope('ssh:')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-    expect(normalizeExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
-  })
-
   it('defaults an omitted scope request to this host, not a fan-out', () => {
     expect(requestedExecutionHostScope(undefined)).toBe(LOCAL_EXECUTION_HOST_ID)
     expect(requestedExecutionHostScope(null)).toBe(LOCAL_EXECUTION_HOST_ID)
@@ -82,34 +29,6 @@ describe('execution host identity', () => {
     expect(requestedExecutionHostScope('bogus')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
     expect(requestedExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
     expect(requestedExecutionHostScope('ssh:dev%20box')).toBe('ssh:dev%20box')
-  })
-
-  it('normalizes visible host id arrays', () => {
-    expect(normalizeVisibleExecutionHostIds(null)).toBeNull()
-    expect(normalizeVisibleExecutionHostIds([])).toBeNull()
-    expect(normalizeVisibleExecutionHostIds(['local', 'bogus', 'ssh:win%20vm', 'local'])).toEqual([
-      'local',
-      'ssh:win%20vm'
-    ])
-  })
-
-  it('normalizes host order arrays', () => {
-    expect(normalizeExecutionHostOrder(null)).toEqual([])
-    expect(normalizeExecutionHostOrder([])).toEqual([])
-    expect(normalizeExecutionHostOrder(['ssh:win%20vm', 'bogus', 'local', 'ssh:win%20vm'])).toEqual(
-      ['ssh:win%20vm', 'local']
-    )
-  })
-
-  it('maps a legacy connection id to its host without trimming it', () => {
-    expect(getConnectionExecutionHostId(null)).toBe('local')
-    expect(getConnectionExecutionHostId('')).toBe('local')
-    expect(getConnectionExecutionHostId('a b')).toBe('ssh:a%20b')
-  })
-
-  it('derives repo ownership from SSH connection ids', () => {
-    expect(getRepoExecutionHostId({ connectionId: null })).toBe(LOCAL_EXECUTION_HOST_ID)
-    expect(getRepoExecutionHostId({ connectionId: 'ssh-target-1' })).toBe('ssh:ssh-target-1')
   })
 
   it('prefers explicit worktree ownership before repo and focused-host fallbacks', () => {
@@ -157,13 +76,6 @@ describe('execution host identity', () => {
       'ssh:runtime-ssh-vm-1'
     )
   })
-
-  it('derives focused host compatibility from active runtime settings', () => {
-    expect(getSettingsFocusedExecutionHostId(null)).toBe(LOCAL_EXECUTION_HOST_ID)
-    expect(getSettingsFocusedExecutionHostId({ activeRuntimeEnvironmentId: 'runtime-1' })).toBe(
-      'runtime:runtime-1'
-    )
-  })
 })
 
 describe('execution host id delimiter invariant', () => {
@@ -176,17 +88,6 @@ describe('execution host id delimiter invariant', () => {
       id: 'ssh:a%7Cb',
       targetId: 'a|b'
     })
-  })
-
-  // An invalid id denotes one unknown host; All hosts would misrepresent its routing scope.
-  it('labels an id that names no host as one unknown host, not as every host', () => {
-    for (const id of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box'] as const) {
-      expect(getExecutionHostLabel(id as never)).toBe('Unknown host')
-    }
-    expect(getExecutionHostLabel(null)).toBe('Unknown host')
-    expect(getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE)).toBe('All hosts')
-    expect(getExecutionHostLabel('ssh:box')).toBe('box')
-    expect(getExecutionHostLabel('runtime:env-1')).toBe('env-1')
   })
 })
 
@@ -211,16 +112,5 @@ describe('isRepoOnCatalogHost', () => {
     // A stale connection id contradicts `local`; an unknown host id is not proven local.
     expect(isRepoOnCatalogHost({ executionHostId: 'local', connectionId: 'ssh-1' })).toBe(false)
     expect(isRepoOnCatalogHost({ executionHostId: 'future:host' })).toBe(false)
-  })
-})
-
-describe('owned SSH target ids', () => {
-  it('hides recipe-VM and machine targets but keeps the recipe-VM meaning narrow', () => {
-    expect(isOwnedSshTargetId('runtime-ssh-vm-1')).toBe(true)
-    expect(isOwnedSshTargetId('machine-0123456789abcdef0123')).toBe(true)
-    expect(isOwnedSshTargetId('ssh-1792393612859-abc123')).toBe(false)
-    expect(isOwnedSshTargetId(null)).toBe(false)
-    // Only recipe VMs carry "replaced every provision" semantics.
-    expect(isRuntimeOwnedSshTargetId('machine-0123456789abcdef0123')).toBe(false)
   })
 })

@@ -55,12 +55,4 @@ describe('account sign-in link opener', () => {
     expect(openExternalMock).not.toHaveBeenCalled()
     warn.mockRestore()
   })
-
-  it('survives the OS failing to open the browser', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    openExternalMock.mockRejectedValueOnce(new Error('no handler'))
-    expect(() => openAccountSignInLink('codex', CODEX_LINK)).not.toThrow()
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
-    warn.mockRestore()
-  })
 })

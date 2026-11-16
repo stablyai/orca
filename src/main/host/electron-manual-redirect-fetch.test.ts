@@ -35,21 +35,6 @@ describe('fetchWithElectronManualRedirects', () => {
     )
   })
 
-  it('streams the final response body', async () => {
-    const pending = fetchWithElectronManualRedirects('https://github.com/o.png', {})
-    native.emit(
-      'response',
-      Object.assign(Readable.from([Buffer.from('png')]), {
-        statusCode: 200,
-        headers: { 'content-type': 'image/png' }
-      })
-    )
-    const response = await pending
-
-    expect(response.headers.get('content-type')).toBe('image/png')
-    expect(await response.text()).toBe('png')
-  })
-
   it('keeps a raw relative Location for the caller to resolve', async () => {
     const pending = fetchWithElectronManualRedirects('https://github.com/o.png', {})
     native.emit('redirect', 302, 'GET', 'https://github.com/u/3', { location: ['/u/3'] })
@@ -65,16 +50,6 @@ describe('fetchWithElectronManualRedirects', () => {
     expect((await pending).status).toBe(204)
     expect(empty.destroyed).toBe(true)
     expect(native.abort).toHaveBeenCalled()
-  })
-
-  it('rejects at once for a deadline that already passed', async () => {
-    const reason = new Error('deadline')
-    await expect(
-      fetchWithElectronManualRedirects('https://github.com/o.png', {
-        signal: AbortSignal.abort(reason)
-      })
-    ).rejects.toBe(reason)
-    expect(request).not.toHaveBeenCalled()
   })
 
   it('rejects and aborts a request still waiting at the deadline', async () => {

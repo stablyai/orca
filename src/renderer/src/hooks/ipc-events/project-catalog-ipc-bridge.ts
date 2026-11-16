@@ -1,8 +1,10 @@
+import { applyLocalWorktreeMetadataSet } from './worktree-metadata-set-events'
 import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
-import { adoptFromEndpoint } from '../../store/adopt-from-endpoint'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { adoptFromEndpoint } from '../../store/host-catalog/endpoint-catalog-adoption'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { patchDetectedWorktreeHeadIdentities } from '@/store/slices/worktrees/listing/detected-worktree-head-identity'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -46,6 +48,10 @@ export function registerProjectCatalogIpcBridge(
     )
   )
 
+  if (window.api.worktrees.onMetadataSet) {
+    unsubs.push(window.api.worktrees.onMetadataSet(applyLocalWorktreeMetadataSet))
+  }
+
   if (window.api.worktrees.onHeadIdentitiesChanged) {
     unsubs.push(
       window.api.worktrees.onHeadIdentitiesChanged((data) => {
@@ -58,6 +64,9 @@ export function registerProjectCatalogIpcBridge(
           getWorktreesForRepo: (repoId) => selectWorktreesByRepo(state)[repoId],
           updateWorktreeGitIdentity: state.updateWorktreeGitIdentity
         })
+        useAppStore.setState(
+          (s) => patchDetectedWorktreeHeadIdentities(s, data.repoId, data.identities) ?? s
+        )
       })
     )
   }

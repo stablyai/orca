@@ -1,6 +1,6 @@
-import { recordSshSignInAwaited } from '../../ssh/ssh-credential-decline'
+import { recordSshSignInAwaited } from '../../ssh/authentication/ssh-credential-decline'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
-import type { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
+import type { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'
 import { credentialRequestedForTarget } from './ssh-connect-attempt-registry'
 
 /** Persist credential need so background restore waits for explicit sign-in after the next launch. */

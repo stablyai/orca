@@ -1,8 +1,8 @@
 import type {
   WorkerTerminalResourceRow,
   WorkerTerminalOwnershipState
-} from '../../worker-terminal-ownership'
-import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
+import { WORKER_SETTLED_STATES } from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'

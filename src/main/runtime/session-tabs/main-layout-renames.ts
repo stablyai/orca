@@ -1,10 +1,10 @@
 // Main-owned terminal names/props use layout commands for every view; null/false retains legacy routing for other workspaces.
-import type { OrcaRuntimeWithPersistHeadlessTerminalTitle as PersistHeadlessTerminalTitleMethods } from '../workspaces/workspace-file-session-targets'
+import type { RuntimeHeadlessTerminalTabTitles as PersistHeadlessTerminalTitleMethods } from './headless-terminal-tab-titles'
 import { OrcaRuntimeWithMainLayoutAgentLaunchTabs } from './main-layout-agent-launch-tabs'
 import type {
   RuntimeTerminalRename,
   RuntimeTerminalSetPaneTitle
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'

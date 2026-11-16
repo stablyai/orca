@@ -1,12 +1,28 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import {
+  JIRA_INTEGRATION_SECTION_ID,
+  LINEAR_INTEGRATION_SECTION_ID
+} from '../../integrations/task-trackers/task-provider-integration-section-ids'
+
+// Provider rows carry these ids so search results can scroll to and highlight them.
+export const INTEGRATION_SETTING_TARGET_IDS = {
+  github: 'integrations-github',
+  gitlab: 'integrations-gitlab',
+  bitbucket: 'integrations-bitbucket',
+  azuredevops: 'integrations-azure-devops',
+  gitea: 'integrations-gitea',
+  jira: JIRA_INTEGRATION_SECTION_ID,
+  linear: LINEAR_INTEGRATION_SECTION_ID
+} as const
 
 export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.github,
     title: translate(
-      'auto.components.settings.integrations.search.f16e41cc72',
-      'GitHub Integration'
+      'auto.components.settings.integrations.search.a17a94d0b0',
+      'GitHub integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.7166b9090c',
@@ -25,9 +41,10 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.gitlab,
     title: translate(
-      'auto.components.settings.integrations.search.b50b71ef9d',
-      'GitLab Integration'
+      'auto.components.settings.integrations.search.cd74b2f587',
+      'GitLab integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.6e2ab619c6',
@@ -51,9 +68,10 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.bitbucket,
     title: translate(
-      'auto.components.settings.integrations.search.67a2a0e868',
-      'Bitbucket Integration'
+      'auto.components.settings.integrations.search.9e238582e8',
+      'Bitbucket integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.760e2446e0',
@@ -95,9 +113,10 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.azuredevops,
     title: translate(
-      'auto.components.settings.integrations.search.af6611fa6e',
-      'Azure DevOps Integration'
+      'auto.components.settings.integrations.search.b3efe7ab71',
+      'Azure DevOps integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.7b1f3984bb',
@@ -128,9 +147,10 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.gitea,
     title: translate(
-      'auto.components.settings.integrations.search.aab86d64e5',
-      'Gitea Integration'
+      'auto.components.settings.integrations.search.86a08aa60c',
+      'Gitea integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.d0d019dc29',
@@ -157,7 +177,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.integrations.search.617603509b', 'Jira Integration'),
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.jira,
+    title: translate('auto.components.settings.integrations.search.d8906d60a9', 'Jira integration'),
     description: translate(
       'auto.components.settings.integrations.search.76f6af7c57',
       'Connect Jira Cloud or update Jira API token credentials.'
@@ -191,9 +212,10 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.linear,
     title: translate(
-      'auto.components.settings.integrations.search.b027b4b318',
-      'Linear Integration'
+      'auto.components.settings.integrations.search.d905b3ecee',
+      'Linear integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.16a486a49d',

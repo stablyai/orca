@@ -6,14 +6,14 @@ import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../shared/agent-launch
 import {
   compatibilityEntry,
   rememberRuntimeEnvironmentCompatibility
-} from '@/runtime/runtime-compatibility-cache'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useAppStore } from '@/store'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY as CLIENT
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { mutateHostAgentLaunchSettings } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import {
   ensureAgentLaunchPreferences,
@@ -96,8 +96,9 @@ it('projects one capable source through cold, deadline, late, failed-refresh and
     expect(quick.startupPlan?.launchCommand).not.toContain('desktop')
     expect(quick.startupPlan?.launchCommand).not.toContain("'low'")
     const { prepareDirectWorkItemAgentLaunch } =
-      await import('@/lib/launch-work-item-direct-route-preparation')
-    const { planAgentSessionLaunch } = await import('@/lib/agent-session-launch-plan')
+      await import('@/lib/workspace/creation/work-item/launch-work-item-direct-route-preparation')
+    const { planAgentSessionLaunch } =
+      await import('@/lib/agent-session/launch/routing/agent-session-launch-plan')
     const direct = await prepareDirectWorkItemAgentLaunch({
       worktreeId: 'wt',
       worktreePath: '/repo',

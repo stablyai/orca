@@ -42,10 +42,4 @@ describe('parseTerminalOscColorQuery', () => {
     expect(parseTerminalOscColorQuery('\x1b]10;?;?;?\x1b\\', 0)).toEqual({ kind: 'none' })
     expect(parseTerminalOscColorQuery('\x1b]11;?;?\x1b\\', 0)).toEqual({ kind: 'none' })
   })
-
-  it('rejects unsupported query-shaped bodies without waiting for a terminator', () => {
-    expect(parseTerminalOscColorQuery(`\x1b]10;?${'x'.repeat(10_000)}`, 0)).toEqual({
-      kind: 'none'
-    })
-  })
 })

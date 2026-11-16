@@ -1,7 +1,7 @@
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
+import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 
 function getProjectIdFromHeaderRowKey(rowKey: string): string | null {
   if (!rowKey.startsWith('project:')) {

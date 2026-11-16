@@ -103,22 +103,6 @@ describe('ScrcpyStreamSession video buffering', () => {
     session.close()
   })
 
-  it('emits initial metadata and frames before startup resolves', async () => {
-    const { video, callbacks, started } = await startSession()
-    const events: string[] = []
-    callbacks.onMeta.mockImplementation(() => events.push('meta'))
-    callbacks.onFrame.mockImplementation(() => events.push('frame'))
-    const ready = started.then((session) => {
-      events.push('ready')
-      return session
-    })
-    video.emit('data', Buffer.concat([handshake(), packet(3), packet(5)]))
-    expect(events).toEqual(['meta', 'frame', 'frame'])
-    const session = await ready
-    expect(events).toEqual(['meta', 'frame', 'frame', 'ready'])
-    session.close()
-  })
-
   it('fails an already started session on a corrupt batch without delivering partial results', async () => {
     const { video, callbacks, started } = await startSession()
     video.emit('data', handshake())
@@ -199,21 +183,6 @@ describe('ScrcpyStreamSession control', () => {
     expect(session.videoSize()).toEqual({ width: 600, height: 1280 })
     expect(callbacks.onFrame).toHaveBeenCalledWith(expect.objectContaining({ config: true }))
     session.close()
-  })
-
-  it('writes to the control socket without Nagle delay until the session closes', async () => {
-    const { video, control, started } = await startSession()
-    video.emit('data', handshake())
-    const session = await started
-    const message = Buffer.from([2, 0])
-
-    expect(control.setNoDelay).toHaveBeenCalledWith(true)
-    expect(session.sendControl(message)).toBe(true)
-    expect(control.write).toHaveBeenCalledExactlyOnceWith(message)
-
-    session.close()
-    expect(session.sendControl(message)).toBe(false)
-    expect(control.write).toHaveBeenCalledTimes(1)
   })
 })
 

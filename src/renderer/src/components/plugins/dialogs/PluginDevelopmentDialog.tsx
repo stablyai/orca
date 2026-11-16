@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
+import { useTranslate } from '@/i18n/use-translate'
+import { usePluginInstallTrust } from '../state/use-plugin-install-trust'
 import { Button } from '../../ui/button'
 import {
   Dialog,
@@ -38,6 +39,8 @@ export function PluginDevelopmentDialog({
   busy,
   onChange
 }: PluginDevelopmentDialogProps): React.JSX.Element {
+  const t = useTranslate()
+  const confirmTrust = usePluginInstallTrust(open)
   const [pathInput, setPathInput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -45,7 +48,7 @@ export function PluginDevelopmentDialog({
     const path = pathInput.trim()
     if (!path) {
       setError(
-        translate(
+        t(
           'auto.components.settings.PluginDevelopmentSection.pathRequired',
           'Enter a plugin folder path.'
         )
@@ -53,7 +56,7 @@ export function PluginDevelopmentDialog({
       return
     }
     setError(null)
-    if (!(await confirmPluginInstallTrust(localFolderTrustPrompt('dev-folder', path)))) {
+    if (!(await confirmTrust(localFolderTrustPrompt('dev-folder', path)))) {
       return
     }
     try {
@@ -78,13 +81,13 @@ export function PluginDevelopmentDialog({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'auto.components.settings.PluginDevelopmentSection.dialogTitle',
               'Development folders'
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.PluginDevelopmentSection.reviewHelp',
               'Reviewed once. Later code edits run without asking.'
             )}
@@ -105,7 +108,7 @@ export function PluginDevelopmentDialog({
                 disabled={busy}
                 onClick={() => void removePath(index)}
               >
-                {translate('auto.components.settings.PluginDevelopmentSection.remove', 'Remove')}
+                {t('auto.components.settings.PluginDevelopmentSection.remove', 'Remove')}
               </Button>
             </div>
           ))}
@@ -117,7 +120,7 @@ export function PluginDevelopmentDialog({
             }}
           >
             <Label htmlFor="plugin-development-path" className="sr-only">
-              {translate(
+              {t(
                 'auto.components.settings.PluginDevelopmentSection.pathLabel',
                 'Development plugin folder path'
               )}
@@ -127,7 +130,7 @@ export function PluginDevelopmentDialog({
               value={pathInput}
               onChange={(event) => setPathInput(event.target.value)}
               className="h-8 min-w-0 font-mono text-xs"
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.settings.PluginDevelopmentSection.placeholder',
                 'Path to a plugin folder'
               )}
@@ -137,7 +140,7 @@ export function PluginDevelopmentDialog({
             />
             <Button type="submit" variant="outline" size="sm" disabled={busy}>
               {busy ? <Loader2 className="animate-spin" /> : null}
-              {translate('auto.components.settings.PluginDevelopmentSection.add', 'Add path')}
+              {t('auto.components.settings.PluginDevelopmentSection.add', 'Add path')}
             </Button>
           </form>
           {error ? (

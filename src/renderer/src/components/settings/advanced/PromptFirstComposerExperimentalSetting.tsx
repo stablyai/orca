@@ -1,8 +1,8 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../../ui/label'
+import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../form-controls/SettingsFormControls'
 import { getPromptFirstComposerSearchEntry } from './prompt-first-composer-experimental-search-entry'
 
 type PromptFirstComposerExperimentalSettingProps = {
@@ -22,7 +22,7 @@ export function PromptFirstComposerExperimentalSetting({
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
       id="experimental-prompt-first-composer"
     >
       <div className="flex items-start justify-between gap-4">
@@ -30,13 +30,13 @@ export function PromptFirstComposerExperimentalSetting({
           <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">{entry.description}</p>
         </div>
-        <SettingsSwitch
-          checked={enabled}
-          ariaLabel={translate(
+        <Switch
+          aria-label={translate(
             'auto.components.settings.ExperimentalPane.promptFirstComposer.toggleLabel',
             'Toggle starting new workspaces from a prompt'
           )}
-          onChange={() => updateSettings({ promptFirstComposer: !enabled })}
+          checked={enabled}
+          onCheckedChange={(checked) => updateSettings({ promptFirstComposer: checked })}
         />
       </div>
     </SearchableSetting>

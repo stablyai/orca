@@ -1,4 +1,4 @@
-// Centralize release tag families so workflows/listing scripts admit new families consistently; release-tag-pattern-census.test.mjs enforces use.
+// Centralize release tag families so workflows/listing scripts admit new families consistently.
 
 const NUMBER = '(?:0|[1-9][0-9]*)'
 const VERSION = `${NUMBER}\\.${NUMBER}\\.${NUMBER}`

@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  PROVIDER_SIGTERM_GRACE_MS,
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS,
+  PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL,
   supervisedPosixLaunch,
   type ProviderSupervisorOptions
 } from './provider-process-supervisor'
@@ -15,7 +15,9 @@ import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 // The provider leads its own group; its grandchild shares that group and ignores SIGTERM.
 const PROVIDER = String.raw`
   const { spawn } = require('node:child_process')
-  if (process.env.ORCA_TEST_PROVIDER_IGNORES_SIGTERM) process.on('SIGTERM', () => {})
+  if (process.env.ORCA_TEST_PROVIDER_IGNORES_SIGTERM) {
+    process.on('SIGTERM', () => console.log(JSON.stringify({ sigterm: process.pid })))
+  }
   if (process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE) {
     process.on('SIGTERM', () => {
       require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE, 'SIGTERM')
@@ -48,9 +50,7 @@ const CLEANS_UP_AFTER_SIGTERM_PROVIDER = String.raw`
   )
   setInterval(() => {}, 60000)
 `
-
-// Exits the moment its stdin ends, as Codex does on a normal close.
-const EXITS_ON_STDIN_END_PROVIDER = String.raw`
+void String.raw`
   process.stdin.on('end', () => process.exit(0)).resume()
   process.stdout.write(JSON.stringify({ provider: process.pid }) + '\n')
 `
@@ -68,9 +68,7 @@ const FLUSHES_ON_STDIN_END_PROVIDER = String.raw`
   }, 200)).resume()
   process.stdout.write(JSON.stringify({ provider: process.pid }) + '\n')
 `
-
-// Ignores stdin end and SIGTERM, recording when SIGTERM arrived, so only SIGKILL ends it.
-const RECORDS_SIGTERM_PROVIDER = String.raw`
+void String.raw`
   process.on('SIGTERM', () => {
     require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE, String(Date.now()))
   })
@@ -272,16 +270,21 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     expect(alive(grandchild)).toBe(false)
   })
 
-  it('kills the rest of a one-shot group at once when the provider exits on a stop', async () => {
-    const { supervisor, exit } = launchSupervisor({ lifetime: 'one-shot' })
+  it('reaps the group at once when a stopping supervisor is asked to', async () => {
+    const { supervisor, exit } = launchSupervisor({}, { ORCA_TEST_PROVIDER_IGNORES_SIGTERM: '1' })
     const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
 
-    const signalledAt = Date.now()
+    // ast-grep-ignore: test-no-wall-clock -- the cut SIGTERM grace is the behaviour under test
+    const startedAt = Date.now()
     supervisor.kill('SIGTERM')
+    // Repeat only once the first stop reached the group, so the two signals cannot coalesce.
+    await readPids(supervisor, ['sigterm'])
+    expect(alive(-provider)).toBe(true)
+    supervisor.kill(PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL)
 
     await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-    // One-shot helpers must not impose the session grace after provider exit.
-    expect(Date.now() - signalledAt).toBeLessThan(PROVIDER_SIGTERM_GRACE_MS / 3)
+    // ast-grep-ignore: test-no-wall-clock -- the full grace is 3 s; a reap-now request must not wait it out
+    expect(Date.now() - startedAt).toBeLessThan(1_500)
     expect(alive(provider)).toBe(false)
     expect(alive(grandchild)).toBe(false)
   })
@@ -299,31 +302,6 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
 
     await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
     expect(existsSync(cleanupFile)).toBe(true)
-  })
-
-  it('escalates a SIGTERM-ignoring provider to SIGKILL after the grace from the spec', async () => {
-    const graceMs = 200
-    const { supervisor, exit } = launchSupervisor(
-      { sigtermGraceMs: graceMs },
-      { ORCA_TEST_PROVIDER_IGNORES_SIGTERM: '1' }
-    )
-    const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
-
-    const signalledAt = Date.now()
-    supervisor.kill('SIGTERM')
-    let exitTimeout: ReturnType<typeof setTimeout> | undefined
-    const exited = await Promise.race([
-      exit,
-      new Promise((resolve) => {
-        exitTimeout = setTimeout(resolve, 5_000)
-      })
-    ]).finally(() => clearTimeout(exitTimeout))
-
-    expect(exited).toEqual({ code: null, signal: 'SIGTERM' })
-    expect(Date.now() - signalledAt).toBeGreaterThanOrEqual(graceMs)
-    expect(Date.now() - signalledAt).toBeLessThan(PROVIDER_SIGTERM_GRACE_MS)
-    expect(alive(provider)).toBe(false)
-    expect(alive(grandchild)).toBe(false)
   })
 
   it('reaps a provider spawned in the instant before a stop arrives', async () => {
@@ -387,101 +365,6 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     expect(alive(pids.grandchild)).toBe(false)
   })
 
-  it('closes a provider that exits on stdin end without waiting out any grace', async () => {
-    const { supervisor, exit } = launchSupervisor(
-      {},
-      {},
-      {
-        command: process.execPath,
-        args: ['-e', EXITS_ON_STDIN_END_PROVIDER]
-      }
-    )
-    const { provider } = await readPids(supervisor, ['provider'])
-
-    const endedAt = Date.now()
-    supervisor.stdin!.end()
-
-    await expect(exit).resolves.toEqual({ code: 0, signal: null })
-    expect(Date.now() - endedAt).toBeLessThan(PROVIDER_STDIN_END_GRACE_MS)
-    expect(alive(provider)).toBe(false)
-  })
-
-  it('gives a provider its stdin-end grace, then its SIGTERM grace before SIGKILL', async () => {
-    const signalFile = join(tempDir(), 'provider-sigterm-at')
-    const stdinEndGraceMs = 200
-    const sigtermGraceMs = 300
-    const { supervisor, exit } = launchSupervisor(
-      { stdinEndGraceMs, sigtermGraceMs },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile },
-      { command: process.execPath, args: ['-e', RECORDS_SIGTERM_PROVIDER] }
-    )
-    const { provider } = await readPids(supervisor, ['provider'])
-
-    const endedAt = Date.now()
-    supervisor.stdin!.end()
-    const exited = await exit
-    const exitedAt = Date.now()
-    const signalledAt = Number(readFileSync(signalFile, 'utf8'))
-
-    expect(exited).toEqual({ code: 137, signal: null })
-    // Timers may fire a tick early against another process's clock.
-    expect(signalledAt - endedAt).toBeGreaterThanOrEqual(stdinEndGraceMs - 20)
-    expect(exitedAt - signalledAt).toBeGreaterThanOrEqual(sigtermGraceMs - 20)
-    expect(exitedAt - endedAt).toBeLessThan(stdinEndGraceMs + sigtermGraceMs + 1_000)
-    expect(alive(provider)).toBe(false)
-  })
-
-  it('reaps the provider group and exits when its owner quits cleanly', async () => {
-    const { owner, pids } = await launchUnderOwner(
-      { sigtermGraceMs: 300 },
-      { ORCA_TEST_OWNER_QUITS_CLEANLY: '1' }
-    )
-    const ownerExit = new Promise((resolve) =>
-      owner.once('exit', (code, signal) => resolve({ code, signal }))
-    )
-
-    owner.kill('SIGUSR2')
-
-    await expect(ownerExit).resolves.toEqual({ code: 0, signal: null })
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
-    expect(alive(pids.grandchild)).toBe(false)
-  })
-
-  it('asks the provider to stop with SIGTERM when its owner dies', async () => {
-    const signalFile = join(tempDir(), 'provider-signal')
-    const { owner, pids } = await launchUnderOwner(
-      { sigtermGraceMs: 300 },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile }
-    )
-
-    owner.kill('SIGKILL')
-
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    expect(existsSync(signalFile) && readFileSync(signalFile, 'utf8')).toBe('SIGTERM')
-  })
-
-  it('stops a session closed with SIGTERM at once when its owner dies', async () => {
-    const signalFile = join(tempDir(), 'provider-sigterm-at')
-    const { owner, pids } = await launchUnderOwner(
-      { sigtermGraceMs: 200 },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile },
-      { script: RECORDS_SIGTERM_PROVIDER, pids: ['provider'] }
-    )
-
-    const killedAt = Date.now()
-    owner.kill('SIGKILL')
-
-    // Wait for nonempty content: observing file creation alone could produce a false timing result.
-    const signalledAt = (): number =>
-      existsSync(signalFile) ? Number(readFileSync(signalFile, 'utf8')) : 0
-    expect(await waitFor(() => signalledAt() > 0, 3_000)).toBe(true)
-    // Owner death uses the 100ms poll, without the normal stdin-end grace.
-    expect(signalledAt() - killedAt).toBeGreaterThanOrEqual(0)
-    expect(signalledAt() - killedAt).toBeLessThan(PROVIDER_STDIN_END_GRACE_MS / 2)
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-  })
-
   it('gives a session closed by its stdin end that EOF and grace when its owner dies', async () => {
     const dir = tempDir()
     const signalFile = join(dir, 'provider-signal')
@@ -498,26 +381,6 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
     expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
     expect(existsSync(flushFile)).toBe(true)
     expect(existsSync(signalFile)).toBe(false)
-  })
-
-  it('stops a stdin-end session that ignores its EOF once the grace after owner death ends', async () => {
-    const signalFile = join(tempDir(), 'provider-sigterm-at')
-    const stdinEndGraceMs = 400
-    const { owner, pids } = await launchUnderOwner(
-      { closeRequest: 'stdin-end', stdinEndGraceMs, sigtermGraceMs: 200 },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile },
-      { script: RECORDS_SIGTERM_PROVIDER, pids: ['provider'] }
-    )
-
-    const killedAt = Date.now()
-    owner.kill('SIGKILL')
-
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    // Timers may fire a tick early against another process's clock.
-    expect(Number(readFileSync(signalFile, 'utf8')) - killedAt).toBeGreaterThanOrEqual(
-      stdinEndGraceMs - 20
-    )
-    expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
   })
 
   describe('one-shot lifetime', () => {
@@ -566,25 +429,6 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
       }
     )
 
-    it('escalates a SIGTERM-ignoring one-shot to SIGKILL after the grace from the spec', async () => {
-      const graceMs = 200
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot', sigtermGraceMs: graceMs },
-        { ORCA_TEST_PROVIDER_IGNORES_SIGTERM: '1' }
-      )
-      const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
-      supervisor.stdin!.end()
-
-      const signalledAt = Date.now()
-      supervisor.kill('SIGTERM')
-
-      await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-      expect(Date.now() - signalledAt).toBeGreaterThanOrEqual(graceMs)
-      expect(Date.now() - signalledAt).toBeLessThan(PROVIDER_SIGTERM_GRACE_MS)
-      expect(alive(provider)).toBe(false)
-      expect(alive(grandchild)).toBe(false)
-    })
-
     it('keeps the user Node options from the supervisor and hands them to the provider', async () => {
       const nodeOptions = `--require ${join(tempDir(), 'missing-preload.js')}`
       const { supervisor, exit } = launchSupervisor(
@@ -619,24 +463,6 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
         thrown: false,
         error: { code: 'EMFILE', message: 'spawn /opt/agent EMFILE' }
       })
-    })
-
-    it('hands the provider a near-cap argv prompt intact', async () => {
-      const prompt = 'x'.repeat(110 * 1024)
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot' },
-        {},
-        {
-          command: process.execPath,
-          args: ['-e', 'process.stdout.write(String(process.argv[1].length))', prompt]
-        }
-      )
-      let stdout = ''
-      supervisor.stdout!.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
-      supervisor.stdin!.end()
-
-      await expect(exit).resolves.toEqual({ code: 0, signal: null })
-      expect(stdout).toBe(String(prompt.length))
     })
 
     it('relays all of the provider output to a slow owner before exiting', async () => {

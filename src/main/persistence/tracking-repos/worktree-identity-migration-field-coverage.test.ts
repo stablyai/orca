@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
 import { migrateWorktreeIdentity } from './worktree-identity-migration'
 
@@ -207,5 +207,39 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
     state.workspaceSessionsByHostId = { 'ssh:target': hostSession }
     expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
     expect(hostSession.closedTerminalTabTombstonesByTabId?.['tab-1']?.worktreeId).toBe(NEW)
+  })
+
+  it('re-keys a cross-store link by its child and never touches a parent in another store', () => {
+    // A copied profile can name the same locator in the other store.
+    const parent = {
+      installationId: 'other-install',
+      workspaceKey: 'worktree:repo::/old/path',
+      instanceId: 'parent-instance'
+    }
+    const state = persistedState(getDefaultWorkspaceSession())
+    state.crossStoreLineageByChildKey = {
+      'worktree:repo::/old/path': { childWorkspaceKey: 'worktree:repo::/old/path', parent },
+      'worktree:repo::/sibling': { childWorkspaceKey: 'worktree:repo::/sibling', parent }
+    }
+
+    expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
+    expect(state.crossStoreLineageByChildKey).toEqual({
+      'worktree:repo::/new/path': {
+        childWorkspaceKey: 'worktree:repo::/new/path',
+        parent: {
+          installationId: 'other-install',
+          workspaceKey: 'worktree:repo::/old/path',
+          instanceId: 'parent-instance'
+        }
+      },
+      'worktree:repo::/sibling': {
+        childWorkspaceKey: 'worktree:repo::/sibling',
+        parent: {
+          installationId: 'other-install',
+          workspaceKey: 'worktree:repo::/old/path',
+          instanceId: 'parent-instance'
+        }
+      }
+    })
   })
 })

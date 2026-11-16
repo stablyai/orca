@@ -8,7 +8,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +47,7 @@ export function DraftReviewActions({
   onMarkReadyForReview: () => void
   onCloseReview: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const disabled = readying || stateUpdating !== null
   const ReadyIcon = isGitLab ? GitMerge : GitPullRequestArrow
   return (
@@ -66,11 +67,11 @@ export function DraftReviewActions({
           )}
           <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
             {readying
-              ? translate(
+              ? t(
                   'auto.components.right.sidebar.HostedReviewActions.markingReady',
                   'Marking ready...'
                 )
-              : translate(
+              : t(
                   'auto.components.right.sidebar.HostedReviewActions.markReady',
                   'Mark ready for review'
                 )}
@@ -83,7 +84,7 @@ export function DraftReviewActions({
               size="xs"
               className="shrink-0 rounded-l-none border-l border-primary-foreground/20 px-1.5 disabled:cursor-not-allowed"
               disabled={disabled}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.right.sidebar.HostedReviewActions.draftMoreActions',
                 'More {{value0}} actions',
                 { value0: reviewLabel }
@@ -99,7 +100,7 @@ export function DraftReviewActions({
           <DropdownMenuContent align="end" className="w-52">
             <DropdownMenuItem variant="destructive" onSelect={onCloseReview}>
               <GitPullRequestClosed className="size-3.5" />
-              {translate(
+              {t(
                 'auto.components.right.sidebar.HostedReviewActions.closeReview',
                 'Close {{review}}',
                 { review: shortLabel }
@@ -124,6 +125,7 @@ export function ClosedReviewActions({
   actionError: string | null
   onReopenReview: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col items-start gap-1.5">
       <Button
@@ -140,15 +142,10 @@ export function ClosedReviewActions({
           <CircleDot className="size-3.5" />
         )}
         {stateUpdating === 'open'
-          ? translate(
-              'auto.components.right.sidebar.HostedReviewActions.6645ac7dd1',
-              'Reopening...'
-            )
-          : translate(
-              'auto.components.right.sidebar.HostedReviewActions.3ce211ece6',
-              'Reopen {{value0}}',
-              { value0: shortLabel }
-            )}
+          ? t('auto.components.right.sidebar.HostedReviewActions.6645ac7dd1', 'Reopening...')
+          : t('auto.components.right.sidebar.HostedReviewActions.3ce211ece6', 'Reopen {{value0}}', {
+              value0: shortLabel
+            })}
       </Button>
       <HostedReviewActionError message={actionError} />
     </div>
@@ -164,9 +161,10 @@ export function MergedReviewActions({
   isDeletingWorktree: boolean
   onDeleteWorktree: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const deleteLabel = isMainWorktree
-    ? translate('auto.components.sidebar.RemoveFolderDialog.b79b39d865', 'Remove Project')
-    : translate('auto.components.right.sidebar.HostedReviewActions.e4aca40024', 'Delete Workspace')
+    ? t('auto.components.sidebar.RemoveFolderDialog.b79b39d865', 'Remove Project')
+    : t('auto.components.right.sidebar.HostedReviewActions.e4aca40024', 'Delete Workspace')
   return (
     <Button
       type="button"
@@ -182,7 +180,7 @@ export function MergedReviewActions({
         <Trash2 className="size-3.5" />
       )}
       {isDeletingWorktree
-        ? translate('auto.components.right.sidebar.HostedReviewActions.eefd50457e', 'Deleting...')
+        ? t('auto.components.right.sidebar.HostedReviewActions.eefd50457e', 'Deleting...')
         : deleteLabel}
     </Button>
   )

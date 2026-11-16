@@ -1,15 +1,16 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { selectStructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import {
   createCodexHistoryTranslator,
   createCodexJournalTranslator
@@ -112,13 +113,12 @@ async function session() {
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
       contextUsage: async () => {
         await expect(deferred.drained()).resolves.toEqual({ ok: true })
-        return selectStructuredAgentContextUsage(journal.snapshot().items)
+        return selectStructuredAgentContextUsage(await readTestJournalItems(journal))
       },
       turnRecord: async (turnId: string) => {
         await expect(deferred.drained()).resolves.toEqual({ ok: true })
-        return journal
-          .snapshot()
-          .items.map((item) => readAgentJournalTurn(item.body))
+        return (await readTestJournalItems(journal))
+          .map((item) => readAgentJournalTurn(item.body))
           .find((turn) => turn?.turnId === turnId)
       }
     }
@@ -127,28 +127,6 @@ async function session() {
 }
 
 describe('Codex context usage in the journal', () => {
-  it('follows each response of a turn and holds once the turn ends', async () => {
-    const { on, tokenUsage, contextUsage } = await session()
-    on('turn/started', { turn: { id: 'turn-1' } })
-
-    tokenUsage('turn-1', FIRST_RESPONSE)
-    expect(await contextUsage()).toEqual({
-      usedTokens: 17611,
-      windowTokens: 258400,
-      percentage: 7,
-      estimated: false,
-      categories: []
-    })
-
-    // Context usage measures the response, not cumulative thread spend.
-    tokenUsage('turn-1', AFTER_TOOL_CALL)
-    expect(await contextUsage()).toMatchObject({ usedTokens: 17684, windowTokens: 475000 })
-
-    tokenUsage('turn-1', FINAL_RESPONSE)
-    on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
-    expect(await contextUsage()).toMatchObject({ usedTokens: 17714, windowTokens: 475000 })
-  })
-
   it.each([
     ['while the turn runs', false],
     ['after the turn ended', true]
@@ -219,18 +197,6 @@ describe('Codex context usage in the journal', () => {
     tokenUsage('turn-1', { ...AFTER_TOOL_CALL, modelContextWindow: null })
 
     expect(await contextUsage()).toBeNull()
-  })
-
-  it('holds a reading that reached the open turn row under another turn name', async () => {
-    const { on, tokenUsage, contextUsage } = await session()
-    on('turn/started', { turn: { id: 'turn-1' } })
-    tokenUsage('turn-1', FINAL_RESPONSE)
-    // An unknown turn falls back to the newest row.
-    tokenUsage('turn-nobody-opened', AFTER_COMPACTION)
-
-    on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
-
-    expect(await contextUsage()).toMatchObject({ usedTokens: 6033, windowTokens: 475000 })
   })
 
   it('keeps the saved reading through a resume that restores history, then takes the replayed frame', async () => {

@@ -6,7 +6,7 @@ import { renderCard, unmountCard } from './NewWorkspaceComposerCard.test-fixture
 
 const settings = vi.hoisted(() => ({ promptFirstComposer: false }))
 
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
       selector({
@@ -39,7 +39,7 @@ vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: () => <input aria-label="workspace name" />
 }))
 
-vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
+vi.mock('@/components/new-workspace/project-selection/ProjectCombobox', () => ({
   default: () => <div />
 }))
 

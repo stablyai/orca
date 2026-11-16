@@ -1,3 +1,4 @@
+import { linkRecordWrite } from '../../keyed-record-transitions'
 import type { AppState } from '../../types'
 import type { DropAgentStatusByTabPrefixOptions } from './agent-status-contract'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
@@ -24,8 +25,6 @@ export type AgentStatusTabPrefixDropState = Pick<
   | 'manuallyUnreadTurnsByPaneKey'
   | 'recentlyClosedAgentStatusTabIds'
   | 'recentlyRetiredAgentStatusPaneKeys'
-  | 'retainedAgentsByPaneKey'
-  | 'retentionSuppressedPaneKeys'
   | 'sortEpoch'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
@@ -49,20 +48,17 @@ export function buildAgentStatusTabPrefixDropPatch(
       : findCompletedOrphanPaneKeysForTabClose(s, opts?.worktreeId, prefix)
     const completedOrphanKeySet = new Set(completedOrphanKeys)
     const liveKeys = [
-      ...Object.keys(s.agentStatusByPaneKey).filter((k) => matchesPane(k)),
+      ...Array.from(s.agentStatusByPaneKey.keysForTab(tabIdPrefix)).filter((k) => matchesPane(k)),
       ...completedOrphanKeys
     ]
     const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
-      (k) => matchesPane(k) || completedOrphanKeySet.has(k)
-    )
-    const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter(
       (k) => matchesPane(k) || completedOrphanKeySet.has(k)
     )
     const migrationUnsupported = pruneMigrationUnsupportedEntries(
       s.migrationUnsupportedByPtyId,
       (entry) => (entry.paneKey ? matchesPane(entry.paneKey) : false)
     )
-    // See removeAgentStatus for ack-cleanup rationale; ack entries are owned by the pane lifecycle regardless of live/retained state.
+    // See removeAgentStatus for ack-cleanup rationale; ack entries are owned by the pane lifecycle regardless of live state.
     let nextAck = s.acknowledgedAgentsByPaneKey
     const ackKeys = Object.keys(nextAck).filter(
       (k) => matchesPane(k) || completedOrphanKeySet.has(k)
@@ -72,6 +68,7 @@ export function buildAgentStatusTabPrefixDropPatch(
       for (const k of ackKeys) {
         delete nextAck[k]
       }
+      linkRecordWrite(nextAck, s.acknowledgedAgentsByPaneKey, ackKeys)
     }
     const nextClosedTabs = opts?.paneKeys
       ? s.recentlyClosedAgentStatusTabIds
@@ -112,12 +109,7 @@ export function buildAgentStatusTabPrefixDropPatch(
             completedOrphanKeySet
           )
 
-    if (
-      liveKeys.length === 0 &&
-      launchConfigKeys.length === 0 &&
-      retainedKeys.length === 0 &&
-      !migrationUnsupported.changed
-    ) {
+    if (liveKeys.length === 0 && launchConfigKeys.length === 0 && !migrationUnsupported.changed) {
       if (nextAck !== s.acknowledgedAgentsByPaneKey) {
         return {
           acknowledgedAgentsByPaneKey: nextAck,
@@ -146,10 +138,9 @@ export function buildAgentStatusTabPrefixDropPatch(
     }
     hadLive = liveKeys.length > 0
 
-    const nextLive = liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+    const nextLive = removePaneKeys(s.agentStatusByPaneKey, new Set(liveKeys))
     for (const key of liveKeys) {
       removedPaneKeys.push(key)
-      delete nextLive[key]
     }
     const nextLaunchConfigs =
       launchConfigKeys.length > 0
@@ -159,31 +150,11 @@ export function buildAgentStatusTabPrefixDropPatch(
       delete nextLaunchConfigs[key]
     }
 
-    const nextRetained =
-      retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
-    for (const key of retainedKeys) {
-      delete nextRetained[key]
-    }
-
-    // Only live→gone consumes suppressors; skip absent/already-suppressed/completed-orphan keys to prevent leaks, like dropAgentStatus.
-    const suppressorAdds = liveKeys.filter(
-      (k) => !completedOrphanKeySet.has(k) && !(k in s.retentionSuppressedPaneKeys)
-    )
-    let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
-    if (suppressorAdds.length > 0) {
-      nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
-      for (const key of suppressorAdds) {
-        nextRetentionSuppressedPaneKeys[key] = true
-      }
-    }
-
     return {
       agentStatusByPaneKey: nextLive,
       agentConversationsByPaneKey: nextConversations,
       agentLaunchConfigByPaneKey: nextLaunchConfigs,
-      retainedAgentsByPaneKey: nextRetained,
       migrationUnsupportedByPtyId: migrationUnsupported.next,
-      retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
       recentlyClosedAgentStatusTabIds: nextClosedTabs,
       recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys,
       ...(nextAck !== s.acknowledgedAgentsByPaneKey
@@ -195,7 +166,7 @@ export function buildAgentStatusTabPrefixDropPatch(
       ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
         ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
         : {}),
-      // Bump epochs only for live-map changes; retained-only sweeps do not affect sort/freshness.
+      // Bump epochs only for live-map changes; metadata-only sweeps do not affect sort/freshness.
       agentStatusEpoch:
         hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
       sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch

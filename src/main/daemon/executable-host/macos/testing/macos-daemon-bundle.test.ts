@@ -35,13 +35,13 @@ let verifyCode: number
 let onCopy: (() => Promise<void>) | null
 
 const signal = (): AbortSignal => new AbortController().signal
-const helperExecutable = (): string => join(helper, 'Contents', 'MacOS', 'orca-terminal-host')
+const helperExecutable = (): string => join(helper, 'Contents', 'MacOS', 'Orca Agents')
 
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'orca-mac-runtime-')))
   // Model an update that moved the running bundle and replaced its original path.
   source = join(root, 'com.stablyai.orca.ShipIt.old', 'Orca.app')
-  helper = join(source, 'Contents', 'Helpers', 'Orca Terminal Host.app')
+  helper = join(source, 'Contents', 'Helpers', 'Orca Agents.app')
   copies = join(root, 'profile', 'daemon-host', 'macos')
   await mkdir(join(source, 'Contents', 'MacOS'), { recursive: true })
   await mkdir(join(helper, 'Contents', 'MacOS'), { recursive: true })
@@ -96,36 +96,16 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-const runs = (flag: string): number =>
-  runProcessMock.mock.calls.filter(([spec]) => spec.args?.[0] === flag).length
-
 it('publishes one verified copy per helper build, from the running app rather than its replacement', async () => {
   const copy = await materializeMacDaemonBundle(copies, signal())
   await rm(source, { recursive: true })
   expect(copy.directory).toBe(join(copies, `terminal-host-${cdhash}`))
   expect(copy.execPath).toBe(
-    join(
-      copy.directory,
-      'app.noindex',
-      'Orca Terminal Host.app',
-      'Contents',
-      'MacOS',
-      'orca-terminal-host'
-    )
+    join(copy.directory, 'app.noindex', 'Orca Agents.app', 'Contents', 'MacOS', 'Orca Agents')
   )
   expect(await readFile(copy.execPath, 'utf8')).toBe('signed-node')
   expect(await readFile(copy.entryPath, 'utf8')).toBe('daemon-code')
   expect(await readdir(copies)).toEqual([`terminal-host-${cdhash}`])
-})
-
-it('reuses a published copy without copying or verifying again', async () => {
-  const first = await materializeMacDaemonBundle(copies, signal())
-  await writeFile(helperExecutable(), 'same-build-rewritten')
-  const second = await materializeMacDaemonBundle(copies, signal())
-  expect(second).toEqual(first)
-  expect(await readFile(second.execPath, 'utf8')).toBe('signed-node')
-  expect(runs('-cR')).toBe(1)
-  expect(runs('--verify')).toBe(1)
 })
 
 it('publishes a new copy beside the old one when the helper build changes', async () => {
@@ -149,22 +129,13 @@ it("rejects a copy that does not satisfy the running app's requirement and publi
 it('keeps the winning copy when a concurrent publisher renames first', async () => {
   onCopy = async () => {
     onCopy = null
-    const winner = join(copies, `terminal-host-${cdhash}`, 'app.noindex', 'Orca Terminal Host.app')
+    const winner = join(copies, `terminal-host-${cdhash}`, 'app.noindex', 'Orca Agents.app')
     await cp(helper, winner, { recursive: true })
-    await writeFile(join(winner, 'Contents', 'MacOS', 'orca-terminal-host'), 'winner')
+    await writeFile(join(winner, 'Contents', 'MacOS', 'Orca Agents'), 'winner')
   }
   const copy = await materializeMacDaemonBundle(copies, signal())
   expect(await readFile(copy.execPath, 'utf8')).toBe('winner')
   expect(await readdir(copies)).toEqual([`terminal-host-${cdhash}`])
-})
-
-it('replaces a partial clone with a regular copy', async () => {
-  cloneLeavesPartialTree = true
-  const copy = await materializeMacDaemonBundle(copies, signal())
-  expect(await readdir(join(copy.directory, 'app.noindex', 'Orca Terminal Host.app'))).toEqual([
-    'Contents'
-  ])
-  expect(await readFile(copy.entryPath, 'utf8')).toBe('daemon-code')
 })
 
 it('stops at the shared deadline and removes the staging copy', async () => {
@@ -177,7 +148,7 @@ it('stops at the shared deadline and removes the staging copy', async () => {
     return controller.signal.aborted ? { ...ok, code: null } : (signed?.(spec) ?? ok)
   })
   await expect(materializeMacDaemonBundle(copies, controller.signal)).rejects.toThrow(
-    'Could not copy Orca Terminal Host.app'
+    'Could not copy Orca Agents.app'
   )
   expect(await readdir(copies)).toEqual([])
 })

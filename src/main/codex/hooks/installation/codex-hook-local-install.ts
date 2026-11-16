@@ -2,11 +2,11 @@ import { mkdirSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  writeManagedScript,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+  removeManagedCommands
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import { writeManagedScript } from '../../../agent-hooks/installation/scripts/managed-hook-script-write'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 import { upsertHookTrustEntries, type CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import { getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath } from '../../trust/identity/codex-trust-identity'
@@ -40,12 +40,13 @@ import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-pat
 export async function installCodexHooksExclusively(
   runtimeHomePath: string,
   hashes: CodexHookHashes,
-  getStatus: (runtimeHomePath: string) => AgentHookInstallStatus
+  getStatus: (runtimeHomePath: string) => AgentHookInstallStatus,
+  onComplete?: () => void
 ): Promise<AgentHookInstallStatus> {
   const configPath = getConfigPath(runtimeHomePath)
   const scriptPath = getManagedScriptPath()
   // Save in-Orca approvals before rewriting their runtime positions or cleaning stale trust.
-  promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
+  let complete = promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
   const config = readHooksJson(configPath)
   if (!config) {
     return {
@@ -129,6 +130,7 @@ export async function installCodexHooksExclusively(
       handlerIndex: 0,
       command,
       timeoutSec: hook.timeout,
+      statusMessage: hook.statusMessage,
       trustedHash,
       // Orca's setting overrides Codex's /hooks off switch for this hook.
       enabled: true
@@ -142,10 +144,11 @@ export async function installCodexHooksExclusively(
   try {
     // Config mirroring and approvals need the home before hooks.json creates it.
     mkdirSync(runtimeHomePath, { recursive: true })
-    syncSystemConfigIntoManagedCodexHome({
+    const mirrored = syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
     })
+    complete = mirrored && complete
     writeCodexHookApprovalsBeforeEntries(
       tomlPath,
       managedTrustEntries,
@@ -163,9 +166,13 @@ export async function installCodexHooksExclusively(
   } catch (error) {
     return trustWriteError(configPath, true, error)
   }
-  snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
-  await cleanupLegacyManagedHookRepresentations()
-  return getStatus(runtimeHomePath)
+  const snapshotted = snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
+  const cleaned = await cleanupLegacyManagedHookRepresentations()
+  const status = getStatus(runtimeHomePath)
+  if (complete && snapshotted && cleaned && status.state !== 'error') {
+    onComplete?.()
+  }
+  return status
 }
 
 function trustWriteError(

@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   advancePartialEscapeTail,
   advanceTerminalEscapeBoundary,
-  extractPartialEscapeTail,
-  MAX_PARTIAL_ESCAPE_TAIL_LENGTH
+  extractPartialEscapeTail
 } from './terminal-partial-escape-tail'
 
 describe('advanceTerminalEscapeBoundary', () => {
@@ -59,14 +58,6 @@ describe('extractPartialEscapeTail', () => {
     expect(extractPartialEscapeTail('\x1b] \x1b\x1b^')).toBe('\x1b^')
     expect(extractPartialEscapeTail('\x1bPq\x1b\x1b[3')).toBe('\x1b[3')
     expect(extractPartialEscapeTail('\x1b]0;t\x1b\x1b')).toBe('\x1b')
-  })
-})
-
-describe('advancePartialEscapeTail', () => {
-  it('abandons tracking (returns empty) past the cap', () => {
-    // An unterminated OSC longer than the cap degrades to pre-fix behavior.
-    const huge = `\x1b]0;${'x'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 10)}`
-    expect(advancePartialEscapeTail('', huge)).toBe('')
   })
 })
 

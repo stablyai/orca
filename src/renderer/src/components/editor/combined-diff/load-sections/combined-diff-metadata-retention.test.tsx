@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type {
   GitDiffResult,
@@ -51,7 +51,6 @@ function useReview(props: Review) {
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
-  const [sideBySide, setSideBySide] = useState(false)
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const entrySet = useCombinedDiffEntrySet({
     file: props.file,
@@ -67,7 +66,6 @@ function useReview(props: Review) {
     setGeneration,
     setSectionHeights,
     setSections,
-    setSideBySide,
     viewStateKey: props.viewStateKey
   })
   const loader = useCombinedDiffSectionLoader({
@@ -109,7 +107,6 @@ function useReview(props: Review) {
     scrollContainerRef,
     sectionHeights,
     sections,
-    sideBySide,
     viewStateKey: props.viewStateKey
   })
   return {

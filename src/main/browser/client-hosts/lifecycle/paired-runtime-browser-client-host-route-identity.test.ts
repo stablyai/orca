@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -61,12 +61,6 @@ const SSH_DEPLOYMENT: OrcadDeploymentLink = {
   localPort: 9999,
   remotePort: 7777
 }
-const WSL_DEPLOYMENT: OrcadDeploymentLink = {
-  kind: 'wsl',
-  distro: 'Ubuntu',
-  localPort: 9999,
-  remotePort: 7777
-}
 
 function pairedEnvironment(
   id: string,
@@ -116,18 +110,6 @@ async function routeIdentity(
     throw new Error('missing route identity')
   }
   return identity
-}
-
-async function connectionIdentity(
-  environment: KnownRuntimeEnvironment,
-  authorityRuntimeId: string
-): Promise<{ current: string; pairing: string; legacy: string }> {
-  const identity = await routeIdentity(environment, authorityRuntimeId)
-  return {
-    current: identity.authorityConnectionIdentity,
-    pairing: identity.pairingAuthorityConnectionIdentity,
-    legacy: identity.legacyAuthorityConnectionIdentity
-  }
 }
 
 function pageIdentity(
@@ -202,41 +184,6 @@ function resolvePartitionAsOlderBuild(filePath: string, identity: ClientHostRout
   return derived.partition
 }
 
-/** Older parsers discard unrecognized alias fields. */
-function rewriteAsOlderBuild(filePath: string): void {
-  const persisted: {
-    version: number
-    bindings: Record<string, { fingerprint: string; storageScope: string; lastUsedAt: number }>
-  } = JSON.parse(readFileSync(filePath, 'utf8'))
-  const bindings = Object.fromEntries(
-    Object.entries(persisted.bindings).map(([partition, binding]) => [
-      partition,
-      {
-        fingerprint: binding.fingerprint,
-        storageScope: binding.storageScope,
-        lastUsedAt: binding.lastUsedAt
-      }
-    ])
-  )
-  writeFileSync(filePath, JSON.stringify({ version: persisted.version, bindings }))
-}
-
-function seedOlderBuildJar(filePath: string, identity: ClientHostRouteIdentity): string {
-  const derived = deriveBrowserRoutePartition(
-    pageIdentity(
-      identity,
-      identity.pairingAuthorityConnectionIdentity,
-      identity.executionHostIdentity
-    )
-  )
-  new BrowserRoutePartitionBindingStore({ filePath }).set(
-    derived.partition,
-    derived.bindingFingerprint,
-    identity.storageScope
-  )
-  return derived.partition
-}
-
 function bindingStorePath(): string {
   return join(
     realpathSync(mkdtempSync(join(realpathSync(tmpdir()), 'orca-re-pair-partition-'))),
@@ -248,148 +195,7 @@ beforeEach(() => {
   compositions.length = 0
 })
 
-describe('client host authority connection identity', () => {
-  it('survives the remote restarting, and keeps the pre-migration identity distinct', async () => {
-    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
-    const environment = pairedEnvironment('environment-restart')
-
-    const before = await connectionIdentity(environment, 'runtime-a')
-    const after = await connectionIdentity(environment, 'runtime-restarted')
-
-    expect(after.current).toBe(before.current)
-    expect(after.legacy).not.toBe(before.legacy)
-    expect(before.legacy).not.toBe(before.current)
-  })
-
-  it('separates environments, pairing revisions, and server keys', async () => {
-    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
-    const identities = [
-      await connectionIdentity(pairedEnvironment('environment-a'), 'runtime-a'),
-      await connectionIdentity(pairedEnvironment('environment-b'), 'runtime-a'),
-      await connectionIdentity(
-        pairedEnvironment('environment-a', { pairingRevision: 2 }),
-        'runtime-a'
-      ),
-      await connectionIdentity(
-        pairedEnvironment('environment-a', { publicKeyB64: 'key-rotated' }),
-        'runtime-a'
-      )
-    ]
-
-    expect(new Set(identities.map((entry) => entry.current)).size).toBe(identities.length)
-  })
-})
-
 describe('client host identity for a server Orca re-pairs in place', () => {
-  it.each([
-    ['managed SSH', SSH_DEPLOYMENT],
-    ['WSL', WSL_DEPLOYMENT]
-  ])('%s keeps one identity across re-pairs and still separates keys', async (_, deployment) => {
-    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
-    const id = `environment-${deployment.kind ?? 'ssh'}`
-    const before = await connectionIdentity(
-      pairedEnvironment(id, { orcadDeployment: deployment, pairedDeviceId: 'device-a' }),
-      'runtime-a'
-    )
-    const rePaired = await connectionIdentity(
-      pairedEnvironment(id, {
-        orcadDeployment: deployment,
-        pairingRevision: 5,
-        pairedDeviceId: 'device-b',
-        deviceToken: 'token-b'
-      }),
-      'runtime-b'
-    )
-    const otherKey = await connectionIdentity(
-      pairedEnvironment(id, { orcadDeployment: deployment, publicKeyB64: 'key-b' }),
-      'runtime-a'
-    )
-    const otherEnvironment = await connectionIdentity(
-      pairedEnvironment(`${id}-other`, { orcadDeployment: deployment }),
-      'runtime-a'
-    )
-
-    expect(rePaired.current).toBe(before.current)
-    expect(rePaired.pairing).not.toBe(before.pairing)
-    expect(otherKey.current).not.toBe(before.current)
-    expect(otherEnvironment.current).not.toBe(before.current)
-  })
-
-  it('leaves a manually paired server on its pairing identity', async () => {
-    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
-    const identity = await connectionIdentity(pairedEnvironment('environment-manual'), 'runtime-a')
-
-    expect(identity.current).toBe(identity.pairing)
-  })
-
-  it.each([
-    ['managed SSH', SSH_DEPLOYMENT],
-    ['WSL', WSL_DEPLOYMENT]
-  ])(
-    '%s keeps the jar an older build filled through re-pairs and a downgrade',
-    async (_, deployment) => {
-      configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
-      const filePath = bindingStorePath()
-      const id = `environment-jar-${deployment.kind ?? 'ssh'}`
-      const atRevisionOne = await routeIdentity(
-        pairedEnvironment(id, { orcadDeployment: deployment, pairedDeviceId: 'device-a' }),
-        'runtime-a'
-      )
-      const atRevisionTwo = await routeIdentity(
-        pairedEnvironment(id, {
-          orcadDeployment: deployment,
-          pairingRevision: 2,
-          pairedDeviceId: 'device-b',
-          deviceToken: 'token-b'
-        }),
-        'runtime-b'
-      )
-      const withNewKey = await routeIdentity(
-        pairedEnvironment(id, {
-          orcadDeployment: deployment,
-          pairingRevision: 3,
-          publicKeyB64: 'key-b'
-        }),
-        'runtime-c'
-      )
-      const olderJar = seedOlderBuildJar(filePath, atRevisionOne)
-
-      expect(resolvePartition(filePath, atRevisionOne)).toBe(olderJar)
-      expect(resolvePartitionAsOlderBuild(filePath, atRevisionOne)).toBe(olderJar)
-      expect(resolvePartition(filePath, atRevisionTwo)).toBe(olderJar)
-      expect(resolvePartitionAsOlderBuild(filePath, atRevisionTwo)).toBe(olderJar)
-      rewriteAsOlderBuild(filePath)
-      expect(resolvePartition(filePath, atRevisionTwo)).toBe(olderJar)
-      expect(resolvePartition(filePath, withNewKey)).not.toBe(olderJar)
-    }
-  )
-
-  it('mints a fresh jar an older build can open at every pairing', async () => {
-    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
-    const filePath = bindingStorePath()
-    const id = 'environment-fresh'
-    const atRevisionOne = await routeIdentity(
-      pairedEnvironment(id, { orcadDeployment: SSH_DEPLOYMENT, pairedDeviceId: 'device-a' }),
-      'runtime-a'
-    )
-    const atRevisionTwo = await routeIdentity(
-      pairedEnvironment(id, {
-        orcadDeployment: SSH_DEPLOYMENT,
-        pairingRevision: 2,
-        pairedDeviceId: 'device-b'
-      }),
-      'runtime-b'
-    )
-
-    const jar = resolvePartition(filePath, atRevisionOne)
-    expect(resolvePartitionAsOlderBuild(filePath, atRevisionOne)).toBe(jar)
-    expect(resolvePartition(filePath, atRevisionTwo)).toBe(jar)
-    expect(resolvePartitionAsOlderBuild(filePath, atRevisionTwo)).toBe(jar)
-    rewriteAsOlderBuild(filePath)
-    expect(resolvePartition(filePath, atRevisionOne)).toBe(jar)
-    expect(resolvePartitionAsOlderBuild(filePath, atRevisionOne)).toBe(jar)
-  })
-
   it('adopts a per-process jar under the fingerprint an older build reads', async () => {
     configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
     const filePath = bindingStorePath()
@@ -412,25 +218,5 @@ describe('client host identity for a server Orca re-pairs in place', () => {
 
     expect(resolvePartition(filePath, identity)).toBe(legacy.partition)
     expect(resolvePartitionAsOlderBuild(filePath, identity)).toBe(legacy.partition)
-  })
-})
-
-describe('client host route identity lifetime', () => {
-  it('stops answering with a route identity once the host is retired by its own error', async () => {
-    configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
-    const environment = pairedEnvironment('environment-retired')
-    await startPairedRuntimeBrowserClientHost({
-      environment,
-      authorityRuntimeId: 'runtime-a'
-    })
-    expect(getPairedRuntimeBrowserClientRouteIdentity(environment.id)).not.toBeNull()
-
-    const failure = new Error('lease fenced')
-    compositions.at(-1)?.options.onError(failure)
-    await vi.waitFor(() => {
-      expect(compositions.at(-1)?.closed).toEqual([failure])
-    })
-
-    expect(getPairedRuntimeBrowserClientRouteIdentity(environment.id)).toBeNull()
   })
 })

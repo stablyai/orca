@@ -11,12 +11,14 @@ import {
   useWslHostsPaused
 } from '../../use-wsl-hosts-enabled'
 import { getWslHostsPausedShortLabel } from '../../wsl-host-row-status'
+import { useTranslate } from '../../../../i18n/use-translate'
 
 export function AddRepoHostSelectorSlot({
   hostSelection
 }: {
   hostSelection: ReturnType<typeof useAddRepoHostSelection>
 }) {
+  const t = useTranslate()
   const [addRemoteHostMode, setAddRemoteHostMode] = useState<AddRemoteHostMode | null>(null)
   const wslHostsAcceptNewWork = useWslHostsAcceptNewWork()
   const wslHostsPaused = useWslHostsPaused()
@@ -33,7 +35,7 @@ export function AddRepoHostSelectorSlot({
         onAddSshHost={() => setAddRemoteHostMode('ssh')}
         onAddRemoteServer={() => setAddRemoteHostMode('server')}
         onAddWslHost={wslHostsAcceptNewWork ? () => setAddRemoteHostMode('wsl') : undefined}
-        wslHostsPausedNote={wslHostsPaused ? getWslHostsPausedShortLabel() : undefined}
+        wslHostsPausedNote={wslHostsPaused ? getWslHostsPausedShortLabel(t) : undefined}
         onOpenWslHostsSetting={openWslHostsExperimentalSetting}
       />
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />

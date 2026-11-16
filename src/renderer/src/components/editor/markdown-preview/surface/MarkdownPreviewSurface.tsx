@@ -1,15 +1,25 @@
 import { Loader2 } from 'lucide-react'
-import { useMemo, type RefObject } from 'react'
+import { useCallback, useMemo, useState, type RefObject } from 'react'
+import { parseMarkdownDocLinkHref } from '../../markdown/documents/markdown-doc-links'
 import {
   extractFrontMatter,
   markdownFrontMatterInner
 } from '../../markdown/source-scanning/markdown-frontmatter'
+import {
+  RichMarkdownLinkBubble,
+  type LinkBubbleState
+} from '../../rich-markdown/links/RichMarkdownLinkBubble'
+import { copyRichMarkdownLink } from '../../rich-markdown/links/rich-markdown-link-clipboard'
+import {
+  measureHoveredLinkBubblePosition,
+  useMarkdownLinkHoverBubble
+} from '../../rich-markdown/links/use-markdown-link-hover-bubble'
 import { VirtualMarkdownPreviewBody } from '../viewport/VirtualMarkdownPreviewBody'
 import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-preview-navigation'
 import type { useMarkdownPreviewDocument } from '../document-worker/use-markdown-preview-document'
 import type { useMarkdownPreviewDocumentSearch } from '../search/use-markdown-preview-document-search'
 import type { Components } from 'react-markdown'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { MarkdownTableOfContentsPanel } from '../../markdown/navigation/MarkdownTableOfContentsPanel'
 import { MarkdownPreviewBody } from '../render-tree/MarkdownPreviewBody'
 import { MarkdownPreviewReviewToolbar } from '../review/MarkdownPreviewReviewToolbar'
@@ -45,6 +55,7 @@ export function MarkdownPreviewSurface({
   showTableOfContents: boolean
   onCloseTableOfContents?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     isSearchOpen,
     canShowReviewTools,
@@ -55,6 +66,47 @@ export function MarkdownPreviewSurface({
     frontmatterVisible,
     renderedContent
   } = foundation
+
+  const [bodyElement, setBodyElement] = useState<HTMLDivElement | null>(null)
+  const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
+  const setBodyContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      bodyRef.current = node
+      setBodyElement(node)
+    },
+    [bodyRef]
+  )
+  const { cancelHoverBubble, onBubblePointerEnter, onBubblePointerLeave } =
+    useMarkdownLinkHoverBubble({
+      containerElement: bodyElement,
+      isOpen: linkBubble !== null,
+      findLinkElement: (target) => {
+        const element =
+          target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+        const anchor = element?.closest<HTMLAnchorElement>('a[href]')
+        if (!anchor || !bodyElement?.contains(anchor)) {
+          return null
+        }
+        const href = anchor.getAttribute('href') ?? ''
+        if (!href || parseMarkdownDocLinkHref(href) !== null) {
+          return null
+        }
+        return anchor
+      },
+      resolveLinkBubble: (linkElement, point) => {
+        const href = linkElement.getAttribute('href') ?? ''
+        if (!href) {
+          return null
+        }
+        return {
+          kind: 'html-superscript',
+          href,
+          copyEnabled: true,
+          ...measureHoveredLinkBubblePosition(linkElement, point)
+        }
+      },
+      setLinkBubble
+    })
 
   const displayedContent =
     documentState.status === 'ready' ? documentState.content : renderedContent
@@ -106,7 +158,7 @@ export function MarkdownPreviewSurface({
         ) : null}
         {/* Why: OS page translation can replace react-owned text nodes and crash reconciliation. */}
         <div
-          ref={bodyRef}
+          ref={setBodyContainerRef}
           className="markdown-body"
           translate="no"
           data-markdown-preview-incomplete={largePreview || undefined}
@@ -114,7 +166,7 @@ export function MarkdownPreviewSurface({
           {frontMatter && frontmatterVisible ? (
             <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                {translate('auto.components.editor.MarkdownPreview.2b2b31382c', 'Front Matter')}
+                {t('auto.components.editor.MarkdownPreview.2b2b31382c', 'Front Matter')}
               </div>
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
                 {frontMatterInner}
@@ -124,7 +176,7 @@ export function MarkdownPreviewSurface({
           {largePreview ? (
             <>
               <p className="relative text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'editor.markdownPreview.largeNotice',
                   'Large preview. Use source view to copy the complete document. PDF export is unavailable.'
                 )}
@@ -134,11 +186,11 @@ export function MarkdownPreviewSurface({
                     className="absolute inset-0 bg-background"
                   >
                     {documentState.refreshError
-                      ? translate(
+                      ? t(
                           'editor.markdownPreview.refreshFailed',
                           'Preview update failed. Showing the previous version; open source view for current content.'
                         )
-                      : translate('editor.markdownPreview.preparing', 'Preparing preview…')}
+                      : t('editor.markdownPreview.preparing', 'Preparing preview…')}
                   </span>
                 ) : null}
               </p>
@@ -161,7 +213,7 @@ export function MarkdownPreviewSurface({
                 />
               ) : documentState.status === 'error' ? (
                 <p role="alert" className="text-sm text-muted-foreground">
-                  {translate(
+                  {t(
                     'editor.markdownPreview.processingFailed',
                     'This document cannot be rendered within the preview limits. Open source view to read the complete file.'
                   )}
@@ -169,7 +221,7 @@ export function MarkdownPreviewSurface({
               ) : (
                 <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  {translate('editor.markdownPreview.preparing', 'Preparing preview…')}
+                  {t('editor.markdownPreview.preparing', 'Preparing preview…')}
                 </p>
               )}
             </>
@@ -178,6 +230,25 @@ export function MarkdownPreviewSurface({
           )}
         </div>
       </div>
+      {linkBubble ? (
+        <RichMarkdownLinkBubble
+          anchorElement={foundation.rootRef.current ?? bodyElement}
+          linkBubble={linkBubble}
+          isEditing={false}
+          onDismiss={() => {
+            cancelHoverBubble()
+            setLinkBubble(null)
+          }}
+          onSave={() => {}}
+          onRemove={() => {}}
+          onEditStart={() => {}}
+          onEditCancel={() => {}}
+          onCopy={() => void copyRichMarkdownLink(linkBubble.href)}
+          onPointerEnter={onBubblePointerEnter}
+          onPointerLeave={onBubblePointerLeave}
+          portalToDocument
+        />
+      ) : null}
     </div>
   )
 }
