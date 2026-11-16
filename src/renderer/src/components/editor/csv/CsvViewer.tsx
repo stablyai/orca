@@ -206,9 +206,10 @@ export function CsvFooter({
 }: {
   rowCount: number
   columnCount: number
-  delimiterChoice: CsvDelimiterChoice
-  detectedDelimiter: string
-  onDelimiterChange: (choice: CsvDelimiterChoice) => void
+  /** Omitted for tables without a delimiter, such as Parquet. */
+  delimiterChoice?: CsvDelimiterChoice
+  detectedDelimiter?: string
+  onDelimiterChange?: (choice: CsvDelimiterChoice) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -228,11 +229,13 @@ export function CsvFooter({
           defaultValue_one: '{{formatted}} column'
         })}
       </span>
-      <CsvDelimiterPicker
-        value={delimiterChoice}
-        detectedDelimiter={detectedDelimiter}
-        onChange={onDelimiterChange}
-      />
+      {delimiterChoice !== undefined && detectedDelimiter !== undefined && onDelimiterChange && (
+        <CsvDelimiterPicker
+          value={delimiterChoice}
+          detectedDelimiter={detectedDelimiter}
+          onChange={onDelimiterChange}
+        />
+      )}
     </div>
   )
 }

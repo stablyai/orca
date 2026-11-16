@@ -26123,5 +26123,9 @@
     "suggestionUse": "Use",
     "browseOnline": "Browse",
     "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
+  },
+  "parquet": {
+    "readOnlyPreview": "Parquet preview · Read-only",
+    "loading": "Reading Parquet file…"
   }
 }

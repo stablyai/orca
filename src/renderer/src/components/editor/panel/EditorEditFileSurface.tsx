@@ -1,5 +1,4 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
 import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
@@ -12,8 +11,7 @@ import {
   ImageViewer,
   IpynbViewer,
   MermaidViewer,
-  MonacoEditor,
-  MediaViewer
+  MonacoEditor
 } from '../editor-lazy-views'
 import type { EditorConflictNavigation } from '../conflict-review/useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from '../loading/EditorFileLoadErrorView'
@@ -26,7 +24,7 @@ import {
 } from '../loading/editor-panel-content-types'
 import { CustomEditorExternalChangeBanner } from '../external-changes/CustomEditorExternalChangeBanner'
 import { PluginFileTypeSuggestion } from '../plugin-editors/PluginFileTypeSuggestion'
-import { BinaryFileDefaultAppButton } from '../document-media/BinaryFileDefaultAppButton'
+import { EditorBinaryFileSurface } from './EditorBinaryFileSurface'
 import type { useMarkdownDocuments } from '../markdown/documents/useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
 import type { MarkdownRenderState } from '../markdown/render-mode/markdown-render-mode'
@@ -161,46 +159,14 @@ export function EditorEditFileSurface({
     )
   }
   if (fileContent.isBinary) {
-    if (fileContent.mediaUrl && !fileContent.isImage) {
-      return (
-        <MediaViewer
-          key={fileContent.mediaUrl}
-          src={fileContent.mediaUrl}
-          mimeType={fileContent.mimeType ?? 'video/mp4'}
-          filePath={activeFile.filePath}
-          playbackCacheKey={pdfViewStateKey}
-          canOpenLocally={
-            !activeFile.externalSshTargetId &&
-            !activeFile.runtimeEnvironmentId &&
-            getConnectionIdForFile(activeFile.worktreeId, activeFile.filePath) === null
-          }
-        />
-      )
-    }
-    if (fileContent.isImage) {
-      return (
-        <ImageViewer
-          content={fileContent.content}
-          src={fileContent.mediaUrl}
-          byteSize={fileContent.size}
-          filePath={activeFile.filePath}
-          mimeType={fileContent.mimeType}
-          preferenceKey={pdfPreferenceKey}
-          scrollCacheKey={pdfViewStateKey}
-        />
-      )
-    }
     return (
-      <div className="flex h-full flex-col">
-        <PluginEditorSourceFallbackNotice fileId={activeFile.id} filePath={activeFile.filePath} />
-        <PluginFileTypeSuggestion filePath={activeFile.filePath} />
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-          {t('auto.components.editor.EditorContent.b9de81ba52', 'Binary file — cannot display')}
-          {fileContent.byteSource && (
-            <BinaryFileDefaultAppButton key={activeFile.id} source={fileContent.byteSource} />
-          )}
-        </div>
-      </div>
+      <EditorBinaryFileSurface
+        activeFile={activeFile}
+        fileContent={fileContent}
+        pdfViewStateKey={pdfViewStateKey}
+        pdfPreferenceKey={pdfPreferenceKey}
+        reloadContent={reloadContent}
+      />
     )
   }
 

@@ -9,6 +9,7 @@ import {
 import { useAppStore } from '@/store/index'
 import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
 import { readEditorCsvFileContent } from '../csv/preview/csv-file-content'
+import { isParquetFilePath, readEditorParquetFileContent } from '../parquet/parquet-file-content'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/files/access/runtime-workspace-file-route'
@@ -227,7 +228,9 @@ export function useEditorPanelFileContentLoader({
         const readPathKey = `${readScope ?? ''}::${filePath}`
         const key = `${readPathKey}::${JSON.stringify(acquisition?.provenance)}::${access?.kind ?? ''}${allowPagedPreview ? '' : '::editable'}${options?.wakeWslDistro ? '::wake' : ''}`
         const result = await readEditorPanelFileContent(key, options, () =>
-          readEditorCsvFileContent(readArgs, allowPagedPreview)
+          isParquetFilePath(filePath)
+            ? readEditorParquetFileContent(readArgs)
+            : readEditorCsvFileContent(readArgs, allowPagedPreview)
         )
         if (!requestCurrent()) {
           return
