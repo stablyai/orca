@@ -1,4 +1,4 @@
-import type { Tab } from '../../tab-types'
+import type { Tab } from './tab-types'
 
 type PinnedTab = Pick<Tab, 'id' | 'isPinned'>
 

@@ -2,7 +2,7 @@
 
 import { getDefaultWorkspaceSession } from '../../constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../execution-host'
-import type { Tab, TabGroup } from '../../tab-types'
+import type { Tab, TabGroup } from '../tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,

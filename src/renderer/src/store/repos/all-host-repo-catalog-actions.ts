@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
+import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import { retainValidFilterRepoIds } from './repo-filter-selection'
 import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/settings/worktree-visibility-owner-settings'
 import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'

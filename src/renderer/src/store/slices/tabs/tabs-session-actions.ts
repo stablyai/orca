@@ -13,7 +13,7 @@ import {
   finishReconciliationDrafts
 } from './tabs-reconciliation-batch'
 import type { AppState } from '../../types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 import { markFullResync } from '../../keyed-record-transitions'
 import { markPatchFullResync } from '../../seam-record-fields'

@@ -218,7 +218,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     homePath: string | null
   ): void {
     this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
   }
 
   protected syncWslConfigAndGlobalInstructionsForLaunch(
@@ -255,17 +254,18 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     pinnedWslDistro?: string
   ): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
-      return {
-        kind: 'ready',
-        codexHomePath: this.getPreparedWslRateLimitHomePath(target, pinnedWslDistro)
-      }
+      return this.getPreparedWslRateLimitHome(target, pinnedWslDistro)
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
         // Quota probes read account auth in place; resource synchronization belongs to launch prep.
-        return { kind: 'ready', codexHomePath: resolved.homePath }
+        return {
+          kind: 'ready',
+          codexHomePath: resolved.homePath,
+          readingAccount: { accountId: selfContainedAccount.id, runtime: 'host', wslDistro: null }
+        }
       }
       if (resolved.kind === 'indeterminate') {
         return { kind: 'skip' }

@@ -9,7 +9,6 @@ import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/prefligh
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/messages/native-chat-transcript-readability'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
@@ -24,7 +23,7 @@ import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 
@@ -55,11 +54,6 @@ export function resolveWindowsPowerShellImplementationSetting(settings: GlobalSe
 }
 
 export type TabBarRuntimeModel = {
-  newTerminalShortcut: string
-  newBrowserShortcut: string
-  newSimulatorShortcut: string
-  newFileShortcut: string
-  openMarkdownShortcut: string | null
   generatedTabTitlesEnabled: boolean
   mobileEmulatorEnabled: boolean
   showMobileEmulatorIntroCallout: boolean
@@ -91,11 +85,6 @@ export function useTabBarRuntimeModel({
   worktreeId: string
   groupId?: string
 }): TabBarRuntimeModel {
-  const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
-  const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
-  const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
-  const newFileShortcut = useShortcutLabel('tab.newMarkdown')
-  const openMarkdownShortcut = useOptionalShortcutLabel('tab.openMarkdown')
   const generatedTabTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -239,11 +228,6 @@ export function useTabBarRuntimeModel({
   )
 
   return {
-    newTerminalShortcut,
-    newBrowserShortcut,
-    newSimulatorShortcut,
-    newFileShortcut,
-    openMarkdownShortcut,
     generatedTabTitlesEnabled,
     mobileEmulatorEnabled,
     showMobileEmulatorIntroCallout,

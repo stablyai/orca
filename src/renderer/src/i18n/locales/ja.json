@@ -6414,7 +6414,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} が切断されました",
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
           "runtimeHostProjectNamed": "{{hostName}} 上のプロジェクト",
-          "ef18787206": "削除待ち"
+          "ef18787206": "削除待ち",
+          "notificationsMuted": "通知はミュート中"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agent",
@@ -6509,7 +6510,9 @@
           "copyPathOption": "パス",
           "copyNameOption": "ワークツリー名",
           "lineageSubmenu": "親と子",
-          "projectGroupSubmenu": "プロジェクトグループ"
+          "projectGroupSubmenu": "プロジェクトグループ",
+          "muteNotifications": "通知をミュート",
+          "unmuteNotifications": "通知のミュートを解除"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -13284,7 +13287,7 @@
           "catalog": "カタログ",
           "clear": "絞り込みをクリア",
           "themes": "テーマ",
-          "codeLanguages": "プログラミング言語",
+          "codeLanguages": "言語",
           "translations": "翻訳",
           "icons": "アイコン",
           "commands": "コマンドとパネル",
@@ -13297,7 +13300,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "このアップデートを読み取れませんでした",
-          "newAccess": "新規: {{value0}}",
           "failed": "{{value0}} をアップデートできませんでした。その他はアップデートされました。",
           "cancel": "キャンセル",
           "updateOne": "1 件のプラグインをアップデート",
@@ -13311,14 +13313,21 @@
           "allAccess": "すべてのアクセスを表示",
           "newCommands": "コマンド",
           "newContributions": "あなたの代わりに動作する機能",
-          "newEvents": "追加のイベント",
-          "newPanels": "パネル",
+          "newEvents": "より多くの Orca イベントに反応します",
+          "newPanels": "パネルを追加します",
           "newRecipes": "マシンレシピ",
           "newShortcuts": "キーボードショートカット",
-          "sourceMoved": "新しいソース: {{value0}} (以前: {{value1}})",
           "update": "アップデート",
-          "review": "確認",
-          "replacesAction": "Orca の {{value1}} の代わりに {{value0}} が実行されます"
+          "replacesAction": "Orca の {{value1}} の代わりに {{value0}} が実行されます",
+          "newFileTypes": "開くファイルが変わります",
+          "newHooks": "Orca と Agent の動作を変更または停止できます",
+          "newSettings": "設定ページ",
+          "newStatusBarItems": "ステータスバー項目",
+          "opensFileTypes": "新しいファイル形式を開きます: {{value0}}",
+          "becomesDefaultEditor": "{{value0}} の既定のエディターになります",
+          "needApproval": "承認が必要",
+          "readyToUpdate": "更新の準備完了",
+          "movedRepository": "別のリポジトリから提供されます"
         },
         "PluginDetailInfo": {
           "previous": "以前のバージョン",
@@ -13433,11 +13442,11 @@
         },
         "PluginUpdateReview": {
           "title": "{{value0}} のアップデートを確認",
-          "back": "戻る",
           "approve": "承認してアップデート",
-          "explain": "このアップデートは、承認済みのバージョンより多くのアクセスを求めています。ここで承認した場合にのみインストールされます。",
-          "before": "変更前",
-          "after": "変更後"
+          "uncompared": "Orca はこのバージョンを承認済みのバージョンと比較できませんでした。更新する前にアクセス内容を確認してください。",
+          "newInVersion": "このバージョンの新機能:",
+          "titleMany": "{{value0}} 件の更新を確認",
+          "history": "GitHub で変更を見る"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "公開元",
@@ -13445,7 +13454,8 @@
           "update": "アップデートする前に、{{value0}} を信頼できることを確認してください。このプラグインは公開元のコードを Orca 内で実行します。",
           "installed": "{{value0}} を信頼できることを確認してください。このプラグインは公開元のコードを Orca 内で実行します。",
           "label": "公式プラグインではありません:",
-          "translations": "翻訳は Orca 内のあらゆるテキストを変更できます。{{value0}} を信頼できることを確認してください。"
+          "translations": "翻訳は Orca 内のあらゆるテキストを変更できます。{{value0}} を信頼できることを確認してください。",
+          "community": "コミュニティプラグイン"
         },
         "pluginConsentCopy": {
           "addsCommands": "コマンドを追加します",
@@ -13463,11 +13473,15 @@
           "movedTitle": "{{value0}} {{value1}} は別のリポジトリから提供されています",
           "accessTitle": "{{value0}} {{value1}} がより多くのアクセスを求めています",
           "manyTitle": "{{value0}} 件のプラグイン更新が確認待ちです",
-          "oneDescription": "公開元: {{value0}}。確認するまで更新されません。",
-          "manyDescription": "確認するまで更新されません。",
-          "review": "確認",
           "dismiss": "閉じる",
-          "movedInstalled": "確認するまでオフのままです。"
+          "movedInstalled": "確認するまでオフのままです。",
+          "approveAll": "すべて承認して更新",
+          "approveOne": "承認して更新",
+          "details": "詳細",
+          "failed": "{{value0}} を更新できませんでした",
+          "morePlugins": "ほか {{value0}} 件のプラグイン",
+          "uncompared": "Orca は承認済みのバージョンと比較できませんでした。",
+          "held": "{{value0}} は確認後に変更されたため、設定 → プラグイン で確認を待っています。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "このフォルダーを信頼できることを確認してください",
@@ -16203,13 +16217,6 @@
                       "skillNotInstalled": "Orca CLI スキルはまだインストールされていません。"
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "モバイルエミュレータを非表示にできませんでした。"
-                    }
-                  }
                 }
               }
             }
@@ -16234,17 +16241,6 @@
             "5789936d9a": "Agent が画面を操作している間に iOS シミュレーターをプレビューできます。",
             "8014b4b80b": "保持",
             "6e051a40b7": "非表示"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "モバイルエミュレータを非表示にしました",
-                  "c46c979c1d": "いつでもモバイルエミュレータを再有効化できます",
-                  "600f9a745a": "設定 › モバイルエミュレータ"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "貼り付ける内容が大きすぎて、エミュレータのキーボード入力では扱えません。",
@@ -21000,7 +20996,6 @@
           "reopen": "再度開く",
           "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。"
         },
-        "ignoredFilesLost": "無視されたファイルは失われます: {{names}}",
         "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
       },
       "atRiskLocalFiles": {
@@ -23690,21 +23685,13 @@
     "language": {
       "back": "言語",
       "requestPrompt": "Orcaに対応してほしい言語は何ですか？",
-      "requestSuccess": "言語のリクエストを記録しました。設定を続けられます。",
       "requestError": "リクエストを記録できませんでした。再試行してください。",
       "retry": "再試行",
       "requestAction": "言語をリクエスト",
       "title": "表示言語",
-      "device": "システム言語：{{language}}",
-      "unsupported": "システム言語：{{language}}。この言語はまだサポートされていません。",
-      "unknown": "システム言語を検出できませんでした。以下から選択してください。",
-      "loadError": "この言語を読み込めませんでした。再試行してください。",
-      "saveError": "言語設定を保存できませんでした。再試行してください。",
-      "other": "その他の言語…",
       "settingsError": "設定を読み込めませんでした。",
       "loadingSettings": "設定を読み込み中…",
-      "loading": "言語を読み込み中…",
-      "saving": "言語を保存中…"
+      "loading": "言語を読み込み中…"
     }
   },
   "resourceManager": {

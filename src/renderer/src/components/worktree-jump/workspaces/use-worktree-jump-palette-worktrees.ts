@@ -20,7 +20,7 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../../shared/workspace-view/workspace-creator-visibility'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { indexHiddenProjects } from '../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../shared/project/catalog/hidden-projects'
 import { EMPTY_SORTED_WORKTREES } from '../worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from '../tabs/worktree-jump-palette-document-index'
 import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'

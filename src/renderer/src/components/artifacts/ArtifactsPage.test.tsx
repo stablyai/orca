@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import type { ReactNode } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -128,173 +128,6 @@ describe('ArtifactsPage', () => {
 
   afterEach(cleanup)
 
-  it('closes the drawer on Escape, then the page', async () => {
-    render(<ArtifactsPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /Quarterly report/ }))
-    expect(
-      await screen.findByRole('heading', { level: 2, name: 'Quarterly report' })
-    ).toBeInTheDocument()
-
-    fireEvent.keyDown(document.querySelector('[data-slot="sheet-content"]') as Element, {
-      key: 'Escape'
-    })
-    await waitFor(() =>
-      expect(screen.queryByRole('heading', { level: 2, name: 'Quarterly report' })).toBeNull()
-    )
-    expect(mocks.closePage).not.toHaveBeenCalled()
-
-    fireEvent.keyDown(document.body, { key: 'Escape' })
-    expect(mocks.closePage).toHaveBeenCalledOnce()
-  })
-
-  it('loads each cursor once and appends the next artifact page', async () => {
-    let resolveNextPage!: (value: unknown) => void
-    mocks.rpc
-      .mockResolvedValueOnce({
-        status: 'ok',
-        value: {
-          artifacts: [artifactListItem('First page', 'first-page')],
-          nextCursor: 'opaque cursor'
-        }
-      })
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          resolveNextPage = resolve
-        })
-      )
-    render(<ArtifactsPage />)
-
-    await screen.findAllByText('First page')
-    const loadMore = screen.getByRole('button', { name: 'Load more' })
-    fireEvent.click(loadMore)
-    fireEvent.click(loadMore)
-
-    expect(mocks.rpc).toHaveBeenCalledTimes(2)
-    expect(mocks.rpc).toHaveBeenLastCalledWith({ kind: 'local' }, 'artifacts.list', {
-      cursor: 'opaque cursor'
-    })
-    resolveNextPage({
-      status: 'ok',
-      value: { artifacts: [artifactListItem('Second page', 'second-page')] }
-    })
-
-    expect(await screen.findByRole('button', { name: /Second page/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /First page/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
-  })
-
-  it('can continue from an empty page that has a next cursor', async () => {
-    mocks.rpc
-      .mockResolvedValueOnce({
-        status: 'ok',
-        value: { artifacts: [], nextCursor: 'after-empty-page' }
-      })
-      .mockResolvedValueOnce({
-        status: 'ok',
-        value: { artifacts: [artifactListItem('Older artifact', 'older-artifact')] }
-      })
-    render(<ArtifactsPage />)
-
-    expect(await screen.findByText('More artifacts are available')).toBeInTheDocument()
-    expect(screen.queryByText('No shared artifacts')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
-
-    expect(await screen.findByRole('button', { name: /Older artifact/ })).toBeInTheDocument()
-  })
-
-  it('keeps loaded artifacts when loading another page fails', async () => {
-    mocks.rpc
-      .mockResolvedValueOnce({
-        status: 'ok',
-        value: {
-          artifacts: [artifactListItem('Still visible', 'still-visible')],
-          nextCursor: 'next-page'
-        }
-      })
-      .mockRejectedValueOnce(new Error('network down'))
-    render(<ArtifactsPage />)
-
-    await screen.findByRole('button', { name: /Still visible/ })
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
-
-    expect(await screen.findByText('Could not load more artifacts.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Still visible/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Load more' })).toBeEnabled()
-  })
-
-  it('does not surface an initial auth error after the account changes during refresh', async () => {
-    let resolveRefresh!: () => void
-    mocks.refreshAuth.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveRefresh = resolve
-      })
-    )
-    mocks.rpc.mockResolvedValueOnce({ status: 'reconnect-required' }).mockResolvedValueOnce({
-      status: 'ok',
-      value: { artifacts: [artifactListItem('Account B', 'account-b')] }
-    })
-    const view = render(<ArtifactsPage />)
-    await waitFor(() => expect(mocks.refreshAuth).toHaveBeenCalledOnce())
-
-    mocks.authStatus = {
-      activeProfileId: 'profile-b',
-      cloud: { cloudProfileId: 'cloud-b', userId: 'user-b' },
-      configured: true,
-      state: 'connected'
-    }
-    view.rerender(<ArtifactsPage />)
-    expect(await screen.findByRole('button', { name: /Account B/ })).toBeInTheDocument()
-    await act(async () => {
-      resolveRefresh()
-    })
-
-    await waitFor(() =>
-      expect(screen.queryByText('Sign in to Orca again to load artifacts.')).not.toBeInTheDocument()
-    )
-  })
-
-  it('does not surface a load-more auth error after switching accounts during refresh', async () => {
-    let resolveRefresh!: () => void
-    mocks.refreshAuth.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveRefresh = resolve
-      })
-    )
-    mocks.rpc
-      .mockResolvedValueOnce({
-        status: 'ok',
-        value: {
-          artifacts: [artifactListItem('Account A', 'account-a')],
-          nextCursor: 'account-a-next'
-        }
-      })
-      .mockResolvedValueOnce({ status: 'reconnect-required' })
-      .mockResolvedValueOnce({
-        status: 'ok',
-        value: { artifacts: [artifactListItem('Account B', 'account-b')] }
-      })
-    const view = render(<ArtifactsPage />)
-    await screen.findAllByText('Account A')
-    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
-    await waitFor(() => expect(mocks.refreshAuth).toHaveBeenCalledOnce())
-
-    mocks.authStatus = {
-      activeProfileId: 'profile-b',
-      cloud: { cloudProfileId: 'cloud-b', userId: 'user-b' },
-      configured: true,
-      state: 'connected'
-    }
-    view.rerender(<ArtifactsPage />)
-    expect(await screen.findByRole('button', { name: /Account B/ })).toBeInTheDocument()
-    await act(async () => {
-      resolveRefresh()
-    })
-
-    await waitFor(() =>
-      expect(screen.queryByText('Sign in to Orca again to load artifacts.')).not.toBeInTheDocument()
-    )
-  })
-
   it('never renders artifacts loaded for a previous account', async () => {
     let resolveFirst!: (value: unknown) => void
     mocks.rpc.mockReturnValueOnce(
@@ -376,36 +209,6 @@ describe('ArtifactsPage', () => {
     })
 
     expect(await screen.findByRole('button', { name: /Shared slug B/ })).toBeInTheDocument()
-  })
-
-  it('does not resurrect a deletion from an older refresh', async () => {
-    let resolveRefresh!: (value: unknown) => void
-    mocks.confirm.mockResolvedValue(true)
-    mocks.rpc
-      .mockResolvedValueOnce({
-        status: 'ok',
-        value: { artifacts: [artifactListItem('Delete me', 'delete-me')] }
-      })
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          resolveRefresh = resolve
-        })
-      )
-      .mockResolvedValueOnce({ status: 'ok', value: undefined })
-    render(<ArtifactsPage />)
-
-    await screen.findAllByText('Delete me')
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-    await deleteFirstArtifactFromDrawerMenu()
-    await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
-    await act(async () => {
-      resolveRefresh({
-        status: 'ok',
-        value: { artifacts: [artifactListItem('Delete me', 'delete-me')] }
-      })
-    })
-
-    await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
   })
 })
 

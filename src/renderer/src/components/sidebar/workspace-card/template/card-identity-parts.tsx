@@ -14,6 +14,7 @@ import {
   WorktreeCardRuntimeHostMark,
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
+import { WorktreeCardNotificationsMutedBadge } from '../identity/WorktreeCardNotificationsMutedBadge'
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath,
@@ -132,6 +133,9 @@ export const CARD_IDENTITY_PARTS = {
       hasHoverDetails={props.hasHoverDetails === true}
       directories={card.worktree.sparseDirectories}
     />
+  )),
+  NotificationsMuted: part([], (_props, _children, { worktree }) => (
+    <WorktreeCardNotificationsMutedBadge worktreeId={worktree.id} />
   )),
   DeleteQuickAction: part([], (_props, _children, card) => (
     <WorktreeCardDeleteQuickAction

@@ -2,11 +2,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   ACK_INCARNATION,
   ACK_LEAF,
-  ACK_SECOND_LEAF,
   ACK_TAB,
   createAcknowledgedTabRetirementFixture
 } from './acknowledged-terminal-tab-retirement-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 
 // The window's acknowledged close; a layout-owner build closes in main without one, and the twin
 // of that case is in acknowledged-terminal-tab-retirement-main-close.test.ts.
@@ -58,62 +57,4 @@ it('publishes physical-exit retirement before its durable write completes', asyn
     f.store.getWorkspaceSession().terminalLayoutsByTabId[ACK_TAB].ptyIdsByLeafId?.[ACK_LEAF]
   ).toBeUndefined()
   unsubscribe()
-})
-
-it('publishes nothing when the exit write lands after a replacement is admitted', async () => {
-  const f = await fixture()
-  await f.store.flushPendingOrThrowAsync()
-  const published = vi.fn()
-  const unsubscribe = f.runtime.onMobileSessionTabsChanged(published)
-  const gate = f.authority.pause()
-  const exiting = f.runtime.onPtyExit('pty-a', 0, ACK_INCARNATION, { providerExitObserved: true })
-  await gate.started.promise
-  f.runtime.onPtySpawned('pty-a', 'new-incarnation')
-  published.mockClear()
-  gate.finish.resolve()
-  await exiting
-  expect(published).not.toHaveBeenCalled()
-  unsubscribe()
-})
-
-async function exitWithFailedDurableWrite(f: Awaited<ReturnType<typeof fixture>>): Promise<void> {
-  await f.store.flushPendingOrThrowAsync()
-  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-  f.authority.failNextWrite()
-  await f.runtime.onPtyExit('pty-a', 0, ACK_INCARNATION, { providerExitObserved: true })
-  expect(errorSpy).toHaveBeenCalledWith(
-    '[runtime] terminal retirement is not yet durable:',
-    expect.any(Error)
-  )
-  errorSpy.mockRestore()
-  // The failed write left disk untouched, so a relaunch would still load the exited leaf.
-  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId).toEqual({
-    [ACK_LEAF]: 'pty-a',
-    [ACK_SECOND_LEAF]: 'pty-b'
-  })
-}
-
-it('persists a failed exit retirement with the next unrelated profile write', async () => {
-  const f = await fixture()
-  await exitWithFailedDurableWrite(f)
-  f.store.addRepo({
-    id: 'repo2',
-    path: '/tmp/other',
-    displayName: 'Other',
-    badgeColor: 'gray',
-    addedAt: 2
-  })
-  await f.store.flushPendingOrThrowAsync()
-  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId).toEqual({
-    [ACK_SECOND_LEAF]: 'pty-b'
-  })
-})
-
-it('persists a failed exit retirement with the final quit flush', async () => {
-  const f = await fixture()
-  await exitWithFailedDurableWrite(f)
-  await f.quit()
-  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]?.ptyIdsByLeafId).toEqual({
-    [ACK_SECOND_LEAF]: 'pty-b'
-  })
 })

@@ -1,7 +1,7 @@
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { useMemo, useState } from 'react'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import {
   buildOrderedTabItems,

@@ -57,10 +57,8 @@ type Props = {
   tooltipSide?: StateIndicatorTooltipSide
   /** Program-reported 0–100; live states then draw a filling ring instead of the spinner/glyph. */
   progress?: number
-  /** Unread completion swaps the check for the workspace unread dot; live and needs-you glyphs keep precedence. */
+  /** Unread completion is spoken in the label only; the card's status lane owns the one unread dot. */
   unread?: boolean
-  /** 'label' keeps the check and only speaks unread, for rows whose card already draws the one dot. */
-  unreadDisplay?: 'dot' | 'label'
 }
 
 type ProgressRing = { tone: AgentProgressRingTone; percent: number }
@@ -99,8 +97,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   title,
   tooltipSide,
   progress,
-  unread = false,
-  unreadDisplay = 'dot'
+  unread = false
 }: Props): React.JSX.Element {
   const t = useTranslate()
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
@@ -108,7 +105,6 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
   const ring = progressRing(state, progress)
   const announceUnread = unread && state === 'done'
-  const showUnreadDot = announceUnread && unreadDisplay === 'dot'
   const label = announceUnread
     ? t('workspace.activity.unreadLabel', '{{status}} · Unread', {
         status: agentStateLabel(state)
@@ -141,16 +137,6 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         aria-label={agentStateLabel(state)}
       >
         <Activity className={cn('text-agent-working', icon)} aria-hidden="true" />
-      </span>
-    )
-  } else if (showUnreadDot) {
-    // Same unread token as the workspace status lane, so one blue dot means unread everywhere.
-    indicator = (
-      <span
-        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={label}
-      >
-        <span className={cn('block rounded-full bg-unread', inner)} />
       </span>
     )
   } else if (state === 'done') {

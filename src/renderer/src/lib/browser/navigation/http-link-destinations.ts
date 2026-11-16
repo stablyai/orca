@@ -38,6 +38,7 @@ type WorkspaceHttpLinkBrowserRequest = HttpLinkBrowserRequestFields & {
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
   allowClientBrowserFallback?: boolean
+  allowSshDeviceBrowser?: boolean
 }
 
 /** Resolves to the page id when the page renders on this desktop, else null. */
