@@ -1484,6 +1484,75 @@
       "supportedKeys": "Define only the supported keys: `scripts` and `setup`.",
       "supportedArchiveKeys": "Define only the supported keys: `scripts`, `setup`, and `archive`.",
       "invalidArchive": "The file is present, but Orca could not find a valid setup or archive script."
+    },
+    "uninstall": {
+      "groupTitle": "Uninstall",
+      "title": "Uninstall Orca",
+      "searchDescription": "Remove agent hooks, the orca command, the background service and SSH host files.",
+      "keywords": {
+        "uninstall": "uninstall",
+        "remove": "remove",
+        "delete": "delete",
+        "cleanup": "cleanup",
+        "hooks": "hooks"
+      },
+      "copyCommand": "Copy command",
+      "quit": "Quit Orca",
+      "next": {
+        "unknown": "Quit Orca, then delete the app.",
+        "macApp": "Quit Orca, then drag it from Applications to the Trash.",
+        "homebrew": "Orca was installed with Homebrew. Run this to remove the app:",
+        "linuxPackage": "Run this to remove the package:",
+        "windows": "Finish in the Windows uninstaller. Orca quits when it opens.",
+        "appImage": "Quit Orca, then delete <path>{{path}}</path>."
+      },
+      "openUninstaller": "Open uninstaller",
+      "agentStatusOff": "Agent status is off. Orca won't add hooks again unless you turn it on in Settings → Agents.",
+      "loadFailed": "Orca could not check what it installed.",
+      "tryAgain": "Try again",
+      "keeps": "Projects, worktrees and Orca settings stay.",
+      "keepsShared": "{{name}} is also installed, so hooks it shares stay too.",
+      "removing": "Removing…",
+      "button": "Uninstall",
+      "uninstalling": "Uninstalling…",
+      "rows": {
+        "agents_one": "Hooks in 1 agent",
+        "agents_other": "Hooks in {{count}} agents",
+        "hosts": "SSH hosts",
+        "hostCount_one": "1 host",
+        "hostCount_other": "{{count}} hosts",
+        "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
+        "service": "Background service",
+        "hookScripts": "Hook scripts"
+      },
+      "retry": "Retry",
+      "host": {
+        "connected": "Connected",
+        "offline": "Offline"
+      },
+      "summary": {
+        "agents_one": "hooks in 1 agent",
+        "agents_other": "hooks in {{count}} agents",
+        "cliCommand": "the <cmd>{{name}}</cmd> CLI",
+        "service": "a background service",
+        "hookScripts": "hook scripts",
+        "hosts_one": "1 SSH host",
+        "hosts_other": "{{count}} SSH hosts",
+        "nothing": "Nothing outside the app to remove.",
+        "loading": "Checking what Orca installed…",
+        "done": "Removed. Delete the app to finish.",
+        "problems_one": "1 item needs you before you delete the app.",
+        "problems_other": "{{count}} items need you before you delete the app.",
+        "stillInUse": "Some Orca files are still in use, so they stay for now."
+      },
+      "status": {
+        "running": "Removing",
+        "done": "Done",
+        "problem": "Needs attention",
+        "kept": "Kept"
+      },
+      "stepFailed": "Orca could not finish this step.",
+      "finishFailed": "Orca could not do that."
     }
   },
   "menu": {

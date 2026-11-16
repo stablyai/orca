@@ -2515,6 +2515,22 @@
         "permissionDenied": "Permission denied",
         "permissionDeniedPublickey": "Permission denied (publickey)"
       }
+    },
+    "uninstall": {
+      "rows": {
+        "agents_one": "Hooks in 1 agent",
+        "agents_other": "Hooks in {{count}} agents",
+        "hostCount_one": "1 host",
+        "hostCount_other": "{{count}} hosts"
+      },
+      "summary": {
+        "agents_one": "hooks in 1 agent",
+        "agents_other": "hooks in {{count}} agents",
+        "hosts_one": "1 SSH host",
+        "hosts_other": "{{count}} SSH hosts",
+        "problems_one": "1 item needs you before you delete the app.",
+        "problems_other": "{{count}} items need you before you delete the app."
+      }
     }
   },
   "sidebar": {
