@@ -3189,6 +3189,7 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReviewApproved": "{{agent}} approved this action. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
+      "autoReviewDenied": "{{agent}}'s automatic review denied: {{action}}",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
       "forkedFrom": "Forked from",

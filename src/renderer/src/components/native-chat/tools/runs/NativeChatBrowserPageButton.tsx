@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { findBrowserWorkspaceForRemotePage } from '@/runtime/web-session-tabs-sync/mirrored-browser-tabs'
 import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
-import { browserPageActivationFailureMessage } from '@/components/tab-bar/open-tab-selection-routing'
+import { browserPageActivationFailureMessage } from '@/components/tab-bar/create-entry/open-tab-selection-routing'
 import { useLastBrowserAgentPageId } from '../../../browser-pane/agent-cursor/browser-agent-activity-state'
 import {
   useNativeChatVisualOwner,

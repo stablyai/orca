@@ -7,7 +7,7 @@ import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { RetainedPaneHost } from '../../../tab-group/RetainedPaneHost'
+import { RetainedPaneHost } from '../../../tab-group/retained-pane/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
 import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'

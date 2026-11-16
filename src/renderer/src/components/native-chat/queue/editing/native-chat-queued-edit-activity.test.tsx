@@ -32,7 +32,7 @@ function Queue() {
         value={edit.editor.text}
         onChange={(event) => edit.editor?.change(event.target.value)}
       />
-      <button disabled={!edit.editor.canSave} onClick={edit.editor.save}>
+      <button disabled={edit.editor.acquiring || !edit.editor.canSave} onClick={edit.editor.save}>
         Save
       </button>
     </>
@@ -57,6 +57,7 @@ it('keeps an unsaved inline edit open across a chat switch without returning it 
     expect(view.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
   )
   fireEvent.change(view.getByRole('textbox'), { target: { value: 'unsaved replacement' } })
+  expect(view.getByDisplayValue('unsaved replacement')).toBeTruthy()
   view.rerender(pane(false))
   await act(async () => {})
   expect(toast.error).not.toHaveBeenCalled()

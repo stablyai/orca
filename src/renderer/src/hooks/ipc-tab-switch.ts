@@ -1,5 +1,5 @@
 import { useAppStore } from '../store'
-import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
+import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
 import {
   getActiveEntityIdForTabType,
   getNextTerminalCycleTab,

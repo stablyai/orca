@@ -481,3 +481,22 @@ it('a send restated off a snapshot page survives a follow-up abandoned by a newe
 
   expect(chat.sendState('send')).toBe('pending')
 })
+
+it('a first snapshot abandoned mid-read is still sent before any other frame', async () => {
+  const held = new Set(['send'])
+  const chat = await openChat('owed-snapshot', held)
+  await chat.submit()
+  // The opening snapshot's authority changes during its read, so that capture is abandoned.
+  chat.historyReads.mockImplementationOnce(async (...args) => {
+    const read = chat.journal.history(...args)
+    held.clear()
+    return read
+  })
+  chat.open()
+  await chat.laneDrained()
+  chat.subscribers.publish(SESSION, chat.journal)
+  await vi.waitFor(() => expect(chat.events.length).toBeGreaterThan(0))
+
+  expect(chat.events[0]).toMatchObject({ type: 'snapshot', sessionId: SESSION, fence: 1 })
+  expect(chat.sendState('send')).toBe('unknown')
+})
