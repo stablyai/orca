@@ -136,7 +136,7 @@ export async function refreshWorktreeHeadIdentities(
   }
   state.inFlight = true
   try {
-    const { identities, complete } = await readGitCommonHeadIdentities(
+    const { identities, complete, headlessEntryKeys } = await readGitCommonHeadIdentities(
       host.path,
       state.cache,
       effectiveScope
@@ -154,9 +154,10 @@ export async function refreshWorktreeHeadIdentities(
     for (const identity of identities) {
       nextBaseline.set(identity.worktreePath, headIdentitySignature(identity))
     }
-    // Silent head-moving passes accompany structural catalog notification, which publishes the authoritative heads.
+    // Silent head-moving passes accompany structural catalog notification, which publishes the authoritative heads;
+    // an emitting request queued mid-pass would diff against this baseline, so publish its moves now.
     const changed =
-      baseline && requestedEmit
+      baseline && (requestedEmit || state.queuedEmit)
         ? identities.filter(
             (identity) => baseline.get(identity.worktreePath) !== headIdentitySignature(identity)
           )
@@ -164,10 +165,17 @@ export async function refreshWorktreeHeadIdentities(
     for (const repoId of changed.length > 0 ? host.repos.keys() : []) {
       notifyWorktreeHeadIdentitiesChanged(host.mainWindow, repoId, changed)
     }
+    if (baseline === null) {
+      // This first baseline absorbs moves queued mid-read, so their next pass cannot publish them either.
+      unverifiedCallbacks.push(...state.queuedUnverified.splice(0))
+    }
     // Commit baseline after notification so a partial send failure retries instead of burying the move.
     state.baseline = nextBaseline
-    // Without a prior baseline nothing was diffed, so no move could have been published.
-    verified = complete && baseline !== null
+    // Without a prior baseline nothing was diffed; a headless scoped entry (orphan branch) publishes nothing.
+    verified =
+      complete &&
+      baseline !== null &&
+      ![...requestedScope.entryNames].some((key) => headlessEntryKeys.has(key))
   } catch (error) {
     console.warn(`[worktree-base-watcher] head identity read failed for ${host.path}:`, error)
     // Failed reads invalidate partial memo state; force a full refresh next time.
