@@ -4,7 +4,7 @@ import {
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
   type ExecutionHostScope
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

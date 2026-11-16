@@ -1,4 +1,7 @@
-import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import {
   getManagedOrcadSshTargetId,
   type ManagedOrcadEnvironmentSummary

@@ -36,7 +36,7 @@
 
 휴대폰에서 에이전트를 모니터링하고 조종하세요 — 에이전트가 완료되면 알림을 받고 어디서든 후속 지시를 보낼 수 있습니다.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://orca.dev/download/android) · [문서 →](https://orca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [Android APK](https://orca.dev/download/android) · [문서 →](https://orca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -236,7 +236,7 @@ yay -S stably-orca-bin
 데스크톱 앱과 페어링해 휴대폰에서 에이전트를 모니터링하고 조종하세요.
 
 - **iOS:** [App Store에서 다운로드](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [APK 다운로드](https://orca.dev/download/android) · [설치 가이드](https://orca.dev/docs/android-apk)
+- **Android:** [Google Play](https://play.google.com/store/apps/details?id=dev.orca.app) · [APK 다운로드](https://orca.dev/download/android) · [설치 가이드](https://orca.dev/docs/android-apk)
 
 ---
 

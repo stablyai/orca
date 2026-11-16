@@ -1,7 +1,7 @@
 import { useTaskPageGitHubCollectionState } from './use-task-page-github-collection-state'
 import type { TaskPageProviderStateModel } from '../../use-task-page-provider-state'
 import { useState, useRef, useEffect, useLayoutEffect, useSyncExternalStore } from 'react'
-import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome-types'
+import type { TaskViewPresetId } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT,

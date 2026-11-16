@@ -7,7 +7,7 @@ import {
   type NewChatPermissionSettings
 } from '../../../agent-launch/permissions/agent-chat-permission-mode'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode-option-id'
-import type { GlobalSettings } from '../../../global-settings-types'
+import type { GlobalSettings } from '../../../settings/global-settings-types'
 import {
   findCatalogModel,
   getAgentSessionOptionCatalog,

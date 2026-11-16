@@ -1,6 +1,6 @@
 import { AGENT_SESSION_ID_MAX_LENGTH as MAX_ID_LENGTH } from '../agent-session/agent-session-wire'
 import { z } from 'zod'
-import { normalizeExecutionHostId } from '../execution-host'
+import { normalizeExecutionHostId } from '../execution-host/execution-host'
 import { Identifier } from './structured-agent-session/structured-agent-session-identifiers'
 
 export const ExecutionHostId = z

@@ -1,6 +1,6 @@
 // In-memory generations advance on bind, retirement or rollback, including same-ID respawns; moves/removals do not.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { StoreRuntimeState } from '../store-runtime-state'
 

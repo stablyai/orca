@@ -15,7 +15,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type {

@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../../terminal/launch/terminal-workspace-scope'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   WorktreeLineageInput,
   WorktreeLineageResolution

@@ -13,7 +13,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { fetchRuntimeAddProjectPathStatus, getRuntimeEnvironmentDisplayName } from './owner-routing'

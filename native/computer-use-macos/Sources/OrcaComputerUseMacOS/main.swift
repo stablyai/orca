@@ -5308,14 +5308,36 @@ private func printPermissionStatus() {
     print(permissionStatusJSON())
 }
 
-private func writePermissionStatus(to path: String) {
-    let text = permissionStatusJSON()
-    do {
-        try text.write(toFile: path, atomically: true, encoding: .utf8)
-    } catch {
-        fputs("failed to write permission status: \(error)\n", stderr)
-        exit(1)
+private let selfResponsibleMarker = "ORCA_COMPUTER_USE_SELF_RESPONSIBLE"
+
+// Why: Orca spawns this probe directly to own its PID, so TCC must be told to judge this helper, not Orca.
+private func becomeSelfResponsible() {
+    typealias ResponsiblePid = @convention(c) (pid_t) -> pid_t
+    typealias SetDisclaim = @convention(c) (UnsafeMutablePointer<posix_spawnattr_t?>, Bool) -> Int32
+    let defaultHandle = UnsafeMutableRawPointer(bitPattern: -2)
+    guard let responsibleSymbol = dlsym(defaultHandle, "responsibility_get_pid_responsible_for_pid"),
+          let disclaimSymbol = dlsym(defaultHandle, "responsibility_spawnattrs_setdisclaim")
+    else {
+        fputs("permission status needs macOS responsibility disclaim\n", stderr)
+        exit(70)
     }
+    if unsafeBitCast(responsibleSymbol, to: ResponsiblePid.self)(getpid()) == getpid() {
+        return
+    }
+    guard getenv(selfResponsibleMarker) == nil else {
+        fputs("permission status helper is still attributed to its parent\n", stderr)
+        exit(70)
+    }
+    setenv(selfResponsibleMarker, "1", 1)
+    var attributes: posix_spawnattr_t?
+    posix_spawnattr_init(&attributes)
+    // SETEXEC replaces this image in place, so the PID Orca owns stays the probe's PID.
+    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETEXEC))
+    _ = unsafeBitCast(disclaimSymbol, to: SetDisclaim.self)(&attributes, true)
+    let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
+    let status = posix_spawn(nil, executable, nil, &attributes, CommandLine.unsafeArgv, environ)
+    fputs("failed to re-exec permission status helper: \(String(cString: strerror(status)))\n", stderr)
+    exit(70)
 }
 
 private func runStdio() {
@@ -5450,13 +5472,8 @@ if arguments.first == "--agent" {
         copy: permissionCopy
     )
 } else if arguments.first == "--permission-status" {
+    becomeSelfResponsible()
     printPermissionStatus()
-} else if arguments.first == "--permission-status-file" {
-    guard arguments.count >= 2 else {
-        fputs("usage: orca-computer-use-macos --permission-status-file <path>\n", stderr)
-        exit(2)
-    }
-    writePermissionStatus(to: arguments[1])
 } else {
     runStdio()
 }

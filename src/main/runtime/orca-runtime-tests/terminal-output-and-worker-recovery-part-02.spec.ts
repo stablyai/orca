@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import '../../../shared/workspace-layout/layout-owner-switch'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import '../../../shared/workspace-layout/stable-pane-id'
 
 import {

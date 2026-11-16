@@ -3,7 +3,7 @@ import type { ProjectGroup } from '../../../../shared/project/groups/project-gro
 import type { GroupHookCheckResult } from '../../../../shared/project/groups/project-group-hooks'
 import type { SetupAgentStartupPolicy } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { getSetupConfig } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'

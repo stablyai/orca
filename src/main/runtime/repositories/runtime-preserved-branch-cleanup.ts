@@ -8,7 +8,7 @@ import {
   getRepoRoutingConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { forceDeleteLocalBranch } from '../../git/worktrees/removal/worktree-branch-removal'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'

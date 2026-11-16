@@ -3,7 +3,7 @@ import { projectGroupHookOwner } from '../../../../../shared/workspace-setup/hoo
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import { RepositoryPane } from '../repository/RepositoryPane'
 import { SettingsSection } from '../section-layout/SettingsSection'

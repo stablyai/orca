@@ -9,7 +9,7 @@ import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-t
 
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   isTuiAgentEnabled
