@@ -62,17 +62,17 @@ export function cloudStateDetail(
         'Restart to recover. Files are kept and Orca resumes your agents after the restart.'
       )
     case 'archived':
-      // Same words as the archived view: what the snapshot holds and when it is deleted.
+      // Same words everywhere an archived workspace shows: read-only, and how long until it's deleted.
       return archivedSnapshotLine(t, keptUntil)
     case 'failed':
       return t(
         'orcaCloudWorkspace.detail.startFailed',
-        'The sandbox couldn’t start. Nothing was lost.'
+        'Couldn’t start the workspace. Your files are safe.'
       )
     case 'wakeFailed':
       return t(
         'orcaCloudWorkspace.detail.wakeFailed',
-        'Couldn’t wake the sandbox. Your files and chats are safe.'
+        'Couldn’t wake the workspace. Your files and chats are safe.'
       )
     case 'running':
     case 'unknown':

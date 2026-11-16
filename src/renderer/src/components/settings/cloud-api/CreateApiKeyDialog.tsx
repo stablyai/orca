@@ -245,7 +245,7 @@ function FormStep({
             <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             {t(
               'auto.components.settings.cloudApi.create.restricted',
-              'Only team owners and admins can grant access to: {{scopes}}. Ask one of them if a script needs it.',
+              'Only team owners and admins can give access to {{scopes}}. Ask one of them if a script needs it.',
               {
                 scopes: formatList(
                   restricted.map((scope) => cloudApiScopeDescription(scope, t).toLowerCase())

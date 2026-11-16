@@ -24,7 +24,8 @@
   },
   "triggers": { "crons": ["*/5 * * * *"] },
   "vars": {
-    "SANDBOX_ENV": "local",
+    // No SANDBOX_ENV here: a config copied from this one that forgets to set it leaves every dev-only route and
+    // behavior off (dev-only.ts). `pnpm dev` passes SANDBOX_ENV=local itself.
     "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
     "VERCEL_REGION": "pdx1",
     "VERCEL_FALLBACK_REGIONS": "iad1",

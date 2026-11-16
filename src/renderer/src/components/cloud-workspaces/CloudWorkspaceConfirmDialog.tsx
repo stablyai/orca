@@ -1,7 +1,8 @@
 // Confirmation for row actions that take something away from people: making a shared workspace
 // private (teammates' computers are disconnected), handing ownership to someone else, and archiving
 // a teammate's running workspace (their agents stop).
-import { useArchiveSnapshotDefinition } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
+import { archiveDialogKeptLine } from '@/components/orca-cloud/archive-snapshot-copy'
+import { useArchiveTtlDays } from '@/lib/orca-cloud/archive-ttl'
 import React, { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -126,8 +127,8 @@ export function CloudWorkspaceConfirmDialog({
         : t('auto.components.cloudWorkspaces.reassignTitle', 'Make {{name}} the owner?', {
             name: memberName(directory, pending.ownerUserId, selfId, t)
           })
-  // What archive keeps, until when, and that it costs no sandbox hours (one shared definition).
-  const archiveDefinition = useArchiveSnapshotDefinition()
+  // How long archive keeps it, in the same relative words as the Archive tooltip.
+  const archiveKept = archiveDialogKeptLine(t, useArchiveTtlDays())
   const losesManagement = pending.kind === 'owner' && w.ownerUserId === selfId && !canAdmin
   // Destructive for someone else (their agents stop, or you lose access): focus starts on Cancel.
   const focusCancel = losesManagement || pending.kind === 'archive' || pending.kind === 'delete'
@@ -142,7 +143,7 @@ export function CloudWorkspaceConfirmDialog({
             <DialogDescription>
               {t(
                 'auto.components.sidebar.DeleteCloudWorkspace.bodyNoSnapshot',
-                "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone."
+                'Deletes the workspace and all its files, chats and uncommitted changes. This can’t be undone.'
               )}
             </DialogDescription>
           ) : pending.kind === 'archive' ? (
@@ -152,7 +153,7 @@ export function CloudWorkspaceConfirmDialog({
                 "{{owner}}'s agents in this workspace will stop.",
                 { owner: memberName(directory, w.ownerUserId, selfId, t) }
               )}{' '}
-              {archiveDefinition}
+              {archiveKept}
             </DialogDescription>
           ) : (
             <>
