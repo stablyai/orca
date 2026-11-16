@@ -86,16 +86,23 @@ export function resolveCodexSessionBackfillScanPlan(
   ) {
     return null
   }
+  const requestedFrom = mergeCodexSessionBackfillDates(
+    baseline.pendingScanDates,
+    baseline.scanFrom ? [baseline.scanFrom] : [],
+    options.scanFrom ? [options.scanFrom] : []
+  )[0]
+  // A cursor without a saved floor belongs to a full-history traversal.
+  const scanFrom = baseline.scanCursor
+    ? baseline.scanCursorFrom && requestedFrom
+      ? mergeCodexSessionBackfillDates([baseline.scanCursorFrom, requestedFrom])[0]
+      : undefined
+    : requestedFrom
   return {
     boundedScan: true,
     scanFrom:
       options.fullScanRequired || !baseline.hasBaseline || !baseline.scanFrom
         ? undefined
-        : mergeCodexSessionBackfillDates(
-            baseline.pendingScanDates,
-            baseline.scanFrom ? [baseline.scanFrom] : [],
-            options.scanFrom ? [options.scanFrom] : []
-          )[0],
+        : scanFrom,
     scanCursor: baseline.scanCursor
   }
 }

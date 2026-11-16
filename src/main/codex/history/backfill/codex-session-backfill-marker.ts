@@ -24,6 +24,7 @@ export type CodexSessionBackfillBaseline = {
   hasBaseline: boolean
   scanFrom?: CodexSessionBackfillDate
   scanCursor?: readonly string[]
+  scanCursorFrom?: CodexSessionBackfillDate
   scanCheckpoint?: CodexSessionBackfillDate
   needsScan: boolean
   /** Legacy pending dates remain inclusive lower bounds. */
@@ -52,6 +53,7 @@ export function readCodexSessionBackfillBaseline(
     pendingScanDates: record.pendingScanDates,
     scanFrom: record.scanFrom,
     scanCursor: record.scanCursor,
+    scanCursorFrom: record.scanCursorFrom,
     scanCheckpoint: record.scanCheckpoint,
     needsScan:
       record.needsFullScan ||
@@ -79,6 +81,7 @@ export function writeCodexSessionBackfillMarker(
     coveredScanDates: readonly CodexSessionBackfillDate[]
     progress: CodexSessionBackfillScanProgress
     resumed: boolean
+    scanFrom?: CodexSessionBackfillDate
     /** Live panes can still write into these dates, so keep them pending. */
     retainPendingScanDates?: boolean
   }
@@ -116,6 +119,11 @@ export function writeCodexSessionBackfillMarker(
         : undefined
       : current?.scanCheckpoint,
     scanCursor: generationCurrent ? options.progress.cursor : current?.scanCursor,
+    scanCursorFrom: generationCurrent
+      ? options.progress.truncated
+        ? options.scanFrom
+        : undefined
+      : current?.scanCursorFrom,
     // Empty bounded scans must not erase the count from the full-history baseline.
     baselineScannedFiles:
       options.coverage === 'full' ? summary.scannedFiles : current?.baselineScannedFiles,
@@ -181,7 +189,14 @@ export function markCodexSessionBackfillMarkerNeedsFullScan(markerPath: string):
     return
   }
   try {
-    writeMarkerRecord(markerPath, { ...record.raw, pendingScanDates: [], needsFullScan: true })
+    writeMarkerRecord(markerPath, {
+      ...record.raw,
+      pendingScanDates: [],
+      needsFullScan: true,
+      scanCursor: undefined,
+      scanCursorFrom: undefined,
+      scanCheckpoint: undefined
+    })
   } catch (error) {
     console.warn('[codex-session-backfill] Failed to record full-scan demand:', error)
     rmSync(markerPath, { force: true })
@@ -197,6 +212,7 @@ type CodexSessionBackfillMarkerRecord = {
   launchActive: boolean
   scanFrom?: CodexSessionBackfillDate
   scanCursor?: readonly string[]
+  scanCursorFrom?: CodexSessionBackfillDate
   scanCheckpoint?: CodexSessionBackfillDate
   baselineScannedFiles: number | undefined
 }
@@ -215,6 +231,7 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       needsFullScan?: unknown
       scanFrom?: unknown
       scanCheckpoint?: unknown
+      scanCursorFrom?: unknown
       scanCursor?: unknown
       launchActive?: unknown
       baselineScannedFiles?: unknown
@@ -237,6 +254,9 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       needsFullScan: marker.needsFullScan === true,
       launchActive: marker.launchActive === true,
       scanFrom: isCodexSessionBackfillDate(marker.scanFrom) ? marker.scanFrom : undefined,
+      scanCursorFrom: isCodexSessionBackfillDate(marker.scanCursorFrom)
+        ? marker.scanCursorFrom
+        : undefined,
       scanCheckpoint: isCodexSessionBackfillDate(marker.scanCheckpoint)
         ? marker.scanCheckpoint
         : undefined,

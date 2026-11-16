@@ -18,6 +18,7 @@ import {
 import {
   captureCodexSessionBackfillMarkerGeneration,
   readCodexSessionBackfillBaseline,
+  markCodexSessionBackfillMarkerNeedsFullScan,
   writeCodexSessionBackfillMarker as writeBackfillMarker
 } from './codex-session-backfill-marker'
 import { resolveCodexSessionBackfillScanPlan } from './codex-session-backfill-scan-dates'
@@ -70,6 +71,9 @@ async function runCodexSessionBackfillOncePerHost(
   systemCodexHomePathOverride?: string
 ): Promise<CodexSessionBackfillSummary | null> {
   const paths = resolveCodexSessionBackfillPaths(systemCodexHomePathOverride)
+  if (options.fullScanRequired) {
+    markCodexSessionBackfillMarkerNeedsFullScan(paths.markerPath)
+  }
   const markerGeneration = captureCodexSessionBackfillMarkerGeneration()
   const baseline = readCodexSessionBackfillBaseline(paths.markerPath, paths.systemSessionsRoot)
   const scanPlan = resolveCodexSessionBackfillScanPlan(baseline, options)
@@ -103,6 +107,7 @@ async function runCodexSessionBackfillOncePerHost(
       coveredScanDates: baseline?.pendingScanDates ?? [],
       progress,
       resumed: !!scanPlan.scanCursor,
+      scanFrom: scanPlan.scanFrom,
       retainPendingScanDates: options.retainPendingScanDates === true
     })
   }

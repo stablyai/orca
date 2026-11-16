@@ -25,7 +25,7 @@ export function createCodexSessionMigrationScheduler(args: {
   isEligible: () => boolean
   isQuitting: () => boolean
   resolveSystemCodexHomePathOverride: () => string | undefined
-  prepareScheduledRun?: () => boolean | void
+  prepareScheduledRun?: (fullScanRequired: boolean) => boolean | void
   finishScheduledRun?: () => void
   startBackfill: MigrationRun
   startIndexHeal: MigrationRun
@@ -71,7 +71,7 @@ export function createCodexSessionMigrationScheduler(args: {
     if (isScheduledRun) {
       pendingScheduledRunGeneration = null
       // Persist launch debt before starting asynchronous publication.
-      preparationNeedsFullScan = args.prepareScheduledRun?.() === true
+      preparationNeedsFullScan = args.prepareScheduledRun?.(pendingFullScan) === true
     }
     const fullScanRequired = pendingFullScan || preparationNeedsFullScan
     pendingFullScan = false
@@ -160,6 +160,9 @@ export function createCodexSessionMigrationScheduler(args: {
     }
     scheduledRunGeneration += 1
     scheduledFullScan ||= fullScanRequired
+    if (fullScanRequired && args.isEligible() && !args.isQuitting()) {
+      args.prepareScheduledRun?.(true)
+    }
     armScheduledRun(scheduledRunGeneration)
   }
 

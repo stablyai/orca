@@ -327,6 +327,55 @@ describe('startCodexSessionBackfillInBackground', () => {
     ).toBe('history\n')
   })
 
+  it('resumes a capped full-history request below the previous scan floor', async () => {
+    writeManagedSession(join('2026', '10', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    for (const month of ['01', '02']) {
+      for (let day = 1; day <= 28; day += 1) {
+        writeManagedSession(
+          join('2026', month, String(day).padStart(2, '0'), 'rollout-older.jsonl'),
+          'older\n'
+        )
+      }
+    }
+    await startCodexSessionBackfillInBackground({
+      ignoreCompletionMarker: true,
+      fullScanRequired: true
+    })
+    expect(
+      existsSync(join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-older.jsonl'))
+    ).toBe(false)
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(
+        join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-older.jsonl'),
+        'utf-8'
+      )
+    ).toBe('older\n')
+  })
+
+  it('revisits a scanned prefix when a bounded continuation receives a full-history request', async () => {
+    writeManagedSession(join('2025', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    for (const month of ['01', '02']) {
+      for (let day = 1; day <= 28; day += 1) {
+        writeManagedSession(
+          join('2026', month, String(day).padStart(2, '0'), 'rollout-older.jsonl'),
+          'older\n'
+        )
+      }
+    }
+    await startCodexSessionBackfillInBackground({ ignoreCompletionMarker: true })
+    writeManagedSession(join('2026', '02', '01', 'rollout-late.jsonl'), 'late\n')
+    await startCodexSessionBackfillInBackground({
+      ignoreCompletionMarker: true,
+      fullScanRequired: true
+    })
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '02', '01', 'rollout-late.jsonl'), 'utf-8')
+    ).toBe('late\n')
+  })
+
   it.each([
     ['month', ['2017', '03']],
     ['year', ['2017']]
