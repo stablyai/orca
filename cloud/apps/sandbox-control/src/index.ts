@@ -1241,6 +1241,15 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
  * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
  * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
  */
+/**
+ * The dev-only GitHub seed route (stores an installation token as a member's GitHub user token) exists only where
+ * SANDBOX_ENV is exactly one of the dev/test names: an allowlist, so unset, staging, prod or a typo all refuse
+ * (404, as if it weren't there). Operator token required on top.
+ */
+export function devSeedAllowed(env: Pick<Env, 'SANDBOX_ENV'>): boolean {
+  return env.SANDBOX_ENV === 'dev' || env.SANDBOX_ENV === 'local' || env.SANDBOX_ENV === 'test'
+}
+
 /** GIT-ACTOR (git-actor.ts): GH-AS-MEMBER on, and member git on for the account. */
 function githubActingOptions(env: Env): GithubActingOptions {
   const memberGit = memberGitEnabled(env)
@@ -1515,7 +1524,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (url.pathname === '/v1/internal/github/app-webhook' && request.method === 'POST') {
         return await configureAppWebhook(env, deps, await readJson(request))
       }
-      if (url.pathname === '/v1/internal/dev/member-github' && request.method === 'POST' && env.SANDBOX_ENV !== 'prod') {
+      if (url.pathname === '/v1/internal/dev/member-github' && request.method === 'POST' && devSeedAllowed(env)) {
         // Dev rehearsal only: stand in a member's GitHub user token with a fresh app installation
         // token for one repo, so git-as-sender can be exercised without a second GitHub human.
         const body = DevMemberGitHubSchema.safeParse(await readJson(request))
