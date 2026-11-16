@@ -14,6 +14,42 @@ import type {
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../../runtime/runtime-environment-subscriptions'
 import type { PreloadApi } from '../../api-types'
+import {
+  RUNTIME_ACKED_SUBSCRIPTION_METHODS,
+  RUNTIME_SUBSCRIPTION_ACK_CHANNEL,
+  RUNTIME_SUBSCRIPTION_ACK_DELAY_MS,
+  RUNTIME_SUBSCRIPTION_ACK_EVERY_FRAMES,
+  type RuntimeSubscriptionAck
+} from '../../../shared/remote-runtime/rpc/runtime-subscription-ack'
+
+/** Acks frames once handled, so main releases what it holds for them. */
+function subscriptionAcks(subscriptionId: string) {
+  let processed = 0
+  let acked = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const send = (): void => {
+    timer = undefined
+    if (processed > acked) {
+      acked = processed
+      ipcRenderer.send(RUNTIME_SUBSCRIPTION_ACK_CHANNEL, {
+        subscriptionId,
+        processedFrames: processed
+      } satisfies RuntimeSubscriptionAck)
+    }
+  }
+  return {
+    processed: (): void => {
+      processed += 1
+      if (processed - acked >= RUNTIME_SUBSCRIPTION_ACK_EVERY_FRAMES) {
+        clearTimeout(timer)
+        send()
+      } else {
+        timer ??= setTimeout(send, RUNTIME_SUBSCRIPTION_ACK_DELAY_MS)
+      }
+    },
+    stop: (): void => clearTimeout(timer)
+  }
+}
 
 export const runtimeApi = {
   syncAgentStatus: (batch: RendererStatusPublication): Promise<RendererStatusAck> =>
@@ -32,18 +68,28 @@ export const runtimeApi = {
   ): Promise<RuntimeEnvironmentSubscriptionHandle> => {
     const subscriptionId = `desktop-${crypto.randomUUID()}`
     const channel = `runtime:subscription:${subscriptionId}`
-    const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) =>
-      callback(response)
+    const acks = RUNTIME_ACKED_SUBSCRIPTION_METHODS.has(args.method)
+      ? subscriptionAcks(subscriptionId)
+      : undefined
+    const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) => {
+      try {
+        callback(response)
+      } finally {
+        acks?.processed()
+      }
+    }
     ipcRenderer.on(channel, listener)
     try {
       await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
     } catch (error) {
       ipcRenderer.removeListener(channel, listener)
+      acks?.stop()
       throw error
     }
     return {
       unsubscribe: () => {
         ipcRenderer.removeListener(channel, listener)
+        acks?.stop()
         ipcRenderer.send('runtime:unsubscribe', { subscriptionId })
       },
       sendBinary: () => {

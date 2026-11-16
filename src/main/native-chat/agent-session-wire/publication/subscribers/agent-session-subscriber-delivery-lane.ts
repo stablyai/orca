@@ -2,7 +2,11 @@ import type { AgentJournalRenderItem } from '../../../../../shared/agent-session
 import type { AgentSessionTurnActivity } from '../../../../../shared/agent-session/agent-session-wire'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
-import { describeWorkerMessage } from '../../../../worker-threads/worker-message-shape'
+import {
+  ChatRetainedBytesRefused,
+  chatLiveTextRetainedBytes,
+  noteChatRetainedBytesRefused
+} from '../../../retention/chat-path-retained-bytes'
 
 /** Reads every row after the subscriber's cursor when it runs, so a later one covers an earlier one. */
 export type SubscriberCatchUp = {
@@ -20,13 +24,15 @@ export type SubscriberLiveText = {
   fence: number
   items: readonly AgentJournalRenderItem[]
   hostNow: number
+  /** Measured once per publication; every subscriber of the chat shares the items. */
+  bytes: number
 }
 
 type LaneEntry =
   | { kind: 'ordered'; since: number; run: () => Promise<unknown> }
   | { kind: 'catch-up'; since: number; catchUp: SubscriberCatchUp }
   | { kind: 'background-tasks'; since: number; fence: number }
-  | { kind: 'live-text'; since: number; liveText: SubscriberLiveText }
+  | { kind: 'live-text'; since: number; liveText: SubscriberLiveText; release: () => void }
 
 export type SubscriberDeliveryLaneRunners = {
   catchUp: (catchUp: SubscriberCatchUp) => Promise<unknown>
@@ -100,32 +106,37 @@ export class SubscriberDeliveryLane {
    */
   liveText(liveText: SubscriberLiveText): void {
     const index = this.pending.findIndex((entry) => entry.kind === 'live-text')
-    const since = index === -1 ? this.runners.now() : this.pending[index]!.since
-    if (index !== -1) {
-      this.pending.splice(index, 1)
+    const replaced = index === -1 ? undefined : this.pending.splice(index, 1)[0]
+    if (replaced?.kind === 'live-text') {
+      replaced.release()
     }
-    this.add({ kind: 'live-text', since, liveText })
+    const release = chatLiveTextRetainedBytes.claim(liveText.bytes)
+    if (!release) {
+      // Over the chat budget: the client resumes from its cursor and reads the text again.
+      noteChatRetainedBytesRefused()
+      this.runners.failed(new ChatRetainedBytesRefused('subscriber live text'))
+      return
+    }
+    this.add({ kind: 'live-text', since: replaced?.since ?? this.runners.now(), liveText, release })
   }
 
   /** Releases waiting work and withdraws queued reads; the active delivery gets no more frames. */
   clear(): void {
+    for (const entry of this.pending) {
+      if (entry.kind === 'live-text') {
+        entry.release()
+      }
+    }
     this.pending.length = 0
     this.stop.abort()
   }
 
-  /** `measured` spans one sample: subscribers of one chat share each snapshot, measured once. */
-  retention(now: number, measured: Map<object, number>): SubscriberDeliveryRetention {
+  retention(now: number): SubscriberDeliveryRetention {
     const entries = this.active ? [this.active, ...this.pending] : this.pending
     let liveTextBytes = 0
     for (const entry of entries) {
       if (entry.kind === 'live-text') {
-        const { items } = entry.liveText
-        let bytes = measured.get(items)
-        if (bytes === undefined) {
-          bytes = describeWorkerMessage(items).bytes
-          measured.set(items, bytes)
-        }
-        liveTextBytes += bytes
+        liveTextBytes += entry.liveText.bytes
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)
@@ -169,6 +180,9 @@ export class SubscriberDeliveryLane {
         this.runners.failed(error)
       } finally {
         this.active = undefined
+        if (entry.kind === 'live-text') {
+          entry.release()
+        }
       }
     }
   }

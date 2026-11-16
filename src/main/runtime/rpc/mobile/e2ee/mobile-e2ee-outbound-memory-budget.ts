@@ -1,3 +1,5 @@
+import { createRetainedBytesBudget } from '../../../../memory/retained-bytes-budget'
+
 export const MOBILE_E2EE_PROCESS_MAX_BUFFERED_BYTES = 32 * 1024 * 1024
 export const MOBILE_E2EE_PROCESS_MAX_QUEUED_BYTES = 128 * 1024 * 1024
 export const MOBILE_E2EE_PROCESS_MAX_QUEUED_FRAMES = 16_384
@@ -32,8 +34,7 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
   const maxQueuedFrames = options?.maxQueuedFrames ?? MOBILE_E2EE_PROCESS_MAX_QUEUED_FRAMES
   const maxSocketSources = options?.maxSocketSources ?? MOBILE_E2EE_PROCESS_MAX_SOCKET_SOURCES
   const bufferedSources = new Set<() => number>()
-  let queuedBytes = 0
-  let queuedFrames = 0
+  const queued = createRetainedBytesBudget({ maxBytes: maxQueuedBytes, maxItems: maxQueuedFrames })
 
   const bufferedBytes = (): number => {
     let total = 0
@@ -51,22 +52,7 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
   }
 
   return {
-    claimQueuedBytes(bytes): (() => void) | null {
-      if (
-        !Number.isFinite(bytes) ||
-        bytes < 0 ||
-        queuedFrames >= maxQueuedFrames ||
-        queuedBytes + bytes > maxQueuedBytes
-      ) {
-        return null
-      }
-      queuedBytes += bytes
-      queuedFrames += 1
-      return createRelease(() => {
-        queuedBytes -= bytes
-        queuedFrames -= 1
-      })
-    },
+    claimQueuedBytes: (bytes) => queued.claim(bytes),
     registerBufferedAmount(readBufferedAmount): MobileE2EEOutboundSocketMemory | null {
       if (bufferedSources.size >= maxSocketSources) {
         return null
@@ -85,12 +71,15 @@ export function createMobileE2EEOutboundMemoryBudget(options?: {
         })
       }
     },
-    evidence: () => ({
-      bufferedBytes: bufferedBytes(),
-      queuedBytes,
-      queuedFrames,
-      sockets: bufferedSources.size
-    })
+    evidence: () => {
+      const { bytes, items } = queued.reading()
+      return {
+        bufferedBytes: bufferedBytes(),
+        queuedBytes: bytes,
+        queuedFrames: items,
+        sockets: bufferedSources.size
+      }
+    }
   }
 }
 

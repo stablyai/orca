@@ -1,6 +1,6 @@
 import type { SubscriberDeliveryRetention } from './agent-session-subscriber-delivery-lane'
 
-type RetentionSource = { retention(measured: Map<object, number>): SubscriberDeliveryRetention[] }
+type RetentionSource = { retention(): SubscriberDeliveryRetention[] }
 
 export type SubscriberRetentionSummary = {
   /** Subscribers with delivery work running or waiting. */
@@ -16,17 +16,16 @@ export function trackSubscriberRetention(source: RetentionSource): void {
   sources.add(new WeakRef(source))
 }
 
-/** Read on the diagnostics sampler's cadence, never per publication; each snapshot's walk is bounded. */
+/** Read on the diagnostics sampler's cadence, never per publication. */
 export function readSubscriberRetention(): SubscriberRetentionSummary {
   const summary: SubscriberRetentionSummary = { busy: 0, pending: 0, oldestMs: 0, liveTextBytes: 0 }
-  const measured = new Map<object, number>()
   for (const ref of sources) {
     const source = ref.deref()
     if (!source) {
       sources.delete(ref)
       continue
     }
-    for (const lane of source.retention(measured)) {
+    for (const lane of source.retention()) {
       summary.busy += 1
       summary.pending += lane.pending
       summary.oldestMs = Math.max(summary.oldestMs, lane.oldestMs)

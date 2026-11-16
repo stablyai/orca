@@ -5,6 +5,10 @@ import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import {
+  CHAT_LIVE_TEXT_RETAINED_BYTES,
+  chatLiveTextRetainedBytes
+} from '../../../../retention/chat-path-retained-bytes'
+import {
   fixture,
   journals,
   SESSION
@@ -34,6 +38,7 @@ async function blockedSubscriber() {
     stateDirectory: join(fixture.root, 'chat')
   })
   const subscribers = new AgentSessionSubscribers()
+  const ends: unknown[] = []
   const transport = Promise.withResolvers<void>()
   let blocked = false
   const events: AgentSessionSubscribeEvent[] = []
@@ -43,6 +48,7 @@ async function blockedSubscriber() {
     journal,
     fence: 1,
     emit: (event) => events.push(event),
+    end: (cause) => ends.push(cause),
     projectJournalEvent: async (_journal, event) => {
       if (blocked) {
         await transport.promise
@@ -76,7 +82,7 @@ async function blockedSubscriber() {
     await collect()
     return snapshots.filter((ref) => ref.deref() !== undefined).length
   }
-  return { publish, alive, close, events, release: () => transport.resolve() }
+  return { publish, alive, close, events, ends, release: () => transport.resolve() }
 }
 
 it('retains only the active and newest live text behind a stalled transport', async () => {
@@ -108,4 +114,17 @@ it('releases waiting live text when the subscriber closes during a stalled deliv
   pane.close()
   expect(await pane.alive()).toBeLessThanOrEqual(1)
   pane.release()
+})
+
+it('ends the stream instead of holding live text past the chat budget', async () => {
+  const pane = await blockedSubscriber()
+  const others = chatLiveTextRetainedBytes.claim(CHAT_LIVE_TEXT_RETAINED_BYTES)
+  try {
+    pane.publish(0)
+    expect(pane.ends).toHaveLength(1)
+    expect(await pane.alive()).toBe(0)
+  } finally {
+    others?.()
+    pane.release()
+  }
 })

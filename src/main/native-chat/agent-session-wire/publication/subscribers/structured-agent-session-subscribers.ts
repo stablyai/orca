@@ -30,6 +30,7 @@ import type { SubscriberDeliveryRetention } from './agent-session-subscriber-del
 import { SubscriberLanes } from './agent-session-subscriber-lane-runners'
 import { trackSubscriberRetention } from './agent-session-subscriber-retention'
 import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
+import { retainedBytesOf } from '../../../retention/chat-path-retained-bytes'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
@@ -64,8 +65,8 @@ export class AgentSessionSubscribers {
   }
 
   /** What waits behind each subscriber's active delivery, for memory diagnostics. */
-  retention(measured: Map<object, number>): SubscriberDeliveryRetention[] {
-    return this.lanes.retention(this.bySession, this.now(), measured)
+  retention(): SubscriberDeliveryRetention[] {
+    return this.lanes.retention(this.bySession, this.now())
   }
 
   subscriberCount(sessionId: string): number {
@@ -153,9 +154,14 @@ export class AgentSessionSubscribers {
     items: readonly AgentJournalRenderItem[],
     targets = this.subscribers(sessionId)
   ): void => {
+    const active = targets.filter(this.isActive)
+    if (active.length === 0) {
+      return
+    }
     const hostNow = this.now()
-    for (const subscriber of targets.filter(this.isActive)) {
-      this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow })
+    const bytes = retainedBytesOf(items)
+    for (const subscriber of active) {
+      this.lanes.of(subscriber).liveText({ journal, fence, items, hostNow, bytes })
     }
   }
 

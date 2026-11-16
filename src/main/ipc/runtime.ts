@@ -16,6 +16,12 @@ import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './runtime-client/desktop-runtime-sender-lifecycle'
+import { RendererChatFrameDelivery } from './renderer-chat-frame-delivery'
+import {
+  RUNTIME_ACKED_SUBSCRIPTION_METHODS,
+  RUNTIME_SUBSCRIPTION_ACK_CHANNEL,
+  type RuntimeSubscriptionAck
+} from '../../shared/remote-runtime/rpc/runtime-subscription-ack'
 import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
@@ -31,11 +37,14 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
 export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
+  /** Keyed by sender id and subscription id; an aborted stream removes its own entry. */
+  const chatDeliveries = new Map<string, RendererChatFrameDelivery>()
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
   ipcMain.removeHandler('runtime:call')
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
+  ipcMain.removeAllListeners(RUNTIME_SUBSCRIPTION_ACK_CHANNEL)
   ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
   ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
 
@@ -152,6 +161,22 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
+      const delivery = RUNTIME_ACKED_SUBSCRIPTION_METHODS.has(args.method)
+        ? new RendererChatFrameDelivery(controller.signal)
+        : undefined
+      if (delivery) {
+        const key = `${event.sender.id}:${args.subscriptionId}`
+        chatDeliveries.set(key, delivery)
+        controller.signal.addEventListener(
+          'abort',
+          () => {
+            if (chatDeliveries.get(key) === delivery) {
+              chatDeliveries.delete(key)
+            }
+          },
+          { once: true }
+        )
+      }
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
       void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreamingObjects(
         {
@@ -161,9 +186,16 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           params: args.params
         },
         (response) => {
-          if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-            event.sender.send(channel, response)
+          if (controller.signal.aborted || event.sender.isDestroyed()) {
+            return
           }
+          if (delivery && !delivery.charge(response)) {
+            // The renderer resumes from its cursor rather than main holding what it hasn't read.
+            event.sender.send(channel, { ...response, result: { type: 'end' } })
+            controller.abort()
+            return
+          }
+          event.sender.send(channel, response)
         },
         {
           signal: controller.signal,
@@ -177,6 +209,10 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       return { subscribed: true }
     }
   )
+
+  ipcMain.on(RUNTIME_SUBSCRIPTION_ACK_CHANNEL, (event, args: RuntimeSubscriptionAck) => {
+    chatDeliveries.get(`${event.sender.id}:${args.subscriptionId}`)?.ack(args.processedFrames)
+  })
 
   ipcMain.on('runtime:unsubscribe', (event, args: { subscriptionId: string }) => {
     const senderSubscriptions = desktopSenders.existingSubscriptionsFor(event.sender)

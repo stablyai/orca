@@ -1,4 +1,5 @@
 import type { Worker } from 'node:worker_threads'
+import { observeRetainedBytes } from '../../memory/retained-bytes-budget'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
@@ -31,6 +32,11 @@ export class JournalSqlOwner {
     }
   >()
   private nextId = 0
+  /** Write commands waiting on the writer; counted only, since each write is already admitted. */
+  private readonly stopObserving = observeRetainedBytes('writes', () => ({
+    bytes: 0,
+    items: this.pending.size
+  }))
   private failure: Error | undefined
   private closing = false
   private didExit = false
@@ -60,6 +66,7 @@ export class JournalSqlOwner {
     this.worker.on('error', (error) => this.fail(error))
     this.worker.once('exit', (code) => {
       this.didExit = true
+      this.stopObserving()
       this.exited.resolve()
       if (!this.closing || this.pending.size > 0) {
         this.fail(new Error(`journal SQL owner exited (${code})`))
