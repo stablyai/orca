@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { prepareJournalDomainImport } from '../journal-domain-import'
+import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
 import {
   finishJournalDomainImport,
   insertJournalDomainImportPage
@@ -19,10 +19,8 @@ import {
 import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT,
-  journalLegacySourceWrittenAt,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
-import { parseJournalRow, type JournalRow } from '../durable-rows/journal-row-schema'
 
 /** Set after a pass absorbed every original chat, so each chat here carries its revision. */
 export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
@@ -47,11 +45,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = {
-    changed: !unchanged,
-    copiedSince: journalLegacySourceWrittenAt(saved),
-    baselines: []
-  }
+  const pass: Pass = { changed: !unchanged, baselines: [] }
   const source = openJournalLegacySource(sourcePath)
   try {
     if (!absorbChats(source, db, pass)) {
@@ -62,7 +56,11 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     source.close()
   }
   // Baselines read while another process wrote the original are not current; read them next launch.
-  if (!sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))) {
+  // An original without a certifiable identity can't be rechecked, so its baselines stand.
+  if (
+    captured.disposition === 'copied-source' &&
+    !sameJournalLegacySource(receipt, captureJournalLegacySourceReceipt(sourcePath))
+  ) {
     return
   }
   runJournalTransaction(db, () => {
@@ -77,8 +75,6 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
 /** What one pass knows about the original, and the chats it takes as already shown here. */
 type Pass = {
   changed: boolean
-  /** Rows saved before this were in the original when this file copied it. */
-  copiedSince: number
   baselines: [string, string][]
 }
 
@@ -159,13 +155,20 @@ function absorbChat(
     return
   }
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
-  const converted = chat?.epoch !== null && chat?.epoch !== undefined
-  if (shown === undefined && !writtenSinceCopy(source, db, id, chat !== undefined, converted, pass)) {
-    pass.baselines.push([id, revision])
+  if (chat?.epoch !== null && chat?.epoch !== undefined) {
+    keepContinuedChat(source, db, id, revision, shown !== undefined, adoption, pass)
     return
   }
-  if (converted) {
-    keepContinuedChat(source, db, id, revision, adoption)
+  // A file copied before revisions were kept has none for a chat it holds: one not converted yet
+  // converts from the current original, so nothing is hidden. One it doesn't know is new, unless
+  // the original is as copied: then it was deleted here.
+  if (
+    shown === undefined &&
+    (!pass.changed ||
+      chat !== undefined ||
+      db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id))
+  ) {
+    pass.baselines.push([id, revision])
     return
   }
   // Not converted here yet: its conversion reads the current original, so it joins as itself.
@@ -173,66 +176,6 @@ function absorbChat(
     adoptChat(source, db, id, id, adoption)
     recordJournalLegacyChatRevision(db, id, revision)
   })
-}
-
-/**
- * A file copied before revisions were kept has none to compare, so only what it lacks shows the
- * older Orca wrote a chat. A converted chat holds its history: it was continued only if the
- * original has an item it never saw. One not converted yet converts from the current original, so
- * nothing is hidden. One this file doesn't know is new, unless the original is as copied: then it
- * was deleted here.
- */
-function writtenSinceCopy(
-  source: Database.Database,
-  db: Database.Database,
-  id: string,
-  cataloged: boolean,
-  converted: boolean,
-  pass: Pass
-): boolean {
-  if (converted) {
-    return holdsUnseenItem(source, db, id, pass.copiedSince)
-  }
-  const known =
-    cataloged || db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id)
-  return pass.changed && !known
-}
-
-/** An item the chat holds, removed or aliases was seen; only rows saved since the copy can be new. */
-function holdsUnseenItem(
-  source: Database.Database,
-  db: Database.Database,
-  id: string,
-  since: number
-): boolean {
-  let seen: Set<string> | undefined
-  for (const { row_json: json } of source
-    .prepare('SELECT row_json FROM journal_rows WHERE session_id=? AND ts>=?')
-    .iterate(id, since)) {
-    const held = (seen ??= new Set(
-      db
-        .prepare(`SELECT item_id AS id FROM journal_items WHERE session_id=?1
-          UNION SELECT item_id FROM journal_item_tombstones WHERE session_id=?1
-          UNION SELECT provider_item_id FROM journal_item_aliases WHERE session_id=?1`)
-        .all(id)
-        .map((row) => String(row.id))
-    ))
-    const parsed = parseJournalRow(String(json), true)
-    if (parsed.ok && rowItemIds(parsed.row).some((item) => !held.has(item))) {
-      return true
-    }
-  }
-  return false
-}
-
-function rowItemIds(row: JournalRow): string[] {
-  if (row.kind === 'item') {
-    return [row.itemId]
-  }
-  if (row.kind === 'lifecycle-batch') {
-    return row.mutations.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.itemId] : []))
-  }
-  return []
 }
 
 /** The original's record, a tab and a catalog row; history converts lazily as usual. */
@@ -304,22 +247,37 @@ function addTab(db: Database.Database, adoption: Adoption, sessionId: string, ta
   adoption.takenTabs.add(tab)
 }
 
-/** The original's version of a converted chat it moved past becomes a second chat beside it. */
+/**
+ * The original's version of a converted chat it moved past becomes a second chat beside it. With
+ * no revision to compare (files copied before revisions were kept), the original moved past this
+ * chat only if its restored history has an item this chat never held.
+ */
 function keepContinuedChat(
   source: Database.Database,
   db: Database.Database,
   id: string,
   revision: string,
-  adoption: Adoption
+  compared: boolean,
+  adoption: Adoption,
+  pass: Pass
 ): void {
   const imported = prepareJournalDomainImport(source, id)
   if (!imported) {
-    runJournalTransaction(db, () => recordJournalLegacyChatRevision(db, id, revision))
+    pass.baselines.push([id, revision])
     return
+  }
+  const { pages: read, ...header } = imported
+  let pages: Iterable<JournalDomainImportPage> = read
+  if (!compared) {
+    const all = [...read]
+    if (heldEveryItem(db, id, all)) {
+      pass.baselines.push([id, revision])
+      return
+    }
+    pages = all
   }
   // Derived from the revision, so an interrupted import resumes into the same chat.
   const copy = createHash('sha256').update(`${id}\0${revision}`).digest('hex').slice(0, 32)
-  const { pages, ...header } = imported
   const target = { sessionId: copy, epoch: header.epoch }
   for (const page of pages) {
     runJournalTransaction(db, () => insertJournalDomainImportPage(db, target, page))
@@ -329,6 +287,24 @@ function keepContinuedChat(
     adoptChat(source, db, id, copy, adoption)
     recordJournalLegacyChatRevision(db, id, revision)
   })
+}
+
+/** Removing an item here leaves its tombstone, so every item this chat converted stays held. */
+function heldEveryItem(
+  db: Database.Database,
+  id: string,
+  pages: readonly JournalDomainImportPage[]
+): boolean {
+  const held = new Set(
+    db
+      .prepare(`SELECT item_id AS id FROM journal_items WHERE session_id=?1
+        UNION SELECT item_id FROM journal_item_tombstones WHERE session_id=?1`)
+      .all(id)
+      .map((row) => String(row.id))
+  )
+  return pages.every(
+    (page) => page.kind !== 'items' || page.rows.every(({ item }) => held.has(item.itemId))
+  )
 }
 
 /** Uploads the older Orca attached stay claimed, so the sweeper never removes them. */

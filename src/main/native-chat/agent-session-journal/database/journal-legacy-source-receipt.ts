@@ -115,17 +115,6 @@ export function sameJournalLegacySource(
   return sameJson(storedFile, file) && sameJson(storedWal, walFields)
 }
 
-/** When the original was last written before the copy a saved receipt describes; 0 if unknown. */
-export function journalLegacySourceWrittenAt(saved: string | undefined): number {
-  try {
-    const stored: unknown = saved === undefined ? undefined : JSON.parse(saved)
-    const main = isRecord(stored) && isRecord(stored.main) ? stored.main : undefined
-    return typeof main?.mtimeNs === 'string' ? Number(BigInt(main.mtimeNs) / 1_000_000n) : 0
-  } catch {
-    return 0
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

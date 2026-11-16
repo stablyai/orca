@@ -284,7 +284,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   await first.close()
 
   // The older Orca continues one converted chat and starts another.
-  insertJournalRow(original, 'converted', turn('older-turn', tip + 1), Date.now())
+  insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
   olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
   const later = await upgrade(root)
   cleanup.push(later.close)
