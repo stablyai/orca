@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { getAgentLaunchExecutableName } from '../../../shared/agent-launch/startup/agent-command-line-intent'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'

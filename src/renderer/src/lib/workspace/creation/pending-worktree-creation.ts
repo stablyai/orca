@@ -1,6 +1,6 @@
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type {
   WorkspaceLinkedItem as FolderWorkspaceLinkedTask,

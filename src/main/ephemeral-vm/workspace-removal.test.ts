@@ -10,7 +10,7 @@ import {
 } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { RecipeWorkspaceRemovalError } from '../../shared/recipe-host-removal'
+import { RecipeWorkspaceRemovalError } from '../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import { mapRuntimeError } from '../runtime/rpc/responses/rpc-response'
 import { removeRecipeWorkspace, type RecipeWorkspaceRemoveParams } from './workspace-removal'
 

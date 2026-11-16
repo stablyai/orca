@@ -4,9 +4,9 @@ import {
 } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionFastModeSupport,
-  AgentSessionModelOption,
   AgentSessionOptionChoice
 } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexOpenedThread } from '../threads/codex-structured-thread-open'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'

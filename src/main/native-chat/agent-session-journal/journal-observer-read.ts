@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../shared/agent-session/agent-session-wire'
 import type { HostUsageLimitCut } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
-import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type { StructuredAgentSessionWorkEvidence } from '../agent-session-wire/observations/structured-agent-session-work-evidence'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalStatusState } from './journal-status-state'
@@ -45,7 +45,8 @@ export type JournalObserverResult = {
   physicalCursor: AgentJournalCursor
   lastActivityAt: number
   authority: JournalWorkAuthority
-  state: JournalStatusState
+  /** goalContinues: the live provider starts the next turn itself, so a settled success is not the end. */
+  state: JournalStatusState & { goalContinues?: true }
   indicators: JournalStatusIndicators
   usageLimitCut: HostUsageLimitCut | null
   orcaStopCut: NativeChatOrcaStopCut | null

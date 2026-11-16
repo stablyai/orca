@@ -28,7 +28,7 @@
 1 src/main/browser/cookies/chromium/prepare-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 25 src/main/browser/cookies/staging/browser-cookie-staged-import.ts
-8 src/main/codex/history/index/codex-state-db.ts
+5 src/main/codex/history/index/codex-state-db.ts
 3 src/main/foreign-sqlite-readers/readers/cursor-profile.ts
 44 src/main/github/pr-watch/pr-check-event-tables.ts
 14 src/main/github/pr-watch/pr-pending-actions.ts
@@ -37,11 +37,12 @@
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 3 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 13 src/main/native-chat/agent-session-journal/database/journal-database.ts
-6 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
+7 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
 2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
-18 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
+20 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-10 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
+32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
+18 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 12 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 18 src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts
 14 src/main/native-chat/agent-session-journal/journal-domain-command-turn.ts

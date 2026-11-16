@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import type { AiVaultSessionSearchInit } from '../ai-vault/scan-service/session-scanner-service-protocol'
 import { sessionSearchDatabasePath } from './session-search-database-path'
 import { sessionSearchPolicy } from './session-search-policy'

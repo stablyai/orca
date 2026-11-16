@@ -18,7 +18,7 @@ import type { DaemonPtyAdapterOptions } from './daemon-pty-adapter-options'
 import type { DaemonEvent } from '../../protocol/daemon-stream-events'
 import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
-import type { DeveloperPermissionStatus } from '../../../../shared/developer-permissions-types'
+import type { DeveloperPermissionStatus } from '../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 import {
   AUTOMATIC_WORK_RESUME_UNSUPPORTED,
   type AutomaticWorkResumeOutcome,

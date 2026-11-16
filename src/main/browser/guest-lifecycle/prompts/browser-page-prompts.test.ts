@@ -41,7 +41,12 @@ function ask(guest: Electron.WebContents, coalesceKey?: string) {
     kind: 'external-app',
     requester: guest,
     target: targets.get(guest.id) ?? null,
-    details: () => ({ appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }),
+    details: () => ({
+      appName: 'Zoom',
+      scheme: 'zoommtg',
+      origin: 'https://zoom.us',
+      rememberSite: null
+    }),
     coalesceKey,
     parseAnswer: (value) => (value === true ? true : undefined),
     settle
@@ -82,7 +87,12 @@ describe('browser page prompts', () => {
       {
         requestId: expect.any(String),
         kind: 'external-app',
-        details: { appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }
+        details: {
+          appName: 'Zoom',
+          scheme: 'zoommtg',
+          origin: 'https://zoom.us',
+          rememberSite: null
+        }
       }
     ])
     const requestId = latestId(renderer)

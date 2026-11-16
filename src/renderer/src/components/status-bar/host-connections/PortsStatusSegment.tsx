@@ -9,7 +9,7 @@ import {
   getUnavailableWorkspacePortHosts,
   type WorkspacePortHostRef
 } from '@/lib/workspace-ports/workspace-port-host-availability'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host/execution-host'
 import {
   getExternalWorkspacePorts,
   getWorkspacePortGroups

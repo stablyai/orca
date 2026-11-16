@@ -3,7 +3,7 @@ import { OrcaRuntimeWithBrowserWorkspaceRouting } from '../../browser/client-pag
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
-} from '../../../../shared/floating-workspace-worktree'
+} from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
@@ -12,7 +12,7 @@ import {
   getConnectionExecutionHostId,
   getWorktreeExecutionHostId,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { resolveRuntimeBrowserNetworkExecutionHost } from '../../browser/network/runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
@@ -32,7 +32,7 @@ import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-
 import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
 
 import type { ResolvedTerminalWorkspaceLaunchTarget } from './terminal-workspace-launch-target'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../../shared/worktree/id'

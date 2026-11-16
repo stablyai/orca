@@ -1,10 +1,10 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import {

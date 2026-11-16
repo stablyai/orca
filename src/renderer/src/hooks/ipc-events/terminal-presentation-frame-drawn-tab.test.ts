@@ -17,7 +17,9 @@ function testStore(): ReturnType<typeof createTestStore> {
 }
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))

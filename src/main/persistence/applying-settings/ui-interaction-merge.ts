@@ -1,4 +1,4 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import { normalizeFeatureInteractions } from '../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'

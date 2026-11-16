@@ -1,7 +1,10 @@
 import * as z from 'zod'
 import { AutomationDraftValidationError } from './automation-error'
 import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost

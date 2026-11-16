@@ -108,18 +108,26 @@ export function getUsageHeadlineSection(
   return getTightestUsageSection(p, t, scope)
 }
 
-/** The most-used scoped window once it is nearly spent, so the roster can flag it beside the headline. */
-export function getUrgentScopedSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
-  const urgent = usedSections(p, t).filter(
+/** The most-used scoped (Fable/MCP) window at or above minUsedPercent, labeled for the roster. */
+export function getTopScopedSection(
+  p: ProviderRateLimits,
+  t?: Translate,
+  minUsedPercent = 0
+): UsageSection | null {
+  const scoped = usedSections(p, t).filter(
     (s) =>
-      isScopedUsageWindow(p, s.window) &&
-      clampUsedPercent(s.window.usedPercent) >= USAGE_URGENT_PERCENT
+      isScopedUsageWindow(p, s.window) && clampUsedPercent(s.window.usedPercent) >= minUsedPercent
   )
-  if (urgent.length === 0) {
+  if (scoped.length === 0) {
     return null
   }
-  const top = urgent.reduce((a, b) =>
+  const top = scoped.reduce((a, b) =>
     clampUsedPercent(b.window.usedPercent) > clampUsedPercent(a.window.usedPercent) ? b : a
   )
   return { ...top, label: shortUsageLabel(p, top) }
+}
+
+/** The most-used scoped window once it is nearly spent, so the roster can flag it beside the headline. */
+export function getUrgentScopedSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
+  return getTopScopedSection(p, t, USAGE_URGENT_PERCENT)
 }

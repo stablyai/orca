@@ -9,7 +9,7 @@ import {
   type WorkspaceCleanupSnapshotPruneBatchArgs,
   type WorkspaceCleanupSnapshotPruneRecordArgs
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getWorkspaceCleanupHostIdentity } from '../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'

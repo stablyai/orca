@@ -1,10 +1,10 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import {
   getAgentAnsweredNativeChatCommands,
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
-} from '../../../../../../src/shared/native-chat/native-chat-agent-profiles'
+} from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { nativeChatPickerScannedSkills } from '../../../../../../src/shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,
@@ -30,6 +30,8 @@ export type MobileComposerStructuredCatalog = {
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
+  /** `/mcp` opens the chat's MCP tray. */
+  mcpPanel?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -64,7 +66,8 @@ export function mobileComposerCatalog({
         structured.conversationCommands,
         reported,
         structured.compactInstructions,
-        interactionModeSupported
+        interactionModeSupported,
+        structured.mcpPanel
       )
     : getAgentAnsweredNativeChatCommands(agent)
   return {

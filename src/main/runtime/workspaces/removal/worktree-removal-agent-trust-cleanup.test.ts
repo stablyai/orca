@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { upsertOrcaCreatedProjectTrustLevel } from '../../../codex/trust/toml/config-toml-trust'
 import { markAntigravityWorkspaceTrusted } from '../../../agent-launch/trust/agent-trust-presets'
 

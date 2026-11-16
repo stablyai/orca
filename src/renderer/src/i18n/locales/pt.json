@@ -1814,9 +1814,6 @@
     },
     "followSymlinkedDirectories": "Seguir diretórios com links simbólicos",
     "followSymlinkedDirectoriesDescription": "Busque em pastas vinculadas na Abertura rápida e expanda pastas vinculadas locais no Explorador de arquivos.",
-    "accounts": {
-      "claudeRemoveFolder": "O Orca exclui deste computador a pasta do Claude desta conta e seu login. O histórico de chat compartilhado com Padrão do sistema é mantido. Se esta conta estiver selecionada, o próximo Claude que você iniciar usará Padrão do sistema."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Operação do Git em outro lugar",
       "remoteOperationInAnotherWorkspace": "Outro espaço de trabalho está executando uma operação do Git, como push, pull ou force push. Aguarde a conclusão antes de usar esta ação para que as operações não se sobreponham.",
@@ -3687,7 +3684,8 @@
             "detailedTooltip": "Uso completo com barras, rótulos e porcentagens",
             "compactTooltip": "Uso condensado: somente a janela mais restrita",
             "footerDetailAria": "Detalhe do rodapé de uso",
-            "notChecked": "Não verificado"
+            "notChecked": "Não verificado",
+            "modelWeeklyLimit": "Limite semanal do {{model}}: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Atualizando {{value0}}/{{value1}}",
@@ -4361,7 +4359,6 @@
           "locationSaveFailed": "Não foi possível salvar o local das contas. Tente novamente.",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "Remover Conta do Claude?",
-          "380a7736cc": "Remover esta conta exclui permanentemente seu diretório gerenciado do Codex, incluindo todo o histórico de sessões do Codex e logins MCP armazenados nele. Isso não pode ser desfeito. Se a conta estiver ativa no momento, o Orca volta a usar o login padrão do sistema para o Codex.",
           "0d47394635": "Remover Conta do Codex?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Encontre isso na URL depois de fazer login em opencode.ai (ex.:",
@@ -9675,17 +9672,14 @@
           "allAccess": "Ver todo o acesso",
           "current": "Já instalado",
           "needsOrca": "Requer Orca {{value0}} ou posterior",
-          "newAccess": "Novo: {{value0}}",
           "newCommands": "Comandos",
           "newContributions": "Recursos que agem por você",
-          "newEvents": "Mais eventos",
-          "newPanels": "Painéis",
+          "newEvents": "Reage a mais eventos do Orca",
+          "newPanels": "Adiciona painéis",
           "newRecipes": "Receitas de máquina",
           "newShortcuts": "Atalhos de teclado",
           "previewError": "Não foi possível ler esta atualização",
-          "sourceMoved": "Nova fonte: {{value0}} (antes {{value1}})",
           "update": "Atualizar",
-          "review": "Revisar",
           "failed": "Não foi possível atualizar {{value0}}. Os outros foram atualizados.",
           "cancel": "Cancelar",
           "updateOne": "Atualizar 1 plugin",
@@ -9694,7 +9688,16 @@
           "close": "Fechar",
           "retry": "Tentar novamente",
           "updated": "Atualizado",
-          "replacesAction": "{{value0}} é executado em vez do {{value1}} do Orca"
+          "replacesAction": "{{value0}} é executado em vez do {{value1}} do Orca",
+          "newFileTypes": "Muda quais arquivos ele abre",
+          "newHooks": "Pode alterar ou interromper o que o Orca e seus agentes fazem",
+          "newSettings": "Uma página de configurações",
+          "newStatusBarItems": "Itens da barra de status",
+          "opensFileTypes": "Abre novos tipos de arquivo: {{value0}}",
+          "becomesDefaultEditor": "Passa a ser o editor padrão para {{value0}}",
+          "needApproval": "Precisam da sua aprovação",
+          "readyToUpdate": "Prontas para atualizar",
+          "movedRepository": "Vem de outro repositório"
         },
         "PluginThemeUseNow": {
           "useForLight": "Usar no claro:",
@@ -9784,11 +9787,11 @@
         },
         "PluginUpdateReview": {
           "title": "Revisar a atualização de {{value0}}",
-          "back": "Voltar",
           "approve": "Aprovar e atualizar",
-          "explain": "Esta atualização pede mais do que a versão que você aprovou. Ela só é instalada se você aprová-la aqui.",
-          "before": "Antes",
-          "after": "Depois"
+          "uncompared": "O Orca não conseguiu comparar esta versão com a que você aprovou. Confira o que ela pode acessar antes de atualizar.",
+          "newInVersion": "Novidades nesta versão:",
+          "titleMany": "Revisar {{value0}} atualizações",
+          "history": "Ver as alterações no GitHub"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "seu editor",
@@ -9796,7 +9799,8 @@
           "update": "Confirme que você confia em {{value0}} antes de atualizar. Este plugin executa o código do editor dentro do Orca.",
           "installed": "Confirme que você confia em {{value0}}. Este plugin executa o código do editor dentro do Orca.",
           "label": "Não é um plugin oficial:",
-          "translations": "Traduções podem alterar qualquer texto do Orca. Confirme que você confia em {{value0}}."
+          "translations": "Traduções podem alterar qualquer texto do Orca. Confirme que você confia em {{value0}}.",
+          "community": "Plugin da comunidade"
         },
         "PluginCardAction": {
           "installed": "Instalado",
@@ -9831,7 +9835,7 @@
           "catalog": "Catálogo",
           "clear": "Limpar filtros",
           "themes": "Temas",
-          "codeLanguages": "Linguagens de programação",
+          "codeLanguages": "Linguagens",
           "translations": "Traduções",
           "icons": "Ícones",
           "commands": "Comandos e painéis",
@@ -9894,11 +9898,15 @@
           "movedTitle": "{{value0}} {{value1}} vem de outro repositório",
           "accessTitle": "{{value0}} {{value1}} quer mais acesso",
           "manyTitle": "{{value0}} atualizações de plugins precisam da sua revisão",
-          "oneDescription": "Publicado por {{value0}}. Não será atualizado até você revisar.",
-          "manyDescription": "Não serão atualizadas até você revisá-las.",
-          "review": "Revisar",
           "dismiss": "Dispensar",
-          "movedInstalled": "Ele fica desativado até você revisá-lo."
+          "movedInstalled": "Ele fica desativado até você revisá-lo.",
+          "approveAll": "Aprovar e atualizar tudo",
+          "approveOne": "Aprovar e atualizar",
+          "details": "Detalhes",
+          "failed": "Não foi possível atualizar {{value0}}",
+          "morePlugins": "e mais {{value0}} plugins",
+          "uncompared": "O Orca não conseguiu compará-la com a versão que você aprovou.",
+          "held": "{{value0}} mudou depois da sua revisão, então aguarda sua revisão em Configurações → Plugins."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Confirme que você confia nesta pasta",
@@ -18594,13 +18602,6 @@
                       "skillNotInstalled": "A skill da CLI do Orca ainda não está instalada."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Não foi possível ocultar o Emulador Móvel."
-                    }
-                  }
                 }
               }
             }
@@ -18625,17 +18626,6 @@
             "5789936d9a": "Pré-visualize simuladores iOS enquanto os agentes controlam a tela.",
             "8014b4b80b": "Manter",
             "6e051a40b7": "Ocultar"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Emulador Móvel oculto",
-                  "c46c979c1d": "Reative o Emulador Móvel a qualquer momento em",
-                  "600f9a745a": "Configurações › Emulador Móvel"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "A colagem é muito grande para a entrada de teclado do emulador.",
@@ -22901,7 +22891,7 @@
         "busy": "Trabalhando",
         "idle": "Ociosa",
         "settingTitle": "Ao trocar de conta com o Claude em execução",
-        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta.",
+        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta. As sessões ocupadas interrompem o que estão fazendo.",
         "keyword": {
           "restart": "reiniciar",
           "running": "em execução"
@@ -22927,15 +22917,17 @@
         "restartCount_one": "Reiniciar {{count}} sessão",
         "restartCount_other": "Reiniciar {{count}} sessões",
         "restartCount_many": "Reiniciar {{count}} sessões",
-        "reviewBody_one": "{{count}} outra sessão do Claude não foi movida para {{next}}.",
-        "reviewBody_other": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
-        "reviewBody_many": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
-        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
+        "reviewBody_one": "{{count}} sessão do Claude não foi movida para {{next}}.",
+        "reviewBody_other": "{{count}} sessões do Claude não foram movidas para {{next}}.",
+        "reviewBody_many": "{{count}} sessões do Claude não foram movidas para {{next}}.",
+        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
         "reasonSharedSession": "Também aberta em outro painel",
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
-        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
+        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
+        "strandedOne": "1 sessão do Claude pode ainda estar em {{previous}}. Reinicie-a manualmente para trocar.",
+        "strandedOther": "{{count}} sessões do Claude podem ainda estar em {{previous}}. Reinicie-as manualmente para trocar."
       },
       "oauthUsage": {
         "title": "Consulta de uso do Claude",
@@ -23388,7 +23380,9 @@
       "chooseTransition": "Escolha uma alteração de status:",
       "cancel": "Cancelar",
       "noTransition": "Nenhuma alteração de status para {{column}} está disponível para {{key}}.",
-      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros."
+      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros.",
+      "reorderColumn": "Reordenar {{column}}",
+      "reorderColumnHint": "Issues nesta coluna: {{count}}. Use as setas para a esquerda e para a direita para movê-la."
     },
     "favourites": {
       "loadFailed": "Não foi possível carregar os favoritos do Jira.",
@@ -23472,21 +23466,13 @@
     "language": {
       "back": "Idiomas",
       "requestPrompt": "Qual idioma você gostaria que o Orca oferecesse?",
-      "requestSuccess": "Solicitação de idioma registrada. Você pode continuar a configuração.",
       "requestError": "Não foi possível registrar sua solicitação. Tente novamente.",
       "retry": "Tentar novamente",
       "requestAction": "Solicitar idioma",
       "title": "Idioma de exibição",
-      "device": "Idioma do sistema: {{language}}",
-      "unsupported": "Idioma do sistema: {{language}}. Este idioma ainda não é compatível.",
-      "unknown": "Não foi possível detectar o idioma do sistema. Escolha um idioma abaixo.",
-      "loadError": "Não foi possível carregar este idioma. Tente novamente.",
-      "saveError": "Não foi possível salvar sua preferência de idioma. Tente novamente.",
-      "other": "Outro idioma…",
       "settingsError": "Não foi possível carregar suas configurações.",
       "loadingSettings": "Carregando configurações…",
-      "loading": "Carregando idioma…",
-      "saving": "Salvando idioma…"
+      "loading": "Carregando idioma…"
     }
   },
   "resourceManager": {

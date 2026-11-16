@@ -10,7 +10,7 @@ import { getProvider } from '../provider/registry'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args

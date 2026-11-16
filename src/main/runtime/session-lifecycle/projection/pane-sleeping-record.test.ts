@@ -3,7 +3,9 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { findPaneSleepingRecord } from './pane-sleeping-record'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const WORKTREE = 'repo::/work'
 const LEFT = '11111111-1111-4111-8111-111111111111'

@@ -4,7 +4,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { Input } from '@/components/ui/input'
 import { Terminal } from 'lucide-react'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
@@ -13,7 +13,7 @@ import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPic
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { retireAgentPickerDrafts, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource

@@ -2,6 +2,7 @@ import { lstat, opendir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DirectoryListingBudget } from '../../file-listing/directory-listing-budget'
 import { ProcessTableCaptureError } from '../tables/process-table-snapshot'
+import { monotonicNow } from '../../concurrency/deadline-settle-notifier'
 
 type DarwinTerminalNameDeps = {
   openDirectory: (path: string) => Promise<AsyncIterable<{ name: string }>>
@@ -11,6 +12,24 @@ type DarwinTerminalNameDeps = {
 const deviceFilesystem: DarwinTerminalNameDeps = {
   openDirectory: (path) => opendir(path),
   readDevice: (path) => lstat(path, { bigint: true })
+}
+
+// Per-capture lstats of every terminal drive millions of libuv pool jobs, which wedge macOS's pool (#31926).
+const VERIFIED_PTY_NAME_TTL_MS = 5 * 60_000
+const verifiedPtyNamesByDeps = new WeakMap<DarwinTerminalNameDeps, Map<string, number>>()
+
+function verifiedPtyNames(deps: DarwinTerminalNameDeps, now: number): Map<string, number> {
+  let verified = verifiedPtyNamesByDeps.get(deps)
+  if (!verified) {
+    verified = new Map()
+    verifiedPtyNamesByDeps.set(deps, verified)
+  }
+  for (const [device, verifiedAt] of verified) {
+    if (now - verifiedAt >= VERIFIED_PTY_NAME_TTL_MS) {
+      verified.delete(device)
+    }
+  }
+  return verified
 }
 
 // The full capture's first six columns are fixed; localized dates and argv stay opaque.
@@ -45,16 +64,21 @@ async function readDeviceKey(deps: DarwinTerminalNameDeps, name: string): Promis
 }
 
 // XNU gives pty slaves one ttys%03d minor entry; verify rdev so an earlier root-created alias cannot win as devname might.
+// The name follows from the device alone and closed ptys stop reporting it, so the TTL is only a safety margin.
 async function readPtyNames(
   devices: ReadonlySet<string>,
   deps: DarwinTerminalNameDeps,
   signal?: AbortSignal
 ): Promise<Map<string, string>> {
   const names = new Map<string, string>()
+  const verified = verifiedPtyNames(deps, monotonicNow())
   for (const device of devices) {
     signal?.throwIfAborted()
     const name = `ttys${device.slice(device.indexOf('/') + 1).padStart(3, '0')}`
-    if ((await readDeviceKey(deps, name)) === device) {
+    if (verified.has(device)) {
+      names.set(device, name)
+    } else if ((await readDeviceKey(deps, name)) === device) {
+      verified.set(device, monotonicNow())
       names.set(device, name)
     }
   }
@@ -108,7 +132,7 @@ export async function nameDarwinTerminalDevices(
   return names
 }
 
-/** Use this capture’s /dev inventory without caching hits or misses. */
+/** Reuse verified ttys names for five minutes; misses and /dev scan aliases are read from this capture's /dev. */
 export async function nameDarwinTerminals(
   stdout: string,
   deps: DarwinTerminalNameDeps = deviceFilesystem,

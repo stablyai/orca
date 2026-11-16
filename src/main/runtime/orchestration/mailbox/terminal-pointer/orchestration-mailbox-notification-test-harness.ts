@@ -9,7 +9,7 @@ import type Database from '../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import type { RuntimeStore } from '../../../construction/runtime-store-contract'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   bindPaneFirst,
   registerBoundPty

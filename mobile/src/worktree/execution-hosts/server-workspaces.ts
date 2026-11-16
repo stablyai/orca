@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { ExecutionHostHealth } from '../../../../src/shared/execution-host/execution-host-health'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

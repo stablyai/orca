@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import {
   createDaemonPtyEnvironment,
@@ -23,6 +24,10 @@ import {
   MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS,
   restoreManagedDataAccountEnvironment
 } from '../../../shared/agent-launch/environment/managed-data-account-environment'
+import { managedDataAccountResumeEnv } from '../../../shared/agent-launch/environment/managed-data-account-resume'
+import { getManagedDataAccountService } from '../../managed-data-accounts/service'
+import { needsOpenCodePrivateServer } from '../../opencode/opencode-private-server'
+import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
 
 const selected = vi.hoisted(() => {
   const value: Record<string, string> = {}
@@ -154,6 +159,42 @@ describe('independent pane agent session environments', () => {
       }
     }
   )
+})
+
+describe('OpenCode Session History resume', () => {
+  it('opens a System store row beside a running selected account', () => {
+    const root = mkdtempSync(join(tmpdir(), 'opencode-system-resume-'))
+    try {
+      const accountState = join(root, 'account-state')
+      writeSecureFile(
+        join(accountState, 'opencode', 'service.json'),
+        JSON.stringify({ pid: process.pid })
+      )
+      vi.stubEnv('XDG_DATA_HOME', join(root, 'system-data'))
+      vi.stubEnv('XDG_STATE_HOME', join(root, 'system-state'))
+      selected.value = {
+        XDG_DATA_HOME: join(root, 'account-data'),
+        XDG_STATE_HOME: accountState,
+        OPENCODE_AUTH_CONTENT: '',
+        OPENCODE_DB: 'opencode.db'
+      }
+      vi.spyOn(getManagedDataAccountService(), 'transcriptEnvironments').mockReturnValue([
+        selected.value
+      ])
+      const env = managedDataAccountResumeEnv({
+        agent: 'opencode2',
+        filePath: join(root, 'system-data', 'opencode', 'opencode.db#ses_1')
+      })
+      applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode2' })
+      expect(env.XDG_DATA_HOME).toBe(join(root, 'system-data'))
+      expect(env.XDG_STATE_HOME).toBe(join(root, 'system-state'))
+      expect(env.OPENCODE_DB).toBeUndefined()
+      // The selected account's service holds OpenCode's one port.
+      expect(needsOpenCodePrivateServer(env)).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
 })
 
 function hash(value: string | undefined): string | undefined {

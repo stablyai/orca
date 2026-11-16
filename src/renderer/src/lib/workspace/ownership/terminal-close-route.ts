@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getPtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type { AppState } from '@/store/types'
 import { collectPtyIdsForTab } from '@/store/terminals/retirement/terminal-tab-retirement'

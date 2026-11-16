@@ -74,7 +74,7 @@ const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
   'src/shared/terminal/pty/lifecycle/git-bash-console-capacity',
   'src/shared/git/',
-  'src/shared/review-head-tracking-ref',
+  'src/shared/worktree/hosted-review/review-head-tracking-ref',
   'src/shared/worktree/base-refs/local-base-branch-fast-forward',
   'src/main/git/',
   'config/scripts/git-binary-compatibility'
@@ -183,7 +183,7 @@ const MOBILE_WEB_APP_PREFIXES = [
   'mobile/pnpm-lock.yaml',
   'mobile/modules/orca-mobile-web-shell/',
   // Chat visuals on both mobile surfaces are built from it; their in-page links check runs here.
-  'src/shared/native-chat/native-chat-visual-shell'
+  'src/shared/native-chat/visuals/native-chat-visual-shell'
 ]
 
 function changesMobileWebApp(changedFiles) {
@@ -218,7 +218,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-launch/contracts/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch/agent-launch-params',
   'src/shared/agent-session/agent-session-wire',
-  'src/shared/agent-session/view/structured-agent-session-projection.test.ts',
   'src/shared/agent-session/view/structured-agent-session-projection.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.test.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.ts',
@@ -333,7 +332,7 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs',
   'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
-  'src/shared/zip-extractor-command.ts',
+  'src/shared/archives/zip-extractor-command.ts',
   'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs',
   'config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs',
   'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs',

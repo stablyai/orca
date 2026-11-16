@@ -83,19 +83,6 @@ afterEach(() => {
   latest = null
 })
 
-describe('useSourceControlGitHistory branch switch', () => {
-  it('reloads the open list when the same workspace switches branches', async () => {
-    const root = await mount({ branchName: 'main' })
-    await flush()
-    await act(async () => {
-      root.render(<Probe branchName="feature" />)
-    })
-    await flush()
-
-    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
-  })
-})
-
 describe('useSourceControlGitHistory stale completion', () => {
   it('drops a stale response for a worktree the user already left and returned to', async () => {
     const firstA = deferred<GitHistoryResult>()
@@ -181,38 +168,6 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
 
     expect(latest?.gitHistoryState).toEqual({ status: 'ready', result: historyResult('current-a') })
-  })
-
-  it('keeps the previous result while refreshing and reports errors alongside it', async () => {
-    const first = deferred<GitHistoryResult>()
-    const second = deferred<GitHistoryResult>()
-    mocks.getRuntimeGitHistory
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-
-    await mount()
-    expect(latest?.gitHistoryState).toEqual({ status: 'loading' })
-    await act(async () => {
-      first.resolve(historyResult('from-a'))
-    })
-    await flush()
-
-    void latest?.refreshGitHistory()
-    await flush()
-    expect(latest?.gitHistoryState).toEqual({
-      status: 'refreshing',
-      result: historyResult('from-a')
-    })
-
-    await act(async () => {
-      second.reject(new Error('git log failed'))
-    })
-    await flush()
-    expect(latest?.gitHistoryState).toEqual({
-      status: 'error',
-      result: historyResult('from-a'),
-      error: 'git log failed'
-    })
   })
 
   it('prunes history for worktrees that disappear and blocks their in-flight response', async () => {

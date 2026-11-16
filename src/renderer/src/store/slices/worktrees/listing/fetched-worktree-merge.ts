@@ -216,7 +216,7 @@ export function mergeFetchedWorktrees(
       s.detectedWorktreesByRepo[args.repoId],
       refreshResult,
       args.hostId,
-      args.setup,
+      args,
       matchOptions
     )
     // Stored rows from a stopped WSL distro lack branch state the scanned rows already have.

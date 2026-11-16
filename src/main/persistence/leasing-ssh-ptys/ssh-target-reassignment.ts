@@ -1,6 +1,6 @@
 import type { ProjectHostSetup } from '../../../shared/project/project-types'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   migrateFolderWorkspaceHostSshTargetId,
   migrateUiHostScopeSshTargetId,

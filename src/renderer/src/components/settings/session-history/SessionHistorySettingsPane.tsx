@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   AiVaultSearchSettingsSchema,
   resolveAiVaultSearchSettings
@@ -8,7 +8,7 @@ import {
   getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'

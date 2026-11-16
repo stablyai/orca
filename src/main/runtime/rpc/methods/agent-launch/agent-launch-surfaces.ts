@@ -20,8 +20,8 @@ import { createStructuredAgentSessionForWorktree } from '../structured-sessions/
 import { structuredAgentRuntimeMetadata } from '../../../agent-session/installation/structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
 import { AgentLaunchSessionAlreadyExistsError } from '../../../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import { createStructuredAgentSessionId } from '../../../../../shared/agent-session/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { toAgentLaunchPreferences } from '../../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { paneIdentity } from '../../../terminal/identity/runtime-terminal-pane-identity'
 import {
@@ -60,7 +60,7 @@ export function agentLaunchSurfaceFactory(
       firstMessage,
       signal
     }) => {
-      const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
+      const sessionId = requested ?? createOrcaSessionId(randomUUID)
       const definition = structuredAgentRuntimeMetadata(agent)?.definition
       const supported = Object.fromEntries(
         Object.entries(narrowStructuredLaunchSeedOptions(options) ?? {}).filter(([key]) =>
