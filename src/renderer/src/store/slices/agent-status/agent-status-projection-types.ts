@@ -2,7 +2,7 @@ import type { DashboardBucket } from '../../../../../shared/agent-status/present
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { WorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type { WorktreeAttention } from '../../../../../shared/sidebar-list/sorting/smart-attention'
-import { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'
+import { KeyedDeadlines } from '../../../../../shared/collections/keyed-deadlines'
 import type { TabAgentPane } from '@/lib/agent-session/tab-identity/tab-agent-status-index'
 
 export const EMPTY_KEYS: readonly string[] = Object.freeze([])

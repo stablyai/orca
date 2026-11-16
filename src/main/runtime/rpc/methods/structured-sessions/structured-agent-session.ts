@@ -59,7 +59,7 @@ import { sendStructuredAgentSessionForClient } from './conversation/structured-a
 import { runConversationCommandForClient } from './conversation/structured-agent-session-conversation-command'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { refusingStructuredAgentSessionCreatesClosedFirst } from './creation/structured-agent-session-close-before-create'
 import * as queuedImages from './attachments/structured-agent-session-queued-image-capability'
 import { projectReceiptDeviceHistory } from './subscriptions/structured-agent-session-receipt-devices'

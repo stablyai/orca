@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'

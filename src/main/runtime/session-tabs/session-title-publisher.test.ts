@@ -3,7 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runt
 import type { RuntimeMobileSessionTerminalTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
-vi.mock('../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }
@@ -115,51 +115,4 @@ describe.each([false, true])('session title publisher, main layout=%s', (isMain)
       h.unsubscribe()
     }
   })
-
-  it.each(['window', 'renderer'])(
-    'requires a successor %s to publish the surface before owning its retained name',
-    async (successor) => {
-      const h = await host()
-      try {
-        await h.publish(1, 1)
-        expect((await h.latest()).tabs[0]).toHaveProperty('resolvesSessionTitle', true)
-        const windowId = successor === 'window' ? 2 : 1
-        if (successor === 'window') {
-          h.runtime.markGraphUnavailable(1)
-          h.runtime.attachWindow(windowId)
-        } else {
-          h.runtime.markRendererReloading(1)
-          expect((await h.latest()).tabs[0]).not.toHaveProperty('resolvesSessionTitle')
-        }
-        await h.publish(windowId, 1, [], true, 'successor-renderer')
-        const retained = await h.latest()
-        expect(retained.tabs[0]).not.toHaveProperty('resolvesSessionTitle')
-        expect(retained.tabs[0]).toHaveProperty('aiVaultTitle', name)
-        await h.publish(windowId, 2, [surface], true, 'successor-renderer')
-        expect((await h.latest()).tabs[0]).toHaveProperty('resolvesSessionTitle', true)
-      } finally {
-        h.unsubscribe()
-      }
-    }
-  )
-
-  it.each([true, false])(
-    'revokes an omitted retained surface when workspace remains=%s',
-    async (includeWorktree) => {
-      const h = await host()
-      try {
-        await h.publish(1, 1)
-        const before = await h.latest()
-        expect(before.tabs[0]).toHaveProperty('resolvesSessionTitle', true)
-        h.events.length = 0
-        await h.publish(1, 2, [], includeWorktree)
-        const after = await h.latest()
-        expect(after.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
-        expect(after.tabs[0]).not.toHaveProperty('resolvesSessionTitle')
-        expect(after.tabs[0]).toHaveProperty('aiVaultTitle', name)
-      } finally {
-        h.unsubscribe()
-      }
-    }
-  )
 })

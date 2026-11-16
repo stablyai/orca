@@ -1,4 +1,4 @@
-import '../../../shared/layout-owner-switch'
+import '../../../shared/workspace-layout/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'

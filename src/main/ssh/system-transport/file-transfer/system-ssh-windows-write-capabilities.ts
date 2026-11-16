@@ -1,5 +1,5 @@
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import { CapabilityProbeCache } from '../../../../shared/capability-probe-cache'
+import { CapabilityProbeCache } from '../../../../shared/concurrency/capability-probe-cache'
 
 /** Cache SFTP/PowerShell 7 absence per execution host to avoid per-file probes. */
 type WindowsRemoteWriteCapability = 'sftp-subsystem' | 'pwsh'

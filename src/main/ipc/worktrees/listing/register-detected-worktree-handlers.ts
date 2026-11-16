@@ -19,7 +19,7 @@ import {
 import { listHostQualifiedDetectedWorktrees } from './host-qualified-worktree-listing'
 import { findExactRepoOwner, isCapturedRepoCurrent } from './worktree-host-ownership'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restoring-sessions/invalid-workspace-layout-purge'
 import { notifyWatchedWorktreeCatalogChanged } from '../../watched-worktree-catalog-notification'
 import { setWslStoppedWorktreeRescanNotifier } from './wsl-stopped-worktree-listing'

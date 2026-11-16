@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
 import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
