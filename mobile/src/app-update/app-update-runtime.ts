@@ -1,4 +1,5 @@
 import Constants from 'expo-constants'
+import { getCalendars, getLocales } from 'expo-localization'
 import * as Linking from 'expo-linking'
 import { useSyncExternalStore } from 'react'
 import { AppState, Platform } from 'react-native'
@@ -11,6 +12,7 @@ import {
 import { appStoreUpdateSource } from './app-store-update-source'
 import { createAppUpdateChecker, type AppUpdateState } from './app-update-checker'
 import type { AppUpdateSource } from './app-update-source'
+import { isLikelyInMainlandChina, shouldPreferGooglePlay } from './google-play-preference'
 import {
   ANDROID_RELEASE_TAG_PREFIX,
   createGithubReleaseUpdateSource,
@@ -27,6 +29,32 @@ export const isRetiredGithubAndroidApp =
 /** Play delivers this install's updates and forbids other update channels. */
 export const isGooglePlayInstall =
   Platform.OS === 'android' && (OrcaPlayStorePresence?.isInstalledByPlayStore() ?? false)
+
+export const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=dev.orca.app'
+
+function deviceIsInMainlandChina(): boolean {
+  try {
+    return isLikelyInMainlandChina({
+      regionCodes: getLocales().map((locale) => locale.regionCode),
+      timeZone: getCalendars()[0]?.timeZone
+    })
+  } catch {
+    // Unknown region: stay on GitHub, which works everywhere.
+    return true
+  }
+}
+
+/**
+ * A GitHub (sideloaded) install outside mainland China is sent to Google Play, which updates it in
+ * place because both carry Google's signing key. Mainland China keeps GitHub: Play is unreachable.
+ */
+export const prefersGooglePlayUpdate = shouldPreferGooglePlay({
+  isAndroid: Platform.OS === 'android',
+  isRetiredApp: isRetiredGithubAndroidApp,
+  isInstalledByPlay: isGooglePlayInstall,
+  playStoreUsable: OrcaPlayStorePresence?.isPlayStoreInstalled() ?? false,
+  inMainlandChina: deviceIsInMainlandChina()
+})
 
 /** The channel that installed this binary. */
 function resolveAppUpdateSource(): AppUpdateSource | null {
@@ -73,7 +101,7 @@ export function useAppUpdateState(): AppUpdateState {
   return useSyncExternalStore(appUpdateChecker.subscribe, appUpdateChecker.getSnapshot)
 }
 
-/** Opens the channel's page for the update: the GitHub release (Android) or App Store (iOS). */
+/** Opens the update's page: Google Play where it applies, else the GitHub release (Android) or App Store (iOS). */
 export function openAppUpdate(url: string): void {
-  void Linking.openURL(url).catch(() => {})
+  void Linking.openURL(prefersGooglePlayUpdate ? GOOGLE_PLAY_URL : url).catch(() => {})
 }

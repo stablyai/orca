@@ -1,7 +1,5 @@
-import {
-  createStructuredAgentSessionId,
-  structuredAgentSessionCreateParams
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
+import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type {
   StructuredAgentSessionCreateParams,
   StructuredAgentSessionFirstMessage,
@@ -29,7 +27,7 @@ import './structured-agent-session-launch-create-call'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
@@ -101,7 +99,7 @@ export function createStructuredAgentSessionLaunchIntent(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
-  const sessionId = createStructuredAgentSessionId(agent, createNonSecureContextUuid)
+  const sessionId = createOrcaSessionId(createNonSecureContextUuid)
   if (activate) {
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),

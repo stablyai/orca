@@ -6,7 +6,7 @@ import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import type { SetupDecision } from '../../../../../../shared/worktree/create-types'
 import type { ApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'

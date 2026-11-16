@@ -11,7 +11,7 @@ import {
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
 import { automationLegacyArguments } from '../../../../../shared/automations/launch/automation-legacy-arguments'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
@@ -30,7 +30,7 @@ import {
   editAutomationLegacyDraft,
   editsSupplementalArguments
 } from './automation-launch-draft'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 function legacyArgumentsDraft(draft: AutomationDraft): AutomationDraft {
   return {

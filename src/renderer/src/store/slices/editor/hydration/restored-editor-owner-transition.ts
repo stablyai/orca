@@ -1,7 +1,7 @@
 import type { ActiveWorktreeStateTransition } from '../../worktrees/session/worktree-selection-contract'
 import type { TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { sanitizeRecentTabIds } from '../../tabs/tab-selection-history'
 import {

@@ -1,7 +1,7 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
 export type SshPtyBindingCleanupOperations = {
   state: PersistedState

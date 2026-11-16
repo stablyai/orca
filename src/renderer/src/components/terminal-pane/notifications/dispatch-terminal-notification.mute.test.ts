@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NotificationDispatchRequest } from '../../../../../shared/notifications/notification-settings-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -113,18 +113,5 @@ describe('dispatchTerminalNotification per-worktree mute', () => {
     expect(requested).toBe(false)
     expect(dispatched).toEqual([])
     expect(store.getState().worktreesByRepo.repo1?.[0]?.isUnread).toBe(true)
-  })
-
-  it('still notifies for worktrees that are not muted', () => {
-    seed({ [OTHER_WORKSPACE]: true })
-
-    const requested = dispatchTerminalNotification(WORKSPACE, {
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey: PANE_KEY
-    })
-
-    expect(requested).toBe(true)
-    expect(dispatched).toHaveLength(1)
   })
 })

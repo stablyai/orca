@@ -29,7 +29,7 @@ import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-brow
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
 import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import { reorderTabInGroup } from '@/components/tab-group/tab-group-layout-owner-commands'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }

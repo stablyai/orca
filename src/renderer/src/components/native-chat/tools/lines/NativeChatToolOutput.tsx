@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
+import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -31,9 +32,11 @@ export function NativeChatToolOutput({
     loading?: boolean
     failed?: boolean
   } | null>(null)
-  useEffect(
-    () => () => setDetail((held) => (held?.body === body && held.owner === owner ? null : held)),
-    [body, owner]
+  useNativeChatPaneLifetimeEffect(
+    useCallback(
+      () => () => setDetail((held) => (held?.body === body && held.owner === owner ? null : held)),
+      [body, owner]
+    )
   )
   const current = detail?.body === body && detail.owner === owner ? detail : null
   const full = current?.full

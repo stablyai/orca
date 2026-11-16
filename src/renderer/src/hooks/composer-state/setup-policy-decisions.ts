@@ -1,4 +1,4 @@
-import { getDefaultRepoHookSettings } from '../../../../shared/constants'
+import { getDefaultRepoHookSettings } from '../../../../shared/orca-profiles/constants'
 import type {
   RepoHookSettings,
   SetupAgentStartupPolicy

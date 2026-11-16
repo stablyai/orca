@@ -9,7 +9,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { TabHoverCard } from './TabHoverCard'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'

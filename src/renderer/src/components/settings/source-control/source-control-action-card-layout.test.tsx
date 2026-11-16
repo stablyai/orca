@@ -6,7 +6,7 @@ import { fireEvent, render, screen, within, waitFor } from '@testing-library/rea
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import '../__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store/index'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AiActionId,

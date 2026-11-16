@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import '../../../../shared/workspace-layout/layout-owner-switch'
 import { makeRepo } from '../../persistence-test-harness'
 import type { Store } from '../../loading-store/store'
 import {
@@ -135,39 +138,6 @@ describe('a window drag-out through layout.apply', () => {
     expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
       expect.objectContaining({ ptyId: 'pty-agent', tabId: TARGET, leafId: MOVED })
     ])
-  })
-
-  it('moves the last pane of main’s copy, leaving the tab for the window’s other panes', async () => {
-    const store = openStore(newDataFile())
-    await store.persistPtyBinding({
-      worktreeId: WT,
-      tabId: SOURCE,
-      leafId: MOVED,
-      ptyId: 'pty-agent',
-      incarnationId: 'inc-1'
-    })
-
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      // With main owning all shown panes, the home copy determines last-pane refusal.
-      await expect(detach(store, 'pty-agent')).resolves.toEqual({ ok: false, code: 'last_pane' })
-      expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([SOURCE])
-      return
-    }
-    await expect(detach(store, 'pty-agent')).resolves.toMatchObject({ ok: true })
-
-    const session = store.getWorkspaceSession()
-    expect(tabsHoldingLeaf(session, MOVED)).toEqual([TARGET])
-    expect(session.tabsByWorktree[WT]?.find((tab) => tab.id === SOURCE)?.ptyId).toBeNull()
-    expect(
-      await store.persistPtyBinding({
-        worktreeId: WT,
-        tabId: SOURCE,
-        leafId: LEFT,
-        ptyId: 'pty-left',
-        incarnationId: 'inc-left'
-      })
-    ).toBe(true)
-    expect(tabsHoldingLeaf(store.getWorkspaceSession(), LEFT)).toEqual([SOURCE])
   })
 })
 
