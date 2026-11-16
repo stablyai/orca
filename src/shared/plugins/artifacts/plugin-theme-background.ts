@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_THEME_GLASS_SINCE,
   PLUGIN_THEME_VIDEO_BACKGROUND_SINCE,
   pluginFieldDoc,
   pluginPathFieldDoc
@@ -35,6 +36,24 @@ const backgroundStyleFields = {
     .meta(pluginFieldDoc('Which edge the image anchors to. Defaults to `center`.', NEXT))
 }
 
+/** Default share of the chrome color over the blurred image. */
+export const PLUGIN_THEME_GLASS_DEFAULT_TINT = 0.75
+
+const glassTintSchema = z
+  .number()
+  .min(0)
+  .max(1)
+  .optional()
+  .meta(
+    pluginFieldDoc(
+      `How much of each surface's own color covers the blurred image, 0 to 1. Defaults to ${PLUGIN_THEME_GLASS_DEFAULT_TINT}. Orca raises it when the theme's text would otherwise read worse than its contrast rules allow.`,
+      PLUGIN_THEME_GLASS_SINCE,
+      [0.8]
+    )
+  )
+
+const glassDescription = `Paints the sidebars, tab bars, title bar and status bar with \`path\` blurred once, under each surface's own color. Terminals, editors and chats are unchanged. Off when the theme has a \`videoPath\`, under Reduce Visual Effects or reduced transparency, and in releases before ${PLUGIN_THEME_GLASS_SINCE}.`
+
 const backgroundFields = {
   path: pluginRelativePathSchema.meta(
     pluginPathFieldDoc(`Image file in the plugin. ${PLUGIN_THEME_BACKGROUND_RULE_TEXT}`, NEXT, [
@@ -50,15 +69,25 @@ const backgroundFields = {
         ['images/dusk.mp4']
       )
     ),
-  ...backgroundStyleFields
+  ...backgroundStyleFields,
+  glass: z
+    .strictObject({ tint: glassTintSchema })
+    .optional()
+    .meta(pluginFieldDoc(glassDescription, PLUGIN_THEME_GLASS_SINCE, [{ tint: 0.8 }]))
 }
+
+// Why per-field catch: a glass option added later must not turn glass off.
+const tolerantGlassSchema = z
+  .object({ tint: glassTintSchema.catch(undefined) })
+  .optional()
+  .catch(undefined)
 
 /** `validate:plugin` shape: unknown keys fail authoring. */
 export const pluginThemeBackgroundSchema = z
   .strictObject(backgroundFields)
   .meta(
     pluginFieldDoc(
-      'One image painted under translucent terminals and chats (Background Opacity below 1). Never blurred.',
+      'One image painted under translucent terminals and chats (Background Opacity below 1). Never blurred live; `glass` paints a copy blurred once on the window chrome.',
       NEXT
     )
   )
@@ -71,7 +100,8 @@ const tolerantBackgroundSchema = z.object({
   videoPath: backgroundFields.videoPath.catch(undefined),
   opacity: backgroundStyleFields.opacity.catch(undefined),
   size: backgroundStyleFields.size.catch(undefined),
-  position: backgroundStyleFields.position.catch(undefined)
+  position: backgroundStyleFields.position.catch(undefined),
+  glass: tolerantGlassSchema
 })
 
 /** Runtime keeps a theme whose background is malformed or newer; at worst it paints no image. */
@@ -91,7 +121,8 @@ const installedImageUrlSchema = z
 export const pluginThemeBackgroundRegistrationSchema = z.object({
   url: installedImageUrlSchema,
   videoUrl: installedImageUrlSchema.optional().catch(undefined),
-  ...backgroundStyleFields
+  ...backgroundStyleFields,
+  glass: tolerantGlassSchema
 })
 
 /** Registration field: an unreadable background drops the image, never the theme. */

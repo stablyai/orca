@@ -149,7 +149,7 @@ export function AppWorkspaceShell(props: {
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Workspace tab groups reach the top; other pages retain the titlebar. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
-            <div className="titlebar">
+            <div className="titlebar" data-glass-surface="tab-bar">
               <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
               {titlebarMainStrip}
             </div>
@@ -162,6 +162,9 @@ export function AppWorkspaceShell(props: {
                   className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
                 >
                   <div
+                    data-glass-surface={
+                      layout.leftTitlebarChromeLayout.isFloating ? 'titlebar' : 'worktree-sidebar'
+                    }
                     // The floating header covers the center border; restore the seam and size to its own controls.
                     className={`titlebar-left${
                       layout.leftTitlebarChromeLayout.isFloating
@@ -191,7 +194,9 @@ export function AppWorkspaceShell(props: {
               {layout.stackedSidebarOpen &&
               layout.activeView !== 'automations' &&
               layout.activeView !== 'artifacts' ? (
-                <div className="titlebar">{titlebarMainStrip}</div>
+                <div className="titlebar" data-glass-surface="tab-bar">
+                  {titlebarMainStrip}
+                </div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}

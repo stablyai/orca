@@ -145,12 +145,36 @@ An app theme may add one image painted behind the window's translucent surfaces:
 - `opacity` (0 to 1, default 1) is how strongly the image shows through the theme's
   `--background`; `size` is `cover` (default), `contain` or `tile` (a video covers instead);
   `position` is `center` (default), `top`, `bottom`, `left` or `right`.
-- The image and video are never blurred. Sidebars, editors and pages stay opaque; it
-  shows through terminals and agent chats when the user's terminal Background Opacity is below 1.
+- The image and video are never blurred live. Sidebars, editors and pages stay opaque unless the
+  theme sets `glass` (below); it shows through terminals and agent chats when the user's terminal
+  Background Opacity is below 1.
   Chat text sits on the chat canvas at that opacity (at least 0.8); message bubbles, code blocks,
   approval and question cards, the composer and menus stay opaque. A chat split beside terminals
   in one tab stays opaque.
 - Orca releases without background images ignore the field (`validate:plugin` on them reports it).
+
+### Glass chrome
+
+`glass` (Orca 1.4.260 and later) paints the window chrome with the image: the left sidebar, its
+header, the tab bars, the right panel and the status bar.
+
+```json
+"background": { "path": "images/dusk.webp", "opacity": 0.35, "glass": { "tint": 0.8 } }
+```
+
+- Orca blurs `path` once, at a quarter of its size, off the UI thread, when the theme is
+  applied. Each chrome surface paints that copy under its own color. Nothing is blurred while
+  you work, so the cost matches a plain image theme.
+- `tint` (0 to 1, default 0.75) is how much of each surface's own color covers the blurred
+  image. Orca raises it as far as needed for the chrome's text to keep its contrast (4.5:1, or
+  no worse than on the plain surface for text the theme already dims) over every part of the
+  image. A busy or high-contrast image ends up more opaque than its `tint`.
+- Terminals, editors and chats are unchanged.
+- The chrome stays opaque:
+  - when the theme has a `videoPath` (a still would not match the playing frames)
+  - when Background Opacity is 1, as the image itself is not painted then
+  - under Reduce Visual Effects or the system's reduced transparency setting
+  - in earlier releases, which ignore `glass` (`validate:plugin` on them reports it)
 
 ## Terminal themes
 
