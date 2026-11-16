@@ -4,7 +4,7 @@ import {
   customSlashCommandName,
   dedupeCustomSlashCommands,
   type DiscoveredSlashCommand
-} from '../../../shared/custom-slash-commands'
+} from '../../../shared/skills/discovery/custom-slash-commands'
 import { SKILL_FILE_MAX_DEPTH } from '../../../shared/skills/discovery/skill-discovery-depth'
 import { quotePosixShell as quoteBashString } from '../../../shared/shell/launch/shell-argument-quoting'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
