@@ -14,7 +14,7 @@ import {
   type LookAroundRun
 } from './bot-look-around-state'
 
-/** A Look now started this soon before a slot stands in for it (and after it, at least). */
+/** A Look now started this soon before a slot may stand in for it (and after it, at least). */
 export const LOOK_RECENT_MS = 60 * 60 * 1000
 /** Far enough back and ahead to cross a long weekend for a weekdays-only schedule. */
 const SCAN_DAYS = 8
@@ -129,13 +129,45 @@ function takes(
 ): boolean {
   return run.scheduledFor !== undefined && current.has(run.scheduledFor)
     ? run.scheduledFor === slot
-    : run.startedAt >= slot - LOOK_RECENT_MS &&
-        run.startedAt <= Math.max(slot + LOOK_RECENT_MS, ends)
+    : inLookNowWindow(run.startedAt, slot, ends)
 }
 
-/** A slot is taken by its own scheduled look, or by a Look now (any look without a slot, as older
- *  records' looks are) started from LOOK_RECENT_MS before it until its catch-up ends (an hour after
- *  it at least). A scheduled look for another current slot never takes it, however late it started;
+/** A Look now started from LOOK_RECENT_MS before a slot until its catch-up ends (an hour after it at
+ *  least) could stand in for it. */
+function inLookNowWindow(startedAt: number, slot: number, ends: number): boolean {
+  return startedAt >= slot - LOOK_RECENT_MS && startedAt <= Math.max(slot + LOOK_RECENT_MS, ends)
+}
+
+/** The one slot a Look now stands in for, never two: the overdue one (a slot at or before it whose
+ *  window it started in, not taken by its own scheduled look or an earlier Look now; the latest, if
+ *  several are), else the nearest slot after it whose window it started in. Slots 9:00 and 10:00: a
+ *  Look now at 9:30 stands in for 9:00, and 10:00 still runs. Null when it started outside every
+ *  window. A later slot's window never ends before an earlier one's, so the first overdue slot
+ *  outside its window ends the search back. */
+function lookNowSlot(
+  setting: BotLookAround,
+  startedAt: number,
+  takenBefore: ReadonlySet<number>
+): number | null {
+  // A window ends by the next day's start or an hour after its slot, so yesterday is far enough back.
+  for (const slot of slotsFrom(setting, startedAt, -1, 1)) {
+    if (slot > startedAt || takenBefore.has(slot)) {
+      continue
+    }
+    if (!inLookNowWindow(startedAt, slot, catchUpEnds(setting, slot))) {
+      break
+    }
+    return slot
+  }
+  const upcoming = nextLookSlot(setting, startedAt)
+  return upcoming !== null && inLookNowWindow(startedAt, upcoming, catchUpEnds(setting, upcoming))
+    ? upcoming
+    : null
+}
+
+/** A slot is taken by its own scheduled look, or by the one Look now (any look without a slot, as
+ *  older records' looks are) that stands in for it (see lookNowSlot), each Look now in the order
+ *  they started. A scheduled look for another current slot never takes it, however late it started;
  *  one for a slot the schedule no longer has (the owner moved a time) counts as a Look now, so an
  *  edit can't start a second look minutes after the first. A look the host's sleep cut short never
  *  takes a slot. */
@@ -150,10 +182,32 @@ function slotTakers(
         : []
     )
   )
-  return (slot) => {
-    const ends = catchUpEnds(setting, slot)
-    return runs.findLast((run) => run.asleep !== true && takes(run, slot, ends, current))
+  const ownSlot = (run: LookAroundRun): boolean =>
+    run.scheduledFor !== undefined && current.has(run.scheduledFor)
+  const taken = new Set(
+    runs.flatMap((run) =>
+      run.asleep !== true && run.scheduledFor !== undefined && ownSlot(run)
+        ? [run.scheduledFor]
+        : []
+    )
+  )
+  const standsInFor = new Map<LookAroundRun, number>()
+  for (const run of runs) {
+    if (run.asleep === true || ownSlot(run)) {
+      continue
+    }
+    const slot = lookNowSlot(setting, run.startedAt, taken)
+    if (slot !== null) {
+      standsInFor.set(run, slot)
+      taken.add(slot)
+    }
   }
+  return (slot) =>
+    runs.findLast(
+      (run) =>
+        run.asleep !== true &&
+        (ownSlot(run) ? run.scheduledFor === slot : standsInFor.get(run) === slot)
+    )
 }
 
 /** A look for the slot the host's sleep cut short a moment ago: it is tried again, only waiting a
@@ -269,7 +323,7 @@ export function lookAroundDecision(
   }
   let after = Math.max(now, allowedFrom - 1)
   let skipped: NonNullable<LookDecision['next']>['skipped']
-  // Slots are at least an hour apart, so a Look now takes at most one; the cap is a backstop.
+  // A Look now takes at most one slot (lookNowSlot), so this skips one per look; the cap is a backstop.
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const at = nextLookSlot(setting, after)
     if (at === null) {

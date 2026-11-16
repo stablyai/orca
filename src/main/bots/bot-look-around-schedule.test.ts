@@ -200,7 +200,9 @@ describe('Look around hours', () => {
   })
 
   it('lets a Look now just before a slot stand in for it, and Next look says why', () => {
-    const lookedNow = looked(armed(at(20, 9)), 'run-1', at(26, 11, 30))
+    // 8:00 ran, so nothing is overdue and the Look now stands in for 12:00.
+    const ran = looked(armed(at(20, 9)), 'run-0', at(26, 8), { scheduledFor: at(26, 8) })
+    const lookedNow = looked(ran, 'run-1', at(26, 11, 30))
     expect(lookAroundDueAt(setting, lookedNow, at(26, 12, 1))).toBeNull()
     expect(next(setting, lookedNow, at(26, 11, 45))).toEqual({
       at: at(26, 16),
@@ -536,4 +538,40 @@ describe('Look now substitution window', () => {
       expect(lookAroundDecision(schedule, state, at(26, 12, 30)).missedAt).toBe(expected)
     }
   )
+})
+
+describe('A Look now stands in for one slot', () => {
+  const times = custom(['09:00', '10:00'])
+  const manual = (startedAt: number) => looked(armed(at(26, 0)), 'manual', startedAt)
+
+  it('takes the overdue slot, never the next one too', () => {
+    const state = manual(at(26, 9, 30))
+    expect(next(times, state, at(26, 9, 45))).toEqual({ at: at(26, 10) })
+    expect(lookAroundDueAt(times, state, at(26, 10, 0, 30))).toBe(at(26, 10))
+    expect(lookAroundDecision(times, state, at(26, 10, 0, 30)).missedAt).toBeUndefined()
+  })
+
+  it('takes the next slot when none is overdue', () => {
+    const state = manual(at(26, 8, 30))
+    expect(next(times, state, at(26, 8, 45))).toEqual({
+      at: at(26, 10),
+      skipped: { at: at(26, 9), lookedAt: at(26, 8, 30) }
+    })
+    expect(lookAroundDueAt(times, state, at(26, 9, 0, 30))).toBeNull()
+    expect(lookAroundDueAt(times, state, at(26, 10, 0, 30))).toBe(at(26, 10))
+  })
+
+  it('takes only the latest of two overdue slots', () => {
+    // At 10:00 both 9:00's catch-up and 10:00 have it.
+    const state = manual(at(26, 10))
+    const decision = lookAroundDecision(times, state, at(26, 10, 0, 30))
+    expect(decision.due).toBeNull()
+    expect(decision.missedAt).toBe(at(26, 9))
+  })
+
+  it('takes no slot when it started outside every window', () => {
+    const state = manual(at(26, 7, 30))
+    expect(next(times, state, at(26, 7, 45))).toEqual({ at: at(26, 9) })
+    expect(lookAroundDueAt(times, state, at(26, 9, 0, 30))).toBe(at(26, 9))
+  })
 })
