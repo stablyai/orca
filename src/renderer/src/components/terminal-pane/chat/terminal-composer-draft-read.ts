@@ -13,10 +13,12 @@ function revisionOf(terminal: Terminal): number {
     const counter = { value: 0 }
     revision = counter
     revisions.set(terminal, counter)
-    // Lives as long as the terminal; one increment per parsed write.
-    terminal.onWriteParsed(() => {
+    // Lives as long as the terminal; one increment per parsed write or resize (reflow without output).
+    const bump = (): void => {
       counter.value += 1
-    })
+    }
+    terminal.onWriteParsed(bump)
+    terminal.onResize(bump)
   }
   return revision.value
 }
@@ -25,7 +27,8 @@ function revisionOf(terminal: Terminal): number {
 export function readTerminalComposerDraft(terminal: Terminal): string | null {
   const revision = revisionOf(terminal)
   const buffer = terminal.buffer.active
-  const key = `${terminal.cols}x${terminal.rows}:${buffer.type}:${buffer.baseY}:${buffer.cursorY}`
+  // Buffer length catches terminal.clear(), which parses no output.
+  const key = `${buffer.type}:${buffer.length}:${buffer.baseY}:${buffer.cursorY}`
   const cached = cache.get(terminal)
   if (cached && cached.revision === revision && cached.key === key) {
     return cached.value ?? null
