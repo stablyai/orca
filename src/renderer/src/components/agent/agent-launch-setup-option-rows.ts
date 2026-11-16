@@ -8,7 +8,10 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionSelectChoice
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type {
   agentPickerEntryOptions,
   agentPickerModels
@@ -59,25 +62,22 @@ function argumentsOwnedRow(
 }
 
 /** Clearing Effort keeps the selected model, so its default is that model's inherited effort.
- *  Why short: it sits in the effort row beside every level; the inherited level is its tooltip. */
+ *  Why short: it sits in the effort row beside every level; its name still says what it inherits. */
 function textEffortDefaultChoice(
   kind: {
     choices: readonly { value: string; label: string }[]
     defaultValue: string
   },
   t: Translate = translate
-): { value: string; label: string; description?: string } {
+): SessionOptionSelectChoice {
   const effort = kind.choices.find((choice) => choice.value === kind.defaultValue)?.label
+  const short = t('settings.sourceControl.actionModel.effortDefault', 'Default')
   return {
     value: TEXT_ACTION_DEFAULT_MODEL,
-    label: t('settings.sourceControl.actionModel.effortDefault', 'Default'),
-    ...(effort
-      ? {
-          description: t('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
-            value0: effort
-          })
-        }
-      : {})
+    label: effort
+      ? t('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', { value0: effort })
+      : short,
+    shortLabel: short
   }
 }
 

@@ -14,6 +14,7 @@ import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picke
 import { isFastServiceTier } from '../../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
 import { nativeChatSessionChoiceShortLabel } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from '../native-chat/session/options/controls/native-chat-session-option-labels-text'
+import { useSyncExternalStore } from 'react'
 import {
   agentPickerEntryOptions,
   agentPickerModels
@@ -21,7 +22,8 @@ import {
 import {
   agentPickerEffectiveChoices,
   type AgentPickerDraft,
-  type AgentPickerEntry
+  type AgentPickerEntry,
+  type AgentPickerModel
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   agentLaunchSetupCatalogState,
@@ -74,28 +76,69 @@ export function agentLaunchSetupState(
   }
 }
 
-/** "Claude Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
-// Why: a closed picker reads no listings, so its trigger names models (and their levels) from the
-// last listing an open picker showed for that agent on that host.
-const shownCatalogs = new Map<string, AgentPickerEntry['catalog']>()
-const shownCatalogKey = (entry: AgentPickerEntry) =>
-  `${entry.agent}\u0000${entry.rows[0]?.executionHostId ?? 'local'}`
+// Why: a closed picker reads no listings, so its trigger names the model the user last picked from
+// one (a live-only Codex model, say) by the row that pick came from. Only picks write here, keyed
+// by agent, host and model, so no other surface's listing can replace a name.
+const PICKED_MODELS_KEPT = 32
+const pickedModels = new Map<string, AgentPickerModel>()
+const pickedModelListeners = new Set<() => void>()
+let pickedModelsVersion = 0
+const pickedModelKey = (entry: AgentPickerEntry, modelId: string) =>
+  `${entry.agent}\u0000${entry.rows[0]?.executionHostId ?? ''}\u0000${modelId}`
 
-export function rememberAgentPickerCatalogs(entries: readonly AgentPickerEntry[]): void {
-  for (const entry of entries) {
-    if (entry.catalog.origin !== 'unknown') {
-      shownCatalogs.set(shownCatalogKey(entry), entry.catalog)
-    }
+export function rememberPickedAgentModel(entry: AgentPickerEntry, draft: AgentPickerDraft): void {
+  const modelId = draft.choices.model
+  const listed = modelId
+    ? agentPickerModels(entry, draft.surface).find((model) => model.id === modelId)
+    : undefined
+  if (!modelId || !listed || entry.catalog.origin === 'unknown') {
+    return
+  }
+  const key = pickedModelKey(entry, modelId)
+  pickedModels.delete(key)
+  pickedModels.set(key, listed)
+  if (pickedModels.size > PICKED_MODELS_KEPT) {
+    pickedModels.delete(pickedModels.keys().next().value!)
+  }
+  pickedModelsVersion++
+  for (const listener of pickedModelListeners) {
+    listener()
   }
 }
 
+/** Re-renders closed triggers when a pick names a model they may show. */
+export function usePickedAgentModelsVersion(): number {
+  return useSyncExternalStore(
+    (listener) => {
+      pickedModelListeners.add(listener)
+      return () => pickedModelListeners.delete(listener)
+    },
+    () => pickedModelsVersion
+  )
+}
+
+/** "Claude Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
 export function agentLaunchSetupSummary(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft
 ): string[] {
-  const shown =
-    entry.catalog.origin === 'unknown' ? shownCatalogs.get(shownCatalogKey(entry)) : undefined
-  const state = agentLaunchSetupState(shown ? { ...entry, catalog: shown } : entry, draft)
+  const modelId = draft.choices.model
+  const picked = modelId ? pickedModels.get(pickedModelKey(entry, modelId)) : undefined
+  const listed =
+    entry.catalog.origin !== 'unknown' && entry.catalog.models.some((model) => model.id === modelId)
+  const state = agentLaunchSetupState(
+    picked && !listed
+      ? {
+          ...entry,
+          catalog: {
+            origin: 'probe',
+            fetchedAt: 0,
+            models: [...(entry.catalog.origin === 'unknown' ? [] : entry.catalog.models), picked]
+          }
+        }
+      : entry,
+    draft
+  )
   const model =
     state.modelInArguments || !state.currentModel
       ? undefined

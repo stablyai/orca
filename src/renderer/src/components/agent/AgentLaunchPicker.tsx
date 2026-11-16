@@ -31,7 +31,11 @@ import { AgentLaunchPickerDropdown } from './AgentLaunchPickerDropdown'
 import { AgentLaunchDefaultsFields } from './AgentLaunchDefaultsFields'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
-import { agentLaunchSetupSummary, rememberAgentPickerCatalogs } from './agent-launch-setup-state'
+import {
+  agentLaunchSetupSummary,
+  rememberPickedAgentModel,
+  usePickedAgentModelsVersion
+} from './agent-launch-setup-state'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
   agentPickerDraft,
@@ -166,7 +170,16 @@ export const AgentLaunchPicker = memo(
         onCatalogOpen?.(catalogAgent)
       }
     }, [catalogAgent, onCatalogOpen])
-    useEffect(() => rememberAgentPickerCatalogs(entries), [entries])
+    const pickedModelsVersion = usePickedAgentModelsVersion()
+    const pick = useCallback<typeof onPick>(
+      (picked, next, from, surface) => {
+        if (next && from) {
+          rememberPickedAgentModel(from, next)
+        }
+        onPick(picked, next, from, surface)
+      },
+      [onPick]
+    )
     const entry = entries.find((entry) => entry.agent === agent)
     const draft = entry
       ? ((value?.agent === entry.agent ? value : undefined) ??
@@ -177,13 +190,13 @@ export const AgentLaunchPicker = memo(
     // render, the summary rebuilds the agent's model catalog, and its labels are translated.
     const summaryKey =
       entry && draft && !setupDisabled && triggerLabel === undefined
-        ? JSON.stringify([languageRevision, draft])
+        ? JSON.stringify([languageRevision, pickedModelsVersion, draft])
         : null
     const summary = useMemo(() => {
       if (!entry || !summaryKey) {
         return ''
       }
-      const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
+      const [, , parsed]: [unknown, unknown, AgentPickerDraft] = JSON.parse(summaryKey)
       return agentLaunchSetupSummary(entry, parsed).join(' · ')
     }, [entry, summaryKey])
     // Only a dropdown with Open in names where the agent runs, as Open in does.
@@ -303,7 +316,7 @@ export const AgentLaunchPicker = memo(
                 defaultAgent={defaultAgent}
                 onSetDefault={onSetDefault}
                 onPaneChange={selectAgent}
-                onPick={onPick}
+                onPick={pick}
                 onClose={close}
                 choices={extraChoices}
               />
