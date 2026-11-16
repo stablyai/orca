@@ -108,7 +108,7 @@ export function getEffectiveKeybindingsForAction(
     : getConfiguredBindings(actionId, platform, overrides)
 }
 
-const implicitBindings = new WeakMap<KeybindingOverrides, Map<NodeJS.Platform, string[]>>()
+const implicitBindings = new WeakMap<KeybindingOverrides, Map<string, string[]>>()
 const emptyOverrides: KeybindingOverrides = {}
 
 export function getEffectiveKeybindingsForDefinition(
@@ -121,10 +121,11 @@ export function getEffectiveKeybindingsForDefinition(
   if (!definition.implicitDefaultYields || Object.hasOwn(overrides, definition.id)) {
     return configured
   }
+  // Why: matched per keystroke; only registry entries memoize, since copies may carry other defaults.
   const cacheable =
-    definition === DEFINITIONS_BY_ID.get('terminal.toggleNativeChat') &&
-    definitions === KEYBINDING_DEFINITIONS
-  const cached = cacheable ? implicitBindings.get(overrides)?.get(platform) : undefined
+    definition === DEFINITIONS_BY_ID.get(definition.id) && definitions === KEYBINDING_DEFINITIONS
+  const cacheKey = `${platform}\0${definition.id}`
+  const cached = cacheable ? implicitBindings.get(overrides)?.get(cacheKey) : undefined
   if (cached) {
     return cached
   }
@@ -142,9 +143,9 @@ export function getEffectiveKeybindingsForDefinition(
       )
   )
   if (cacheable) {
-    const byPlatform = implicitBindings.get(overrides) ?? new Map()
-    byPlatform.set(platform, effective)
-    implicitBindings.set(overrides, byPlatform)
+    const byKey = implicitBindings.get(overrides) ?? new Map<string, string[]>()
+    byKey.set(cacheKey, effective)
+    implicitBindings.set(overrides, byKey)
   }
   return effective
 }

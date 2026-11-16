@@ -19,6 +19,7 @@ import {
   isAppOwnedCopyChord,
   isMacNativeMenuChord
 } from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
+import { isSpatialFocusDirection } from '@/lib/pane-manager/pane-focus/pane-spatial-focus'
 
 /** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
 export function installPreviewTerminalKeyHandler(args: {
@@ -156,10 +157,15 @@ export function installPreviewTerminalKeyHandler(args: {
       return consumeEvent(event)
     }
 
-    const action = resolvePreviewShortcutAction(event, {
+    const resolved = resolvePreviewShortcutAction(event, {
       ...args.getShortcutContext(),
       optionKeyLocations: optionKeyLocations.get()
     })
+    // Why: there is no pane layout here, so spatial focus chords take the unbound path as they did before spatial focus.
+    const action =
+      resolved?.type === 'focusPane' && isSpatialFocusDirection(resolved.direction)
+        ? null
+        : resolved
     if (!action) {
       // After the resolver: it is this surface's only shortcut layer, so user bindings win.
       if (isNativeMenuChord(event)) {

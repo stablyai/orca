@@ -139,6 +139,7 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
   const {
     setExpandedPane,
     restoreExpandedLayout,
+    readUnexpandedLayout,
     refreshPaneSizes,
     syncExpandedLayout,
     toggleExpandPane
@@ -163,6 +164,7 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
     clearExitedPanePtyLayoutBinding,
     setExpandedPane,
     restoreExpandedLayout,
+    readUnexpandedLayout,
     refreshPaneSizes,
     syncExpandedLayout,
     toggleExpandPane

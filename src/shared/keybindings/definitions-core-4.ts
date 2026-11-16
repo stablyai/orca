@@ -80,6 +80,43 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'terminal.focusPaneLeft',
+    title: 'Focus pane left',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'pane', 'focus', 'left', 'spatial', 'adjacent'],
+    // Why: left/right share worktree.history chords; main yields them to a focused terminal, and these defaults yield to saved overrides.
+    defaultBindings: platformBindings(['Mod+Alt+ArrowLeft'])
+  },
+  {
+    id: 'terminal.focusPaneRight',
+    title: 'Focus pane right',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'pane', 'focus', 'right', 'spatial', 'adjacent'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowRight'])
+  },
+  {
+    id: 'terminal.focusPaneUp',
+    title: 'Focus pane up',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'pane', 'focus', 'up', 'spatial', 'adjacent'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowUp'])
+  },
+  {
+    id: 'terminal.focusPaneDown',
+    title: 'Focus pane down',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    implicitDefaultYields: true,
+    searchKeywords: ['shortcut', 'pane', 'focus', 'down', 'spatial', 'adjacent'],
+    defaultBindings: platformBindings(['Mod+Alt+ArrowDown'])
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

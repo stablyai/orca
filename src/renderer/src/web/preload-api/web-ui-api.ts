@@ -279,6 +279,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     setRichMarkdownContextMenuTarget: () => {},
     markPlainTextContextMenuTarget: () => {},
     setTerminalInputFocused: () => {},
+    setNativeChatCoverFocused: () => {},
     setFloatingFocus: () => {},
     setShortcutRecorderFocused: () => {},
     onRichMarkdownContextCommand: () => noopUnsubscribe,
