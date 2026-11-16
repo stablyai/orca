@@ -1,6 +1,7 @@
 import {
   indexPendingVmCheckouts,
   EMPTY_PENDING_VM_CHECKOUT_INDEX,
+  PENDING_VM_CHECKOUT_HIDDEN_AFTER_CLEANUP_MS,
   type PendingVmCheckout,
   type PendingVmCheckoutIndex
 } from '../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
@@ -87,3 +88,29 @@ function sameCheckouts(left: PendingVmCheckout[], right: PendingVmCheckout[]): b
 }
 
 export const pendingVmCheckouts = new PendingVmCheckoutRegistry()
+
+// Window owners are positive webContents ids; creates main runs itself take negative ones.
+let nextMainOwnerId = -1
+
+/**
+ * Hides a VM checkout for a create main runs itself (the CLI's), as a window hides its own: the
+ * create releases it, or after a cleanup keeps it hidden while the destroyed VM's rows leave the lists.
+ */
+export function hideMainVmCreateCheckout(checkout: PendingVmCheckout): {
+  release: () => void
+  settleAfterCleanup: (cleanedUp: boolean) => void
+} {
+  const ownerId = nextMainOwnerId--
+  pendingVmCheckouts.publish(ownerId, [checkout])
+  const release = (): void => pendingVmCheckouts.publish(ownerId, [])
+  return {
+    release,
+    settleAfterCleanup: (cleanedUp) => {
+      if (!cleanedUp) {
+        release()
+        return
+      }
+      setTimeout(release, PENDING_VM_CHECKOUT_HIDDEN_AFTER_CLEANUP_MS).unref?.()
+    }
+  }
+}

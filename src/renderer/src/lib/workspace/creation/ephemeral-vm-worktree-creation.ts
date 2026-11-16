@@ -2,8 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { prepareEphemeralVmWorkspaceTarget } from '@/runtime/ephemeral-vm/ephemeral-vm-workspace-target'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
-import { getProjectIdentityKey } from '../../../../../shared/project/host-setup/project-host-setup-projection'
-import type { Repo } from '../../../../../shared/repository/repo-types'
+import { resolvePortableRecipeProjectId } from '../../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-workspace-target'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/runtime/ephemeral-vm/ephemeral-vm-failed-create-cleanup'
 import { gateVmCreateOnEnvironmentCheck } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check'
@@ -55,7 +54,7 @@ async function prepareEphemeralVmRecipeRequest(
     preparedTarget = await prepareEphemeralVmWorkspaceTarget({
       repoId: recipe.sourceRepoId,
       recipeId: recipe.recipeId,
-      projectId: resolvePortableEphemeralVmProjectId(sourceRepo) ?? recipe.projectId,
+      projectId: resolvePortableRecipeProjectId(sourceRepo) ?? recipe.projectId,
       workspaceName: request.name,
       ...(recipe.checkoutMode === 'provisioned-root'
         ? {
@@ -182,15 +181,6 @@ export async function attachEphemeralVmRuntimeToWorkspace(
   } catch (error) {
     console.error('Failed to attach ephemeral VM runtime to workspace:', error)
   }
-}
-
-function resolvePortableEphemeralVmProjectId(repo: Repo | undefined): string | null {
-  if (!repo) {
-    return null
-  }
-  // Reuse canonical github: identity but reject git:/repo: fallbacks to retain non-GitHub null behavior.
-  const key = getProjectIdentityKey(repo)
-  return key.startsWith('github:') ? key : null
 }
 
 /** A VM cleaned up stays out of the sidebar; one that could not be is shown again so the user can remove it. */

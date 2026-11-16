@@ -10,6 +10,7 @@ import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
 import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspaces/workspace-cleanup-runner-methods'
 import { WORKTREE_ARCHIVE_METHODS } from './workspaces/worktree-archive-methods'
+import { WORKTREE_CREATE_ON_RECIPE_RPC_METHOD } from './workspaces/worktree-create-on-recipe-method'
 import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { REFERENCE_METHODS } from './reference/reference'
 import { TERMINAL_METHODS } from './terminal/terminal'
@@ -100,6 +101,7 @@ export const ALL_RPC_METHODS = [
   ...WORKTREE_METHODS,
   ...WORKSPACE_CLEANUP_RUNNER_METHODS,
   ...WORKTREE_ARCHIVE_METHODS,
+  WORKTREE_CREATE_ON_RECIPE_RPC_METHOD,
   ...AGENT_ACTIVITY_METHODS,
   ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,

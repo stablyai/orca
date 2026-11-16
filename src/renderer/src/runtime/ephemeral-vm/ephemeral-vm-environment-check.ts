@@ -8,6 +8,7 @@ import type {
   EnvironmentDoctorResult
 } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import {
+  ENVIRONMENT_DOCTOR_CHECK_TIMEOUT_MS,
   ENVIRONMENT_DOCTOR_METHOD,
   ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY
 } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-runtime'
@@ -17,8 +18,6 @@ import {
   endVmEnvironmentCheckRun
 } from './ephemeral-vm-environment-check-decision'
 
-// Two 20s network probes, local probes and a login-shell PATH refresh, with headroom for a slow VM.
-const ENVIRONMENT_CHECK_TIMEOUT_MS = 150_000
 // A paused build holds a running VM; give up after an hour so a forgotten one stops billing.
 const PAUSE_TIMEOUT_MS = 60 * 60_000
 
@@ -46,7 +45,7 @@ async function runVmEnvironmentCheck(
       { kind: 'environment', environmentId },
       ENVIRONMENT_DOCTOR_METHOD,
       { path },
-      { timeoutMs: ENVIRONMENT_CHECK_TIMEOUT_MS, signal }
+      { timeoutMs: ENVIRONMENT_DOCTOR_CHECK_TIMEOUT_MS, signal }
     )
   } catch (error) {
     const unreachable: EnvironmentDoctorCheck = {

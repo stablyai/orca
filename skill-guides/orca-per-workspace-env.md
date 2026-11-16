@@ -78,6 +78,7 @@ snapshot (step 5), and `create` boots from the authenticated snapshot they produ
 8. **Dry-run the doctor** — free and static.
 9. **[CHECKPOINT] Live self-test** — run the `--provision` loop until it passes.
 10. **[CHECKPOINT] Optional workspace test** — only if asked: create a workspace via the picker,
+    or without the UI with `ORCA worktree create --on recipe:<recipe-id> --name <name> --json`,
     then verify sleep, wake, and delete.
 
 ## 2. Prerequisites

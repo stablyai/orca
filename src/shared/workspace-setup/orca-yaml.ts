@@ -14,6 +14,7 @@ import {
 } from './orca-yaml-file-limit'
 import { parseEphemeralVmRecipeTimeoutSeconds } from '../remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-timeouts'
 import { parseRecipePassEnv } from '../remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-env'
+import { ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE } from './orca-vm-recipe-id'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -30,9 +31,6 @@ function asTrimmedString(value: unknown): string | undefined {
 }
 
 const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
-export const ORCA_VM_RECIPE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
-export const ORCA_VM_RECIPE_ID_RULE =
-  'Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
 
 // Bound work requested by one repository file.
 const MAX_SHARED_DIRECTORIES = 100

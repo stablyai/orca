@@ -177,6 +177,16 @@ ORCA worktree create --name task --parent-worktree active --setup skip --json
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.
 - `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent codex --json`.
 
+Per-workspace environment (recipe) flags:
+
+```text
+ORCA worktree create --repo id:<repoId> --name task --on recipe:<recipe-id> --agent codex --prompt "hi" --json
+```
+
+- `--on recipe:<recipe-id>` creates the workspace on a new environment from one of the repo's `orca.yaml` `environmentRecipes`, as the new-workspace dialog's Run on > Per-Workspace Environment does. The Orca desktop app on this computer provisions it, so run it there without `--environment`; it needs Settings > Experimental > Cloud VM turned on.
+- It can take minutes. Progress goes to stderr; `--json` reports `result.host` (`id` is the new `runtime:<environment-id>` host, `runtimeId` its VM record) and, with `--agent`, `result.launch`. Reach the workspace later with `--environment <environment-id>`; sleep, wake and delete in the app manage its VM.
+- A failure, or Ctrl+C, destroys the new environment. The error (`recipe_workspace_create_failed`) names the failed step in `data.phase` and the environment's fate in `data.environment`; debug the recipe itself with `ORCA vm recipe doctor <recipe-id> --provision --json`.
+
 ## Review and issue references
 
 ```text

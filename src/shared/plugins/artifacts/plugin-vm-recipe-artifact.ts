@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { ORCA_VM_RECIPE_ID_PATTERN, ORCA_VM_RECIPE_ID_RULE } from '../../workspace-setup/orca-yaml'
+import {
+  ORCA_VM_RECIPE_ID_PATTERN,
+  ORCA_VM_RECIPE_ID_RULE
+} from '../../workspace-setup/orca-vm-recipe-id'
 import type { OrcaVmRecipe } from '../../workspace-setup/orca-yaml-hook-types'
 
 const recipeCommandSchema = z

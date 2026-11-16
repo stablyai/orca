@@ -1,6 +1,7 @@
 import type { RpcRequest } from '../core'
 import '../../../../shared/agent-session/identity/orca-session-address'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../shared/agent-session/identity/orca-session-address-prefix'
+import { WORKTREE_CREATE_ON_RECIPE_METHOD } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-workspace-create-contract'
 
 export const KEEPALIVE_INTERVAL_MS = 10_000
 
@@ -83,6 +84,10 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined
     return params?.wait === true ? 'wait' : null
+  }
+  // A recipe's create step boots a machine and can run for many minutes; Ctrl+C on the CLI aborts it.
+  if (request.method === WORKTREE_CREATE_ON_RECIPE_METHOD) {
+    return 'wait'
   }
   return null
 }

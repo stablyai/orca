@@ -25,6 +25,10 @@ import type {
   RecipeWorkspaceRemoveParams
 } from '../../../ephemeral-vm/workspace-removal'
 import type { RecipeEnvironmentDescription } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
+import type { RecipeWorkspaceCreateResult } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-workspace-create-contract'
+import type { WorktreeCreateOnRecipeParams } from '../../../../shared/rpc-contract/workspaces/worktree-create-on-recipe-params'
+import type { RuntimeRpcProgress } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { Repo } from '../../../../shared/repository/repo-types'
 /** Desktop-only wiring: removal of a workspace whose recipe environment this host provisioned. */
 export type RecipeWorkspaceRemovalHooks = {
   owns: (params: RecipeWorkspaceRemoveParams) => boolean
@@ -32,13 +36,39 @@ export type RecipeWorkspaceRemovalHooks = {
   describe: (hostId: string) => ReadonlyMap<string, RecipeEnvironmentDescription>
 }
 
+/** Desktop-only wiring: a workspace on a new environment from one of a local repo's recipes. */
+export type RecipeWorkspaceCreationHooks = {
+  create: (
+    params: WorktreeCreateOnRecipeParams,
+    repo: Repo,
+    options: { signal?: AbortSignal; onProgress?: (progress: RuntimeRpcProgress) => void }
+  ) => Promise<RecipeWorkspaceCreateResult>
+}
+
 export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
   // Switch point: only a build where main produces the sidebar's inputs queues lifecycle commands.
   readonly workspaceLifecycle = ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceLifecycleQueue() : null
   private recipeWorkspaceRemoval: RecipeWorkspaceRemovalHooks | null = null
+  private recipeWorkspaceCreation: RecipeWorkspaceCreationHooks | null = null
 
   setRecipeWorkspaceRemoval(hooks: RecipeWorkspaceRemovalHooks): void {
     this.recipeWorkspaceRemoval = hooks
+  }
+
+  setRecipeWorkspaceCreation(hooks: RecipeWorkspaceCreationHooks): void {
+    this.recipeWorkspaceCreation = hooks
+  }
+
+  createRecipeWorkspace(
+    ...args: Parameters<RecipeWorkspaceCreationHooks['create']>
+  ): Promise<RecipeWorkspaceCreateResult> {
+    if (!this.recipeWorkspaceCreation) {
+      // Why: orcad and headless serve own no recipe VMs; only the desktop app provisions them.
+      throw new Error(
+        'This Orca host cannot create workspaces from recipes. Run the command where the Orca desktop app runs.'
+      )
+    }
+    return this.recipeWorkspaceCreation.create(...args)
   }
 
   /** Throws when several recipe records claim the workspace, so nothing is destroyed on a guess. */
