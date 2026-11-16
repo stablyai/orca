@@ -1,4 +1,4 @@
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type {
   StructuredAgentSessionAttachContext,

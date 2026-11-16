@@ -2,6 +2,7 @@ import { beginProfileShutdownCheckpoint } from '../persistence/profile-shutdown-
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
 import { initializeMainProcessI18nAndMenu } from './main-window/main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
+import { markHostShuttingDown } from './quit/host-shutdown-state'
 import { initializeReadyFoundation } from './main-process-ready-foundation'
 import { initializeReadyRuntimeServices } from './main-process-ready-runtime'
 import { releaseDesktopActivationAfter } from './serve-launch/serve-desktop-activation'
@@ -39,6 +40,7 @@ export async function initializeMainProcessReady(
     }
   } catch (error) {
     // Startup now exits after failure; reopening would use a closing profile writer.
+    markHostShuttingDown()
     state.desktopActivationGate = null
     try {
       state.profileShutdownCheckpoint ??= beginProfileShutdownCheckpoint(

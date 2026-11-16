@@ -2,11 +2,14 @@ import type {
   ClaudeAccountSelectionChange,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../shared/managed-account-types'
-import type { CodexConfigSyncStatus } from '../../../shared/codex-config-sync-types'
-import type { CursorAccountStatus, GrokAccountStatus } from '../../../shared/rate-limit-types'
-import type { ZcodePlanCredentialsStatus } from '../../../shared/zcode-plan-sites'
-import type { MiniMaxCredentialsStatus } from '../../../shared/minimax-credentials-status'
+} from '../../../shared/agent-accounts/managed-account-types'
+import type { CodexConfigSyncStatus } from '../../../shared/agent-accounts/codex/codex-config-sync-types'
+import type {
+  CursorAccountStatus,
+  GrokAccountStatus
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { ZcodePlanCredentialsStatus } from '../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
+import type { MiniMaxCredentialsStatus } from '../../../shared/agent-accounts/usage-credentials/minimax-credentials-status'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -23,6 +26,10 @@ export type CodexAccountsApi = {
     activateIfSelectionWasEmpty?: boolean
   }) => Promise<CodexRateLimitAccountsState>
   remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
+  rename: (args: {
+    accountId: string
+    displayName: string | null
+  }) => Promise<CodexRateLimitAccountsState>
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'
@@ -58,6 +65,10 @@ export type ClaudeAccountsApi = {
   /** The pending sign-in's link once Claude hands it over; null if it ends without one. */
   waitForSignInLink: () => Promise<string | null>
   remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+  rename: (args: {
+    accountId: string
+    displayName: string | null
+  }) => Promise<ClaudeRateLimitAccountsState>
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'

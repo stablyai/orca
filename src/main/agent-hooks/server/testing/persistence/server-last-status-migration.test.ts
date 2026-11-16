@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { recentTs, PANE } from '../server.test-fixtures'
-import { holdSavedStatusLock } from './last-status.test-fixtures'
+import { holdSavedStatusLock, readSavedStatus } from './last-status.test-fixtures'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({
@@ -71,6 +71,61 @@ describe('saved agent status from an older build', () => {
 
     expect(await restoredPrompt()).toBe('from the old file')
     expect(existsSync(lastStatusPath())).toBe(false)
+  })
+
+  it('never reports disabled writes saved and resumes from authoritative rows with the next writer', async () => {
+    writeLegacyFile('protected original')
+    const release = holdSavedStatusLock(lastStatusPath())
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    release()
+    try {
+      for (let index = 0; index < 100; index++) {
+        const paneKey = `disabled-${index}:11111111-1111-4111-8111-111111111111`
+        server.recordLaunchResumeIdentity({
+          paneKey,
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: `session-${index}` },
+          launchedAt: 1
+        })
+        server.dropStatusEntry(paneKey, { preserveResumeIdentity: false })
+      }
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        payload: {
+          state: 'done',
+          prompt: 'uncommitted session',
+          agentType: 'codex'
+        }
+      })
+      expect(server.flushStatusPersistSync()).toBe(false)
+    } finally {
+      server.stop()
+      vi.restoreAllMocks()
+    }
+    expect(existsSync(lastStatusPath())).toBe(true)
+
+    const next = new AgentHookServer()
+    await next.start({ env: 'production', userDataPath })
+    try {
+      expect(next.getStatusSnapshot().map((row) => row.prompt)).toEqual(['protected original'])
+      next.ingestTerminalStatus({
+        paneKey: PANE,
+        payload: {
+          state: 'working',
+          prompt: 'recovered writer',
+          agentType: 'claude'
+        }
+      })
+      expect(next.flushStatusPersistSync()).toBe(true)
+      expect(JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE].payload.prompt).toBe(
+        'recovered writer'
+      )
+    } finally {
+      next.stop()
+    }
+    expect(await restoredPrompt()).toBe('recovered writer')
   })
 
   it('keeps the saved rows when an old file is rejected', async () => {

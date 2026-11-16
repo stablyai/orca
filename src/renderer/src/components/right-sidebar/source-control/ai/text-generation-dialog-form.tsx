@@ -28,7 +28,7 @@ import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-
 import type { SourceControlTextActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
@@ -98,7 +98,7 @@ export function SourceControlTextGenerationDialogForm({
   const t = useTranslate()
   const entries = useMemo<AgentPickerEntry[]>(
     () =>
-      listCommitMessageAgentCapabilities().map((capability) => ({
+      listCommitMessageAgentCapabilities(actionId).map((capability) => ({
         agent: capability.id,
         label: agentLabel(capability.id),
         rows: [{ agent: capability.id, kind: 'cli' }],
@@ -109,7 +109,7 @@ export function SourceControlTextGenerationDialogForm({
         catalog: { origin: 'unknown' },
         arguments: ''
       })),
-    []
+    [actionId]
   )
   const pickerModel = useMemo(() => commitMessagePickerModel(entries), [entries])
   const showCustomAgent = Boolean(

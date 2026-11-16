@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { intentPresentation } from '@/lib/browser/workspace/workspace-browser-tab-presentation'
-import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   parseRemoteRuntimePtyId,
@@ -24,7 +24,7 @@ import type {
   HttpLinkDestination,
   HttpLinkActionDestinations
 } from '@/lib/browser/navigation/http-link-destinations'
-import type { DashboardCard } from '../../../../../../shared/dashboard-snapshot'
+import type { DashboardCard } from '../../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 
 export type DashboardPreviewLinkSource = Pick<

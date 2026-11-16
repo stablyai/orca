@@ -95,6 +95,8 @@ type VerificationDeps = TerminateDeps & {
   keepAlive?: boolean
   /** Revalidate identities before signaling; used by Claude's close proof. */
   requireIdentityBeforeSignal?: boolean
+  /** A lone idle interactive shell ignores SIGTERM, so it also gets the SIGHUP a closing terminal sends. */
+  shellPid?: number
 }
 
 /** live requires an identity match; unverifiable means the available observations cannot prove exit or liveness. */
@@ -177,6 +179,9 @@ export async function terminateDescendantSnapshotWithVerdict(
       for (const row of live) {
         if (!signalled.has(row.pid)) {
           sendSignal(row.pid, 'SIGTERM')
+          if (row.pid === deps.shellPid) {
+            sendSignal(row.pid, 'SIGHUP')
+          }
           signalled.add(row.pid)
         }
       }

@@ -1,4 +1,4 @@
-import type { SkillCloudVersion } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudVersion } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { fileCountLabel } from '../presentation/skill-display-labels'
 import type { Translate } from '../../../i18n/use-translate'
 

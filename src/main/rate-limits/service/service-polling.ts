@@ -10,7 +10,7 @@ import {
   type ActiveRateLimitProvider,
   type ActiveWindowRefreshPlan
 } from './service-types'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue {
   setPollingInterval(ms: number): void {

@@ -3,7 +3,7 @@ import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/del
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { subscribeToRuntimeTerminalData } from '@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription'
-import { createDraftPasteReadyScanner } from '../../../../../../shared/draft-paste-ready-scanner'
+import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 
 const BRACKETED_PASTE_QUIET_MS = 1500
 

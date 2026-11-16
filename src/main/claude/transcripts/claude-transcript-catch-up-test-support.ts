@@ -1,15 +1,17 @@
+import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Shared real disk/journal fixture for catch-up and historical-duration contracts.
 import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, type Mock, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
+import { StructuredAgentSessionSnapshotRoutes } from '../../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
 
 export const SESSION = 'session-claude-catch-up'
 export const SID = '402eff2b-84dc-4e05-8fe8-49fffb2cd3c3'
@@ -114,22 +116,34 @@ export async function chat(project = '-work', cwd = '/work') {
     now: () => 1_000
   })
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+  let releaseReplacement = journal.epochReplacements.observe((replaced) =>
+    routes.replacing(SESSION, journal, replaced)
+  )
+  await deferred.followSnapshots(routes.observe(SESSION, journal))
   deferred.bind({ journal, fence: 1, publish: () => {} })
   cleanups.push(async () => {
+    releaseReplacement()
     deferred.close()
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   })
   const warn: Mock<(...args: unknown[]) => void> = vi.fn()
   return {
+    root,
     identity,
     get journal() {
       return journal
     },
     replay: async () => {
       await deferred.drained()
+      releaseReplacement()
       await journal.close()
       journal = await journals.open({ identity, stateDirectory: root, now: () => 1_000 })
+      releaseReplacement = journal.epochReplacements.observe((replaced) =>
+        routes.replacing(SESSION, journal, replaced)
+      )
+      await deferred.followSnapshots(routes.observe(SESSION, journal))
       deferred.bind({ journal, fence: 1, publish: () => {} })
       return journal
     },
@@ -236,8 +250,8 @@ export async function chat(project = '-work', cwd = '/work') {
       await deferred.drained()
       return covered
     },
-    rows: () =>
-      journal.snapshot().items.flatMap((item) => {
+    rows: async () =>
+      (await readTestJournalItems(journal)).flatMap((item) => {
         const { body } = item
         if (body.kind === 'message') {
           const text = body.blocks.map((block) => (block.type === 'text' ? block.text : ''))

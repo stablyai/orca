@@ -1,4 +1,4 @@
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
 import type { TerminalTabCloseIntent } from '@/components/terminal/terminal-tab-close-intent'
 
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'

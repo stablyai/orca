@@ -3,7 +3,7 @@ import type { PluginTerminalThemeRegistration } from '../../../../shared/plugins
 import {
   MATCH_TERMINAL_APP_THEME,
   pluginAppThemeSlotUpdate
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING

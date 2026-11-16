@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { parse as parseDomain } from 'tldts'
-import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser-url'
+import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser/navigation/browser-url'
 
 const HOST_FILE_EXTENSIONS = new Set([
   'css',

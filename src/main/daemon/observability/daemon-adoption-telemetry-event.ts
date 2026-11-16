@@ -1,16 +1,16 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import {
   classifyDaemonAppVersionMatch,
   classifyDaemonPtyCwd,
   classifyDaemonSpawnerPath,
   isMacTccFolderClass,
   type DaemonSpawnerPathClass
-} from '../../../shared/daemon-adoption-telemetry'
-import { bucketDaemonLiveSessionCount } from '../../../shared/daemon-lifecycle-telemetry'
-import type { EventProps } from '../../../shared/telemetry-events'
+} from '../../../shared/telemetry/daemon-adoption-telemetry'
+import { bucketDaemonLiveSessionCount } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
+import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
 import { track } from '../../telemetry/client'
 import { readDaemonPidRecord } from '../endpoint/identity/daemon-endpoint-incarnation'
 import { getDaemonMacCodeIdentity } from '../executable-host/macos/daemon-mac-code-identity'

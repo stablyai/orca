@@ -4,10 +4,10 @@ import { getGitHubPRCacheKey } from '../../../../shared/github/cache/github-cach
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
 import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/hosted-review/github-pr-suppression'
-import { selectChecksPanelReview } from '../right-sidebar/checks-panel/checks-panel-review'
+import { selectChecksPanelReview } from '../right-sidebar/checks-panel/review-state/checks-panel-review'
 
 type WorktreeChecksReviewIndexArgs = {
   worktrees: readonly Worktree[]

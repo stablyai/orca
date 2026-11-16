@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import Database from '../../../../sqlite/sync-database'
-import { buildOpenCodeSqliteCandidatePath } from '../../../../../shared/opencode-sqlite-session-path'
+import { buildOpenCodeSqliteCandidatePath } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 

@@ -83,7 +83,7 @@ vi.mock('expo-file-system', () => ({
   Paths: { cache: 'file:///cache' }
 }))
 
-import { MediaHandleRegistry } from '../../mobile-web-shell/media-handle-registry'
+import { MediaHandleRegistry } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import { copyPickedMediaIntoCache, nativeMediaDeviceDeps } from './native-media-device'
 
 beforeEach(() => {

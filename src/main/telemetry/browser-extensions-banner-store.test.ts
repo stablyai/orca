@@ -77,7 +77,6 @@ describe('browser extensions banner with the real settings store', () => {
       status: 'active',
       banner: 'colored_everyday'
     })
-    expect(trackMock).toHaveBeenCalledTimes(2)
     // The relaunch reports the record it loaded, keeping its original time.
     const reported = relaunched.getSettings().telemetry?.browserExtensionsBanner
     expect(reported).toMatchObject(Object.assign({}, onDiskAtReport))

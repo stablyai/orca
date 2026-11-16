@@ -8,7 +8,7 @@ import type {
   WorkspacePortHostScanResult,
   WorkspacePortKillResult,
   WorkspacePortProbe
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import { killWorkspacePort, scanWorkspacePortProbes } from './workspace-port-ownership'
 
 export type WorkspacePortExecutionHostDeps = {

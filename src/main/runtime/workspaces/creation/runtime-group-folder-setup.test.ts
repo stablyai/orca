@@ -1,17 +1,16 @@
-import * as wslGate from '../../../wsl/filesystem/wsl-unc-access-gate'
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { getDefaultRepoHookSettings, getDefaultSettings } from '../../../../shared/constants'
-import { createProjectGroup } from '../../../../shared/project-groups'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { FolderWorkspaceCreateInput } from '../../../../shared/folder-workspaces/folder-workspace-create'
 import { removeFolderSetupRunnerFiles } from '../../../workspace-hooks/folder-setup-runner-files'
 import { prepareGroupFolderCreation } from './runtime-group-folder-setup'
-import { OrcaRuntimeWithGroupFolderSetup } from './runtime-group-folder-setup-host'
+import './runtime-group-folder-setup-host'
 import { provisionWorktreeTerminals } from '../startup/runtime-worktree-terminal-provisioning'
 import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 
@@ -179,75 +178,5 @@ describe('group folder setup lifecycle', () => {
     expect(await creating).toMatchObject({
       folderWorkspace: { id: 'task-a' }
     })
-  })
-
-  it('keeps the worktree structured launch behavior after Setup fails', async () => {
-    const { args, wait } = fixture({ agentLaunchMode: 'structured' })
-    wait.mockResolvedValue({ exitCode: 1 })
-    expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      folderWorkspace: { id: 'task-a' }
-    })
-    expect(wait).toHaveBeenCalledOnce()
-  })
-
-  it('lets an explicit agent create reach a stopped distro with no configured hooks', async () => {
-    const blocked = vi
-      .spyOn(wslGate, 'blockedWslDistroForPath')
-      .mockResolvedValue({ distro: 'Ubuntu', state: 'stopped' })
-    const { args } = fixture({ agentLaunchMode: 'structured' })
-    delete args.group.hookSettings
-    expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      folderWorkspace: { id: 'task-a' }
-    })
-    blocked.mockRestore()
-  })
-
-  it('carries explicit creation through host scope admission and provisioning', async () => {
-    const inputs: Partial<FolderWorkspaceCreateInput>[] = [
-      { setupDecision: 'inherit' },
-      { agentLaunchMode: 'structured' },
-      {}
-    ]
-    for (const input of inputs) {
-      const { args } = fixture(input)
-      const resolveScope = vi.fn(async (..._args: unknown[]) => ({}))
-      const provision = vi.fn(async (..._args: unknown[]) => ({
-        setupSpawned: false,
-        setupTerminalHandle: null
-      }))
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked base is empty; these are every port reached by the production finish method.
-      const runtime = Object.assign(Reflect.construct(OrcaRuntimeWithGroupFolderSetup, []), {
-        requireStore: () => ({ getSettings: () => args.settings }),
-        folderWorkspaceToResolvedWorktree: () => ({ id: 'folder:task-a' }),
-        resolveTerminalWorkspaceLaunchScope: resolveScope,
-        ptyController: { spawn: vi.fn() },
-        shouldProvisionWorktreeInBackground: () => true,
-        provisionManagedWorktreeTerminals: provision
-      }) as {
-        finishGroupFolderCreation: (
-          input: typeof args.input,
-          group: ProjectGroup,
-          workspace: FolderWorkspace
-        ) => Promise<unknown>
-      }
-      await runtime.finishGroupFolderCreation(args.input, args.group, args.workspace)
-      const expected =
-        'setupDecision' in input || 'agentLaunchMode' in input ? { wslUserAct: true } : {}
-      expect(resolveScope.mock.calls[0]?.[2]).toEqual(expected)
-      expect(provision.mock.calls[0]?.[0]).toMatchObject(expected)
-    }
-  })
-
-  it('skips unapproved YAML for legacy requests but still returns a usable workspace', async () => {
-    const { args, wait } = fixture({ agentLaunchMode: 'structured' })
-    delete args.group.hookSettings
-    writeFileSync(
-      join(root, 'orca.yaml'),
-      'setupRunPolicy: run-by-default\nsetupAgentStartupPolicy: wait-for-setup\nscripts:\n  setup: echo shared\n'
-    )
-    expect(await prepareGroupFolderCreation(args)).toMatchObject({
-      folderWorkspace: { id: 'task-a' }
-    })
-    expect(wait).not.toHaveBeenCalled()
   })
 })

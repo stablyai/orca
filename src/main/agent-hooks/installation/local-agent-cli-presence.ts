@@ -7,10 +7,10 @@ import {
   extractExecutableToken,
   hasPathSeparatorToken,
   isSafeExecutableBasename
-} from '../../../shared/managed-agent-command-token'
-import type { ManagedAgentHookTarget } from '../../../shared/managed-agent-hook-targets'
+} from '../../../shared/agent-launch/installation/managed-agent-command-token'
+import type { ManagedAgentHookTarget } from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import {
   hydrateShellPath,
   mergePathSegments

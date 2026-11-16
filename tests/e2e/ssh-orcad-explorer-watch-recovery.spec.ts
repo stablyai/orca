@@ -8,7 +8,7 @@ import {
   skipUnlessManagedDockerHost,
   withManagedHost
 } from './helpers/orcad-managed-workspace'
-import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
+import { folderWorkspaceKey } from '../../src/shared/workspace/identity/workspace-scope'
 
 skipUnlessManagedDockerHost()
 

@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 // Tabs publish members directly into ready documents; their readers must be stricter than the preview screen’s guarded normalizers.
 

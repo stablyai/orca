@@ -3,8 +3,8 @@ import type {
   ContextualTour,
   ContextualTourId,
   ContextualTourStepAction
-} from '../../../../shared/contextual-tours'
-import type { ContextualTourOutcome } from '../../../../shared/feature-education-telemetry'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { ContextualTourOutcome } from '../../../../shared/feature-education/feature-education-telemetry'
 import { useAppStore } from '@/store'
 import {
   getContextualTourOutcomeStepTotal,

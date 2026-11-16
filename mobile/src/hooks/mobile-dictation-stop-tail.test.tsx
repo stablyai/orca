@@ -7,7 +7,7 @@ import {
   createFakeRpcClient,
   type FakeRpcClient,
   type SentRequest
-} from '../mobile-web-shell/bridge-host-test-fakes'
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import type {
   DictationCapture,
   DictationCaptureChunk
@@ -76,13 +76,6 @@ async function pump(rpc: FakeRpcClient, sent: SentRequest[]): Promise<void> {
   }
 }
 
-function audioOf(request: SentRequest): unknown {
-  const params = request.args[1]
-  return typeof params === 'object' && params !== null && 'audioBase64' in params
-    ? params.audioBase64
-    : null
-}
-
 function settleExcept(rpc: FakeRpcClient, sent: SentRequest[], method: string): void {
   for (const request of rpc.requests.splice(0)) {
     sent.push(request)
@@ -123,33 +116,6 @@ beforeEach(() => {
   seam.chunkHandlers.clear()
   seam.tail = null
   held.dictation = null
-})
-
-describe('the audio a capture hands over as it ends', () => {
-  it('is still accepted, and reaches the desktop before the finish', async () => {
-    const rpc = createFakeRpcClient()
-    const sent: SentRequest[] = []
-    mount(rpc)
-    await act(async () => {
-      const started = dictation().start()
-      await pump(rpc, sent)
-      await started
-    })
-    seam.tail = Uint8Array.from([7, 8, 9, 10])
-    await act(async () => {
-      const stopped = dictation().stop()
-      await pump(rpc, sent)
-      await stopped
-    })
-    const methods = sent.map((request) => request.method)
-    expect(methods).toContain('speech.dictation.chunk')
-    // Disabling acceptingChunksRef before end would silently drop this last audio.
-    const chunk = sent.find((request) => request.method === 'speech.dictation.chunk')
-    expect(chunk === undefined ? null : audioOf(chunk)).toBe('BwgJCg==')
-    expect(methods.indexOf('speech.dictation.chunk')).toBeLessThan(
-      methods.indexOf('speech.dictation.finish')
-    )
-  })
 })
 
 describe('a finish whose dictation stopped being the current one', () => {

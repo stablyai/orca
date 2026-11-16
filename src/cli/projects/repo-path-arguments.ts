@@ -1,5 +1,5 @@
 import { resolve as resolvePath } from 'node:path'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 function isAbsoluteServerPath(value: string): boolean {
   return (

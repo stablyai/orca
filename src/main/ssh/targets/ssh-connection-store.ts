@@ -1,8 +1,8 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { SshRepoReadoption, SshTarget } from '../../../shared/ssh-types'
+import type { SshRepoReadoption, SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
-import { normalizeSshConfigAlias } from '../../../shared/ssh-config-alias'
-import { isLegacyConfigImportTarget } from '../../../shared/ssh-target-source'
+import { normalizeSshConfigAlias } from '../../../shared/remote-runtime/ssh/ssh-config-alias'
+import { isLegacyConfigImportTarget } from '../../../shared/remote-runtime/ssh/ssh-target-source'
 import { loadUserSshConfigWithText, sshConfigHostsToTargets } from '../config/ssh-config-parser'
 
 import type { SshConfigHost } from '../config/ssh-config-parser'

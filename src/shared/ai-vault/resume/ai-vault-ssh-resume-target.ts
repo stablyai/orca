@@ -3,8 +3,8 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../execution-host'
-import { isWslUncPath } from '../../wsl-paths'
-import { antigravitySessionOrigin } from '../../antigravity-session-origin'
+import { isWslUncPath } from '../../file-access/wsl-paths'
+import { antigravitySessionOrigin } from '../../agent-session/lifecycle/provider-handles/antigravity-session-origin'
 
 /** Share host eligibility for SSH history resume across desktop/mobile. */
 export function canResumeAiVaultSessionOnSshHost(args: {

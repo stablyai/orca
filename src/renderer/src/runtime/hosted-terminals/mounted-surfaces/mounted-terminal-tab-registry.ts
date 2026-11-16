@@ -18,16 +18,18 @@ export type RegisteredTerminalTabKey = string
 
 const registeredTabs = new Map<RegisteredTerminalTabKey, RegisteredTerminalTab>()
 const tabRegisteredAt = new Map<RegisteredTerminalTabKey, number>()
-const changeListeners = new Set<() => void>()
+const changeListeners = new Set<(tab?: RegisteredTerminalTab) => void>()
 
-function notifyMountedTerminalTabsChanged(): void {
+function notifyMountedTerminalTabsChanged(tab: RegisteredTerminalTab): void {
   for (const listener of changeListeners) {
-    listener()
+    listener(tab)
   }
 }
 
 /** Called on mount, unmount, and an explicit leaf focus. */
-export function subscribeMountedTerminalTabChanges(listener: () => void): () => void {
+export function subscribeMountedTerminalTabChanges(
+  listener: (tab?: RegisteredTerminalTab) => void
+): () => void {
   changeListeners.add(listener)
   return () => {
     changeListeners.delete(listener)
@@ -86,7 +88,7 @@ export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => vo
   const key = registeredTerminalTabKey(tab.worktreeId, tab.tabId)
   registeredTabs.set(key, tab)
   tabRegisteredAt.set(key, Date.now())
-  notifyMountedTerminalTabsChanged()
+  notifyMountedTerminalTabsChanged(tab)
   return () => {
     // React can mount a replacement before the old effect cleans up.
     if (registeredTabs.get(key) !== tab) {
@@ -94,7 +96,7 @@ export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => vo
     }
     registeredTabs.delete(key)
     tabRegisteredAt.delete(key)
-    notifyMountedTerminalTabsChanged()
+    notifyMountedTerminalTabsChanged(tab)
   }
 }
 
@@ -131,6 +133,6 @@ export function focusRuntimeTerminalSurface(
   manager.setActivePane(resolution.numericPaneId, {
     focus: !paneIsCoveredByNativeChat(requestedPane)
   })
-  notifyMountedTerminalTabsChanged()
+  notifyMountedTerminalTabsChanged(registered!)
   return true
 }

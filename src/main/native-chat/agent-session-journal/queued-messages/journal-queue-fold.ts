@@ -1,8 +1,11 @@
+import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
+import type { JournalInputIndexStorage } from '../journal-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { structuredAgentSessionCommandTurnIdentity } from '../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { readStoredRejectionFact } from '../projection/journal-dispatch-reducer'
@@ -24,14 +27,20 @@ import {
 // Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
 export type JournalQueueState = {
-  cards: Map<string, QueuedMessageRow>
+  cards: JournalKeyedMap<string, QueuedMessageRow>
   /** Moves with every card change, so a reader's memo recomputes only when it must. */
-  returnedCommands: Set<string>
+  returnedCommands: JournalKeyedSet<string>
   revision: number
 }
 
-export function createJournalQueueState(): JournalQueueState {
-  return { cards: new Map(), returnedCommands: new Set(), revision: 0 }
+export function createJournalQueueState(
+  storage: JournalInputIndexStorage = memoryJournalInputIndexStorage
+): JournalQueueState {
+  return {
+    cards: storage.map('queue.cards'),
+    returnedCommands: storage.set('queue.returnedCommands'),
+    revision: 0
+  }
 }
 
 /** Proven non-delivery waits again; uncertainty stays spent; reported command refusals need no returned card. */
@@ -238,7 +247,7 @@ function settleHandOffInDoubt(
 
 // Command turns already show their refusal; returned cards would block following work.
 function spendReportedCommandCards(state: JournalReducerState): void {
-  for (const id of state.queue.returnedCommands) {
+  for (const id of state.queries.returnedCommandIds(state)) {
     const card = state.queue.cards.get(id)
     if (!card) {
       continue

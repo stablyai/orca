@@ -1,4 +1,4 @@
-import type { RecipeEnvironmentDescription } from '../../../shared/recipe-host-removal'
+import type { RecipeEnvironmentDescription } from '../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -12,7 +12,7 @@ import type {
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../shared/workspace-creator-visibility'
+} from '../../../shared/workspace-view/workspace-creator-visibility'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
@@ -27,7 +27,7 @@ import {
 import {
   isPendingVmCheckout,
   type PendingVmCheckoutIndex
-} from '../../../shared/pending-vm-checkouts'
+} from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 export type MobileRelayRecipeEnvironmentLookup = (
   hostId: string
@@ -35,7 +35,7 @@ export type MobileRelayRecipeEnvironmentLookup = (
 
 /** Sidebar live rows or per-phone-request fetches, always read as the desktop. */
 export type ServerWorktreeRows = {
-  sync: () => void
+  sync: () => void | Promise<void>
   /** Fetch now or join the in-flight fetch. */
   refresh: (environmentId: string) => Promise<void>
   /** Last-fetched rows under this pairing; null before a successful fetch. */
@@ -86,12 +86,12 @@ export class MobileRelayHostCatalog {
       return null
     }
     const { environmentId } = parsed
-    this.options.serverRows.sync()
-    const cached = this.cachedWorkspaceContext(hostId, environmentId, worktreeId)
+    await this.options.serverRows.sync()
+    const cached = await this.cachedWorkspaceContext(hostId, environmentId, worktreeId)
     if (cached !== undefined && cached !== null) {
       return cached
     }
-    const host = describeRelayHosts(this.options.hosts).find(
+    const host = (await describeRelayHosts(this.options.hosts)).find(
       (entry) => entry.environmentId === environmentId
     )
     if (host?.health !== 'available') {
@@ -111,7 +111,7 @@ export class MobileRelayHostCatalog {
       this.options.serverRows.refresh(environmentId).catch(() => {}),
       PAIRED_WORKSPACE_CONTEXT_FETCH_TIMEOUT_MS
     )
-    const fetched = this.cachedWorkspaceContext(hostId, environmentId, worktreeId) ?? null
+    const fetched = (await this.cachedWorkspaceContext(hostId, environmentId, worktreeId)) ?? null
     if (fetched) {
       this.contextMissFetchedAt.delete(missKey)
     }
@@ -119,14 +119,14 @@ export class MobileRelayHostCatalog {
   }
 
   /** undefined: no rows under the current pairing; null: rows hold no such workspace. */
-  private cachedWorkspaceContext(
+  private async cachedWorkspaceContext(
     hostId: ExecutionHostId,
     environmentId: string,
     worktreeId: string
-  ): PairedWorkspaceContext | null | undefined {
-    const current = this.options.hosts
-      .list()
-      .environments.find((environment) => environment.id === environmentId)
+  ): Promise<PairedWorkspaceContext | null | undefined> {
+    const current = (await this.options.hosts.list()).environments.find(
+      (environment) => environment.id === environmentId
+    )
     const rows = current
       ? this.options.serverRows.rows(environmentId, relayHostFence(current))
       : null
@@ -155,15 +155,19 @@ export class MobileRelayHostCatalog {
 
   private announcer: RelayHostListAnnouncer | null = null
 
-  list(): MobileRelayHostsListResult {
-    const result = this.describe()
+  async list(): Promise<MobileRelayHostsListResult> {
+    const result = await this.describe()
     this.announcer?.listed(result)
     return result
   }
 
   /** Calls `changed` whenever list() would answer differently, so phones need not poll it. */
   publishListChanges(sources: RelayHostListAnnouncerSources): () => void {
-    const announcer = new RelayHostListAnnouncer(this.options.hosts, () => this.describe(), sources)
+    const announcer = new RelayHostListAnnouncer(
+      this.options.hosts,
+      async () => await this.describe(),
+      sources
+    )
     this.announcer = announcer
     return () => {
       announcer.dispose()
@@ -173,9 +177,9 @@ export class MobileRelayHostCatalog {
     }
   }
 
-  private describe(): MobileRelayHostsListResult {
+  private async describe(): Promise<MobileRelayHostsListResult> {
     return {
-      hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
+      hosts: (await describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides())).map(
         ({
           hostId,
           label,
@@ -200,10 +204,10 @@ export class MobileRelayHostCatalog {
   async worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult> {
     const parsed = parseExecutionHostId(hostId)
     // Re-pairing since status publication must fetch under the new identity.
-    this.options.serverRows.sync()
+    await this.options.serverRows.sync()
     const host =
       parsed?.kind === 'runtime'
-        ? describeRelayHosts(this.options.hosts).find(
+        ? (await describeRelayHosts(this.options.hosts)).find(
             (entry) => entry.environmentId === parsed.environmentId
           )
         : undefined
@@ -216,12 +220,13 @@ export class MobileRelayHostCatalog {
         SERVER_FETCH_TIMEOUT_MS
       )
     }
-    const { environments, statusByEnvironmentId } = this.options.hosts.list()
+    const { environments, statusByEnvironmentId } = await this.options.hosts.list()
     const current = environments.find((environment) => environment.id === host.environmentId)
-    // Re-pairing during fetch can leave old-server rows; recheck identity afterward.
-    const rows = current
-      ? this.options.serverRows.rows(host.environmentId, relayHostFence(current))
-      : null
+    // The request belongs to the pairing that admitted its fetch.
+    if (!current || relayHostFence(current) !== relayHostFence(host.identity)) {
+      return { worktrees: null }
+    }
+    const rows = this.options.serverRows.rows(host.environmentId, relayHostFence(current))
     if (!current || !rows) {
       return { worktrees: null }
     }

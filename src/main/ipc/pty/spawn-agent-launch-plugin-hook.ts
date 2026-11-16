@@ -4,7 +4,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { pluginHookWanted, runPluginHook } from '../../plugins/hooks/plugin-hook-dispatch'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../ai-vault/structured-sessions/structured-session-ownership'
-import { addWslEnvKeys } from '../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 
 type AgentSpawnArgs = {
   launchAgent?: TuiAgent

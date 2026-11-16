@@ -1,3 +1,4 @@
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { useCallback } from 'react'
 import type { SettingsNavGroup } from '@/components/settings/navigation/settings-navigation-types'
 import { translate } from '@/i18n/i18n'
@@ -48,6 +49,7 @@ export function useSettingsNavigationActions(
       if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
         return
       }
+      cancelSettingsListReveal()
       const container = contentScrollRef.current
       if (container) {
         container.scrollTo({ top: 0 })
@@ -90,6 +92,7 @@ export function useSettingsNavigationActions(
         }
         releaseNativeAccounts()
       }
+      cancelSettingsListReveal()
       setHighlightedSettingsTarget(null)
       pendingNavSectionRef.current = sectionId
       pendingScrollTargetRef.current = result.targetId

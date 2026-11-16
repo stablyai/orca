@@ -2,9 +2,9 @@ import { webContents } from 'electron'
 import type {
   BrowserCertificateFailure,
   BrowserLoadError
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ManagedBrowserGuestContext } from '../../certificate-trust/browser-certificate-challenge'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { safeOrigin } from '../browser-event-origin'
 import type { BrowserPopupPage } from '../popups/browser-popup-ownership'
 import { BrowserManagerRegistration } from './registration/browser-manager-registration'
@@ -16,6 +16,28 @@ import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/bro
 import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
+  isGuestMemoryProtected(browserPageId: string): boolean {
+    const guestId = this.webContentsIdByTabId.get(browserPageId)
+    if (
+      guestId === undefined ||
+      this.hasActiveGrabOp(browserPageId) ||
+      this.isAgentUsingPage(browserPageId)
+    ) {
+      return true
+    }
+    for (const download of this.downloadsById.values()) {
+      if (download.browserTabId === browserPageId && !download.terminalEvent) {
+        return true
+      }
+    }
+    for (const holds of this.capturePaintHolds.values()) {
+      if (holds.has(browserPageId)) {
+        return true
+      }
+    }
+    return this.getPopupPages().some((popup) => popup.openerBrowserPageId === browserPageId)
+  }
+
   getGuestWebContentsId(browserTabId: string): number | null {
     return this.webContentsIdByTabId.get(browserTabId) ?? null
   }

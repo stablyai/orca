@@ -3,7 +3,7 @@ import {
   EMULATOR_FAILURE_COPY as EN,
   matchEmulatorErrorCopy,
   type EmulatorFailureCode
-} from '../../../../../shared/emulator-failure-copy'
+} from '../../../../../shared/emulator/emulator-failure-copy'
 
 type Param = string | null
 

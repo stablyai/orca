@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { mapWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../../../../shared/terminal/viewport/terminal-fit-restore-deadline'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {

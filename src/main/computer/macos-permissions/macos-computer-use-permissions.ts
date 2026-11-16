@@ -1,6 +1,10 @@
 import { spawn } from 'node:child_process'
 import { runProcess } from '@orca/process-host'
 import { RuntimeClientError } from '../runtime-client-error'
+import {
+  COMPUTER_ERROR_CODES,
+  COMPUTER_SCREEN_LOCKED_MESSAGE
+} from '../../../shared/computer-use-runtime-types'
 import { isHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { readMacosBundleId, resetMacosTccPermission } from '../../macos-permissions/macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from '../macos-native/macos-native-provider-paths'
@@ -181,6 +185,10 @@ async function openComputerUsePermissionsAsync(
   const status = await computerUsePermissionStatusGate.peek()
   if (status.helperUnavailableReason) {
     throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
+  }
+  // Why: behind the lock screen macOS reports Accessibility as untrusted, so setup would open Settings for nothing.
+  if (status.sessionLocked) {
+    throw new RuntimeClientError(COMPUTER_ERROR_CODES.screen_locked, COMPUTER_SCREEN_LOCKED_MESSAGE)
   }
   const nextStep = nextPermissionStep(status.permissions)
   if (generation !== setupGeneration || isHostShuttingDown()) {

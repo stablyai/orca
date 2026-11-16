@@ -1,8 +1,8 @@
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../cross-platform-path'
-import { parseWslUncPath } from '../../wsl-paths'
+} from '../../file-access/cross-platform-path'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isRuntimePathAbsoluteForRepo,
   resolveConfiguredWorktreeBasePaths,
@@ -11,17 +11,17 @@ import {
 import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
-} from '../../agent-scratch-worktrees'
+} from './agent-scratch-worktrees'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from './visibility-sources'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../external-worktree-visibility'
-import { shouldShowWorktree } from '../../worktree-visibility-resolution'
+import { isLegacyRepoForExternalWorktreeVisibility } from './external-worktree-visibility'
+import { shouldShowWorktree } from './worktree-visibility-resolution'
 import type { GlobalSettings } from '../../global-settings-types'
-import type { OrcaWorkspaceLayout } from '../../orca-workspace-layout'
-import type { Repo } from '../../repo-types'
+import type { OrcaWorkspaceLayout } from '../paths/orca-workspace-layout'
+import type { Repo } from '../../repository/repo-types'
 import type { WorktreeMeta } from '../meta-types'
 import type { DetectedWorktree, Worktree, WorktreeOwnership } from '../types'
 

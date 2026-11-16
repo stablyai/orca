@@ -32,6 +32,8 @@ export type ClaudeJournalTranslatorDeps = {
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
+  /** True while a send written with priority `now` has not been echoed. */
+  steerAwaitingEcho?: () => boolean
 }
 
 export type ClaudeJournalTranslator = {
@@ -61,6 +63,8 @@ export type ClaudeJournalTranslator = {
   readonly pendingStreamedBlocks: number
   /** Advances on conversation activity; history catch-up refuses to finish past it. */
   readonly contextActivity: number
+  markContextActivity: () => void
+  subscribeContextActivity: (listener: () => void) => () => void
   /** Every final snapshot and turn settlement this acquisition tried was admitted. */
   readonly finalOutputAdmitted: boolean
   subscribeContextUsageRequests: (listener: ClaudeContextReportListener) => () => void
