@@ -185,7 +185,6 @@
 2 test-no-real-time-wait:src/renderer/src/store/slices/workspace-cleanup/workspace-cleanup-removal-preflight.test.ts
 2 test-no-real-time-wait:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 1 test-no-real-time-wait:src/shared/process-observation/darwin/darwin-terminal-names-real-ps.test.ts
-1 test-no-real-time-wait:src/shared/process-observation/darwin/darwin-terminal-names.test.ts
 1 test-no-real-time-wait:src/shared/git/status/git-branch-line-total-soft-deadline.test.ts
 2 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-auth-refusal.test.ts
 2 test-no-real-time-wait:src/shared/shell/launch/startup-command-staging.node-pty.test.ts
