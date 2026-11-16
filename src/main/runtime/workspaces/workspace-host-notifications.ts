@@ -1,4 +1,4 @@
-import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../session-tabs/mobile-session-hydration'
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'

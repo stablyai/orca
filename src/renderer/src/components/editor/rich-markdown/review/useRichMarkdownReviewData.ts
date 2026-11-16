@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { normalizeRelativePath } from '../../../../../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
 import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   formatMarkdownReviewNotes,

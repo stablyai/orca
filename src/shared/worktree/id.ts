@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
 import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 import type { Repo } from '../repository/repo-types'
 

@@ -2,7 +2,7 @@ import type {
   StructuredChatNameGeneration,
   StructuredChatNamingDeps
 } from './conversation-naming/structured-chat-naming-types'
-import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
+import { chatNamingFailure } from '../../shared/text-generation/chat-naming-failure-copy'
 import {
   createStructuredChatNamingWork,
   type NamingRequest

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { canonicalWorktreeIdentity } from '../../../shared/worktree/identity'
 import {

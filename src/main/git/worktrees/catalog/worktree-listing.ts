@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/concurrency/abort-signal-reason'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { resolveGitMetadataPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { parseGitdirMarkerPayload } from '../../../../shared/git/metadata/gitdir-marker-payload'
 import { isWorktreeCreatePreparation } from '../../../../shared/worktree/creation/create-preparation'

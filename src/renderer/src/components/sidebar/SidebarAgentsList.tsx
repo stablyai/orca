@@ -14,7 +14,7 @@ import { ActivityThreadOptionsMenu } from '@/components/activity/activity-thread
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../shared/agents-view-thread-filters'
+} from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,

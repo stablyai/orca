@@ -15,6 +15,7 @@ import { formatAccountTimestamp, getCodexAccountRuntimeLabel } from '../scope/ac
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { getManagedAccountPrimaryLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
+import { getObservedCodexAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
 export function renderCodexAccountRow(
   account: CodexRateLimitAccountsState['accounts'][number],
@@ -27,6 +28,7 @@ export function renderCodexAccountRow(
     accountRuntimeUnavailable,
     accountVisibilityOptions,
     activeCodexAccountId,
+    codexAccountPlans,
     codexAccounts,
     codexAction,
     codexRateLimits,
@@ -55,6 +57,11 @@ export function renderCodexAccountRow(
       })
   const needsReauthentication = Boolean(accountAuthWarning)
   const accountDetail = getCodexAccountDisplayDetail(account, codexAccounts.accounts)
+  const plan = getObservedCodexAccountPlan(
+    codexAccountPlans,
+    account,
+    getProviderAccountRuntime(account)
+  )
   const isReauthing = codexAction === `reauth:${account.id}`
   const isRemoving = codexAction === `remove:${account.id}`
   const isBusy = codexAction !== 'idle' || accountRuntimeUnavailable
@@ -123,6 +130,12 @@ export function renderCodexAccountRow(
             {accountDetail ? (
               <>
                 <span className="min-w-0 break-words">{accountDetail}</span>
+                <span className="shrink-0 opacity-50">•</span>
+              </>
+            ) : null}
+            {plan ? (
+              <>
+                <span className="shrink-0">{plan}</span>
                 <span className="shrink-0 opacity-50">•</span>
               </>
             ) : null}

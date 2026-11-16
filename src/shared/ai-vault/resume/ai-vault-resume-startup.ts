@@ -30,10 +30,10 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../agent-launch/catalog/tui-agent-config'
-import { findOptionOccurrence } from '../../command-option-occurrence'
+import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import { assertOpenCodeCopyUsesLocalStore } from '../../agent-launch/startup/opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../agent-session/view/structured-agent-cli-conversation-adoption'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { managedDataAccountResumeEnv } from '../../agent-launch/environment/managed-data-account-resume'
 

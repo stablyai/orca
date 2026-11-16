@@ -2,7 +2,7 @@ import {
   joinWorktreeRelativePath,
   normalizeRuntimeRelativePath
 } from './paths/runtime-relative-paths'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { GitWorktreeInfo, Worktree } from '../../../shared/worktree/types'
 import {
   ExecutionHostNotDispatchableError,

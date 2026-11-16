@@ -1,6 +1,6 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { taskSourceRuntimeTarget } from '../../../lib/work-items/task-source-runtime-target'

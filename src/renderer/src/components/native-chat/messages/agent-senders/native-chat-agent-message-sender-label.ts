@@ -22,7 +22,7 @@ import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/wo
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 export function unnamedSenderLabel(t: Translate = translate): string {
   return t('components.native-chat.agentMessage.unnamedSender', 'an agent')

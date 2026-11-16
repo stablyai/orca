@@ -210,10 +210,10 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       })
     }
   })
+  const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
   try {
     const watch = { ...spec.signIn, link: (link: string) => receiveLink(current, link) }
     await servers.run(watch, async (server) => {
-      const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
       const initialized = await server.initialize()
       closed()
       if (
@@ -229,6 +229,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     publish(current, { phase: 'verifying' })
     const { started, live } = await servers.startOnSavedSignIn(
       spec,
+      method,
       (sessionId) => (owned.sessionId = sessionId)
     )
     publishModels(accountHome, started, live)

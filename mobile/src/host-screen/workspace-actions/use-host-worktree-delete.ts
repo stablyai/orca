@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
-import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../../src/shared/worktree/removal/archive-hook-removal-gate'
 import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import { newWorkspaceUiStateRead } from '../../new-workspace/creation/runtime/new-workspace-operations'
-import { canUseRepoWideTrust } from '../../../../src/shared/orca-hook-trust-entries'
+import { canUseRepoWideTrust } from '../../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
 import {
   persistOrcaHookTrustApproval,
   wasOrcaHookPreviouslyApproved

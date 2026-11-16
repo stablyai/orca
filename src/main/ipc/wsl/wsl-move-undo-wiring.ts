@@ -3,7 +3,7 @@
  * terminals, reached over its paired runtime.
  */
 import { z } from 'zod'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import type { Store } from '../../persistence/loading-store/store'
 import { wslMoveDesktopRewriteContext } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'

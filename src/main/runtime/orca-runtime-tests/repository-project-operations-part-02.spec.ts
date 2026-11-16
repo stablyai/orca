@@ -16,7 +16,7 @@ import 'node:fs'
 import '../../../shared/project/host-setup/project-host-setup-projection'
 import { tmpdir } from 'node:os'
 import { createRuntime, store } from './orca-runtime-test-fixtures.spec'
-import '../../../shared/cross-platform-path'
+import '../../../shared/file-access/cross-platform-path'
 
 // Clone and create register resolved paths (macOS tmpdir is a /var symlink).
 async function mkdtempReal(prefix: string): Promise<string> {

@@ -1,4 +1,4 @@
-import { isPathInsideOrEqual } from '../../cross-platform-path'
+import { isPathInsideOrEqual } from '../../file-access/cross-platform-path'
 
 /** Where a notebook's new `.venv` goes: the workspace root when the notebook is inside it, else beside it. */
 export function notebookVenvParent(notebookPath: string, rootPath: string | null): string {

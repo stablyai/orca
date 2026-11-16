@@ -31,7 +31,7 @@ import {
 } from '../../claude-accounts/selection/runtime-selection'
 import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-account-usage'
 import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
-import type { NetworkProxySettings } from '../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
 export class RateLimitService extends RateLimitServiceAccountRefresh {
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {

@@ -6,7 +6,7 @@ import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/removal/nested-removal'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   isLockedWorktreeRemovalError,
   SUBMODULE_DIRTY_REMOVAL_DETAIL,

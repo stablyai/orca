@@ -3,7 +3,7 @@ import type {
   HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
 } from '@/lib/browser/navigation/http-link-destinations'
 import { resolveFileLinkPath } from './files/terminal-file-link-target'
-import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../../shared/file-access/cross-platform-path'
 import type { LinkHandlerDeps } from './files/terminal-link-handlers'
 import { classifyTerminalOscLinkTarget } from '../../../../../shared/terminal/links/terminal-osc-link-target'
 import { isTerminalOwnedLinkGesture } from './gestures/terminal-link-activation'

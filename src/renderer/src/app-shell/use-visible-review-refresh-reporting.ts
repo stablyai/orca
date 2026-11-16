@@ -7,7 +7,7 @@ import { getHostedReviewCacheKey } from '../store/slices/hosted-review/hosted-re
 import { getVisibleHostedReviewWorkspaces } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
 import { shouldCoordinateVisibleGitHubReview } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-ownership'
 import { getPRRefreshRuntimeRepoTarget } from '../store/github/repositories/repository-routing'
-import { reviewForegroundFreshnessMs } from '../../../shared/review-refresh-policy'
+import { reviewForegroundFreshnessMs } from '../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo

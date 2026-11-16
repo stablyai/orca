@@ -2,7 +2,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/prefligh
 import '../../../workspace/ownership/folder-workspace-connection'
 import { findFolderWorkspaceCandidateRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/shell/launch/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../../../shared/shell/launch/windows-terminal-shell'

@@ -1,7 +1,7 @@
 /** Local workspaces use local disk; runtime environments use their server's file RPCs/compare-write.
  * Raw SSH routes remain unsupported instead of falling back to client paths. */
 import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
