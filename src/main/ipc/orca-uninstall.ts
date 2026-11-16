@@ -7,6 +7,7 @@ import {
   type OrcaUninstallPlan,
   type OrcaUninstallRunStepArgs
 } from '../../shared/uninstall/orca-uninstall-types'
+import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import type { Store } from '../persistence/loading-store/store'
 import { getLinuxRootPackageType } from '../updater/linux-package/linux-update-package-type'
 import {
@@ -43,6 +44,8 @@ async function createHost(store: Store): Promise<OrcaUninstallHost> {
         { agentStatusHooksEnabled: false },
         { notifyListeners: true }
       )
+      // Settle the agent-view disable so it can't rewrite the marker after cleanup deletes it.
+      await getClaudeAgentViewService().reconcile(store.getSettings())
     },
     getCliStatus: readLocalCliInstallStatus,
     removeCli: removeLocalCliRegistration,

@@ -236,11 +236,12 @@ export const UNINSTALL_HANDLERS: Record<string, CommandHandler> = {
       plan = await runOrcaUninstallStep(plan, step, host)
     }
     const removeApp = formatRemoveAppLine(plan)
-    if (hasUnfinishedEntry(plan)) {
+    const unfinished = hasUnfinishedEntry(plan)
+    if (unfinished) {
       process.exitCode = 1
     }
     if (json) {
-      console.log(JSON.stringify({ ok: true, result: { plan, removeApp } }, null, 2))
+      console.log(JSON.stringify({ ok: !unfinished, result: { plan, removeApp } }, null, 2))
       return
     }
     console.log([formatOrcaUninstallPlan(plan), removeApp].join('\n'))
