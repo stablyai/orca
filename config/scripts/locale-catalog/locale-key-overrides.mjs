@@ -527,8 +527,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'browser.navigation.back': { fr: 'Retour' },
   'auto.components.settings.browser.search.sshWorkspaceRouting.ssh': { fr: 'ssh' },
   // Worktree badge: stand-alone 主要な leaves the adnominal な dangling — align with the Tooltip's プライマリ.
-  'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ' },
-  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ' }
+  // zh keeps the English "primary" on purpose: beside a branch name 主要 reads as "important". Do not translate it.
+  'auto.components.sidebar.WorktreeCard.7d517f82e2': { ja: 'プライマリ', zh: 'primary' },
+  'auto.components.WorktreeJumpPalette.739bda980c': { ja: 'プライマリ', zh: 'primary' }
 }
 
 export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)
