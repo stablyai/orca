@@ -171,7 +171,10 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       {statusBarVisible ? (
         <Suspense
           fallback={
-            <div className="h-6 min-h-[24px] shrink-0 border-t border-border bg-[var(--bg-titlebar,var(--card))]" />
+            <div
+              data-glass-surface="titlebar"
+              className="h-6 min-h-[24px] shrink-0 border-t border-border bg-[var(--bg-titlebar,var(--card))]"
+            />
           }
         >
           <OverlayBoundary

@@ -177,6 +177,7 @@ function Sidebar({
       <div className="relative flex min-h-0 flex-shrink-0 scrollbar-sleek-parent">
         <div
           ref={sidebarRef}
+          data-glass-surface="worktree-sidebar"
           className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden"
           style={leftSidebarStyle}
           {...dropHandlers}

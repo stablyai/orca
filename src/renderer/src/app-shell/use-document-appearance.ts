@@ -7,6 +7,7 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyThemeBackground } from './appearance/theme-background'
 import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
+import { syncThemeGlass } from './appearance/theme-glass'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
 import { tolerantPluginThemeBackgroundRegistration } from '../../../shared/plugins/artifacts/plugin-theme-background'
@@ -123,6 +124,13 @@ export function useDocumentAppearance(): void {
       applyThemeBackground(paintsBackground ? themeBackground : null, surfaceOpacity)
     }
   }, [pluginThemesLoaded, paintsBackground, surfaceOpacity, themeBackground])
+
+  // Why repaint deps: glass raises its tint until the painted chrome text reads over the image.
+  useEffect(() => {
+    if (pluginThemesLoaded) {
+      syncThemeGlass(paintsBackground ? themeBackground : null)
+    }
+  }, [pluginThemesLoaded, paintsBackground, themeBackground, appTheme, ready, dark, sidebarTint])
 
   const reduceMotion = usePrefersReducedMotion()
   const video =

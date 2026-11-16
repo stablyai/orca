@@ -19,6 +19,7 @@ export function ProjectHeaderActions({
   return (
     <div
       data-repo-header-actions=""
+      data-glass-surface="worktree-sidebar"
       className={cn(PROJECT_HEADER_ACTIONS_CLASS_NAME, className)}
       {...props}
     />

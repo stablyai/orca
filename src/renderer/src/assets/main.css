@@ -1133,6 +1133,37 @@ body[data-modal-overlay-open]
   opacity: var(--orca-theme-background-opacity);
 }
 
+/* Theme glass (theme-glass.ts): static chrome paints the image blurred once, under the body's veil
+   and its own color at the theme's tint. Fixed, so it lines up with the body's image. */
+:root[data-theme-glass] [data-glass-surface] {
+  --orca-glass-veil: color-mix(
+    in srgb,
+    var(--orca-glass-surface) calc(var(--orca-theme-glass-tint) * 100%),
+    transparent
+  );
+  /* The body's opaque base, under any transparent part of the image. */
+  background-color: var(--background);
+  background-image:
+    linear-gradient(var(--orca-glass-veil) 0 0),
+    linear-gradient(var(--orca-theme-background-veil) 0 0), var(--orca-theme-glass-image);
+  background-size: auto, auto, var(--orca-theme-glass-size);
+  background-repeat: no-repeat, no-repeat, var(--orca-theme-background-repeat);
+  background-position: center, center, var(--orca-theme-background-position);
+  background-attachment: fixed;
+}
+[data-glass-surface='worktree-sidebar'] {
+  --orca-glass-surface: var(--worktree-sidebar);
+}
+[data-glass-surface='sidebar'] {
+  --orca-glass-surface: var(--sidebar);
+}
+[data-glass-surface='tab-bar'] {
+  --orca-glass-surface: var(--tab-bar, var(--card));
+}
+[data-glass-surface='titlebar'] {
+  --orca-glass-surface: var(--bg-titlebar, var(--card));
+}
+
 /* The window material (window-material-options.ts) is the backdrop; an opaque body would cover it.
    A theme image keeps its opaque base so its letterbox and veil never expose the desktop. */
 :root[data-window-material]:not([data-theme-background]) body {
