@@ -1,5 +1,6 @@
 // App-level wiring for team cloud workspaces: orca://cloud links, presence for the workspace in
 // front, and the copy-link shortcut. Installed once from main.tsx; no React tree needed.
+import { cloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
@@ -232,6 +233,7 @@ export function installCloudWorkspaceLinks(): () => void {
     const target = event.target instanceof HTMLElement ? event.target : null
     if (
       !event.defaultPrevented &&
+      cloudShareLinksEnabled() &&
       !shortcutOwnedElsewhere(target) &&
       keybindingMatchesAction(
         'cloudWorkspace.copyLink',
