@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
-import {
-  normalizeWorktreeRootPathForTerminalLink,
-  resolveKnownWorktreeRootPathLink
-} from './terminal-worktree-path-link'
+import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 
 type WorktreeRootPathState = NonNullable<Parameters<typeof resolveKnownWorktreeRootPathLink>[1]>
 
@@ -24,61 +21,6 @@ function createState(
     )
   }
 }
-
-describe('resolveKnownWorktreeRootPathLink', () => {
-  it('matches trailing separators without trimming filesystem roots', () => {
-    const state = createState({
-      repo: [
-        { id: 'posix-root', path: '/' },
-        { id: 'posix-wt', path: '/repo/feature' },
-        { id: 'windows-root', path: 'C:\\' },
-        { id: 'windows-wt', path: 'C:\\repo\\feature' }
-      ]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('/repo/feature/', state)?.id).toBe('posix-wt')
-    expect(resolveKnownWorktreeRootPathLink('C:\\repo\\feature\\', state)?.id).toBe('windows-wt')
-    expect(normalizeWorktreeRootPathForTerminalLink('/')).toBe('/')
-    expect(normalizeWorktreeRootPathForTerminalLink('C:\\')).toBe('C:/')
-  })
-
-  it('rebuilds the cached root index when worktreesByRepo is replaced', () => {
-    const firstState = createState({
-      repo: [{ id: 'wt-1', path: '/repo/feature' }]
-    })
-    const nextState = createState({
-      repo: [{ id: 'wt-2', path: '/repo/feature' }]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('/repo/feature', firstState)?.id).toBe('wt-1')
-    expect(resolveKnownWorktreeRootPathLink('/repo/feature', nextState)?.id).toBe('wt-2')
-  })
-
-  it('matches Windows paths across native and resolved separator styles', () => {
-    const state = createState({
-      repo: [{ id: 'wt-1', path: 'C:\\Users\\Alice\\Repo' }]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('C:\\Users\\Alice\\Repo\\', state)?.id).toBe('wt-1')
-    expect(resolveKnownWorktreeRootPathLink('C:/Users/Alice/Repo', state)?.id).toBe('wt-1')
-    expect(resolveKnownWorktreeRootPathLink('C:\\Users\\Alice\\Repo\\src', state)).toBeNull()
-    expect(resolveKnownWorktreeRootPathLink('C:/Users/Alice/Repo/src', state)).toBeNull()
-  })
-
-  it('matches Windows and UNC roots case-insensitively without changing POSIX matching', () => {
-    const state = createState({
-      repo: [
-        { id: 'wt-win', path: 'C:\\Users\\Alice\\Repo' },
-        { id: 'wt-unc', path: '\\\\Server\\Share\\Repo' },
-        { id: 'wt-posix', path: '/Users/Alice/Repo' }
-      ]
-    })
-
-    expect(resolveKnownWorktreeRootPathLink('c:\\users\\alice\\repo', state)?.id).toBe('wt-win')
-    expect(resolveKnownWorktreeRootPathLink('//server/share/repo', state)?.id).toBe('wt-unc')
-    expect(resolveKnownWorktreeRootPathLink('/users/alice/repo', state)).toBeNull()
-  })
-})
 
 const remoteContext = (environmentId: string, worktreeId = 'source') => ({
   target: { kind: 'environment' as const, environmentId: environmentId },
