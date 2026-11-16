@@ -5,12 +5,20 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildKnownOrcaWorkspaceLayouts } from '../../../../shared/worktree/visibility/ownership'
-import { isENOENT } from '../../../ipc/filesystem/access/filesystem-path-containment'
+import { isPathAbsentError } from '../../../ipc/filesystem/access/filesystem-path-containment'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import { listWorkspaceCleanupOwnedRepos } from '../workspace-cleanup-run-evidence'
 
 // Folders are compared by filesystem identity, so symlinks, case and Unicode spellings are the OS's call.
 type Identity = string
+
+/** Like identityOf, but an error other than absence is `'unknown'`: protection can't be derived from it. */
+async function provenIdentityOf(path: string): Promise<Identity | null | 'unknown'> {
+  return stat(path, { bigint: true }).then(
+    (stats) => (stats.isDirectory() && stats.ino !== 0n ? `${stats.dev}:${stats.ino}` : null),
+    (error: unknown) => (isPathAbsentError(error) ? null : 'unknown')
+  )
+}
 
 async function identityOf(path: string): Promise<Identity | null> {
   // Bigint: NTFS file ids exceed 2^53 and would round together; inode 0 means no identity.
@@ -24,7 +32,7 @@ async function identityOf(path: string): Promise<Identity | null> {
 async function presence(path: string): Promise<'present' | 'missing' | 'unknown'> {
   return lstat(path).then(
     () => 'present' as const,
-    (error: unknown) => (isENOENT(error) ? 'missing' : 'unknown')
+    (error: unknown) => (isPathAbsentError(error) ? 'missing' : 'unknown')
   )
 }
 
@@ -153,14 +161,20 @@ async function linkTargets(path: string): Promise<{ targets: string[]; complete:
 
 export async function readListedFolders(store: RuntimeStore): Promise<ListedFolders> {
   const listed: ListedFolders = { present: new Set(), claims: new Set(), complete: true }
-  const identities = new Map<string, Promise<Identity | null>>()
-  const cachedIdentity = (path: string): Promise<Identity | null> => {
+  const identities = new Map<string, Promise<Identity | null | 'unknown'>>()
+  const cachedIdentity = async (path: string): Promise<Identity | null> => {
     let id = identities.get(path)
     if (!id) {
-      id = identityOf(path)
+      id = provenIdentityOf(path)
       identities.set(path, id)
     }
-    return id
+    const proven = await id
+    // A folder that couldn't be read may hold a listed path's claim: then nothing is proven.
+    if (proven === 'unknown') {
+      listed.complete = false
+      return null
+    }
+    return proven
   }
   for (const listedPath of new Set(listedPaths(store))) {
     const { targets, complete } = await linkTargets(listedPath)
