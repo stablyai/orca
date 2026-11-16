@@ -7,7 +7,8 @@ import { MOBILE_TERMINAL_CARET_OPTIONS } from '../../terminal-webview-html/theme
 import { ESC } from '../surface-input/escape-introducers'
 import { notify } from '../host-bridge/host-notify'
 import { reportLaidOutCellBox } from '../viewport/laid-out-cell-box'
-import { fontPxForScale } from '../viewport/text-scaling'
+import { terminalFontPxForScale } from '../../preferences/terminal-text-scales'
+import { applyTerminalFontStyle, terminalFontOptions } from '../viewport/text-scaling'
 import type { TerminalDocumentScope } from '../document-scope'
 import type { TerminalDocumentTerminal } from '../document-terminal-shape'
 import { scheduleDocumentFrame } from '../document-frame-registry'
@@ -40,10 +41,8 @@ function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) 
     rows: rows,
     theme: scope.terminalTheme,
     minimumContrastRatio: scope.terminalMinimumContrastRatio,
-    fontFamily: scope.terminalFontFamily,
-    fontSize: fontPxForScale(scope.currentTextScale),
-    fontWeight: '300',
-    fontWeightBold: '500',
+    ...terminalFontOptions(scope),
+    fontSize: terminalFontPxForScale(scope.currentTextScale),
     scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
     // Parser query replies need stdin enabled; native still validates their grammar.
     disableStdin: false,
@@ -95,7 +94,9 @@ export function init(
   nextFontScale: unknown,
   preserveScroll: boolean,
   nextOscLinks: unknown,
-  kittyKeyboardFlags: unknown
+  kittyKeyboardFlags: unknown,
+  nextFontStyle?: unknown,
+  fontFaceCss?: unknown
 ) {
   // Replay replaces the scroll target; retire momentum and pending drags belonging to the old one.
   stopSurfaceTouchGestures(scope)
@@ -104,6 +105,9 @@ export function init(
   scope.tapCandidate = null
   if (typeof nextFontScale === 'number' && nextFontScale > 0) {
     scope.currentTextScale = nextFontScale
+  }
+  if (nextFontStyle !== undefined) {
+    applyTerminalFontStyle(scope, nextFontStyle, fontFaceCss)
   }
   // Use distance from bottom across width reflow because row counts/cell positions change; null remains bottom-pinned.
   const prevB =
@@ -162,7 +166,7 @@ export function init(
     nextTerm = reused
     scope.term = reused
     reused.reset()
-    reused.options.fontSize = fontPxForScale(scope.currentTextScale)
+    reused.options.fontSize = terminalFontPxForScale(scope.currentTextScale)
     reused.resize(cols || 80, rows || 24)
     // Seed the reported grid so its first box change can trigger one DOM-column refit.
     if (scope.reportedCellBox) {
