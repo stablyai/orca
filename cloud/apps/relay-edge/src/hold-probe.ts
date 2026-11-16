@@ -1,26 +1,36 @@
-// Staging-only socket hold probe: how long a plain WebSocket survives from a given network, through
-// the front door and direct. On only with HOLD_PROBE === '1' (absent: these paths are 404, as any
-// unknown path). No object, no auth, no stored state: each socket lives in the Worker request that
-// accepted it and ends as one metric.
+// Staging-only socket hold probe: how long a WebSocket survives from a given network, through the
+// front door and direct. On only with HOLD_PROBE === '1' (absent: these paths are 404, as any
+// unknown path, and SpliceRelay refuses the 'hold' kind).
 //   GET /__probe/page              static page that keeps 3 sockets open per path and redials.
-//   GET /__probe/hold/<sessionId>  WebSocket: 'p:<n>' every 25 s, the page echoes it back.
+//   GET /__probe/hold/<sessionId>  WebSocket, held in a Durable Object as desktops' sockets are:
+//     SpliceRelay `hold:<sessionId>` (a splice object is `<relayHostId>.<slot>`, never with ':'),
+//     so both paths of one session end in the same object and no new class (or migration) is
+//     needed. The object pings 'p:<n>' every 25 s from its alarm and the page echoes it; 75 s
+//     without a frame closes 4408 (PEER_DROPPED), as HostRelay does for a silent control.
 // The page's first frame on a redialled socket reports how the previous one ended from its side
-// ('c:<ageSeconds>:<code>'), which covers sockets whose server end never saw a close.
+// ('c:<ageSeconds>:<code>'), which covers sockets whose server end never saw a close (a reset).
 import type { Env } from './env'
 import type { Ingress } from './ingress'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth } from './preauth'
+import { NO_DEADLINE } from './splice-state'
 
 export const HOLD_PING_MS = 25_000
-// No frame for this long: the socket is dead even if no close arrived (code 4408 on both sides).
 export const HOLD_SILENCE_MS = 75_000
 export const HOLD_SILENCE_CODE = 4408
+export const HOLD_OBJECT_PREFIX = 'hold:'
 const SESSION_ID = /^[A-Za-z0-9]{8,32}$/
 const CLIENT_CLOSE = /^c:(\d{1,7}):(\d{1,4}|error)$/
+const TAG = 'hold'
+
+type HoldPath = 'front' | 'direct'
+type HoldAttachment = { hold: 1; sid: string; path: HoldPath; place: string; openedAt: number; lastSeen: number; lastPingAt: number; pings: number; ended?: true }
 
 export function holdProbeEnabled(env: Env): boolean {
   return env.HOLD_PROBE === '1'
 }
+
+// ---------------- Worker side ----------------
 
 export async function holdProbe(env: Env, request: Request, ingress: Ingress | null, pathname: string): Promise<Response | null> {
   if (!holdProbeEnabled(env)) { return null }
@@ -32,46 +42,99 @@ export async function holdProbe(env: Env, request: Request, ingress: Ingress | n
   }
   const hold = pathname.match(/^\/__probe\/hold\/([^/]+)$/)
   if (!hold) { return null }
-  if (!SESSION_ID.test(hold[1]!)) { return new Response(null, { status: 400 }) }
+  const sid = hold[1]!
+  if (!SESSION_ID.test(sid)) { return new Response(null, { status: 400 }) }
   if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') { return new Response(null, { status: 426 }) }
   if (!(await admitPreAuth(env, request, 'hold', ingress))) { return new Response(null, { status: 429 }) }
-  return holdSocket(env, hold[1]!, ingress ? 'front' : 'direct', requestPlace(request, ingress))
+  // Only what the object needs: none of the client's headers reach it.
+  const headers = new Headers({
+    upgrade: 'websocket',
+    'x-edge-kind': TAG,
+    'x-edge-hold': JSON.stringify({ sid, path: ingress ? 'front' : 'direct', place: requestPlace(request, ingress) })
+  })
+  return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(HOLD_OBJECT_PREFIX + sid)).fetch(new Request(request.url, { headers }))
 }
 
-function holdSocket(env: Env, sessionId: string, path: 'front' | 'direct', place: string): Response {
-  const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket]
-  server.accept()
-  const opened = Date.now()
-  let lastFrame = opened
-  let pings = 0
-  let ended = false
-  const age = () => Math.round((Date.now() - opened) / 1000)
-  const end = (reason: string) => {
-    if (ended) { return }
-    ended = true
-    clearInterval(timer)
-    metric(env, 'hold_close', age(), path, [pings], reason, place, sessionId)
+// ---------------- object side (SpliceRelay delegates here for 'hold' sockets) ----------------
+
+export function holdAccept(ctx: DurableObjectState, env: Env, request: Request): Response {
+  let meta: { sid?: unknown; path?: unknown; place?: unknown }
+  try { meta = JSON.parse(request.headers.get('x-edge-hold') ?? '') } catch { meta = {} }
+  const { sid, path, place } = meta
+  if (!holdProbeEnabled(env) || typeof sid !== 'string' || !SESSION_ID.test(sid) || (path !== 'front' && path !== 'direct')) {
+    return new Response(null, { status: 404 })
   }
-  const timer = setInterval(() => {
-    if (Date.now() - lastFrame > HOLD_SILENCE_MS) {
-      end(String(HOLD_SILENCE_CODE))
-      try { server.close(HOLD_SILENCE_CODE, 'silent') } catch {}
-      return
-    }
-    try { server.send(`p:${++pings}`) } catch {}
-  }, HOLD_PING_MS)
-  server.addEventListener('message', (event) => {
-    lastFrame = Date.now()
-    const report = typeof event.data === 'string' ? event.data.match(CLIENT_CLOSE) : null
-    if (report) { metric(env, 'hold_client_close', Number(report[1]), path, [], report[2]!, place, sessionId) }
-  })
-  server.addEventListener('close', (event) => {
-    end(String(event.code))
-    try { server.close() } catch {}
-  })
-  server.addEventListener('error', () => end('error'))
-  metric(env, 'hold_open', 1, path, [], '', place, sessionId)
+  const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket]
+  ctx.acceptWebSocket(server, [TAG])
+  const now = Date.now()
+  const a: HoldAttachment = { hold: 1, sid, path, place: typeof place === 'string' ? place : '', openedAt: now, lastSeen: now, lastPingAt: now, pings: 0 }
+  server.serializeAttachment(a)
+  metric(env, 'hold_open', 1, a.path, [], '', a.place, a.sid)
   return new Response(null, { status: 101, webSocket: client })
+}
+
+export function isHoldSocket(ctx: DurableObjectState, ws: WebSocket): boolean {
+  return ctx.getTags(ws)[0] === TAG
+}
+
+export function holdMessage(env: Env, ws: WebSocket, message: string | ArrayBuffer): void {
+  const a = attachment(ws)
+  if (!a || a.ended) { return }
+  a.lastSeen = Date.now()
+  ws.serializeAttachment(a)
+  const report = typeof message === 'string' ? message.match(CLIENT_CLOSE) : null
+  if (report) { metric(env, 'hold_client_close', Number(report[1]), a.path, [], report[2]!, a.place, a.sid) }
+}
+
+// Close or error from the client side; once per socket.
+export function holdGone(env: Env, ws: WebSocket, code: string): void {
+  const a = attachment(ws)
+  if (!a || a.ended) { return }
+  end(env, ws, a, code)
+  try { ws.close() } catch {}
+}
+
+// From the object's alarm: ping each socket due, close the silent ones.
+export function holdTick(ctx: DurableObjectState, env: Env, now = Date.now()): void {
+  for (const ws of ctx.getWebSockets(TAG)) {
+    const a = attachment(ws)
+    if (!a || a.ended) { continue }
+    if (now - a.lastSeen > HOLD_SILENCE_MS) {
+      end(env, ws, a, String(HOLD_SILENCE_CODE))
+      try { ws.close(HOLD_SILENCE_CODE, 'silent') } catch {}
+      continue
+    }
+    if (now - a.lastPingAt >= HOLD_PING_MS - 50) {
+      a.lastPingAt = now
+      try { ws.send(`p:${++a.pings}`) } catch {}
+      ws.serializeAttachment(a)
+    }
+  }
+}
+
+// The next ping due among the object's hold sockets (NO_DEADLINE when it holds none).
+export function holdNextAlarm(ctx: DurableObjectState): number {
+  let next = NO_DEADLINE
+  for (const ws of ctx.getWebSockets(TAG)) {
+    const a = attachment(ws)
+    if (a && !a.ended) { next = Math.min(next, a.lastPingAt + HOLD_PING_MS) }
+  }
+  return next
+}
+
+function end(env: Env, ws: WebSocket, a: HoldAttachment, code: string): void {
+  a.ended = true
+  try { ws.serializeAttachment(a) } catch {}
+  metric(env, 'hold_close', Math.round((Date.now() - a.openedAt) / 1000), a.path, [a.pings], code, a.place, a.sid)
+}
+
+function attachment(ws: WebSocket): HoldAttachment | null {
+  try {
+    const a = ws.deserializeAttachment() as HoldAttachment | null
+    return a?.hold === 1 ? a : null
+  } catch {
+    return null
+  }
 }
 
 // The two hosts the page dials: the front door (the first token-mode origin) and the edge itself.

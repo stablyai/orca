@@ -11,6 +11,7 @@ import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/prot
 import { MESSAGE_TOO_BIG, frameOver, timingSafeEqualStr } from './bytes'
 import type { Env } from './env'
 import { metric } from './metrics'
+import { holdAccept, holdGone, holdMessage, holdNextAlarm, holdTick, isHoldSocket } from './hold-probe'
 import { parseConnId } from './splice-slot'
 import { KEY_PREFIX, NO_DEADLINE, type GuardAttachment, type SocketKind, type State } from './splice-state'
 
@@ -18,6 +19,12 @@ export class SpliceRelay extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const kind = request.headers.get('x-edge-kind')
     if (kind === 'abort' && this.env.SPIKE_ADMIN === '1') { this.ctx.abort('spike reset') }
+    // Staging hold probe (hold-probe.ts): its own `hold:<sid>` objects, 404 unless HOLD_PROBE is '1'.
+    if (kind === 'hold') {
+      const response = holdAccept(this.ctx, this.env, request)
+      if (response.status === 101) { await this.reschedule() }
+      return response
+    }
     const connId = request.headers.get('x-edge-conn-id') ?? ''
     const parsed = parseConnId(connId)
     if (!parsed) { return new Response(null, { status: 404 }) }
@@ -55,6 +62,7 @@ export class SpliceRelay extends DurableObject<Env> {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    if (isHoldSocket(this.ctx, ws)) { return holdMessage(this.env, ws, message) }
     const id = this.identify(ws)
     if (!id) { return }
     const state = await this.state(id.connId)
@@ -68,10 +76,12 @@ export class SpliceRelay extends DurableObject<Env> {
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {
+    if (isHoldSocket(this.ctx, ws)) { return holdGone(this.env, ws, String(code)) }
     await this.teardown(ws, code)
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
+    if (isHoldSocket(this.ctx, ws)) { return holdGone(this.env, ws, 'error') }
     await this.teardown(ws, 1006)
   }
 
@@ -244,6 +254,7 @@ export class SpliceRelay extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     const now = Date.now()
+    holdTick(this.ctx, this.env, now)
     for (const state of await this.states()) {
       if (now < state.deadline) { continue }
       const phone = this.socket(state.connId, 'phone')
@@ -262,7 +273,7 @@ export class SpliceRelay extends DurableObject<Env> {
   }
 
   private async reschedule(): Promise<void> {
-    const next = Math.min(NO_DEADLINE, ...(await this.states()).map((s) => s.deadline))
+    const next = Math.min(NO_DEADLINE, holdNextAlarm(this.ctx), ...(await this.states()).map((s) => s.deadline))
     if (next === NO_DEADLINE) {
       await this.ctx.storage.deleteAlarm()
       return
