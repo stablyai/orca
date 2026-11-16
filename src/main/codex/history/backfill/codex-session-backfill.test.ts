@@ -45,6 +45,7 @@ import {
   resolveCodexSessionBackfillPaths,
   startCodexSessionBackfillInBackground
 } from './codex-session-backfill'
+import { createCodexSessionMigrationScheduler } from './codex-session-migration-scheduler'
 import { markCodexSessionBackfillMarkerPending } from './codex-session-backfill-marker'
 import { fsMockState, resetCodexSessionBackfillFsMocks } from './codex-session-backfill-fs-mocks'
 import type { CodexSessionBackfillDate } from './codex-session-backfill-types'
@@ -131,6 +132,8 @@ afterEach(() => {
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
   vi.clearAllMocks()
 })
 
@@ -212,6 +215,60 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
 })
 
 describe('startCodexSessionBackfillInBackground', () => {
+  describe.each([
+    ['Asia/Seoul', '2026-10-26T15:53:24Z'],
+    ['America/Los_Angeles', '2026-10-27T05:00:00Z']
+  ])('local and shell-TZ rollouts in %s', (timeZone, instant) => {
+    it.each(['launch', 'exit', 'recovery'])(
+      'publishes both date shards after %s',
+      async (trigger) => {
+        vi.stubEnv('TZ', timeZone)
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(new Date(instant))
+        writeManagedSession(join('2026', '05', '26', 'rollout-baseline.jsonl'), 'baseline\n')
+        await startCodexSessionBackfillInBackground()
+        if (trigger === 'recovery') {
+          markLaunchPending(['2026', '10', '25'])
+          await startCodexSessionBackfillInBackground({ retainPendingScanDates: true })
+        }
+        writeManagedSession(join('2026', '10', '26', 'rollout-26.jsonl'), 'day 26\n')
+        writeManagedSession(join('2026', '10', '27', 'rollout-27.jsonl'), 'day 27\n')
+        writeManagedSession(join('2026', '01', '01', 'rollout-unrelated.jsonl'), 'unrelated\n')
+        await (trigger === 'exit'
+          ? new Promise<void>((resolve, reject) => {
+              const scheduler = createCodexSessionMigrationScheduler({
+                isEligible: () => true,
+                isQuitting: () => false,
+                resolveSystemCodexHomePathOverride: () => undefined,
+                startBackfill: (options) =>
+                  startCodexSessionBackfillInBackground(options).catch(reject),
+                startIndexHeal: async () => {},
+                finishScheduledRun: resolve,
+                initialDelayMs: 0
+              })
+              scheduler.beginLaunch('launch', false, new Date(instant))
+              scheduler.finishLaunch('launch')
+            })
+          : startCodexSessionBackfillInBackground({ ignoreCompletionMarker: trigger === 'launch' }))
+        expect(
+          readFileSync(
+            join(getSystemSessionsRoot(), '2026', '10', '26', 'rollout-26.jsonl'),
+            'utf-8'
+          )
+        ).toBe('day 26\n')
+        expect(
+          readFileSync(
+            join(getSystemSessionsRoot(), '2026', '10', '27', 'rollout-27.jsonl'),
+            'utf-8'
+          )
+        ).toBe('day 27\n')
+        expect(
+          existsSync(join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-unrelated.jsonl'))
+        ).toBe(false)
+      }
+    )
+  })
+
   it('stops target mutations after real-home opt-out and leaves the run retryable', async () => {
     writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
     writeManagedSession(join('2026', '05', '26', 'rollout-b.jsonl'), '{"id":"b"}\n')
