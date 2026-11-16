@@ -12,7 +12,8 @@ function isSameProcess(row: CopyHostProcessRow, target: HostProcess): boolean {
     row.pid === target.pid &&
     row.name === target.name &&
     row.command === target.commandLine &&
-    (target.startedAt == null || row.creationTimeMs === target.startedAt)
+    target.startedAt != null &&
+    row.creationTimeMs === target.startedAt
   )
 }
 

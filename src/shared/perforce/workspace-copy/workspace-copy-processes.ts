@@ -78,8 +78,9 @@ export async function processesUnder(
       startedAt: p.startedAt ?? null,
       parentPid: p.parentPid ?? null,
       heldFolder: held.get(p.pid) ?? null,
-      // An empty command line means the process refused a query handle, so it cannot be ended either.
-      canEnd: p.commandLine !== '' && !NEVER_ENDED.has(p.name.toLowerCase())
+      // An empty command line means the process refused a query handle, so it cannot be ended either;
+      // without a start time a reused pid cannot be told apart from it.
+      canEnd: p.commandLine !== '' && p.startedAt != null && !NEVER_ENDED.has(p.name.toLowerCase())
     }))
 }
 

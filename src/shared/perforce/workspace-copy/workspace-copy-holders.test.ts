@@ -175,20 +175,24 @@ describe('programs holding a copy', () => {
     processes.push(
       { pid: 40, name: 'explorer.exe', commandLine: 'C:\\WINDOWS\\Explorer.EXE', startedAt: 50 },
       // An empty command line: the process refused a query handle, so it cannot be ended either.
-      { pid: 50, name: 'MsMpEng.exe', commandLine: '', startedAt: 10 }
+      { pid: 50, name: 'MsMpEng.exe', commandLine: '', startedAt: 10 },
+      // No start time: a reused pid could not be told apart from it.
+      { pid: 60, name: 'tool.exe', commandLine: `tool.exe ${copyRoot}`, startedAt: null }
     )
     folderHolders.set(40, copyRoot).set(50, join(copyRoot, 'Game'))
 
     const preview = await previewWorkspaceCopyRemoval(host, ws, 'one')
     expect(preview.holders?.map((holder) => [holder.pid, holder.canEnd])).toEqual([
       [40, false],
-      [50, false]
+      [50, false],
+      [60, false]
     ])
     await expect(
       removeWorkspaceCopy(host, ws, 'one', {
         endHolders: [
           { pid: 40, startedAt: 50 },
-          { pid: 50, startedAt: 10 }
+          { pid: 50, startedAt: 10 },
+          { pid: 60, startedAt: null }
         ]
       })
     ).rejects.toThrow(/Orca will not end them/)
