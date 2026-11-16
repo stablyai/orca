@@ -97,6 +97,7 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
     // A late PID still gets the tree kill, even after the caller stopped waiting for it.
     const onSpawn = (): void => {
       detach()
+      clearTimeout(timer)
       void killSpawnedCommandTree(child).then(settle)
     }
     const onClose = (): void => {
@@ -108,10 +109,8 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
         onClose()
       }
     }
-    const timer = setTimeout(() => {
-      child.kill()
-      settle()
-    }, WORKER_PID_WAIT_MS)
+    // Stop waiting without a root kill: one queued behind the spawn could end the root before taskkill walks its tree.
+    const timer = setTimeout(settle, WORKER_PID_WAIT_MS)
     child.on('spawn', onSpawn)
     child.on('close', onClose)
     child.on('error', onError)

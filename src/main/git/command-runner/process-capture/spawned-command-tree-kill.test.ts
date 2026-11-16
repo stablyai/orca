@@ -112,6 +112,7 @@ describe('Git command tree termination', () => {
       await vi.advanceTimersByTimeAsync(10_000)
       await pending
       expect(spawnMock).not.toHaveBeenCalled()
+      expect(child.kill).not.toHaveBeenCalled()
 
       child.receive({ type: 'spawn', id: 1, pid: 4321 })
       expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '4321', '/t', '/f'], {
