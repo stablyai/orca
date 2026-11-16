@@ -3,7 +3,11 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import { journalStoredItemRow } from './journal-stored-output-rows'
 import { JOURNAL_DOMAIN_ITEM_COLUMNS } from './journal-domain-item-read-columns'
-import { hydrateJournalItemOutput, JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
+import {
+  hydrateJournalItemOutput,
+  JOURNAL_STORED_OUTPUT_WRITES,
+  MAX_STORED_TEXT_BYTES
+} from './journal-stored-output'
 
 /** The last rowid examined; rows appended later are picked up, rows behind it are never rescanned. */
 export const JOURNAL_STORED_OUTPUT_CURSOR = 'journal.stored-output.cursor'
@@ -84,7 +88,9 @@ export function compactJournalStoredOutputPage(
       (header.kind !== 'tool-call' && header.kind !== 'diff') ||
       header.wire_version !== AGENT_SESSION_ITEM_WIRE_VERSION ||
       !header.inline ||
-      size < MIN_ROW_BYTES
+      size < MIN_ROW_BYTES ||
+      // Judged from the record header: a row this large is never loaded inside a page.
+      size > MAX_STORED_TEXT_BYTES * 2
     ) {
       continue
     }

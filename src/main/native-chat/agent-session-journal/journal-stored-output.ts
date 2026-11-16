@@ -11,6 +11,8 @@ export const JOURNAL_STORED_OUTPUT_WRITES = false
 // Format 1: one zstd frame over the text as a JSON string literal, so lone surrogates survive.
 const FORMAT_ZSTD_JSON = 1
 const MIN_STORED_TEXT_BYTES = 512
+// Encoding and the read-back check run inside the writer transaction; larger text stays inline.
+export const MAX_STORED_TEXT_BYTES = 2 * 1024 * 1024
 const ZSTD_PARAMS = {
   [constants.ZSTD_c_compressionLevel]: 3,
   [constants.ZSTD_c_checksumFlag]: 1
@@ -59,7 +61,8 @@ export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
     !payload ||
     (item.body.kind === 'tool-call' && item.body.state === 'running') ||
     storedMarker(payload) ||
-    payload.head.length * 3 < MIN_STORED_TEXT_BYTES
+    payload.head.length * 3 < MIN_STORED_TEXT_BYTES ||
+    payload.head.length > MAX_STORED_TEXT_BYTES
   ) {
     return null
   }
@@ -67,6 +70,7 @@ export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
   // Reads bound and check decoding by the recorded length, so a text that disagrees stays inline.
   if (
     textBytes < MIN_STORED_TEXT_BYTES ||
+    textBytes > MAX_STORED_TEXT_BYTES ||
     textBytes > payload.byteLength ||
     (!payload.truncated && textBytes !== payload.byteLength)
   ) {

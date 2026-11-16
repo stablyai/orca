@@ -17,28 +17,43 @@ const WIRE_BYTES = JOURNAL_DOMAIN_ITEM_COLUMNS.indexOf('wire_bytes')
 export function readJournalStoredItem<T extends AgentJournalRenderItem = AgentJournalRenderItem>(
   db: Database.Database,
   prefix: Prefix,
-  json: unknown
+  json: unknown,
+  /** The row's `output_blob` when the read already selected it, saving a lookup per row. */
+  blob?: unknown
 ): T {
   const item: T = JSON.parse(String(json))
-  return hydrateJournalStoredItem(db, prefix, item)
+  return hydrateJournalStoredItem(db, prefix, item, blob)
+}
+
+/** A row that selected `payload_json` and, to save a lookup, `output_blob`. */
+export function readJournalStoredRow(
+  db: Database.Database,
+  prefix: Prefix,
+  row: { payload_json?: unknown; output_blob?: unknown }
+): AgentJournalRenderItem {
+  // A row that did not select the blob reads it by key, never as missing.
+  return readJournalStoredItem(db, prefix, row.payload_json, row.output_blob)
 }
 
 /** Returns the same object when the item stores nothing, so callers can reuse its row text. */
 export function hydrateJournalStoredItem<T extends AgentJournalRenderItem>(
   db: Database.Database,
   prefix: Prefix,
-  item: T
+  item: T,
+  blob?: unknown
 ): T {
   if (!hasJournalStoredOutput(item)) {
     return item
   }
-  const row = db
-    .prepare('SELECT output_blob FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?')
-    .get(...prefix, item.itemId)
-  return hydrateJournalItemOutput(
-    item,
-    row?.output_blob instanceof Uint8Array ? row.output_blob : null
-  )
+  const held =
+    blob === undefined
+      ? db
+          .prepare(
+            'SELECT output_blob FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
+          )
+          .get(...prefix, item.itemId)?.output_blob
+      : blob
+  return hydrateJournalItemOutput(item, held instanceof Uint8Array ? held : null)
 }
 
 export type JournalStoredItemRow<V> = {

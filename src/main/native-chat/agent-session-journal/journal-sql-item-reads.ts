@@ -1,4 +1,4 @@
-import { readJournalStoredItem } from './journal-stored-output-rows'
+import { readJournalStoredItem, readJournalStoredRow } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
   readJournalHistoryItems,
@@ -188,13 +188,13 @@ export function readJournalDomainItems(
         .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
       const chosen = headers.slice(0, operation.limit)
       const page = db
-        .prepare(`SELECT item.payload_json FROM json_each(?) chosen
+        .prepare(`SELECT item.payload_json,item.output_blob FROM json_each(?) chosen
         CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=?
           AND item.item_id=chosen.value ORDER BY CAST(chosen.key AS INTEGER)`)
         .all(JSON.stringify(chosen.map((header) => header.item_id)), ...prefix)
       return {
         kind: 'items-by-kind',
-        items: page.map((row) => readJournalStoredItem(db, prefix, row.payload_json)),
+        items: page.map((row) => readJournalStoredRow(db, prefix, row)),
         nextOrdinal: headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
       }
     }
