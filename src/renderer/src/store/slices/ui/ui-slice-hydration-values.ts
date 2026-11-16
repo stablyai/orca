@@ -8,6 +8,8 @@ import type { ContextualTourId } from '../../../../../shared/feature-education/c
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
+import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
+import { normalizeManualTagOrder } from '../../../../../shared/worktree/metadata/manual-tag-order'
 import { sanitizePaneKeyTimestampRecord } from './ui-slice-hydration-sanitizers'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
@@ -175,4 +177,28 @@ export function hydrateAgentReadState(
     activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
   }
+}
+
+/** Tag-section order; a host that predates it sends neither field. */
+export function hydrateTagOrder(
+  ui: PersistedUIState
+): Pick<UISlice, 'tagOrderBy' | 'manualTagOrder'> {
+  return {
+    tagOrderBy: ui.tagOrderBy ?? 'name',
+    manualTagOrder: normalizeManualTagOrder(ui.manualTagOrder)
+  }
+}
+
+/** The persisted pet when this build or a saved custom pet still has it, else the default. */
+export function resolveHydratedPetId(
+  petId: unknown,
+  customPets: readonly { id: string }[]
+): string {
+  if (typeof petId !== 'string') {
+    return DEFAULT_PET_ID
+  }
+  if (isBundledPetId(petId) || customPets.some((pet) => pet.id === petId)) {
+    return petId
+  }
+  return DEFAULT_PET_ID
 }

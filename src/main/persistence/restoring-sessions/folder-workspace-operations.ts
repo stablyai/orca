@@ -12,7 +12,7 @@ import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-attachme
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { retireAtRestCommandContext } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
-import { applyNormalizedWorktreeTags } from '../../../shared/worktree/metadata/worktree-tags'
+import { setWorktreeTags } from '../../../shared/worktree/metadata/worktree-tags'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
@@ -235,8 +235,7 @@ export class FolderWorkspacePersistenceOperations {
       workspace.workspaceStatus = updates.workspaceStatus
     }
     if (updates.tags !== undefined) {
-      workspace.tags = updates.tags
-      applyNormalizedWorktreeTags(workspace)
+      setWorktreeTags(workspace, updates.tags)
     }
     if (updates.createdWithAgent !== undefined) {
       workspace.createdWithAgent = updates.createdWithAgent

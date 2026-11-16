@@ -20,7 +20,7 @@ import {
   resolveFolderWorkspaceName,
   toFolderWorkspaceLinkedTask
 } from './folder-workspace-source-selection'
-import { persistCreationMetadata } from '@/lib/workspace/creation/worktree-creation-meta'
+import { persistFolderWorkspaceCreationTags } from './folder-workspace-creation-tags'
 import {
   planAgentSessionLaunch,
   adoptAgentSessionLaunchVerdict
@@ -229,20 +229,7 @@ export async function submitFolderWorkspaceCreate({
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
   )
-  if (tags.length > 0) {
-    const folderWorktree = folderWorkspaceToWorktree(workspace)
-    // Why: same route the Tags menu uses, so tags land on the host that owns the folder; not awaited so the handoff stays fast.
-    void persistCreationMetadata({
-      worktreeId: folderWorktree.id,
-      workspaceName: workspace.name,
-      note: undefined,
-      tags,
-      write: (worktreeId, updates) =>
-        useAppStore.getState().updateWorktreeMeta(worktreeId, updates, {
-          executionHostId: folderWorktree.hostId ?? 'local'
-        })
-    })
-  }
+  persistFolderWorkspaceCreationTags(workspace, tags)
   const launchFailed = isCancelled()
 
   const startup = buildFolderWorkspaceStartupPayload({

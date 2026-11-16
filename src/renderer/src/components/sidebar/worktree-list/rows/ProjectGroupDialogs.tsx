@@ -8,6 +8,7 @@ import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 import SuppressExternalWorktreeInboxDialog from '../listing/SuppressExternalWorktreeInboxDialog'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { ProjectGroupDialogs } from './use-project-group-dialogs'
+import { TagRenameDialogHost } from '../../workspace-tags/TagRenameDialogHost'
 
 export function SidebarWorktreeListDialogs({
   dialogs,
@@ -32,6 +33,7 @@ export function SidebarWorktreeListDialogs({
   const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
   return (
     <>
+      <TagRenameDialogHost />
       <ProjectGroupNameDialog
         open={nameDialog !== null}
         title={

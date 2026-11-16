@@ -143,7 +143,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     projectGroups,
     groupBy,
     projectOrderBy: props.projectOrderBy,
-    tagOrderBy: props.tagOrder.by,
     scrollRef,
     onReorderHostSections: props.onReorderHostSections,
     onHostDragActiveChange: props.onHostDragActiveChange,

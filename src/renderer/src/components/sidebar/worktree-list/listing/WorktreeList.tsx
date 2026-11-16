@@ -41,8 +41,7 @@ import { useMainSidebarListModel } from './use-main-list-model'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
-import { useWorkspaceTagCommands } from '../../workspace-tags/use-workspace-tag-commands'
-import { TagRenameDialogHost } from '../../workspace-tags/TagRenameDialogHost'
+import { useSidebarTagModeProps } from '../../workspace-tags/use-sidebar-tag-mode'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
 import { useWorkspaceBoardStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
@@ -106,8 +105,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const boardStatuses = useWorkspaceBoardStatuses()
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
-  const tagOrderBy = useAppStore((s) => s.tagOrderBy)
-  const manualTagOrder = useAppStore((s) => s.manualTagOrder)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -145,16 +142,13 @@ const WorktreeList = React.memo(function WorktreeList({
     () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
     [allWorktrees, folderWorkspaces]
   )
-  const tagOrder = useMemo(
-    () => ({ by: tagOrderBy, manual: manualTagOrder }),
-    [manualTagOrder, tagOrderBy]
-  )
+  const tagMode = useSidebarTagModeProps(groupBy, onWorkspaceBoardDragPreviewStart)
   const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
     filterState,
     sortBy,
     groupBy,
     projectOrderBy,
-    tagOrder,
+    tagOrder: tagMode.tagOrder,
     pinnedDisplayPolicy,
     defaultHostId,
     workspaceStatuses: boardStatuses,
@@ -208,7 +202,6 @@ const WorktreeList = React.memo(function WorktreeList({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
   })
-  const tagCommands = useWorkspaceTagCommands()
   const statusMutations = useWorktreeStatusMutations({
     manualOrderCatalog,
     workspaceStatuses: boardStatuses,
@@ -311,7 +304,6 @@ const WorktreeList = React.memo(function WorktreeList({
             projectsCollapseTarget
           )
         : null}
-      <TagRenameDialogHost />
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
         repos={repos}
@@ -346,7 +338,6 @@ const WorktreeList = React.memo(function WorktreeList({
         groupBy={groupBy}
         pinnedDisplayPolicy={pinnedDisplayPolicy}
         projectOrderBy={projectOrderBy}
-        tagOrder={tagOrder}
         toggleGroup={handleToggleGroup}
         onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
         collapsedGroups={effectiveCollapsedGroups}
@@ -405,16 +396,11 @@ const WorktreeList = React.memo(function WorktreeList({
         onMoveWorktreesToStatusAtIndex={statusMutations.moveWorktreesToStatusAtIndex}
         onPinWorktree={statusMutations.pinWorktree}
         onPinWorktrees={statusMutations.pinWorktrees}
-        onTagWorktrees={tagCommands.addTagToIdentities}
+        onTagWorktrees={tagMode.onTagWorktrees}
         onDropWorktreesOnWorkspaceBoard={statusMutations.dropWorktreesOnWorkspaceBoard}
         workspaceBoardOpen={workspaceBoardOpen}
         onWorktreeCardClick={onWorktreeCardClick}
-        // Why: a tag-mode drag means "tag this"; auto-opening the status board competes with the tag sections.
-        onWorkspaceBoardDragPreviewStart={
-          groupBy === 'tag'
-            ? NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
-            : onWorkspaceBoardDragPreviewStart
-        }
+        onWorkspaceBoardDragPreviewStart={tagMode.onWorkspaceBoardDragPreviewStart}
         onWorkspaceBoardDragPreviewCommit={onWorkspaceBoardDragPreviewCommit}
         onWorkspaceBoardDragPreviewCancel={onWorkspaceBoardDragPreviewCancel}
         shouldShowWorkspaceBoardDropIndicator={

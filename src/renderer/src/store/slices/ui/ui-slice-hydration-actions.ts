@@ -7,7 +7,6 @@ import {
   normalizeManualRepoOrder
 } from '../../../../../shared/repository/manual-repo-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
-import { normalizeManualTagOrder } from '../../../../../shared/worktree/metadata/manual-tag-order'
 import {
   normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
@@ -41,7 +40,6 @@ import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
 } from '../../../runtime/repo-hooks/setup-script-prompt'
-import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
 import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import {
   withWslMovedRepoIds,
@@ -73,6 +71,7 @@ import {
   hydrateReadAndBotState,
   sanitizeTaskResumeState
 } from './ui-slice-bot-sidebar-hydration'
+import { hydrateTagOrder, resolveHydratedPetId } from './ui-slice-hydration-values'
 import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateBrowserPaneLayout } from './browser-pane-layout-hydration'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
@@ -136,7 +135,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           sortBy,
           // Why: main-process getUI() already normalized this (defaulting to 'manual'); read it through without migrating.
           projectOrderBy: ui.projectOrderBy,
-          tagOrderBy: ui.tagOrderBy ?? 'name',
+          ...hydrateTagOrder(ui),
           // Why: Active-only was retired; force the old flag off so an old profile can't invisibly narrow the workspace list.
           showActiveOnly: false,
           // Why: ignore older positive-form keys so old profiles start from the new default (sleeping workspaces visible).
@@ -147,7 +146,6 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
           automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
           manualRepoOrder,
-          manualTagOrder: normalizeManualTagOrder(ui.manualTagOrder),
           // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
           repos: orderedRepos,
           hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
@@ -209,19 +207,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           }),
           customPets,
           // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.
-          petId: ((): string => {
-            const id = petId
-            if (typeof id !== 'string') {
-              return DEFAULT_PET_ID
-            }
-            if (isBundledPetId(id)) {
-              return id
-            }
-            if (customPets.some((m) => m.id === id)) {
-              return id
-            }
-            return DEFAULT_PET_ID
-          })(),
+          petId: resolveHydratedPetId(petId, customPets),
           dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
           ...hydrateUnexpectedSignoutDismissal(s, ui.dismissedUnexpectedSignoutVersion),
           // Reject channels unknown to this build; activeChannel falls back only on null, otherwise leaking invalid values to listBuilds/controls.
