@@ -1478,7 +1478,6 @@
       "src/main/ipc/filesystem/imports/filesystem-import.test.ts": 1186,
       "src/main/ipc/filesystem/search/filesystem-list-files.test.ts": 796,
       "src/main/ipc/filesystem/filesystem-listing-cancel-admission.test.ts": 157,
-      "src/main/ipc/filesystem/mutations/filesystem-mutations.test.ts": 1189,
       "src/main/ipc/filesystem/access/filesystem-path-containment-unicode-normalization.test.ts": 505,
       "src/main/ipc/filesystem/search/filesystem-quick-open-options.integration.test.ts": 1350,
       "src/main/ipc/filesystem/imports/filesystem-runtime-upload-staging.test.ts": 106,
