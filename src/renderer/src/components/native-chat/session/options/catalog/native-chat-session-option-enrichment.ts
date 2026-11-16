@@ -7,6 +7,8 @@ type CatalogEnrichmentEntry = {
   state: 'idle' | 'pending' | 'settled'
   models: CatalogModel[] | null
   listeners: Set<(models: CatalogModel[]) => void>
+  /** Resolves once discovery settles, also when it fails or lists nothing (which notifies no listener). */
+  settled?: Promise<void>
 }
 
 const enrichmentByAgentHost = new Map<string, CatalogEnrichmentEntry>()
@@ -38,6 +40,15 @@ export function readNativeChatEnrichedModels(
   return models ? [...models] : null
 }
 
+/** True once this host's discovery settled without a listing, or when the agent has none to discover. */
+export function nativeChatModelDiscoveryListedNothing(agent: AgentType, hostKey: string): boolean {
+  if (!getAgentSessionOptionCatalog(agent)?.listModels) {
+    return true
+  }
+  const entry = enrichmentByAgentHost.get(enrichmentKey(agent, hostKey))
+  return entry?.state === 'settled' && !entry.models
+}
+
 export function subscribeNativeChatEnrichedModels(
   agent: AgentType,
   hostKey: string,
@@ -58,15 +69,15 @@ export function ensureNativeChatModelEnrichment(args: {
   agent: AgentType
   hostKey: string
   discover: () => Promise<readonly CatalogModel[] | null>
-}): void {
+}): Promise<void> {
   const catalog = getAgentSessionOptionCatalog(args.agent)
   if (!catalog?.listModels) {
-    return
+    return Promise.resolve()
   }
   const key = enrichmentKey(args.agent, args.hostKey)
   const existing = enrichmentByAgentHost.get(key)
   if (existing?.state === 'pending' || existing?.state === 'settled') {
-    return
+    return existing.settled ?? Promise.resolve()
   }
   const entry: CatalogEnrichmentEntry = existing ?? {
     state: 'idle',
@@ -77,7 +88,7 @@ export function ensureNativeChatModelEnrichment(args: {
   retainEnrichmentEntry(key, entry)
 
   // Render and launch from the seed while once-per-host discovery runs in the background.
-  void args
+  entry.settled = args
     .discover()
     .then((discovered) => {
       entry.state = 'settled'
@@ -94,6 +105,7 @@ export function ensureNativeChatModelEnrichment(args: {
       entry.state = 'settled'
       retainEnrichmentEntry(key, entry)
     })
+  return entry.settled
 }
 
 export function clearNativeChatModelEnrichmentForTests(): void {

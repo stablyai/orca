@@ -217,7 +217,8 @@ export function newestClaudeResponse(
 ): ClaudeResponseEvidence | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const { role, model, effort } = messages[index]!
-    if (role === 'assistant' && model) {
+    // A thinking-only response decodes as reasoning but was served by the same model.
+    if ((role === 'assistant' || role === 'reasoning') && model) {
       return { model, ...(effort ? { effort } : {}) }
     }
   }

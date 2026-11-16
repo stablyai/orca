@@ -47,6 +47,15 @@ describe('Claude session options from the newest transcript response', () => {
     expect(newestClaudeResponse(messages)).toEqual({ model: 'claude-opus-5-5', effort: 'xhigh' })
   })
 
+  it('names the model of a newest response that only thought', () => {
+    const messages: NativeChatMessage[] = [
+      message({ id: '1', role: 'assistant', model: 'claude-sonnet-5-5', effort: 'high' }),
+      message({ id: '2', role: 'reasoning', model: 'claude-opus-5-5', effort: 'max' })
+    ]
+
+    expect(newestClaudeResponse(messages)).toEqual({ model: 'claude-opus-5-5', effort: 'max' })
+  })
+
   it('maps a listed model and keeps an unlisted one with its recorded effort', () => {
     expect(
       readClaudeSessionOptionsFromResponse({ model: 'claude-opus-5-5', effort: 'xhigh' }, LISTED)

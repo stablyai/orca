@@ -174,6 +174,53 @@ describe('useNativeChatSessionOptions model reporting', () => {
     expect(effort?.kind).toMatchObject({ currentValue: 'low' })
   })
 
+  it('names a response model from the seed catalog when discovery lists nothing', async () => {
+    discoverModels.mockResolvedValue(null)
+    const { result } = renderHook(() =>
+      useNativeChatSessionOptions({
+        agent: 'claude',
+        terminalTabId: 'tab-unlisted',
+        targetPtyId: 'pty-unlisted',
+        dispatchCommand: vi.fn(),
+        readTerminalScreen: () => null,
+        claudeResponse: { model: 'claude-opus-5-5', effort: 'high' }
+      })
+    )
+
+    await waitFor(() =>
+      expect(modelDescriptor(result.current.snapshot).currentValue).toBe('claude-opus-5-5')
+    )
+  })
+
+  it('waits for Claude discovery after a Codex session on the same host listed nothing', async () => {
+    let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+    discoverModels.mockReturnValue(
+      new Promise<readonly CatalogModel[]>((resolve) => {
+        resolveDiscovery = resolve
+      })
+    )
+    const { result, rerender } = renderHook(
+      ({ agent }: { agent: 'codex' | 'claude' }) =>
+        useNativeChatSessionOptions({
+          agent,
+          terminalTabId: 'tab-switch',
+          targetPtyId: 'pty-switch',
+          dispatchCommand: vi.fn(),
+          readTerminalScreen: () => null,
+          claudeResponse: { model: 'claude-opus-5-5', effort: 'low' }
+        }),
+      { initialProps: { agent: 'codex' } }
+    )
+    await Promise.resolve()
+
+    rerender({ agent: 'claude' })
+    resolveDiscovery([
+      { id: 'opus', label: 'Opus', resolvedModel: 'claude-opus-5-5', options: [EFFORT] }
+    ])
+
+    await waitFor(() => expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus'))
+  })
+
   it('does not re-resolve a late snapshot from the previous pty', async () => {
     let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
     discoverModels.mockReturnValue(
