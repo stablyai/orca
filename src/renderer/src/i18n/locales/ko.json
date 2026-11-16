@@ -5413,7 +5413,7 @@
           "gitBlocksMainWorktree": "Git에서는 메인 워크트리를 제거할 수 없습니다.",
           "removeBatchFolder_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeBatchMixed_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
-          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_other": "워크트리 {{count}}개와 해당 브랜치를 삭제합니다(병합되지 않은 브랜치는 유지됩니다).",
           "removeWithChildrenFolder_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeWithChildrenMixed_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
           "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
@@ -19774,9 +19774,11 @@
           "closedToast_other": "{{workspace}}에서 저장되지 않은 편집 내용이 있는 파일 {{count}}개를 닫았습니다",
           "reopen": "다시 열기",
           "reopenFailed": "일부 파일을 다시 열지 못했습니다. 워크스페이스를 열고 다시 열기를 다시 시도하세요.",
-          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
-          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
-        }
+          "line_one": "파일 {{count}}개의 저장하지 않은 편집 내용이 삭제됩니다: {{files}}",
+          "line_other": "파일 {{count}}개의 저장하지 않은 편집 내용이 삭제됩니다: {{files}}"
+        },
+        "ignoredFilesLost": "무시된 파일이 사라집니다: {{names}}",
+        "ignoredFilesUnchecked": "무시된 파일을 모두 확인하지 못했습니다"
       }
     },
     "agentSessionContinuation": {
@@ -21819,9 +21821,9 @@
         "unsavedFiles_other": "저장하지 않은 파일 {{count}}개",
         "both": "{{changes}}과(와) {{files}}이(가) 사라집니다",
         "one": "{{what}}이(가) 사라집니다",
-        "all": "{{changes}}, {{files}} and ignored files will be lost",
-        "withIgnored": "{{what}} and ignored files will be lost",
-        "ignoredOnly": "Ignored files will be lost"
+        "all": "{{changes}}, {{files}} 및 무시된 파일이 사라집니다",
+        "withIgnored": "{{what}} 및 무시된 파일이 사라집니다",
+        "ignoredOnly": "무시된 파일이 사라집니다"
       },
       "showChanges": "변경 사항 보기",
       "unsavedSuffix": "(저장 안 됨)",
@@ -21837,9 +21839,9 @@
       "allVerb": "모두 삭제",
       "singleTitle": "{{name}}을(를) 삭제할까요?",
       "singleVerb": "워크스페이스 삭제",
-      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "forceExplanation": "변경 사항이 있어 Git이 삭제하지 못했습니다. 강제로 삭제하면 변경 사항도 삭제됩니다.",
+      "errorDetails": "세부 정보",
+      "changesIncomplete": "일부 변경 사항을 완전히 확인하지 못했습니다."
     }
   },
   "mediaPreview": {

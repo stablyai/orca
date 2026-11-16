@@ -6209,8 +6209,8 @@
           "removeBatchFolder_other": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeBatchMixed_one": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeBatchMixed_other": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
-          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
-          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_one": "{{count}} worktree ve branch’ini siler (merge edilmemiş branch korunur).",
+          "removeBatchGit_other": "{{count}} worktree ve branch’lerini siler (merge edilmemiş branch’ler korunur).",
           "removeWithChildrenFolder_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenFolder_other": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenMixed_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
@@ -20655,9 +20655,11 @@
           "closedToast_other": "{{workspace}} çalışma alanında kaydedilmemiş değişiklikler içeren {{count}} dosya kapatıldı",
           "reopen": "Yeniden aç",
           "reopenFailed": "Bazı dosyalar yeniden açılamadı. Bir çalışma alanı açıp Yeniden aç seçeneğini tekrar deneyin.",
-          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
-          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
-        }
+          "line_one": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}",
+          "line_other": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}"
+        },
+        "ignoredFilesLost": "Yok sayılan dosyalar kaybolacak: {{names}}",
+        "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi"
       }
     },
     "agentSessionContinuation": {
@@ -22211,9 +22213,9 @@
         "unsavedFiles_other": "{{count}} kaydedilmemiş dosya",
         "both": "{{changes}} ve {{files}} kaybolacak",
         "one": "{{what}} kaybolacak",
-        "all": "{{changes}}, {{files}} and ignored files will be lost",
-        "withIgnored": "{{what}} and ignored files will be lost",
-        "ignoredOnly": "Ignored files will be lost"
+        "all": "{{changes}}, {{files}} ve yok sayılan dosyalar kaybolacak",
+        "withIgnored": "{{what}} ve yok sayılan dosyalar kaybolacak",
+        "ignoredOnly": "Yok sayılan dosyalar kaybolacak"
       },
       "showChanges": "Değişiklikleri göster",
       "unsavedSuffix": "(kaydedilmedi)",
@@ -22229,9 +22231,9 @@
       "allVerb": "Tümünü sil",
       "singleTitle": "{{name}} silinsin mi?",
       "singleVerb": "Çalışma alanını sil",
-      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "forceExplanation": "Git, değişiklikler olduğu için silemedi. Zorla silme işlemi bu değişiklikleri de siler.",
+      "errorDetails": "Ayrıntılar",
+      "changesIncomplete": "Bazı değişiklikler tam olarak kontrol edilemedi."
     }
   },
   "projectBoard": {

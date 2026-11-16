@@ -6104,8 +6104,8 @@
           "removeBatchFolder_other": "<target>{{count}} Arbeitsbereiche</target> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeBatchMixed_one": "<target>{{count}} Arbeitsbereich</target> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeBatchMixed_other": "<target>{{count}} Arbeitsbereiche</target> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
-          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
-          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_one": "Löscht {{count}} Worktree und seinen Branch (der Branch bleibt erhalten, wenn er nicht gemergt ist).",
+          "removeBatchGit_other": "Löscht {{count}} Worktrees und ihre Branches (nicht gemergte Branches bleiben erhalten).",
           "removeWithChildrenFolder_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenFolder_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenMixed_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
@@ -20510,9 +20510,11 @@
           "closedToast_other": "{{count}} Dateien mit nicht gespeicherten Änderungen aus {{workspace}} geschlossen",
           "reopen": "Erneut öffnen",
           "reopenFailed": "Einige Dateien konnten nicht erneut geöffnet werden. Einen Arbeitsbereich öffnen und „Erneut öffnen“ noch einmal versuchen.",
-          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
-          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
-        }
+          "line_one": "Nicht gespeicherte Änderungen in {{count}} Datei werden verworfen: {{files}}",
+          "line_other": "Nicht gespeicherte Änderungen in {{count}} Dateien werden verworfen: {{files}}"
+        },
+        "ignoredFilesLost": "Ignorierte Dateien gehen verloren: {{names}}",
+        "ignoredFilesUnchecked": "Ignorierte Dateien konnten nicht vollständig geprüft werden"
       }
     },
     "agentSessionContinuation": {
@@ -22070,10 +22072,10 @@
         "unsavedFiles_one": "{{count}} nicht gespeicherte Datei",
         "unsavedFiles_other": "{{count}} nicht gespeicherte Dateien",
         "both": "{{changes}} und {{files}} gehen verloren",
-        "one": "{{what}} gehen verloren",
-        "all": "{{changes}}, {{files}} and ignored files will be lost",
-        "withIgnored": "{{what}} and ignored files will be lost",
-        "ignoredOnly": "Ignored files will be lost"
+        "one": "Folgendes geht verloren: {{what}}",
+        "all": "{{changes}}, {{files}} und ignorierte Dateien gehen verloren",
+        "withIgnored": "{{what}} und ignorierte Dateien gehen verloren",
+        "ignoredOnly": "Ignorierte Dateien gehen verloren"
       },
       "showChanges": "Änderungen anzeigen",
       "unsavedSuffix": "(nicht gespeichert)",
@@ -22089,9 +22091,9 @@
       "allVerb": "Alle löschen",
       "singleTitle": "{{name}} löschen?",
       "singleVerb": "Arbeitsbereich löschen",
-      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
+      "forceExplanation": "Git konnte ihn wegen vorhandener Änderungen nicht löschen. Erzwungenes Löschen entfernt diese Änderungen trotzdem.",
       "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "changesIncomplete": "Einige Änderungen konnten nicht vollständig geprüft werden."
     }
   },
   "projectBoard": {

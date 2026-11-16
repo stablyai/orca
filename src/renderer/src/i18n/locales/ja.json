@@ -5990,7 +5990,7 @@
           "gitBlocksMainWorktree": "Git ではメインワークツリーを削除できません。",
           "removeBatchFolder_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeBatchMixed_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
-          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_other": "{{count}} 個のワークツリーとそのブランチを削除します（未マージのブランチは保持されます）。",
           "removeWithChildrenFolder_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeWithChildrenMixed_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
           "removeWithChildrenGit_other": "git から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除し、それらのワークスペースフォルダーも削除します。",
@@ -20932,8 +20932,8 @@
           "closedToast_other": "{{workspace}} の未保存の編集がある {{count}} 個のファイルを閉じました",
           "reopen": "再度開く",
           "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。",
-          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
-          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
+          "line_one": "{{count}} 個のファイルの未保存の編集内容が破棄されます: {{files}}",
+          "line_other": "{{count}} 個のファイルの未保存の編集内容が破棄されます: {{files}}"
         },
         "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
       },
@@ -23302,9 +23302,9 @@
         "unsavedFiles_other": "未保存のファイル {{count}} 個",
         "both": "{{changes}}と{{files}}が失われます",
         "one": "{{what}}が失われます",
-        "all": "{{changes}}, {{files}} and ignored files will be lost",
-        "withIgnored": "{{what}} and ignored files will be lost",
-        "ignoredOnly": "Ignored files will be lost"
+        "all": "{{changes}}、{{files}}、無視されたファイルが失われます",
+        "withIgnored": "{{what}}と無視されたファイルが失われます",
+        "ignoredOnly": "無視されたファイルが失われます"
       },
       "showChanges": "変更を表示",
       "unsavedSuffix": "（未保存）",
@@ -23320,9 +23320,9 @@
       "allVerb": "すべて削除",
       "singleTitle": "{{name}} を削除しますか?",
       "singleVerb": "ワークスペースを削除",
-      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "forceExplanation": "変更があるため、Git で削除できませんでした。強制削除すると、その変更も削除されます。",
+      "errorDetails": "詳細",
+      "changesIncomplete": "一部の変更を完全には確認できませんでした。"
     }
   },
   "mediaPreview": {

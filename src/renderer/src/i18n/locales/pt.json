@@ -12546,9 +12546,9 @@
           "removeBatchMixed_one": "Remover <target>{{count}} espaço de trabalho</target> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
           "removeBatchMixed_other": "Remover <target>{{count}} espaços de trabalho</target> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
           "removeBatchMixed_many": "Remover <target>{{count}} espaços de trabalho</target> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
-          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
-          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
-          "removeBatchGit_many": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_one": "Exclui {{count}} worktree e sua branch (a branch é mantida se não tiver sido mesclada).",
+          "removeBatchGit_other": "Exclui {{count}} worktrees e suas branches (as branches não mescladas são mantidas).",
+          "removeBatchGit_many": "Exclui {{count}} worktrees e suas branches (as branches não mescladas são mantidas).",
           "removeWithChildrenFolder_one": "Remover <target/> e <descendants>{{count}} espaço de trabalho filho</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
@@ -22039,10 +22039,12 @@
           "closedToast_many": "{{count}} arquivos com alterações não salvas de {{workspace}} foram fechados",
           "reopen": "Reabrir",
           "reopenFailed": "Não foi possível reabrir alguns arquivos. Abra um espaço de trabalho e tente Reabrir novamente.",
-          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
-          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}",
-          "line_many": "Unsaved edits in {{count}} files will be discarded: {{files}}"
-        }
+          "line_one": "As edições não salvas em {{count}} arquivo serão descartadas: {{files}}",
+          "line_other": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}",
+          "line_many": "As edições não salvas em {{count}} arquivos serão descartadas: {{files}}"
+        },
+        "ignoredFilesLost": "Os arquivos ignorados serão perdidos: {{names}}",
+        "ignoredFilesUnchecked": "Não foi possível verificar completamente os arquivos ignorados"
       }
     },
     "agentSessionContinuation": {
@@ -23048,10 +23050,10 @@
         "unsavedFiles_other": "{{count}} arquivos não salvos",
         "unsavedFiles_many": "{{count}} arquivos não salvos",
         "both": "{{changes}} e {{files}} serão perdidos",
-        "one": "Será perdido: {{what}}",
-        "all": "{{changes}}, {{files}} and ignored files will be lost",
-        "withIgnored": "{{what}} and ignored files will be lost",
-        "ignoredOnly": "Ignored files will be lost"
+        "one": "O seguinte será perdido: {{what}}",
+        "all": "{{changes}}, {{files}} e os arquivos ignorados serão perdidos",
+        "withIgnored": "{{what}} e os arquivos ignorados serão perdidos",
+        "ignoredOnly": "Os arquivos ignorados serão perdidos"
       },
       "showChanges": "Mostrar alterações",
       "unsavedSuffix": "(não salvo)",
@@ -23068,9 +23070,9 @@
       "allVerb": "Excluir tudo",
       "singleTitle": "Excluir {{name}}?",
       "singleVerb": "Excluir espaço de trabalho",
-      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "forceExplanation": "O Git não conseguiu excluí-lo porque há alterações. A exclusão forçada remove essas alterações mesmo assim.",
+      "errorDetails": "Detalhes",
+      "changesIncomplete": "Não foi possível verificar completamente algumas alterações."
     }
   },
   "projectBoard": {

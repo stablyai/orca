@@ -5955,7 +5955,7 @@
           "gitBlocksMainWorktree": "Git 不允許移除主工作樹。",
           "removeBatchFolder_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。磁碟上的專案資料夾不會被刪除。",
           "removeBatchMixed_other": "從 Orca 移除 <target>{{count}} 個工作區</target>。Git 工作樹也會從 git 和磁碟中移除；資料夾工作區只會移除 Orca 中的工作區項目。",
-          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_other": "刪除 {{count}} 個工作樹及其分支（未合併的分支會保留）。",
           "removeWithChildrenFolder_other": "從 Orca 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>。磁碟上的專案資料夾不會被刪除。",
           "removeWithChildrenMixed_other": "從 Orca 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>。Git 工作樹也會從 git 和磁碟中移除；資料夾工作區只會移除 Orca 中的工作區項目。",
           "removeWithChildrenGit_other": "從 git 移除 <target/> 和 <descendants>{{count}} 個子工作區</descendants>，並刪除其工作區資料夾。",
@@ -20192,9 +20192,11 @@
           "closedToast_other": "已關閉 {{workspace}} 中 {{count}} 個含有未儲存變更的檔案",
           "reopen": "重新開啟",
           "reopenFailed": "部分檔案無法重新開啟。請先開啟工作區，再試一次「重新開啟」。",
-          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
-          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
-        }
+          "line_one": "{{count}} 個檔案中未儲存的編輯內容將被捨棄：{{files}}",
+          "line_other": "{{count}} 個檔案中未儲存的編輯內容將被捨棄：{{files}}"
+        },
+        "ignoredFilesLost": "Git 忽略的檔案將會遺失：{{names}}",
+        "ignoredFilesUnchecked": "無法完整檢查 Git 忽略的檔案"
       }
     },
     "agentSessionContinuation": {
@@ -21743,9 +21745,9 @@
         "unsavedFiles_other": "{{count}} 個未儲存的檔案",
         "both": "{{changes}}和{{files}}將會遺失",
         "one": "{{what}}將會遺失",
-        "all": "{{changes}}, {{files}} and ignored files will be lost",
-        "withIgnored": "{{what}} and ignored files will be lost",
-        "ignoredOnly": "Ignored files will be lost"
+        "all": "{{changes}}、{{files}}及 Git 忽略的檔案將會遺失",
+        "withIgnored": "{{what}}及 Git 忽略的檔案將會遺失",
+        "ignoredOnly": "Git 忽略的檔案將會遺失"
       },
       "showChanges": "顯示變更",
       "unsavedSuffix": "（未儲存）",
@@ -21761,9 +21763,9 @@
       "allVerb": "全部刪除",
       "singleTitle": "要刪除 {{name}} 嗎？",
       "singleVerb": "刪除工作區",
-      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "forceExplanation": "存在變更，Git 無法刪除此工作樹。強制刪除仍會移除這些變更。",
+      "errorDetails": "詳細資訊",
+      "changesIncomplete": "部分變更未能完整檢查。"
     }
   },
   "projectBoard": {

@@ -5916,9 +5916,9 @@
           "removeBatchMixed_one": "Retirer <target>{{count}} espace de travail</target> d'Orca. Les worktrees Git seront aussi supprimés de git et du disque ; pour les espaces de travail de dossier, seule l'entrée dans Orca sera retirée.",
           "removeBatchMixed_other": "Retirer <target>{{count}} espaces de travail</target> d'Orca. Les worktrees Git seront aussi supprimés de git et du disque ; pour les espaces de travail de dossier, seule l'entrée dans Orca sera retirée.",
           "removeBatchMixed_many": "Retirer <target>{{count}} espaces de travail</target> d'Orca. Les worktrees Git seront aussi supprimés de git et du disque ; pour les espaces de travail de dossier, seule l'entrée dans Orca sera retirée.",
-          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
-          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
-          "removeBatchGit_many": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
+          "removeBatchGit_one": "Supprime {{count}} worktree et sa branche (la branche est conservée si elle n’est pas fusionnée).",
+          "removeBatchGit_other": "Supprime {{count}} worktrees et leurs branches (les branches non fusionnées sont conservées).",
+          "removeBatchGit_many": "Supprime {{count}} worktrees et leurs branches (les branches non fusionnées sont conservées).",
           "removeWithChildrenFolder_one": "Retirer <target/> et <descendants>{{count}} espace de travail enfant</descendants> d'Orca. Les dossiers des projets sur le disque ne seront pas supprimés.",
           "removeWithChildrenFolder_other": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> d'Orca. Les dossiers des projets sur le disque ne seront pas supprimés.",
           "removeWithChildrenFolder_many": "Retirer <target/> et <descendants>{{count}} espaces de travail enfants</descendants> d'Orca. Les dossiers des projets sur le disque ne seront pas supprimés.",
@@ -20573,10 +20573,12 @@
           "closedToast_many": "{{count}} fichiers avec des modifications non enregistrées de {{workspace}} ont été fermés",
           "reopen": "Rouvrir",
           "reopenFailed": "Certains fichiers n’ont pas pu être rouverts. Ouvrez un espace de travail et réessayez avec Rouvrir.",
-          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
-          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}",
-          "line_many": "Unsaved edits in {{count}} files will be discarded: {{files}}"
-        }
+          "line_one": "Les modifications non enregistrées dans {{count}} fichier seront abandonnées : {{files}}",
+          "line_other": "Les modifications non enregistrées dans {{count}} fichiers seront abandonnées : {{files}}",
+          "line_many": "Les modifications non enregistrées dans {{count}} fichiers seront abandonnées : {{files}}"
+        },
+        "ignoredFilesLost": "Les fichiers ignorés seront perdus : {{names}}",
+        "ignoredFilesUnchecked": "Les fichiers ignorés n’ont pas pu être entièrement vérifiés"
       }
     },
     "agentSessionContinuation": {
@@ -22563,10 +22565,10 @@
         "unsavedFiles_other": "{{count}} fichiers non enregistrés",
         "unsavedFiles_many": "{{count}} fichiers non enregistrés",
         "both": "{{changes}} et {{files}} seront perdus",
-        "one": "Perdu : {{what}}",
-        "all": "{{changes}}, {{files}} and ignored files will be lost",
-        "withIgnored": "{{what}} and ignored files will be lost",
-        "ignoredOnly": "Ignored files will be lost"
+        "one": "Ce qui sera perdu : {{what}}",
+        "all": "{{changes}}, {{files}} et les fichiers ignorés seront perdus",
+        "withIgnored": "{{what}} et les fichiers ignorés seront perdus",
+        "ignoredOnly": "Les fichiers ignorés seront perdus"
       },
       "showChanges": "Afficher les modifications",
       "unsavedSuffix": "(non enregistré)",
@@ -22583,9 +22585,9 @@
       "allVerb": "Tout supprimer",
       "singleTitle": "Supprimer {{name}} ?",
       "singleVerb": "Supprimer l'espace de travail",
-      "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "forceExplanation": "Git n’a pas pu le supprimer car il contient des modifications. La suppression forcée les supprime quand même.",
+      "errorDetails": "Détails",
+      "changesIncomplete": "Certaines modifications n’ont pas pu être entièrement vérifiées."
     }
   },
   "mediaPreview": {
