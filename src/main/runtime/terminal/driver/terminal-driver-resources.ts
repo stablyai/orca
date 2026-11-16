@@ -147,7 +147,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       this.mobileTookFloor(ptyId, clientId, previousFloor, isCurrent)
   })
 
-  protected readonly serveBrowserTabs = new ServeBrowserTabs({
+  readonly serveBrowserTabs = new ServeBrowserTabs({
     backend: () => (this.getAvailableAuthoritativeWindow() ? null : this.offscreenBrowserBackend),
     livePageIds: (worktreeId) =>
       new Set(

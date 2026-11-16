@@ -11,7 +11,7 @@ import { translate } from '@/i18n/i18n'
 import {
   buildServeSimKeyboardFramesForKey,
   type ServeSimKeyboardFrame
-} from '../../../../../shared/emulator-keyboard-frame'
+} from '../../../../../shared/emulator/emulator-keyboard-frame'
 import type { ScrcpyKeyboard } from '../streaming/use-emulator-control-stream'
 import {
   pasteTextIntoAndroidEmulator,

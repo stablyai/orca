@@ -1,6 +1,6 @@
 import { Notification } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
-import type { NotificationDeliveryProbeResult } from '../../shared/notification-settings-types'
+import type { NotificationDeliveryProbeResult } from '../../shared/notifications/notification-settings-types'
 import { activeNotifications } from './native-notification-lifecycle'
 
 const NOTIFICATION_PROBE_RESULT_TIMEOUT_MS = 3000

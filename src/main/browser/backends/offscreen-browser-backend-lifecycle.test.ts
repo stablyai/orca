@@ -118,7 +118,11 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     })
     const onPageClosed = vi.fn(() => ownerRetirementBlocked)
     const backend = new OffscreenBrowserBackend(browserManager as never, {
-      getAgentBrowserBridge: () => ({ onPageClosed })
+      getAgentBrowserBridge: () => ({
+        onPageClosed,
+        isRoutedPage: () => false,
+        holdsPageNetworkState: () => false
+      })
     })
 
     await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
@@ -144,7 +148,11 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     })
     const onPageClosed = vi.fn(() => ownerRetirementBlocked)
     const backend = new OffscreenBrowserBackend(browserManager as never, {
-      getAgentBrowserBridge: () => ({ onPageClosed })
+      getAgentBrowserBridge: () => ({
+        onPageClosed,
+        isRoutedPage: () => false,
+        holdsPageNetworkState: () => false
+      })
     })
 
     await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })

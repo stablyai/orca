@@ -11,7 +11,7 @@ import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agen
 import type { FeatureInteractionTelemetryBucketState } from './feature-education/interactions/feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './agent-accounts/codex/codex-reset-credit-attempt-ledger'
 import type { ChatUiLaunchTipAudience } from './native-chat/chat-ui-launch-tip-audience'
-import type { DiffComment } from './diff-comment-types'
+import type { DiffComment } from './file-review/diff-comment-types'
 import type { FolderWorkspace } from './folder-workspaces/folder-workspace-types'
 import type { WorkspaceKey } from './workspace/identity/workspace-scope'
 import type { GlobalSettings } from './global-settings-types'

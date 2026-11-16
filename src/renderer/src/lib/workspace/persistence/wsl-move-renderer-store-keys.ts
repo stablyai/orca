@@ -4,7 +4,7 @@
  */
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
-import type { PythonEnvironment } from '../../../../../shared/notebook-kernel-types'
+import type { PythonEnvironment } from '../../../../../shared/editor/notebooks/notebook-kernel-types'
 import type { WslMoveRendererRewriteScope } from '../../../../../shared/wsl-move/wsl-move-renderer-rewrite-scope'
 
 function parseArray(value: string): unknown[] | null {

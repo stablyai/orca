@@ -1,4 +1,4 @@
-import { isActivatingBrowserGuestInput } from '../input/browser-guest-input-gesture'
+import { onActivatingBrowserGuestInput } from '../input/browser-guest-input-gesture'
 
 const quietContents = new Set<number>()
 
@@ -15,17 +15,12 @@ export function quietBrowserPagePrompts(contents: Electron.WebContents): void {
   quietContents.add(id)
   const release = (): void => {
     quietContents.delete(id)
+    stopWatchingInput()
     try {
-      contents.off('input-event', onInput)
       contents.off('did-start-navigation', onNavigation)
       contents.off('destroyed', release)
     } catch {
       // Contents may already be destroyed.
-    }
-  }
-  const onInput = (_event: Electron.Event, input: Electron.InputEvent): void => {
-    if (isActivatingBrowserGuestInput(input)) {
-      release()
     }
   }
   // Toolbar navigation has no initiating frame.
@@ -36,7 +31,7 @@ export function quietBrowserPagePrompts(contents: Electron.WebContents): void {
       release()
     }
   }
-  contents.on('input-event', onInput)
+  const stopWatchingInput = onActivatingBrowserGuestInput(contents, release)
   contents.on('did-start-navigation', onNavigation)
   contents.once('destroyed', release)
 }

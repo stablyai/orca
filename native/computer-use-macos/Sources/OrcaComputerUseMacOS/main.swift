@@ -285,6 +285,8 @@ final class Provider {
     /// Per app, window elements already read (valid while the window lives) for when a window moves to another Space,
     /// and when a remote-token lookup last missed, since a window becomes findable only once some client reads it.
     private var otherSpaceLookups: [pid_t: OtherSpaceLookups] = [:]
+    /// Set by a --restore-window click that went to a target window that never took focus, for the front-app restore after it.
+    private var unfocusedTargetClick: UnfocusedTargetClick?
     /// When this provider last asked each app process for its full accessibility tree.
     private var manualAccessibilityRequests: [pid_t: (launched: Date?, at: Date)] = [:]
 
@@ -336,8 +338,16 @@ final class Provider {
             frontmost: app.app.isActive,
             focusedWindowID: app.app.isActive ? focusedWindowId(of: app) : nil
         )
+        let userFrontApp = isForegroundRequest(requestParams) ? NSWorkspace.shared.frontmostApplication : nil
         // Why: raise once, before the action's reads, so the pre and post observations never raise again.
         let params = isForegroundRequest(requestParams) ? try recoverRequestedWindow(params: requestParams) : requestParams
+        unfocusedTargetClick = nil
+        // Why: after the delivery read, so a click that brought the app forward still reports foreground.
+        defer {
+            if let click = unfocusedTargetClick, let userFrontApp {
+                restoreUserFrontApp(userFrontApp, target: app, before: click)
+            }
+        }
         var action = try runAction(params)
         // Why: the action's currentSnapshot just cached this target's tree from before the action;
         // a subtree read can't be compared with the whole-window read that follows.
@@ -1185,7 +1195,7 @@ final class Provider {
                 try requireBackgroundInputReachable(snapshot, input: "pointer click")
             }
             let point = try pointerTarget(record, snapshot: snapshot)
-            try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
+            unfocusedTargetClick = try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground, element: record.element)
             guard unselectedRow else {
                 return actionMetadata(
                     path: "synthetic",
@@ -1203,7 +1213,7 @@ final class Provider {
             try requireBackgroundInputReachable(snapshot, input: "pointer click")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
-        try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground)
+        unfocusedTargetClick = try clickPointer(at: point, button: button, count: count, modifiers: modifiers, snapshot: snapshot, foreground: foreground)
         return actionMetadata(
             path: "synthetic",
             verification: unverifiedAction(reason: "synthetic_input")
@@ -1274,7 +1284,9 @@ final class Provider {
         let snapshot = try currentSnapshot(params: params)
         let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
         let requested = try requiredString(params, "action")
-        let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
+        // Why: a custom action keeps its case ("Delete"), so an exact match picks it over AXDelete ("delete").
+        let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0) == requested }
+            ?? record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
         }
@@ -1814,6 +1826,21 @@ private func currentSyntheticClickRecipient(
     }
 }
 
+/// The window that receives a click at the point, for a target that stayed unfocused: a click goes to the topmost window, focused or not.
+private func topmostSyntheticClickRecipient(
+    snapshot: Snapshot,
+    point: CGPoint
+) -> SyntheticMouseClickDelivery.RecipientObservation {
+    let target = syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId)
+    let hit = hitTestSyntheticClickRecipient(at: point, targetPID: snapshot.app.pid) {
+        WindowCapture.candidates(pid: snapshot.app.pid)
+    }
+    // Why: read after the hit test, so a target that closed meanwhile isn't taken as still covered by the window beneath.
+    let targetOnScreen = hit == .focused(target)
+        || WindowCapture.candidates(pid: snapshot.app.pid).contains { $0.windowId == snapshot.windowId }
+    return SyntheticMouseClickDelivery.topmostObservation(hit: hit, target: target, targetOnScreen: targetOnScreen)
+}
+
 private func focusedSyntheticClickRecipient(
     targetPID: pid_t,
     targetCandidates: () -> [WindowCandidate]
@@ -2003,10 +2030,9 @@ private func clickPointer(
     snapshot: Snapshot,
     foreground: Bool,
     element: AXUIElement? = nil
-) throws {
+) throws -> UnfocusedTargetClick? {
     if foreground {
-        try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
-        return
+        return try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
     }
     guard let hitElement = element ?? elementAtPoint(point, pid: snapshot.app.pid) else {
         throw unidentifiedBackgroundTarget
@@ -2026,6 +2052,7 @@ private func clickPointer(
             hit: hit
         )
     }
+    return nil
 }
 
 private func elementAtPoint(_ point: CGPoint, pid: pid_t) -> AXUIElement? {
@@ -2130,6 +2157,25 @@ private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, foc
     return windows.first {
         usableWindow($0) && stringAttribute($0, kAXTitleAttribute as String) == titleHint
     } ?? focused
+}
+
+/// A --restore-window click on a target window its app never focused, with the app's focused and on-screen windows just before it.
+struct UnfocusedTargetClick {
+    let focusedWindowID: CGWindowID?
+    let windowIDs: Set<CGWindowID>
+}
+
+/// After a click on a target window that refused focus (#32040), puts back the app the user had in front if the target's
+/// app is now in front but the click opened and focused nothing (a new window, menu or popover needs its app in front).
+private func restoreUserFrontApp(_ previous: NSRunningApplication, target app: AppDescriptor, before click: UnfocusedTargetClick) {
+    guard previous.processIdentifier != app.pid, !previous.isTerminated,
+          focusedWindowId(of: app) == click.focusedWindowID,
+          WindowCapture.onScreenWindowIDs(pid: app.pid).isSubset(of: click.windowIDs),
+          // Why: last, after the reads above can wait on the app, so a switch the user made meanwhile is never undone.
+          NSWorkspace.shared.frontmostApplication?.processIdentifier == app.pid
+    else { return }
+    _ = previous.activate(options: [])
+    _ = AXUIElementSetAttributeValue(AXUIElementCreateApplication(previous.processIdentifier), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
 }
 
 /// Brings only the target window forward: no other window of the app, and no LaunchServices reopen that can open a new one.
@@ -3392,6 +3438,16 @@ private struct WindowCapture {
         })
     }
 
+    /// Every on-screen window of the process, however small: menus and popovers count as something a click opened.
+    static func onScreenWindowIDs(pid: pid_t) -> Set<CGWindowID> {
+        Set(windowInfos(includeOffScreen: false).compactMap { info in
+            guard info[kCGWindowOwnerPID as String] as? pid_t == pid, let number = info[kCGWindowNumber as String] as? NSNumber else {
+                return nil
+            }
+            return CGWindowID(number.uint32Value)
+        })
+    }
+
     private static func windowInfos(includeOffScreen: Bool) -> [[String: Any]] {
         let options: CGWindowListOption = includeOffScreen ? [.optionAll, .excludeDesktopElements] : [.optionOnScreenOnly]
         return CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
@@ -3504,19 +3560,44 @@ private enum Input {
         count: Int,
         modifiers: [KeyModifier],
         targetWindow: Snapshot
-    ) throws {
+    ) throws -> UnfocusedTargetClick? {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
         let flags = eventFlags(modifiers)
         let target = syntheticClickRecipient(pid: targetWindow.app.pid, windowId: targetWindow.windowId)
+        // Why: some windows never take focus even when raised (#32040), yet a real click reaches the topmost window at the point.
+        let refusedFocus = currentSyntheticClickRecipient(snapshot: targetWindow, point: point) != .focused(target)
+        let observe = refusedFocus
+            ? { topmostSyntheticClickRecipient(snapshot: targetWindow, point: point) }
+            : { currentSyntheticClickRecipient(snapshot: targetWindow, point: point) }
+        // Why: only a window its own app doesn't focus refused focus; a target still activating takes this route too but keeps its app in front.
+        let appFocusedWindow = refusedFocus ? focusedWindowId(of: targetWindow.app) : nil
+        let unfocusedClick = refusedFocus && appFocusedWindow != targetWindow.windowId
+            ? UnfocusedTargetClick(
+                focusedWindowID: appFocusedWindow,
+                windowIDs: WindowCapture.onScreenWindowIDs(pid: targetWindow.app.pid)
+            )
+            : nil
+        if refusedFocus {
+            let topmost = observe()
+            guard topmost == .focused(target) else {
+                let cover = if case let .focused(other) = topmost {
+                    "pid \(other.ownerPID) window \(other.windowID) covers the click point"
+                } else {
+                    "Orca can't tell which window is at the click point"
+                }
+                throw ProviderError.coded(
+                    "window_not_focused",
+                    "window \(target.windowID) is not in front at the click point although --restore-window was requested: \(cover), so nothing was sent; ask the user to uncover the window, then run get-app-state again"
+                )
+            }
+        }
         try hidGesture { post in
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
-                currentObservation: {
-                    currentSyntheticClickRecipient(snapshot: targetWindow, point: point)
-                },
+                currentObservation: observe,
                 makeEvent: { step in
                     let type: CGEventType
                     switch step {
@@ -3546,6 +3627,7 @@ private enum Input {
                 pause: { _ = usleep($0) }
             )
         }
+        return unfocusedClick
     }
 
     /// Posts a pointer gesture through the HID tap, then puts the user's pointer back unless they moved it meanwhile.

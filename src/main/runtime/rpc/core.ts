@@ -18,7 +18,7 @@ import type {
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
-} from '../../../shared/delegated-mobile-device-contract'
+} from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './callers/rpc-caller-identity'

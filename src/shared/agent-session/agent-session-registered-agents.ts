@@ -30,6 +30,8 @@ const registeredAgentSchema = z.object({
     rewind: capabilityFlag,
     compact: capabilityFlag,
     threadGoal: capabilityFlag,
+    // Optional, like fork: absent stays absent, and anything but true offers no MCP panel.
+    mcpServers: z.literal(true).optional().catch(undefined),
     contextUsage: capabilityFlag,
     imagePrompts: capabilityFlag,
     // An unknown fork level reads as absent: the host never forks for this client.

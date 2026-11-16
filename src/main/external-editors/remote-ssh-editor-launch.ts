@@ -1,4 +1,4 @@
-import { getRemoteSshEditorKind } from '../../shared/remote-ssh-editor-launcher'
+import { getRemoteSshEditorKind } from '../../shared/editor/launch/remote-ssh-editor-launcher'
 import type { ShellOpenExternalEditorResult } from '../../shared/shell/opening/shell-open-types'
 import type { SshTarget } from '../../shared/remote-runtime/ssh/ssh-types'
 import { getLauncherBaseName } from './editor-launcher-name'

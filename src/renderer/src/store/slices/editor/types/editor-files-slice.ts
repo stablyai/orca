@@ -6,7 +6,7 @@ import type {
   ConflictReviewEntry,
   ConflictReviewState,
   OpenCheckRunDetailsState
-} from '../../../../../../shared/editor-tab-view-types'
+} from '../../../../../../shared/editor/views/editor-tab-view-types'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
