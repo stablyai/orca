@@ -85,8 +85,13 @@ export function applyNewModelLineEnding(
 export function trackNewModelLineEnding(
   model: LineEndingModel,
   lineEnding: EditorLineEnding | null,
-  modelKey: string
+  modelKey: string,
+  /** The buffer matches the file on disk; saved line breaks are never converted. */
+  isClean = false
 ): { dispose(): void } {
+  if (isClean && model.getLineCount() > 1) {
+    markForeignLineBreaks(model)
+  }
   applyNewModelLineEnding(model, lineEnding, modelKey)
   let disposed = false
   const subscription = model.onDidChangeContent(() => {
@@ -118,12 +123,15 @@ export function useNewModelLineEnding(
   const lineEnding = useAppStore((state) =>
     resolveOpenFileNewModelLineEnding(state, fileId, language)
   )
+  const isClean = useAppStore(
+    (state) => state.openFiles?.find((entry) => entry.id === fileId)?.isDirty === false
+  )
   useEffect(() => {
     const model = mountedEditor?.getModel()
     if (!model || model.uri.toString() !== modelUri) {
       return
     }
-    const tracker = trackNewModelLineEnding(model, lineEnding, modelUri)
+    const tracker = trackNewModelLineEnding(model, lineEnding, modelUri, isClean)
     return () => tracker.dispose()
-  }, [mountedEditor, modelUri, lineEnding])
+  }, [mountedEditor, modelUri, lineEnding, isClean])
 }

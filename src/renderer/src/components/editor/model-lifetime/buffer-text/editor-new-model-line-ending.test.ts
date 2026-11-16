@@ -137,6 +137,30 @@ describe('line ending of a new model', () => {
     remount.dispose()
   })
 
+  it('never converts a new file once its typed lines are saved', () => {
+    const model = windowsModel()
+    const typing = trackNewModelLineEnding(model, '\r\n', 'key')
+    type(model, 'one\ntwo')
+    typing.dispose()
+    // Saved to disk, then End of Line changes to LF.
+    const saved = trackNewModelLineEnding(model, '\r\n', 'key', true)
+    saved.dispose()
+    const changed = trackNewModelLineEnding(model, '\n', 'key', true)
+    expect(model.getValue()).toBe('one\r\ntwo')
+    changed.dispose()
+  })
+
+  it('stays an existing file after it becomes dirty again', () => {
+    const model = windowsModel()
+    trackNewModelLineEnding(model, '\r\n', 'key').dispose()
+    type(model, 'one\ntwo')
+    trackNewModelLineEnding(model, '\r\n', 'key', true).dispose()
+    type(model, 'one\ntwo\nthree')
+    const changed = trackNewModelLineEnding(model, '\n', 'key', false)
+    expect(model.getValue()).toBe('one\r\ntwo\r\nthree')
+    changed.dispose()
+  })
+
   it('keeps undo offsets valid across a late conversion of typed lines', async () => {
     const model = windowsModel()
     const pending = trackNewModelLineEnding(model, null, 'key')
