@@ -1,4 +1,4 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { Worktree } from '../../worktree/types'
 import {
   getRepoExecutionHostId,
@@ -14,7 +14,7 @@ import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import {
   getProjectGroupingForRepo,
   type ProjectGroupingIndex
-} from '../../project-section-grouping'
+} from '../sections/project-section-grouping'
 import type { WorktreeGroupEntry } from '../sections/worktree-group-entry'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 import { getFolderWorkspaceWorktree } from '../../folder-workspaces/folder-workspace-worktree'

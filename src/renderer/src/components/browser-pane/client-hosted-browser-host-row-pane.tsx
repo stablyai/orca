@@ -1,6 +1,6 @@
 import { Laptop } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 
 /** The host has no guest for a page deliberately rendered on another desktop; show that placement rather than a failure. */
 export function ClientHostedBrowserHostRowPane({

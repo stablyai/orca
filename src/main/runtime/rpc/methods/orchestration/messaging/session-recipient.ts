@@ -1,14 +1,14 @@
 /** Address any host-local chat by Orca session id, including /clear ancestors.
  * Unbound mail belongs to the root mailbox and points at the live session. Released leases may restart; closed/foreign/unknown chats refuse before storage. */
 
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress,
   type OrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../../../shared/orca-session-address'
+} from '../../../../../../shared/agent-session/identity/orca-session-address'
 // The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {

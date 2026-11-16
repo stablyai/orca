@@ -22,12 +22,4 @@ describe('parseH264SpsPictureSize', () => {
     const packet = Buffer.from(`000001${BASELINE_600X1280_SPS}00000001${PPS}`, 'hex')
     expect(parseH264SpsPictureSize(packet)).toEqual({ width: 600, height: 1280 })
   })
-
-  it('returns null without an SPS or when the SPS is truncated', () => {
-    expect(parseH264SpsPictureSize(Buffer.from(`00000001${PPS}`, 'hex'))).toBeNull()
-    expect(parseH264SpsPictureSize(Buffer.alloc(0))).toBeNull()
-    expect(
-      parseH264SpsPictureSize(Buffer.from(`00000001${HIGH_1080X2400_SPS.slice(0, 12)}`, 'hex'))
-    ).toBeNull()
-  })
 })

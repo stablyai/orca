@@ -12,7 +12,7 @@ import {
 import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalWait
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 
 export type CliChatResumeCloseHooks = {

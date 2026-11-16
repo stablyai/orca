@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -124,7 +125,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
               updatedAt: 1
             }
           }
-        } as StoreState
+        } satisfies StoreState
         const pane = createPane(2)
         const manager = createManager(2)
         const deps = createDeps({
@@ -199,18 +200,20 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'restored-session' }] },
         settings: { ...mockStoreState.settings, agentCmdOverrides: {} },
-        agentStatusByPaneKey: {
-          [paneKey]: {
-            state: 'working',
-            prompt: 'new live task',
-            agentType: 'codex',
-            providerSession: { key: 'session_id', id: 'live-codex-session' },
-            paneKey,
-            updatedAt: 2,
-            stateStartedAt: 2,
-            stateHistory: []
-          }
-        },
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({
+            [paneKey]: {
+              state: 'working',
+              prompt: 'new live task',
+              agentType: 'codex',
+              providerSession: { key: 'session_id', id: 'live-codex-session' },
+              paneKey,
+              updatedAt: 2,
+              stateStartedAt: 2,
+              stateHistory: []
+            }
+          })
+        ),
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
             paneKey,
@@ -225,7 +228,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      } satisfies StoreState
       const pane = createPane(2)
       const manager = createManager(2)
       const deps = createDeps({

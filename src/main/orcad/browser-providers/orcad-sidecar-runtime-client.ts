@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { createConnection } from 'node:net'
 import { z } from 'zod'
-import { findTransport, type RuntimeMetadata } from '../../../shared/runtime-bootstrap'
-import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../shared/runtime-session-contracts'
+import {
+  findTransport,
+  type RuntimeMetadata
+} from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { BrowserError } from '../../browser/browser-error'
 import { daemonSocketDirIsTrusted } from '../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 const SIDECAR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024

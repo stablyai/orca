@@ -8,8 +8,8 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {

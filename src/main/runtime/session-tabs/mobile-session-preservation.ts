@@ -6,8 +6,8 @@ import {
 } from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithSyncMobileSessionTabs } from './mobile-session-reconciliation'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   appendChatTabOrder,
   getMobileSessionSnapshotTabIdentityKeys,
@@ -220,6 +220,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       : existing
     return normalizeMobileSessionTabSelection({
       ...existing,
+      browserPageInventory: undefined,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
       // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,

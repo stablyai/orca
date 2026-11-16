@@ -7,7 +7,7 @@ import { runProcess } from '@orca/process-host'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 
 let directory = ''
 let launcher = ''

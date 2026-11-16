@@ -1,4 +1,4 @@
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { StatusPorcelainParser } from '../../../../shared/git/status/git-status-porcelain-parser'
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
 import { gitStreamStdout } from '../../command-runner/git-stream-stdout'

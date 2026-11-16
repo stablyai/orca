@@ -2,7 +2,7 @@ import { lstat } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { isENOENT } from './access/filesystem-path-containment'
 import { classifyImportSource } from './filesystem-import-source-stat'
-import { deconflictCopyName } from '../../../shared/import-copy-name'
+import { deconflictCopyName } from '../../../shared/file-import/import-copy-name'
 import type { ImportItemResult } from '../../../shared/file-import/filesystem-import-result'
 import {
   copyLocalFileNoFollow,

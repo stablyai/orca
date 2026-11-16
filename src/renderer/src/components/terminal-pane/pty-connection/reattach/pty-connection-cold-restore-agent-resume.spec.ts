@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -95,7 +96,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
           ...mockStoreState.settings,
           agentCmdOverrides: {}
         },
-        agentStatusByPaneKey: {},
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
             paneKey,
@@ -113,7 +114,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      } satisfies StoreState
 
       const pane = createPane(1)
       const manager = createManager(1)
@@ -165,7 +166,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
           })
         })
       )
-      expect(mockStoreState.agentStatusByPaneKey).toEqual({})
+      expect(Array.from(mockStoreState.agentStatusByPaneKey.values())).toEqual([])
       expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
         paneKey,
         providerSession: { id: 'codex-session-1', transcriptPath },
@@ -230,7 +231,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
           ...mockStoreState.settings,
           agentCmdOverrides: {}
         },
-        agentStatusByPaneKey: {},
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
         sleepingAgentSessionsByPaneKey: {
           [firstLegacyPaneKey]: {
             paneKey: firstLegacyPaneKey,
@@ -255,7 +256,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
             updatedAt: 2
           }
         }
-      } as StoreState
+      } satisfies StoreState
 
       const pane = createPane(1)
       const manager = createManager(1)

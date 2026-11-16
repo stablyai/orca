@@ -7,13 +7,13 @@ import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserPage as BrowserPageState
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
-import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'

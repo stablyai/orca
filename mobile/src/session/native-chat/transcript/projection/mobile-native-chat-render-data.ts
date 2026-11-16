@@ -1,5 +1,5 @@
 import { formatAgentTypeLabel } from '../../../../../../src/shared/agent-status/presentation/agent-type-label'
-import { describeLoadError } from '../../../../components/load-error-description'
+import { describeLoadError } from '../../../../components/feedback/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../../../../src/shared/native-chat/native-chat-noise'

@@ -21,7 +21,7 @@ export type AgentStatusLiveFacts = {
   migrationUnsupported: ReturnType<typeof pruneMigrationUnsupportedEntries>
   completionRefreshWorktreeId: string | null
   sortRelevantChange: boolean
-  retentionRelevantChange: boolean
+  aggregateRelevantChange: boolean
   boundaryResolved: boolean
 }
 
@@ -65,7 +65,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     isSmartSortRelevantAgentChange(existing, entry, updatedAt) ||
     commandCodeNewTurn ||
     existing?.firstStateStartedAt !== entry.firstStateStartedAt
-  const doneRetentionFieldsChanged =
+  const doneRowFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&
     (entry.prompt !== existing.prompt ||
@@ -86,12 +86,12 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
   // Verdicts move no clocks: failures preserve done completion and working subagent state/start.
   const verdictChanged =
     !!existing && agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing)
-  const retentionRelevantChange =
+  const aggregateRelevantChange =
     sortRelevantChange ||
     attributionChanged ||
     existing?.workingMode !== entry.workingMode ||
     verdictChanged ||
-    doneRetentionFieldsChanged
+    doneRowFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
   const liveRecoveryRecord = liveResumeRecord({
     entry,
@@ -111,7 +111,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     migrationUnsupported,
     completionRefreshWorktreeId,
     sortRelevantChange,
-    retentionRelevantChange,
+    aggregateRelevantChange,
     boundaryResolved
   }
 }

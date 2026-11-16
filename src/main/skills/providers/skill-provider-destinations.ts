@@ -3,7 +3,7 @@ import {
   isSkillInstallProviderId,
   SKILL_INSTALL_PROVIDERS,
   type SkillInstallProviderId
-} from '../../../shared/skill-install-providers'
+} from '../../../shared/skills/installation/skill-install-providers'
 
 export type SkillProviderDestination = {
   provider: SkillInstallProviderId

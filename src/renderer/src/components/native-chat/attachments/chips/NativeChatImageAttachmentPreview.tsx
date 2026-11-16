@@ -9,7 +9,7 @@ import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
 } from '../../media/images/native-chat-image-copy'
-import { isAgentInlineImagePath } from '../../../../../../shared/agent-inline-image-types'
+import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 import { isAgentSessionAttachmentStorePath } from '../../../../../../shared/agent-session/agent-session-attachments'

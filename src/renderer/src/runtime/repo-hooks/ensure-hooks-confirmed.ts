@@ -1,15 +1,15 @@
 import { findHookRepo, hookRepoOwnerHostId } from './hook-owner-resolution'
-import { projectGroupHookTrustKey } from '../../../../shared/workspace-hook-owner'
+import { projectGroupHookTrustKey } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { AppState } from '@/store/types'
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
-import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
-import { getSetupTrustContent } from '../../../../shared/orca-hook-setup-config'
+import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import { resolveHookCommandSourcePolicy } from '../../../../shared/workspace-setup/hooks/hook-command-source-policy'
+import { getSetupTrustContent } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import {
   canUseRepoWideTrust,
   isOrcaHookContentApproved
-} from '../../../../shared/orca-hook-trust-entries'
+} from '../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import { hashOrcaHookScript } from './orca-hook-trust'
-import type { OrcaHookTrustKind } from '../../../../shared/orca-hook-trust-entries'
+import type { OrcaHookTrustKind } from '../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import { getVmRecipeTrustContent } from './vm-recipe-trust-content'
 import type { SetupHooksCreateSource } from '../../../../shared/worktree/setup-hooks-create-source'
 import { getIssueCommandTrustContent, isUserOwnedIssueCommand } from './issue-command-trust-content'

@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
-import { useAppStore } from '@/store'
-import type { BrowserAddressBarSuggestion } from '../assemble-chrome/browser-address-bar-suggestions'
+import { useAppStore } from '@/store/index'
+import type { BrowserAddressBarSuggestion } from '../assemble-chrome/address-bar/browser-address-bar-suggestions'
 
 type RemovableRow = Pick<BrowserAddressBarSuggestion, 'normalizedUrl' | 'docLocation'>
 

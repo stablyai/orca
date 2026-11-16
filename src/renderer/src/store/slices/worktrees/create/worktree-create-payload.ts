@@ -9,7 +9,7 @@ import type {
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef

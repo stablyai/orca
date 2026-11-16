@@ -29,13 +29,14 @@ import {
   promptTextOffset,
   promptTextPosition
 } from './native-chat-prompt-document'
-import { promptTextContent } from './native-chat-prompt-document-text'
+import { promptParagraphLines, promptTextContent } from './native-chat-prompt-document-text'
 import type {
   NativeChatComposerInput,
   NativeChatPromptEditorProps
 } from './native-chat-composer-input'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
+import { NativeChatHardBreakParagraphs } from './native-chat-hard-break-paragraphs'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
 
@@ -100,13 +101,16 @@ function NativePromptEditor({
         NativeChatSkill,
         NativeChatFileReference,
         NativeChatUnkernedRunDecorations,
+        NativeChatHardBreakParagraphs,
         // A disabled box still says why it is disabled, as the plain text box's placeholder does.
         Placeholder.configure({
           placeholder: () => placeholderRef.current,
           showOnlyWhenEditable: false
         })
       ],
-      content: adopted.current?.document || promptTextContent(initialValue),
+      content: adopted.current?.document
+        ? promptParagraphLines(adopted.current.document)
+        : promptTextContent(initialValue),
       editable: !disabled,
       editorProps: {
         attributes: {
@@ -114,7 +118,7 @@ function NativePromptEditor({
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': placeholder,
-          class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:first-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:pointer-events-none`,
+          class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:only-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:only-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:only-child]:before:float-left [&_p.is-editor-empty:only-child]:before:h-0 [&_p.is-editor-empty:only-child]:before:pointer-events-none`,
           ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
         },
         // Clipboard input is always literal text; only the picker and attachments create pills.

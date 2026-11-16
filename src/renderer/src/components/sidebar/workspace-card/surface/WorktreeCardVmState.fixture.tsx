@@ -1,5 +1,5 @@
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import type { EphemeralVmRuntimeStatus } from '../../../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeStatus } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import type { EphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'

@@ -1,9 +1,9 @@
 import { translate } from '@/i18n/i18n'
-import type { LinuxPackageCommandUnavailableReason } from '../../../../shared/update-status-types'
+import type { LinuxPackageCommandUnavailableReason } from '../../../../shared/updater/update-status-types'
 import {
   UPDATER_FAILURE_COPY,
   type UpdaterFailureCode
-} from '../../../../shared/updater-failure-copy'
+} from '../../../../shared/updater/updater-failure-copy'
 
 type Param = (name: string) => string | null
 type CountParam = (name: string) => number | null

@@ -2,8 +2,11 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { SecretStore } from '../../../shared/secret-store'
-import { _resetSecretStoreForTests, setSecretStore } from '../../../shared/secret-store'
+import type { SecretStore } from '../../../shared/secure-storage/secret-store'
+import {
+  _resetSecretStoreForTests,
+  setSecretStore
+} from '../../../shared/secure-storage/secret-store'
 import { readStoredCredentialToken } from '../../credentials/integration-credential-file'
 import { migratePlaintextCredentials } from './orcad-plaintext-credential-migration'
 import { orcadSecretStateFileName } from './orcad-secret-key-record'

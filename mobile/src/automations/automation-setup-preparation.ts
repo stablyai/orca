@@ -1,12 +1,12 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { findAutomationRepo } from '../../../src/shared/automations/ownership/automation-repo-target'
 import { getAutomationSetupDefaultDecision } from '../../../src/shared/automations/launch/automation-setup-decision'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import {
   newWorkspaceSetupHooksRead,
   newWorkspaceUiStateRead
-} from '../components/new-workspace-operations'
-import type { OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
+} from '../new-workspace/creation/runtime/new-workspace-operations'
+import type { OrcaHookTrustPrompt } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import {
   isSetupHookTrusted,

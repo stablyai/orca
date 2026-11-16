@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(

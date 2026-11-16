@@ -11,7 +11,7 @@ import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import type { NotificationDispatchRequest } from '../../../../../../shared/notification-settings-types'
+import type { NotificationDispatchRequest } from '../../../../../../shared/notifications/notification-settings-types'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 

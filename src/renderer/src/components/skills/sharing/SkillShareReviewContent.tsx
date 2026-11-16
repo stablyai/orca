@@ -7,7 +7,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   SkillSharePreview,
   SkillShareProgress
-} from '../../../../../shared/skill-sharing-contract'
+} from '../../../../../shared/skills/sharing/skill-sharing-contract'
 import { SkillSharePackageSummary } from './SkillSharePackageSummary'
 import { SkillShareReleaseNotesField } from './SkillShareReleaseNotesField'
 import { shortDigest } from './skill-package-digest'

@@ -1,7 +1,7 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
-import { isChatUiLaunchTipTargeted } from '../../../../shared/feature-tips'
+import { isChatUiLaunchTipTargeted } from '../../../../shared/feature-education/feature-tips'
 import { track } from '@/diagnostics/telemetry/telemetry'
-import type { EventProps } from '../../../../shared/telemetry-events'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 

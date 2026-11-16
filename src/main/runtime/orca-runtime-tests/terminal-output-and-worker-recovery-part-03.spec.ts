@@ -50,7 +50,7 @@ describe('OrcaRuntimeService', () => {
       expect(harness.resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalled()
 
       harness.runtime.attachWindow(1)
-      harness.runtime.syncWindowGraph(1, {
+      await harness.runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: identity.tabId,
@@ -144,7 +144,7 @@ describe('OrcaRuntimeService', () => {
     expect(harness.getSession().terminalLayoutsByTabId['legacy-post-reveal']).toBeUndefined()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       // The window draws main's layout, which no longer holds the tab: its next graph omits it.
-      harness.runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+      await harness.runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
     }
     const runtimeState = harness.runtime as unknown as {
       tabs: Map<string, unknown>

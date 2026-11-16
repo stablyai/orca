@@ -2,19 +2,19 @@
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import type { AgentPaneChange } from '../../../agent-hooks/observations/agent-transition-detector'
 import { agentMainAgentVerdict } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { buildAgentNotificationId } from '../../../../shared/agent-status/presentation/agent-notification-id'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   isCoordinatorOnlyNews,
   withApprovalTitle
 } from '../../../../shared/orchestration/workers/dispatched-worker-attention'
-import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
-import { isNotificationSourceEnabled } from '../../../../shared/notification-source-gate'
+import { reserveNotificationCooldown } from '../../../../shared/notifications/notification-burst-cooldown'
+import { isNotificationSourceEnabled } from '../../../../shared/notifications/notification-source-gate'
 import type {
   NotificationDispatchRequest,
   NotificationSettings
-} from '../../../../shared/notification-settings-types'
+} from '../../../../shared/notifications/notification-settings-types'
 import { buildNotificationOptions } from '../../../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import { TerminalAgentTurnNews } from './terminal-agent-turn-news'

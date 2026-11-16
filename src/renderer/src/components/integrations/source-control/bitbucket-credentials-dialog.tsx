@@ -1,6 +1,6 @@
 import { useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
-import type { BitbucketAuthMode } from '../../../../../shared/bitbucket-credentials'
+import type { BitbucketAuthMode } from '../../../../../shared/bitbucket/bitbucket-credentials'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'

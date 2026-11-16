@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { REPO_COLORS } from '../../../../../shared/repo-badge-color'
+import { REPO_COLORS } from '../../../../../shared/repository/appearance/repo-badge-color'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { CandidateRow, type WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
@@ -25,7 +25,7 @@ const NO_CONTEXT: WorkspaceCleanupCandidate['localContext'] = {
   browserTabCount: 0,
   diffCommentCount: 0,
   newestDiffCommentAt: null,
-  retainedDoneAgentCount: 0
+  finishedAgentCount: 0
 }
 const GIT_CLEAN = { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
 const GIT_UNKNOWN = { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
@@ -281,7 +281,7 @@ const OVERFLOW_ROW: Scenario = {
       ...NO_CONTEXT,
       terminalTabCount: 2,
       browserTabCount: 1,
-      retainedDoneAgentCount: 1
+      finishedAgentCount: 1
     }
   }),
   activity: 'Just now',

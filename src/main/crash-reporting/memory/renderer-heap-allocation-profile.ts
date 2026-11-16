@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import {
   RENDERER_HEAP_ALLOCATION_PROFILE_BREADCRUMB,
   recordCrashBreadcrumb

@@ -4,7 +4,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../shared/browser/workspaces/browser-workspace-types'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('../ssh/config/ssh-config-parser', () => ({

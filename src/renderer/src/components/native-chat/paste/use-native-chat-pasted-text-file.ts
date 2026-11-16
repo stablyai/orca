@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { stageNativeChatDraftFile } from '../drafts/native-chat-draft-attachment-staging'
 import {

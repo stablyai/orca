@@ -265,7 +265,7 @@ describe('orchestration worker recovery', () => {
       terminalHandle: 'term_windows_worker'
     })
     const pendingShow = deferred<unknown>()
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment_windows',
       name: 'windows',
       peerFingerprint: 'windows_peer'
