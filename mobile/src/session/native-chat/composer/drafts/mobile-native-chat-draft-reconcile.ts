@@ -5,6 +5,7 @@ import {
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
+  nativeChatImageTranscriptUnits,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
@@ -58,25 +59,21 @@ export function mergeSentImagePreviews(
   return next
 }
 
-function imagePreviewReplacementMessageId(
-  messages: readonly NativeChatMessage[],
-  sourceIndex: number
-): string | null {
-  const source = messages[sourceIndex]
-  if (!source || !isImageSourceUserTurn(source)) {
-    return null
+// Image-source row id -> the prompt row id it folds into.
+function imageSourceFoldTargets(messages: readonly NativeChatMessage[]): Map<string, string> {
+  const targets = new Map<string, string>()
+  for (const unit of nativeChatImageTranscriptUnits(messages)) {
+    const prompt = unit.find((message) => !isImageSourceUserTurn(message))
+    if (!prompt) {
+      continue
+    }
+    for (const message of unit) {
+      if (message !== prompt) {
+        targets.set(message.id, prompt.id)
+      }
+    }
   }
-  let nextIndex = sourceIndex + 1
-  while (
-    messages[nextIndex]?.source === source.source &&
-    isImageSourceUserTurn(messages[nextIndex]!)
-  ) {
-    nextIndex++
-  }
-  const prompt = messages[nextIndex]
-  return prompt?.role === 'user' && prompt.source === source.source && hasImagePromptMarker(prompt)
-    ? prompt.id
-    : null
+  return targets
 }
 
 // Move local previews when progressive source-only rows fold into a new marker-bearing authoritative id.
@@ -89,14 +86,10 @@ export function migrateImagePreviewMessageIds(
   if (!sessionPreviews) {
     return previous
   }
-  const messageIndexById = new Map(messages.map((message, index) => [message.id, index]))
+  const foldTargets = imageSourceFoldTargets(messages)
   let nextSession: Record<string, string[]> | null = null
   for (const [messageId, images] of Object.entries(sessionPreviews)) {
-    const sourceIndex = messageIndexById.get(messageId)
-    if (sourceIndex === undefined) {
-      continue
-    }
-    const replacementId = imagePreviewReplacementMessageId(messages, sourceIndex)
+    const replacementId = foldTargets.get(messageId)
     if (!replacementId) {
       continue
     }
@@ -120,8 +113,7 @@ function foldedBoundaryIndex(
   if (direct !== undefined) {
     return direct
   }
-  const rawIndex = messages.findIndex((message) => message.id === boundaryId)
-  const promptId = rawIndex === -1 ? null : imagePreviewReplacementMessageId(messages, rawIndex)
+  const promptId = imageSourceFoldTargets(messages).get(boundaryId)
   return promptId ? normalizedIndexById.get(promptId) : undefined
 }
 
