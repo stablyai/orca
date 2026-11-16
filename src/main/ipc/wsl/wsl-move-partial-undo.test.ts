@@ -12,7 +12,11 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
-import { setWslMoveReloadableWindow } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
+import {
+  isWslMoveWindowWriteHeld,
+  resetWslMoveWindowWriteHoldForTests,
+  setWslMoveReloadableWindow
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import {
   registerWslMoveDesktopRewriteStore,
   resetWslMoveDesktopRewriteStoresForTests
@@ -38,6 +42,7 @@ const useHere = (repoId: string) =>
   )
 
 let userDataPath: string
+let unhideThrows = false
 const touched: string[] = []
 const record = (step: string) => (move: WslMoveCutover) => {
   touched.push(`${step}:${move.migrationId}`)
@@ -70,12 +75,20 @@ beforeEach(() => {
         return 'stopped'
       },
       refocusHere: record('refocus'),
-      unhideMovedEntries: record('unhide')
+      unhideMovedEntries: (move) => {
+        record('unhide')(move)
+        if (unhideThrows) {
+          throw new Error('ui store unwritable')
+        }
+      }
     })
   )
   setWslMoveReloadableWindow(() => null)
 })
 afterEach(() => {
+  unhideThrows = false
+  resetWslMoveWindowWriteHoldForTests()
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
   resetWslMoveFenceForTests()
@@ -126,5 +139,26 @@ describe('undo of an older move while a newer one stands', () => {
     ])
     expect(journal()).toEqual([])
     expect(moved('repo-1')).toBe(false)
+  })
+
+  // Unhiding is cosmetic (the startup prune repeats it); a throw must not strand held writes.
+  it('still reloads the window when unhiding its entries throws', async () => {
+    unhideThrows = true
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let loaded: () => void = () => {}
+    const reload = vi.fn(() => loaded())
+    setWslMoveReloadableWindow(() => ({
+      isDestroyed: () => false,
+      reload,
+      allowUnload: () => () => {},
+      onLoadedOrGone: (listener) => {
+        loaded = listener
+        return () => {}
+      }
+    }))
+    expect(await useHere('repo-q')).toMatchObject({ released: true, repoIds: ['repo-q'] })
+    expect(touched).toContain('unhide:move-q')
+    await vi.waitFor(() => expect(reload).toHaveBeenCalled())
+    expect(isWslMoveWindowWriteHeld()).toBe(false)
   })
 })
