@@ -1,7 +1,6 @@
 import { lstat, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
-import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
@@ -56,7 +55,8 @@ export async function goneFolderOf(path: string): Promise<GoneFolder | null> {
 
 // macOS and Windows names usually ignore case and Unicode form, so protection compares them folded.
 const foldName = (name: string): string =>
-  process.platform === 'linux' ? name : name.normalize('NFC').toLowerCase()
+  // Upper then lower folds case pairs one lowercasing misses (final sigma ς and σ are both Σ).
+  process.platform === 'linux' ? name : name.normalize('NFC').toUpperCase().toLowerCase()
 
 export function goneFolderKey(folder: GoneFolder): string {
   return `${folder.ancestorId}/${foldName(folder.name)}`
@@ -83,6 +83,18 @@ function listedPaths(store: RuntimeStore): string[] {
   }
   // A WSL path can't protect a local parent, and touching it can boot a stopped distro.
   return paths.filter((path) => !parseWslUncPath(path))
+}
+
+/** Changes whenever what Orca lists, or where it nests workspaces, changes: archive and rename both write rows. */
+export function listedCatalogFingerprint(store: RuntimeStore): string {
+  const { workspaceDir, nestWorkspaces, workspaceDirHistory } = store.getSettings()
+  return JSON.stringify([
+    listedPaths(store),
+    store.getRepos().map((repo) => [repo.path, repo.worktreeBasePath]),
+    workspaceDir,
+    nestWorkspaces,
+    workspaceDirHistory
+  ])
 }
 
 export type ListedFolders = {
@@ -176,7 +188,8 @@ export async function readWorkspaceParents(
   const scopePaths: string[] = []
   const ids = new Set<Identity>()
   for (const repo of listWorkspaceCleanupOwnedRepos(store).values()) {
-    const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
+    // This host's own path rules: a POSIX repo name can contain `\\`, as worktree creation keeps it.
+    const repoName = basename(repo.path).replace(/\.git$/, '')
     // A WSL distro's transcripts carry Linux paths this process cannot check for absence.
     if (!repoName || parseWslUncPath(repo.path)) {
       continue

@@ -15,7 +15,9 @@ import {
   goneFolderKey,
   goneFolderOf,
   isStillGone,
+  listedCatalogFingerprint,
   readListedFolders,
+  type ListedFolders,
   readWorkspaceParents,
   type GoneFolder
 } from './deleted-workspace-folders'
@@ -115,17 +117,27 @@ export async function sweepDeletedWorkspaceChatHistory(
     byFolder.set(key, group)
   }
 
+  // Re-read Orca's rows after each folder was seen gone, but stat them again only when they changed.
+  type CurrentRows = { fingerprint: string; listed: ListedFolders; parentIds: Set<string> }
+  let current: CurrentRows | null = null
+  const readCurrent = async (): Promise<CurrentRows> => {
+    const fingerprint = listedCatalogFingerprint(deps.store)
+    if (current && current.fingerprint === fingerprint) {
+      return current
+    }
+    const listedNow = await readListedFolders(deps.store)
+    const parentsNow = await readWorkspaceParents(deps.store, listedNow)
+    current = { fingerprint, listed: listedNow, parentIds: parentsNow.ids }
+    return current
+  }
   for (const [key, { folder, targets }] of byFolder) {
     if (deps.signal?.aborted || !deps.isEnabled() || !(await isStillGone(folder))) {
       continue
     }
-    // Read Orca's rows after the folder was seen gone: a workspace archived or renamed during the
-    // scan, the grouping or earlier deletions keeps its row, and that row protects its chats.
-    const listedNow = await readListedFolders(deps.store)
-    if (
-      listedNow.gone.has(key) ||
-      !(await readWorkspaceParents(deps.store, listedNow)).ids.has(folder.ancestorId)
-    ) {
+    // A workspace archived or renamed during the scan, the grouping or earlier deletions keeps its
+    // row, and that row protects its chats.
+    const now = await readCurrent()
+    if (now.listed.gone.has(key) || !now.parentIds.has(folder.ancestorId)) {
       continue
     }
     // Reading one transcript can take a while, so each is checked right before its own removal.

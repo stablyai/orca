@@ -278,7 +278,6 @@ export class WorkspaceCleanupRunner {
   private async execute(trigger: WorkspaceCleanupRunTrigger): Promise<WorkspaceCleanupRun> {
     const startedAt = Date.now()
     const rows: WorkspaceCleanupRunRow[] = []
-    let chatHistory: WorkspaceCleanupRun['chatHistory']
     let error: string | undefined
     try {
       const removals: (DecidedWorkspace & { reason: WorkspaceCleanupRuleReason })[] = []
@@ -308,11 +307,11 @@ export class WorkspaceCleanupRunner {
         })
         rows.push({ ...ref, reason, ...outcome })
       }
-      // After removals, so this run's deleted workspaces are gone from disk when the sweep looks.
-      chatHistory = await this.chatHistory.sweepIfDue(trigger, startedAt, this.abort.signal)
     } catch (cause) {
       error = errorMessage(cause)
     }
+    // After removals, so this run's deleted workspaces are gone from disk; a rule failure doesn't block it.
+    const chatHistory = await this.chatHistory.sweepIfDue(trigger, startedAt, this.abort.signal)
     const run = summarizeWorkspaceCleanupRun({
       id: randomUUID(),
       trigger,
