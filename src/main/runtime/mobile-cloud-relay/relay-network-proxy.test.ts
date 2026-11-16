@@ -151,15 +151,27 @@ describe('Relay app proxy routing', () => {
     'carries Relay data through %s SOCKS5h with proxy DNS',
     async (mode) => {
       const { server, hosts, cellUrl } = await socksRelay(mode)
+      const response = Promise.withResolvers<string>()
       const auth = new Promise<unknown>((resolve) =>
         server.once('connection', (socket) => {
-          socket.once('message', (message) => resolve(JSON.parse(message.toString())))
+          socket.once('message', (message) => {
+            resolve(JSON.parse(message.toString()))
+            socket.once('message', (reply) =>
+              response.resolve(Buffer.isBuffer(reply) ? reply.toString('hex') : 'not-binary')
+            )
+            socket.send(new Uint8Array([1, 2, 3]))
+          })
         })
       )
       const transport = new CloudRelayTransport({
         cellUrl,
         relayHostId: 'AbCdEf0123_-xyZ9',
         generation: 7
+      })
+      const incoming = Promise.withResolvers<string | Uint8Array<ArrayBufferLike>>()
+      transport.onMessage((message, _reply, socket) => {
+        incoming.resolve(message)
+        socket.send(new Uint8Array([4, 5, 6]))
       })
       cleanups.push(() => transport.stop())
       await transport.start()
@@ -179,6 +191,8 @@ describe('Relay app proxy routing', () => {
         connTicket: 'ticket-1',
         generation: 7
       })
+      expect(await incoming.promise).toEqual(new Uint8Array([1, 2, 3]))
+      expect(await response.promise).toBe('040506')
       expect(hosts).toEqual(new Set(['relay.invalid']))
     }
   )
