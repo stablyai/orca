@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { streamCodexSessionLedgerRecords } from '../rollouts/codex-session-ledger-stream'
 

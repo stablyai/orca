@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { JsonTextStructureCapacityError } from '../../../../shared/json-stream/json-text-structure-limit'
 import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-bounded-file-reader'
 import { join } from 'node:path'

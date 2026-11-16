@@ -1,4 +1,4 @@
-import { findOptionOccurrence } from '../../../command-option-occurrence'
+import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 
 // Required values consume dash-leading text; boolean and optional-valued options are excluded.

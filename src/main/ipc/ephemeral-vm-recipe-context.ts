@@ -4,7 +4,7 @@ import type { EphemeralVmRecipeDoctorResult } from '../../shared/remote-runtime/
 import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { isFolderRepo, isGitRepoKind } from '../../shared/repository/repo-kind'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailure,

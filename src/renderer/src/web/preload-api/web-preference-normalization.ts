@@ -9,7 +9,7 @@ import {
   normalizeAgentDefaultSurface,
   carriedChatUiLaunchSettings
 } from '../../../../shared/native-chat/native-chat-providers'
-import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
 import { getDefaultSettings, normalizeAgentActivityDisplayMode } from '../../../../shared/constants'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row-display/card-properties'
 import {

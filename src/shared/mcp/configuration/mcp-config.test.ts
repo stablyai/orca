@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,
-  maskMcpEnv,
   MCP_CONFIG_CANDIDATES
 } from './mcp-config'
+import { maskMcpEnv } from './mcp-server-inspection'
 import {
   MCP_CONFIG_INSPECTION_MAX_BYTES,
   MCP_CONFIG_INSPECTION_MAX_ENV_FIELDS,

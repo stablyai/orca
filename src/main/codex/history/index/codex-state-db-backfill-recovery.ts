@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { withManagedHookInstallLock } from '../../../agent-hooks/installation/locking/managed-hook-install-lock'
 import { readManagedHookHostIdentity } from '../../../agent-hooks/installation/locking/managed-hook-owner-identity'

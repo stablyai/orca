@@ -10,7 +10,7 @@ import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projec
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { findAgentSwitchBlocker, type AgentSwitchRow } from './branch-switch-agent-blocker'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import type { RuntimeGitCommandHost } from './runtime-git-command-target'
 
 type ConnectedPty = { ptyId: string; worktreeId: string; connected: boolean }

@@ -1,28 +1,7 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-// Wrap real reads to measure walk concurrency.
-const readdirCalls = vi.hoisted(() => ({ outstanding: 0, peak: 0, count: 0 }))
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>()
-  const realReaddir = actual.readdir as (...args: unknown[]) => Promise<never>
-  return {
-    ...actual,
-    readdir: async (...args: unknown[]) => {
-      readdirCalls.outstanding += 1
-      readdirCalls.count += 1
-      readdirCalls.peak = Math.max(readdirCalls.peak, readdirCalls.outstanding)
-      try {
-        return await realReaddir(...args)
-      } finally {
-        readdirCalls.outstanding -= 1
-      }
-    }
-  }
-})
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { countLooseRefs } from './loose-ref-count'
 
@@ -44,7 +23,6 @@ async function makeRefsTree(counts: Record<string, number>): Promise<string> {
 }
 
 afterEach(async () => {
-  vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 

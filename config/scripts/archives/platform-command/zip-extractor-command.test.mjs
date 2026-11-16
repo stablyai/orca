@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-import { getZipExtractorCommand } from '../../../../src/shared/zip-extractor-command.ts'
+import { getZipExtractorCommand } from '../../../../src/shared/archives/zip-extractor-command.ts'
 
 const directories = []
 afterEach(() => {

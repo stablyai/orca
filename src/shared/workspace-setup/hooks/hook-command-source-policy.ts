@@ -1,4 +1,4 @@
-import type { HookCommandSourcePolicy } from './orca-yaml-hook-types'
+import type { HookCommandSourcePolicy } from '../orca-yaml-hook-types'
 
 export function resolveHookCommandSourcePolicy(
   policy: unknown,

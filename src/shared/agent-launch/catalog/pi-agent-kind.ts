@@ -1,6 +1,9 @@
 import { isFreshOmpLaunchCommand } from '../startup/omp-fresh-launch'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
-import { getCommandTokenPathBasename, getFirstCommandToken } from '../../command-token-scanner'
+import {
+  getCommandTokenPathBasename,
+  getFirstCommandToken
+} from '../../shell/command-resolution/command-token-scanner'
 import { extractAgentLaunchCommand } from '../startup/agent-command-line-intent'
 
 /** Pi-compatible agents share PI_CODING_AGENT_DIR and extension APIs but have separate user directories.

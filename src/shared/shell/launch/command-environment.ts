@@ -1,4 +1,4 @@
-import { processEnvWithoutAgentSession } from './agent-launch/startup/parent-agent-session-env'
+import { processEnvWithoutAgentSession } from '../../agent-launch/startup/parent-agent-session-env'
 
 /** Leading assignments are data, never shell expressions. */
 export function extractLeadingEnvAssignments(tokens: string[]): {

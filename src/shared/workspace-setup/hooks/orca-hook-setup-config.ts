@@ -1,5 +1,5 @@
 import { resolveHookCommandSourcePolicy } from './hook-command-source-policy'
-import type { OrcaHooks, SetupRunPolicy } from './orca-yaml-hook-types'
+import type { OrcaHooks, SetupRunPolicy } from '../orca-yaml-hook-types'
 
 export type SetupConfig = {
   source: 'yaml' | 'local' | 'both'
