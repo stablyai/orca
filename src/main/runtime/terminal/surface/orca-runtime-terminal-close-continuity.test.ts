@@ -92,7 +92,7 @@ describe('explicit terminal close when the window does not confirm the tab close
   })
 
   it('does not fall back to killing a successor that took the PTY id during the stop', async () => {
-    const harness = await createHarness()
+    const harness = await createHarness({ registerPtyBacked: true })
     harness.setCloseTerminalTabAction(() => {})
     harness.setStopAndWaitAction(() => {
       harness.runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
