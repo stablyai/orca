@@ -9,6 +9,8 @@ import type {
 } from '../../jsonl-rpc/agent-connection'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { PiHistoryCaptureDeps } from './history/rpc-history-capture'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -37,5 +39,10 @@ export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
     fence: number
     outcome: AgentSessionDispatchOutcome
   }) => void
+  onChildWorkEvidence?: (
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ) => void
   logger: StructuredAgentSessionLogger
 }

@@ -4,7 +4,7 @@
 import type { FolderWorkspace } from './folder-workspace-types'
 import type { ProjectGroup } from '../project/groups/project-group-types'
 import type { Repo } from '../repository/repo-types'
-import { isPathInsideOrEqual } from '../cross-platform-path'
+import { isPathInsideOrEqual } from '../file-access/cross-platform-path'
 import { getProjectGroupSubtreeIds } from '../project/groups/project-groups'
 import {
   getRepoExecutionHostId,

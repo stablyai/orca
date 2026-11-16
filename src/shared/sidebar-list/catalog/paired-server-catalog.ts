@@ -8,7 +8,7 @@ import type { Project, ProjectHostSetup } from '../../project/project-types'
 import type { Repo } from '../../repository/repo-types'
 import type { RuntimeRpcResponse } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 import type { PairedServerCatalog } from './sidebar-project-catalog'
-import { salvagingArray } from '../../zod-salvage'
+import { salvagingArray } from '../../validation/zod-salvage'
 
 // The server's own rows as it sends them; the adoption and projection steps normalize the rest.
 function rowWith<T>(...keys: string[]) {

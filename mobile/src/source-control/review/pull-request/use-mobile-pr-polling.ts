@@ -6,7 +6,7 @@ import {
 } from '../../../../../src/shared/github/checks/checks-detail-polling-policy'
 import type { PRCheckDetail } from '../../../../../src/shared/github/checks/check-types'
 import type { PRInfo } from '../../../../../src/shared/github/pull-requests/pull-request-types'
-import type { PRAutoRefreshCadence } from '../../../../../src/shared/review-refresh-policy'
+import type { PRAutoRefreshCadence } from '../../../../../src/shared/source-control/hosted-review/review-refresh-policy'
 import { useHostQuery } from '../../../query/host-query'
 import {
   NO_SOURCE_CONTROL_SETTINGS_INPUT,

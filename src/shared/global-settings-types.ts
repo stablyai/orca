@@ -7,17 +7,17 @@ import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/projects/project-types'
 import type { VoiceSettings } from './speech/speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
-import type { GitLabProjectSettings } from './gitlab-types'
+import type { GitLabProjectSettings } from './gitlab/gitlab-types'
 import type { TaskProvider } from './work-items/task-providers'
-import type { AppIconId } from './app-icon'
+import type { AppIconId } from './app-lifecycle/identity/app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from './agent-launch/startup/claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
-import type { UiLanguage } from './ui-language'
+import type { UiLanguage } from './i18n/ui-language'
 import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
-import type { ComputerAwakeMode } from './computer-awake-mode'
+import type { ComputerAwakeMode } from './app-lifecycle/computer-awake-mode'
 import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
 import type { HostSettingOverrides } from './execution-host/host-setting-overrides'
 import type {
@@ -25,12 +25,12 @@ import type {
   ClaudeManagedAccountRuntimeSelection,
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection
-} from './managed-account-types'
-import type { NotificationSettings } from './notification-settings-types'
+} from './agent-accounts/managed-account-types'
+import type { NotificationSettings } from './notifications/notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalQuickCommand } from './terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import type { ZcodePlanSite } from './zcode-plan-sites'
+import type { ZcodePlanSite } from './agent-accounts/usage-credentials/zcode-plan-sites'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,

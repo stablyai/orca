@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { wslGatedAccess } from '../../transcript-filesystem/wsl-transcript-fs-access'
 import { join } from 'node:path'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { getAiVaultWslScanHomeDirs } from '../../../ai-vault/discovery/ai-vault-scan-roots'
 import { prepareOpenCodeWslReaders } from '../../../ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import {

@@ -69,7 +69,7 @@ import { disposeOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad
 import { retainUnretainedOrcadMigrationSources } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
 import { reconcileManagedOrcadSshTargets } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
 import { installOrcadMigrationScrollbackRetention } from '../../persistence/migrating-orcad-catalog/terminal-history/orcad-migration-scrollback-retention-wiring'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-ipc'
 import {
   onLastBridgedTerminalExit,

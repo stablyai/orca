@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import {
   syncSystemCodexResourcesIntoManagedHome,
   getSystemCodexHomePath,
@@ -14,7 +14,7 @@ import {
   resolveWslCodexSessionSourceHome
 } from '../../../codex/history/rollouts/codex-session-source-home'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
   resolveHostCodexManagedHomeVerdict,
@@ -28,8 +28,8 @@ import {
 } from '../../../codex/history/backfill/codex-session-backfill-marker'
 import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
 import { startWslCodexSessionBridgeInBackground } from '../../../codex/history/bridges/wsl-codex-session-bridge'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {

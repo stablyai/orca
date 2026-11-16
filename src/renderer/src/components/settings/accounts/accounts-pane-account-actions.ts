@@ -5,7 +5,7 @@ import type { FeatureInteractionId } from '../../../../../shared/feature-educati
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -30,6 +30,7 @@ import {
 } from '../../../lib/provider-accounts/provider-account-action-errors'
 import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
 import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/provider-accounts/claude-account-switch-sessions'
+import { createAccountRenameRunner, type AccountRenameContext } from './account-rename-runner'
 
 type CodexActionContext = {
   settings: GlobalSettings
@@ -235,5 +236,19 @@ export function createClaudeAccountActionRunner(
     } finally {
       setClaudeAction('idle')
     }
+  }
+}
+
+export function createAccountsPaneRunners(
+  context: CodexActionContext & ClaudeActionContext & AccountRenameContext
+): {
+  runCodexAccountAction: CodexAccountActionRunner
+  runClaudeAccountAction: ClaudeAccountActionRunner
+  renameAccount: ReturnType<typeof createAccountRenameRunner>
+} {
+  return {
+    runCodexAccountAction: createCodexAccountActionRunner(context),
+    runClaudeAccountAction: createClaudeAccountActionRunner(context),
+    renameAccount: createAccountRenameRunner(context)
   }
 }

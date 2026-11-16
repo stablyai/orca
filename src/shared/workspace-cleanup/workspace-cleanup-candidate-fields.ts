@@ -1,4 +1,4 @@
-import type { DiffComment } from '../diff-comment-types'
+import type { DiffComment } from '../file-review/diff-comment-types'
 
 export type WorkspaceCleanupDiffCommentTimes = readonly Pick<DiffComment, 'createdAt'>[]
 

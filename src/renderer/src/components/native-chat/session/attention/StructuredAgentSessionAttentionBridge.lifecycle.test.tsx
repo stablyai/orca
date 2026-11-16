@@ -10,7 +10,7 @@ import type {
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
 } from '../../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
-import type { NotificationDispatchRequest } from '../../../../../../shared/notification-settings-types'
+import type { NotificationDispatchRequest } from '../../../../../../shared/notifications/notification-settings-types'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Tab } from '../../../../../../shared/tab-types'

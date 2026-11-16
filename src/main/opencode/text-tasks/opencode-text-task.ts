@@ -1,4 +1,4 @@
-import { mergeCommandEnvironment } from '../../../shared/command-environment'
+import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
 import { cleanAgentAnswer } from '../../text-generation/failures/source-control-agent-failure'
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'

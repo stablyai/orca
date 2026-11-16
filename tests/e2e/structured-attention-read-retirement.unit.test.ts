@@ -40,7 +40,7 @@ import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/se
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { StructuredNotificationRead } from '../../src/shared/notification-settings-types'
+import type { StructuredNotificationRead } from '../../src/shared/notifications/notification-settings-types'
 import { RuntimeMobileNotificationController } from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 
 describe('Explicit desktop read acknowledgements', () => {

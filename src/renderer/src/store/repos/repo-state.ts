@@ -74,6 +74,7 @@ export type RepoUpdate = Partial<
   hiddenAt?: Repo['hiddenAt'] | null
   ghAccount?: GhAccountBinding | null
   workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+  browserProfileId?: string | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']

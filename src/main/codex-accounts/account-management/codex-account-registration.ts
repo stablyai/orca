@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
@@ -9,7 +9,7 @@ import {
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState
-} from '../../../shared/managed-account-types'
+} from '../../../shared/agent-accounts/managed-account-types'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexRuntimeHomeService } from '../runtime-home-service'
@@ -29,7 +29,7 @@ import {
   normalizeCodexRuntimeSelection,
   setSelectedCodexAccountIdForTarget
 } from './runtime-selection'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 
 type CodexAccountRegistrationDependencies = {
   store: Store

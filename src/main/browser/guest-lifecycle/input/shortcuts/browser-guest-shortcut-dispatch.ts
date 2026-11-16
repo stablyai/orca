@@ -1,7 +1,7 @@
 import {
   resolveWindowShortcutAction,
   type WindowShortcutInput
-} from '../../../../../shared/window-shortcut-policy'
+} from '../../../../../shared/keybindings/window-shortcut-policy'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { hasModifier } from '../../../../../shared/keybindings/parser'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
@@ -11,7 +11,7 @@ import type { BrowserFindTarget } from '../../../../../shared/browser/guest-life
 import type { BrowserPageTabShortcut } from '../../../../../shared/browser/guest-lifecycle/browser-page-command-target'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 import { matchesGuestTabShortcut } from './browser-guest-tab-shortcut'
-import { textInputOwnsComposition } from '../../../../../shared/text-input-shortcut-policy'
+import { textInputOwnsComposition } from '../../../../../shared/keybindings/text-input-shortcut-policy'
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean

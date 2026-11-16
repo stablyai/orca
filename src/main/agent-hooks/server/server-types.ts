@@ -1,6 +1,6 @@
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { RowAgentIdentity } from '../identity/pane-agent-identities'
-import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -37,6 +37,7 @@ export type IncomingAgentHookEvent = AgentHookEventPayload & {
 }
 
 export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+  paneSleep?: { ptyId: string; incarnationId?: string }
   /** Live acknowledgement of the matching renderer retirement; never cached. */
   authorityRestartId?: string
   receivedAt: number
@@ -133,6 +134,8 @@ export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
 export type AgentHookStatusRowIdentity = {
+  providerSession?: EnrichedAgentHookEventPayload['providerSession']
+  agentType?: EnrichedAgentHookEventPayload['payload']['agentType']
   paneKey: string
   worktreeId?: string
   terminalHandle?: string

@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { AppIdentity } from '../../shared/app-identity'
+import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { MacCapturedDigitRowChord } from '../../shared/keybindings/macos-symbolic-hotkeys'
@@ -8,7 +8,7 @@ import type { WriteTerminalRenderDesyncEvidenceArgs } from '../../shared/termina
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
-} from '../../shared/keyboard-layout-events'
+} from '../../shared/keybindings/keyboard-layout-events'
 import { prepareAndInvokeAppRestart } from '../renderer/restart/renderer-restart-wiring'
 import {
   awaitBeforeUnloadCheckpoint,

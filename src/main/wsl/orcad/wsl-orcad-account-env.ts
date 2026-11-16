@@ -1,5 +1,5 @@
 /** D10: desktop prepares distro-local account homes for orcad. Patch caller-built launches/plain shells, agent.launch accountEnv, and capability-advertised agent-session creates; leave bare-command Settings defaults untouched. */
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { posix } from 'node:path'
 import {
   AGENT_LAUNCH_ACCOUNT_ENV_KEYS,

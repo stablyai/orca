@@ -4,7 +4,7 @@ import { getDefaultSettings, getDefaultUIState } from '../../../../shared/consta
 import { getWorktreeCardModeProperties } from '../../../../shared/worktree/row-display/card-properties'
 import { normalizeWorktreeVisibilityDefaults } from '../../../../shared/worktree/visibility/external-worktree-visibility'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../shared/osc52-clipboard-settings'
+import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import {
   applyPRBotAuthorOverride,

@@ -6,7 +6,7 @@ import {
   profileStateRecoveryResponseSchema,
   type ProfileStateRecoveryRequest,
   type ProfileStateRollbackResult
-} from '../../../shared/profile-state-recovery-command'
+} from '../../../shared/orca-profiles/profile-state-recovery-command'
 import {
   getExecutableAppArgs,
   resolveAppRoot,

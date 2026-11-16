@@ -115,14 +115,16 @@ describe('browserManager', () => {
       features: string
       disposition: string
     }) => unknown = guestSetWindowOpenHandlerMock.mock.calls[0][0]
-    const inputEventHandler = guestOnMock.mock.calls.find(([event]) => event === 'input-event')?.[1]
+    const mouseEventHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'before-mouse-event'
+    )?.[1]
     return {
       guest,
       rendererSendMock,
       openLink: (url) => {
         handler({ url, frameName: '', features: '', disposition: 'foreground-tab' })
       },
-      pressMouse: () => inputEventHandler({}, { type: 'mouseUp' })
+      pressMouse: () => mouseEventHandler({}, { type: 'mouseUp' })
     }
   }
 

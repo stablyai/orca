@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { setAppEnvironment } from '../../../shared/app-environment'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../../host/electron-app-environment'
 import { ensureWindowsAppDataPath } from '../windows-startup/windows-app-data-path'
 

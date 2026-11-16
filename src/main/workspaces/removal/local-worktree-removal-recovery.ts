@@ -12,7 +12,7 @@ import {
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
 import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 
 type LocalPartialRemovalRecoveryArgs = {
   error: unknown

@@ -10,7 +10,7 @@ import { sourceControlAiSettingsFromLegacy } from '../../../../shared/source-con
 import {
   normalizeOsc52ClipboardDefaultOn,
   osc52ClipboardDefaultOnOverridesPersistedOff
-} from '../../../../shared/osc52-clipboard-settings'
+} from '../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import { migrateWindowsTerminalFontWeight } from '../../../../shared/terminal/appearance/terminal-font-weight-windows-regular'
 import {

@@ -170,4 +170,16 @@ describe('active workspace context for a focused desktop-catalog workspace (real
       path: '/srv/runtime:env-1'
     })
   })
+
+  it('answers null on the start screen even while another workspace has an open terminal', async () => {
+    const id = `${REPO_ID}::${linkedPath}`
+    const runtime = runtimeFor({ activeWorktreeId: null, activeWorkspaceKey: null })
+    await runtime.syncWindowGraph(1, {
+      tabs: [
+        { tabId: 'tab-b', worktreeId: id, title: 'zsh', activeLeafId: 'pane:1', layout: null }
+      ],
+      leaves: []
+    })
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toBeNull()
+  })
 })

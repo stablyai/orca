@@ -8,7 +8,7 @@ import type { SearchOptions, SearchResult } from '../../../../shared/file-search
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { listQuickOpenFiles } from '../../../ipc/filesystem/filesystem-list-files'
 import { searchQuickOpenFilePaths as searchHostQuickOpenFilePaths } from '../../../ipc/filesystem/filesystem-search-file-paths'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from '../mobile-file-kind'

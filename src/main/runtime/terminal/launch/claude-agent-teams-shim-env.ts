@@ -8,8 +8,11 @@ import {
   isDirectClaudeCommand,
   type ClaudeAgentTeamsMode
 } from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
-import { getAppEnvironment, hasAppEnvironment } from '../../../../shared/app-environment'
-import { getOrcaCliCommandNameForPlatform } from '../../../../shared/orca-cli-command-name'
+import {
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../shared/app-lifecycle/app-environment'
+import { getOrcaCliCommandNameForPlatform } from '../../../../shared/cli/orca-cli-command-name'
 import { getBundledLauncherPath } from '../../../cli/packaged-assets/bundled-cli-launcher-path'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 

@@ -5,8 +5,8 @@ import type {
   BrowserWorkspace
 } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from '../../../../../shared/locale-text-collators'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
+import { compareBaseSensitivityLocaleText } from '../../../../../shared/i18n/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,

@@ -9,7 +9,7 @@ import {
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../worktree/visibility/visibility-sources'
 import { OptionalFiniteNumber, OptionalString } from '../rpc-param-primitives'
-import { editorFormatterSchema } from '../../editor-formatter'
+import { editorFormatterSchema } from '../../editor/formatting/editor-formatter'
 import { normalizeDictationTerms } from '../../speech/dictation/dictation-dictionary'
 import { RepoWorkspaceCleanupPolicyParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 
@@ -93,6 +93,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       hiddenAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
+      browserProfileId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
       sourceControlAi: RepoSourceControlAiOverrides,
       workspaceCleanupPolicy: RepoWorkspaceCleanupPolicyParam.optional()

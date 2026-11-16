@@ -20,7 +20,7 @@ import { isRuntimeCatalogListingStale } from '../runtime-status/runtime-status-h
 import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { bumpProviderRuntimeSessionGeneration } from '@/runtime/hosts/observations/provider-runtime-context'
-import { normalizeUiLanguage } from '../../../../../shared/ui-language'
+import { normalizeUiLanguage } from '../../../../../shared/i18n/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'
 import {
@@ -34,7 +34,7 @@ import {
 import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null

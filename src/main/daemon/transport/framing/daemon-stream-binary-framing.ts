@@ -4,7 +4,7 @@
  * EVENT body: UTF-8 JSON; DATA body: [meta length u16 BE][meta JSON][data bytes].
  * DATA metadata omits payload.data, which the reader restores from the bytes.
  */
-import { NDJSON_MAX_LINE_BYTES } from '../../../../shared/main-process-ndjson-framer'
+import { NDJSON_MAX_LINE_BYTES } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import type { DaemonEvent } from '../../protocol/daemon-stream-events'
 
 export const BINARY_STREAM_FRAMING = 'binary-v1'

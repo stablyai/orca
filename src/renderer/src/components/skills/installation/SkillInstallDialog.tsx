@@ -30,7 +30,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { resolveSkillShareForInstall } from './preview/skill-warning-preview-gate'
 import { useSkillInstallRisk } from './use-skill-install-risk'
 import { SkillInstallDialogFooter } from './SkillInstallDialogFooter'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

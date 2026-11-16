@@ -1,6 +1,6 @@
 import type { AiVaultSession } from '../contracts/ai-vault-types'
 import { sessionFileExecutionNamespace } from './ai-vault-scope-cwd-match'
-import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import { normalizeExecutionHostId } from '../../execution-host'
 
 /** A relationship or provider id alone does not prove that two rows recorded the same directory. */

@@ -4,12 +4,30 @@ import type { AgentJournalToolCallItem } from '../../../shared/agent-session/jou
 import { legacyAgentSessionQuestionAnswers } from '../../../shared/agent-session/agent-session-question-answer'
 import { AcpRpcError, acpErrorDataWords, type AcpAgentError } from '../transport/acp-errors'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
+import {
+  ACP_FORM_ELICITATION_METHOD,
+  acpFormElicitationPresentation
+} from '../requests/acp-form-elicitation'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { antigravityToolSubagents } from './antigravity-subagents'
 
-// interaction_ permissions are questions, even in yolo mode; never auto-approve them.
+// The server's question forms open with only a count; each field's title is the real question.
+const QUESTION_FORM_MESSAGE = /^The agent has (?:a question|\d+ questions)\.$/
+const formMessageSchema = z.looseObject({ mode: z.literal('form'), message: z.string() })
+
+function questionForm(method: string, params: unknown): AcpRequestPresentation | undefined {
+  if (method !== ACP_FORM_ELICITATION_METHOD) {
+    return undefined
+  }
+  const form = formMessageSchema.safeParse(params).data
+  return form && QUESTION_FORM_MESSAGE.test(form.message)
+    ? acpFormElicitationPresentation({ ...form, message: '' })
+    : undefined
+}
+
+// Formless servers ask via interaction_ permissions; never auto-approve them, even in yolo mode.
 function questionRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
   const request =
     method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null
@@ -190,7 +208,12 @@ function toolPlan(update: ToolCallUpdate, tool: AgentJournalToolCallItem): strin
 }
 
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
-  request: (method, params) => questionRequest(method, params) ?? enrichedApproval(method, params),
+  // With forms, ask_question carries a write-in field per question; permissions cannot carry text.
+  clientCapabilities: { elicitation: { form: {} } },
+  request: (method, params) =>
+    questionForm(method, params) ??
+    questionRequest(method, params) ??
+    enrichedApproval(method, params),
   normalizeToolUpdate,
   promptErrorDetail,
   toolPlan,

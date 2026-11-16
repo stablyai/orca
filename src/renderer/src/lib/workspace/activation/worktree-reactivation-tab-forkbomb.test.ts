@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -55,7 +56,7 @@ function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState>
     tabBarOrderByWorktree: {},
     pendingStartupByTabId: {},
     automaticAgentResumeClaimsByTabId: {},
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     sleepingAgentSessionsByPaneKey: {},
     settings: {
       ...getDefaultSettings(''),

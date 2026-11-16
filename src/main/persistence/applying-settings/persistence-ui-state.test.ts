@@ -40,7 +40,7 @@ async function createStore() {
   if (hasCreatedStoreInCase) {
     vi.resetModules()
   }
-  const { setSecretStore } = await import('../../../shared/secret-store')
+  const { setSecretStore } = await import('../../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
     encryptString: (plaintext) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),

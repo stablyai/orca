@@ -22,7 +22,7 @@ import {
 } from './orcad-incumbent-recovery'
 import type { OrcadManagedRefusal } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { resumeInterruptedOrcadCandidate } from './orcad-interrupted-candidate-resume'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { isOrcadLaunchFailure } from './orcad-launch-failure'
 
 export type OrcadActivationRecoveryResult =

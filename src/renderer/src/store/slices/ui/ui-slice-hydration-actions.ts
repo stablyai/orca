@@ -1,4 +1,4 @@
-import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
+import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
@@ -29,16 +29,16 @@ import {
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
 } from '../../../../../shared/workspace/status/workspace-statuses'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
-import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
+import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
-import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
-import { isReleaseChannel } from '../../../../../shared/release-channel'
+import { isReleaseChannel } from '../../../../../shared/updater/release-channel'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals

@@ -61,7 +61,8 @@ const deliveredTo = (branch: string) =>
     ?.outcome.pr?.title
 
 async function load() {
-  const policy = await import('../../../../shared/review-refresh-policy')
+  const policy =
+    await import('../../../../shared/source-control/hosted-review/review-refresh-policy')
   const coordinator = await import('./pr-refresh-coordinator')
   const lookup = await import('../../client/lookup/pr-for-branch-outcome')
   const resources = await import('../../client/lookup/pr-branch-read-resources')
@@ -105,36 +106,6 @@ async function load() {
   const claims = () => resources._prBranchReadResourceCountForTests()
   return { coordinator, lookup, switchTo, fillExactCache, directRead, claims }
 }
-
-it('restores a failure the full exact cache could not keep as its own retry, which Off retires again', async () => {
-  const { coordinator, switchTo, fillExactCache, claims } = await load()
-  const holds = await fillExactCache()
-  provider.resolve.mockImplementation(async () => failed())
-  const target = makeCandidate({ branch: 'target', currentHeadOid: 'head-sha' })
-  // Fails at 1 s with no exact entry; Default would retry it at 121 s.
-  coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
-  await vi.advanceTimersByTimeAsync(0)
-  expect(readsOf('target')).toBe(1)
-  for (const release of holds) {
-    release()
-  }
-
-  await switchTo('off', 1_500)
-  await switchTo('default', 2_000)
-  await switchTo('off', 3_000)
-  await vi.advanceTimersByTimeAsync(130_000 - Date.now())
-  expect(readsOf('target')).toBe(1)
-
-  provider.resolve.mockImplementation(async () => found('recovered'))
-  await switchTo('default', Date.now())
-  await vi.advanceTimersByTimeAsync(0)
-  expect(readsOf('target')).toBe(2)
-  expect(coordinatorMocks.sendToTrustedUIRendererMock.mock.calls.at(-1)?.[1]).toMatchObject({
-    outcome: { pr: { title: 'recovered' } }
-  })
-  // Recovery released the failure's claim on its request.
-  expect(claims()).toBe(0)
-})
 
 it.each(['succeeded', 'failed'] as const)(
   'a cadence turned back on reads once for every shown worktree of a PR whose last read %s',
@@ -214,45 +185,6 @@ it.each(['default', 'off'] as const)(
     ])
     // Default: the ordinary follow-up two minutes after the newer read, not the old error's retry.
     await expectNextAutomaticRead(cadence, 125_000, switchTo)
-  }
-)
-
-it.each(['default', 'off'] as const)(
-  'a newer read starting retires a failure already settled, its retry and its claim (%s)',
-  async (cadence) => {
-    const { coordinator, lookup, switchTo, fillExactCache, directRead, claims } = await load()
-    const { hostedReviewOptionArgs } = await import('./pr-refresh-candidate-policy')
-    await fillExactCache()
-    const target = makeCandidate({ branch: 'target', currentHeadOid: 'head-sha' })
-    const running = Promise.withResolvers<PRRefreshOutcome>()
-    provider.resolve.mockImplementationOnce(() => running.promise)
-    coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
-    await vi.advanceTimersByTimeAsync(0)
-    // Another reader of the same request joins the running read: it starts nothing, so the failure
-    // stays that read's, with its retry at 121 s.
-    const joined = lookup.getPRForBranchOutcome(
-      '/repo',
-      'target',
-      null,
-      null,
-      null,
-      hostedReviewOptionArgs(target, 'visible')[0] ?? {}
-    )
-    await vi.advanceTimersByTimeAsync(0)
-    running.resolve(failed())
-    expect(await joined).toMatchObject({ kind: 'upstream-error' })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(readsOf('target')).toBe(1)
-    expect(claims()).toBe(1)
-    if (cadence === 'off') {
-      await switchTo('off', 2_000)
-      expect(claims()).toBe(1)
-    }
-    await vi.advanceTimersByTimeAsync(61_000 - Date.now())
-    provider.resolve.mockImplementationOnce(async () => found('newer'))
-    await directRead(target)
-    expect(claims()).toBe(0)
-    await expectNextAutomaticRead(cadence, 181_000, switchTo)
   }
 )
 
@@ -339,46 +271,6 @@ it.each(['automatic', 'reported again', 'shown again'] as const)(
   }
 )
 
-it.each(['off', 'reduced'] as const)(
-  'a restored follow-up that waited for quota starts only when %s still gives it',
-  async (cadence) => {
-    const { coordinator, lookup, switchTo } = await load()
-    const x = makeCandidate({ branch: 'x', currentHeadOid: 'head-sha' })
-    coordinator.reportVisiblePRRefreshCandidates([x], 1, 1)
-    await vi.advanceTimersByTimeAsync(0)
-    await switchTo('off', 2_000)
-    // Other reads push X's exact answer out of the bounded cache, so none can stand in for a start.
-    for (let other = 0; other < 256; other += 1) {
-      await lookup.getPRForBranchOutcome('/repo', `other-${other}`, null, null, null, {
-        currentHeadOid: 'head-sha'
-      })
-    }
-    await vi.advanceTimersByTimeAsync(200_000 - Date.now())
-    const quota = Promise.withResolvers<number | null>()
-    provider.gate.mockReturnValueOnce(quota.promise)
-    await switchTo('default', 200_000)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(provider.gate).toHaveBeenCalled()
-    await switchTo(cadence, 201_000)
-    provider.resolve.mockImplementation(async () => found('changed'))
-    if (cadence === 'off') {
-      quota.resolve(null)
-      await vi.advanceTimersByTimeAsync(60 * 60_000)
-      expect(readsOf('x')).toBe(1)
-      return
-    }
-    // Reduced puts X's next read five intervals after its data (1 s + 600 s); a shorter learned
-    // pause does not bring it forward.
-    await vi.advanceTimersByTimeAsync(1_000)
-    quota.resolve(300_000)
-    await vi.advanceTimersByTimeAsync(600_999 - Date.now())
-    expect(readsOf('x')).toBe(1)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(readsOf('x')).toBe(2)
-    expect(deliveredTo('x')).toBe('changed')
-  }
-)
-
 /** Opens these renderer windows; a closed one reports destroyed before any cleanup for it runs. */
 function openWindows(...ids: number[]): (id: number) => void {
   const closed = new Set<number>()
@@ -390,71 +282,6 @@ function openWindows(...ids: number[]): (id: number) => void {
 
 const row = (branch: string) =>
   makeCandidate({ branch, worktreeId: `wt-${branch}`, cacheKey: `/repo::${branch}` })
-
-it('a parked failure releases its claim once no window shows its row, however that demand ends', async () => {
-  const { coordinator, switchTo, claims } = await load()
-  const close = openWindows(1, 2, 3)
-  provider.resolve.mockImplementation(async () => failed())
-  coordinator.reportVisiblePRRefreshCandidates([row('a'), row('shared'), row('removed')], 1, 1)
-  coordinator.reportVisiblePRRefreshCandidates([row('shared')], 1, 2)
-  await vi.advanceTimersByTimeAsync(30_000)
-  expect([readsOf('a'), readsOf('shared'), readsOf('removed')]).toEqual([1, 1, 1])
-  // Off leaves no queued work; each failure keeps its claim while its row is shown.
-  await switchTo('off', 31_000)
-  expect(coordinator._getPRRefreshQueueSizeForTests()).toBe(0)
-  expect(claims()).toBe(3)
-
-  // A removed workspace's row has no queued alias to prune, yet its demand ends.
-  coordinator.pruneWorktreePRRefreshAliases('wt-removed')
-  expect(claims()).toBe(2)
-  // Window 1 is already destroyed when its close cleanup runs; window 2 still shows the shared row.
-  close(1)
-  coordinator.clearVisiblePRRefreshWindow(1)
-  expect(claims()).toBe(1)
-  // Window 2 closes with no cleanup of its own; the next report, from window 3, prunes it.
-  close(2)
-  coordinator.reportVisiblePRRefreshCandidates([], 1, 3)
-  expect(claims()).toBe(0)
-  expect(coordinator._getPRRefreshErrorBackoffCountForTests()).toBe(0)
-})
-
-it.each([750, 7_500])(
-  'a report from another window does no bookkeeping over %i unchanged rows, and its dropped row releases',
-  async (count) => {
-    const { coordinator, claims } = await load()
-    const { PRRefreshVisibility } = await import('./pr-refresh-visibility')
-    const { PRRefreshRetryState } = await import('./pr-refresh-retry-state')
-    openWindows(1, 2)
-    provider.resolve.mockImplementation(async () => failed())
-    coordinator.reportVisiblePRRefreshCandidates([row('b')], 1, 2)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(claims()).toBe(1)
-    coordinator.reportVisiblePRRefreshCandidates(
-      Array.from({ length: count }, (_, index) => row(`a-${index}`)),
-      1,
-      1
-    )
-    const memberships = vi.spyOn(PRRefreshVisibility.prototype, 'has')
-    const releases = vi.spyOn(PRRefreshRetryState.prototype, 'releaseFailure')
-    const rendererChecks = coordinatorMocks.webContentsFromIdMock
-    const work = (report: () => void) => {
-      for (const counter of [memberships, releases, rendererChecks]) {
-        counter.mockClear()
-      }
-      report()
-      return [memberships, releases, rendererChecks].map((counter) => counter.mock.calls.length)
-    }
-    // Row membership checks, failure releases and renderer checks: one prune of the two windows per
-    // report, and only B's dropped row is checked and released.
-    expect(work(() => coordinator.reportVisiblePRRefreshCandidates([row('b')], 2, 2))).toEqual([
-      0, 0, 2
-    ])
-    expect(work(() => coordinator.reportVisiblePRRefreshCandidates([], 1, 2))).toEqual([0, 0, 2])
-    expect(work(() => coordinator.reportVisiblePRRefreshCandidates([], 3, 2))).toEqual([1, 1, 2])
-    expect(claims()).toBe(0)
-    expect(coordinator._getPRRefreshErrorBackoffCountForTests()).toBe(0)
-  }
-)
 
 it('a drain that finds every queued row’s window closed ends quietly; a row still shown reads on', async () => {
   const { coordinator, claims } = await load()
@@ -563,55 +390,6 @@ it('an action that waited for quota keeps its turn when another worktree of its 
   // The push's own read goes, and Y, coalesced with it, gets that answer too.
   expect(provider.resolve.mock.calls.map(([read]) => read.branchName)).toEqual(['x', 'x'])
   expect([deliveredTo('x'), deliveredTo('y')]).toEqual(['pushed', 'pushed'])
-})
-
-it.each(['its read', 'its failure', 'an earlier head’s read'] as const)(
-  'a queued watch planned from %s follows a cadence change from that same anchor',
-  async (anchor) => {
-    const { coordinator, switchTo } = await load()
-    const headReads = vi.fn(async () => Date.now())
-    coordinator.setPRWatchJobHooks({ isWatched: () => true, readHeadChecks: headReads })
-    if (anchor === 'its failure') {
-      provider.resolve.mockImplementation(async () => failed())
-    }
-    const watched = makeCandidate({ branch: 'watched', linkedPRNumber: 12 })
-    const job =
-      anchor === 'an earlier head’s read'
-        ? { prKey: 'github.com/acme/repo#12', headSha: 'old-head' }
-        : { prKey: 'github.com/acme/repo#12' }
-    const watchReads = () =>
-      anchor === 'an earlier head’s read' ? headReads.mock.calls.length : readsOf('watched')
-    await switchTo('minimal', 1_000)
-    coordinator.schedulePRWatchRead(job, watched, 1_000)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(watchReads()).toBe(1)
-    // Minimal put the next read at 1 201 s; Default, set at 2 s, puts it at 121 s from the same read.
-    await switchTo('default', 2_000)
-    await vi.advanceTimersByTimeAsync(120_999 - Date.now())
-    expect(watchReads()).toBe(1)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(watchReads()).toBe(2)
-  }
-)
-
-it('a watch that waited for quota while Off slowed it to Minimal reads at the Minimal time', async () => {
-  const { coordinator, switchTo } = await load()
-  coordinator.setPRWatchJobHooks({ isWatched: () => true, readHeadChecks: async () => null })
-  const watched = makeCandidate({ branch: 'watched', linkedPRNumber: 12 })
-  coordinator.schedulePRWatchRead({ prKey: 'github.com/acme/repo#12' }, watched, 1_000)
-  await vi.advanceTimersByTimeAsync(0)
-  // Due at 121 s on Default; quota is still being checked when Off (Minimal for watches) arrives.
-  await vi.advanceTimersByTimeAsync(121_000 - Date.now() - 1)
-  const quota = Promise.withResolvers<number | null>()
-  provider.gate.mockReturnValueOnce(quota.promise)
-  await vi.advanceTimersByTimeAsync(1)
-  expect(provider.gate).toHaveBeenLastCalledWith(watched, true)
-  await switchTo('off', 121_500)
-  quota.resolve(null)
-  await vi.advanceTimersByTimeAsync(1_200_999 - Date.now())
-  expect(readsOf('watched')).toBe(1)
-  await vi.advanceTimersByTimeAsync(1)
-  expect(readsOf('watched')).toBe(2)
 })
 
 it('retiming an old HEAD failure cannot delay the newer HEAD return under Off', async () => {

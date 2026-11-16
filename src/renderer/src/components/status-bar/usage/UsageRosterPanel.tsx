@@ -3,15 +3,16 @@ import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { ProviderIcon } from './provider-usage-panel'
-import { getProviderDisplayName } from '../../../../../shared/usage-provider-windows'
+import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { formatPlanLabel } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
+  getTopScopedSection,
   getUrgentScopedSection,
   getUsageHeadlineSection,
   providerPrimaryMaxUsed,
@@ -24,22 +25,28 @@ import {
   formatResetsInCaption,
   validResetAt
 } from './usage-reset-caption'
-import { formatBareUsagePercentage } from './usage-percentage-label'
-import { getUsageHealthTone, usageTextClass } from './usage-health-tone'
+import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
+import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
 
 type ProviderId = ProviderRateLimits['provider']
 function DetailMetric({
   section,
   label,
-  display
+  display,
+  title
 }: {
   section: UsageSection
   label: string
   display: UsagePercentageDisplay
+  title?: string
 }): React.JSX.Element {
   return (
-    <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
+    <span
+      data-usage-window={section.label}
+      title={title}
+      className="flex shrink-0 items-center gap-1.5"
+    >
       <span className="text-[10px] text-muted-foreground">{label}</span>
       <UsageBar
         usedPercent={section.window.usedPercent}
@@ -55,10 +62,32 @@ function DetailMetric({
   )
 }
 
+/** Spells out what a Fable figure limits; MCP windows are not weekly, so they get no title. */
+function scopedUsageTitle(
+  p: ProviderRateLimits,
+  section: UsageSection,
+  display: UsagePercentageDisplay,
+  t: Translate
+): string | undefined {
+  if (section.window !== p.fableWeekly) {
+    return undefined
+  }
+  return t(
+    'auto.components.status.bar.UsageRosterPanel.modelWeeklyLimit',
+    '{{model}} weekly limit: {{usage}}',
+    {
+      model: section.label,
+      usage: formatUsagePercentageLabel(section.window.usedPercent, display, t)
+    }
+  )
+}
+
 function ScopedUsageFlag({
+  p,
   section,
   display
 }: {
+  p: ProviderRateLimits
   section: UsageSection
   display: UsagePercentageDisplay
 }): React.JSX.Element {
@@ -66,7 +95,8 @@ function ScopedUsageFlag({
   return (
     <span
       data-usage-scoped-urgent
-      className={`shrink-0 text-[11px] ${usageTextClass(section.window.usedPercent)}`}
+      title={scopedUsageTitle(p, section, display, t)}
+      className="shrink-0 text-[11px] text-muted-foreground"
     >
       {`${section.label} ${formatBareUsagePercentage(section.window.usedPercent, display, t)}`}
     </span>
@@ -85,18 +115,29 @@ function RowUsageSummary({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const headline = getUsageHeadlineSection(p, t)
-  const scoped = getUrgentScopedSection(p, t)
   if (!headline) {
-    // Why both: no ordinary reading yet, but a nearly spent Fable/MCP limit is still worth naming.
+    // Why: a Fable/MCP-only reading is still a reading; show it where the value goes, at any level.
+    const only = getTopScopedSection(p, t)
     return (
       <span className="ml-auto flex shrink-0 items-center gap-2">
-        {scoped ? <ScopedUsageFlag section={scoped} display={display} /> : null}
-        <span data-usage-not-checked className="text-[11px] text-muted-foreground">
-          {t('auto.components.status.bar.UsageRosterPanel.notChecked', 'Not checked')}
-        </span>
+        {only ? (
+          <span
+            data-usage-scoped-only
+            title={scopedUsageTitle(p, only, display, t)}
+            className="text-right text-[12px] font-medium tabular-nums"
+          >
+            <span className="text-[11px] font-normal text-muted-foreground">{only.label}</span>{' '}
+            {formatBareUsagePercentage(only.window.usedPercent, display, t)}
+          </span>
+        ) : (
+          <span data-usage-not-checked className="text-[11px] text-muted-foreground">
+            {t('auto.components.status.bar.UsageRosterPanel.notChecked', 'Not checked')}
+          </span>
+        )}
       </span>
     )
   }
+  const scoped = getUrgentScopedSection(p, t)
   // Why: a nearly spent headline needs its own reset more than a scoped flag the Detailed line repeats.
   const showScoped = scoped !== null && getUsageHealthTone(headline.window.usedPercent) !== 'urgent'
   const resetsAt = validResetAt(headline.window.resetsAt)
@@ -108,7 +149,7 @@ function RowUsageSummary({
   return (
     <span className="ml-auto flex shrink-0 items-center gap-2">
       {showScoped && scoped ? (
-        <ScopedUsageFlag section={scoped} display={display} />
+        <ScopedUsageFlag p={p} section={scoped} display={display} />
       ) : resetLabel ? (
         <span
           data-usage-reset
@@ -189,6 +230,12 @@ export function UsageRow({
               section={section}
               label={shortUsageLabel(p, section)}
               display={display}
+              title={scopedUsageTitle(
+                p,
+                { ...section, label: shortUsageLabel(p, section) },
+                display,
+                t
+              )}
             />
           ))}
         </div>

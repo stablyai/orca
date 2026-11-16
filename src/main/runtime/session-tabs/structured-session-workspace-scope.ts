@@ -21,7 +21,7 @@ import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../ses
 import type { RuntimeWorkspaceCatalog } from '../workspaces/catalog/workspace-catalog'
 import type { RuntimeWorkspaceSelectors } from '../workspaces/workspace-selectors'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type { NotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
+import type { NotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
 
 export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStructuredSessionAccountHome {
   protected abstract resolveFolderWorkspaceSelector(

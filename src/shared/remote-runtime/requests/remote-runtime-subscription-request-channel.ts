@@ -5,7 +5,7 @@ import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connecti
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
 import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
-import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
+import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../concurrency/timer-delay'
 
 type PendingRemoteRuntimeSubscriptionRequest = {
   resolve: (response: RuntimeRpcResponse<unknown>) => void

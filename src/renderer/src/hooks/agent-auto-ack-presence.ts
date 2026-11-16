@@ -1,4 +1,4 @@
-import { DESKTOP_AWAY_SECONDS } from '../../../shared/desktop-away-threshold'
+import { DESKTOP_AWAY_SECONDS } from '../../../shared/app-lifecycle/presence/desktop-away-threshold'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 // Only trusted renderer input stamps presence; main’s below-idle-threshold answer applies to that scan and must not extend the presence window again.

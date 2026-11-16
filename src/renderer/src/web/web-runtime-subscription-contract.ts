@@ -1,5 +1,8 @@
 import type { WebRuntimeClient } from './web-runtime-client'
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../shared/concurrency/abort-signal-reason'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from './web-runtime-request-registry'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
