@@ -43,7 +43,7 @@ export function seedStickyWorkerRecords(
         launch: { effective: { agent: 'codex', model: 'gpt-6.1-sol', effort: 'xhigh' } }
       }
     })
-    const handle = `term_sticky_capture_${index}`
+    const handle = `term_sticky_capture_${session}_${index}`
     db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       handle,
