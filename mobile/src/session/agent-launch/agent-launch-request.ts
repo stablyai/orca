@@ -11,7 +11,8 @@ import {
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-intent'
 import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcSendParams } from '../../../../src/shared/rpc-contract/rpc-send-params'
@@ -20,6 +21,8 @@ import type { WorkspaceCreateParams } from '../../new-workspace/creation/workspa
 // False identifies older hosts without agent.launch.
 export type AgentLaunchSupport = {
   replay: boolean
+  /** Its receipt reports setup the host skipped; without it a pinned setup must create through worktree.create. */
+  reportsSetupTrustMismatch?: boolean
 }
 
 export function readAgentLaunchSupport(
@@ -28,7 +31,12 @@ export function readAgentLaunchSupport(
   if (!capabilities?.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
     return false
   }
-  return { replay: capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY) }
+  return {
+    replay: capabilities.includes(AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY),
+    reportsSetupTrustMismatch: capabilities.includes(
+      AGENT_LAUNCH_SETUP_TRUST_MISMATCH_RUNTIME_CAPABILITY
+    )
+  }
 }
 
 export type WorktreeCreateAgentLaunch = {

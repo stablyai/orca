@@ -22,6 +22,28 @@ describe('mobile setup approval', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 
+  it('pins empty setup when the created branch shows none, so setup it adds is asked about', async () => {
+    const client = new FakeSession('connected')
+    client.sendRequest.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { hooks: null, source: null, setupConfig: null },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const result = await resolveCreateSetupApproval({
+      client,
+      trust: {},
+      repos: REPOS,
+      repo: { id: 'repo-1', displayName: 'marlin' },
+      createSource: { kind: 'base', baseBranch: 'origin/main' }
+    })
+    expect(result).toEqual({
+      approved: {
+        approvedSetupHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+      }
+    })
+  })
+
   it('runs once with the shown hash and stores nothing', async () => {
     const client = new FakeSession('connected')
     const trust = {}

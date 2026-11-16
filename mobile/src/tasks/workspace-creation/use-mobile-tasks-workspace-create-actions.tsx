@@ -75,6 +75,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       }
       setCreatingKey(item.key)
       setError('')
+      // Create stays disabled while a created workspace's skipped setup is under review.
+      let reviewing = false
       try {
         const targetRepo = getWorkspaceTargetRepo(item, repoIdOverride)
         if (!targetRepo) {
@@ -272,7 +274,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         setActionItem(null)
         setWorkspaceCreateDraft(null)
         setSetupPrompt(null)
-        const open = (notice?: string) =>
+        const open = (notice?: string) => {
+          setCreatingKey(null)
           // Use the shared route builder so special characters in host ids are encoded for bridge validation.
           router.push(
             workspaceRouteHref(
@@ -285,6 +288,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               taskRepoServer(targetRepo)
             )
           )
+        }
         const mismatch = readSetupTrustMismatch(result)
         if (!mismatch) {
           open()
@@ -301,10 +305,13 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
           }),
           created: { worktreeId: result.worktree.id, open }
         })
+        reviewing = true
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to create workspace')
       } finally {
-        setCreatingKey(null)
+        if (!reviewing) {
+          setCreatingKey(null)
+        }
       }
     },
     [

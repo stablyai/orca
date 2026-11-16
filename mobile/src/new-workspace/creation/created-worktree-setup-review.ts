@@ -80,13 +80,19 @@ export async function runReviewedCreatedSetup(
     if (!reply.ok && isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
       return unsupported
     }
-    return worktreeRunApprovedSetupRun.interpret(reply).status === 'mismatch'
-      ? translate(
-          'newWorkspace.createdSetupReview.changedAgain',
-          "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it."
-        )
-      : undefined
+    const outcome = worktreeRunApprovedSetupRun.interpret(reply).status
+    if (outcome === 'mismatch') {
+      return translate(
+        'newWorkspace.createdSetupReview.changedAgain',
+        "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it."
+      )
+    }
+    return outcome === 'spawn_failed' ? runFailed() : undefined
   } catch {
-    return translate('newWorkspace.createdSetupReview.runFailed', 'Could not start setup.')
+    return runFailed()
   }
+}
+
+function runFailed(): string {
+  return translate('newWorkspace.createdSetupReview.runFailed', 'Could not start setup.')
 }

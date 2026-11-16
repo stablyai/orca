@@ -122,8 +122,8 @@ async function createWorkItemWorkspace(args: {
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   parent?: WorktreeCreateParent
 }): Promise<WorktreeCreateResult> {
-  const { client, targetRepoId, setupDecision, agent, workspaceName, note } = args
-  const selection = await resolveComposerSelectionBase(client, args.selection, targetRepoId)
+  // The caller resolved the start point before showing its setup; creating from another could run unseen setup.
+  const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
   const taskItem = toTaskItem(item, targetRepoId)
   const { baseBranch, compareBaseRef, pushTarget, branchNameOverride } = selection

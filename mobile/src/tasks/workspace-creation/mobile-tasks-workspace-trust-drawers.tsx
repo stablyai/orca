@@ -241,13 +241,14 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
       return
     }
     void (async () => {
+      let notice: string | undefined
       try {
         const setupApproval = await persistSetupHookTrust(prompt, alwaysTrust)
         setOrcaYamlTrustPrompt(null)
-        if (prompt.created && client) {
-          prompt.created.open(
-            await runReviewedCreatedSetup(client, prompt.created.worktreeId, prompt.contentHash)
-          )
+        if (prompt.created) {
+          notice = client
+            ? await runReviewedCreatedSetup(client, prompt.created.worktreeId, prompt.contentHash)
+            : undefined
         } else if (setupApproval) {
           await createWithSetup(prompt, setupApproval)
         }
@@ -257,6 +258,12 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
             ? err.message
             : translate('tasks.workspaceTrustDrawers.trustFailed', 'Failed to trust setup script.')
         )
+      } finally {
+        // The workspace exists either way; opening it ends the review.
+        if (prompt.created) {
+          setOrcaYamlTrustPrompt(null)
+          prompt.created.open(notice)
+        }
       }
     })()
   }
@@ -274,7 +281,11 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     <OrcaHookTrustDrawer
       visible={taskUiReady && orcaYamlTrustPrompt != null}
       prompt={orcaYamlTrustPrompt}
-      busy={orcaYamlTrustPrompt != null && creatingKey === orcaYamlTrustPrompt.item.key}
+      busy={
+        orcaYamlTrustPrompt != null &&
+        !orcaYamlTrustPrompt.created &&
+        creatingKey === orcaYamlTrustPrompt.item.key
+      }
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       onRunOnce={() => approve(false)}
       onAlwaysTrust={() => approve(true)}

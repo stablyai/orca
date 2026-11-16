@@ -81,7 +81,11 @@ export async function prepareAutomationSetup(args: {
   let details: ReturnType<typeof newWorkspaceSetupHooksRead.interpret>
   try {
     details = newWorkspaceSetupHooksRead.interpret(
-      await newWorkspaceSetupHooksRead.request(client, { repo: `id:${setup.repoId}` })
+      await newWorkspaceSetupHooksRead.request(client, {
+        repo: `id:${setup.repoId}`,
+        // Runs create from the automation's base branch, so its setup is what a pin must match.
+        createSource: { kind: 'base', baseBranch: draft.baseBranch || undefined }
+      })
     )
   } catch {
     return current() ? { ...draft, setupDecision: 'skip' } : null

@@ -68,7 +68,7 @@ export async function createWorktreeWithNameRetry(
   // Wait for status before create or slow networks could silently disable safe replay.
   const worktreeCreateIdempotency = await args.worktreeCreateIdempotency
   // Fix the launch route before creating so collision retries cannot change methods.
-  let launch = await resolveAgentLaunchRoute(args.agentLaunch)
+  let launch = await resolveAgentLaunchRoute(args.agentLaunch, args.approvedSetupHash)
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   const mintLaunchOperationId = args.mintLaunchOperationId ?? structuredSessionOperationId
@@ -162,13 +162,18 @@ export async function createWorktreeWithNameRetry(
 }
 
 async function resolveAgentLaunchRoute(
-  launch: WorktreeCreateAgentLaunch | undefined
+  launch: WorktreeCreateAgentLaunch | undefined,
+  approvedSetupHash: string | undefined
 ): Promise<{ agent: TuiAgent; replay: boolean } | null> {
   if (!launch) {
     return null
   }
   const support = await launch.supported
-  return support ? { agent: launch.agent, replay: support.replay } : null
+  // A host whose launch receipt can't report skipped setup would drop pinned setup silently; worktree.create reports it.
+  if (!support || (approvedSetupHash && !support.reportsSetupTrustMismatch)) {
+    return null
+  }
+  return { agent: launch.agent, replay: support.replay }
 }
 
 // Launch lacks display name; use the candidate until the host resolves it, preserving warnings from either route.

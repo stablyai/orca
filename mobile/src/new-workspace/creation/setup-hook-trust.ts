@@ -7,6 +7,7 @@ import {
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed
 } from '../../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
+import { hashOrcaHookContent } from '../../../../src/shared/hashing/orca-hook-content-hash'
 import type { SetupHooksCreateSource } from '../../../../src/shared/worktree/setup-hooks-create-source'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
@@ -79,7 +80,12 @@ export async function resolveCreateSetupApproval(args: {
   )
   const setupTrust = normalizeSetupHookTrust(reply.setupTrust)
   if (!setupTrust) {
-    return { approved: {} }
+    // As desktop: approving no shared setup pins empty content, so setup the created branch adds is re-asked.
+    // Hosts that didn't read hooks here (SSH, another host's folder) omit setupConfig and can't recover it.
+    return {
+      approved:
+        reply.setupConfig === undefined ? {} : { approvedSetupHash: hashOrcaHookContent('') }
+    }
   }
   if (isOrcaHookContentApproved(args.trust, repoId, 'setup', setupTrust.contentHash)) {
     return { approved: { approvedSetupHash: setupTrust.contentHash } }

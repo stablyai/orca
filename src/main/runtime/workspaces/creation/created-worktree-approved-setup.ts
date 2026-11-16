@@ -30,7 +30,9 @@ type ApprovedSetupRuntime = {
     options?: { matchFolders?: boolean }
   ) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path' | 'displayName'>>
   requireStore: () => Pick<RuntimeStore, 'getRepo' | 'getSettings' | 'getProjectGroups'>
-  provisionManagedWorktreeTerminals: (args: WorktreeTerminalProvisioningArgs) => Promise<unknown>
+  provisionManagedWorktreeTerminals: (
+    args: WorktreeTerminalProvisioningArgs
+  ) => Promise<{ setupSpawned: boolean }>
 }
 
 /**
@@ -79,7 +81,7 @@ export async function runApprovedCreatedWorktreeSetup(
   if (!setup && !defaultTabs) {
     return { status: 'not_configured' }
   }
-  await runtime.provisionManagedWorktreeTerminals({
+  const provisioned = await runtime.provisionManagedWorktreeTerminals({
     worktreeSelector: `id:${worktree.id}`,
     worktreeId: worktree.id,
     worktreePath: worktree.path,
@@ -92,5 +94,5 @@ export async function runApprovedCreatedWorktreeSetup(
     ),
     ...options
   })
-  return { status: 'started' }
+  return setup && !provisioned.setupSpawned ? { status: 'spawn_failed' } : { status: 'started' }
 }
