@@ -14,8 +14,7 @@ function topLevelCwd(line: Buffer): string | null {
   }
   try {
     const record: unknown = JSON.parse(line.toString('utf8'))
-    const cwd =
-      typeof record === 'object' && record !== null ? (record as { cwd?: unknown }).cwd : null
+    const cwd = typeof record === 'object' && record !== null && 'cwd' in record ? record.cwd : null
     return typeof cwd === 'string' ? cwd : null
   } catch {
     return null

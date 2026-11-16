@@ -44,6 +44,7 @@ function session(
     `${JSON.stringify({ cwd })}\n${JSON.stringify({ cwd: lastCwd, input: { cwd } })}\n${blob}\n`
   )
   utimesSync(filePath, new Date(DAY_AGO), new Date(DAY_AGO))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only the fields set here
   return {
     executionHostId: 'local',
     agent: 'claude',
@@ -80,6 +81,7 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     const gone = join(appWorkspaces, 'gone')
     // Archived while the session scan runs: its row appears after the first read of the store.
     const archivedDuringScan: Record<string, object> = {}
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
     const store = {
       getSettings: () => ({
         workspaceDir: workspaces,
