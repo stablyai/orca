@@ -63,7 +63,7 @@ export function TabBarCreateRow({
   const [keyboardNav, setKeyboardNav] = useState(false)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const pointerInside = useRef(false)
-  const scroller = useCreateRowScroller()
+  const { scrollerRef, attachScroller, overflow, revealIcon } = useCreateRowScroller()
   const idPrefix = useId()
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const customizeIndex = visible.length
@@ -152,11 +152,11 @@ export function TabBarCreateRow({
             if (event.key === 'ArrowLeft') {
               event.preventDefault()
               setActiveIndex(Math.max(0, active - 1))
-              scroller.revealIcon(Math.max(0, active - 1))
+              revealIcon(Math.max(0, active - 1))
             } else if (event.key === 'ArrowRight' && active < customizeIndex) {
               event.preventDefault()
               setActiveIndex(active + 1)
-              scroller.revealIcon(active + 1)
+              revealIcon(active + 1)
             } else if ((event.key === 'Enter' || event.key === ' ') && activeItem) {
               event.preventDefault()
               run(activeItem)
@@ -167,7 +167,9 @@ export function TabBarCreateRow({
           <TabBarCreateRowIcons
             items={visible}
             highlightedIndex={keyboardActive ? active : hoveredIndex}
-            scroller={scroller}
+            overflow={overflow}
+            scrollerRef={scrollerRef}
+            attachScroller={attachScroller}
             idPrefix={idPrefix}
             onEscape={closeMenu}
             onHover={(index) => {

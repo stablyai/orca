@@ -7,6 +7,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
 import type { useCreateRowScroller } from './use-create-row-scroller'
+
+type CreateRowScroller = ReturnType<typeof useCreateRowScroller>
 import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
 
 export const CREATE_ROW_HIGHLIGHT_CLASS = 'bg-black/8 text-foreground dark:bg-white/14'
@@ -15,7 +17,9 @@ export const CREATE_ROW_HIGHLIGHT_CLASS = 'bg-black/8 text-foreground dark:bg-wh
 export function TabBarCreateRowIcons({
   items,
   highlightedIndex,
-  scroller,
+  overflow,
+  scrollerRef,
+  attachScroller,
   idPrefix,
   onEscape,
   onHover,
@@ -23,7 +27,9 @@ export function TabBarCreateRowIcons({
 }: {
   items: readonly TabBarCreateRowItem[]
   highlightedIndex: number | null
-  scroller: ReturnType<typeof useCreateRowScroller>
+  overflow: CreateRowScroller['overflow']
+  scrollerRef: CreateRowScroller['scrollerRef']
+  attachScroller: CreateRowScroller['attachScroller']
   /** Icon ids are `${idPrefix}-${index}` so the row can point aria-activedescendant at them. */
   idPrefix: string
   /** Controlled tooltips sit above the menu and take Escape first; it must still close the menu. */
@@ -38,16 +44,16 @@ export function TabBarCreateRowIcons({
       className={cn(
         'group/tab-strip relative flex min-w-0 flex-1',
         // A lane under the icons so the scroll rail never sits on them.
-        scroller.overflow.hasOverflow && 'pb-1.5'
+        overflow.hasOverflow && 'pb-1.5'
       )}
       onPointerMove={(event) => event.preventDefault()}
       onClick={(event) => event.preventDefault()}
     >
       <div
-        ref={scroller.attachScroller}
+        ref={attachScroller}
         className={cn(
           'flex min-w-0 flex-1 gap-0.5 overflow-x-auto overflow-y-hidden scrollbar-none',
-          getTabStripScrollMaskClassName(scroller.overflow)
+          getTabStripScrollMaskClassName(overflow)
         )}
       >
         {items.map((item, index) => {
@@ -88,8 +94,8 @@ export function TabBarCreateRowIcons({
         })}
       </div>
       <TabStripScrollIndicator
-        hasOverflow={scroller.overflow.hasOverflow}
-        scrollContainerRef={scroller.scrollerRef}
+        hasOverflow={overflow.hasOverflow}
+        scrollContainerRef={scrollerRef}
       />
     </div>
   )

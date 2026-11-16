@@ -24,7 +24,10 @@ export function useCreateRowScroller() {
       setOverflow((current) => (sameTabStripOverflowState(current, next) ? current : next))
     }
     const onWheel = (event: WheelEvent): void => {
-      scrollStripSidewaysOnWheel(scroller, event)
+      // Only while overflowing, so a short row never swallows the menu's own scrolling.
+      if (scroller.scrollWidth > scroller.clientWidth) {
+        scrollStripSidewaysOnWheel(scroller, event)
+      }
     }
     sync()
     const unbindResize = bindTabStripContentResizeObservers(scroller, sync)
