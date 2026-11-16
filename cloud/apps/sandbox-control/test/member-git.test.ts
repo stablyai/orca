@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { generateGrantRecipientKey } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
 import { memberPlaceholder } from '../src/github-user-tokens'
 import { MEMBERS_COMMAND } from '../src/lifecycle'
+import { githubActingViews } from '../src/git-actor'
 import { memberCoauthors } from '../src/member-git'
 import { getSandbox } from '../src/store'
 import { gitBasicAuthorization } from '../src/network-policy'
@@ -228,4 +229,23 @@ describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail
     t.h.advance(61 * 60_000)
     expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'window_expired' })
   })
+
+  it('the list reads a fixed number of times whatever its size (no per-row lookups)', async () => {
+    const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
+    await t.seed('alice', 'alice-gh', 11, false)
+    const db = t.h.env.SANDBOX_DB
+    let reads = 0
+    const counting = new Proxy(db, {
+      get: (target, prop) => (prop === 'prepare' ? (sql: string) => (reads++, target.prepare(sql)) : Reflect.get(target, prop, target))
+    }) as D1Database
+    const row = (await getSandbox(db, t.id))!
+    // Four rows of the same owner (ids differ): a list of any size.
+    const results = [row, ...[1, 2, 3].map((n) => ({ ...row, id: `${row.id.slice(0, -1)}${n}` }))]
+    const options = { enabled: () => true, sharedMaxMs: 60 * 60_000 }
+    const views = await githubActingViews(counting, results as never, 'alice', t.h.now(), options)
+    expect([...views.values()].map((v) => v.githubActing)).toEqual(Array(4).fill({ actingAs: 'member', userId: 'alice', login: 'alice-gh' }))
+    // grants + sends + one connections read for the account.
+    expect(reads).toBe(3)
+  })
 })
+

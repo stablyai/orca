@@ -9,7 +9,7 @@
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
 // departed member's workspaces can be reassigned or archived — metadata only, never access.
-import { githubActingView, type GithubActingOptions } from './git-actor'
+import { githubActingViews, type GithubActingOptions, type GithubActingView } from './git-actor'
 import type { TeamMembershipCheck } from './team-membership'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
@@ -172,18 +172,14 @@ export function costView(row: SandboxRow, settledMs: number, now: number) {
 }
 
 async function githubActingFor(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number, acting: GithubActingOptions) {
-  const out = new Map<string, Awaited<ReturnType<typeof githubActingView>>>()
-  await Promise.all(
-    rows
-      .filter((row) => canOpen(caller, row))
-      .map(async (row) => {
-        const view = await githubActingView(db, row, caller.userId, now, acting).catch(() => null)
-        if (view) {
-          out.set(row.id, view)
-        }
-      })
-  )
-  return out
+  // A failed read leaves the fields out; it never fails the list.
+  return githubActingViews(
+    db,
+    rows.filter((row) => canOpen(caller, row)),
+    caller.userId,
+    now,
+    acting
+  ).catch(() => new Map<string, GithubActingView>())
 }
 
 function repoView(row: SandboxRow) {
@@ -206,7 +202,7 @@ export async function workspaceViews(
     rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null),
     followersFor(db, ids),
     // GIT-ACTOR: who pushes and PRs go out as, only on rows the caller may open.
-    acting ? githubActingFor(db, caller, rows, now, acting) : Promise.resolve(new Map<string, Awaited<ReturnType<typeof githubActingView>>>())
+    acting ? githubActingFor(db, caller, rows, now, acting) : Promise.resolve(new Map<string, GithubActingView>())
   ])
   const followersOf = (row: SandboxRow) => visibleFollowers(row, canSee(caller, row), follows.get(row.id) ?? [])
   const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>

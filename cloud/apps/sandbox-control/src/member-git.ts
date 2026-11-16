@@ -64,28 +64,41 @@ export async function memberMayAct(db: D1Database, row: SandboxRow, userId: stri
  * shared workspace's latest sender (`until`: when their window lapses; null = no cap). The one source for
  * both the egress choice (memberMayAct) and what the UI shows (git-actor.ts).
  */
-export async function actingMember(
-  db: D1Database,
-  row: SandboxRow,
-  now: number,
-  sharedMaxMs: number | null
-): Promise<{ userId: string; until: number | null } | { none: 'no_send' | 'stale' }> {
-  const ownerToo = row.ownership_transferred_at == null
+export async function actingMember(db: D1Database, row: SandboxRow, now: number, sharedMaxMs: number | null): Promise<ActingMember> {
   const { results } = await db
     .prepare(`SELECT DISTINCT user_id FROM workspace_grants WHERE sandbox_id = ? AND status = 'active'`)
     .bind(row.id)
     .all<{ user_id: string }>()
-  const people = new Set(results.map((r) => r.user_id))
-  if (ownerToo) {
-    people.add(row.user_id)
-  }
-  if (people.size === 1) {
-    return { userId: [...people][0]!, until: null }
+  const grantees = results.map((r) => r.user_id)
+  const solo = pickActing(row, grantees, null, now, sharedMaxMs)
+  if ('userId' in solo) {
+    // One person: no send needed (and no read on the egress path).
+    return solo
   }
   const latest = await db
     .prepare('SELECT user_id, sent_at FROM workspace_member_sends WHERE sandbox_id = ? ORDER BY sent_at DESC LIMIT 1')
     .bind(row.id)
     .first<{ user_id: string; sent_at: number }>()
+  return pickActing(row, grantees, latest, now, sharedMaxMs)
+}
+
+export type ActingMember = { userId: string; until: number | null } | { none: 'no_send' | 'stale' }
+
+/** The rule itself, on already-read rows (the workspace list reads them for every row in one go). */
+export function pickActing(
+  row: Pick<SandboxRow, 'user_id' | 'ownership_transferred_at'>,
+  grantees: readonly string[],
+  latest: { user_id: string; sent_at: number } | null,
+  now: number,
+  sharedMaxMs: number | null
+): ActingMember {
+  const people = new Set(grantees)
+  if (row.ownership_transferred_at == null) {
+    people.add(row.user_id)
+  }
+  if (people.size === 1) {
+    return { userId: [...people][0]!, until: null }
+  }
   if (!latest || !people.has(latest.user_id)) {
     return { none: 'no_send' }
   }
