@@ -756,6 +756,70 @@
       "supportedArchiveKeys": "只定义受支持的键：`scripts`、`setup` 和 `archive`",
       "invalidArchive": "文件存在，但 Orca 找不到有效的设置或归档脚本"
     },
+    "uninstall": {
+      "groupTitle": "卸载",
+      "title": "卸载 Orca",
+      "searchDescription": "移除智能体钩子、orca 命令、后台服务和 SSH 主机上的文件",
+      "keywords": {
+        "uninstall": "卸载",
+        "remove": "移除",
+        "delete": "删除",
+        "cleanup": "清理",
+        "hooks": "钩子"
+      },
+      "copyCommand": "复制命令",
+      "quit": "退出 Orca",
+      "next": {
+        "unknown": "退出 Orca，然后删除应用",
+        "macApp": "退出 Orca，然后将它从“应用程序”文件夹拖到废纸篓",
+        "homebrew": "Orca 是通过 Homebrew 安装的，运行以下命令即可移除应用：",
+        "linuxPackage": "运行以下命令即可移除软件包：",
+        "windows": "请在 Windows 卸载程序中完成卸载，卸载程序打开时 Orca 会退出",
+        "appImage": "退出 Orca，然后删除 <path>{{path}}</path>"
+      },
+      "openUninstaller": "打开卸载程序",
+      "agentStatusOff": "智能体状态已关闭，除非你在“设置 → 智能体”中重新开启，否则 Orca 不会再添加钩子",
+      "loadFailed": "Orca 无法检查它安装了哪些内容",
+      "tryAgain": "重试",
+      "keeps": "项目、工作树和 Orca 设置会保留",
+      "keepsShared": "{{name}} 也已安装，因此与它共用的钩子也会保留",
+      "removing": "正在移除…",
+      "button": "卸载",
+      "uninstalling": "正在卸载…",
+      "rows": {
+        "agents_other": "{{count}} 个智能体中的钩子",
+        "hosts": "SSH 主机",
+        "hostCount_other": "{{count}} 台主机",
+        "cliCommand": "PATH 中的 <cmd>{{name}}</cmd> 命令行工具",
+        "service": "后台服务",
+        "hookScripts": "钩子脚本"
+      },
+      "retry": "重试",
+      "host": {
+        "connected": "已连接",
+        "offline": "离线"
+      },
+      "summary": {
+        "agents_other": "{{count}} 个智能体中的钩子",
+        "cliCommand": "<cmd>{{name}}</cmd> 命令行工具",
+        "service": "后台服务",
+        "hookScripts": "钩子脚本",
+        "hosts_other": "{{count}} 台 SSH 主机",
+        "nothing": "应用之外没有需要移除的内容",
+        "loading": "正在检查 Orca 安装了哪些内容…",
+        "done": "已移除，删除应用即可完成卸载",
+        "problems_other": "删除应用前，还有 {{count}} 项需要你处理",
+        "stillInUse": "部分 Orca 文件仍在使用中，暂时保留"
+      },
+      "status": {
+        "running": "正在移除",
+        "done": "完成",
+        "problem": "需要处理",
+        "kept": "已保留"
+      },
+      "stepFailed": "Orca 无法完成此步骤",
+      "finishFailed": "Orca 无法完成此操作"
+    },
     "general": {
       "openInMenu": {
         "keyword": {
@@ -5001,15 +5065,15 @@
             "contact_note": "主机可能仍在运行，仅 Orca 连接不可用",
             "last_connected": "上次连接于 {{value0}}",
             "reconnect_attempt": "第 {{value0}} 次尝试",
-            "access_revoked": "Access revoked",
+            "access_revoked": "访问权限已撤销",
             "access_revoked_summary": "该服务器已撤销此计算机的访问权限",
             "access_revoked_explanation": "使用服务器新生成的配对链接重新配对，以恢复连接。",
             "managed_access_revoked_explanation": "Orca 无法通过 SSH 重新与其配对，请连接以重试",
             "connect_access_revoked_explanation": "请连接以重试",
-            "update_required": "Update required",
+            "update_required": "需要更新",
             "update_required_summary": "Orca 版本不兼容",
             "update_required_explanation": "更新此计算机或服务器上的 Orca，然后重新连接。",
-            "repair": "Re-pair…",
+            "repair": "重新配对…",
             "open_settings": "打开设置…",
             "server_replaced": "不同的服务器",
             "server_replaced_summary": "此主机现在运行的 Orca 服务器与此计算机配对的服务器不同",
@@ -6155,10 +6219,10 @@
           "invalidPathControlCharacters": "无效路径：不允许使用控制字符"
         },
         "SleepTwinWorkspaceDialog": {
-          "title": "Sleep Workspace",
+          "title": "休眠工作区",
           "alsoSleeps": "同时休眠 {{hosts}} 上的副本",
-          "cancel": "Cancel",
-          "confirm": "Sleep"
+          "cancel": "取消",
+          "confirm": "休眠"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "移除",
@@ -6575,7 +6639,7 @@
           "failedUnnestWorkspace": "展开工作区失败",
           "groupRenameFailed": "重命名组失败",
           "groupRenameFailedDesc": "Orca 无法与该组所属主机确认新名称，请在重新连接后检查该组",
-          "hostRepairRequired": "Re-pair required",
+          "hostRepairRequired": "需要重新配对",
           "showChildWorkspaces_other": "显示 {{count}} 个子工作区",
           "hideChildWorkspaces_other": "隐藏 {{count}} 个子工作区",
           "childCount_other": "{{count}} 个子项",
@@ -6989,7 +7053,7 @@
           "2d3e4f5a6b": "检查连接",
           "3c4d5e6f7a": "管理主机…",
           "6e7f8a9b0c": "删除主机...",
-          "repair": "Re-pair…"
+          "repair": "重新配对…"
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "任务状态同步失败",
@@ -8841,8 +8905,8 @@
           "accessRevoked": "{{value0}} 不再允许此计算机连接。请使用新的访问链接重新配对。",
           "managedAccessRevoked": "{{value0}} 不再接受这台电脑，且 Orca 无法通过 SSH 重新与其配对，请连接以重试",
           "connectAccessRevoked": "{{value0}} 不再接受这台电脑，请连接以重试",
-          "repair": "Re-pair…",
-          "serverAccessRevoked": "Access revoked",
+          "repair": "重新配对…",
+          "serverAccessRevoked": "访问权限已撤销",
           "pairedTwice": "与 {{value0}} 是同一台服务器，被配对了两次，请移除其中一个，以便编辑其项目",
           "removeDefaultServerDescription": "此服务器是新项目的默认主机，移除前请在“新项目打开位置”中选择其他主机，现有会话不受影响",
           "connectedNewProjectsHint": "已连接到 {{value0}}，若要默认在此创建新项目，请在“新项目打开位置”中选择它",
@@ -12989,10 +13053,10 @@
           "chip": "WSL"
         },
         "RuntimeRepairDialog": {
-          "title": "Re-pair {{name}}",
-          "submit": "Re-pair",
-          "success": "Re-paired with {{name}}",
-          "failed": "Re-pair failed",
+          "title": "重新配对 {{name}}",
+          "submit": "重新配对",
+          "success": "已与 {{name}} 重新配对",
+          "failed": "重新配对失败",
           "descriptionShareComputer": "{{name}} 不再接受此电脑，请在 {{name}} 上打开 设置 → 远程 Orca 服务器 → 共享此电脑，为另一个 Orca 创建链接，然后粘贴到这里"
         },
         "usageCredentialHost": {
@@ -15625,6 +15689,7 @@
             "609517273b": "工作中",
             "005afbad3d": "刚刚",
             "04a94cadee": "40 个工作树 · 5 个活跃",
+            "b5308d5e2c": "M1 Mini",
             "aefd110ea5": "配对桌面设备",
             "d08ee9c466": "新工作区",
             "aa44b4a6b2": "浏览议题和评审",
@@ -21043,7 +21108,18 @@
           "reopen": "重新打开",
           "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”"
         },
-        "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
+        "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件",
+        "ignoredFiles": {
+          "none": "没有 Git 忽略的本地文件",
+          "unavailable": "未检查 Git 忽略的文件",
+          "checking": "正在检查 Git 忽略的文件…",
+          "lost_other": "{{count}} 个 Git 忽略的文件将丢失",
+          "lostIncomplete": "{{count}}+ 个 Git 忽略的文件将丢失",
+          "showPaths": "显示 Git 忽略的路径",
+          "morePaths_other": "另有 {{count}} 个 Git 忽略的路径",
+          "listLabel": "将丢失的 Git 忽略文件",
+          "incompleteNotice": "检查提前结束，此工作树中可能还有更多 Git 忽略的文件会被删除"
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -21759,8 +21835,8 @@
       "agentOptional": "代理 [可选]",
       "createDescription": "选择项目和工作区名称，如果想启动代理，请选择一个",
       "directSetup": {
-        "run": "Run setup",
-        "skip": "Skip setup",
+        "run": "运行设置",
+        "skip": "跳过设置",
         "description": "选择是否在创建此工作区前运行设置。",
         "cancel": "取消",
         "retry": "重试",
@@ -22424,6 +22500,20 @@
       "childrenCaption": "父工作树会汇总子工作树",
       "unreadCaption": "<label>蓝点：</label>未读",
       "dismiss": "关闭"
+    },
+    "worktreeCardsIntroNotice": {
+      "title": "新卡片样式",
+      "experimental": "实验性",
+      "dismiss": "暂不",
+      "previewBody": "每张卡片都会显示智能体状态、未读圆点和子项汇总，这是你当前列表的预览",
+      "classicBody": "已切回你当前卡片，切换到“新版”即可再次预览",
+      "switchLabel": "卡片样式",
+      "classic": "经典",
+      "new": "新版",
+      "keep": "保留新版",
+      "laterToast": "随时可在“工作区选项 › 卡片样式”中试用新卡片",
+      "keptTitle": "已启用新卡片",
+      "keptBody": "可在这里的“卡片样式”中更改"
     },
     "revealFiltered": {
       "title": "显示隐藏的工作区？",
@@ -23239,11 +23329,11 @@
     "repositoryRoot": "仓库根目录",
     "loadingPaths": "正在读取文件夹…",
     "pathsUnavailable": "无法读取此文件夹，请改为输入路径",
-    "pathAdded": "Added",
-    "openFolder": "Open {{name}}",
+    "pathAdded": "已添加",
+    "openFolder": "打开 {{name}}",
     "findOrTypePath": "查找文件夹，或输入任意路径…",
     "noDirectories": "尚未添加文件夹",
-    "removePath": "Remove {{name}}",
+    "removePath": "移除 {{name}}",
     "addTypedPathCode": "添加 <path/>"
   },
   "accounts": {
@@ -25546,10 +25636,90 @@
       "uncheckAttachments": "取消勾选“附加已保存的卡死报告和诊断日志”并重试，或复制详细信息"
     }
   },
+  "tabBar": {
+    "createRow": {
+      "label": "新建标签页操作，按左右方向键选择，最后一项用于自定义这一行",
+      "shownLabel": "显示在 + 菜单中",
+      "hint": "拖动或按 {{modifier}}↑/↓ 调整顺序，按空格键显示或隐藏；隐藏的项目仍可通过搜索和各自的快捷键打开",
+      "reset": "重置顺序",
+      "allShortcuts": "所有键盘快捷键…",
+      "hiddenLabel": "已隐藏",
+      "hiddenEmpty": "将项目拖到这里即可隐藏",
+      "locked": "始终显示",
+      "hide": "隐藏",
+      "show": "显示",
+      "customize": "自定义",
+      "featureOff": "已关闭",
+      "turnOn": "已关闭，显示它即可重新开启",
+      "moreOptions": "更多选项"
+    }
+  },
+  "emulatorPane": {
+    "tabIntro": {
+      "hiddenFromMenu": "已从 + 菜单中移除手机模拟器",
+      "hiddenFromMenuHint": "可通过图标行末尾的齿轮按钮恢复",
+      "undoHide": "撤销",
+      "saveFailed": "无法更新 + 菜单"
+    }
+  },
   "languages": {
+    "search": "搜索语言",
+    "searchPlaceholder": "搜索语言",
+    "pluginsDisabled": "社区翻译需要开启插件",
+    "community": "社区翻译",
+    "loadingPacks": "正在查找社区翻译…",
+    "catalogFailed": "无法加载社区翻译",
+    "noPacks": "暂无社区翻译",
+    "refresh": "检查新翻译",
+    "noMatches": "没有与“{{query}}”匹配的语言",
+    "managePacks": "在插件中浏览",
+    "builtIn": "内置",
+    "coverage": "已翻译 {{percent}}%",
+    "installing": "正在安装…",
+    "changing": "正在切换…",
+    "current": "当前",
+    "incomplete": "不完整",
+    "description": "内置语言和社区翻译，未翻译的文字仍以英文显示",
+    "continue": "继续",
+    "done": "完成",
+    "requestRecorded": "已记录语言请求",
+    "nowUsing": "现在使用 {{language}}",
+    "switchBack": "切回原语言",
     "switchBackTo": "切换回{{language}}",
     "switchBackToSystem": "切换回系统语言（{{language}}）",
     "communityBy": "由 {{publisher}} 提供的社区翻译",
-    "communityTranslation": "社区翻译"
+    "communityTranslation": "社区翻译",
+    "changeFailed": "无法切换语言，请重试",
+    "installedUnavailable": "已安装，但此翻译暂时无法加载",
+    "installedSwitchFailed": "已安装，但无法切换语言，请在“设置 → 语言”中重试",
+    "suggestionClose": "关闭",
+    "moreLanguages": "更多语言…",
+    "retry": "重试",
+    "request": "请求添加语言",
+    "byPublisher": "由 {{publisher}} 发布",
+    "deviceTag": "设备语言",
+    "get": "获取",
+    "didNotLoad": "未能加载",
+    "requestQuery": "请求添加“{{query}}”",
+    "requestPlaceholder": "例如 Polski、Tiếng Việt",
+    "requestDescription": "告诉我们需要添加哪种语言，任何人也都可以发布社区翻译",
+    "turnOnPlugins": "在插件中开启",
+    "languageDidNotLoad": "{{language}} 未能加载",
+    "yourLanguage": "你的语言",
+    "offerSentence": "Orca 有 {{language}} 的社区翻译",
+    "offerInstall": "安装 <lang>{{language}}</lang>…",
+    "offerUse": "使用 <lang>{{language}}</lang>",
+    "offerInstalling": "正在安装 <lang>{{language}}</lang>…",
+    "offerSwitching": "正在切换到 <lang>{{language}}</lang>…",
+    "pluginsDisabledCount_other": "{{count}} 个社区翻译需要开启插件",
+    "preparing": "正在准备…",
+    "offerConfirming": "正在等待确认…",
+    "offerRetry": "重试",
+    "suggestionTitle": "<lang>{{language}}</lang> 版 Orca",
+    "systemResolved": "{{system}}（{{language}}）",
+    "suggestionInstall": "安装",
+    "suggestionUse": "使用",
+    "browseOnline": "浏览",
+    "browseOnlineLabel": "在 orca.dev 上浏览社区翻译（在浏览器中打开）"
   }
 }
