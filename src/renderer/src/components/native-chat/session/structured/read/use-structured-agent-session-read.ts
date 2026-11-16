@@ -29,6 +29,7 @@ export function useStructuredAgentSessionRead(args: {
   target: RuntimeClientTarget
   isVisible?: boolean
   isViewed?: boolean
+  keepReadingWhileHidden?: boolean
 }) {
   const { sessionId, target, isVisible = true } = args
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
@@ -36,9 +37,11 @@ export function useStructuredAgentSessionRead(args: {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const observationKey = structuredAttentionReadObservation(snapshot.state)
   const lastView = useRef<{ owner: typeof owner; observationKey: string } | null>(null)
+  const keepReading =
+    isVisible || (args.keepReadingWhileHidden !== false && snapshot.state.working === true)
 
   useEffect(() => {
-    if (isVisible) {
+    if (keepReading) {
       return owner.activate({
         getState: useAppStore.getState,
         subscribeRetryNow: (retry) =>
@@ -46,7 +49,7 @@ export function useStructuredAgentSessionRead(args: {
       })
     }
     return undefined
-  }, [isVisible, owner, environmentId])
+  }, [keepReading, owner, environmentId])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {
