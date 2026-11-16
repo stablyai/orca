@@ -21,7 +21,7 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
-import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
+import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import {
   buildProjectGroupingIndex,
   buildProjectSections,

@@ -11,7 +11,7 @@ import type { HostedReviewProvider } from '../../../../../shared/source-control/
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { TextGenerationFailureFields } from '../../../../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../../../../shared/text-generation/text-generation-failure-copy'
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }

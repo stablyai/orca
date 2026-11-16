@@ -4,7 +4,7 @@ import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/de
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,

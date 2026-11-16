@@ -147,7 +147,8 @@ async function expectNothingStartsTheStoppedDistro(
   await activate(page, workspace.worktreeId)
   await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
   await page
-    .getByRole('menuitem', { name: /New Terminal/ })
+    .getByRole('menu')
+    .getByRole('button', { name: /New Terminal/ })
     .first()
     .click()
   await expect(page.locator('.xterm:visible').first()).toBeVisible({ timeout: 60_000 })

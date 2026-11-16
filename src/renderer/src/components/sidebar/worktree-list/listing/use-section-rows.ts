@@ -1,7 +1,7 @@
 import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
-import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
-import type { Tab, TabContentType } from '../../tab-types'
+import type { Tab, TabContentType } from '../tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../constants'
 import '../old-client/old-client-method-translation'
@@ -10,7 +10,7 @@ import { loadWorkspaceLayout } from './workspace-layout-load'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'
 import './workspace-layout-save'
 
-vi.mock('../../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const KEY = 'repo-1::/w'
 

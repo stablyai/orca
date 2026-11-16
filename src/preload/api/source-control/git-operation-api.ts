@@ -13,7 +13,7 @@ import type { ConflictResolution } from '../../../shared/source-control/listing/
 import type { HostedReviewProvider } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings-types'
-import type { TextGenerationFailureFields } from '../../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../../shared/text-generation/text-generation-failure-copy'
 
 export type GitOperationApi = {
   appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>

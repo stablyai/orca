@@ -5,7 +5,7 @@ import {
 } from './conversation-navigation-preferences'
 import { AI_VAULT_AGENT_LABELS, type AiVaultSession } from './ai-vault/contracts/ai-vault-types'
 import { sessionPromptPreview } from './ai-vault/session-display/ai-vault-session-display'
-import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from './agent-session/journal/harness-injected-user-turns'
 
 const GENERIC_TITLES = new Set(
   Object.values(AI_VAULT_AGENT_LABELS)

@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { PersistedOpenFile } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import type { OpenFile } from '../types/open-file'

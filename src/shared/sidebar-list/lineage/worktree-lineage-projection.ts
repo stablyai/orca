@@ -1,7 +1,7 @@
 import {
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
-} from '../../resolved-worktree-lineage'
+} from '../../worktree/lineage/resolved-worktree-lineage'
 import type { ExecutionHostId } from '../../execution-host'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import type { WorktreeLineage } from '../../worktree/lineage-types'

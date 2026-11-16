@@ -5,7 +5,6 @@ const { spawnProcess } = vi.hoisted(() => ({ spawnProcess: vi.fn() }))
 vi.mock('./run-process', () => ({ spawnProcess }))
 
 import {
-  buildWindowsEnvironmentBlock,
   quoteWindowsArgumentLikeLibuv,
   setIsolatedSpawner,
   spawnDetachedWithoutInheritance,
@@ -33,27 +32,6 @@ describe('quoteWindowsArgumentLikeLibuv', () => {
     ['C:\\Program Files\\x', '"C:\\Program Files\\x"']
   ])('quotes %j as %s', (value, expected) => {
     expect(quoteWindowsArgumentLikeLibuv(value)).toBe(expected)
-  })
-})
-
-describe('buildWindowsEnvironmentBlock', () => {
-  it('sorts case-insensitively, keeps the first of a duplicate, and ends with two NULs', () => {
-    const block = buildWindowsEnvironmentBlock(
-      { b: '2', A: '1', B: 'dup', SYSTEMROOT: 'C:\\Windows', skip: undefined },
-      {}
-    )
-
-    expect(block).toBe('A=1\0b=2\0SYSTEMROOT=C:\\Windows\0\0')
-  })
-
-  it('fills required variables from the parent the way libuv does', () => {
-    const block = buildWindowsEnvironmentBlock({ X: '1' }, { SystemRoot: 'C:\\W', Other: 'no' })
-
-    expect(block).toBe('SystemRoot=C:\\W\0X=1\0\0')
-  })
-
-  it('keeps an empty environment a valid block', () => {
-    expect(buildWindowsEnvironmentBlock({}, {})).toBe('\0')
   })
 })
 

@@ -1,7 +1,7 @@
 import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
 import { preserveTerminalRetirementProofs } from '../terminal/surface/mobile-session-terminal-retirement-proof'
 import { stampMobileSnapshotVersion } from './mobile-session-snapshot-version'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import {
   headlessMobileSnapshotContentUnchanged,

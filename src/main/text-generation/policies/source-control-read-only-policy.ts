@@ -10,6 +10,7 @@ import {
   KIMI_VALUE_OPTIONS
 } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
+import { isNamingOnlyTextAgent } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { parseWslUncPath, wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { CODEX_DISABLE_PLUGINS_ARGS } from '../../codex-cli/codex-read-only-app-server-args'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
@@ -216,7 +217,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
   async function prepare(): Promise<CommitMessagePlan> {
     const { plan, target, signal } = input
     const naming = input.operation === 'conversation-name'
-    if (input.agentId === 'amp' || input.agentId === 'muse') {
+    if (isNamingOnlyTextAgent(input.agentId)) {
       if (naming) {
         return plan
       }

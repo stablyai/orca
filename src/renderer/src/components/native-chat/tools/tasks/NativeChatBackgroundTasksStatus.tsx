@@ -15,13 +15,13 @@ import { useNow } from '@/hooks/use-now'
 import {
   backgroundTasksHeaderText,
   NARROW_BACKGROUND_TASKS_STRIP_REM
-} from '../../../../../../shared/background-task-header-content'
+} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-header-content'
 import {
   backgroundTaskRowMeta,
   backgroundTaskRowStopId,
   backgroundTasksStripTicks,
   type BackgroundTaskGroup
-} from '../../../../../../shared/background-task-roster'
+} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
 import { backgroundTasksHeaderContent } from './background-task-header-content'
 import {
   backgroundTaskGroupLabel,

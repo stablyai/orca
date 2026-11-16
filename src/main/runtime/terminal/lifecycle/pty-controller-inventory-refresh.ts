@@ -26,7 +26,7 @@ import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/terminal/pty/li
 import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
 import { retireOrchestrationAuthorityAbsentFromInventory } from '../../orchestration/terminal-authority/runtime-restored-orchestration-authority-sweep'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'
 
 export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory extends OrcaRuntimeWithPtyControllerInventoryListing {

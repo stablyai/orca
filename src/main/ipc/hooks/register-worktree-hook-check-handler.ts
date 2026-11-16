@@ -4,7 +4,7 @@ import {
   isRepoOnCatalogHost,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'

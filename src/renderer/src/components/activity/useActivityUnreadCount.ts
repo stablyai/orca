@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
 import { useAppStore } from '@/store'
 import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
 import type { AppState } from '@/store/types'

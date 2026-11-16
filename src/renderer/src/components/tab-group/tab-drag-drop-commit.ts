@@ -10,7 +10,7 @@ import {
   type TabGroupPanelGeometrySnapshot
 } from './tab-group-panel-split-target'
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { dropTabThroughLayoutOwner, reorderTabInGroup } from './tab-group-layout-owner-commands'
 import { moveTabToGroup } from '../tab-bar/tab-move-to-pane-column'
 

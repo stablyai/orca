@@ -5,7 +5,7 @@ import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
-} from '../../../../../shared/manual-repo-order'
+} from '../../../../../shared/repository/manual-repo-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
@@ -23,7 +23,7 @@ import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,

@@ -1,4 +1,4 @@
-import type { DashboardBucket } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardBucket } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import {
   dashboardRowBucketProjection,
   readAgentRowTurnRecords

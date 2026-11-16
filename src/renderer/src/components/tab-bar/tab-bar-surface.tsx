@@ -71,12 +71,7 @@ export function renderTabBarSurface(
     workspaceHasSimulatorTab,
     showMobileEmulatorIntroCallout,
     windowsTerminalCapabilities,
-    defaultWindowsPowerShellImplementation,
-    newTerminalShortcut,
-    newBrowserShortcut,
-    newSimulatorShortcut,
-    newFileShortcut,
-    openMarkdownShortcut
+    defaultWindowsPowerShellImplementation
   } = runtime
   const {
     agentMenu,
@@ -292,11 +287,6 @@ export function renderTabBarSurface(
               windowsShellEntries={windowsShellEntries}
               defaultWindowsPowerShellImplementation={defaultWindowsPowerShellImplementation}
               pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
-              newTerminalShortcut={newTerminalShortcut}
-              newBrowserShortcut={newBrowserShortcut}
-              newSimulatorShortcut={newSimulatorShortcut}
-              newFileShortcut={newFileShortcut}
-              openMarkdownShortcut={openMarkdownShortcut}
               queueNewActiveTerminalFocusAfterNewTabMenuClose={
                 queueNewActiveTerminalFocusAfterNewTabMenuClose
               }
