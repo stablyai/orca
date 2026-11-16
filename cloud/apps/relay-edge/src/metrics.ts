@@ -38,7 +38,7 @@ export type MetricEvent =
   // that close code; double2 = seconds between last-known-alive and the actual close.
   // reason 'keepalive' | 'legacy' of the new control.
   | 'reconnect_gap'
-  // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data' | 'health'. Unpushed-host phones: 'not_on_edge'.
+  // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data' | 'health' | 'hold'. Unpushed-host phones: 'not_on_edge'.
   | 'preauth_limited'
   | 'not_on_edge'
   // A request carried an ingress header that failed to verify (wrong secret, skew, malformed).
@@ -47,8 +47,14 @@ export type MetricEvent =
   | 'ingress_rejected'
   // An ingress mode is configured but malformed, so it is off: label names the problem (per isolate).
   | 'ingress_config_invalid'
+  // Staging hold probe (hold-probe.ts): label 'front' | 'direct', blob 6 the page's session id.
+  // hold_close (server's view): value = socket age s, reason = close code or 'error', double2 = pings sent.
+  // hold_client_close (the page's view of its previous socket): value = age s, reason = its close code.
+  | 'hold_open'
+  | 'hold_close'
+  | 'hold_client_close'
 
-// blobs: [event, label, version, reason, place]; doubles: [value, ...extra]. place is the
+// blobs: [event, label, version, reason, place, detail?]; doubles: [value, ...extra]. place is the
 // client's ingress '<continent>/<colo>' (e.g. 'AS/HKG'), '' where no client is involved. A verified
 // ingress hop appends the client's country (as the ingress reports it, else the hop's) and the hop's
 // name: 'AS/HKG/CN/cn' (continent/colo are then the hop's). One index per event for sampling.
@@ -58,13 +64,13 @@ export type MetricEvent =
 // is sum(_sample_interval * double2). No other event has it.
 const HEARTBEAT_FACTOR = 10
 
-export function metric(env: Env, event: MetricEvent, value = 1, label = '', extra: number[] = [], reason = '', place = ''): void {
+export function metric(env: Env, event: MetricEvent, value = 1, label = '', extra: number[] = [], reason = '', place = '', detail = ''): void {
   const heartbeat = event === 'alarm_lag_ms' || event === 'pong_rtt_ms'
   if (heartbeat && Math.random() >= 1 / HEARTBEAT_FACTOR) { return }
   try {
     env.METRICS?.writeDataPoint({
       indexes: [event],
-      blobs: [event, label, env.EDGE_VERSION ?? 'dev', reason, place],
+      blobs: [event, label, env.EDGE_VERSION ?? 'dev', reason, place, ...(detail ? [detail] : [])],
       doubles: heartbeat ? [value, ...extra, HEARTBEAT_FACTOR] : [value, ...extra]
     })
   } catch {
