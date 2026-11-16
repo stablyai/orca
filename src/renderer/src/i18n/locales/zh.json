@@ -9541,7 +9541,7 @@
           "1eac933202": "打开 macOS 隐私和安全，授予访问权限后再次启用听写",
           "cd9fe37556": "已授予麦克风权限",
           "6fa734ed95": "删除 {{value0}}",
-          "openAiKeyName": "您的 OpenAI 转录密钥",
+          "openAiKeyName": "你的 OpenAI 转录密钥",
           "dictationModeAuto": "自动",
           "speechGpuLabel": "使用 GPU",
           "c5ea32143e": "语音模型"
@@ -11373,15 +11373,15 @@
               "micDevice": "设备",
               "micAirpods": "耳机",
               "micDefault": "系统默认",
-              "dictationLanguageDescription": "告诉语音模型你说的是哪种语言。",
+              "dictationLanguageDescription": "告诉语音模型你说的是哪种语言",
               "dictationLanguageKeyword": "语言",
-              "modelUnloadDescription": "选择何时从内存中卸载本地语音模型。",
+              "modelUnloadDescription": "选择何时从内存中卸载本地语音模型",
               "modelUnloadKeyword": "卸载",
               "modelMemoryKeyword": "内存",
-              "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词。",
+              "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词",
               "fillerWordsKeyword": "语气词",
               "vocabularyTitle": "词汇",
-              "vocabularyDescription": "听写按你的写法拼写的名称和代码术语，可用于个人或某个仓库。",
+              "vocabularyDescription": "听写按你的写法拼写的名称和代码术语，可用于个人或某个仓库",
               "vocabularyKeyword": "词典",
               "7f5a2416a6": "语音模型",
               "9d83747eae": "听写语言",
@@ -11389,11 +11389,11 @@
               "c7a7eaa0da": "移除语气词",
               "d0c230c061": "听写模式",
               "silenceStopTitle": "静音后停止",
-              "silenceStopDescription": "选择你停止说话后听写还会继续听多久。",
+              "silenceStopDescription": "选择你停止说话后听写还会继续听多久",
               "silenceStopKeyword": "静音",
               "dictationTitle": "听写",
               "shortcutTitle": "快捷键",
-              "shortcutDescription": "开始听写的按键。",
+              "shortcutDescription": "开始听写的按键",
               "shortcutKeyword": "键盘",
               "keepLoadedTitle": "保持模型加载",
               "gpuKeyword": "显卡",
@@ -21402,25 +21402,25 @@
       },
       "voice": {
         "dictationLanguage": {
-          "unsupported": "{{model}} 不支持{{language}}，因此会自动检测语言。",
+          "unsupported": "{{model}} 不支持{{language}}，因此会自动检测语言",
           "auto": "自动检测",
-          "rated": "你说的语言。质量按此语言评分。",
-          "alwaysUses": "你说的语言。{{model}} 始终使用{{language}}。",
-          "detectsItself": "你说的语言。{{model}} 会自动识别。"
+          "rated": "你说的语言，质量按此语言评分",
+          "alwaysUses": "你说的语言，{{model}} 始终使用{{language}}",
+          "detectsItself": "你说的语言，{{model}} 会自动识别"
         },
         "modelUnload": {
-          "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容。"
+          "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容"
         },
         "fillerWords": {
           "0134406785": "移除语气词",
-          "short": "去掉“嗯”和“呃”。"
+          "short": "去掉“嗯”和“呃”"
         },
         "input": {
           "title": "输入",
           "shortcut": "快捷键",
           "changeShortcut": "更改",
-          "description": "除非你另选，否则跟随系统设置。",
-          "missing": "{{microphone}} 未连接。在它重新连接前使用系统默认设备。"
+          "description": "除非你另选，否则跟随系统设置",
+          "missing": "{{microphone}} 未连接，在它重新连接前使用系统默认设备"
         },
         "language": {
           "title": "语言"
@@ -21441,8 +21441,8 @@
           "excellent": "优秀"
         },
         "models": {
-          "retired": "已不再提供。删除即可释放空间。",
-          "sendsToOpenAi": "会把你的音频发送给 OpenAI。",
+          "retired": "已不再提供，删除即可释放空间",
+          "sendsToOpenAi": "会把你的音频发送给 OpenAI",
           "delete": "删除",
           "inUse": "使用中",
           "use": "使用",
@@ -21451,28 +21451,28 @@
           "cloud": "云端",
           "where": "模型运行位置",
           "local": "这台电脑",
-          "sendsToCompatible": "会把你的音频发送到你设置的服务。",
+          "sendsToCompatible": "会把你的音频发送到你设置的服务",
           "downloadingProgress": "正在下载，{{done}} / {{total}} MB（{{percent}}%）",
-          "needsUpdate": "需要为更快的引擎下载一次。",
+          "needsUpdate": "需要为更快的引擎下载一次",
           "recommended": "推荐",
           "columnModel": "模型",
           "columnQuality": "质量",
           "columnSize": "大小",
           "about": {
-            "parakeetV3": "速度快。支持 {{languages}} 种欧洲语言。",
-            "parakeetV2": "速度快。仅支持英语，英语最准确。",
-            "parakeetUnifiedEn": "仅限英语。说话时即时显示文字。",
-            "whisperTiny": "下载最小。适合试用听写。",
-            "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
-            "senseVoice": "速度快。适用于中文、日语和韩语。",
-            "nemotron": "{{languages}} 种语言，包括阿拉伯语、印地语和日语。"
+            "parakeetV3": "速度快，支持 {{languages}} 种欧洲语言",
+            "parakeetV2": "速度快，仅支持英语，英语识别最准确",
+            "parakeetUnifiedEn": "仅限英语，说话时即时显示文字",
+            "whisperTiny": "下载最小，适合试用听写",
+            "whisperTurbo": "语言最多（约 100 种），没有 GPU 时较慢",
+            "senseVoice": "速度快，适用于中文、日语和韩语",
+            "nemotron": "{{languages}} 种语言，包括阿拉伯语、印地语和日语"
           }
         },
         "vocabulary": {
           "title": "词汇",
-          "description": "按你的写法拼写的名称和代码术语。如果模型总是听错，可以加上它听成的说法。",
-          "repoScope": "仅在 {{repo}} 中听写时使用。",
-          "personalScope": "在所有仓库中使用。",
+          "description": "按你的写法拼写的名称和代码术语，如果模型总是听错，可以加上它听成的说法",
+          "repoScope": "仅在 {{repo}} 中听写时使用",
+          "personalScope": "在所有仓库中使用",
           "scope": "术语范围",
           "personal": "个人 · {{total}}",
           "repo": "{{repo}} · {{total}}",
@@ -21483,24 +21483,24 @@
           "heardAsLabel": "听成",
           "add": "添加",
           "repoNameHint": "将仓库名用作提示",
-          "repoNameHintDescription": "帮助识别仓库名称。",
-          "repoSaveFailed": "无法保存仓库的术语。运行此仓库的主机可能需要更新 Orca。"
+          "repoNameHintDescription": "帮助识别仓库名称",
+          "repoSaveFailed": "无法保存仓库的术语，运行此仓库的主机可能需要更新 Orca"
         },
         "micTest": {
           "test": "测试",
           "recording": "正在录音 {{elapsed}} / {{limit}}",
           "stop": "停止",
-          "hint": "像平时听写那样说一句话。",
+          "hint": "像平时听写那样说一句话",
           "playing": "正在回放 {{elapsed}}",
           "skip": "跳过",
           "levelGood": "音量正常",
-          "levelQuiet": "声音很小。请检查麦克风或靠近一些。",
+          "levelQuiet": "声音很小，请检查麦克风或靠近一些",
           "playAgain": "再听一遍",
           "testAgain": "重新测试",
           "listening": "{{model}} 也在听…",
           "heardLabel": "{{model}} 听到的内容",
-          "heardNothing": "没有听到任何词。请大声一点。",
-          "heardFailed": "{{model}} 无法转写这段录音。",
+          "heardNothing": "没有听到任何词，请大声一点",
+          "heardFailed": "{{model}} 无法转写这段录音",
           "cleaningUp": "正在整理…",
           "tryCleanup": "试用整理",
           "cleanupFailed": "整理失败：{{reason}}",
@@ -21511,32 +21511,32 @@
         "silenceStop": {
           "off": "关闭",
           "label": "静音后停止",
-          "short": "你停止说话时结束听写。"
+          "short": "你停止说话时结束听写"
         },
         "pageDescription": "在任意面板中用说话代替打字。",
         "dictation": {
           "label": "听写",
-          "ready": "在任意面板中按 {{shortcut}}。",
-          "off": "开启后，可在任意面板中按 {{shortcut}} 听写。",
-          "noModel": "在下方下载一个语音模型即可开始。它在这台电脑上运行，音频不会离开这里。",
-          "downloading": "{{model}} 下载完成后即可使用。",
-          "needsUpdate": "在下方更新 {{model}} 以继续听写。"
+          "ready": "在任意面板中按 {{shortcut}}",
+          "off": "开启后，可在任意面板中按 {{shortcut}} 听写",
+          "noModel": "在下方下载一个语音模型即可开始，模型在这台电脑上运行，音频不会离开这里",
+          "downloading": "{{model}} 下载完成后即可使用",
+          "needsUpdate": "在下方更新 {{model}} 以继续听写"
         },
         "mode": {
           "label": "模式",
-          "auto": "轻按 {{shortcut}} 开始和停止，或说话时按住。",
-          "hold": "按住 {{shortcut}} 时说话。",
-          "toggle": "按 {{shortcut}} 开始，再按一次停止。"
+          "auto": "轻按 {{shortcut}} 开始和停止，或说话时按住",
+          "hold": "按住 {{shortcut}} 时说话",
+          "toggle": "按 {{shortcut}} 开始，再按一次停止"
         },
         "words": {
           "title": "词语"
         },
         "gpu": {
-          "description": "如果听写导致电脑卡死，请关闭。"
+          "description": "如果听写导致电脑卡死，请关闭"
         },
         "keepLoaded": {
           "label": "保持模型加载",
-          "description": "模型加载期间，听写会立即开始。",
+          "description": "模型加载期间，听写会立即开始",
           "always": "始终",
           "never": "从不"
         },
