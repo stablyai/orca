@@ -77,10 +77,15 @@ function parseSettings(raw: string | null): NativeChatTextSettings | null {
 
 type Snapshot = { settings: NativeChatTextSettings; stored: boolean }
 
-let snapshot: Snapshot = { settings: defaultNativeChatTextSettings(), stored: false }
+// The phone default until the first storage read, which measures the screen; importing never does.
+let snapshot: Snapshot = {
+  settings: { size: BASE_TEXT_SIZE, font: 'system', lineSpacing: 'default' },
+  stored: false
+}
 // A change made while a read is in flight wins over that older read.
 let changeCount = 0
 let writes: Promise<void> = Promise.resolve()
+let watchingScreen = false
 const listeners = new Set<() => void>()
 
 function adopt(settings: NativeChatTextSettings | null): void {
@@ -101,12 +106,26 @@ function adopt(settings: NativeChatTextSettings | null): void {
   }
 }
 
+// A foldable's default follows the screen it is on, until a size is saved.
+function watchScreen(): void {
+  if (watchingScreen) {
+    return
+  }
+  watchingScreen = true
+  Dimensions.addEventListener('change', () => {
+    if (!snapshot.stored) {
+      adopt(null)
+    }
+  })
+}
+
 /** Rereads storage; the page calls it when the app republishes storage after a Settings change. */
 export function reloadNativeChatTextSettings(): Promise<void> {
   const readAt = changeCount
   return Promise.resolve()
     .then(() => AsyncStorage.getItem(NATIVE_CHAT_TEXT_KEY))
     .then((raw) => {
+      watchScreen()
       if (changeCount === readAt) {
         adopt(parseSettings(raw))
       }
@@ -126,12 +145,6 @@ subscribeMirroredKey(NATIVE_CHAT_TEXT_KEY, (raw, source) => {
 let hydrated = false
 const hydration = reloadNativeChatTextSettings().then(() => {
   hydrated = true
-})
-// A foldable's default follows the screen it is on, until a size is saved.
-Dimensions.addEventListener('change', () => {
-  if (!snapshot.stored) {
-    adopt(null)
-  }
 })
 
 function persist(settings: NativeChatTextSettings | null): Promise<void> {

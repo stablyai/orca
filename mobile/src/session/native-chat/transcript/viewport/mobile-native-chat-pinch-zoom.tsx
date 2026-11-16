@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import {
@@ -17,7 +17,9 @@ export function useMobileNativeChatPinchGesture(): {
   const { size } = useNativeChatTextSettingsFollowingShell()
   const [pinched, setPinched] = useState<number | null>(null)
   const saved = useRef(size)
-  saved.current = size
+  useEffect(() => {
+    saved.current = size
+  }, [size])
   const live = useRef<number | null>(null)
   const pinchBase = useRef(size)
   // Run callbacks on JS to access React state safely; simultaneous native scrolling keeps active lists from stealing pinch recognition.
