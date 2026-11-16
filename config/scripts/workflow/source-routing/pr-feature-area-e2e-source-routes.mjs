@@ -63,11 +63,6 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
       'src/shared/linear/'
     ]
   ),
-  featureRoute(
-    'feature.jira',
-    ['jira-panel-layout'],
-    [`${COMPONENTS}task-page/jira/`, 'src/main/jira/', 'src/main/ipc/jira/', 'src/shared/jira/']
-  ),
   featureRoute('feature.tasks-page', ['tasks-page'], [`${COMPONENTS}task-page/`]),
   // Pane geometry and the link tooltip share terminal.css and the pane DOM.
   featureRoute(
