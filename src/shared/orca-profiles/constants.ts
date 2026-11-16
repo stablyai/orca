@@ -1,8 +1,10 @@
 import { DEFAULT_APP_FONT_FAMILY } from '../app-lifecycle/appearance/app-font-family'
 import { DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS } from '../editor/saving/editor-auto-save-delay'
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../terminal/appearance/terminal-pane-opacity'
-import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../workspace-view/sleeping-workspace-visibility'
-import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../workspace-view/sleeping-workspace-visibility'
+import {
+  DEFAULT_SHOW_SLEEPING_WORKSPACES,
+  DEFAULT_HIDE_SLEEPING_WORKSPACES
+} from '../workspace-view/sleeping-workspace-visibility'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../agent-status/presentation/agent-activity-display-mode'
 import type { GlobalSettings } from '../settings/global-settings-types'
 import type { RepoHookSettings } from '../workspace-setup/orca-yaml-hook-types'
