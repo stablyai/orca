@@ -183,7 +183,10 @@ export function OrcaUninstallRows({ model }: { model: RowsModel }): React.JSX.El
           plan.cliCommand ? (
             <Trans
               i18n={i18n}
-              defaults={t('settings.uninstall.rows.cliCommand', '<cmd>{{name}}</cmd> command')}
+              defaults={t(
+                'settings.uninstall.rows.cliCommand',
+                '<cmd>{{name}}</cmd> CLI on your PATH'
+              )}
               values={{ name: plan.cliCommand.commandName }}
               components={{ cmd: <code className="font-mono text-xs" /> }}
             />

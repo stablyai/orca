@@ -1521,7 +1521,7 @@
         "hosts": "SSH hosts",
         "hostCount_one": "1 host",
         "hostCount_other": "{{count}} hosts",
-        "cliCommand": "<cmd>{{name}}</cmd> command",
+        "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
         "service": "Background service",
         "hookScripts": "Hook scripts"
       },
@@ -1533,7 +1533,7 @@
       "summary": {
         "agents_one": "hooks in 1 agent",
         "agents_other": "hooks in {{count}} agents",
-        "cliCommand": "the <cmd>{{name}}</cmd> command",
+        "cliCommand": "the <cmd>{{name}}</cmd> CLI",
         "service": "a background service",
         "hookScripts": "hook scripts",
         "hosts_one": "1 SSH host",

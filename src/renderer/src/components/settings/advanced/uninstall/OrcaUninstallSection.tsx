@@ -22,7 +22,7 @@ function describePlanParts(plan: OrcaUninstallPlan, t: Translate, intlLocale: st
   }
   if (plan.cliCommand) {
     parts.push(
-      t('settings.uninstall.summary.cliCommand', 'the <cmd>{{name}}</cmd> command', {
+      t('settings.uninstall.summary.cliCommand', 'the <cmd>{{name}}</cmd> CLI', {
         name: plan.cliCommand.commandName
       })
     )
