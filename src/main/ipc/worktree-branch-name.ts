@@ -31,7 +31,10 @@ export function computeValidatedBranchName(
   gitUsername: string | null
 ): string {
   // Git rejects a ref component ending in .lock; only the branch is rewritten so the folder keeps its name.
-  const sanitizedName = sanitizedWorktreeName.replace(/-?\.lock$/, '-lock')
+  const sanitizedName = sanitizedWorktreeName
+    .split('/')
+    .map((segment) => segment.replace(/-?\.lock$/, '-lock'))
+    .join('/')
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
   if (prefix === null) {
     return sanitizedName

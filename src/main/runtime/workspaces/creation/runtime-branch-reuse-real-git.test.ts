@@ -402,3 +402,39 @@ describe('exact-name create with real Git', () => {
     expect(mapped).not.toMatchObject(refused)
   })
 })
+
+describe('derived slash branches with real Git', () => {
+  it('keeps branch hierarchy, a flat checkout path and matching collision suffixes', async () => {
+    const f = await fixture('origin', { branchPrefix: 'custom', branchPrefixCustom: 'team' })
+    const request = {
+      name: 'feature/tti_fix_1440',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new' as const
+    }
+    const first = await f.create(request)
+    expect(first.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440'))
+    expect(await git(first.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440'
+    )
+    const second = await f.create(request)
+    expect(second.worktreePath).toBe(join(f.workspaceRoot, 'feature-tti_fix_1440-2'))
+    expect(await git(second.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/team/feature/tti_fix_1440-2'
+    )
+  })
+
+  it('normalizes reserved ref segments without changing the directory name', async () => {
+    const f = await fixture()
+    const picked = await f.create({
+      name: '/feature.lock//.中文 fix../item.lock.lock/',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(
+      join(f.workspaceRoot, 'feature.lock-.中文-fix.-item.lock.lock')
+    )
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe(
+      'refs/heads/feature-lock/中文-fix/item.lock-lock'
+    )
+  })
+})

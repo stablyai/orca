@@ -6,6 +6,7 @@ import {
   computeWorktreePath,
   ensurePathWithinWorkspace,
   sanitizeWorktreeName,
+  sanitizeWorktreeBranchName,
   type getWorktreePathSettings
 } from '../../../ipc/worktree-logic'
 import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-display-name'
@@ -76,6 +77,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   pathClaim: WorktreeCreatePathClaim
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
   const sanitizedName = sanitizeWorktreeName(args.request.name)
+  const branchSafeName = sanitizeWorktreeBranchName(args.request.name)
   let effectiveRequestedName = args.request.name
   let effectiveSanitizedName = sanitizedName
   let branchName = ''
@@ -114,7 +116,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         (await resolveCreateBranchName(
           args.repo.path,
           undefined,
-          sanitizedName,
+          branchSafeName,
           args.settings,
           args.username,
           args.localWorktreeGitOptions
@@ -174,7 +176,9 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.repo.path,
       selectedExistingLocalBranchName ??
         getBranchNameOverrideCandidate(args.request.branchNameOverride, suffix),
-      effectiveSanitizedName,
+      shouldRetireGeneratedName
+        ? effectiveSanitizedName
+        : getWorktreeCreateCandidate(branchSafeName, suffix),
       args.settings,
       args.username,
       args.localWorktreeGitOptions

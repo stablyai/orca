@@ -25,15 +25,27 @@ type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDi
 }
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export function sanitizeWorktreeName(input: string): string {
-  // Preserve Unicode letters/numbers: Git permits them and workspace names must support users' languages.
-  const sanitized = replaceKnownEmojiWithShortcodes(input)
+function sanitizeNameSegment(input: string): string {
+  return input
     .trim()
     .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
-    // Git rejects internal .. even after path separators are slugified.
     .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
+}
+
+export function sanitizeWorktreeBranchName(input: string): string {
+  const sanitized = replaceKnownEmojiWithShortcodes(input)
+    .split('/')
+    .map(sanitizeNameSegment)
+    .filter(Boolean)
+    .join('/')
+  return sanitized || sanitizeWorktreeName(input)
+}
+
+export function sanitizeWorktreeName(input: string): string {
+  // Preserve Unicode letters/numbers: Git permits them and workspace names must support users' languages.
+  const sanitized = sanitizeNameSegment(replaceKnownEmojiWithShortcodes(input))
 
   if (!sanitized && containsEmoji(input)) {
     return 'workspace'
