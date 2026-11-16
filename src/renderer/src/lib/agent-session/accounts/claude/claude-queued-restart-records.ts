@@ -47,10 +47,6 @@ export function moveQueuedClaudeRestart(fromPtyId: string, toPtyId: string): voi
   }
 }
 
-export function skipsClaudeTurnHold(ptyId: string): boolean {
-  return records.get(ptyId)?.restartAll === true
-}
-
 export function carriesLookedUpClaudeSession(ptyId: string): boolean {
   return records.get(ptyId)?.session !== undefined
 }

@@ -15,7 +15,6 @@ import {
   type AgentProviderSessionMetadata
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import { holdsClaudeRestartForTurn } from './pane-account-restart-readiness'
 
 export async function lookUpDiscoveredClaudeRestart(
   agent: AccountRestartAgent,
@@ -33,10 +32,6 @@ export async function lookUpDiscoveredClaudeRestart(
   const state = useAppStore.getState()
   if (state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] !== pane.ptyId) {
     warnDiscoveredClaudeNotMoved()
-    return null
-  }
-  if (holdsClaudeRestartForTurn(state, makePaneKey(pane.tabId, pane.leafId), queued.restartAll)) {
-    requeueRestart(pane.ptyId, agent, queued)
     return null
   }
   const startup = session && session.id === carried.id ? build(session) : null

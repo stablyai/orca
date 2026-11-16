@@ -1,17 +1,14 @@
 import { useAppStore } from '@/store/index'
-import {
-  getCodexSelectionLaneKey,
-  normalizeCodexAccountSelectionTarget
-} from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import { getCodexSelectionLaneKey } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { AgentProviderSessionMetadata } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
 import { warnSessionsLeftBehind } from '@/lib/provider-accounts/claude-account-switch-notices'
-import { isClaudePaneOnAccount, resolveClaudePaneFolder } from './claude-pane-account-folder'
 import type { ClaudeHostFolders } from './claude-pane-account-folder'
-import { claudeSwitchCandidatePanes, hasSleepingSession } from './claude-switch-candidate-panes'
+import { localClaudePanes } from './claude-pane-inventory'
+import { findQueuedClaudeRestartsOnAccount } from './claude-session-account-move'
 import {
   carriesLookedUpClaudeSession,
   keepQueuedClaudeRestarts,
@@ -41,15 +38,13 @@ export async function lookUpClaudePaneSession(
 async function lookUpUnnamedPanes(
   scope: Pick<QueuedRestartScope, 'owner' | 'target' | 'restartAll'>
 ): Promise<ClaudePaneLookups> {
-  const state = useAppStore.getState()
+  if (!scope.restartAll) {
+    return new Map()
+  }
   const hostLane = getCodexSelectionLaneKey(null)
-  const panes = claudeSwitchCandidatePanes(state, scope.owner, scope.target, scope.restartAll)
+  const panes = localClaudePanes(useAppStore.getState(), scope.owner, scope.target, true)
   const unnamed = [...panes].filter(
-    (pane) =>
-      pane.inLane &&
-      pane.laneKey === hostLane &&
-      !pane.session &&
-      (!pane.entry || !hasSleepingSession(state, pane))
+    (pane) => pane.inLane && pane.laneKey === hostLane && (!pane.entry || !pane.resumable)
   )
   return new Map(
     await Promise.all(
@@ -59,37 +54,6 @@ async function lookUpUnnamedPanes(
       )
     )
   )
-}
-
-export function findQueuedClaudeRestartsOnAccount(
-  args: QueuedRestartScope & { discovered?: ClaudePaneLookups }
-): string[] {
-  const state = useAppStore.getState()
-  const saved = state.settings?.claudeManagedAccounts ?? []
-  const host =
-    normalizeCodexAccountSelectionTarget(args.target).runtime === 'host' ? args.host : undefined
-  const panes = claudeSwitchCandidatePanes(
-    state,
-    args.owner,
-    args.target,
-    args.restartAll,
-    args.discovered
-  )
-  const ptyIds: string[] = []
-  for (const pane of panes) {
-    if (
-      pane.inLane &&
-      state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
-      isClaudePaneOnAccount(
-        resolveClaudePaneFolder(pane.session?.transcriptPath, saved, host),
-        args.accountId,
-        host
-      )
-    ) {
-      ptyIds.push(pane.ptyId)
-    }
-  }
-  return ptyIds
 }
 
 function cancelQueuedRestartsOnAccount(
@@ -104,7 +68,7 @@ function cancelQueuedRestartsOnAccount(
 
 function cancelLookedUpRestartsWithoutEntry(scope: QueuedRestartScope): void {
   const state = useAppStore.getState()
-  for (const pane of claudeSwitchCandidatePanes(state, scope.owner, scope.target, true)) {
+  for (const pane of localClaudePanes(state, scope.owner, scope.target, true)) {
     if (
       pane.inLane &&
       !pane.entry &&
@@ -119,14 +83,13 @@ function cancelLookedUpRestartsWithoutEntry(scope: QueuedRestartScope): void {
 function cancelSharedQueuedRestarts(scope: QueuedRestartScope, lookups: ClaudePaneLookups): number {
   const state = useAppStore.getState()
   let lookedUp = 0
-  for (const pane of claudeSwitchCandidatePanes(state, scope.owner, scope.target, true, lookups)) {
+  for (const pane of localClaudePanes(state, scope.owner, scope.target, true, lookups)) {
     const paneKey = makePaneKey(pane.tabId, pane.leafId)
     if (
       state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
-      pane.session &&
-      isSessionHeldByAnotherPane(state, paneKey, pane.session.id, lookups) &&
-      (pane.identifiedBy === 'lookup' ||
-        !isSessionHeldByAnotherPane(state, paneKey, pane.session.id))
+      pane.sessionId &&
+      isSessionHeldByAnotherPane(state, paneKey, pane.sessionId, lookups) &&
+      (!!pane.lookedUp || !isSessionHeldByAnotherPane(state, paneKey, pane.sessionId))
     ) {
       lookedUp += carriesLookedUpClaudeSession(pane.ptyId) ? 1 : 0
       state.consumePendingPaneAccountRestart(pane.ptyId)

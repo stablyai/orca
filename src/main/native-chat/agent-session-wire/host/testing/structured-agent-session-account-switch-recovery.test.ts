@@ -234,7 +234,11 @@ it('an account-switch continuation leaves a restart-held queued send held', asyn
     f.rig.host.publishChildWorkEvidence(PARENT, reportedChildWork([devServer], f.rig.clock.now))
     await f.turn(mail, 'completed')
     await selectB(f, 'restart-all')
-    expect(dispatchedTexts(f)).toEqual(['refactor the parser', 'coordinator mail', MOVED_MESSAGE])
+    expect(dispatchedTexts(f)).toEqual([
+      'refactor the parser',
+      expect.stringMatching(/^You have 1 orchestration message\./),
+      MOVED_MESSAGE
+    ])
     expect((await structuredQueuePauses(journal(f)!)).map((pause) => pause.reason)).toEqual([
       'restarted'
     ])

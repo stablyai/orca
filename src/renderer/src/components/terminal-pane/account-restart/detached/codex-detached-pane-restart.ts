@@ -17,7 +17,7 @@ import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
-import { defersClaudeRestart, retryableClaudeSpawn } from './claude-detached-restart-hold'
+import { retryableClaudeSpawn } from './claude-detached-restart-hold'
 import {
   lookUpDiscoveredClaudeRestart,
   requeueRestart,
@@ -86,10 +86,6 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     }
     // Mounted tabs register before transport bind; taking over in that gap would kill the PTY being attached.
     if (hasRegisteredRuntimeTerminalTab(located.tab.id, located.worktreeId)) {
-      return
-    }
-    // Why: outside restart-all a Claude restart waits out the turn; the scheduler re-sweeps on status changes.
-    if (defersClaudeRestart(state, located, ptyId)) {
       return
     }
     const agent = useAppStore.getState().consumePendingPaneAccountRestart(ptyId)
@@ -168,7 +164,7 @@ async function executeDetachedCodexPaneRestart(
         (session) => buildPaneAccountRestartStartup(agent, pane, session, continueWork),
         rejectedSpawns > 0
       )
-    : buildPaneAccountRestartStartup(agent, pane, undefined, continueWork, true)
+    : buildPaneAccountRestartStartup(agent, pane, undefined, continueWork, continueWork)
   if (!startup) {
     return
   }

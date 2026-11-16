@@ -6,7 +6,7 @@ import {
   type AgentSessionFailureKind,
   type ProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionArgumentProblem } from '../../../../shared/agent-session/agent-session-argument-problem'
+import type { AgentSessionArgumentProblem } from '../../../../shared/agent-session/failures/agent-session-argument-problem'
 import type { AgentSessionRefusalReason } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import {
   agentSessionFailureWords,

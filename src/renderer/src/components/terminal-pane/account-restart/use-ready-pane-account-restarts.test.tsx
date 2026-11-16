@@ -7,7 +7,6 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agen
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import {
-  answerClaudeAccountSwitchPrompt,
   handleRunningClaudeSessionsAfterSwitch,
   resetClaudeAccountSwitchSessionsForTests
 } from '@/lib/provider-accounts/claude-account-switch-sessions'
@@ -22,7 +21,7 @@ import {
   takeQueuedClaudeRestart
 } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import { useReadyPaneAccountRestarts } from './use-ready-pane-account-restarts'
-import { lookUpDiscoveredClaudeRestart } from './discovered-claude-restart'
+import { requeueRestart } from './discovered-claude-restart'
 import { useTerminalPaneLayoutBindings } from '../layout/ownership/use-terminal-pane-layout-bindings'
 import type { TerminalPaneLayoutController } from '../layout/persistence/use-terminal-pane-layout-persistence'
 
@@ -113,31 +112,28 @@ describe('on-screen Claude account restart readiness', () => {
 
   afterEach(cleanup)
 
-  it.each([
-    { setting: 'restart-all' as const, restarts: [[1, STARTUP, { focus: false }]], pending: {} },
-    { setting: 'restart' as const, restarts: [], pending: { [OLD_PTY]: 'claude' } }
-  ])('under $setting, a working pane queued now restarts $restarts.length time(s)', (row) => {
-    seedWorkingClaudePane(row.setting)
-    attachedPtyId = OLD_PTY
-    renderReadyPaneAccountRestarts()
+  it.each(['restart-all', 'restart'] as const)(
+    'under %s, a working pane queued now restarts at once',
+    (setting) => {
+      seedWorkingClaudePane(setting)
+      attachedPtyId = OLD_PTY
+      renderReadyPaneAccountRestarts()
 
-    act(() => queueFromSwitch(row.setting))
+      act(() => queueFromSwitch(setting))
 
-    expect(handleRestartPane.mock.calls).toEqual(row.restarts)
-    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual(row.pending)
-  })
+      expect(handleRestartPane.mock.calls).toEqual([[1, STARTUP, { focus: false }]])
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+    }
+  )
 
-  it.each([
-    { setting: 'restart-all' as const, restarts: [[1, STARTUP, { focus: false }]], pending: {} },
-    { setting: 'restart' as const, restarts: [], pending: { [OLD_PTY]: 'claude' } }
-  ])(
-    'under $setting, a working pane queued before its same-id reattach restarts $restarts.length time(s) at bind',
-    async (row) => {
-      seedWorkingClaudePane(row.setting)
+  it.each(['restart-all', 'restart'] as const)(
+    'under %s, a working pane queued before its same-id reattach restarts at bind',
+    async (setting) => {
+      seedWorkingClaudePane(setting)
       renderReadyPaneAccountRestarts()
       const bindings = renderLayoutBindings()
 
-      act(() => queueFromSwitch(row.setting))
+      act(() => queueFromSwitch(setting))
       expect(handleRestartPane).not.toHaveBeenCalled()
       await act(async () => {
         attachedPtyId = OLD_PTY
@@ -145,8 +141,8 @@ describe('on-screen Claude account restart readiness', () => {
       })
 
       expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']).toBe(LAYOUT)
-      expect(handleRestartPane.mock.calls).toEqual(row.restarts)
-      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual(row.pending)
+      expect(handleRestartPane.mock.calls).toEqual([[1, STARTUP, { focus: false }]])
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
     }
   )
 
@@ -260,7 +256,7 @@ describe('on-screen restart of a Claude pane no hook named', () => {
       foregroundProcess: 'claude',
       hasChildProcesses: true
     })
-    seedWorkingClaudePane('ask')
+    seedWorkingClaudePane('restart-all')
     useAppStore.setState((state) => ({
       settings: {
         ...state.settings!,
@@ -302,22 +298,16 @@ describe('on-screen restart of a Claude pane no hook named', () => {
     Reflect.deleteProperty(window, 'api')
   })
 
-  async function switchWorkThenRestart(build: typeof realBuild = realBuild): Promise<void> {
+  async function switchThenRestart(build: typeof realBuild = realBuild): Promise<void> {
     renderReadyPaneAccountRestarts(build)
     await act(async () => {
       expect(await switchAccount()).toBe('handled')
-    })
-    await act(async () => {
-      const store = useAppStore.getState()
-      store.setAgentStatus(PANE_KEY, { state: 'working', prompt: 'next', agentType: 'claude' })
-      store.setAgentStatus(PANE_KEY, { state: 'done', prompt: 'next', agentType: 'claude' })
-      answerClaudeAccountSwitchPrompt('restart')
       await flush()
     })
   }
 
-  it('restarts a pane picked after a later turn, on the session it looks up then', async () => {
-    await switchWorkThenRestart()
+  it('restarts a pane no hook named on the session it looks up again at restart', async () => {
+    await switchThenRestart()
 
     expect(handleRestartPane).toHaveBeenCalledTimes(1)
     expect(handleRestartPane.mock.calls[0][1].command).toContain(SESSION)
@@ -327,7 +317,7 @@ describe('on-screen restart of a Claude pane no hook named', () => {
   it('leaves the pane running, and says so, when the lookup then finds nothing', async () => {
     discoverClaudeSession.mockReset().mockResolvedValueOnce(record).mockResolvedValue(null)
 
-    await switchWorkThenRestart()
+    await switchThenRestart()
 
     expect(handleRestartPane).not.toHaveBeenCalled()
     expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
@@ -336,16 +326,9 @@ describe('on-screen restart of a Claude pane no hook named', () => {
 
   it('restarts on the session a hook names once one does, even when the lookup then finds nothing', async () => {
     discoverClaudeSession.mockReset().mockResolvedValueOnce(record).mockResolvedValue(null)
-    renderReadyPaneAccountRestarts(realBuild)
-    await act(async () => {
-      expect(await switchAccount()).toBe('handled')
-    })
+    expect(await switchAccount()).toBe('handled')
 
     await act(async () => {
-      useAppStore
-        .getState()
-        .setAgentStatus(PANE_KEY, { state: 'working', prompt: 'next', agentType: 'claude' })
-      answerClaudeAccountSwitchPrompt('restart')
       useAppStore.setState((state) => ({
         agentStatusByPaneKey: acceptedAgentStatuses([
           [
@@ -358,6 +341,7 @@ describe('on-screen restart of a Claude pane no hook named', () => {
           ]
         ])
       }))
+      renderReadyPaneAccountRestarts(realBuild)
       await flush()
     })
 
@@ -379,69 +363,60 @@ describe('on-screen restart of a Claude pane no hook named', () => {
     expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
   })
 
-  it('says a pane a hook names was not moved when another pane holds its session at restart', async () => {
-    const otherLeaf = '22222222-2222-4222-8222-222222222222'
-    const named = {
-      ...useAppStore.getState().agentStatusByPaneKey.get(PANE_KEY)!,
-      providerSession: { key: 'session_id', id: SESSION } as const
+  it.each([
+    { setting: 'restart-all' as const, notices: 1 },
+    { setting: 'restart' as const, notices: 0 }
+  ])(
+    'under $setting, gives $notices notice(s) when another pane holds a hook-named session at restart',
+    async (row) => {
+      const otherLeaf = '22222222-2222-4222-8222-222222222222'
+      const named = {
+        ...useAppStore.getState().agentStatusByPaneKey.get(PANE_KEY)!,
+        providerSession: { key: 'session_id', id: SESSION } as const
+      }
+      useAppStore.setState((state) => ({
+        tabsByWorktree: {
+          wt1: [...state.tabsByWorktree.wt1, { ...state.tabsByWorktree.wt1[0], id: 'tab-2' }]
+        },
+        ptyIdsByTabId: { 'tab-1': [OLD_PTY], 'tab-2': ['pty-other'] },
+        terminalLayoutsByTabId: {
+          'tab-1': LAYOUT,
+          'tab-2': { ...LAYOUT, ptyIdsByLeafId: { [otherLeaf]: 'pty-other' } }
+        },
+        agentStatusByPaneKey: acceptedAgentStatuses([
+          [PANE_KEY, named],
+          [`tab-2:${otherLeaf}`, { ...named, paneKey: `tab-2:${otherLeaf}`, tabId: 'tab-2' }]
+        ])
+      }))
+      renderReadyPaneAccountRestarts(realBuild)
+
+      await act(async () => {
+        queueFromSwitch(row.setting)
+        await flush()
+      })
+
+      expect(handleRestartPane).not.toHaveBeenCalled()
+      expect(toast.warning).toHaveBeenCalledTimes(row.notices)
     }
-    useAppStore.setState((state) => ({
-      tabsByWorktree: {
-        wt1: [...state.tabsByWorktree.wt1, { ...state.tabsByWorktree.wt1[0], id: 'tab-2' }]
-      },
-      ptyIdsByTabId: { 'tab-1': [OLD_PTY], 'tab-2': ['pty-other'] },
-      terminalLayoutsByTabId: {
-        'tab-1': LAYOUT,
-        'tab-2': { ...LAYOUT, ptyIdsByLeafId: { [otherLeaf]: 'pty-other' } }
-      },
-      agentStatusByPaneKey: acceptedAgentStatuses([
-        [PANE_KEY, named],
-        [`tab-2:${otherLeaf}`, { ...named, paneKey: `tab-2:${otherLeaf}`, tabId: 'tab-2' }]
-      ])
-    }))
-    renderReadyPaneAccountRestarts(realBuild)
-
-    await act(async () => {
-      queueFromSwitch('restart')
-      await flush()
-    })
-
-    expect(handleRestartPane).not.toHaveBeenCalled()
-    expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
-  })
+  )
 
   it.each([
     { order: 'older first', putBack: [0, 1] },
     { order: 'newer first', putBack: [1, 0] }
   ])(
-    'keeps the newer switch record when two restarts held for a turn are put back, $order',
-    async ({ putBack }) => {
-      const resolvers: ((found: typeof record) => void)[] = []
-      discoverClaudeSession
-        .mockReset()
-        .mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)))
-      useAppStore
-        .getState()
-        .setAgentStatus(PANE_KEY, { state: 'working', prompt: 'next', agentType: 'claude' })
-      const pane = { ptyId: OLD_PTY, tabId: 'tab-1', leafId: LEAF }
-      const runs = ['session-older', 'session-newer'].map((id) => {
+    'keeps the newer switch record when two taken restarts are put back, $order',
+    ({ putBack }) => {
+      const taken = ['session-older', 'session-newer'].map((id) => {
         recordQueuedClaudeRestarts(
           [OLD_PTY],
           false,
           new Map([[OLD_PTY, { key: 'session_id', id }]])
         )
-        return lookUpDiscoveredClaudeRestart(
-          'claude',
-          pane,
-          takeQueuedClaudeRestart(OLD_PTY),
-          () => null
-        )
+        return takeQueuedClaudeRestart(OLD_PTY)
       })
-      await flush()
-      resolvers[putBack[0]](record)
-      await flush()
-      resolvers[putBack[1]](record)
-      await Promise.all(runs)
+      for (const index of putBack) {
+        requeueRestart(OLD_PTY, 'claude', taken[index])
+      }
 
       expect(takeQueuedClaudeRestart(OLD_PTY)?.session?.id).toBe('session-newer')
     }
@@ -456,7 +431,7 @@ describe('on-screen restart of a Claude pane no hook named', () => {
     renderReadyPaneAccountRestarts(realBuild)
 
     await act(async () => {
-      queueFromSwitch('restart')
+      queueFromSwitch('restart-all')
       await flush()
     })
 
@@ -476,7 +451,7 @@ describe('on-screen restart of a Claude pane no hook named', () => {
         return record
       })
 
-    await switchWorkThenRestart()
+    await switchThenRestart()
 
     expect(handleRestartPane).not.toHaveBeenCalled()
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
@@ -507,7 +482,7 @@ describe('on-screen restart of a Claude pane no hook named', () => {
     'puts the restart on the terminal a pane holds when it $pane after the lookup',
     async ({ move, kept, restarts }) => {
       let moved = false
-      await switchWorkThenRestart((...args) => {
+      await switchThenRestart((...args) => {
         if (args[2] && !moved) {
           moved = true
           attachedPtyId = null

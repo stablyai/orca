@@ -1,29 +1,19 @@
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
-
-/** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
 import { useAppStore } from '@/store/index'
-import {
-  confirmRuntimeTerminalForegroundProcess,
-  inspectRuntimeTerminalProcess
-} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-import {
-  isAgentForegroundWrapperProcess,
-  recognizeAgentProcess
-} from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { isClientOnlyUnverifiableInspection } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import {
-  getCodexSelectionLaneKey,
-  normalizeCodexAccountSelectionTarget
-} from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import { normalizeCodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
-import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
 import { resolveAgentAccountRestartResumeStartup } from '../agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from '../../identity/claude-session-pane-holders'
 import { isClaudePaneOnAccount, resolveClaudePaneFolder } from './claude-pane-account-folder'
 import type { ClaudeHostFolders } from './claude-pane-account-folder'
-import { isLocalCodexSelectionLaneKey } from '../codex-pane-selection-lane'
+import {
+  isClaudeRunning,
+  isWslLane,
+  localClaudePanes,
+  type ClaudeSessionMoveCandidate,
+  type LocalClaudePane
+} from './claude-pane-inventory'
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
@@ -31,44 +21,9 @@ import type {
   ClaudeRateLimitAccountsState
 } from '../../../../../../shared/agent-accounts/managed-account-types'
 import type { ClaudePaneLookups } from './claude-queued-restart-records'
-import {
-  claudeSwitchCandidatePanes,
-  hasSleepingSession,
-  type ClaudeSwitchCandidatePane
-} from './claude-switch-candidate-panes'
 
-export type ClaudeSessionMoveCandidate = {
-  ptyId: string
-  worktreeId: string
-  tabId: string
-  leafId: string
-}
+export type { ClaudeSessionMoveCandidate } from './claude-pane-inventory'
 
-// Match npm Claude by its fresh command line: generic node/python may now run user programs.
-function isClaudeProcess(processName: string | null): boolean {
-  return recognizeAgentProcess(processName)?.agent === 'claude'
-}
-
-/** Confirm foreground identity: cached names flap to shells and native macOS binaries report version-folder names. */
-async function isClaudeInForeground(
-  ptyId: string,
-  inspection: RuntimeTerminalProcessInspection
-): Promise<boolean | 'unchecked'> {
-  if (isClientOnlyUnverifiableInspection(inspection)) {
-    return false
-  }
-  if (isClaudeProcess(inspection.foregroundProcess)) {
-    return true
-  }
-  const fresh = await confirmRuntimeTerminalForegroundProcess(ptyId)
-  // Why: a bare node/python may be an npm Claude, but only the failed fresh read could have said so.
-  if (fresh === null && isAgentForegroundWrapperProcess(inspection.foregroundProcess ?? '')) {
-    return 'unchecked'
-  }
-  return isClaudeProcess(fresh)
-}
-
-/** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
 export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
   const entry = state.agentStatusByPaneKey.get(paneKey)
   return entry?.agentType === 'claude' && entry.state !== 'done'
@@ -81,6 +36,40 @@ export function claudeLaunchAccountId(
 ): string | null {
   const account = state.accounts.find((candidate) => candidate.id === accountId)
   return account?.runsOnSystemDefault ? null : accountId
+}
+
+export function findQueuedClaudeRestartsOnAccount(args: {
+  owner: RuntimeClientTarget
+  target: CodexAccountSelectionTarget
+  accountId: string | null
+  host?: ClaudeHostFolders
+  restartAll?: boolean
+  discovered?: ClaudePaneLookups
+}): string[] {
+  const state = useAppStore.getState()
+  const saved = state.settings?.claudeManagedAccounts ?? []
+  const host = isHostTarget(args.target) ? args.host : undefined
+  const ptyIds: string[] = []
+  for (const pane of localClaudePanes(
+    state,
+    args.owner,
+    args.target,
+    args.restartAll,
+    args.discovered
+  )) {
+    if (
+      pane.inLane &&
+      state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
+      isClaudePaneOnAccount(
+        resolveClaudePaneFolder(pane.transcriptPath, saved, host),
+        args.accountId,
+        host
+      )
+    ) {
+      ptyIds.push(pane.ptyId)
+    }
+  }
+  return ptyIds
 }
 
 function isHostTarget(target: CodexAccountSelectionTarget): boolean {
@@ -104,14 +93,20 @@ export type ClaudeSwitchSessions = {
 }
 
 type ScannedPane =
-  | { group: 'onAccount'; pane: ClaudeSwitchCandidatePane }
-  | { group: 'elsewhere'; pane: ClaudeSwitchCandidatePane; accountId: string | null }
-  | { group: 'cantMove'; pane: ClaudeSwitchCandidatePane; reason: ClaudeSessionCantMoveReason }
+  | { group: 'onAccount'; pane: LocalClaudePane }
+  | { group: 'elsewhere'; pane: LocalClaudePane; accountId: string | null }
+  | {
+      group: 'cantMove'
+      pane: LocalClaudePane
+      reason: ClaudeSessionCantMoveReason
+      /** Possibly still on the account being left, so the user must restart it to switch. */
+      stranded?: true
+    }
 
 export type InspectedClaudePane = ScannedPane & { running: boolean | 'unchecked' }
 
 function scanPane(
-  pane: ClaudeSwitchCandidatePane,
+  pane: LocalClaudePane,
   args: {
     saved: readonly ClaudeManagedAccount[]
     host: ClaudeHostFolders | undefined
@@ -126,9 +121,12 @@ function scanPane(
       ? { group: 'cantMove', pane, reason: 'wsl-terminal' }
       : null
   }
-  const folder = resolveClaudePaneFolder(pane.session?.transcriptPath, args.saved, args.host)
+  if (!pane.resumable) {
+    return { group: 'cantMove', pane, reason: 'no-session', stranded: true }
+  }
+  const folder = resolveClaudePaneFolder(pane.transcriptPath, args.saved, args.host)
   if (!folder) {
-    return { group: 'cantMove', pane, reason: 'unknown-account' }
+    return { group: 'cantMove', pane, reason: 'unknown-account', stranded: true }
   }
   // Why: the shell function keeps a pane's own CLAUDE_CONFIG_DIR, so a restart lands in the same folder.
   if (folder.kind === 'own-folder') {
@@ -145,10 +143,12 @@ function scanPane(
       worktreeId: pane.worktreeId,
       shellOverride: pane.tab.shellOverride
     },
-    pane.session
+    pane.lookedUp ?? undefined
   )
   if (!resumable) {
-    return { group: 'cantMove', pane, reason: 'no-session' }
+    return isClaudePaneOnAccount(folder, args.fromAccountId, args.host)
+      ? { group: 'cantMove', pane, reason: 'no-session', stranded: true }
+      : { group: 'cantMove', pane, reason: 'no-session' }
   }
   return isClaudePaneOnAccount(folder, args.fromAccountId, args.host)
     ? { group: 'onAccount', pane }
@@ -159,31 +159,13 @@ function scanPane(
       }
 }
 
-function isWslLane(laneKey: string): boolean {
-  return isLocalCodexSelectionLaneKey(laneKey) && laneKey !== getCodexSelectionLaneKey(null)
-}
-
-async function isClaudeRunning(
-  state: AppState,
-  pane: ClaudeSwitchCandidatePane
-): Promise<boolean | 'unchecked'> {
-  // Why: a Windows host cannot see processes inside WSL, so the guest's hooks and shell marks decide.
-  if (isWslLane(pane.laneKey)) {
-    return resolvePaneAgentSessionId(state, makePaneKey(pane.tabId, pane.leafId)) !== null
-  }
-  return inspectRuntimeTerminalProcess(pane.ptyId).then(
-    (inspection) => isClaudeInForeground(pane.ptyId, inspection),
-    () => 'unchecked' as const
-  )
-}
-
-function unnamedPaneRow(state: AppState, pane: ClaudeSwitchCandidatePane): ScannedPane | null {
+function unnamedPaneRow(state: AppState, pane: LocalClaudePane): ScannedPane | null {
   return pane.inLane && state.pendingPaneAccountRestarts[pane.ptyId] !== 'claude'
     ? { group: 'cantMove', pane, reason: 'no-session' }
     : null
 }
 
-function toCandidate(pane: ClaudeSwitchCandidatePane): ClaudeSessionMoveCandidate {
+function toCandidate(pane: LocalClaudePane): ClaudeSessionMoveCandidate {
   return { ptyId: pane.ptyId, worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId }
 }
 
@@ -195,15 +177,17 @@ export async function findClaudeSwitchSessions(args: {
   fromAccountId: string | null
   toAccountId: string | null
   host?: ClaudeHostFolders
-  restartAll: boolean
+  restartAll?: boolean
   discovered?: ClaudePaneLookups
-  /** Sessions on the outgoing account left out because their foreground could not be read. */
+  /** Sessions that may be on the outgoing account, left out because their foreground could not be read. */
   onUnchecked?: (sessions: ClaudeSessionMoveCandidate[]) => void
   /** Sessions on any other account left out because their foreground could not be read. */
   onUncheckedOthers?: (sessions: ClaudeSessionMoveCandidate[]) => void
   /** Sessions on the outgoing account kept running because another pane holds their conversation. */
   onShared?: (sessions: ClaudeSessionMoveCandidate[]) => void
-  onInspected?: (panes: ClaudeSwitchCandidatePane[], inspected: InspectedClaudePane[]) => void
+  /** Running Claude sessions no restart can move that may still be on the outgoing account. */
+  onStranded?: (sessions: ClaudeSessionMoveCandidate[]) => void
+  onInspected?: (panes: LocalClaudePane[], inspected: InspectedClaudePane[]) => void
 }): Promise<ClaudeSwitchSessions> {
   const found: ClaudeSwitchSessions = { onAccount: [], elsewhere: [], cantMove: [] }
   if (args.owner.kind !== 'local') {
@@ -219,10 +203,11 @@ export async function findClaudeSwitchSessions(args: {
     toAccountId: args.toAccountId
   }
   const panes = [
-    ...claudeSwitchCandidatePanes(state, args.owner, args.target, args.restartAll, args.discovered)
+    ...localClaudePanes(state, args.owner, args.target, args.restartAll, args.discovered)
   ]
   const scanned = panes.flatMap((pane) => {
-    const row = pane.entry || pane.session ? scanPane(pane, scanArgs) : unnamedPaneRow(state, pane)
+    const nameless = !pane.resumable && !pane.entry && (pane.unnamed || pane.lookedUp === null)
+    const row = nameless ? unnamedPaneRow(state, pane) : scanPane(pane, scanArgs)
     return row ? [row] : []
   })
   const inspected: InspectedClaudePane[] = await Promise.all(
@@ -232,15 +217,17 @@ export async function findClaudeSwitchSessions(args: {
   const unchecked: ClaudeSessionMoveCandidate[] = []
   const uncheckedOthers: ClaudeSessionMoveCandidate[] = []
   const shared: ClaudeSessionMoveCandidate[] = []
+  const stranded: ClaudeSessionMoveCandidate[] = []
   for (const row of inspected) {
     const candidate = toCandidate(row.pane)
-    if (row.running === 'unchecked' && row.group === 'onAccount') {
+    const mayStayBehind = row.group === 'onAccount' || (row.group === 'cantMove' && row.stranded)
+    if (row.running === 'unchecked' && mayStayBehind) {
       unchecked.push(candidate)
-    } else if (
-      row.running === 'unchecked' &&
-      (row.pane.entry || row.pane.session || hasSleepingSession(state, row.pane))
-    ) {
+    } else if (row.running === 'unchecked' && (!row.pane.unnamed || row.pane.resumable)) {
       uncheckedOthers.push(candidate)
+    }
+    if (row.running === true && row.group === 'cantMove' && row.stranded) {
+      stranded.push(candidate)
     }
     if (row.running !== true) {
       continue
@@ -248,8 +235,8 @@ export async function findClaudeSwitchSessions(args: {
     const paneKey = makePaneKey(row.pane.tabId, row.pane.leafId)
     if (
       row.group !== 'cantMove' &&
-      row.pane.session &&
-      isSessionHeldByAnotherPane(state, paneKey, row.pane.session.id, args.discovered)
+      row.pane.sessionId &&
+      isSessionHeldByAnotherPane(state, paneKey, row.pane.sessionId, args.discovered)
     ) {
       found.cantMove.push({ ...candidate, reason: 'shared-session' })
       if (row.group === 'onAccount') {
@@ -271,6 +258,9 @@ export async function findClaudeSwitchSessions(args: {
   }
   if (uncheckedOthers.length > 0) {
     args.onUncheckedOthers?.(uncheckedOthers)
+  }
+  if (stranded.length > 0) {
+    args.onStranded?.(stranded)
   }
   return found
 }

@@ -321,22 +321,6 @@ it('leaves a pane no hook named running, and says so, when its session is gone a
     )
   }))
 
-it('restarts a pane picked after a later turn, on the session it looks up then', () =>
-  withExecutor(async () => {
-    seedHooklessPane('ask')
-    discoverClaudeSession.mockResolvedValue(recordIn(FOLDERS['acct-a']))
-    spawn.mockResolvedValue({ id: NEW_PTY })
-    await switchAccount('acct-a', 'acct-b')
-    const store = useAppStore.getState()
-    store.setAgentStatus(PANE_KEY, { state: 'working', prompt: 'next', agentType: 'claude' })
-    store.setAgentStatus(PANE_KEY, { state: 'done', prompt: 'next', agentType: 'claude' })
-    answerClaudeAccountSwitchPrompt('restart')
-    await settle()
-
-    expect(spawnedCommand().match(/--resume/g)).toEqual(['--resume'])
-    expect(spawnedCommand()).toContain(SESSION_ID)
-  }))
-
 it('names each launch flag once when the command override already sets the model', () =>
   withExecutor(async () => {
     seedHooklessPane()
@@ -405,33 +389,29 @@ it('says a pane no hook named was not moved once its restart-all spawns are spen
     expect(leafPtyId()).toBe(OLD_PTY)
   }))
 
-it.each(['restart-all', 'restart', 'ask'] as const)(
-  'hands a pane no hook named to the tab opened during its lookup under %s',
-  (policy) =>
-    withExecutor(async () => {
-      seedHooklessPane(policy)
-      lookedUpAtA()
-        .mockResolvedValueOnce(recordIn(FOLDERS['acct-a']))
-        .mockImplementationOnce(async () => {
-          ptyDataHandlers.set(OLD_PTY, () => {})
-          return recordIn(FOLDERS['acct-a'])
-        })
-      await switchAccount('acct-a', 'acct-b')
-      answerClaudeAccountSwitchPrompt('restart')
-      await settle()
-      expect(spawn).not.toHaveBeenCalled()
-      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
+it('hands a pane no hook named to the tab opened during its restart-time lookup', () =>
+  withExecutor(async () => {
+    seedHooklessPane()
+    lookedUpAtA()
+      .mockResolvedValueOnce(recordIn(FOLDERS['acct-a']))
+      .mockImplementationOnce(async () => {
+        ptyDataHandlers.set(OLD_PTY, () => {})
+        return recordIn(FOLDERS['acct-a'])
+      })
+    await switchAccount('acct-a', 'acct-b')
+    await settle()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
 
-      const pane = { worktreeId: 'wt1', tabId: 'tab-1', leafId: LEAF_ID }
-      const onScreen = await lookUpDiscoveredClaudeRestart(
-        'claude',
-        { ptyId: OLD_PTY, ...pane },
-        takeQueuedClaudeRestart(OLD_PTY),
-        (session) => buildPaneAccountRestartStartup('claude', pane, session)
-      )
-      expect(onScreen?.command).toContain(SESSION_ID)
-    })
-)
+    const pane = { worktreeId: 'wt1', tabId: 'tab-1', leafId: LEAF_ID }
+    const onScreen = await lookUpDiscoveredClaudeRestart(
+      'claude',
+      { ptyId: OLD_PTY, ...pane },
+      takeQueuedClaudeRestart(OLD_PTY),
+      (session) => buildPaneAccountRestartStartup('claude', pane, session)
+    )
+    expect(onScreen?.command).toContain(SESSION_ID)
+  }))
 
 it('names the effort once when the recorded launch command already sets it', () =>
   withExecutor(async () => {
@@ -466,32 +446,6 @@ it('restarts a queued pane no hook named after a later switch could not look it 
   expect(spawnedCommand()).toContain(SESSION_ID)
 })
 
-it('waits out a turn that starts while it looks a pane no hook named up at restart', () =>
-  withExecutor(async () => {
-    seedHooklessPane('ask')
-    const turn = (state: 'working' | 'done') =>
-      useAppStore
-        .getState()
-        .setAgentStatus(PANE_KEY, { state, prompt: 'next', agentType: 'claude' })
-    lookedUpAtA()
-      .mockResolvedValueOnce(recordIn(FOLDERS['acct-a']))
-      .mockImplementationOnce(async () => {
-        turn('working')
-        return recordIn(FOLDERS['acct-a'])
-      })
-    spawn.mockResolvedValue({ id: NEW_PTY })
-    await switchAccount('acct-a', 'acct-b')
-    answerClaudeAccountSwitchPrompt('restart')
-    await settle()
-    expect(spawn).not.toHaveBeenCalled()
-
-    turn('done')
-    await settle()
-
-    expect(spawn).toHaveBeenCalledTimes(1)
-    expect(spawnedCommand()).toContain(SESSION_ID)
-  }))
-
 const OTHER_SESSION_ID = '00000000-0000-4000-8000-0000000000b2'
 const SECOND_LEAF = '22222222-2222-4222-8222-222222222222'
 const SECOND_PTY = 'wt1@@second'
@@ -501,14 +455,6 @@ const dropStatus = () => useAppStore.setState({ agentStatusByPaneKey: acceptedAg
 const setPolicy = (policy: 'ask' | 'restart' | 'restart-all' | 'keep') =>
   useAppStore.setState((current) => ({
     settings: { ...current.settings!, claudeAccountSwitchRunningSessions: policy }
-  }))
-
-const setTurn = (state: 'working' | 'done') =>
-  useAppStore.setState((current) => ({
-    agentStatusByPaneKey: acceptedAgentStatuses([
-      ...current.agentStatusByPaneKey,
-      [PANE_KEY, { ...current.agentStatusByPaneKey.get(PANE_KEY)!, state }]
-    ])
   }))
 
 function sleepOn(id: string): void {
@@ -575,22 +521,17 @@ it('asks a hook-named pane once to continue after its restart-all resume', () =>
     expect(followUps()).toBe(1)
   }))
 
-it('keeps the turn hold and sends no follow-up for a restart queued under restart after the setting changes', () =>
-  withExecutor(async () => {
-    seedRestartAllPaneOnFirstAccount()
-    setPolicy('restart')
-    setTurn('working')
-    spawn.mockResolvedValue({ id: NEW_PTY })
-    await switchAccount('acct-a', 'acct-b')
-    setPolicy('restart-all')
-    setTurn('working')
-    await settle()
-    expect(spawn).not.toHaveBeenCalled()
+it('sends no follow-up for a restart queued under restart after the setting changes to restart-all', async () => {
+  seedRestartAllPaneOnFirstAccount()
+  setPolicy('restart')
+  spawn.mockResolvedValue({ id: NEW_PTY })
+  await switchAccount('acct-a', 'acct-b')
+  setPolicy('restart-all')
 
-    setTurn('done')
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1))
-    expect(followUps()).toBe(0)
-  }))
+  await withExecutor(() => vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1)))
+
+  expect(followUps()).toBe(0)
+})
 
 it('drops a queued restart, and says so, once its pane runs another conversation', () =>
   withExecutor(async () => {
@@ -622,45 +563,49 @@ it('moves a pane that has only a sleeping record on the session its lookup finds
     expect(spawnedCommand()).not.toContain(OTHER_SESSION_ID)
   }))
 
-it('counts a pane that has only a sleeping record as not moved when its lookup finds nothing', () =>
-  withExecutor(async () => {
-    seedRestartAllPaneOnFirstAccount()
-    dropStatus()
-    sleepOn(SESSION_ID)
+it.each(['restart', 'restart-all'] as const)(
+  'moves a pane that has only a sleeping record from that record when its lookup finds nothing under %s',
+  (policy) =>
+    withExecutor(async () => {
+      seedRestartAllPaneOnFirstAccount()
+      setPolicy(policy)
+      dropStatus()
+      sleepOn(SESSION_ID)
+      spawn.mockResolvedValue({ id: NEW_PTY })
 
-    expect(await switchAccount('acct-a', 'acct-b')).toBe('show-confirmation')
+      expect(await switchAccount('acct-a', 'acct-b')).toBe('handled')
+      await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1))
 
-    expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
-    expect(pending()).toEqual({})
-  }))
+      expect(spawnedCommand()).toContain(SESSION_ID)
+      expect(toast.warning).not.toHaveBeenCalled()
+    })
+)
 
 it.each([
   { other: 'on the terminal it was looked up on', rebound: false },
   { other: 'rebound to another terminal since', rebound: true }
 ])(
   'skips a queued restart once a lookup finds its conversation open in another pane $other',
-  ({ rebound }) =>
-    withExecutor(async () => {
-      seedRestartAllPaneOnFirstAccount()
-      setPolicy('restart')
-      setTurn('working')
-      addSecondPane()
-      discoverClaudeSession.mockImplementation(async (id: string) =>
-        id === SECOND_PTY ? recordIn(FOLDERS['acct-a']) : null
-      )
-      spawn.mockResolvedValue({ id: NEW_PTY })
-      await switchAccount('acct-a', 'acct-b')
-      setPolicy('restart-all')
-      await switchAccount('acct-b', 'acct-c')
-      if (rebound) {
-        useAppStore.getState().updateTabPtyId('tab-2', 'wt1@@second-rot', SECOND_PTY)
-      }
-      setTurn('done')
-      await vi.waitFor(() => expect(pending()).toEqual({}))
+  async ({ rebound }) => {
+    seedRestartAllPaneOnFirstAccount()
+    setPolicy('restart')
+    addSecondPane()
+    discoverClaudeSession.mockImplementation(async (id: string) =>
+      id === SECOND_PTY ? recordIn(FOLDERS['acct-a']) : null
+    )
+    spawn.mockResolvedValue({ id: NEW_PTY })
+    await switchAccount('acct-a', 'acct-b')
+    setPolicy('restart-all')
+    await switchAccount('acct-b', 'acct-c')
+    if (rebound) {
+      useAppStore.getState().updateTabPtyId('tab-2', 'wt1@@second-rot', SECOND_PTY)
+    }
+    await withExecutor(settle)
 
-      expect(spawn).not.toHaveBeenCalled()
-      expect(toast.warning).not.toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
-    })
+    expect(pending()).toEqual({})
+    expect(spawn).not.toHaveBeenCalled()
+    expect(toast.warning).not.toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
+  }
 )
 
 const ROTATED_PTY = 'wt1@@rot'
@@ -669,9 +614,8 @@ const rotateTerminal = (): void => {
   useAppStore.getState().updateTabPtyId('tab-1', ROTATED_PTY, OLD_PTY)
 }
 
-it('skips the turn hold, retries and asks to continue for a hook-named pane rebound before its restart-all restart', async () => {
+it('retries and asks to continue for a hook-named pane rebound before its restart-all restart', async () => {
   seedRestartAllPaneOnFirstAccount()
-  setTurn('working')
   spawn.mockRejectedValueOnce(new Error('launch refused')).mockResolvedValue({ id: NEW_PTY })
   await switchAccount('acct-a', 'acct-b')
   rotateTerminal()

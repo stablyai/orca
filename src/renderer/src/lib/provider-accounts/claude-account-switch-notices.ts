@@ -67,6 +67,30 @@ export function warnUncheckedSessions(count: number, previous: string): void {
   )
 }
 
+/** Why a toast: nothing else moved, so no dialog lists the Claude sessions Orca couldn't restart. */
+export function warnStrandedSessions(count: number, previous: string, review: () => void): void {
+  toast.warning(
+    count === 1
+      ? translate(
+          'accounts.claude.switchSessions.strandedOne',
+          '1 Claude session may still be on {{previous}}. Restart it manually to switch.',
+          { previous }
+        )
+      : translate(
+          'accounts.claude.switchSessions.strandedOther',
+          '{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.',
+          { count, previous }
+        ),
+    {
+      classNames: INLINE_ACTION_CLASS_NAMES,
+      action: {
+        label: translate('accounts.claude.switchSessions.review', 'Review'),
+        onClick: review
+      }
+    }
+  )
+}
+
 /** Why a toast: with nothing else to move, no dialog says why these sessions stayed. */
 export function warnSharedSessions(count: number, previous: string): void {
   toast.warning(

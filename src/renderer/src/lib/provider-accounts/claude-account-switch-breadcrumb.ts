@@ -1,12 +1,11 @@
 import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
-import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import {
-  isClaudePaneMidTurn,
-  type ClaudeSwitchSessions,
-  type InspectedClaudePane
+import { normalizeAgentProviderSession } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  ClaudeSwitchSessions,
+  InspectedClaudePane
 } from '../agent-session/accounts/claude/claude-session-account-move'
-import type { ClaudeSwitchCandidatePane } from '../agent-session/accounts/claude/claude-switch-candidate-panes'
+import type { LocalClaudePane } from '../agent-session/accounts/claude/claude-pane-inventory'
 import type { ClaudePaneLookups } from '../agent-session/accounts/claude/claude-queued-restart-records'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 
@@ -16,7 +15,7 @@ export type ClaudeAccountSwitchRecord = {
   fromAccountId: string | null
   toAccountId: string | null
   lookups?: ClaudePaneLookups
-  panes?: ClaudeSwitchCandidatePane[]
+  panes?: LocalClaudePane[]
   inspected?: InspectedClaudePane[]
   found?: ClaudeSwitchSessions | null
   queued?: string[]
@@ -47,10 +46,6 @@ export function recordClaudeAccountSwitchBreadcrumb(
     to: shortAccountId(record.toAccountId),
     seen: panes.length,
     queued: queued.length,
-    waitingForTurn:
-      record.policy === 'restart-all'
-        ? 0
-        : queued.filter((ptyId) => waitsForTurn(record, ptyId)).length,
     notMoved: [...notMoved].map(([reason, count]) => `${reason}=${count}`).join(','),
     panes: joinWithinDetailCap(panes.map((pane) => pane.text))
   })
@@ -73,7 +68,7 @@ function switchStage(local: boolean, record: ClaudeAccountSwitchRecord, result: 
 }
 
 function paneLine(
-  pane: ClaudeSwitchCandidatePane,
+  pane: LocalClaudePane,
   record: ClaudeAccountSwitchRecord,
   queued: string[]
 ): PaneLine {
@@ -85,7 +80,7 @@ function paneLine(
       : 'kept'
   const row = record.inspected?.find((candidate) => candidate.pane.ptyId === pane.ptyId)
   const reason = row ? scannedReason(row, record.found) : unscannedReason(pane, record.lookups)
-  const text = `${shortPtyId(pane.ptyId)} ${pane.identifiedBy} ${outcome} ${reason}`
+  const text = `${shortPtyId(pane.ptyId)} ${identifiedBy(pane)} ${outcome} ${reason}`
   return { outcome, reason, text }
 }
 
@@ -100,16 +95,18 @@ function scannedReason(row: InspectedClaudePane, found: ClaudeSwitchSessions | n
   return row.group === 'onAccount' ? 'on-account' : 'other-account'
 }
 
-function unscannedReason(pane: ClaudeSwitchCandidatePane, lookups?: ClaudePaneLookups): string {
-  if (!pane.entry && !pane.session) {
+function identifiedBy(pane: LocalClaudePane): 'hook' | 'lookup' | 'none' {
+  if (normalizeAgentProviderSession(pane.entry?.providerSession)) {
+    return 'hook'
+  }
+  return pane.lookedUp ? 'lookup' : 'none'
+}
+
+function unscannedReason(pane: LocalClaudePane, lookups?: ClaudePaneLookups): string {
+  if (!pane.entry && !pane.lookedUp) {
     return lookups?.has(makePaneKey(pane.tabId, pane.leafId)) ? 'not-found' : 'not-looked-up'
   }
   return pane.inLane ? 'on-target' : 'out-of-lane'
-}
-
-function waitsForTurn(record: ClaudeAccountSwitchRecord, ptyId: string): boolean {
-  const pane = record.panes?.find((candidate) => candidate.ptyId === ptyId)
-  return !!pane && isClaudePaneMidTurn(useAppStore.getState(), makePaneKey(pane.tabId, pane.leafId))
 }
 
 function joinWithinDetailCap(entries: string[]): string {

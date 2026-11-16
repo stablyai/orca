@@ -7,6 +7,7 @@ import {
   announceRestart,
   warnSessionsLeftBehind,
   warnSharedSessions,
+  warnStrandedSessions,
   warnUncheckedSessions
 } from './claude-account-switch-notices'
 import {
@@ -158,8 +159,10 @@ async function moveSessionsAfterSwitch(
   args: ClaudeAccountSwitch,
   record: ClaudeAccountSwitchRecord
 ): Promise<'show-confirmation' | 'handled'> {
-  const { fromAccountId, toAccountId, policy } = record
-  const restartAll = policy === 'restart-all'
+  const { fromAccountId, toAccountId } = record
+  const scansAll = record.policy === 'restart-all'
+  // Why: a switch begun under restart-all finishes as one, since its scan and lookups were made for it.
+  const readSetting = () => (scansAll ? record.policy : readPolicy(args.madeElsewhere))
   // Why: a server's switch, or one between coinciding launch folders, moves nothing here.
   if (args.owner.kind !== 'local' || fromAccountId === toAccountId) {
     return 'show-confirmation'
@@ -177,22 +180,23 @@ async function moveSessionsAfterSwitch(
     host,
     accountLabel: nextAccountLabel,
     isCurrent: () => generation === switchGeneration,
-    restartAll
+    restartAll: scansAll
   })
   record.lookups = discovered
-  if (policy === 'keep') {
+  if (readSetting() === 'keep') {
     return 'show-confirmation'
   }
   let uncheckedCount = 0
   let uncheckedOthersCount = 0
   let sharedCount = 0
+  let strandedPtyIds: ReadonlySet<string> = new Set()
   const found = await findClaudeSwitchSessions({
     owner: args.owner,
     target: args.target,
     fromAccountId,
     toAccountId,
     host,
-    restartAll,
+    restartAll: scansAll,
     discovered,
     onUnchecked: (sessions) => {
       uncheckedCount = sessions.length
@@ -207,6 +211,9 @@ async function moveSessionsAfterSwitch(
     onShared: (sessions) => {
       sharedCount = sessions.length
     },
+    onStranded: (sessions) => {
+      strandedPtyIds = new Set(sessions.map((session) => session.ptyId))
+    },
     onInspected: (panes, inspected) => {
       record.panes = panes
       record.inspected = inspected
@@ -218,65 +225,81 @@ async function moveSessionsAfterSwitch(
   if (generation !== switchGeneration) {
     return 'handled'
   }
+  // Why re-read: the setting may change while the scan runs.
+  const policy = readSetting()
+  record.policy = policy
+  if (policy === 'keep') {
+    return 'show-confirmation'
+  }
   if (uncheckedCount > 0) {
     warnUncheckedSessions(
       uncheckedCount,
       getClaudeAccountLabel(args.before.state, args.before.accountId)
     )
   }
-  const queued =
-    found && restartAll
-      ? currentPtyIds([...found.onAccount, ...found.elsewhere], true)
-      : currentPtyIds(found?.onAccount ?? [])
-  record.found = found
-  record.queued = policy === 'ask' ? [] : queued
-  // Why: other sessions are listed only alongside a move, so parallel-account users get no prompt.
-  if (!found || queued.length === 0) {
-    if (sharedCount > 0) {
-      warnSharedSessions(
-        sharedCount,
-        getClaudeAccountLabel(args.before.state, args.before.accountId)
-      )
-    }
-    // Why less shared: the warning above already named the outgoing account's shared sessions.
-    const leftBehind = (found?.cantMove.length ?? 0) - sharedCount + uncheckedOthersCount
-    if (restartAll && leftBehind > 0) {
-      warnSessionsLeftBehind(leftBehind, nextAccountLabel)
-    }
-    return 'show-confirmation'
-  }
-  if (restartAll) {
-    queueClaudeRestarts(queued, true, discovered)
-    announceRestart(queued.length, nextAccountLabel, found.cantMove.length + uncheckedOthersCount)
-    return 'handled'
-  }
+  const restartAll = policy === 'restart-all'
   const sessions: ClaudeAccountSwitchPromptSessions = {
-    ...found,
-    elsewhere: found.elsewhere.map((session) => ({
+    onAccount: found?.onAccount ?? [],
+    elsewhere: (found?.elsewhere ?? []).map((session) => ({
       ...session,
       accountLabel: getClaudeAccountLabel(args.after.state, session.accountId)
     })),
+    cantMove: found?.cantMove ?? [],
     lookups: discovered
   }
   const labels = {
     previousAccountLabel: getClaudeAccountLabel(args.before.state, args.before.accountId),
     nextAccountLabel
   }
+  const queued = restartAll
+    ? currentPtyIds([...sessions.onAccount, ...sessions.elsewhere], true)
+    : currentPtyIds(sessions.onAccount)
+  record.found = found
+  record.queued = policy === 'ask' ? [] : queued
+  const openReview = (reviewSessions = sessions): void => {
+    if (generation === switchGeneration) {
+      setPrompt({
+        id: generation,
+        review: true,
+        sessions: { ...reviewSessions, onAccount: [] },
+        ...labels
+      })
+    }
+  }
+  // Why: other sessions are listed only alongside a move, so parallel-account users get no prompt.
+  if ((policy === 'ask' ? sessions.onAccount : queued).length === 0) {
+    if (sharedCount > 0) {
+      warnSharedSessions(sharedCount, labels.previousAccountLabel)
+    }
+    // Why less shared: the warning above already named the outgoing account's shared sessions.
+    const leftBehind = sessions.cantMove.length - sharedCount + uncheckedOthersCount
+    if (restartAll && leftBehind > 0) {
+      warnSessionsLeftBehind(leftBehind, nextAccountLabel)
+    } else if (!restartAll && strandedPtyIds.size > 0) {
+      warnStrandedSessions(strandedPtyIds.size, labels.previousAccountLabel, () =>
+        openReview({
+          onAccount: [],
+          elsewhere: [],
+          cantMove: sessions.cantMove.filter((session) => strandedPtyIds.has(session.ptyId)),
+          lookups: discovered
+        })
+      )
+    }
+    return 'show-confirmation'
+  }
+  if (restartAll) {
+    queueClaudeRestarts(queued, true, discovered)
+    announceRestart(
+      queued.length,
+      nextAccountLabel,
+      sessions.cantMove.length + uncheckedOthersCount
+    )
+    return 'handled'
+  }
   if (policy === 'restart') {
     queueClaudeRestarts(queued, false, discovered)
-    const listed = found.elsewhere.length + found.cantMove.length
-    const review = (): void => {
-      if (generation === switchGeneration) {
-        setPrompt({
-          id: generation,
-          review: true,
-          sessions: { ...sessions, onAccount: [] },
-          ...labels
-        })
-      }
-    }
-    const others = listed + uncheckedOthersCount
-    announceRestart(queued.length, nextAccountLabel, others, listed > 0 ? review : undefined)
+    const others = sessions.elsewhere.length + sessions.cantMove.length
+    announceRestart(queued.length, nextAccountLabel, others, () => openReview())
     return 'handled'
   }
   setPrompt({ id: generation, sessions, ...labels })
@@ -285,7 +308,7 @@ async function moveSessionsAfterSwitch(
 
 function readPolicy(madeElsewhere?: true): ClaudeAccountSwitchRunningSessions {
   const policy = useAppStore.getState().settings?.claudeAccountSwitchRunningSessions ?? 'ask'
-  // Why: no one at the phone sees a dialog here; restarts still wait for each turn to end.
+  // Why: no one at the phone sees a dialog here.
   return policy === 'ask' && madeElsewhere ? 'restart' : policy
 }
 

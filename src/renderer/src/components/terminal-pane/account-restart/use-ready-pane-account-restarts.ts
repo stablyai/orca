@@ -34,11 +34,11 @@ export function useReadyPaneAccountRestarts({
   handleRestartPane: ReturnType<typeof usePaneProcessRestart>['handleRestartPane']
   panePtyLayoutBindings: TerminalPaneCloseController['savedLayout']['ptyIdsByLeafId']
 }) {
-  // Why primitive ids: unrelated status updates stay shallow-equal and skip this pane.
-  const readyRestartPtyIds = useAppStore(
+  // Why primitive ids: another tab's queued restart stays shallow-equal and skips this pane.
+  const queuedRestartPtyIds = useAppStore(
     useShallow((state) => selectReadyAccountRestartPtyIds(state, tabId))
   )
-  const runReadyAccountRestarts = useCallback(() => {
+  const runQueuedAccountRestarts = useCallback(() => {
     const manager = managerRef.current
     const ready = selectReadyAccountRestartPtyIds(useAppStore.getState(), tabId)
     if (!manager || ready.length === 0) {
@@ -61,7 +61,7 @@ export function useReadyPaneAccountRestarts({
               pane.leafId,
               undefined,
               queued?.restartAll,
-              !queued?.session
+              !!queued?.restartAll && !queued.session
             )
           : null
       if (agent && startup) {
@@ -91,11 +91,11 @@ export function useReadyPaneAccountRestarts({
     tabId
   ])
   useEffect(() => {
-    runReadyAccountRestarts()
-  }, [panePtyLayoutBindings, readyRestartPtyIds, runReadyAccountRestarts])
-  // Why a microtask: the bind fires inside the connection handler; the restart runs once it yields, and the handler's later steps check their transport is still current.
+    runQueuedAccountRestarts()
+  }, [panePtyLayoutBindings, queuedRestartPtyIds, runQueuedAccountRestarts])
+  // Why a microtask: the bind fires inside the connection handler, which must finish before a restart replaces it.
   useEffect(
-    () => onQueuedRestartPaneBound(tabId, () => queueMicrotask(runReadyAccountRestarts)),
-    [runReadyAccountRestarts, tabId]
+    () => onQueuedRestartPaneBound(tabId, () => queueMicrotask(runQueuedAccountRestarts)),
+    [runQueuedAccountRestarts, tabId]
   )
 }

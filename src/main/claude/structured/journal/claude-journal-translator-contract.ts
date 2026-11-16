@@ -1,6 +1,6 @@
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
-import type { AgentSessionContextReport } from '../../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
@@ -17,7 +17,7 @@ import type { ClaudeCommandStart } from '../turns/claude-command-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink

@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { CLI_AGENT_CALLER_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/cli-agent-caller-capability'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'

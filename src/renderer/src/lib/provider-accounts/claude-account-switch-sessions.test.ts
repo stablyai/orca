@@ -14,7 +14,6 @@ import {
   handleRunningClaudeSessionsAfterSwitch,
   resetClaudeAccountSwitchSessionsForTests
 } from './claude-account-switch-sessions'
-import { carriesLookedUpClaudeSession } from '../agent-session/accounts/claude/claude-queued-restart-records'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
@@ -210,9 +209,17 @@ it('restarts only the account left when set to always restart', async () => {
   expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'pty-1': 'claude' })
 })
 
-it.each(['restart', 'restart-all'] as const)(
-  'counts sessions whose process could not be read as not moved under %s',
-  async (policy) => {
+it.each([
+  {
+    policy: 'restart-all' as const,
+    toast: [
+      expect.objectContaining({ description: 'accounts.claude.switchSessions.notMovedOther:2' })
+    ]
+  },
+  { policy: 'restart' as const, toast: [] }
+])(
+  'counts sessions on other accounts whose process could not be read as not moved under restart-all only: $policy',
+  async ({ policy, toast: description }) => {
     seed(policy, { 1: FOLDERS['acct-a'], 2: SYSTEM_HOME, 3: FOLDERS['acct-c'] })
     vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async (id) => {
       if (id === ptyId(2)) {
@@ -227,7 +234,7 @@ it.each(['restart', 'restart-all'] as const)(
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'pty-1': 'claude' })
     expect(toast.success).toHaveBeenCalledWith(
       'accounts.claude.switchSessions.restartingOne',
-      expect.objectContaining({ description: 'accounts.claude.switchSessions.notMovedOther:2' })
+      ...description
     )
   }
 )
@@ -372,8 +379,8 @@ function discoverAt(configDir: string, during: () => void = () => {}): ReturnTyp
 const paneSession = () =>
   useAppStore.getState().agentStatusByPaneKey.get(makePaneKey(tabId(1), leafId(1)))?.providerSession
 
-it('queues a pane no hook named whose record sits on the account left', async () => {
-  seed('restart', { 1: null })
+it('queues a pane no hook named whose record sits on the account left under restart-all', async () => {
+  seed('restart-all', { 1: null })
   discoverAt(FOLDERS['acct-a'])
 
   await switchAccount('acct-a', 'acct-b')
@@ -388,19 +395,6 @@ it('queues a pane no hook named whose record sits in System default under restar
   await switchAccount('acct-a', 'acct-b')
 
   expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'pty-1': 'claude' })
-  expect(paneSession()).toBeUndefined()
-})
-
-it('lists a pane no hook named in the question and leaves no session on it after Keep', async () => {
-  seed('ask', { 1: null })
-  discoverAt(FOLDERS['acct-a'])
-
-  expect(await switchAccount('acct-a', 'acct-b')).toBe('handled')
-  expect(getClaudeAccountSwitchPrompt()?.sessions.onAccount).toEqual([
-    expect.objectContaining({ ptyId: 'pty-1' })
-  ])
-  answerClaudeAccountSwitchPrompt('keep')
-
   expect(paneSession()).toBeUndefined()
 })
 
@@ -447,7 +441,7 @@ it('keeps the session a hook reported while the lookup ran', async () => {
 })
 
 it('looks every pane no hook named up again at each switch', async () => {
-  seed('restart', { 1: null })
+  seed('restart-all', { 1: null })
   discoverAt(FOLDERS['acct-a'])
   await switchAccount('acct-a', 'acct-b')
   useAppStore.setState({ pendingPaneAccountRestarts: {} })
@@ -549,18 +543,6 @@ it.each(['keep', 'ask', 'restart'] as const)(
   }
 )
 
-it('queues no looked-up session for a pane a hook names by the time the restart is picked', async () => {
-  seed('ask', { 1: null })
-  stubLookups(() => recorded(1, FOLDERS['acct-a']))
-  await switchAccount('acct-a', 'acct-b')
-  seed('ask', { 1: FOLDERS['acct-a'] })
-
-  answerClaudeAccountSwitchPrompt('restart')
-
-  expect(pending()).toEqual({ 'pty-1': 'claude' })
-  expect(carriesLookedUpClaudeSession('pty-1')).toBe(false)
-})
-
 it('keeps the setting read when the switch began after it changes during the scan', async () => {
   seed('restart-all', { 1: FOLDERS['acct-a'], 3: FOLDERS['acct-c'] })
   vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async () => {
@@ -589,6 +571,19 @@ it('keeps the setting read when the switch began after it changes during a looku
 
   expect(pending()).toEqual({ 'pty-1': 'claude' })
 })
+
+it.each(['ask', 'restart', 'keep'] as const)(
+  'looks up no pane a hook left unnamed under %s',
+  async (policy) => {
+    seed(policy, { 1: null })
+    const { discoverClaudeSession } = stubLookups(() => recorded(1, FOLDERS['acct-a']))
+
+    await switchAccount('acct-a', 'acct-b')
+
+    expect(discoverClaudeSession).not.toHaveBeenCalled()
+    expect(pending()).toEqual({})
+  }
+)
 
 it.each(['ask', 'restart', 'keep'] as const)(
   'neither looks up nor restarts a terminal without a status entry under %s',
@@ -702,7 +697,6 @@ it('records one breadcrumb per switch, listing panes until the detail is full', 
         to: 'acct-b',
         seen: 7,
         queued: 1,
-        waitingForTurn: 0,
         notMoved: 'not-running=1,no-session=5',
         panes:
           'a0000001 lookup queued on-account, a0000002 none kept not-running, a0000003 none kept no-session, a0000004 none kept no-session, a0000005 none kept no-session, a0000006 none kept no-session (+1 more)'
@@ -729,7 +723,6 @@ it('records a pane the ask setting offers as asked, with nothing queued', async 
         to: 'acct-b',
         seen: 1,
         queued: 0,
-        waitingForTurn: 0,
         notMoved: '',
         panes: 'a0000001 hook asked on-account'
       }
@@ -757,7 +750,6 @@ it('records that a switch came from a phone or the CLI, where ask restarts unpro
         to: 'acct-b',
         seen: 1,
         queued: 1,
-        waitingForTurn: 0,
         notMoved: '',
         panes: 'a0000001 hook queued on-account'
       }
@@ -782,7 +774,6 @@ it('records a switch to the account already selected', async () => {
         to: 'acct-a',
         seen: 0,
         queued: 0,
-        waitingForTurn: 0,
         notMoved: '',
         panes: ''
       }

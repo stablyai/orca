@@ -3,7 +3,7 @@ import {
   selectAgentSenderAssociation
 } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 import { useMemo } from 'react'
-import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/agent-message-presentation'
+import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -21,7 +21,7 @@ import {
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   useLeasedSenderSelector,
