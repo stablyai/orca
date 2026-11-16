@@ -72,9 +72,9 @@ export async function createWorktreeDefaultTabTerminals(
   defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined,
   surfacing: TerminalSurfacing = {},
   startupHandle?: string
-): Promise<string[]> {
+): Promise<DefaultTabTerminals> {
   if (!defaultTabs || defaultTabs.tabs.length === 0 || !host.canSpawn()) {
-    return []
+    return { handles: [], failed: false }
   }
   const [first, ...rest] = defaultTabs.tabs
   // Startup occupies the first default tab: inherit its title/color without also running its template command.
@@ -90,6 +90,7 @@ export async function createWorktreeDefaultTabTerminals(
     )
   }
   const handles: string[] = []
+  let failed = false
   for (const template of startupHandle ? rest : defaultTabs.tabs) {
     try {
       const command = template.command?.trim()
@@ -101,11 +102,15 @@ export async function createWorktreeDefaultTabTerminals(
       handles.push(terminal.handle)
       await dressAsDefaultTab(host, worktreeId, terminal.handle, template)
     } catch (error) {
+      failed = true
       console.warn(`[worktree-create] Failed to create default tab for ${worktreeId}:`, error)
     }
   }
-  return handles
+  return { handles, failed }
 }
+
+/** `failed`: a tab didn't start, which an approved-setup run reports instead of claiming success. */
+type DefaultTabTerminals = { handles: string[]; failed: boolean }
 
 async function startDefaultTabsInLayout(
   host: WorktreeTerminalProvisioningHost,
@@ -122,7 +127,7 @@ async function startDefaultTabsInLayout(
     surfacing: TerminalSurfacing
   },
   templates: NonNullable<CreateWorktreeResult['defaultTabs']>['tabs']
-): Promise<string[]> {
+): Promise<DefaultTabTerminals> {
   const panes = templates.map((template) => ({
     template,
     tab: {
@@ -138,11 +143,12 @@ async function startDefaultTabsInLayout(
   )
   if (!createdTabs) {
     console.warn(`[worktree-create] Main refused the default tabs for ${worktreeId}`)
-    return []
+    return { handles: [], failed: true }
   }
   // Start only newly created defaults; existing workspaces receive none again.
   const created = new Set(createdTabs.map(({ tabId }) => tabId))
   const handles: string[] = []
+  let failed = false
   for (const { template, tab } of panes.filter(({ tab }) => created.has(tab.tabId))) {
     const command = template.command?.trim()
     try {
@@ -155,10 +161,11 @@ async function startDefaultTabsInLayout(
       })
       handles.push(terminal.handle)
     } catch (error) {
+      failed = true
       console.warn(`[worktree-create] Failed to start a default tab for ${worktreeId}:`, error)
     }
   }
-  return handles
+  return { handles, failed }
 }
 
 // Appearance failures must not cost the tab, the other field or workspace creation.
@@ -201,7 +208,7 @@ export async function provisionWorktreeTerminals(
   let failed = false
   try {
     const setupOnly = args.setup !== undefined && args.setupOnly === true
-    const defaultHandles = await createWorktreeDefaultTabTerminals(
+    const defaultTabTerminals = await createWorktreeDefaultTabTerminals(
       host,
       args.worktreeSelector,
       args.worktreeId,
@@ -209,7 +216,8 @@ export async function provisionWorktreeTerminals(
       surfacing,
       args.hasStartupTerminal ? (args.primaryTerminalHandle ?? undefined) : undefined
     )
-    const primaryHandle = args.primaryTerminalHandle ?? defaultHandles[0] ?? null
+    failed = defaultTabTerminals.failed
+    const primaryHandle = args.primaryTerminalHandle ?? defaultTabTerminals.handles[0] ?? null
     if (!args.hasStartupTerminal && !primaryHandle && setupOnly) {
       shellSkippedForSetup = true
     }

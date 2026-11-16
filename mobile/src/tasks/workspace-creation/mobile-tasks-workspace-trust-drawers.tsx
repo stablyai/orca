@@ -214,6 +214,9 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
   )
 }
 
+// Prompts whose approval is in flight; the prompt object lives as long as its drawer.
+const approvingPrompts = new WeakSet<OrcaYamlTrustPrompt>()
+
 export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentationModel) {
   const {
     client,
@@ -240,9 +243,11 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     )
   const approve = (alwaysTrust: boolean) => {
     const prompt = orcaYamlTrustPrompt
-    if (!prompt) {
+    // A second tap while the first approval runs must not run setup or open the workspace twice.
+    if (!prompt || approvingPrompts.has(prompt)) {
       return
     }
+    approvingPrompts.add(prompt)
     void (async () => {
       let notice: string | undefined
       try {
@@ -260,6 +265,8 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
           notice = createdSetupRunFailed()
           return
         }
+        // The prompt stays up after a failed save, so it may be approved again.
+        approvingPrompts.delete(prompt)
         setError(
           err instanceof Error
             ? err.message

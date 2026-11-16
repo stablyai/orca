@@ -1,4 +1,5 @@
 import { EMPTY_ORCA_HOOK_CONTENT_HASH } from '../../../src/shared/hashing/orca-hook-content-hash'
+import { isOrcaHookRepoTrusted } from '../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
 import {
   parseExecutionHostId,
   type ExecutionHostId
@@ -105,17 +106,14 @@ export async function prepareAutomationSetup(args: {
       : draft.setupDecision
   const runtimeHost = parseExecutionHostId(args.executionHost)?.kind === 'runtime'
   const setupTrust = normalizeSetupHookTrust(details.value.setupTrust)
-  // A runtime host can't trust the repo, so as desktop, approving no shared setup pins empty content:
-  // setup the base branch adds later is skipped for review. Hosts that read no hooks here omit setupConfig.
-  if (decision === 'run' && !setupTrust && runtimeHost && details.value.setupConfig !== undefined) {
-    return { ...draft, setupDecision: 'run', setupTrustHash: EMPTY_ORCA_HOOK_CONTENT_HASH }
+  // Hosts that read no hooks here (SSH, another host's folder) omit setupConfig; nothing can be pinned.
+  const pinsEmptySetup = !setupTrust && details.value.setupConfig !== undefined
+  if (decision !== 'run' || (!setupTrust && !pinsEmptySetup)) {
+    return readRepoHooksSetupCommand(details.value)
+      ? { ...draft, setupDecision: decision ?? 'inherit' }
+      : { ...draft, setupDecision: 'inherit' }
   }
-  if (!readRepoHooksSetupCommand(details.value)) {
-    return { ...draft, setupDecision: 'inherit' }
-  }
-  if (decision !== 'run' || !setupTrust) {
-    return { ...draft, setupDecision: decision ?? 'inherit' }
-  }
+  // Trust can only be saved on a paired desktop; a runtime host never trusts the repo.
   let trust: PersistedTrustedOrcaHooks = {}
   if (!runtimeHost) {
     try {
@@ -129,9 +127,19 @@ export async function prepareAutomationSetup(args: {
     if (!current()) {
       return null
     }
-    if (isOrcaHookTrusted(trust, repos, setup.repoId, 'setup', setupTrust.contentHash)) {
-      return { ...draft, setupDecision: 'run' }
+  }
+  if (!setupTrust) {
+    // As desktop: approving no shared setup in an untrusted repo pins empty content, so setup the base
+    // branch adds later is skipped for review instead of running unseen.
+    if (isOrcaHookRepoTrusted(trust, repos, setup.repoId)) {
+      return readRepoHooksSetupCommand(details.value)
+        ? { ...draft, setupDecision: 'run' }
+        : { ...draft, setupDecision: 'inherit' }
     }
+    return { ...draft, setupDecision: 'run', setupTrustHash: EMPTY_ORCA_HOOK_CONTENT_HASH }
+  }
+  if (isOrcaHookTrusted(trust, repos, setup.repoId, 'setup', setupTrust.contentHash)) {
+    return { ...draft, setupDecision: 'run' }
   }
   const approved = await args.confirm(
     {

@@ -6,6 +6,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { hashOrcaHookTrustContent } from '../../../workspace-hooks/created-worktree-setup-trust'
 import { runApprovedCreatedWorktreeSetup } from './created-worktree-approved-setup'
+import { provisionWorktreeTerminals } from '../startup/runtime-worktree-terminal-provisioning'
 
 const runner = vi.hoisted(() => ({ createSetupRunnerScript: vi.fn() }))
 vi.mock('../../../workspace-hooks/worktree-runner-script', () => ({
@@ -54,14 +55,32 @@ afterEach(() => {
 })
 
 describe('runApprovedCreatedWorktreeSetup', () => {
-  it('fails the call when the approved commands could not start', async () => {
-    provisionManagedWorktreeTerminals.mockResolvedValue({ setupSpawned: false, failed: true })
+  it('fails the call when an approved default tab could not start', async () => {
+    writeFileSync(
+      join(worktreePath, 'orca.yaml'),
+      'defaultTabs:\n  - title: dev\n    command: pnpm dev\n'
+    )
+    provisionManagedWorktreeTerminals.mockImplementation((args) =>
+      provisionWorktreeTerminals(
+        {
+          canSpawn: () => true,
+          createTerminal: async () => {
+            throw new Error('pty unavailable')
+          },
+          setTabTitle: async () => {},
+          setTabColor: async () => {},
+          getPtyId: () => undefined,
+          recordSetupCompletionToken: () => {}
+        },
+        args
+      )
+    )
 
     await expect(
       runApprovedCreatedWorktreeSetup(
         runtimeFor(),
         'id:wt',
-        hashOrcaHookTrustContent(BRANCH_TRUST_CONTENT)
+        hashOrcaHookTrustContent('# defaultTabs[1] dev\npnpm dev')
       )
     ).rejects.toThrow('Could not start')
   })
