@@ -180,8 +180,8 @@ function retentionAnnotations({ reads, lanes }: Retention): [string, string][] {
     [
       'orca-reader-pool',
       `flight=${reads.inFlight} unconsumed=${reads.unconsumed} wait=${reads.waiting} ` +
-        `oldest=${reads.oldestWaitMs}ms reserved=${Math.round(reads.reservedBytes / MB)}MB ` +
-        `recv=${Math.round(reads.receivedBytes / MB)}MB cons=${Math.round(reads.consumedBytes / MB)}MB`
+        `oldest=${reads.oldestWaitMs}ms held=${Math.round(reads.outstandingBytes / MB)}MB ` +
+        `recv=${Math.round(reads.receivedBytes / MB)}MB cons=${Math.round(reads.consumedBytes / MB)}MB exp=${reads.creditWaitsExpired}`
     ],
     [
       'orca-chat-subscribers',
@@ -197,7 +197,8 @@ function retentionData({ reads, lanes }: Retention): CrashReportBreadcrumbData {
     readsUnconsumed: reads.unconsumed,
     readsWaiting: reads.waiting,
     readsOldestWaitMs: reads.oldestWaitMs,
-    readsReservedMB: Math.round(reads.reservedBytes / MB),
+    readsHeldMB: Math.round(reads.outstandingBytes / MB),
+    readsCreditWaitsExpired: reads.creditWaitsExpired,
     subscribersBusy: lanes.busy,
     subscriberPending: lanes.pending,
     subscriberOldestMs: lanes.oldestMs,

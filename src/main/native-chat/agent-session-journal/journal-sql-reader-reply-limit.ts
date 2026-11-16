@@ -21,11 +21,24 @@ export function journalReaderReplyExceedsLimit(
   reply: unknown,
   limit = JOURNAL_READER_REPLY_BYTE_LIMIT
 ): boolean {
-  if (isRecordSetReply(reply) || carriesOneItem(reply)) {
-    return false
+  return replyBytes(reply, limit).exceeds
+}
+
+/**
+ * Never below the serialized size: the walk counts characters, and a two-byte string serializes
+ * at twice that, so walked sizes count at UTF-16 width. Measured whenever the walk may miss rows.
+ * A one-item reply is never refused but is still sized, so reply credit holds it like any other.
+ */
+function replyBytes(reply: unknown, limit: number): { bytes?: number; exceeds: boolean } {
+  if (isRecordSetReply(reply)) {
+    return { exceeds: false }
   }
   const shape = describeWorkerMessage(reply)
-  return (shape.truncated || shape.bytes > limit / 4) && serialize(reply).byteLength > limit
+  if (!shape.truncated && shape.bytes <= limit / 4) {
+    return { bytes: shape.bytes * 2, exceeds: false }
+  }
+  const bytes = serialize(reply).byteLength
+  return { bytes, exceeds: bytes > limit && !carriesOneItem(reply) }
 }
 
 /** The reader posts every reply through this: an oversized one becomes its request's failure. */
@@ -33,18 +46,29 @@ export function limitJournalReaderReply<T extends { type: string }>(
   reply: T,
   limit = JOURNAL_READER_REPLY_BYTE_LIMIT
 ): T | Extract<JournalSqlReaderReply, { type: 'failed' }> {
-  if (
-    reply.type === 'failed' ||
-    !('id' in reply) ||
-    typeof reply.id !== 'number' ||
-    !journalReaderReplyExceedsLimit(reply, limit)
-  ) {
-    return reply
+  return measureJournalReaderReply(reply, limit).reply
+}
+
+/** `bytes` is absent for failures, untracked replies and the record set. */
+export function measureJournalReaderReply<T extends { type: string }>(
+  reply: T,
+  limit = JOURNAL_READER_REPLY_BYTE_LIMIT
+): { reply: T | Extract<JournalSqlReaderReply, { type: 'failed' }>; bytes?: number } {
+  if (reply.type === 'failed' || !('id' in reply) || typeof reply.id !== 'number') {
+    return { reply }
+  }
+  const { bytes, exceeds } = replyBytes(reply, limit)
+  if (!exceeds) {
+    return bytes === undefined ? { reply } : { reply, bytes }
   }
   return {
-    type: 'failed',
-    id: reply.id,
-    error: journalSqlFailure(new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`))
+    reply: {
+      type: 'failed',
+      id: reply.id,
+      error: journalSqlFailure(
+        new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`)
+      )
+    }
   }
 }
 

@@ -187,10 +187,15 @@ export class AgentSessionSubscribers {
   ): void {
     const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal, queueChanged)
+    let owedQueue: SubscriberDeliveryPort | undefined
+    // Subscribers whose waiting catch-up still owes a queue read share one port for it.
+    const queuePort = () =>
+      queueChanged ? port : (owedQueue ??= this.deliveryPort(sessionId, journal, true))
     for (const subscriber of this.subscribers(sessionId)) {
       this.lane(subscriber).catchUp({
         journal,
         port,
+        queuePort,
         queueChanged,
         hostNow,
         ...(activity !== undefined ? { activity } : {})
@@ -339,7 +344,7 @@ export class AgentSessionSubscribers {
             subscribers: [subscriber],
             hostNow
           }),
-        mergeCatchUp: (pending, next) => this.mergeCatchUp(sessionId, pending, next),
+        mergeCatchUp: (pending, next) => this.mergeCatchUp(pending, next),
         runnable: () => this.isActive(subscriber),
         failed: (error) => {
           if (!(error instanceof SubscriberFrameSuperseded)) {
@@ -355,7 +360,6 @@ export class AgentSessionSubscribers {
 
   /** The newer fan-out's reads are fresher; a text-only commit never hides an owed queue read. */
   private mergeCatchUp(
-    sessionId: string,
     pending: SubscriberCatchUp,
     next: SubscriberCatchUp
   ): SubscriberCatchUp | undefined {
@@ -366,10 +370,8 @@ export class AgentSessionSubscribers {
     const activity = next.activity !== undefined ? next.activity : pending.activity
     return {
       journal: next.journal,
-      port:
-        queueChanged === next.queueChanged
-          ? next.port
-          : this.deliveryPort(sessionId, next.journal, queueChanged),
+      port: queueChanged === next.queueChanged ? next.port : next.queuePort(),
+      queuePort: next.queuePort,
       queueChanged,
       hostNow: next.hostNow,
       ...(activity !== undefined ? { activity } : {})

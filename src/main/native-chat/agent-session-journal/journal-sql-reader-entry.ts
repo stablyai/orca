@@ -14,7 +14,11 @@ import {
   openJournalLegacySource
 } from './database/journal-legacy-source'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
-import { limitJournalReaderReply } from './journal-sql-reader-reply-limit'
+import { measureJournalReaderReply } from './journal-sql-reader-reply-limit'
+import {
+  takeJournalReaderReplyCredit,
+  type JournalReaderReplyCreditGrant
+} from './journal-sql-reader-reply-credit'
 
 installWorkerSendLedger('orca-journal-sql-reader')
 
@@ -30,9 +34,27 @@ let db: Database.Database | undefined
 let original: Database.Database | undefined
 let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
+const replyCredit = creditGrant(workerData.replyCredit)
 function reply(message: JournalSqlReaderReply): void {
   // An oversized reply fails its request instead of the receiving thread running out of memory.
-  port.postMessage(limitJournalReaderReply(message))
+  const { reply: limited, bytes } = measureJournalReaderReply(message)
+  // Releases free other readers' state, so they never wait behind credit.
+  if (bytes === undefined || !replyCredit || limited.type === 'released') {
+    port.postMessage(limited)
+    return
+  }
+  const granted = takeJournalReaderReplyCredit(replyCredit, bytes)
+  port.postMessage({ ...limited, bytes, ...(granted ? {} : { creditWaitExpired: true }) })
+}
+
+function creditGrant(value: unknown): JournalReaderReplyCreditGrant | undefined {
+  if (typeof value !== 'object' || value === null || !('index' in value) || !('credit' in value)) {
+    return undefined
+  }
+  const { index, credit } = value
+  return typeof index === 'number' && credit instanceof SharedArrayBuffer
+    ? { index, credit }
+    : undefined
 }
 try {
   db = new Database(workerData.filename, { readonly: true, fileMustExist: true, timeout: 5000 })

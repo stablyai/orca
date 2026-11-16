@@ -8,6 +8,8 @@ import { describeWorkerMessage } from '../../../../worker-threads/worker-message
 export type SubscriberCatchUp = {
   journal: AgentSessionJournal
   port: SubscriberDeliveryPort
+  /** The same fan-out's port with a queue read, shared by every subscriber that still owes one. */
+  queuePort: () => SubscriberDeliveryPort
   queueChanged: boolean
   hostNow: number
   activity?: AgentSessionTurnActivity | null

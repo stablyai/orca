@@ -33,7 +33,9 @@ export type JournalSqlReaderOperation =
   | { kind: 'conversion-release'; conversionId: number }
 
 export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
-export type JournalSqlReaderReply =
+/** A charged reply's bytes, which main releases once the caller has taken it. */
+type JournalSqlReaderReplyCharge = { bytes?: number; creditWaitExpired?: true }
+export type JournalSqlReaderReply = (
   | { type: 'fork-prepared'; id: number }
   | { type: 'fork-next'; id: number; result: JournalForkPreparationResult }
   | { type: 'ready' }
@@ -45,5 +47,7 @@ export type JournalSqlReaderReply =
   | { type: 'rows'; id: number; page: JournalDomainImportPage | null }
   | { type: 'released'; id: number }
   | { type: 'failed'; id?: number; error: JournalSqlFailure }
+) &
+  JournalSqlReaderReplyCharge
 
 export type JournalSqlReaderResult = Exclude<JournalSqlReaderReply, { type: 'ready' | 'failed' }>

@@ -18,28 +18,22 @@ import type {
 } from './journal-sql-reader-protocol'
 
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
+import { JournalReaderAdmission, type JournalReaderTicket } from './journal-sql-reader-admission'
 import {
-  JournalReaderAdmission,
-  JOURNAL_READER_DEFAULT_REPLY_BYTES,
-  type JournalReaderTicket
-} from './journal-sql-reader-admission'
+  JournalReaderReplyCredit,
+  type JournalReaderReplyCreditGrant
+} from './journal-sql-reader-reply-credit'
 
-/** Row content budget plus the page envelope; undefined for replies admission does not hold. */
-function reservedReplyBytes(operation: JournalSqlReaderOperation): number | undefined {
+/** Releases free reader state others wait on, and the record set opens every chat. */
+function admitted(operation: JournalSqlReaderOperation): boolean {
   switch (operation.kind) {
     case 'fork-release':
     case 'conversion-release':
-      return undefined
+      return false
     case 'database':
-      // The record set opens every chat; it is never held behind other reads.
-      return operation.operation.kind === 'records' ? undefined : JOURNAL_READER_DEFAULT_REPLY_BYTES
-    case 'domain-history':
-      return (
-        (operation.request.reader?.budgetBytes ?? JOURNAL_READER_DEFAULT_REPLY_BYTES) +
-        JOURNAL_READER_DEFAULT_REPLY_BYTES
-      )
+      return operation.operation.kind !== 'records'
     default:
-      return JOURNAL_READER_DEFAULT_REPLY_BYTES
+      return true
   }
 }
 
@@ -114,6 +108,8 @@ export class ReaderSlot {
   private readonly ready = Promise.withResolvers<void>()
   private readonly exited = Promise.withResolvers<void>()
   private closing?: Promise<void>
+  private readonly grant: JournalReaderReplyCreditGrant | undefined
+  private retired = false
 
   get pendingCount(): number {
     return this.pending.size + this.conversions
@@ -123,11 +119,13 @@ export class ReaderSlot {
     filename: string,
     originalFilename: string,
     workerPath: string,
-    private readonly admission = new JournalReaderAdmission(Infinity, Infinity)
+    private readonly admission = new JournalReaderAdmission(Infinity),
+    private readonly replyCredit?: JournalReaderReplyCredit
   ) {
+    this.grant = replyCredit?.claim()
     this.worker = spawnWorkerThread(workerPath, {
       name: 'orca-journal-sql-reader',
-      workerData: { filename, originalFilename },
+      workerData: { filename, originalFilename, replyCredit: this.grant },
       execArgv: []
     })
     const startup = setTimeout(() => {
@@ -143,6 +141,9 @@ export class ReaderSlot {
         }
         return
       }
+      if (reply.creditWaitExpired) {
+        this.admission.creditWaitExpired()
+      }
       const pending = reply.id === undefined ? undefined : this.pending.get(reply.id)
       if (reply.id !== undefined) {
         this.pending.delete(reply.id)
@@ -156,14 +157,20 @@ export class ReaderSlot {
         if (reply.id === undefined) {
           this.fail(error)
         }
-      } else {
-        pending?.resolve(reply)
+      } else if (pending) {
+        pending.resolve(reply)
+      } else if (reply.bytes !== undefined) {
+        this.releaseCredit(reply.bytes)
       }
     })
     this.worker.on('error', (error) => this.fail(error))
     this.worker.once('exit', (code) => {
       if (!this.closing) {
         this.fail(new Error(`journal SQL reader exited (${code})`))
+      }
+      if (this.grant && !this.retired) {
+        this.retired = true
+        this.replyCredit?.retire(this.grant.index)
       }
       this.exited.resolve()
     })
@@ -231,7 +238,7 @@ export class ReaderSlot {
       return { id, result: Promise.reject(this.failure ?? new Error('journal SQL reader failed')) }
     }
     this.worker.ref()
-    const bytes = reservedReplyBytes(operation)
+    const admits = admitted(operation)
     // A request rejected by slot failure or close leaves the admission queue at once.
     const settled = new AbortController()
     const admissionSignal = signal ? AbortSignal.any([signal, settled.signal]) : settled.signal
@@ -239,13 +246,16 @@ export class ReaderSlot {
       let ticket: JournalReaderTicket | undefined
       this.pending.set(id, {
         resolve: (reply) => {
-          ticket?.received()
+          const bytes = reply.bytes ?? 0
+          ticket?.received(bytes)
           resolve(reply)
           // Credit returns once the awaiting caller has taken the reply.
-          const consumed = ticket?.consumed
-          if (consumed) {
-            queueMicrotask(consumed)
-          }
+          queueMicrotask(() => {
+            ticket?.consumed()
+            if (reply.bytes !== undefined) {
+              this.releaseCredit(reply.bytes)
+            }
+          })
         },
         reject: (error) => {
           ticket?.consumed()
@@ -255,15 +265,15 @@ export class ReaderSlot {
       })
       void this.ready.promise
         .then(async () => {
-          if (bytes === undefined || !this.pending.has(id)) {
+          if (!admits || !this.pending.has(id)) {
             return
           }
-          const admitted = await this.admission.admit(bytes, admissionSignal)
+          const granted = await this.admission.admit(admissionSignal)
           if (!this.pending.has(id)) {
-            admitted.consumed()
+            granted.consumed()
             return
           }
-          ticket = admitted
+          ticket = granted
         })
         .then(() => {
           if (this.pending.has(id)) {
@@ -280,6 +290,12 @@ export class ReaderSlot {
         })
     })
     return { id, result }
+  }
+
+  private releaseCredit(bytes: number): void {
+    if (this.grant && !this.retired) {
+      this.replyCredit?.release(this.grant.index, bytes)
+    }
   }
 
   close(): Promise<void> {
