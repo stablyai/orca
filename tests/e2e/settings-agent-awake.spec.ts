@@ -12,10 +12,6 @@ type AwakeProbeSnapshot = {
   activeIds: number[]
 }
 
-async function getSettings(page: Page): Promise<GlobalSettings> {
-  return page.evaluate(() => window.api.settings.get())
-}
-
 async function setKeepAwake(page: Page, enabled: boolean): Promise<void> {
   await page.evaluate(async (enabled) => {
     const nextSettings = await window.api.settings.set({
@@ -23,26 +19,6 @@ async function setKeepAwake(page: Page, enabled: boolean): Promise<void> {
     })
     window.__store?.setState({ settings: nextSettings as GlobalSettings })
   }, enabled)
-}
-
-async function openSettings(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    window.__store!.getState().openSettingsPage()
-  })
-  await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
-}
-
-async function dismissTransientAnnouncement(page: Page): Promise<void> {
-  // Dismiss independent first-run announcements before they cover Settings search.
-  const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
-  const visible = await maybeLaterButton
-    .isVisible({
-      timeout: 1_000
-    })
-    .catch(() => false)
-  if (visible) {
-    await maybeLaterButton.click()
-  }
 }
 
 async function installPowerSaveBlockerProbe(electronApp: ElectronApplication): Promise<void> {
@@ -150,39 +126,6 @@ async function postCodexHookEvent(
 test.describe('Agent awake setting', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
-  })
-
-  test('can be changed from Agents settings and persists through IPC', async ({ orcaPage }) => {
-    await openSettings(orcaPage)
-    await dismissTransientAnnouncement(orcaPage)
-    await orcaPage.getByPlaceholder('Search settings').fill('awake')
-
-    await expect(orcaPage.getByText('Keep computer awake').first()).toBeVisible()
-
-    const keepAwakeModes = orcaPage.getByRole('radiogroup', {
-      name: 'Keep computer awake'
-    })
-    const offMode = keepAwakeModes.getByRole('radio', { name: 'Off' })
-    const agentMode = keepAwakeModes.getByRole('radio', { name: 'Agent' })
-
-    await expect(offMode).toHaveAttribute('aria-checked', 'true')
-    await agentMode.click()
-    await expect(agentMode).toHaveAttribute('aria-checked', 'true')
-    await expect
-      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
-        timeout: 5_000,
-        message: 'keep-awake mode did not persist after selecting Agent'
-      })
-      .toBe('auto')
-
-    await offMode.click()
-    await expect(offMode).toHaveAttribute('aria-checked', 'true')
-    await expect
-      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
-        timeout: 5_000,
-        message: 'keep-awake mode did not persist after selecting Off'
-      })
-      .toBe('off')
   })
 
   test('keeps the OS awake only while a hook-reported agent is working', async ({

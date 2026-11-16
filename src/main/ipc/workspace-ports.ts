@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type {
   WorkspacePortAdvertisedUrlChangedEvent,
@@ -9,7 +9,7 @@ import type {
   WorkspacePortPageProbeResult,
   WorkspacePortScanRequest,
   WorkspacePortScanResult
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import {
   getStoreWorkspacePortProbes,
   killWorkspacePort,

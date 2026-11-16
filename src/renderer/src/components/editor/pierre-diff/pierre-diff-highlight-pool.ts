@@ -3,7 +3,8 @@
 // hast-util-to-html never get rewritten.
 import PierreDiffHighlightWorker from '@pierre/diffs/worker/worker.js?worker'
 import { getOrCreateWorkerPoolSingleton, type WorkerPoolManager } from '@pierre/diffs/worker'
-import { PIERRE_DIFF_THEMES } from './pierre-diff-options'
+import { resolvePierreDiffTheme } from './pierre-diff-theme'
+import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
 
 // Why: Shiki grammars are heavy per worker; cap the pool well under Pierre's
 // default of 8 so a diff tab can't starve the terminal and agent threads.
@@ -33,7 +34,10 @@ export function createDiffHighlightPool(): WorkerPoolManager {
       totalASTLRUCacheSize: 32
     },
     // Why: the pool owns `theme` for every component instance; per-file options are ignored.
-    highlighterOptions: { theme: PIERRE_DIFF_THEMES, useTokenTransformer: true }
+    highlighterOptions: {
+      theme: resolvePierreDiffTheme(useCodeEditorThemeStore.getState().monaco),
+      useTokenTransformer: true
+    }
   })
   if (!pool.isWorkingPool()) {
     void pool

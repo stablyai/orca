@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { isUtf8ByteLengthWithinLimit } from '../../utf8-byte-limits'
+import { isUtf8ByteLengthWithinLimit } from '../../text/utf8-byte-limits'
 import { pluginGrammarScopeSchema } from '../contributions/plugin-content-pack-contributions'
+import type { PluginArtifactStrictness } from './plugin-theme-artifact'
 
 export const PLUGIN_SYNTAX_GRAMMAR_MAX_BYTES = 1024 * 1024
 export const PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES = 64 * 1024
@@ -62,18 +63,58 @@ const grammarSchema = z.object({
   repository: z.record(repositoryKey, ruleSchema).default({})
 })
 
-const literal = z.string().min(1).max(128)
-const pair = z.tuple([literal, literal])
+// Why short, one line and printable: the editor types these as you type, and real languages need a
+// few characters at most (`<!--`, `"""`, `{{!--`).
+const literal = z
+  .string()
+  .regex(
+    /^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,8}$/u,
+    'must be 1 to 8 printable characters on one line'
+  )
+// Why longer: brackets match and color keywords such as `function`/`end`, and comment markers are
+// only inserted by Toggle Comment, where some languages need more (Liquid's `{% endcomment %}`).
+const lineLiteral = z
+  .string()
+  .regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]{1,128}$/u, 'must be printable text on one line')
+const linePair = z.tuple([lineLiteral, lineLiteral])
 const closingPair = z.object({ open: literal, close: literal })
-const configurationSchema = z.object({
-  comments: z.object({ lineComment: literal.optional(), blockComment: pair.optional() }).optional(),
-  brackets: z.array(pair).max(64).optional(),
-  autoClosingPairs: z.array(closingPair).max(64).optional(),
-  surroundingPairs: z.array(closingPair).max(64).optional()
-})
+
+/** `validate:plugin` refuses a bad literal; hosts drop just that entry so the language still loads. */
+function configurationSchema(strictness: PluginArtifactStrictness) {
+  const optional = <Item extends z.ZodType>(item: Item) =>
+    strictness === 'strict' ? item.optional() : item.optional().catch(undefined)
+  const list = <Item extends z.ZodType>(item: Item) =>
+    strictness === 'strict'
+      ? z.array(item).max(64)
+      : z
+          .array(optional(item))
+          .max(64)
+          .transform((items) => items.filter((entry) => entry !== undefined))
+  return z
+    .object({
+      comments: optional(
+        z.object({ lineComment: optional(lineLiteral), blockComment: optional(linePair) })
+      ),
+      brackets: list(linePair).optional(),
+      autoClosingPairs: list(closingPair).optional(),
+      surroundingPairs: list(closingPair).optional()
+    })
+    .transform((config) => {
+      if (config.autoClosingPairs || !config.brackets) {
+        return config
+      }
+      // Why: without autoClosingPairs Monaco auto-closes every bracket, so long ones would be
+      // typed as you type; spell out only the pairs that pass the typed-pair rule.
+      const autoClosingPairs = config.brackets
+        .map(([open, close]) => ({ open, close }))
+        .filter((pair) => closingPair.safeParse(pair).success)
+      return { ...config, autoClosingPairs }
+    })
+}
+const tolerantConfigurationSchema = configurationSchema('tolerant')
 
 export type PluginGrammarArtifact = z.infer<typeof grammarSchema>
-export type PluginLanguageConfiguration = z.infer<typeof configurationSchema>
+export type PluginLanguageConfiguration = z.infer<typeof tolerantConfigurationSchema>
 
 function boundedJson(raw: string, limit: number): unknown {
   if (!isUtf8ByteLengthWithinLimit(raw, limit)) {
@@ -103,8 +144,13 @@ export function parsePluginGrammarArtifact(raw: string, scopeName: string): Plug
   return grammar
 }
 
-export function parsePluginLanguageConfiguration(raw: string): PluginLanguageConfiguration {
-  return configurationSchema.parse(boundedJson(raw, PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES))
+export function parsePluginLanguageConfiguration(
+  raw: string,
+  strictness: PluginArtifactStrictness = 'tolerant'
+): PluginLanguageConfiguration {
+  return configurationSchema(strictness).parse(
+    boundedJson(raw, PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES)
+  )
 }
 
 function childRules(rule: GrammarRule): GrammarRule[] {
@@ -185,7 +231,7 @@ const payloadSchema = z.object({
   revision: z.string(),
   scopeName: pluginGrammarScopeSchema,
   grammars: z.array(grammarSchema).min(1).max(16),
-  configuration: configurationSchema
+  configuration: tolerantConfigurationSchema
 })
 
 /** What the editor needs to route files; grammars load only when a matching file opens. */

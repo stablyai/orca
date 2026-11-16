@@ -9,7 +9,7 @@ vi.mock('./use-pierre-diff-search-results', () => ({ usePierreDiffSearchResults:
 vi.mock('./use-pierre-diff-search-view', () => ({
   usePierreDiffSearchView: () => ({ onPostRender: vi.fn(), selectActive: vi.fn() })
 }))
-vi.mock('../editor-shortcuts', () => ({
+vi.mock('@/components/editor/commands/editor-shortcuts', () => ({
   editorShortcutMatches: (action: string, event: KeyboardEvent) =>
     event.key === (action === 'editor.find' ? 'f' : 'h') && event.ctrlKey
 }))

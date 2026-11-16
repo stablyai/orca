@@ -1,0 +1,456 @@
+{
+  "sessionId": "session-1",
+  "epoch": "epoch-1",
+  "rows": [
+    "{\"v\":2,\"kind\":\"epoch\",\"epoch\":\"epoch-1\",\"seq\":1,\"fence\":0,\"ts\":1001,\"reason\":\"session_created\",\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"},\"historyOrigin\":{\"version\":1,\"kind\":\"legacy_import\"}}",
+    "{\"v\":2,\"kind\":\"submission\",\"epoch\":\"epoch-1\",\"seq\":2,\"fence\":1,\"ts\":1002,\"clientMessageId\":\"send-1\",\"payloadFingerprint\":\"f1\",\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"},\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"handoverRecorded\":true,\"origin\":\"client\",\"options\":{\"model\":\"gpt-5\",\"effort\":\"high\",\"retired\":\"x\"}}",
+    "{\"v\":2,\"kind\":\"dispatch\",\"epoch\":\"epoch-1\",\"seq\":3,\"fence\":1,\"ts\":1003,\"clientMessageId\":\"send-1\",\"state\":\"pending\",\"providerItemId\":null,\"reason\":null,\"carries\":[]}",
+    "{\"v\":3,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":4,\"fence\":1,\"ts\":1004,\"itemId\":\"codex:thread-1:turn-1:0\",\"revision\":1,\"turnScope\":{\"kind\":\"thread\"},\"ownerFence\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"turn-1\",\"state\":\"running\",\"userItemId\":\"orca:send-1\",\"startedAt\":1004,\"requestedAt\":1002}}",
+    "{\"v\":2,\"kind\":\"dispatch\",\"epoch\":\"epoch-1\",\"seq\":5,\"fence\":1,\"ts\":1005,\"clientMessageId\":\"send-1\",\"state\":\"accepted\",\"providerItemId\":\"codex:thread-1:turn-1:1\",\"reason\":null,\"answeredInTurn\":{\"turnItemId\":\"codex:thread-1:turn-1:0\",\"via\":\"start\"}}",
+    "{\"v\":2,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":6,\"fence\":1,\"ts\":1006,\"itemId\":\"codex:thread-1:turn-1:2\",\"revision\":1,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-1:0\"},\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"Reading\"},{\"type\":\"tool-call\",\"name\":\"Read\",\"input\":{\"path\":\"a.ts\"},\"callId\":\"call-1\"},{\"type\":\"tool-result\",\"output\":\"ok\",\"callId\":\"call-1\"}]}}",
+    "{\"v\":2,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":7,\"fence\":1,\"ts\":1007,\"itemId\":\"codex:thread-1:turn-1:3\",\"revision\":1,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-1:0\"},\"agentId\":\"child-1\",\"producerKind\":\"agent\",\"body\":{\"kind\":\"tool-call\",\"name\":\"shell\",\"input\":{\"command\":\"ls\"},\"callId\":\"call-2\",\"state\":\"running\"}}",
+    "{\"v\":2,\"kind\":\"lifecycle-batch\",\"epoch\":\"epoch-1\",\"seq\":8,\"fence\":1,\"ts\":1008,\"settlementId\":\"settle-1\",\"mutations\":[{\"kind\":\"item\",\"itemId\":\"codex:thread-1:turn-1:3\",\"revision\":2,\"body\":{\"kind\":\"tool-call\",\"name\":\"shell\",\"input\":{\"command\":\"ls\"},\"callId\":\"call-2\",\"state\":\"completed\",\"endedAs\":\"completed\",\"exitCode\":0},\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-1:0\"},\"agentId\":\"child-1\",\"producerKind\":\"agent\"},{\"kind\":\"tombstone\",\"itemId\":\"codex:thread-1:turn-1:2\",\"revision\":2}]}",
+    "{\"v\":4,\"kind\":\"queue\",\"epoch\":\"epoch-1\",\"seq\":9,\"fence\":1,\"ts\":1009,\"messageId\":\"card-1\",\"change\":{\"op\":\"queued\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"position\":1,\"queuedAt\":{\"epoch\":\"epoch-1\",\"sequence\":9},\"options\":{\"model\":\"gpt-5\"}}}",
+    "{\"v\":4,\"kind\":\"queue\",\"epoch\":\"epoch-1\",\"seq\":10,\"fence\":1,\"ts\":1010,\"messageId\":\"card-1\",\"change\":{\"op\":\"edited\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate both\"}]}}}",
+    "{\"v\":4,\"kind\":\"queue\",\"epoch\":\"epoch-1\",\"seq\":11,\"fence\":1,\"ts\":1011,\"messageId\":\"card-2\",\"change\":{\"op\":\"queued\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Please investigate\"}]},\"position\":2,\"queuedAt\":{\"epoch\":\"epoch-1\",\"sequence\":11}}}",
+    "{\"v\":4,\"kind\":\"queue\",\"epoch\":\"epoch-1\",\"seq\":12,\"fence\":1,\"ts\":1012,\"messageId\":\"card-2\",\"change\":{\"op\":\"moved\",\"position\":0}}",
+    "{\"v\":2,\"kind\":\"tombstone\",\"epoch\":\"epoch-1\",\"seq\":13,\"fence\":1,\"ts\":1013,\"itemId\":\"orca:stop-13\",\"revision\":1,\"stopEvent\":{\"reason\":\"user-stop\",\"turnId\":\"turn-1\",\"at\":1013,\"caller\":\"client\"}}",
+    "{\"v\":3,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":14,\"fence\":1,\"ts\":1014,\"itemId\":\"codex:thread-1:turn-1:0\",\"revision\":2,\"turnScope\":{\"kind\":\"thread\"},\"ownerFence\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"turn-1\",\"state\":\"interrupted\",\"userItemId\":\"orca:send-1\",\"startedAt\":1004,\"requestedAt\":1002,\"completedAt\":1014,\"contextUsage\":{\"window\":{\"tokens\":200000,\"capturedAt\":1014},\"used\":{\"kind\":\"estimate\",\"usage\":{\"inputTokens\":10,\"cacheCreationInputTokens\":0,\"cacheReadInputTokens\":0,\"outputTokens\":5},\"capturedAt\":1014}}}}",
+    "{\"v\":4,\"kind\":\"queue\",\"epoch\":\"epoch-1\",\"seq\":15,\"fence\":1,\"ts\":1015,\"messageId\":\"card-2\",\"change\":{\"op\":\"held\",\"holdReason\":\"send_failed\"}}",
+    "{\"v\":2,\"kind\":\"tombstone\",\"epoch\":\"epoch-1\",\"seq\":16,\"fence\":1,\"ts\":1016,\"itemId\":\"orca:resume-16\",\"revision\":1,\"queueResume\":true}",
+    "{\"v\":2,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":17,\"fence\":1,\"ts\":1017,\"itemId\":\"codex:thread-1:turn-2:0\",\"revision\":1,\"turnScope\":{\"kind\":\"thread\"},\"body\":{\"kind\":\"approval\",\"title\":\"Run shell?\",\"detail\":null,\"options\":[{\"id\":\"yes\",\"label\":\"Yes\"}],\"subject\":{\"kind\":\"plan\",\"text\":\"Plan\"},\"resolution\":{\"state\":\"approved\",\"selectedOptionId\":\"yes\",\"resolvedBy\":\"client\",\"resolvedAt\":1017}}}",
+    "{\"v\":4,\"kind\":\"queue\",\"epoch\":\"epoch-1\",\"seq\":18,\"fence\":1,\"ts\":1018,\"messageId\":\"card-1\",\"change\":{\"op\":\"withdrawn\"}}",
+    "{\"v\":2,\"kind\":\"item\",\"epoch\":\"epoch-1\",\"seq\":19,\"fence\":1,\"ts\":1019,\"itemId\":\"codex:thread-1:turn-2:1\",\"revision\":1,\"turnScope\":{\"kind\":\"thread\"},\"body\":{\"kind\":\"status\",\"text\":\"The agent stopped.\",\"failure\":{\"kind\":\"providerExited\",\"detail\":{\"text\":\"exit 1\",\"audience\":\"log\"}}}}",
+    "{\"kind\":\"item\",\"itemId\":\"codex:thread-1:turn-3:0\",\"revision\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"turn-3\",\"state\":\"running\"},\"v\":3,\"epoch\":\"epoch-1\",\"seq\":20,\"fence\":1,\"ts\":1020,\"ownerFence\":1,\"executionOwner\":2,\"turnScope\":{\"kind\":\"thread\"}}",
+    "{\"kind\":\"item\",\"echoOf\":null,\"itemId\":\"codex:thread-1:turn-3:1\",\"revision\":1,\"body\":{\"kind\":\"message\",\"role\":\"assistant\",\"blocks\":[{\"type\":\"text\",\"text\":\"Echoed\"}]},\"v\":2,\"epoch\":\"epoch-1\",\"seq\":21,\"fence\":1,\"ts\":1021,\"ownerFence\":1,\"turnScope\":{\"kind\":\"turn\",\"turnItemId\":\"codex:thread-1:turn-3:0\"}}",
+    "{\"kind\":\"item\",\"itemId\":\"codex:thread-1:turn-4:0\",\"revision\":1,\"body\":{\"kind\":\"turn\",\"turnId\":\"turn-4\",\"state\":\"running\"},\"v\":3,\"epoch\":\"epoch-1\",\"seq\":22,\"fence\":1,\"ts\":1022,\"ownerFence\":1,\"turnScope\":{\"kind\":\"thread\"}}",
+    "{\"kind\":\"tombstone\",\"itemId\":\"codex:thread-1:turn-4:0\",\"revision\":2,\"v\":2,\"epoch\":\"epoch-1\",\"seq\":23,\"fence\":1,\"ts\":1023}",
+    "{\"kind\":\"queue\",\"messageId\":\"card-3\",\"change\":{\"op\":\"queued\",\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Hand this over\"}]},\"position\":2,\"queuedAt\":{\"epoch\":\"epoch-1\",\"sequence\":23}},\"v\":4,\"epoch\":\"epoch-1\",\"seq\":24,\"fence\":1,\"ts\":1024}",
+    "{\"kind\":\"submission\",\"clientMessageId\":\"send-2\",\"payloadFingerprint\":\"d6988eb76aa81c64728f527ffa51b1ff309e9657db975fd77f115c01e7da3f61\",\"providerHandle\":{\"kind\":\"codex\",\"threadId\":\"thread-1\"},\"body\":{\"kind\":\"message\",\"role\":\"user\",\"blocks\":[{\"type\":\"text\",\"text\":\"Hand this over\"}]},\"v\":2,\"epoch\":\"epoch-1\",\"seq\":25,\"fence\":1,\"ts\":1025,\"handoverRecorded\":true,\"queuedMessageId\":\"card-3\"}",
+    "{\"kind\":\"dispatch\",\"clientMessageId\":\"send-2\",\"state\":\"pending\",\"providerItemId\":null,\"reason\":null,\"v\":2,\"epoch\":\"epoch-1\",\"seq\":26,\"fence\":1,\"ts\":1026,\"turnScope\":{\"kind\":\"thread\"},\"carries\":[\"send-1\"]}",
+    "{\"kind\":\"dispatch\",\"clientMessageId\":\"send-2\",\"state\":\"rejected\",\"providerItemId\":null,\"reason\":\"provider_cancelled_before_start\",\"rejection\":{\"kind\":\"cancelled\"},\"answeredInTurn\":null,\"v\":2,\"epoch\":\"epoch-1\",\"seq\":27,\"fence\":1,\"ts\":1027}"
+  ],
+  "expected": {
+    "sessionId": "session-1",
+    "epoch": "epoch-1",
+    "lastSequence": 27,
+    "lastActivityAt": 1027,
+    "oldestSequence": 1,
+    "highestFence": 1,
+    "items": [
+      [
+        "orca:send-1",
+        {
+          "itemId": "orca:send-1",
+          "revision": 0,
+          "body": {
+            "kind": "message",
+            "role": "user",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Please investigate"
+              }
+            ]
+          },
+          "sequence": 3,
+          "observedAt": 1003,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-1:0",
+        {
+          "itemId": "codex:thread-1:turn-1:0",
+          "revision": 2,
+          "body": {
+            "kind": "turn",
+            "turnId": "turn-1",
+            "state": "interrupted",
+            "userItemId": "orca:send-1",
+            "startedAt": 1004,
+            "requestedAt": 1002,
+            "completedAt": 1014,
+            "contextUsage": {
+              "window": {
+                "tokens": 200000,
+                "capturedAt": 1014
+              },
+              "used": {
+                "kind": "estimate",
+                "usage": {
+                  "inputTokens": 10,
+                  "cacheCreationInputTokens": 0,
+                  "cacheReadInputTokens": 0,
+                  "outputTokens": 5
+                },
+                "capturedAt": 1014
+              }
+            }
+          },
+          "sequence": 4,
+          "observedAt": 1004,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-1:3",
+        {
+          "itemId": "codex:thread-1:turn-1:3",
+          "revision": 2,
+          "body": {
+            "kind": "tool-call",
+            "name": "shell",
+            "input": {
+              "command": "ls"
+            },
+            "callId": "call-2",
+            "state": "completed",
+            "endedAs": "completed",
+            "exitCode": 0
+          },
+          "sequence": 7,
+          "observedAt": 1007,
+          "turnScope": {
+            "kind": "turn",
+            "turnItemId": "codex:thread-1:turn-1:0"
+          },
+          "agentId": "child-1",
+          "producerKind": "agent"
+        }
+      ],
+      [
+        "codex:thread-1:turn-2:0",
+        {
+          "itemId": "codex:thread-1:turn-2:0",
+          "revision": 1,
+          "body": {
+            "kind": "approval",
+            "title": "Run shell?",
+            "detail": null,
+            "options": [
+              {
+                "id": "yes",
+                "label": "Yes"
+              }
+            ],
+            "subject": {
+              "kind": "plan",
+              "text": "Plan"
+            },
+            "resolution": {
+              "state": "approved",
+              "selectedOptionId": "yes",
+              "resolvedBy": "client",
+              "resolvedAt": 1017
+            }
+          },
+          "sequence": 17,
+          "observedAt": 1017,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-2:1",
+        {
+          "itemId": "codex:thread-1:turn-2:1",
+          "revision": 1,
+          "body": {
+            "kind": "status",
+            "text": "The agent stopped.",
+            "failure": {
+              "kind": "providerExited",
+              "detail": {
+                "text": "exit 1",
+                "audience": "log"
+              }
+            }
+          },
+          "sequence": 19,
+          "observedAt": 1019,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-3:0",
+        {
+          "itemId": "codex:thread-1:turn-3:0",
+          "revision": 1,
+          "body": {
+            "kind": "turn",
+            "turnId": "turn-3",
+            "state": "running"
+          },
+          "sequence": 20,
+          "observedAt": 1020,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ],
+      [
+        "codex:thread-1:turn-3:1",
+        {
+          "itemId": "codex:thread-1:turn-3:1",
+          "revision": 1,
+          "body": {
+            "kind": "message",
+            "role": "assistant",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Echoed"
+              }
+            ]
+          },
+          "sequence": 21,
+          "observedAt": 1021,
+          "turnScope": {
+            "kind": "turn",
+            "turnItemId": "codex:thread-1:turn-3:0"
+          }
+        }
+      ],
+      [
+        "orca:send-2",
+        {
+          "itemId": "orca:send-2",
+          "revision": 0,
+          "body": {
+            "kind": "message",
+            "role": "user",
+            "blocks": [
+              {
+                "type": "text",
+                "text": "Hand this over"
+              }
+            ]
+          },
+          "sequence": 26,
+          "observedAt": 1026,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ]
+    ],
+    "itemFences": [
+      ["orca:send-1", 1],
+      ["codex:thread-1:turn-1:0", 1],
+      ["codex:thread-1:turn-1:3", 1],
+      ["codex:thread-1:turn-2:0", 1],
+      ["codex:thread-1:turn-2:1", 1],
+      ["codex:thread-1:turn-3:0", 1],
+      ["codex:thread-1:turn-3:1", 1],
+      ["orca:send-2", 1]
+    ],
+    "itemExecutionOwners": [["codex:thread-1:turn-3:0", 2]],
+    "providerActivityAt": [
+      [1, 1022],
+      [2, 1020]
+    ],
+    "tombstones": [
+      ["codex:thread-1:turn-1:2", 2],
+      ["codex:thread-1:turn-4:0", 2]
+    ],
+    "removedTurnIds": ["turn-4"],
+    "submissions": [
+      [
+        "send-1",
+        {
+          "clientMessageId": "send-1",
+          "fence": 1,
+          "payloadFingerprint": "f1",
+          "dispatchState": "accepted",
+          "providerItemId": "codex:thread-1:turn-1:1",
+          "reason": null,
+          "submittedAt": 1002,
+          "resolvedAt": 1005,
+          "submittedSequence": 2,
+          "handoverRecorded": true,
+          "acceptedSequence": 2,
+          "origin": "client",
+          "options": {
+            "model": "gpt-5",
+            "effort": "high"
+          },
+          "handedOverAt": 1003
+        }
+      ],
+      [
+        "send-2",
+        {
+          "clientMessageId": "send-2",
+          "fence": 1,
+          "payloadFingerprint": "d6988eb76aa81c64728f527ffa51b1ff309e9657db975fd77f115c01e7da3f61",
+          "dispatchState": "rejected",
+          "providerItemId": null,
+          "reason": "provider_cancelled_before_start",
+          "submittedAt": 1025,
+          "resolvedAt": 1027,
+          "submittedSequence": 25,
+          "handoverRecorded": true,
+          "acceptedSequence": 25,
+          "handedOverAt": 1026,
+          "rejection": {
+            "kind": "cancelled"
+          },
+          "answeredInTurn": null
+        }
+      ]
+    ],
+    "receipts": [
+      [
+        "send-1",
+        {
+          "clientMessageId": "send-1",
+          "providerItemId": "codex:thread-1:turn-1:1",
+          "cursor": {
+            "epoch": "epoch-1",
+            "sequence": 5
+          },
+          "acceptedAt": 1005
+        }
+      ]
+    ],
+    "aliases": [["codex:thread-1:turn-1:1", "orca:send-1"]],
+    "itemEchoes": [["codex:thread-1:turn-3:1", null]],
+    "appliedSettlementIds": ["settle-1"],
+    "derivedTurnScope": null,
+    "latestAcceptedTurnSequence": 2,
+    "queuePauseMarks": {
+      "latestStop": {
+        "sequence": 13,
+        "event": {
+          "reason": "user-stop",
+          "turnId": "turn-1",
+          "at": 1013,
+          "caller": "client"
+        }
+      },
+      "resumedSequence": 16,
+      "reopenedSequence": 0
+    },
+    "stoppedHistoryCarried": [["send-2", ["send-1"]]],
+    "queuedHandOffPlaces": [
+      [
+        "send-2",
+        {
+          "sequence": 26,
+          "observedAt": 1026,
+          "turnScope": {
+            "kind": "thread"
+          }
+        }
+      ]
+    ],
+    "normalizedHandOffs": ["send-2"],
+    "queue": {
+      "revision": 8,
+      "cards": [
+        [
+          "card-1",
+          {
+            "messageId": "card-1",
+            "position": 1,
+            "body": {
+              "kind": "message",
+              "role": "user",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "Please investigate both"
+                }
+              ]
+            },
+            "fingerprint": "62f92d8004a31a5be6ee414930186d2097897cbbbb53e1e3607e6b2719b912f9",
+            "state": "withdrawn",
+            "holdReason": null,
+            "returnedReason": null,
+            "returnedRejection": null,
+            "consumedAs": null,
+            "queuedAt": {
+              "epoch": "epoch-1",
+              "sequence": 9
+            },
+            "options": {
+              "model": "gpt-5"
+            }
+          }
+        ],
+        [
+          "card-2",
+          {
+            "messageId": "card-2",
+            "position": 0,
+            "body": {
+              "kind": "message",
+              "role": "user",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "Please investigate"
+                }
+              ]
+            },
+            "fingerprint": "56536a28c3f5a4f744c847534ff54e59e9b9992246ea370baa3a048de146b571",
+            "state": "waiting",
+            "holdReason": "send_failed",
+            "returnedReason": null,
+            "returnedRejection": null,
+            "consumedAs": null,
+            "queuedAt": {
+              "epoch": "epoch-1",
+              "sequence": 11
+            }
+          }
+        ],
+        [
+          "card-3",
+          {
+            "messageId": "card-3",
+            "position": 2,
+            "body": {
+              "kind": "message",
+              "role": "user",
+              "blocks": [
+                {
+                  "type": "text",
+                  "text": "Hand this over"
+                }
+              ]
+            },
+            "fingerprint": "d6988eb76aa81c64728f527ffa51b1ff309e9657db975fd77f115c01e7da3f61",
+            "state": "dispatched",
+            "holdReason": null,
+            "returnedReason": null,
+            "returnedRejection": null,
+            "consumedAs": "send-2",
+            "queuedAt": {
+              "epoch": "epoch-1",
+              "sequence": 23
+            }
+          }
+        ]
+      ]
+    },
+    "historyOrigin": {
+      "providerHandle": {
+        "kind": "codex",
+        "threadId": "thread-1"
+      },
+      "raw": {
+        "version": 1,
+        "kind": "legacy_import"
+      }
+    }
+  }
+}

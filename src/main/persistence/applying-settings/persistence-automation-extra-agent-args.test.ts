@@ -9,6 +9,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { automationCanonicalLaunchSetup } from '../../../shared/automations/launch/automation-canonical-launch-setup'
+
+import {
+  encodeAutomationLaunchEdit,
+  foldAutomationSourceEdit
+} from '../../../shared/automations/launch/automation-launch-source-edits'
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -67,15 +73,6 @@ describe('automation extra agent args persistence', () => {
     expect(reloaded.listAutomations()[0].extraAgentArgs).toBe(text)
   })
 
-  it('stores no field for empty or whitespace input', async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    for (const extraAgentArgs of ['', '   ', undefined]) {
-      const automation = store.createAutomation({ ...BASE, extraAgentArgs })
-      expect(Object.hasOwn(automation, 'extraAgentArgs')).toBe(false)
-    }
-  })
-
   it('preserves on omission, replaces, and clears with empty or whitespace text', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -125,5 +122,229 @@ describe('automation extra agent args persistence', () => {
     expect(
       store.updateAutomation(id, { extraAgentArgs: '', reuseSession: true }).reuseSession
     ).toBe(true)
+  })
+  it('atomically saves Chat with retained Terminal extras and keeps legacy records Terminal after reload', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const legacy = store.createAutomation(BASE)
+    const chat = store.createAutomation({
+      ...BASE,
+      reuseSession: true,
+      launchSetupPatch: {
+        surface: 'chat',
+        arguments: { kind: 'legacy-extras', value: '--model opus' }
+      }
+    })
+    expect(chat).toMatchObject({
+      surface: 'chat',
+      extraAgentArgs: '--model opus',
+      launchSetup: { surface: 'chat', extraAgentArgs: '--model opus' }
+    })
+    expect(() =>
+      store.updateAutomation(chat.id, { launchSetupPatch: { surface: 'terminal' } })
+    ).toThrow('fresh session')
+    expect(store.listAutomations().find((row) => row.id === chat.id)?.surface).toBe('chat')
+    expect(() =>
+      store.updateAutomation(chat.id, {
+        extraAgentArgs: '',
+        launchSetupPatch: { surface: 'terminal' }
+      })
+    ).toThrow('one launch setup')
+    store.updateAutomation(chat.id, {
+      reuseSession: false,
+      launchSetupPatch: { surface: 'terminal', arguments: { kind: 'legacy-extras', value: '' } }
+    })
+    expect(store.listAutomations().find((row) => row.id === chat.id)).toMatchObject({
+      surface: 'terminal'
+    })
+    store.flush()
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.listAutomations().find((row) => row.id === legacy.id)?.surface).toBeUndefined()
+    expect(
+      reloaded.listAutomations().find((row) => row.id === chat.id)?.extraAgentArgs
+    ).toBeUndefined()
+  })
+
+  it('lets old edits retire only their published raw and owned domains', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({
+      ...BASE,
+      launchSetupPatch: {
+        arguments: { kind: 'value', value: '--model sonnet --verbose' },
+        choices: { options: { fastMode: 'true' }, permissionMode: 'accept-edits' }
+      }
+    })
+    expect(created.extraAgentArgs).toContain('sonnet')
+    const changed = store.updateAutomation(created.id, { extraAgentArgs: '--model opus' })
+    expect(changed.launchSetup?.agentArgs).toContain('--model opus')
+    expect(changed.launchSetup?.agentArgs).toContain('--verbose')
+    expect(changed.launchSetup?.launchPreferences).toMatchObject({
+      options: { fastMode: 'true' },
+      permissionMode: 'accept-edits'
+    })
+    const cleared = store.updateAutomation(created.id, { extraAgentArgs: '' })
+    expect(cleared.launchSetup?.agentArgs).toBe('--verbose')
+    expect(cleared.launchSetup?.launchPreferences?.permissionMode).toBe('accept-edits')
+  })
+
+  it('distinguishes an explicit equal modern pick from an old echo', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({
+      ...BASE,
+      extraAgentArgs: '--model sonnet --add-dir docs'
+    })
+    const picked = store.updateAutomation(created.id, {
+      launchSetupPatch: { choices: { model: 'sonnet' } }
+    })
+    expect(picked.launchSetup?.launchPreferences?.model).toBe('sonnet')
+    expect(picked.launchSetup?.extraAgentArgs).toBe('--add-dir docs')
+    expect(store.updateAutomation(created.id, { extraAgentArgs: '' }).launchSetup).toMatchObject({
+      launchPreferences: {}
+    })
+  })
+
+  it('replaces extras with full Args, supports all agents, and honors inherit on the latest owner', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({ ...BASE, extraAgentArgs: '--model opus' })
+    const full = store.updateAutomation(created.id, {
+      launchSetupPatch: { arguments: { kind: 'value', value: '--verbose' } }
+    })
+    expect(full.launchSetup).toEqual({ agentArgs: '--verbose' })
+    store.updateAutomation(created.id, { extraAgentArgs: '--add-dir docs' })
+    const inherited = store.updateAutomation(created.id, {
+      launchSetupPatch: { arguments: { kind: 'inherit' } }
+    })
+    expect(inherited.launchSetup).toEqual({})
+    const rebound = store.updateAutomation(created.id, {
+      agentId: 'opencode',
+      launchSetupPatch: {
+        arguments: { kind: 'value', value: '--arbitrary-provider-argument' }
+      }
+    })
+    expect(rebound.launchSetup?.agentArgs).toBe('--arbitrary-provider-argument')
+    expect(rebound.launchSetup?.launchPreferences).toBeUndefined()
+  })
+
+  it('retains target-agent validation and visible extras when a rebind also changes surface', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({ ...BASE, extraAgentArgs: '--add-dir docs' })
+    expect(() =>
+      store.updateAutomation(created.id, {
+        agentId: 'codex',
+        launchSetupPatch: { surface: 'terminal' }
+      })
+    ).toThrow('extra arguments')
+    expect(store.listAutomations()[0].agentId).toBe('claude')
+    const supported = store.createAutomation({ ...BASE, extraAgentArgs: '--model sonnet' })
+    expect(
+      store.updateAutomation(supported.id, {
+        agentId: 'codex',
+        launchSetupPatch: { surface: 'terminal' }
+      }).launchSetup
+    ).toEqual({ surface: 'terminal', extraAgentArgs: '--model sonnet' })
+    expect(
+      store.updateAutomation(created.id, {
+        agentId: 'opencode',
+        launchSetupPatch: { arguments: { kind: 'value', value: '--new' } }
+      }).launchSetup?.agentArgs
+    ).toBe('--new')
+  })
+
+  it('retires a raw model through the shared control reconciler without dropping raw siblings', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({
+      ...BASE,
+      launchSetupPatch: {
+        arguments: { kind: 'value', value: '--model sonnet --verbose' }
+      }
+    })
+    const removed = store.updateAutomation(created.id, {
+      launchSetupPatch: { choices: { model: null } }
+    })
+    expect(removed.launchSetup).toMatchObject({
+      agentArgs: '--verbose',
+      launchPreferences: { model: null }
+    })
+  })
+
+  it('validates only the active surface consumption for reuse and validates surface switches atomically', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const chat = store.createAutomation({
+      ...BASE,
+      reuseSession: true,
+      launchSetupPatch: {
+        surface: 'chat',
+        arguments: { kind: 'empty' },
+        choices: { model: null }
+      }
+    })
+    expect(chat.reuseSession).toBe(true)
+    expect(() =>
+      store.updateAutomation(chat.id, { launchSetupPatch: { surface: 'terminal' } })
+    ).toThrow('fresh session')
+    expect(() =>
+      store.updateAutomation(chat.id, {
+        launchSetupPatch: { arguments: { kind: 'value', value: '--model sonnet' } }
+      })
+    ).toThrow('fresh session')
+    expect(store.listAutomations()[0].launchSetup).toEqual(chat.launchSetup)
+    const inert = store.updateAutomation(chat.id, {
+      launchSetupPatch: { arguments: { kind: 'value', value: '--verbose' } }
+    })
+    expect(inert.reuseSession).toBe(true)
+  })
+
+  it('copies canonical presence and bytes rather than a legacy projection', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const source = store.createAutomation({
+      ...BASE,
+      launchSetupPatch: {
+        surface: 'chat',
+        copy: {
+          agentArgs: null,
+          launchPreferences: { model: null, options: { effort: null } },
+          extraAgentArgs: '--legacy-dormant-text'
+        }
+      }
+    })
+    const copy = store.createAutomation({
+      ...BASE,
+      creationKey: 'modern-copy',
+      launchSetupPatch: { copy: source.launchSetup }
+    })
+    expect(copy.launchSetup).toEqual(source.launchSetup)
+  })
+
+  it('applies permission source edits to the latest old-writer model without replacing its raw field', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const created = store.createAutomation({
+      ...BASE,
+      launchSetupPatch: {
+        arguments: { kind: 'value', value: '--verbose --model sonnet --permission-mode default' }
+      }
+    })
+    const { patch } = foldAutomationSourceEdit(
+      'claude',
+      automationCanonicalLaunchSetup(created),
+      undefined,
+      { kind: 'choices', value: { permissionMode: 'full-access' } }
+    )
+    store.updateAutomation(created.id, { extraAgentArgs: '--model opus' })
+    const saved = store.updateAutomation(created.id, {
+      launchSetupPatch: encodeAutomationLaunchEdit(patch ?? {}, 'terminal')
+    })
+    expect(saved.launchSetup?.agentArgs).toContain('--model opus')
+    expect(saved.launchSetup?.agentArgs).not.toContain('sonnet')
+    expect(saved.launchSetup?.agentArgs).not.toContain('--permission-mode')
+    expect(saved.launchSetup?.launchPreferences?.permissionMode).toBe('full-access')
   })
 })

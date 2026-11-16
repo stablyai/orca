@@ -2,9 +2,11 @@ import type { CSSProperties } from 'react'
 import { DEFAULT_VIRTUAL_FILE_METRICS, type FileDiffOptions, type ThemesType } from '@pierre/diffs'
 import type { CreatePatchOptionsNonabortable } from 'diff'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  resolveEditorTypography,
+  type EditorTypography
+} from '../../../../../shared/editor/editor-typography'
 import { PIERRE_SEARCH_CSS } from './pierre-diff-search-view'
-import { buildFontFamily } from '@/lib/monospace-font-family'
 
 /**
  * `light-plus` / `dark-plus` are the VS Code default themes that Monaco's
@@ -19,6 +21,10 @@ export const PIERRE_DIFF_THEMES: ThemesType = { light: 'light-plus', dark: 'dark
  * sanction — keeping the add-note affordance in the glyph margin like Monaco's.
  */
 const PIERRE_GUTTER_BUTTON_CSS = '[data-utility-button] { margin-right: 0; }'
+const PIERRE_SELECTION_CSS =
+  ':host { --diffs-editor-selection-bg: var(--orca-diff-selection-bg); }' +
+  ':host(:not(:focus-within)) { --diffs-editor-selection-bg: var(--orca-diff-inactive-selection-bg); }' +
+  '[data-code]:not(:has([contenteditable])) ::selection { background-color: var(--diffs-editor-selection-bg); }'
 
 /** Every field is optional: callers pass partial settings while the store hydrates. */
 export type PierreDiffSettings = Partial<
@@ -30,6 +36,10 @@ export type PierreDiffSettings = Partial<
     | 'terminalFontSize'
     | 'editorFontFamily'
     | 'terminalFontFamily'
+    | 'editorFontSize'
+    | 'editorFontWeight'
+    | 'editorLineHeight'
+    | 'editorLigatures'
   >
 >
 
@@ -53,7 +63,6 @@ export function buildPierreDiffOptions<LAnnotation>({
   settings?: PierreDiffSettings | null
   sideBySide: boolean
   collapsed?: boolean
-  /** Monaco only hid unchanged regions in the combined diff, never the file tab. */
   collapseUnchanged: boolean
 }): FileDiffOptions<LAnnotation, undefined> {
   return {
@@ -63,12 +72,10 @@ export function buildPierreDiffOptions<LAnnotation>({
     // from here — without it Pierre asks Shiki for its unregistered default
     // `pierre-dark` and the render throws instead of painting.
     theme: PIERRE_DIFF_THEMES,
-    unsafeCSS: PIERRE_GUTTER_BUTTON_CSS + PIERRE_SEARCH_CSS,
+    unsafeCSS: PIERRE_GUTTER_BUTTON_CSS + PIERRE_SEARCH_CSS + PIERRE_SELECTION_CSS,
     themeType: settings?.theme ?? 'system',
     overflow: settings?.diffWordWrap ? 'wrap' : 'scroll',
     parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace),
-    // Why: replaces Monaco's `hideUnchangedRegions`, which the single-file diff
-    // tab never enabled — that surface always showed the whole file.
     expandUnchanged: !collapseUnchanged,
     collapsed,
     // Why: our own DiffSectionHeader / DiffViewer chrome already renders the file row.
@@ -83,25 +90,32 @@ export function buildPierreDiffOptions<LAnnotation>({
 /** Pierre reads typography from CSS variables rather than component options. */
 export function buildPierreDiffStyle(
   settings: PierreDiffSettings | null | undefined,
-  editorFontZoomLevel: number
+  editorFontZoomLevel: number,
+  typography: EditorTypography = resolveEditorTypography(settings, editorFontZoomLevel, 'diff')
 ): CSSProperties & Record<`--diffs-${string}`, string> {
-  const fontSize = computeDiffEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
+  const { fontSize } = typography
   return {
     // Why: Pierre's own fallback only applies when the variable is absent, so a
     // configured-but-uninstalled font (e.g. "SF Mono" on a Mac without it) would
     // drop all the way to the default serif face. Reuse the terminal's
     // cross-platform monospace chain, which always ends in `monospace`.
-    '--diffs-font-family': buildFontFamily(resolveEditorFontFamily(settings)),
-    '--diffs-editor-selection-bg': 'var(--editor-selection-background)',
+    '--diffs-font-family': typography.cssFontFamily,
+    '--diffs-font-features': typography.fontLigatures ? '"liga" 1, "calt" 1' : '"liga" 0, "calt" 0',
+    fontWeight: typography.fontWeight,
+    fontVariantLigatures: typography.fontLigatures ? 'normal' : 'none',
     '--diffs-font-size': `${fontSize}px`,
-    '--diffs-line-height': `${buildPierreDiffMetrics(settings, editorFontZoomLevel).lineHeight}px`
+    '--diffs-line-height': `${buildPierreDiffMetrics(settings, editorFontZoomLevel, typography).lineHeight}px`
   }
 }
 
 export function buildPierreDiffMetrics(
   settings: PierreDiffSettings | null | undefined,
-  editorFontZoomLevel: number
+  editorFontZoomLevel: number,
+  typography: EditorTypography = resolveEditorTypography(settings, editorFontZoomLevel, 'diff')
 ) {
-  const fontSize = computeDiffEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
-  return { ...DEFAULT_VIRTUAL_FILE_METRICS, lineHeight: Math.round(fontSize * 1.5) }
+  const { fontSize } = typography
+  return {
+    ...DEFAULT_VIRTUAL_FILE_METRICS,
+    lineHeight: typography.lineHeight || Math.round(fontSize * 1.5)
+  }
 }

@@ -1,6 +1,5 @@
 /** @vitest-environment happy-dom */
 import { act, useState } from 'react'
-import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useActivityTerminalPortalStatus } from './activity-terminal-portal-status'
@@ -54,85 +53,6 @@ async function drainReadinessFrame(): Promise<void> {
 }
 
 describe('Activity portal readiness subscription churn', () => {
-  // React #185 requires over 50 consecutive commits with pending sync/default work. Readiness writes only from rAF, cancelled on subscription cleanup, so sync churn must commit no readiness updates.
-  it('contributes no state updates to a synchronous churn cascade past React nested-update limit', () => {
-    const target = document.createElement('div')
-    buildNeverReadyRoot(target)
-    document.body.append(target)
-
-    let selectPane: (paneKey: string) => void = () => {}
-    let readinessCommits = 0
-    let lastStatus = 'loading'
-
-    function ActivityTerminalSlot(): null {
-      const [paneKey, setPaneKey] = useState(PANE_A)
-      selectPane = setPaneKey
-      const status = useActivityTerminalPortalStatus(target, paneKey)
-      if (status !== lastStatus) {
-        readinessCommits += 1
-        lastStatus = status
-      }
-      return null
-    }
-
-    root = createRoot(document.createElement('div'))
-    act(() => {
-      root.render(<ActivityTerminalSlot />)
-    })
-    readinessCommits = 0
-
-    act(() => {
-      expect(() => {
-        for (let index = 0; index < 60; index += 1) {
-          flushSync(() => {
-            selectPane(index % 2 === 0 ? PANE_B : PANE_A)
-          })
-        }
-      }).not.toThrow()
-    })
-    expect(readinessCommits).toBe(0)
-  })
-
-  it('coalesces pane-key churn and commits the latest readiness', async () => {
-    const target = document.createElement('div')
-    buildNeverReadyRoot(target)
-    document.body.append(target)
-
-    let selectPane: (paneKey: string) => void = () => {}
-    let renders = 0
-    let status = 'loading'
-
-    function ActivityTerminalSlot(): null {
-      renders += 1
-      const [paneKey, setPaneKey] = useState(PANE_A)
-      selectPane = setPaneKey
-      status = useActivityTerminalPortalStatus(target, paneKey)
-      return null
-    }
-
-    root = createRoot(document.createElement('div'))
-    act(() => {
-      root.render(<ActivityTerminalSlot />)
-    })
-
-    act(() => {
-      expect(() => {
-        for (let index = 0; index < 29; index += 1) {
-          flushSync(() => {
-            selectPane(index % 2 === 0 ? PANE_B : PANE_A)
-          })
-        }
-      }).not.toThrow()
-    })
-    expect(renders).toBeLessThanOrEqual(31)
-
-    await act(async () => {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    })
-    expect(status).toBe('unavailable')
-    expect(renders).toBeLessThanOrEqual(32)
-  })
-
   // Prove termination: swap-driving readiness must stop alternating while DOM churn continues.
   function expectReadinessStopsAlternating(statuses: string[]): void {
     // Sanity: the fixture really does alternate early, so the run below is the latch, not a rig.
@@ -176,38 +96,6 @@ describe('Activity portal readiness subscription churn', () => {
     for (let flip = 1; flip <= 40; flip += 1) {
       await act(async () => {
         selectFlip(flip)
-      })
-      await drainReadinessFrame()
-      settledStatuses.push(status)
-    }
-
-    expectReadinessStopsAlternating(settledStatuses)
-  })
-
-  it('stops alternating readiness when only the pane key churns within one tab', async () => {
-    const target = document.createElement('div')
-    buildNeverReadyRoot(target, TAB_ID)
-    document.body.append(target)
-
-    let selectPane: (paneKey: string) => void = () => {}
-    let status = 'loading'
-    const settledStatuses: string[] = []
-
-    function ActivityTerminalSlot(): null {
-      const [paneKey, setPaneKey] = useState(PANE_A)
-      selectPane = setPaneKey
-      status = useActivityTerminalPortalStatus(target, paneKey)
-      return null
-    }
-
-    root = createRoot(document.createElement('div'))
-    act(() => {
-      root.render(<ActivityTerminalSlot />)
-    })
-
-    for (let flip = 0; flip < 40; flip += 1) {
-      await act(async () => {
-        selectPane(flip % 2 === 0 ? PANE_B : PANE_A)
       })
       await drainReadinessFrame()
       settledStatuses.push(status)

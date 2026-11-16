@@ -1,13 +1,16 @@
 // Count distro identities locally; only buckets/booleans reach the telemetry payload.
-import type { WslHostsGateState } from '../../shared/wsl-host-internal-gate'
-import type { WslHostsPolicyState } from '../../shared/wsl-hosts-policy'
-import type { Repo } from '../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import { isDrvfsLinuxPath, parseWslUncPath } from '../../shared/wsl-paths'
+import type { WslHostsGateState } from '../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
+import type {
+  WslHostsMovedProjects,
+  WslHostsPolicyState
+} from '../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
+import type { Repo } from '../../shared/repository/repo-types'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
+import { isDrvfsLinuxPath, parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import {
   bucketWslUsageCount,
   type WslUsageSnapshotProps
-} from '../../shared/telemetry-wsl-usage-event-schemas'
+} from '../../shared/telemetry/schemas/telemetry-wsl-usage-event-schemas'
 
 export type WslUsageProjectLocation = 'distro_fs' | 'windows_drive'
 
@@ -37,6 +40,8 @@ export type WslUsageSnapshotInput = {
   wslHostsGateState?: WslHostsGateState
   /** The cached remote policy applied at launch; absent when the internal gate left it unread. */
   wslHostsPolicy?: WslHostsPolicyState | null
+  /** What an applied block asks for moved projects; absent when nothing blocks. */
+  wslHostsMovedProjects?: WslHostsMovedProjects | null
 }
 
 /** `2.4.13.0` → `2.4`; anything else is dropped rather than sent. */
@@ -120,6 +125,9 @@ export function buildWslUsageSnapshot(input: WslUsageSnapshotInput): WslUsageSna
     project_distros_used: bucketWslUsageCount(projectDistros.size),
     wsl_hosts_gate_open: input.wslHostsGateOpen,
     ...(input.wslHostsGateState ? { wsl_hosts_gate_state: input.wslHostsGateState } : {}),
-    ...(input.wslHostsPolicy ? { wsl_hosts_policy: input.wslHostsPolicy } : {})
+    ...(input.wslHostsPolicy ? { wsl_hosts_policy: input.wslHostsPolicy } : {}),
+    ...(input.wslHostsMovedProjects
+      ? { wsl_hosts_moved_projects: input.wslHostsMovedProjects }
+      : {})
   }
 }

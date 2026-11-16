@@ -1,10 +1,11 @@
 import { toast } from 'sonner'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { WslHostServerStop } from '../../../../shared/wsl-host-types'
+import type { WslHostServerStop } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
-import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
+import { runEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import { workspaceOwnerHostId } from '@/lib/workspace/ownership/workspace-row-owner-host'
+import { wslHostStopReasonMessage } from './wsl-host-failure-text'
 
 /** Stop terminals/server, remove records and refresh hosts; report anything still running that keeps the distro alive. */
 async function removeWslHostImpl(environmentId: string): Promise<void> {
@@ -54,7 +55,7 @@ export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined)
       translate(
         'auto.components.sidebar.wslHostRemoval.pending',
         'Orca didn’t remove the host yet: {{value0}} Remove it again to retry, or connect it to keep it.',
-        { value0: serverStop.reason }
+        { value0: wslHostStopReasonMessage(serverStop) }
       ),
       { duration: Infinity }
     )
@@ -65,7 +66,7 @@ export function warnWslHostServerStop(serverStop: WslHostServerStop | undefined)
     translate(
       'auto.components.sidebar.wslHostRemoval.partial',
       'The host was removed, but something in the distro is still running: {{value0}}',
-      { value0: serverStop.reason }
+      { value0: wslHostStopReasonMessage(serverStop) }
     ),
     { duration: Infinity }
   )

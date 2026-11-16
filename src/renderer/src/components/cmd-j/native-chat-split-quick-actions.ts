@@ -2,7 +2,7 @@ import { PanelBottomClose, PanelRightClose } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { CmdJQuickAction } from './quick-actions'
 import type { CmdJQuickActionContext } from './quick-action-context'
-import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-split-shortcut'
+import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
 
 function availability(ctx: CmdJQuickActionContext) {
   return ctx.canSplitActiveChat
@@ -28,32 +28,30 @@ function splitAction(
 }
 
 export function getNativeChatSplitQuickActions(): CmdJQuickAction[] {
+  const right = translate('components.native-chat.splitRight', 'Split Right')
+  const down = translate('components.native-chat.splitDown', 'Split Down')
   return [
     splitAction('right', {
       id: 'split-chat-right',
-      title: translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right'),
-      description: translate(
-        'auto.components.cmd.j.quick.actions.splitChatRightDescription',
-        'Open a new chat in a split pane to the right.'
-      ),
+      title: right,
+      description: right,
       icon: PanelRightClose,
       verbKeywords: [
+        right,
         translate('auto.components.cmd.j.quick.actions.verbs.splitChatRight', 'split chat right'),
-        translate('auto.components.cmd.j.quick.actions.verbs.newChatRight', 'new chat right'),
+        translate('auto.components.cmd.j.quick.actions.splitChatRight', 'Split Chat Right'),
         translate('auto.components.cmd.j.quick.actions.verbs.chatPaneRight', 'chat pane right')
       ]
     }),
     splitAction('down', {
       id: 'split-chat-down',
-      title: translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down'),
-      description: translate(
-        'auto.components.cmd.j.quick.actions.splitChatDownDescription',
-        'Open a new chat in a split pane below.'
-      ),
+      title: down,
+      description: down,
       icon: PanelBottomClose,
       verbKeywords: [
+        down,
         translate('auto.components.cmd.j.quick.actions.verbs.splitChatDown', 'split chat down'),
-        translate('auto.components.cmd.j.quick.actions.verbs.newChatBelow', 'new chat below'),
+        translate('auto.components.cmd.j.quick.actions.splitChatDown', 'Split Chat Down'),
         translate('auto.components.cmd.j.quick.actions.verbs.chatPaneBelow', 'chat pane below')
       ]
     })

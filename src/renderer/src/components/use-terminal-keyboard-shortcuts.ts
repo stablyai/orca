@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function useTerminalKeyboardShortcuts(controller: TerminalActivationController): void {
   const {
     activeWorktreeId,
     handleCloseAllFiles,
     handleNewBrowserTab,
+    handleNewBrowserTabSplitRight,
     handleNewFile,
     handleNewSimulatorTab,
     handleNewTab,
@@ -16,9 +17,6 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     terminalShortcutPolicy
   } = controller
   useEffect(() => {
-    if (!activeWorktreeId) {
-      return
-    }
     const isMac = navigator.userAgent.includes('Mac')
     const shortcutPlatform: NodeJS.Platform = isMac
       ? 'darwin'
@@ -34,6 +32,7 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
   }, [
     activeWorktreeId,
     handleNewBrowserTab,
+    handleNewBrowserTabSplitRight,
     handleNewSimulatorTab,
     handleNewFile,
     handleNewTab,

@@ -1,4 +1,4 @@
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 /** Spawn completion must not give a launch label newer authority than titles received in flight. */
 export function seedPtyLaunchTitle(

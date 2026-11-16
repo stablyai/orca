@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import {
   createCombinedDiffLoadScheduler,
   type CombinedDiffLoadScheduler
@@ -59,7 +59,9 @@ export function useCombinedDiffSectionLoadRegistry(
   const registryLiveRef = useRef(true)
   const loadSchedulerRef = useRef<ReturnType<typeof createCombinedDiffLoadScheduler>>(undefined!)
   loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
-    loadSection: (index) => loadSectionRef.current(index)
+    loadSection: (index) => loadSectionRef.current(index),
+    getRenderedIndices: () => renderedIndicesRef.current,
+    isSectionExpanded: (index) => sectionsRef.current[index]?.collapsed === false
   })
   // Why in render AND in the effect below: child effects run before this parent's, so a
   // render-only write covers that window; StrictMode replays setup -> cleanup -> setup with no

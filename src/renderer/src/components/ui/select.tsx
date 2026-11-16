@@ -5,7 +5,9 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import * as SelectPrimitive from 'radix-ui/select'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root data-slot="select" {...props} />
@@ -78,33 +80,38 @@ function SelectContent({
 }: React.ComponentProps<typeof SelectPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
+  const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
   return (
     <SelectPrimitive.Portal container={portalContainer ?? undefined}>
-      <SelectPrimitive.Content
-        data-slot="select-content"
-        // Match dropdown surface/border/shadow tokens so options remain distinct from the dark canvas.
-        className={cn(
-          'relative z-[70] max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
-          position === 'popper' &&
-            'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
-          className
-        )}
-        position={position}
-        align={align}
-        {...props}
-      >
-        <SelectScrollUpButton />
-        <SelectPrimitive.Viewport
+      <OverlayFocusScope value={scope}>
+        <SelectPrimitive.Content
+          data-slot="select-content"
+          // Match dropdown surface/border/shadow tokens so options remain distinct from the dark canvas.
           className={cn(
-            'p-1',
+            'relative z-[70] max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)] data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
             position === 'popper' &&
-              'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1'
+              'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
+            className
           )}
+          position={position}
+          align={align}
+          {...props}
+          ref={focusScopeRef}
+          onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, props.onCloseAutoFocus)}
         >
-          {children}
-        </SelectPrimitive.Viewport>
-        <SelectScrollDownButton />
-      </SelectPrimitive.Content>
+          <SelectScrollUpButton />
+          <SelectPrimitive.Viewport
+            className={cn(
+              'p-1',
+              position === 'popper' &&
+                'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1'
+            )}
+          >
+            {children}
+          </SelectPrimitive.Viewport>
+          <SelectScrollDownButton />
+        </SelectPrimitive.Content>
+      </OverlayFocusScope>
     </SelectPrimitive.Portal>
   )
 }
@@ -112,8 +119,12 @@ function SelectContent({
 function SelectItem({
   className,
   children,
+  description,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+}: React.ComponentProps<typeof SelectPrimitive.Item> & {
+  /** A muted second line shown only in the list, never in the trigger. */
+  description?: React.ReactNode
+}) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -131,7 +142,14 @@ function SelectItem({
           <CheckIcon className="size-4" />
         </SelectPrimitive.ItemIndicator>
       </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {description ? (
+        <div className="flex min-w-0 flex-col">
+          <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+          <span className="text-xs text-muted-foreground">{description}</span>
+        </div>
+      ) : (
+        <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      )}
     </SelectPrimitive.Item>
   )
 }

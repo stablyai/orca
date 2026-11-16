@@ -1,10 +1,10 @@
-import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
+import type { AiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { sessionSearchDatabasePath } from './session-search-database-path'
-import type { SessionSearchIndexerOptions } from './session-search-indexer-options'
+import type { SessionSearchIndexerOptions } from './indexing/session-search-indexer-options'
 import { SessionSearchInstance } from './session-search-instance'
-import type { SessionSearchScanRoots } from './session-search-scan-roots'
+import type { SessionSearchScanRoots } from './discovery/session-search-scan-roots'
 import { setSessionSearchService } from './session-search-service-registry'
-import { sessionSearchSqliteAvailable } from './session-search-sqlite-support'
+import { isSqliteAvailable } from '../sqlite/sync-database'
 
 /** Own the index where the scanner cannot publish transcript reads; skip hosts without SQLite. */
 export function installInProcessSessionSearchService(args: {
@@ -14,7 +14,7 @@ export function installInProcessSessionSearchService(args: {
   settings: AiVaultSearchSettings
   onError?: (error: unknown) => void
 }): { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null {
-  if (!sessionSearchSqliteAvailable()) {
+  if (!isSqliteAvailable()) {
     return null
   }
   const instance = new SessionSearchInstance({

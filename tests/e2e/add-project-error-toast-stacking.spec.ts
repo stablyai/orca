@@ -1,7 +1,7 @@
 import path from 'node:path'
-import type { ElectronApplication, Locator, TestInfo } from '@stablyai/playwright-test'
+import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
+import { eventSchemas } from '../../src/shared/telemetry/telemetry-event-registry'
 import { test, expect } from './helpers/orca-app'
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient
@@ -48,12 +48,15 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(async (theme) => {
         await window.__store?.getState().updateSettings({ theme })
       }, theme)
-      await openSidebarProjectDialog(page)
-      const dialog = page.getByRole('dialog', { name: /Add a project/i })
-      const hostPicker = dialog.getByRole('combobox')
-      await hostPicker.click()
-      await page.locator('[cmdk-item]').filter({ hasText: 'Disposable host' }).click()
-      await dialog.getByRole('button', { name: /Browse folder|Browse host/i }).click()
+      await page
+        .locator('[data-sidebar-header-actions]')
+        .getByRole('button', { name: 'Add project', exact: true })
+        .click()
+      const addMenu = page.getByRole('menu', { name: 'Add project', exact: true })
+      await expect(
+        addMenu.getByRole('menuitem', { name: 'Project host: Disposable host', exact: true })
+      ).toBeVisible()
+      await addMenu.getByRole('menuitem', { name: /Browse folder/i }).click()
       await page
         .getByRole('dialog', { name: /Browse host filesystem/i })
         .getByRole('button', { name: 'Cancel', exact: true })
@@ -124,28 +127,43 @@ for (const theme of ['dark', 'light'] as const) {
             if (!bounds) {
               throw new Error('Missing toast control target')
             }
-            await cdp.send('Input.dispatchTouchEvent', {
-              type: 'touchStart',
-              touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }]
-            })
-            await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+            // Match Playwright's tap: waiting for Chromium's start ack can turn it into a long press.
+            await Promise.all([
+              cdp.send('Input.dispatchTouchEvent', {
+                type: 'touchStart',
+                touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }]
+              }),
+              cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+            ])
           } finally {
             await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
             await cdp.detach()
           }
         }
         await pathField.click()
-        await clickToastControl(customToast.getByRole('button', { name: 'Later', exact: true }))
-        await expect(customToast).toBeVisible()
-        await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
-        await expect(pathField).toHaveValue(missingPath)
-        expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
         await clickToastControl(customToast.getByRole('button', { name: 'Dismiss', exact: true }))
         await expect(customToast).toBeHidden()
         await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
         await expect(pathField).toHaveValue(missingPath)
         expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
       }
+      // A toast raised while the modal is open comes forward, so its actions run above it.
+      await client.app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0].webContents.send('star-nag:show', {
+          mode: 'web',
+          surface: 'toast'
+        })
+      })
+      const raisedToast = page
+        .locator('[data-sonner-toast]')
+        .filter({ hasText: 'Onboarding completed!' })
+      await expect(raisedToast).toBeVisible()
+      await pathField.click()
+      await raisedToast.getByRole('button', { name: 'Later', exact: true }).click()
+      await expect(raisedToast).toBeHidden()
+      await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
+      await expect(pathField).toHaveValue(missingPath)
+      expect(await pathField.evaluate((input) => input === document.activeElement)).toBe(true)
       await page.screenshot({
         path: testInfo.outputPath(`toast-dismissed-modal-preserved-${theme}.png`),
         animations: 'disabled'
@@ -162,7 +180,6 @@ for (const theme of ['dark', 'light'] as const) {
         .filter({ hasText: 'A device tried to connect but is not paired' })
       const action = actionToast.getByRole('button', { name: 'Open Mobile Settings' })
       await expect(action).toBeVisible()
-      await action.click()
       await actionToast.locator('[data-title]').click()
       await expect(actionToast).toBeVisible()
       await expect(page.getByRole('dialog', { name: /Open host project/i })).toBeVisible()
@@ -232,5 +249,120 @@ for (const theme of ['dark', 'light'] as const) {
     } finally {
       await client.dispose()
     }
+  })
+}
+
+async function showUnpairedDeviceToast(app: ElectronApplication): Promise<void> {
+  // A real persistent action toast, fed a synthetic notification.
+  await app.evaluate(({ ipcMain, BrowserWindow }) => {
+    ipcMain.removeHandler('mobile:consumePendingUnpairedDeviceAuthFailure')
+    ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', () => true)
+    BrowserWindow.getAllWindows()[0].webContents.send('mobile:unpairedDeviceAuthFailure')
+  })
+}
+
+type RecordedTelemetryEvent = { name: unknown; props: unknown }
+
+declare global {
+  // Test-only recorder installed in the Electron main process by recordTelemetry.
+  var __toastTelemetry: RecordedTelemetryEvent[] | undefined
+}
+
+async function recordTelemetry(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }) => {
+    const events: RecordedTelemetryEvent[] = []
+    globalThis.__toastTelemetry = events
+    ipcMain.removeHandler('telemetry:track')
+    ipcMain.handle('telemetry:track', (_event, name: unknown, props: unknown) => {
+      events.push({ name, props })
+      return true
+    })
+  })
+}
+
+async function recordedToastActions(app: ElectronApplication): Promise<unknown[]> {
+  const events = await app.evaluate(() => globalThis.__toastTelemetry ?? [])
+  return events
+    .filter((event) => event.name === 'toast_action_over_modal')
+    .map((event) => event.props)
+}
+
+async function toasterZIndex(page: Page): Promise<number> {
+  return page
+    .locator('[data-sonner-toaster]')
+    .evaluate((toaster) => Number(getComputedStyle(toaster).zIndex))
+}
+
+async function pressAt(page: Page, target: Locator): Promise<void> {
+  const box = await target.boundingBox()
+  if (!box) {
+    throw new Error('Missing press target')
+  }
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`toasts behind a settings dialog come forward on a press and keep its draft (${theme})`, async ({
+    electronApp,
+    orcaPage: page
+  }) => {
+    await recordTelemetry(electronApp)
+    await page.evaluate(async (theme) => {
+      const store = window.__store!.getState()
+      await store.updateSettings({ theme })
+      store.openSettingsPage()
+      store.openSettingsTarget({ pane: 'browser', repoId: null })
+    }, theme)
+    const unpairedToast = page
+      .locator('[data-sonner-toast]')
+      .filter({ hasText: 'A device tried to connect but is not paired' })
+    const action = unpairedToast.getByRole('button', { name: 'Open Mobile Settings' })
+    const mobilePane = page.getByText('Control terminals and agents from your phone.')
+    const dialog = page.getByRole('dialog', { name: 'New browser profile' })
+    const nameField = dialog.getByRole('textbox')
+
+    // An older toast drops behind the modal's backdrop: visible but dimmed, and nothing in it is live.
+    await showUnpairedDeviceToast(electronApp)
+    await expect(action).toBeVisible()
+    await page.getByRole('button', { name: 'Add profile', exact: true }).click()
+    await expect(dialog).toBeVisible()
+    await nameField.fill('Draft profile name')
+    await expect.poll(() => toasterZIndex(page)).toBe(49)
+    await expect(
+      unpairedToast.locator('[data-close-button]').click({ trial: true, timeout: 300 })
+    ).rejects.toThrow()
+
+    // A press on the dimmed toast brings it forward without dismissing the modal or moving focus.
+    await pressAt(page, unpairedToast.locator('[data-title]'))
+    await expect.poll(() => toasterZIndex(page)).toBe(60)
+    await expect(dialog).toBeVisible()
+    await expect(nameField).toHaveValue('Draft profile name')
+    await expect(nameField).toBeFocused()
+    await unpairedToast.locator('[data-close-button]').click()
+    await expect(unpairedToast).toHaveCount(0)
+    await expect(dialog).toBeVisible()
+    await expect(nameField).toHaveValue('Draft profile name')
+    await expect(nameField).toBeFocused()
+
+    // Each modal starts lowered; a toast raised while it is open comes forward by itself.
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    await page.getByRole('button', { name: 'Add profile', exact: true }).click()
+    await expect(dialog).toBeVisible()
+    await nameField.fill('Second draft')
+    await showUnpairedDeviceToast(electronApp)
+    await expect(action).toBeVisible()
+    await expect.poll(() => toasterZIndex(page)).toBe(60)
+    await expect(nameField).toBeFocused()
+
+    // The escape hatch: a navigating action runs above the modal, and is counted.
+    expect(await recordedToastActions(electronApp)).toEqual([])
+    await action.click()
+    await expect(mobilePane).toBeVisible()
+    const tracked = await recordedToastActions(electronApp)
+    expect(tracked).toEqual([
+      { toast_id: 'unpaired-device-auth-failure', modal_kind: 'dialog', raised_by: 'new_toast' }
+    ])
+    expect(eventSchemas.toast_action_over_modal.safeParse(tracked[0]).success).toBe(true)
   })
 }

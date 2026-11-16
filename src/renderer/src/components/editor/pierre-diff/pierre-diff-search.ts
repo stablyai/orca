@@ -1,5 +1,5 @@
 import { TextDocument, type Range } from '@pierre/diffs/edit'
-import { isWholeWordMatch } from '@/lib/text-match-ranges'
+import { isWholeWordMatch } from '@/lib/text-search/text-match-ranges'
 
 export type DiffSearchQuery = {
   text: string

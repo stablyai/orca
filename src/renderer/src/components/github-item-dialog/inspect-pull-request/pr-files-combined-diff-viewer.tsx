@@ -1,14 +1,16 @@
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/sections/diff-section-layout'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
-import { useAppStore } from '@/store'
-import type { GitBranchChangeEntry } from '../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { isPRFileViewed } from '@/components/github/pr-file-content-size'
 import {
   PR_DIFF_OVERSCAN,
@@ -16,7 +18,7 @@ import {
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
-import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
+import { buildInlineReviewComments } from '@/components/pull-request-page/files/inline-comments'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
 import { PRFilesCombinedDiffBody } from './pr-files-combined-diff-body'
 import { getPRFilesCombinedDiffSignature } from './pr-files-combined-diff-signature'
@@ -27,9 +29,7 @@ import {
   setAllPRFilesCombinedDiffSectionsCollapsed,
   togglePRFilesCombinedDiffSection
 } from './pr-files-combined-diff-load'
-import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type PRFilesCombinedDiffSectionsProps = PRFilesCombinedDiffViewerProps & {
   signature: string
@@ -92,7 +92,7 @@ function PRFilesCombinedDiffSections({
   fileTreeCollapsed,
   setFileTreeCollapsed
 }: PRFilesCombinedDiffSectionsProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  // The keyed mount fixes this file set; state preserves its identity without a render-time ref cache.
   const viewStateKey = [
     'pr-dialog',
     sourceContext?.hostId ?? LOCAL_EXECUTION_HOST_ID,
@@ -100,8 +100,6 @@ function PRFilesCombinedDiffSections({
     prRepo ? githubRepoIdentityKey(prRepo) : '',
     prNumber
   ].join('\0')
-  // Why: this subtree is keyed by the diff signature, so its file set is fixed for the
-  // mount. Freezing it in state keeps a stable identity without caching through a ref.
   const [entries] = useState<GitBranchChangeEntry[]>(() =>
     getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry))
   )
@@ -130,34 +128,8 @@ function PRFilesCombinedDiffSections({
       fileByPath.get(section.path)?.reviewCommentLineNumbers,
     [fileByPath]
   )
-  const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
-    () =>
-      comments.flatMap((comment): DecoratedDiffComment[] => {
-        // Why: outdated threads' line number can attach the comment to unrelated current code, so skip them inline.
-        if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
-          return []
-        }
-        const createdAtMs = new Date(comment.createdAt).getTime()
-        return [
-          {
-            id: `github-pr-comment:${comment.id}`,
-            worktreeId: `github-pr:${repoId}:${prNumber}`,
-            filePath: comment.path,
-            source: 'diff',
-            startLine: comment.startLine,
-            lineNumber: comment.line,
-            body: comment.body,
-            createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
-            side: 'modified',
-            author: comment.author,
-            authorAvatarUrl: comment.authorAvatarUrl,
-            createdAtLabel: formatRelativeTime(comment.createdAt),
-            url: comment.url,
-            canDelete: false,
-            canEdit: false
-          }
-        ]
-      }),
+  const inlineReviewComments = useMemo(
+    () => buildInlineReviewComments(comments, repoId, prNumber),
     [comments, prNumber, repoId]
   )
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
@@ -168,9 +140,7 @@ function PRFilesCombinedDiffSections({
   const sectionsRef = useRef<DiffSection[]>(sections)
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
 
-  // Why: commit-phase write (a render React abandons would leak one), and it must be a layout
-  // effect — collapsing rekeys a section's virtual item, so the remounted DiffSectionItem's
-  // passive effect calls loadSection before any passive effect here could sync this ref.
+  // Sync after commit but before passive effects: collapsed sections remount and read this ref during their passive load.
   useLayoutEffect(() => {
     sectionsRef.current = sections
   }, [sections])
@@ -280,7 +250,7 @@ function PRFilesCombinedDiffSections({
   )
 
   const openFilesOnGitHub = useCallback(() => {
-    void window.api.shell.openUrl(`${prUrl.replace(/\/$/, '')}/files`)
+    openAppHttpLink(`${prUrl.replace(/\/$/, '')}/files`)
   }, [prUrl])
 
   const handleAddLineComment = useCallback(
@@ -340,6 +310,9 @@ function PRFilesCombinedDiffSections({
     <PierreDiffProviders scrollContainerRef={scrollContainerRef}>
       <PRFilesCombinedDiffBody
         viewStateKey={viewStateKey}
+        imageUploadAddress={() =>
+          githubCommentImageUploadAddress({ repoPath, repoId, sourceContext, type: 'pr', prRepo })
+        }
         files={files}
         repoPath={repoPath}
         repoId={repoId}
@@ -358,7 +331,6 @@ function PRFilesCombinedDiffSections({
         scrollContainerRef={scrollContainerRef}
         virtualizer={virtualizer}
         sections={sections}
-        settings={settings}
         sectionHeights={sectionHeights}
         inlineReviewComments={inlineReviewComments}
         loadSection={loadSection}

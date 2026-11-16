@@ -2,8 +2,8 @@ import { app, ipcMain } from 'electron'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
+} from '../../shared/agent-session/agent-session-attachments'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { uploadExternalPathsToAgentSessionAttachments } from './agent-session-attachment-upload'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
@@ -22,7 +22,7 @@ export function registerAgentSessionAttachmentUploadHandlers(): void {
           {
             ...args,
             // The manual-disconnect check keys on the resolved id, not whatever selector came in.
-            environmentId: resolveEnvironment(userDataPath, args.environmentId).id,
+            environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id,
             userDataPath,
             signal: lifetime.signal
           },

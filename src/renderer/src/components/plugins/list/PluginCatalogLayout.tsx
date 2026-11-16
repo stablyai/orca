@@ -1,10 +1,10 @@
 import { Search, X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Tabs, TabsList, TabsTrigger } from '../../ui/tabs'
 
-export type PluginCatalogFilter = 'all' | 'installed' | 'updates'
+export type PluginCatalogFilter = 'all' | 'installed' | 'available' | 'updates'
 
 type PluginCatalogLayoutProps = {
   filter: PluginCatalogFilter
@@ -14,14 +14,16 @@ type PluginCatalogLayoutProps = {
   installedCount: number
   updateCount: number
   toolbar?: React.ReactNode
+  /** A row under the search, e.g. the category chips. */
+  filters?: React.ReactNode
   children: React.ReactNode
 }
 
 function isPluginCatalogFilter(value: string): value is PluginCatalogFilter {
-  return value === 'all' || value === 'installed' || value === 'updates'
+  return value === 'all' || value === 'installed' || value === 'available' || value === 'updates'
 }
 
-/** Filter tabs, search and tools above the plugin list. */
+/** Install-state filter, search and tools above the one plugin list. */
 export function PluginCatalogLayout({
   filter,
   onFilterChange,
@@ -30,11 +32,13 @@ export function PluginCatalogLayout({
   installedCount,
   updateCount,
   toolbar,
+  filters,
   children
 }: PluginCatalogLayoutProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section
-      aria-label={translate('auto.components.pluginCatalog.PluginCatalogLayout.title', 'Plugins')}
+      aria-label={t('auto.components.pluginCatalog.PluginCatalogLayout.title', 'Plugins')}
       className="@container/plugin-list space-y-4"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -47,26 +51,26 @@ export function PluginCatalogLayout({
           }}
         >
           <TabsList
-            aria-label={translate(
+            aria-label={t(
               'auto.components.pluginCatalog.PluginCatalogLayout.filter',
               'Plugin filter'
             )}
           >
             <TabsTrigger value="all">
-              {translate('auto.components.pluginCatalog.PluginCatalogLayout.all', 'All')}
+              {t('auto.components.pluginCatalog.PluginCatalogLayout.all', 'All')}
             </TabsTrigger>
             <TabsTrigger value="installed">
-              {translate(
-                'auto.components.pluginCatalog.PluginCatalogLayout.installed',
-                'Installed'
-              )}
+              {t('auto.components.pluginCatalog.PluginCatalogLayout.installed', 'Installed')}
               <span className="text-xs font-normal tabular-nums text-muted-foreground">
                 {installedCount}
               </span>
             </TabsTrigger>
+            <TabsTrigger value="available">
+              {t('auto.components.pluginCatalog.PluginCatalogLayout.notInstalled', 'Not installed')}
+            </TabsTrigger>
             {updateCount > 0 ? (
               <TabsTrigger value="updates">
-                {translate('auto.components.pluginCatalog.PluginCatalogLayout.updates', 'Updates')}
+                {t('auto.components.pluginCatalog.PluginCatalogLayout.updates', 'Updates')}
                 <span className="text-xs font-normal tabular-nums text-muted-foreground">
                   {updateCount}
                 </span>
@@ -79,11 +83,11 @@ export function PluginCatalogLayout({
           <Input
             value={search}
             className="pl-9"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.pluginCatalog.PluginCatalogLayout.searchLabel',
               'Search plugins'
             )}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.pluginCatalog.PluginCatalogLayout.searchPlaceholder',
               'Search plugins'
             )}
@@ -94,7 +98,7 @@ export function PluginCatalogLayout({
               variant="ghost"
               size="icon-xs"
               className="absolute top-1/2 right-1.5 -translate-y-1/2"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.pluginCatalog.PluginCatalogLayout.clearSearch',
                 'Clear search'
               )}
@@ -106,6 +110,7 @@ export function PluginCatalogLayout({
         </div>
         {toolbar ? <div className="ml-auto flex items-center gap-1">{toolbar}</div> : null}
       </div>
+      {filters}
 
       {children}
     </section>

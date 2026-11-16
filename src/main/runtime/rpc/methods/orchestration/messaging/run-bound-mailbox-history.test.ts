@@ -25,45 +25,41 @@ describe('Run history after residual Dispatch acknowledgment', () => {
     )
   })
   afterEach(() => h.cleanup())
-  it.each([
-    { mode: { all: true }, acknowledgeTogether: false },
-    { mode: { all: true }, acknowledgeTogether: true },
-    { mode: { unread: false }, acknowledgeTogether: false },
-    { mode: { unread: false }, acknowledgeTogether: true }
-  ])('shows Run history after old mail is read: %j', async ({ mode, acknowledgeTogether }) => {
-    const task = state.db.createTask({ spec: 'nested lead' })
-    const dispatch = createRootDispatch(state.db, task.id, 'term_lead', LEAD)
-    const run = state.db.createRun({
-      objective: 'child Run',
-      coordinatorHandle: 'term_lead',
-      coordinatorPaneKey: LEAD
-    })
-    const old = state.db.insertMessage({
-      from: 'term_coord',
-      to: `dispatch:${dispatch.id}`,
-      runId: dispatch.run_id,
-      subject: 'old mail'
-    })
-    const check = (params = {}) =>
-      h.call('orchestration.check', { terminal: 'term_lead', ...params }, state.ctx)
-    expect(await check(mode)).toMatchObject({ runId: dispatch.run_id, messages: [{ id: old.id }] })
-    expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
-    const delivery = deliveryId(await check())
-    if (!acknowledgeTogether) {
-      await check({ ack: delivery })
+  it.each([{ all: true }, { unread: false }])(
+    'shows Run history after old mail is read: %j',
+    async (mode) => {
+      const task = state.db.createTask({ spec: 'nested lead' })
+      const dispatch = createRootDispatch(state.db, task.id, 'term_lead', LEAD)
+      const run = state.db.createRun({
+        objective: 'child Run',
+        coordinatorHandle: 'term_lead',
+        coordinatorPaneKey: LEAD
+      })
+      const old = state.db.insertMessage({
+        from: 'term_coord',
+        to: `dispatch:${dispatch.id}`,
+        runId: dispatch.run_id,
+        subject: 'old mail'
+      })
+      const check = (params = {}) =>
+        h.call('orchestration.check', { terminal: 'term_lead', ...params }, state.ctx)
+      expect(await check(mode)).toMatchObject({
+        runId: dispatch.run_id,
+        messages: [{ id: old.id }]
+      })
+      expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
+      await check({ ack: deliveryId(await check()) })
+      const fresh = state.db.insertMessage({
+        from: 'term_child',
+        to: `run:${run.id}`,
+        runId: run.id,
+        subject: 'new mail'
+      })
+      expect(await check(mode)).toMatchObject({ runId: run.id, messages: [{ id: fresh.id }] })
+      expect(state.db.getMessageById(old.id)?.read).toBe(1)
+      expect(state.db.getMessageById(fresh.id)?.read).toBe(0)
+      expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
+      expect(state.db.hasOutstandingMailboxDelivery(`run:${run.id}`)).toBe(false)
     }
-    const fresh = state.db.insertMessage({
-      from: 'term_child',
-      to: `run:${run.id}`,
-      runId: run.id,
-      subject: 'new mail'
-    })
-    expect(
-      await check({ ...mode, ...(acknowledgeTogether ? { ack: delivery } : {}) })
-    ).toMatchObject({ runId: run.id, messages: [{ id: fresh.id }] })
-    expect(state.db.getMessageById(old.id)?.read).toBe(1)
-    expect(state.db.getMessageById(fresh.id)?.read).toBe(0)
-    expect(state.db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(false)
-    expect(state.db.hasOutstandingMailboxDelivery(`run:${run.id}`)).toBe(false)
-  })
+  )
 })

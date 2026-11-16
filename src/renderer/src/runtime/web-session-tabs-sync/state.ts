@@ -1,23 +1,26 @@
-import type { AppState } from '../../store'
+import type { PresentationRecordDrafts } from './presentation-record-drafts'
+import type { BrowserInitializationPresentation } from './browser-initialization-presentation'
+import type { AppState } from '../../store/types'
+import type { RetiredTerminalTabSweepState } from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
-  RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { OpenFile } from '../../store/slices/editor'
-import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
+import type { RuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -63,6 +66,10 @@ export type WebSessionTabsSnapshotApplyOptions = {
   contentScope?: 'all' | 'agent-session'
   preserveLocalLayout?: boolean
   terminalPtyMode?: 'local' | 'remote'
+  reconcileBrowserPage?: {
+    page: BrowserPage
+    handle: WebSessionTabsSyncState['remoteBrowserPageHandlesByPageId'][string]
+  }
 }
 
 export type TrackedWebSessionTabsWorktree = {
@@ -169,7 +176,6 @@ export function resetReceivedSessionTabsFrameSequence(): void {
   receivedSessionTabsFrameSequence = 0
 }
 
-export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 export type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
 export type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
 export type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
@@ -180,15 +186,18 @@ export type MirroredTerminalTab = {
   hostTabId: string
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
-  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, TerminalSurface>
+  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>
 }
 export type MirroredBrowserTab = {
   workspace: BrowserWorkspace
   page: BrowserPage
+  previousPage?: BrowserPage
+  preservesLoading: boolean
   certificateFailure: BrowserCertificateFailure | null
   remotePageId: string
   browserProfileId?: string
   placement?: RuntimeBrowserPlacement
+  initializationPresentation?: BrowserInitializationPresentation
   unifiedTab: Tab
   hostTabId: string
   clientGroupId?: string
@@ -225,27 +234,21 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<Pick<AppState, 'splitLandingGroupIds'>> &
+  Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<
       AppState,
-      | 'acknowledgedAgentsByPaneKey'
-      | 'activityClearedAtByPaneKey'
-      | 'agentLaunchConfigByPaneKey'
+      | 'agentSenderPublicationsByHost'
       | 'automaticAgentResumeClaimsByTabId'
       // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'
       // Why: the live index carries sticky detachments; absent here, views resolve by identity.
       | 'editorBufferIdOf'
       | 'localOnlyScrollbackByTabId'
-      | 'migrationUnsupportedByPtyId'
-      | 'manuallyUnreadTurnsByPaneKey'
-      | 'paneForegroundAgentByPaneKey'
       | 'pendingStartupByTabId'
-      | 'recentlyClosedAgentStatusTabIds'
-      | 'recentlyRetiredAgentStatusPaneKeys'
-      | 'retainedAgentsByPaneKey'
-      | 'retentionSuppressedPaneKeys'
       | 'runtimePaneTitlesByTabId'
+      | 'sleepingAgentSessionsByPaneKey'
     >
   >
 
@@ -280,11 +283,7 @@ export type WebSessionOpenFilesIndex = {
 export type WebSessionTabsBatchContext = {
   changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
-  agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>
+  presentationDrafts?: PresentationRecordDrafts
   openFilesIndex: WebSessionOpenFilesIndex | null
 }
-
-export type AgentTab = RuntimeMobileSessionAgentTab
-export type TabGroupSnapshot = RuntimeMobileSessionTabGroup
-export type RemovedTabsResult = RuntimeMobileSessionTabsRemovedResult

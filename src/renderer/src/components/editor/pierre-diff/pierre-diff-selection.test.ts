@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { getPierreSelectionRange } from './pierre-diff-selection'
-import { formatCopiedSelectionWithContext } from '../selection-copy'
+import { formatCopiedSelectionWithContext } from '@/components/editor/contextual-copy/selection-copy'
 
 function selection(endOffset: number): Pick<Selection, 'rangeCount' | 'getRangeAt'> {
   const root = document.createElement('div')

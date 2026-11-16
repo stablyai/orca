@@ -6,8 +6,8 @@ import {
   type LocalhostWorktreeLabelResult,
   type LocalhostWorktreeLabelRoute
 } from '../../shared/localhost-worktree-labels'
-import type { Store } from '../persistence'
-import { localhostWorktreeLabelProxy } from '../localhost-worktree-label-proxy'
+import type { Store } from '../persistence/loading-store/store'
+import { localhostWorktreeLabelProxy } from '../ports/workspace-labels/localhost-worktree-label-proxy'
 import {
   getStoreWorkspacePortProbes,
   scanWorkspacePortProbes

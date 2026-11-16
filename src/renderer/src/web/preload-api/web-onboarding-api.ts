@@ -2,8 +2,8 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import {
   ONBOARDING_FLOW_VERSION,
   getDefaultOnboardingState
-} from '../../../../shared/onboarding-defaults'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+} from '../../../../shared/onboarding/onboarding-defaults'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import { ONBOARDING_STORAGE_KEY, readJson, writeJson } from './web-storage'
 
 export function getStoredOnboarding(): OnboardingState {
@@ -54,8 +54,8 @@ export function createWebOnboardingApi(): Partial<PreloadApi> {
         writeJson(ONBOARDING_STORAGE_KEY, next)
         return next
       },
-      // Why: the browser client has no local profile from before the upgrade, so it is never in the audience.
-      getNativeChatUpgradeTipVariant: () => Promise.resolve('none')
+      // Why: the browser client has no profile from before Chat UI left Experimental.
+      getChatUiLaunchTipVariant: () => Promise.resolve('none')
     }
   }
 }

@@ -4,7 +4,9 @@ import { buildPierreDiffCommentAnnotations } from './pierre-diff-comment-annotat
 
 vi.mock('../../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
 vi.mock('../../diff-comments/DiffCommentPopover', () => ({ DiffCommentPopover: () => null }))
-vi.mock('../NotesSendMenu', () => ({ NotesSendMenu: () => null }))
+vi.mock('@/components/editor/review-note-delivery/NotesSendMenu', () => ({
+  NotesSendMenu: () => null
+}))
 
 const note = (filePath: string): DecoratedDiffComment => ({
   id: filePath,

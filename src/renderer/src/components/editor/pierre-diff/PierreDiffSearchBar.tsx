@@ -13,7 +13,7 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { DiffSearchQuery } from './pierre-diff-search'
 
 export type DiffSearchSide = 'additions' | 'deletions'

@@ -1,4 +1,5 @@
-import type { ActivityGroupBy, ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
+import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 /** One row of the virtualized Activity list: a group header or a thread. */
 export type ActivityVirtualItemDescriptor =

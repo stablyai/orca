@@ -9,8 +9,8 @@ import {
   ReleaseMismatchError
 } from './runtime-archive-download'
 import { findOrcadCachePath } from './orcad-cache-path'
-import { orcadNodeRuntimeExecutable } from '../../shared/orcad-artifacts'
-import { nodeDistMirrorUrl } from '../../shared/node-dist-mirror'
+import { orcadNodeRuntimeExecutable } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import { nodeDistMirrorUrl } from '../../shared/node-runtime/node-dist-mirror'
 import { configuredNodeDistMirror } from './node-dist-mirror-setting'
 import {
   NODE_RUNTIME_PIN,
@@ -18,14 +18,16 @@ import {
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl,
   type NodeRuntimeTarget
-} from '../../shared/node-runtime-pin'
-import { errorMessage } from '../../shared/error-message'
+} from '../../shared/node-runtime/node-runtime-pin'
+import { errorMessage } from '../../shared/errors/error-message'
 
 export type PinnedRuntimeMaterializeOptions = {
   fetcher?: MainHttpClient['fetch']
   signal?: AbortSignal
   /** Empty disables retries. */
   retryDelaysMs?: readonly number[]
+  /** Give up, without retrying, when no response arrives in time (a firewall that drops packets). */
+  connectTimeoutMs?: number
 }
 
 export type PinnedRuntimeArchive = {
@@ -73,7 +75,9 @@ export async function materializeVerifiedRuntimeArchive(
       downloaded,
       options.fetcher ?? getMainHttpClient().fetch,
       options.signal,
-      options.retryDelaysMs
+      options.retryDelaysMs,
+      undefined,
+      options.connectTimeoutMs
     ).catch((error: unknown) => {
       throw unreachableArchiveError(archive, cached.path, error, options.signal)
     })

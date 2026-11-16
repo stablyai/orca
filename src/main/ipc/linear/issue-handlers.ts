@@ -1,12 +1,12 @@
 import { ipcMain } from 'electron'
-import { getIssue, searchIssues } from '../../linear/linear-issue-lookups'
-import { listIssues, type LinearListFilter } from '../../linear/linear-issue-listing'
-import { createIssue, updateIssue } from '../../linear/linear-issue-mutations'
-import { addIssueComment, getIssueComments } from '../../linear/linear-issue-comments'
+import { getIssue, searchIssues } from '../../linear/issues/linear-issue-lookups'
+import { listIssues, type LinearListFilter } from '../../linear/issues/linear-issue-listing'
+import { createIssue, updateIssue } from '../../linear/issues/linear-issue-mutations'
+import { addIssueComment, getIssueComments } from '../../linear/issues/linear-issue-comments'
 import { normalizeWorkspaceId, normalizeWorkspaceSelection } from './ipc-args'
 import { clampLinearIssueListLimit } from '../../../shared/linear/issue-read-limits'
 import { optionalParsedLinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
-import type { LinearIssueUpdate } from '../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../shared/work-items/issue-mutation-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
 const VALID_FILTERS = new Set<LinearListFilter>(['assigned', 'created', 'all', 'completed'])

@@ -7,7 +7,7 @@ vi.mock('sonner', () => ({ toast: { success } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_: string, fallback: string) => fallback }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ keybindings: {} }) } }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ formatShortcutLabel: () => 'Ctrl+Alt+C' }))
-vi.mock('../editor-shortcuts', () => ({
+vi.mock('@/components/editor/commands/editor-shortcuts', () => ({
   editorShortcutMatches: (_: string, event: KeyboardEvent) =>
     event.key === 'c' && event.ctrlKey && event.altKey
 }))

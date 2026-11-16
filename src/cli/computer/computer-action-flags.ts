@@ -1,0 +1,241 @@
+import {
+  computerUseClickModifiersValidationMessage,
+  computerUseHotkeyValidationMessage,
+  computerUsePressKeyValidationMessage
+} from '../../shared/computer-use-key-spec'
+import {
+  getOptionalNonNegativeIntegerFlag,
+  getOptionalNumberFlag,
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../arguments/flags'
+import { getFlagOrStdinPayload } from '../arguments/flag-or-stdin-payload'
+import { RuntimeClientError } from '../runtime/connection/types'
+import {
+  validateDragTarget,
+  validateElementOrCoordinates,
+  validateExclusiveWindowTarget,
+  validateMouseButton,
+  validateScrollDirection
+} from './computer-action-flag-validation'
+
+export function getComputerWindowTargetFlags(flags: Map<string, string | boolean>): {
+  windowId?: number
+  windowIndex?: number
+} {
+  const windowId = getOptionalNonNegativeIntegerFlag(flags, 'window-id')
+  const windowIndex = getOptionalNonNegativeIntegerFlag(flags, 'window-index')
+  validateExclusiveWindowTarget(windowId, windowIndex)
+  return {
+    ...(windowId !== undefined ? { windowId } : {}),
+    ...(windowIndex !== undefined ? { windowIndex } : {})
+  }
+}
+
+export function getComputerObserveFlags(flags: Map<string, string | boolean>): {
+  noScreenshot?: boolean
+  screenshotFormat?: 'png' | 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
+  restoreWindow?: boolean
+  windowId?: number
+  windowIndex?: number
+} {
+  return {
+    noScreenshot: flags.has('no-screenshot') ? true : undefined,
+    ...getComputerScreenshotFlags(flags),
+    ...(flags.has('restore-window') ? { restoreWindow: true } : {}),
+    ...getComputerWindowTargetFlags(flags)
+  }
+}
+
+function getComputerScreenshotFlags(flags: Map<string, string | boolean>): {
+  screenshotFormat?: 'png' | 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
+} {
+  const format = getOptionalStringFlag(flags, 'screenshot-format')
+  if (format !== undefined && format !== 'png' && format !== 'jpeg') {
+    throw new RuntimeClientError('invalid_argument', '--screenshot-format must be png or jpeg')
+  }
+  const scale = getOptionalNumberFlag(flags, 'screenshot-scale')
+  if (scale !== undefined && !(scale > 0)) {
+    throw new RuntimeClientError('invalid_argument', '--screenshot-scale must be greater than 0')
+  }
+  const maxEdge = getOptionalPositiveIntegerFlag(flags, 'screenshot-max-edge')
+  return {
+    ...(format !== undefined ? { screenshotFormat: format } : {}),
+    ...(scale !== undefined ? { screenshotScale: scale } : {}),
+    ...(maxEdge !== undefined ? { screenshotMaxEdge: maxEdge } : {})
+  }
+}
+
+export function getComputerActionObserveFlags(
+  flags: Map<string, string | boolean>
+): ReturnType<typeof getComputerObserveFlags> & { treeDiff?: boolean } {
+  return {
+    ...getComputerObserveFlags(flags),
+    ...(flags.has('full-tree') ? {} : { treeDiff: true })
+  }
+}
+
+export function getComputerClickActionFlags(flags: Map<string, string | boolean>): {
+  elementIndex?: number
+  x?: number
+  y?: number
+  clickCount?: number
+  mouseButton?: string
+  modifiers?: string
+} {
+  const rawModifiers = flags.get('modifiers')
+  const modifiers = typeof rawModifiers === 'string' ? rawModifiers : undefined
+  const result = {
+    elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
+    x: getOptionalNumberFlag(flags, 'x'),
+    y: getOptionalNumberFlag(flags, 'y'),
+    clickCount: getOptionalPositiveIntegerFlag(flags, 'click-count'),
+    mouseButton: getOptionalStringFlag(flags, 'mouse-button'),
+    modifiers
+  }
+  validateElementOrCoordinates('Click', result.elementIndex, result.x, result.y)
+  validateMouseButton(result.mouseButton)
+  if (modifiers !== undefined) {
+    const message = computerUseClickModifiersValidationMessage(modifiers)
+    if (message) {
+      throw new RuntimeClientError('invalid_argument', message)
+    }
+  }
+  return result
+}
+
+export function getComputerSecondaryActionFlags(flags: Map<string, string | boolean>): {
+  elementIndex: number
+  action: string
+} {
+  return {
+    elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
+    action: getRequiredStringFlag(flags, 'action')
+  }
+}
+
+export function getComputerScrollActionFlags(flags: Map<string, string | boolean>): {
+  elementIndex?: number
+  x?: number
+  y?: number
+  direction: string
+  pages?: number
+} {
+  const result = {
+    elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
+    x: getOptionalNumberFlag(flags, 'x'),
+    y: getOptionalNumberFlag(flags, 'y'),
+    direction: getRequiredStringFlag(flags, 'direction'),
+    pages: getOptionalPositiveNumberFlag(flags, 'pages')
+  }
+  validateElementOrCoordinates('Scroll', result.elementIndex, result.x, result.y)
+  validateScrollDirection(result.direction)
+  return result
+}
+
+export function getComputerDragActionFlags(flags: Map<string, string | boolean>): {
+  fromElementIndex?: number
+  toElementIndex?: number
+  fromX?: number
+  fromY?: number
+  toX?: number
+  toY?: number
+} {
+  const result = {
+    fromElementIndex: getOptionalNonNegativeIntegerFlag(flags, 'from-element-index'),
+    toElementIndex: getOptionalNonNegativeIntegerFlag(flags, 'to-element-index'),
+    fromX: getOptionalNumberFlag(flags, 'from-x'),
+    fromY: getOptionalNumberFlag(flags, 'from-y'),
+    toX: getOptionalNumberFlag(flags, 'to-x'),
+    toY: getOptionalNumberFlag(flags, 'to-y')
+  }
+  validateDragTarget(result)
+  return result
+}
+
+export async function getComputerTextActionFlags(flags: Map<string, string | boolean>): Promise<{
+  text: string
+}> {
+  return { text: await getFlagOrStdinPayload(flags, 'text') }
+}
+
+export async function getComputerTypeTextActionFlags(
+  flags: Map<string, string | boolean>
+): Promise<{ elementIndex?: number; text: string }> {
+  return {
+    elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
+    ...(await getComputerTextActionFlags(flags))
+  }
+}
+
+export function getComputerKeyActionFlags(flags: Map<string, string | boolean>): {
+  key: string
+  allowSystemShortcut?: boolean
+} {
+  const key = getRequiredStringFlag(flags, 'key')
+  const message = computerUsePressKeyValidationMessage(key)
+  if (message) {
+    throw new RuntimeClientError('invalid_argument', message)
+  }
+  return {
+    key,
+    ...(flags.get('allow-system-shortcut') === true ? { allowSystemShortcut: true } : {})
+  }
+}
+
+export function getComputerHotkeyActionFlags(flags: Map<string, string | boolean>): {
+  key: string
+  allowSystemShortcut?: boolean
+} {
+  const key = getRequiredStringFlag(flags, 'key')
+  const message = computerUseHotkeyValidationMessage(key)
+  if (message) {
+    throw new RuntimeClientError('invalid_argument', message)
+  }
+  return {
+    key,
+    ...(flags.get('allow-system-shortcut') === true ? { allowSystemShortcut: true } : {})
+  }
+}
+
+export async function getComputerSetValueActionFlags(
+  flags: Map<string, string | boolean>
+): Promise<{
+  elementIndex: number
+  value: string
+}> {
+  return {
+    elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
+    value: await getFlagOrStdinPayload(flags, 'value', { allowEmptyStdin: true })
+  }
+}
+
+function getOptionalPositiveNumberFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): number | undefined {
+  const value = getOptionalNumberFlag(flags, name)
+  if (value === undefined) {
+    return undefined
+  }
+  if (value <= 0) {
+    throw new RuntimeClientError('invalid_argument', `Invalid positive number for --${name}`)
+  }
+  return value
+}
+
+function getRequiredNonNegativeIntegerFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): number {
+  const value = getOptionalNonNegativeIntegerFlag(flags, name)
+  if (value === undefined) {
+    throw new RuntimeClientError('invalid_argument', `Missing required --${name}`)
+  }
+  return value
+}

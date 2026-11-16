@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type SetStateAction } from 'react'
-import type { DiffSection } from '../diff-section-types'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 
 export function useCombinedDiffSectionsState(initial: DiffSection[] = []) {
   const [sections, renderSections] = useState(initial)

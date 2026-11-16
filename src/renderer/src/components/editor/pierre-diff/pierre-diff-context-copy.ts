@@ -1,6 +1,6 @@
 import { getShadowRootSelection } from '@/lib/shadow-root-selection'
-import { formatCopiedSelectionWithContext } from '../selection-copy'
-import { editorShortcutMatches } from '../editor-shortcuts'
+import { formatCopiedSelectionWithContext } from '@/components/editor/contextual-copy/selection-copy'
+import { editorShortcutMatches } from '@/components/editor/commands/editor-shortcuts'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
@@ -10,7 +10,7 @@ import {
   PRIMARY_SELECTION_MAX_LENGTH,
   isPrimarySelectionEnabled,
   setPrimarySelectionText
-} from '@/lib/primary-selection'
+} from '@/lib/clipboard/primary-selection/primary-selection'
 
 const PRIMARY_SELECTION_DEBOUNCE_MS = 200
 
@@ -66,10 +66,13 @@ export function installPierreContextualCopy(
       hideHint()
       return
     }
-    hint.textContent = `Copy context ${formatShortcutLabel(
-      'editor.copyContext',
-      useAppStore.getState().keybindings
-    )}`
+    hint.textContent = translate(
+      'auto.components.editor.contextualCopy.copyContextHint',
+      'Copy context {{shortcut}}',
+      {
+        shortcut: formatShortcutLabel('editor.copyContext', useAppStore.getState().keybindings)
+      }
+    )
     const rect = selection?.getRangeAt(0).getBoundingClientRect()
     if (!rect || rect.width === 0) {
       hideHint()

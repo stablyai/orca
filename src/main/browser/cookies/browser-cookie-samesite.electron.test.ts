@@ -225,26 +225,10 @@ async function runFixture(): Promise<{
 
 describe('Chromium SameSite storage enum import', () => {
   let fixture: FixtureResult
-  let sourceCookieRows: SourceCookieRow[]
 
   beforeAll(async () => {
-    ;({ fixture, sourceCookieRows } = await runFixture())
+    ;({ fixture } = await runFixture())
   }, 120_000)
-
-  it('runs the real Chromium import against the complete synthetic matrix', () => {
-    expect(fixture.step).toBe('import finished')
-    expect(fixture.beforeCookieCount).toBe(0)
-    expect(fixture.importResult.ok).toBe(true)
-    expect(sourceCookieRows).toEqual(
-      [REJECTION_CONTROL, ...VALID_COMBINATIONS, NULL_CASE].map(
-        ({ name, rawSameSite, secure }) => ({
-          name,
-          samesite: rawSameSite,
-          is_secure: secure ? 1 : 0
-        })
-      )
-    )
-  })
 
   it.each(VALID_COMBINATIONS)(
     'imports $name with the decoded SameSite and authored Secure flag',

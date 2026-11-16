@@ -6,7 +6,7 @@ import type {
 } from './types'
 import { iterateClaudeUsageResumeProjection } from './transcript-resume-projection'
 import { decodeClaudeUsagePersistedFile } from './persisted-token-columns'
-import { yieldToEventLoop } from '../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../shared/concurrency/event-loop-yield'
 import {
   finalizeClaudeSessions,
   mergeClaudeDailyAggregates,

@@ -1,13 +1,13 @@
-import type { Store } from '../../persistence'
-import type { LocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import type { Store } from '../../persistence/loading-store/store'
+import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import {
   assertWslUncPathRunning,
   noteWslDistroWokenForPath,
   runAsWslUserAct,
   wslDistroForPath
-} from '../../wsl/wsl-unc-access-gate'
+} from '../../wsl/filesystem/wsl-unc-access-gate'
 
 /**
  * Resolves a registered worktree and runs its Git read, refusing first when that would boot a

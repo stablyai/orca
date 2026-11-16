@@ -1,9 +1,9 @@
-import { agentJournalToolCallLifecycle } from '../../agent-journal-tool-call-lifecycle'
+import { agentJournalToolCallLifecycle } from '../../agent-session/journal/agent-journal-tool-call-lifecycle'
 import {
   isToolCallBlock,
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 import { diffFromToolCall } from './native-chat-diff'
 import { toolWebSearchResults, type NativeChatWebSearchResult } from './native-chat-tool-identity'
 import {

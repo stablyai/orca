@@ -1,10 +1,10 @@
 import { buildDefaultSettings } from '../../../../shared/default-global-settings'
 import { createRoot } from 'react-dom/client'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { BrowserPagePane } from '@/components/browser-pane/assemble-chrome/browser-page-pane'
-import { registerBrowserOverlaySlotViewport } from '@/components/browser-pane/host-guest/browser-page-viewport'
+import { registerBrowserOverlaySlotViewport } from '@/components/browser-pane/host-guest/viewport/browser-page-viewport'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 
 const worktreeId = 'link-probe-folder'
@@ -65,11 +65,13 @@ export function installBrowserLinkMaterializationProbe() {
       primarySelectionMiddleClickPaste: false,
       primarySelectionDefaultedForLinux: false,
       terminalFontFamily: 'monospace',
+      terminalFontWeight: 500,
       terminalInactivePaneOpacity: 1,
       terminalRightClickToPaste: false,
       notifications: {
         enabled: false,
         agentTaskComplete: false,
+        agentNeedsInput: false,
         terminalBell: false,
         suppressWhenFocused: true,
         customSoundId: 'system',
@@ -82,19 +84,24 @@ export function installBrowserLinkMaterializationProbe() {
         enabled: false,
         sttModel: '',
         modelsDir: '',
-        language: 'en',
+        dictationLanguage: 'auto',
         dictationMode: 'hold',
+        dictationHoldToRecord: false,
+        removeFillerWords: true,
         terminalConfirmBeforeInsert: true,
-        userModels: [],
         openAiApiKeyConfigured: false,
         microphoneDeviceId: null,
-        microphoneDeviceLabel: null
+        microphoneDeviceLabel: null,
+        unloadModelAfterMinutes: 15
       }
     })
   useAppStore.setState({
     activeWorktreeId: worktreeId,
-    settings: { ...settings, activeRuntimeEnvironmentId: null },
-    defaultBrowserSessionProfileId: 'other-profile',
+    settings: {
+      ...settings,
+      activeRuntimeEnvironmentId: null,
+      browserDefaultProfileIdByHostId: { local: 'other-profile' }
+    },
     browserSessionProfiles: [
       {
         id: 'isolated-profile',

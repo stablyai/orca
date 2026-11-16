@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
 import { cleanup, render, fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import DiffViewer from './DiffViewer'
-import { DiffNavigationProvider, useDiffNavigation } from './diff-navigation-context'
-import { getLargeDiffRenderLimitFromCounts } from './large-diff-render-limit'
+import DiffViewer from '@/components/editor/diff/monaco-view/DiffViewer'
+import {
+  DiffNavigationProvider,
+  useDiffNavigation
+} from '@/components/editor/diff/review/diff-navigation-context'
+import { getLargeDiffRenderLimitFromCounts } from '../../../../shared/source-control/diff/large-diff-render-limit'
 import { buildPierreFileDiff, type PierreDiffInput } from './pierre-diff/pierre-diff-metadata'
 
 const fileDiff = buildPierreFileDiff({
@@ -20,9 +23,6 @@ const fixture = vi.hoisted(() => ({
 }))
 vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: typeof fixture.state) => T) => selector(fixture.state)
-}))
-vi.mock('@/store/worktree-diff-comments-selector', () => ({
-  selectWorktreeDiffComments: () => undefined
 }))
 vi.mock('./pierre-diff/use-pierre-file-diff', () => ({
   usePierreFileDiff: (input: PierreDiffInput | null) => ({
@@ -41,8 +41,12 @@ vi.mock('./pierre-diff/use-pierre-diff-scroll-restore', () => ({
   usePierreDiffScrollRestore: () => vi.fn()
 }))
 vi.mock('./pierre-diff/pierre-diff-scroll', () => ({ scrollPierreDiffToLine: fixture.scroll }))
-vi.mock('./editor-shortcuts', () => ({ installDiffChangeNavigationShortcut: () => vi.fn() }))
-vi.mock('./LargeDiffFallback', () => ({ LargeDiffFallback: () => <div>Large diff</div> }))
+vi.mock('@/components/editor/commands/editor-shortcuts', () => ({
+  installDiffChangeNavigationShortcut: () => vi.fn()
+}))
+vi.mock('@/components/editor/diff/large-files/LargeDiffFallback', () => ({
+  LargeDiffFallback: () => <div>Large diff</div>
+}))
 
 function NavigationProbe() {
   const navigation = useDiffNavigation()

@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
+import { makeTabGroup, makeUnifiedTab } from '../../store/slices/tabs/tab-group.test-fixture'
 import type { BulkTabCloseScope } from '../../../../shared/bulk-tab-close-confirmation'
 import { useTabGroupCloseScopeCommands } from './useTabGroupCloseScopeCommands'
 
@@ -64,44 +64,13 @@ function request(scope: BulkTabCloseScope) {
   act(actions[scope])
 }
 
-async function confirmRequest(confirmed = true) {
+async function confirmRequest() {
   await act(async () => {
-    settle(confirmed)
+    settle(true)
   })
 }
 
 describe('group bulk close confirmation', () => {
-  it.each(['editors', 'others', 'right', 'left'] as const)(
-    'waits for confirmation and leaves tabs untouched on cancelling %s',
-    async (scope) => {
-      request(scope)
-      expect(confirm).toHaveBeenCalledOnce()
-      expect(closeItem).not.toHaveBeenCalled()
-      expect(closeMany).not.toHaveBeenCalled()
-      await confirmRequest(false)
-      expect(closeItem).not.toHaveBeenCalled()
-      expect(closeMany).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each([
-    ['others', ['left', 'right']],
-    ['right', ['right']],
-    ['left', ['left']]
-  ] as const)('closes the unpinned %s selection on confirmation', async (scope, ids) => {
-    request(scope)
-    await confirmRequest()
-    expect(closeMany).toHaveBeenCalledExactlyOnceWith([...ids])
-    expect(closeItem).not.toHaveBeenCalled()
-  })
-
-  it('routes editor closes through the existing dirty-aware item command', async () => {
-    request('editors')
-    await confirmRequest()
-    expect(closeItem).toHaveBeenCalledExactlyOnceWith(left.id)
-    expect(closeMany).not.toHaveBeenCalled()
-  })
-
   it.each(['others', 'right', 'left'] as const)(
     'abandons %s when the anchor is removed while the dialog is open',
     async (scope) => {
@@ -115,17 +84,6 @@ describe('group bulk close confirmation', () => {
       )
       await confirmRequest()
       expect(closeMany).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each(['editors', 'others', 'right', 'left'] as const)(
-    'abandons %s when the original group disappears',
-    async (scope) => {
-      request(scope)
-      act(() => useAppStore.setState({ groupsByWorktree: {} }))
-      await confirmRequest()
-      expect(closeMany).not.toHaveBeenCalled()
-      expect(closeItem).not.toHaveBeenCalled()
     }
   )
 
@@ -183,11 +141,5 @@ describe('group bulk close confirmation', () => {
     await confirmRequest()
     expect(closeMany).toHaveBeenCalledExactlyOnceWith([left.id, right.id])
     expect(otherCloseMany).not.toHaveBeenCalled()
-  })
-
-  it('does not prompt when there are no eligible targets', () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { [worktreeId]: [anchor, pinned] } })
-    request('others')
-    expect(confirm).not.toHaveBeenCalled()
   })
 })

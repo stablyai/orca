@@ -1,6 +1,9 @@
 import type { RefObject } from 'react'
-import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
-import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
+import type {
+  OrcaHooks,
+  SetupAgentStartupPolicy
+} from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 
 export type ComposerProviderSyncModel = {
   persistedSetupAgentStartupPolicy: SetupAgentStartupPolicy

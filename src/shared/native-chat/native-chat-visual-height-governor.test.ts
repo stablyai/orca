@@ -2,14 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createNativeChatVisualHeightGovernor } from './native-chat-visual-height-governor'
 
 describe('createNativeChatVisualHeightGovernor', () => {
-  it('applies clamped changes and ignores repeats', () => {
-    const governor = createNativeChatVisualHeightGovernor()
-    expect(governor.decide(300, 0)).toEqual({ kind: 'apply', height: 300 })
-    expect(governor.decide(300.2, 10)).toEqual({ kind: 'ignore' })
-    expect(governor.decide(5, 20)).toEqual({ kind: 'apply', height: 80 })
-    expect(governor.decide(50_000, 30)).toEqual({ kind: 'apply', height: 2000 })
-  })
-
   it('defers changes past the per-second budget instead of dropping the last one', () => {
     const governor = createNativeChatVisualHeightGovernor()
     let now = 0

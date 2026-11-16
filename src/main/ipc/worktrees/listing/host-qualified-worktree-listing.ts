@@ -10,7 +10,7 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   DirectSshDetectedWorktreeRequest
 } from '../../../../shared/detected-worktree-provider-contract'
-import { isCurrentSshProviderAuthority } from '../../../ssh/ssh-provider-authority'
+import { isCurrentSshProviderAuthority } from '../../../ssh/connection/authority/ssh-provider-authority'
 import {
   hasValidDirectSshAuthority,
   listDetectedWorktreesForCapturedRepo

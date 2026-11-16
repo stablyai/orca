@@ -7,16 +7,16 @@ import {
   toPublicDictationMeterState,
   type DictationMeterAnalyzerState,
   type DictationMeterState
-} from '../../../src/shared/dictation-audio-meter'
+} from '../../../src/shared/speech/dictation/dictation-audio-meter'
 import {
   DICTATION_SAMPLE_RATE,
   PCM_BYTES_PER_SAMPLE
-} from '../../../src/shared/rpc-contract/speech-params'
-import type { DictationCapture } from '../platform/dictation-capture-contract'
+} from '../../../src/shared/rpc-contract/speech/speech-params'
+import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 
 const WINDOW_MS = 50
 const WINDOW_SAMPLES = (DICTATION_SAMPLE_RATE * WINDOW_MS) / 1000
-// The page shell drains every 500 ms; more backlog than two drains only adds lag.
+// More backlog than a second of page drains only adds lag.
 const MAX_BACKLOG_MS = 1_000
 
 export type MobileDictationMeterState = DictationMeterState & {
@@ -30,6 +30,8 @@ export type MobileDictationMeter = {
   readonly start: () => void
   readonly push: (pcm: Uint8Array) => void
   readonly stop: () => void
+  /** Date.now() when a pushed window last measured as speech; 0 until then. */
+  readonly lastSpeechAt: () => number
 }
 
 const IDLE_METER: MobileDictationMeterState = { ...DEFAULT_DICTATION_METER, startedAt: 0 }
@@ -46,6 +48,7 @@ export function createMobileDictationMeter(): MobileDictationMeter {
   let queuedMs = 0
   let creditMs = 0
   let lastTickAt = 0
+  let lastSpeechAt = 0
   let timer: ReturnType<typeof setInterval> | null = null
 
   function publish(next: MobileDictationMeterState): void {
@@ -58,7 +61,7 @@ export function createMobileDictationMeter(): MobileDictationMeter {
     }
   }
 
-  // Play windows back at the pace they were captured, so a 500 ms page batch moves the dots smoothly instead of in one jump.
+  // Play windows back at the pace they were captured, so a page batch moves the dots smoothly instead of in one jump.
   function tick(): void {
     const now = performance.now()
     creditMs += now - lastTickAt
@@ -101,6 +104,7 @@ export function createMobileDictationMeter(): MobileDictationMeter {
       stop()
       analyzer = createDictationMeterAnalyzerState()
       sampleClockMs = 0
+      lastSpeechAt = 0
       creditMs = 0
       lastTickAt = performance.now()
       timer = setInterval(tick, WINDOW_MS)
@@ -120,6 +124,9 @@ export function createMobileDictationMeter(): MobileDictationMeter {
         const durationMs = (samples.length * 1000) / DICTATION_SAMPLE_RATE
         sampleClockMs += durationMs
         analyzer = analyzeDictationAudioChunk(samples, sampleClockMs, analyzer)
+        if (analyzer.isSpeaking) {
+          lastSpeechAt = Date.now()
+        }
         queue.push({ meter: toPublicDictationMeterState(analyzer), durationMs })
         queuedMs += durationMs
       }
@@ -130,7 +137,8 @@ export function createMobileDictationMeter(): MobileDictationMeter {
       }
       queue.splice(0, dropped)
     },
-    stop
+    stop,
+    lastSpeechAt: () => lastSpeechAt
   }
 }
 

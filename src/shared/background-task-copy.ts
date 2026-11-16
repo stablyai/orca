@@ -1,6 +1,6 @@
 // Share whole English translation pieces for desktop/mobile roster wording.
 
-import { englishCopyText, type CopyValues, type CountedCopy } from './counted-copy-english'
+import { englishCopyText, type CopyValues, type CountedCopy } from './i18n/counted-copy-english'
 
 export const BACKGROUND_TASK_COPY = {
   monitoring: 'Monitoring background tasks',
@@ -13,6 +13,7 @@ export const BACKGROUND_TASK_COPY = {
   monitor: 'Background monitor',
   task: 'Background task',
   detailsUnavailable: 'Task details are unavailable for this session.',
+  outputFile: 'Output: {{value0}}',
   countAgents: { one: '{{count}} agent', other: '{{count}} agents' },
   countShell: { one: '{{count}} shell', other: '{{count}} shells' },
   countShellCommandOne: '1 shell command',

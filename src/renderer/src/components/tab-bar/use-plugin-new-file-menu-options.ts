@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { usePluginNewFiles } from '@/store/plugin-new-files'
+import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { withPluginNewFileMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 
 /** The + menu's searchable options with enabled plugins' new files, and a select handler that

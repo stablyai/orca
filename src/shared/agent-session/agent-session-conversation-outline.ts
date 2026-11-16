@@ -1,18 +1,22 @@
-// Project every journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
+// Project every human-authored journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
 
+import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
-  AgentJournalCursor,
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../agent-session-journal-types'
-import type { NativeChatBlock, NativeChatMessage } from '../native-chat-types'
-import { deriveNativeChatRowContent, nativeChatRowRendersContent } from '../native-chat-row-content'
-import { iterateProcessOutputLines } from '../process-output-field-scanner'
-import { agentJournalSubmissionKey } from '../agent-session-journal-item-key'
-import { dispatchWasWithdrawn } from '../structured-agent-session-dispatch-rejection'
-import { projectStructuredAgentSessionMessages } from '../structured-agent-session-message-projection'
-import { projectNativeChatTranscriptMessages } from '../native-chat-transcript-projection'
-import { nativeChatTurnMembership } from '../native-chat-turn-membership'
+} from './journal/agent-session-journal-types'
+import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
+import {
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../native-chat/transcript/row-content/native-chat-row-content'
+import { withoutSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { iterateProcessOutputLines } from '../process-observation/process-output-field-scanner'
+import { agentJournalSubmissionKey } from './journal/agent-session-journal-item-key'
+import { dispatchWasWithdrawn } from './requests/structured-agent-session-dispatch-rejection'
+import { projectStructuredAgentSessionMessages } from './view/structured-agent-session-message-projection'
+import { projectNativeChatTranscriptMessages } from '../native-chat/transcript/native-chat-transcript-projection'
+import { nativeChatTurnMembership } from '../native-chat/transcript/turns/native-chat-turn-membership'
 
 /** Cap previews on the host because the rail hides prose beyond two lines. */
 export const AGENT_SESSION_OUTLINE_PREVIEW_MAX_CHARS = 200
@@ -32,7 +36,9 @@ export type AgentSessionConversationOutlineEntry = {
 
 export type AgentSessionConversationOutline = {
   sessionId: string
-  /** Journal position the outline is current through: every user message created
+  /** Absent on older hosts whose outlines can include agent-authored turn inputs. */
+  humanMessagesOnly?: true
+  /** Journal position the outline is current through: every human-authored message created
    *  at or before `cursor.sequence` is listed, unless `omittedEntries` says otherwise. */
   cursor: AgentJournalCursor
   entries: AgentSessionConversationOutlineEntry[]
@@ -46,18 +52,18 @@ const previews = new WeakMap<readonly NativeChatBlock[], NativeChatUserMessagePr
 
 /** Share preview formatting between loaded transcript rows and outline entries. */
 export function nativeChatUserMessagePreview(
-  blocks: readonly NativeChatBlock[]
+  message: Pick<NativeChatMessage, 'role' | 'blocks'>
 ): NativeChatUserMessagePreview {
-  const cached = previews.get(blocks)
+  const cached = previews.get(message.blocks)
   if (cached) {
     return cached
   }
-  const content = deriveNativeChatRowContent(blocks)
+  const content = deriveNativeChatRowContent(withoutSentImagePromptMarkers(message))
   const preview = {
     text: content.markdown.replace(/\s+/g, ' ').trim(),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length
   }
-  previews.set(blocks, preview)
+  previews.set(message.blocks, preview)
   return preview
 }
 
@@ -65,7 +71,7 @@ const replies = new WeakMap<readonly NativeChatBlock[], string>()
 
 /** An assistant message as preview prose: fenced code, rules and markdown markers
  *  dropped, cut to the preview cap. */
-function assistantReplyProse(blocks: readonly NativeChatBlock[]): string {
+export function assistantReplyProse(blocks: readonly NativeChatBlock[]): string {
   const cached = replies.get(blocks)
   if (cached !== undefined) {
     return cached
@@ -144,7 +150,15 @@ export function truncateOutlinePreview(text: string, maxChars: number): string {
 /** Project the whole journal: neighbours decide whether a user row survives, and journal position sets its order. Leave previews uncut for the reply bound. */
 export function projectAgentSessionConversationOutline(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  readReplies: (
+    messages: readonly NativeChatMessage[],
+    turnKeys: readonly (string | undefined)[]
+  ) => ReadonlyMap<string, string> = nativeChatTurnReplyPreviews,
+  facts?: {
+    projectItems: (items: readonly AgentJournalRenderItem[]) => NativeChatMessage[]
+    userPreview: (message: NativeChatMessage) => NativeChatUserMessagePreview
+  }
 ): AgentSessionConversationOutlineEntry[] {
   const sequences = new Map<string, number>()
   for (const item of items) {
@@ -161,23 +175,24 @@ export function projectAgentSessionConversationOutline(
   const entries: AgentSessionConversationOutlineEntry[] = []
   const transcript = projectNativeChatTranscriptMessages(
     // Unchanged on the wire: a not-sent row ticks only once a desktop loads its page.
-    projectStructuredAgentSessionMessages(items, [], submissions).filter(
+    projectStructuredAgentSessionMessages(items, [], submissions, facts?.projectItems).filter(
       (message) => !message.unsent
     )
   )
   const { turnKeys } = nativeChatTurnMembership(transcript, { items, submissions })
-  const replies = nativeChatTurnReplyPreviews(transcript, turnKeys)
+  const replies = readReplies(transcript, turnKeys)
   for (const [index, message] of transcript.entries()) {
     const sequence = sequences.get(message.id)
     if (
       sequence === undefined ||
       stopped.has(message.id) ||
       message.role !== 'user' ||
+      message.from !== undefined ||
       !nativeChatRowRendersContent(message.blocks)
     ) {
       continue
     }
-    const preview = nativeChatUserMessagePreview(message.blocks)
+    const preview = facts?.userPreview(message) ?? nativeChatUserMessagePreview(message)
     const turnKey = turnKeys[index]
     const reply = turnKey === undefined ? undefined : replies.get(turnKey)
     entries.push({

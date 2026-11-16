@@ -1,8 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
-import { LazyWorkerThreadHost, type WorkerThreadFactory } from '../lazy-worker-thread-host'
-import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
+import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
+import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
 import type {
   WorkerThreadChildErrorPayload,
   WorkerThreadChildEvent,
@@ -51,6 +56,9 @@ class WorkerThreadChildStdin extends EventEmitter {
 
 /** Main-thread stand-in for a piped ChildProcess whose real process lives on the worker. */
 export class WorkerThreadChildProcess extends EventEmitter {
+  ownedGroupStopping = false
+  ownedGroupTerminated = false
+  closed = false
   pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
@@ -73,8 +81,17 @@ export class WorkerThreadChildProcess extends EventEmitter {
     return this.send({ type: 'kill', id: this.id, signal })
   }
 
+  stopOwnedGroup(): void {
+    this.ownedGroupStopping = true
+    this.send({ type: 'stop-owned-group', id: this.id })
+  }
+
   receive(event: WorkerThreadChildEvent): void {
     switch (event.type) {
+      case 'group-terminated':
+        this.ownedGroupTerminated = true
+        this.emit('group-terminated')
+        return
       case 'spawn':
         this.pid = event.pid
         this.emit('spawn')
@@ -94,6 +111,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':
+        this.emit('group-terminated')
         this.emitErrorIfObserved(event.error)
         this.receive({ type: 'exit', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
         this.receive({ type: 'close', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
@@ -104,6 +122,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.emit('exit', event.code, event.signal)
         return
       case 'close':
+        this.closed = true
         this.emit('close', event.code, event.signal)
     }
   }
@@ -176,10 +195,16 @@ export class WorkerThreadChildProcessHost {
     if (!child) {
       return
     }
-    if (event.type === 'close' || event.type === 'spawn-error') {
+    child.receive(event)
+    if (event.type === 'close') {
+      this.post({ type: 'release', id: event.id })
+    }
+    if (
+      event.type === 'spawn-error' ||
+      (child.closed && (!child.ownedGroupStopping || child.ownedGroupTerminated))
+    ) {
       this.forget(event.id)
     }
-    child.receive(event)
   }
 
   private forget(id: number): void {
@@ -209,7 +234,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Child process worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null

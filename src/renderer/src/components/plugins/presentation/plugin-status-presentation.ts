@@ -1,5 +1,6 @@
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** What an installed plugin's state means to the user; one word each, never colour alone. */
 export type PluginStatusKind =
@@ -98,7 +99,9 @@ export function installedPluginPresentation(
   plugin: PluginHostListEntry,
   updateVersion: string | null,
   busy: boolean,
-  autoUpdate: { updatedTo: string | null; needsReview: boolean }
+  autoUpdate: { updatedTo: string | null; needsReview: boolean },
+  reinstallVersion: string | null = null,
+  t: Translate = translate
 ) {
   const kind = pluginStatusKind(plugin)
   const removable = !plugin.bundled && !plugin.isDev
@@ -109,28 +112,27 @@ export function installedPluginPresentation(
     [pluginNeedsReview(plugin), 'review'],
     [kind === 'error', 'restart'],
     [Boolean(updateVersion), 'update'],
+    [kind === 'invalid' && Boolean(reinstallVersion), 'reinstall'],
     [kind === 'invalid', 'error']
   ] as const
   const primary = primaryRules.find(([applies]) => applies)?.[1] ?? null
   const fact =
     updateVersion && autoUpdate.needsReview
-      ? translate(
+      ? t(
           'auto.components.settings.PluginManagerRows.updateNeedsReview',
           'update {{value0}} needs review',
           { value0: updateVersion }
         )
       : updateVersion
-        ? translate(
+        ? t(
             'auto.components.settings.PluginManagerRows.updateAvailable',
             'update {{value0}} available',
             { value0: updateVersion }
           )
         : autoUpdate.updatedTo
-          ? translate(
-              'auto.components.settings.PluginManagerRows.updatedTo',
-              'updated to {{value0}}',
-              { value0: autoUpdate.updatedTo }
-            )
+          ? t('auto.components.settings.PluginManagerRows.updatedTo', 'updated to {{value0}}', {
+              value0: autoUpdate.updatedTo
+            })
           : null
   return {
     kind,

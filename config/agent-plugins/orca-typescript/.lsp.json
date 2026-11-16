@@ -1,7 +1,9 @@
 {
   "orca-typescript": {
     "command": "node",
-    "args": ["${CLAUDE_PROJECT_DIR}/config/scripts/agent-typescript-lsp.mjs"],
+    "args": [
+      "${CLAUDE_PROJECT_DIR}/config/scripts/typecheck/language-server/agent-typescript-lsp.mjs"
+    ],
     "extensionToLanguage": {
       ".ts": "typescript",
       ".tsx": "typescriptreact",

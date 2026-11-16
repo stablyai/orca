@@ -1,54 +1,76 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
-import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
-import { createMacAppActivationHandler } from './window/macos-app-activation'
-import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
-import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
+import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
+import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
+import {
+  isBackgroundLaunch,
+  isOrcadSidecarLaunch
+} from './window/activation/foreground-activation-policy'
+import {
+  createDesktopHandoff,
+  desktopHandoffArguments
+} from './window/activation/macos-desktop-handoff'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
-} from './startup/main-window-actions'
-import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
+} from './startup/main-window/main-window-actions'
+import { openMainWindow as openMainWindowController } from './startup/main-window/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
-import { runWslHolderUninstallPreflight } from './startup/wsl-holder-uninstall-preflight'
-import { runAgentHooksUninstallPreflight } from './startup/agent-hooks-uninstall-preflight'
-import { enableLinearRegexpFallback } from './startup/linear-regexp-fallback'
+import { runWslHolderUninstallPreflight } from './startup/uninstall/wsl-holder-uninstall-preflight'
+import { runAgentHooksUninstallPreflight } from './startup/uninstall/agent-hooks-uninstall-preflight'
+import { enableLinearRegexpFallback } from './startup/chromium-policy/linear-regexp-fallback'
+import { ensureWindowsRendererRuntimeFiles } from './startup/windows-startup/windows-renderer-runtime-files'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
-import { installMainProcessQuitHandlers } from './startup/main-process-quit'
-import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
-import { resolveOsOpenedDocuments } from './startup/os-opened-documents'
+import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
+import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
+import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
 import {
   formatProfileStateStartupFailure,
   isDivergedProfileStateFailure,
   profileStateStartupFailureClass
-} from './persistence/profile-state/profile-state-startup-failure'
-import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
+} from './persistence/profile-state/startup/profile-state-startup-failure'
+import { recordDurableCrashBreadcrumb } from './crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import {
   chooseProfileStateCopy,
   chooseProfileStateRepair,
   presentProfileStateStartupRecoveryDialog,
   readProfileStateCopySavedTimes
-} from './persistence/profile-state/profile-state-startup-recovery-dialog'
-import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
+} from './persistence/profile-state/startup/profile-state-startup-recovery-dialog'
+import { profileStateDesktopRecoveryArgs } from './startup/profile-startup/profile-state-recovery-preflight'
+import { profileStateRepairSectionApproval } from '../shared/orca-profiles/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
-import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/profile-state-recovery-required'
+import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
-import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage-generation-lease'
-import { wakeRememberedWslHosts } from './wsl/wsl-host-early-wake'
-import { wslHostsServing } from './wsl/wsl-host-gate'
-import { configureWslHostsGateFromDisk } from './wsl/wsl-host-gate-startup'
-import { ignoreInheritedWslHostsGateState } from '../shared/wsl-host-internal-gate'
-import { registerOrcaProtocolClient } from './startup/orca-protocol-registration'
+import { leaseAppImageGenerationForCurrentProcess } from './cli/appimage/appimage-generation-lease'
+import { deleteLegacyWslHostWakeList } from './wsl/host-lifecycle/wsl-host-early-wake'
+import { configureWslHostsGateFromDisk } from './wsl/host-lifecycle/wsl-host-gate-startup'
+import { configureRemoteRuntimeE2EEV2HostLatch } from '../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
+import { ignoreInheritedWslHostsGateState } from '../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
+import { registerOrcaProtocolClient } from './startup/open-routing/orca-protocol-registration'
+import { clearWindowsStdHandleInheritance } from './startup/windows-startup/windows-std-handle-inheritance'
+import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows-isolated-spawner'
+import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
+import type { MainWindowOpenOptions } from './window/main-window/main-window-contracts'
+import type { DesktopActivationRequest } from './startup/serve-launch/serve-desktop-activation'
+import {
+  argvRequestsBackgroundOpen,
+  BACKGROUND_OPEN_ARG
+} from '../shared/app-lifecycle/launch/background-open-argv'
+import { setBackgroundWindowOpener } from './window/activation/background-window-open'
 
-function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
-  return openMainWindowController(options)
+// Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
+dropE2eSpawnLogOutsideE2e()
+
+async function openMainWindow(options: MainWindowOpenOptions = {}): Promise<BrowserWindow> {
+  return await openMainWindowController(options)
 }
 
 setMainWindowOpener(openMainWindow)
+setBackgroundWindowOpener(() => requestDesktopActivation([BACKGROUND_OPEN_ARG]))
 
-function focusExistingWindow(): void {
-  focusExistingWindowAction()
+function focusExistingWindow(request: DesktopActivationRequest = {}): void {
+  focusExistingWindowAction(request)
 }
 
 const requestDesktopHandoff = createDesktopHandoff({
@@ -72,7 +94,9 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     requestDesktopHandoff()
     return
   }
-  state.desktopActivationGate?.requestActivation()
+  state.desktopActivationGate?.requestActivation({
+    background: argvRequestsBackgroundOpen(argv)
+  })
 }
 
 /** Buffer documents until listener readiness; webContents.send silently drops unhandled messages. */
@@ -107,6 +131,9 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
+// Before anything spawns: no child may inherit Orca's std handles.
+clearWindowsStdHandleInheritance()
+installWindowsIsolatedSpawner()
 // A relaunch or installer inherits the parent's published WSL gate state; this process recomputes.
 ignoreInheritedWslHostsGateState()
 // The uninstaller's holder release and hook removal run instead of the app, never alongside it.
@@ -116,17 +143,19 @@ const preflightReady =
   runMainProcessPreflight({
     focusExistingWindow,
     requestDesktopActivation
-  })
+  }) &&
+  ensureWindowsRendererRuntimeFiles(state.isServeMode)
 
 // Skip userData writes after losing the single-instance lock.
 if (preflightReady) {
   enableLinearRegexpFallback()
   void leaseAppImageGenerationForCurrentProcess()
   // Before any gate check: saved WSL work keeps a closed gate serving it.
-  configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
-  // Why this early: a cold distro takes seconds to boot; starting now overlaps it with app startup.
-  if (process.platform === 'win32' && wslHostsServing()) {
-    wakeRememberedWslHosts(app.getPath('userData'))
+  const wslHostsGateReady = configureWslHostsGateFromDisk(app.getPath('userData'), app.getVersion())
+  configureRemoteRuntimeE2EEV2HostLatch(app.getPath('userData'))
+  // A launch restore is passive (E9): it never boots a WSL host's distro, so drop the old wake list.
+  if (process.platform === 'win32') {
+    deleteLegacyWslHostWakeList(app.getPath('userData'))
   }
   app.on('open-url', (event, url) => {
     if (!isRoutedOrcaDeepLink(url)) {
@@ -158,14 +187,15 @@ if (preflightReady) {
   installMainProcessQuitHandlers()
   void app.whenReady().then(async () => {
     try {
+      await wslHostsGateReady
       await initializeMainProcessReady({
         openMainWindow,
         handleMacAppActivation
       })
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
       const message =
-        formatProfileStateStartupFailure(error) ??
-        `Orca could not finish starting: ${error instanceof Error ? error.message : String(error)}`
+        formatProfileStateStartupFailure(error) ?? `Orca could not finish starting: ${detail}`
       const failureClass = profileStateStartupFailureClass(error)
       if (failureClass !== undefined) {
         recordDurableCrashBreadcrumb('profile_state_startup_failed', {
@@ -213,7 +243,7 @@ if (preflightReady) {
                   profileId: error.profileId,
                   selector: {
                     kind: 'repair',
-                    sections: sections.map(({ domain, backupId }) => ({ domain, backupId }))
+                    sections: sections.map(profileStateRepairSectionApproval)
                   }
                 })
               })
@@ -222,7 +252,13 @@ if (preflightReady) {
             return
           }
           await presentProfileStateStartupRecoveryDialog({
-            message,
+            message:
+              formatProfileStateStartupFailure(error, translateMain) ??
+              translateMain(
+                'startupFailure.finishFailed',
+                'Orca could not finish starting: {{detail}}',
+                { detail }
+              ),
             ...(failureClass === 'recovery-required' || failureClass === 'ambiguous-authority'
               ? { recoveryCommand: 'orca profile state exports' }
               : {}),

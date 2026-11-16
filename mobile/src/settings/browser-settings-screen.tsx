@@ -1,22 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Globe } from 'lucide-react-native'
-import { PickerModal, type PickerOption } from '../components/PickerModal'
+import { Globe } from 'lucide-react-native'
+import { ListRow } from '../components/list/ListGroup'
+import { PickerModal, type PickerOption } from '../components/sheets/PickerModal'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
-  loadTerminalLinkOpenMode,
-  saveTerminalLinkOpenMode,
-  type MobileTerminalLinkOpenMode
+  DEFAULT_LINK_OPEN_MODE,
+  loadLinkOpenMode,
+  saveLinkOpenMode,
+  type MobileLinkOpenMode
 } from '../storage/preferences'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 
-function linkModeOptions(t: Translate): PickerOption<MobileTerminalLinkOpenMode>[] {
+function linkModeOptions(t: Translate): PickerOption<MobileLinkOpenMode>[] {
   return [
+    {
+      value: 'ask',
+      label: t('settings.browserSettingsScreen.askEachTime', 'Ask each time'),
+      subtitle: t(
+        'settings.browserSettingsScreen.askEachTimeDescription',
+        'Choose Orca browser, phone browser, or copy the link each time.'
+      )
+    },
     {
       value: 'orca-browser',
       label: t('settings.browserSettingsScreen.desktopBrowser', 'Orca browser on desktop'),
@@ -37,8 +45,8 @@ function linkModeOptions(t: Translate): PickerOption<MobileTerminalLinkOpenMode>
 }
 
 function linkModeLabel(
-  mode: MobileTerminalLinkOpenMode,
-  options: PickerOption<MobileTerminalLinkOpenMode>[]
+  mode: MobileLinkOpenMode,
+  options: PickerOption<MobileLinkOpenMode>[]
 ): string {
   return options.find((option) => option.value === mode)?.label ?? options[0]!.label
 }
@@ -51,19 +59,18 @@ export default function BrowserSettingsScreen({
   const t = useMobileTranslation()
   useMobileColorScheme()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
-  const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
+  const [linkMode, setLinkMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState<'load' | 'save' | null>(null)
   const options = linkModeOptions(t)
   const selectionRevision = useRef(0)
   const failedSelectionRevision = useRef<number | null>(null)
-  const savedMode = useRef<MobileTerminalLinkOpenMode>('orca-browser')
+  const savedMode = useRef<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const hasSaved = useRef(false)
 
   useEffect(() => {
     let active = true
-    void loadTerminalLinkOpenMode().then(
+    void loadLinkOpenMode().then(
       (mode) => {
         if (!hasSaved.current) {
           savedMode.current = mode
@@ -87,11 +94,11 @@ export default function BrowserSettingsScreen({
     }
   }, [])
 
-  const selectLinkMode = useCallback((mode: MobileTerminalLinkOpenMode) => {
+  const selectLinkMode = useCallback((mode: MobileLinkOpenMode) => {
     setError(null)
     const revision = ++selectionRevision.current
     setLinkMode(mode)
-    void saveTerminalLinkOpenMode(mode).then(
+    void saveLinkOpenMode(mode).then(
       () => {
         savedMode.current = mode
         hasSaved.current = true
@@ -106,149 +113,60 @@ export default function BrowserSettingsScreen({
     )
   }, [])
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-          style={styles.backButton}
-          onPress={onBack ?? (() => router.back())}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>{t('settings.browserSettingsScreen.title', 'Browser')}</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.groupHeading}>
-          {t('settings.browserSettingsScreen.linksHeading', 'LINKS')}
-        </Text>
-        <Text style={styles.groupDescription}>
-          {t(
-            'settings.browserSettingsScreen.linksDescription',
-            'Choose where HTTP(S) links tapped in terminal output open.'
+  const errorNote = error ? (
+    <SettingsNote error>
+      {error === 'load'
+        ? t(
+            'settings.browserSettingsScreen.loadFailed',
+            'Could not load browser preferences. Try again.'
+          )
+        : t(
+            'settings.browserSettingsScreen.saveFailed',
+            'Could not save browser preferences. Try again.'
           )}
-        </Text>
-        {error && (
-          <Text accessibilityRole="alert" style={styles.groupDescription}>
-            {error === 'load'
-              ? t(
-                  'settings.browserSettingsScreen.loadFailed',
-                  'Could not load browser preferences. Try again.'
-                )
-              : t(
-                  'settings.browserSettingsScreen.saveFailed',
-                  'Could not save browser preferences. Try again.'
-                )}
-          </Text>
-        )}
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              'settings.browserSettingsScreen.openTerminalLinks',
-              'Open terminal links'
-            )}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => setPickerOpen(true)}
-          >
-            <Globe size={16} color={colors.textSecondary} />
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>
-                {t('settings.browserSettingsScreen.openTerminalLinks', 'Open terminal links')}
-              </Text>
-              <Text style={styles.rowSublabel}>{linkModeLabel(linkMode, options)}</Text>
-            </View>
-            <ChevronRight size={16} color={colors.textMuted} />
-          </Pressable>
-        </View>
-      </ScrollView>
+    </SettingsNote>
+  ) : null
 
-      <PickerModal<MobileTerminalLinkOpenMode>
-        visible={pickerOpen}
-        title={t('settings.browserSettingsScreen.openTerminalLinks', 'Open terminal links')}
-        options={options}
-        selected={linkMode}
-        onSelect={selectLinkMode}
-        onClose={() => setPickerOpen(false)}
-      />
-    </View>
+  return (
+    <SettingsScreen
+      title={t('settings.browserSettingsScreen.title', 'Browser')}
+      onBack={onBack ?? (() => router.back())}
+      overlays={
+        <PickerModal<MobileLinkOpenMode>
+          visible={pickerOpen}
+          title={t('settings.browserSettingsScreen.openLinks', 'Open links')}
+          options={options}
+          selected={linkMode}
+          onSelect={selectLinkMode}
+          onClose={() => setPickerOpen(false)}
+        />
+      }
+    >
+      <SettingsSection
+        first
+        title={t('settings.browserSettingsScreen.linksHeading', 'LINKS')}
+        footer={
+          <>
+            <SettingsNote>
+              {t(
+                'settings.browserSettingsScreen.terminalAndChatLinksDescription',
+                'Choose where web links tapped in terminal output and chat open.'
+              )}
+            </SettingsNote>
+            {errorNote}
+          </>
+        }
+      >
+        <ListRow
+          key="linkMode"
+          title={t('settings.browserSettingsScreen.openLinks', 'Open links')}
+          subtitle={linkModeLabel(linkMode, options)}
+          leading={<Globe size={18} color={colors.textSecondary} />}
+          navigates
+          accessibilityLabel={t('settings.browserSettingsScreen.openLinks', 'Open links')}
+          onPress={() => setPickerOpen(true)}
+        />
+      </SettingsSection>
+    </SettingsScreen>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg,
-    paddingTop: 0
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl
-  },
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    overflow: 'hidden'
-  },
-  sectionTopGap: {
-    marginTop: spacing.sm
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowContent: {
-    flex: 1
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowSublabel: {
-    fontSize: typography.bodySize - 2,
-    color: colors.textSecondary,
-    marginTop: 2
-  }
-}))

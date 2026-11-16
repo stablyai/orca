@@ -29,7 +29,8 @@ const initializeResponse = {
   available_output_styles: ['default']
 }
 
-// A prompt containing "slow" runs until it is interrupted.
+// A prompt containing "slow" runs until it is interrupted; one containing "plugin-ui" first gets the
+// frames a plugin's `$.ui.status` and `$.ui.toast` calls produce in stream-json mode.
 const TURN_MS = 500
 const SLOW_TURN_MS = 60_000
 let turnTimer = null
@@ -37,10 +38,41 @@ let turnTimer = null
 function startTurn(frame) {
   // The CLI's --replay-user-messages echo, which opens the turn.
   write({ ...frame, isReplay: true })
-  const slow = JSON.stringify(frame.message ?? '').includes('slow')
+  const prompt = JSON.stringify(frame.message ?? '')
+  const slow = prompt.includes('slow')
+  const pluginUi = prompt.includes('plugin-ui')
+  if (prompt.includes('plugin-focus')) {
+    write({
+      type: 'system',
+      subtype: 'ui_panes',
+      session_id: sessionId,
+      uuid: randomUUID(),
+      panes: [{ id: 'blast-radius', title: 'Blast Radius', plugin: 'blast-radius', rows: 10 }],
+      shown_id: 'blast-radius',
+      focused_id: null,
+      focus_requested_id: 'blast-radius'
+    })
+    return
+  }
   turnTimer = setTimeout(
     () => {
       turnTimer = null
+      if (pluginUi) {
+        const ui = { type: 'system', plugin: 'e2e-board', session_id: sessionId }
+        write({
+          ...ui,
+          subtype: 'ui_status',
+          text: 'PR 6 · 진행 13 · 대기 6   /board',
+          uuid: randomUUID()
+        })
+        write({
+          ...ui,
+          subtype: 'ui_toast',
+          text: 'Board synced',
+          timeout_ms: 3000,
+          uuid: randomUUID()
+        })
+      }
       write({
         type: 'assistant',
         uuid: randomUUID(),
@@ -97,6 +129,14 @@ process.stdin.on('data', (chunk) => {
     } catch {
       frame = null
     }
+    fs.appendFileSync(
+      `${launchLog}.requests.jsonl`,
+      `${JSON.stringify({
+        pid: process.pid,
+        type: frame?.type ?? null,
+        subtype: frame?.request?.subtype ?? null
+      })}\n`
+    )
     if (frame?.type === 'user') {
       startTurn(frame)
       continue

@@ -1,6 +1,6 @@
-import { formatDiffComments } from '@/lib/diff-comments-format'
+import { formatDiffComments } from '../../../../shared/file-review/diff-comments-format'
 import { translate } from '@/i18n/i18n'
-import type { NotesSendMenuScope } from '../editor/NotesSendMenu'
+import type { NotesSendMenuScope } from '@/components/editor/review-note-delivery/NotesSendMenu'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
 
 /** Send-menu scope for a single note, shared by every diff annotation surface. */

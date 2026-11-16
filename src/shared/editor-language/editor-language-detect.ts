@@ -1,4 +1,4 @@
-import { parseSetupScriptShebang } from '../setup-script-shebang'
+import { parseSetupScriptShebang } from '../workspace-setup/setup-script-shebang'
 import { detectMonacoFilenameLanguage } from './monaco-filename-language'
 
 function extname(filePath: string): string {
@@ -73,6 +73,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.php': 'php',
   '.swift': 'swift',
   '.sh': 'shell',
+  '.just': 'shell',
   '.bash': 'shell',
   '.zsh': 'shell',
   '.fish': 'shell',
@@ -135,6 +136,8 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
   Jenkinsfile: 'groovy',
   Makefile: 'makefile',
+  Justfile: 'shell',
+  '.justfile': 'shell',
   'CMakeLists.txt': 'cmake',
   '.gitignore': 'ini',
   '.gitattributes': 'ini',

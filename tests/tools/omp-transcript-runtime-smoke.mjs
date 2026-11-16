@@ -5,11 +5,9 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { getPiAgentStatusExtensionSource } from '../../src/main/pi/agent-status-extension-source.ts'
-import {
-  extractAgentProviderSession,
-  getAgentResumeArgv
-} from '../../src/shared/agent-session-resume.ts'
+import { getPiAgentStatusExtensionSource } from '../../src/main/pi/managed-extensions/agent-status/agent-status-extension-source.ts'
+import { extractAgentProviderSession } from '../../src/shared/agent-session/lifecycle/agent-session-resume'
+import { getAgentResumeArgv } from '../../src/shared/agent-launch/startup/agent-resume-argv'
 import { readNativeChatTranscript } from '../../src/main/native-chat/transcript-reader.ts'
 
 const reference = process.argv[2]

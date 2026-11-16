@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { findInErrorChain } from './provider-error-chain'
 
 /** What a spawn's ENOENT proves absent: the provider's executable or the folder it ran in. */
@@ -75,6 +75,11 @@ export function providerExecutableMissing(error: unknown): boolean {
         : undefined
     ) ?? false
   )
+}
+
+/** A spawn ENOENT blamed on the CLI or its folder: a start failure, never a provider exit. */
+export function providerSpawnAbsent(error: unknown): boolean {
+  return providerExecutableMissing(error) || providerLaunchFolderMissing(error)
 }
 
 /** The provider's working folder was gone when it spawned, e.g. a deleted worktree. */

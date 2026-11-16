@@ -1,5 +1,5 @@
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
+import { sanitizeRecentTabIds } from '../../store/slices/tabs/tab-selection-history'
 
 export type TabCycleType = WorkspaceVisibleTabType
 
@@ -7,6 +7,29 @@ export type TypeCyclableTab = {
   type: TabCycleType
   id: string
   tabId?: string
+}
+
+export function isTerminalCycleType(type: string): type is 'terminal' | 'agent-session' {
+  return type === 'terminal' || type === 'agent-session'
+}
+
+/** Terminal shortcuts share one cycle set and preserve exact split-tab identity. */
+export function getNextTerminalCycleTab(
+  tabs: readonly TypeCyclableTab[],
+  active: TypeCyclableTab,
+  direction: number
+): TypeCyclableTab | null {
+  const eligibleTabs = tabs.filter((tab) => isTerminalCycleType(tab.type))
+  const exactIndex = active.tabId ? eligibleTabs.findIndex((tab) => tab.tabId === active.tabId) : -1
+  const currentIndex =
+    exactIndex !== -1
+      ? exactIndex
+      : eligibleTabs.findIndex((tab) => tab.type === active.type && tab.id === active.id)
+  if (eligibleTabs.length === 0 || (eligibleTabs.length === 1 && currentIndex === 0)) {
+    return null
+  }
+  const startIndex = currentIndex === -1 ? (direction > 0 ? -1 : 0) : currentIndex
+  return eligibleTabs[(startIndex + direction + eligibleTabs.length) % eligibleTabs.length]
 }
 
 type GetNextTabWithinActiveTypeParams = {

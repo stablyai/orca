@@ -1,8 +1,11 @@
-import type { ProjectGroup } from './project-group-types'
-import type { ProjectHostSetupProjection } from './project-host-setup-projection'
-import type { ProjectSectionProject, ProjectSectionSetup } from './project-section-grouping'
-import type { RepoIcon } from './repo-icon'
-import type { Repo } from './repo-types'
+import type { ProjectGroup } from './project/groups/project-group-types'
+import type { ProjectHostSetupProjection } from './project/host-setup/project-host-setup-projection'
+import type {
+  ProjectSectionProject,
+  ProjectSectionSetup
+} from './sidebar-list/sections/project-section-grouping'
+import type { RepoIcon } from './repository/appearance/repo-icon'
+import type { Repo } from './repository/repo-types'
 import type { ProjectOrderBy } from './ui-chrome-types'
 
 // Desktop owns the sidebar grouping inputs the phone must match.
@@ -13,7 +16,12 @@ export type MobileProjectSectionRepo = Pick<Repo, 'id' | 'displayName' | 'path' 
   Partial<
     Pick<
       Repo,
-      'addedAt' | 'connectionId' | 'executionHostId' | 'projectGroupId' | 'projectGroupOrder'
+      | 'addedAt'
+      | 'connectionId'
+      | 'executionHostId'
+      | 'projectGroupId'
+      | 'projectGroupOrder'
+      | 'hiddenAt'
     >
   > & { repoIcon?: RepoIcon }
 
@@ -23,7 +31,7 @@ export type MobileProjectSectionCatalog = {
   projects: ProjectSectionProject[]
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
-  /** Every host's project groups, which a feed reader lists folder workspaces under; older desktops omit it. */
+  /** Every host's project groups, which the phone nests projects and folder workspaces under; older desktops omit it. */
   projectGroups?: ProjectGroup[]
 }
 
@@ -44,6 +52,8 @@ function sectionRepo(repo: Repo): MobileProjectSectionRepo {
     ...(typeof repo.projectGroupOrder === 'number'
       ? { projectGroupOrder: repo.projectGroupOrder }
       : {}),
+    // Why: a reader must drop a hidden project's header and rows, as the sidebar does.
+    ...(typeof repo.hiddenAt === 'number' ? { hiddenAt: repo.hiddenAt } : {}),
     // Exclude uploaded data URLs: each repo icon can add hundreds of KB to every read.
     ...(repo.repoIcon && !(repo.repoIcon.type === 'image' && repo.repoIcon.src.startsWith('data:'))
       ? { repoIcon: repo.repoIcon }
@@ -74,6 +84,9 @@ export function buildMobileProjectSectionCatalog(
       ...(setup.executionHostId ? { executionHostId: setup.executionHostId } : {})
     })),
     projectOrderBy,
-    ...(projectGroups ? { projectGroups: [...projectGroups] } : {})
+    // Why: like repos, groups reach phones without their hook commands.
+    ...(projectGroups
+      ? { projectGroups: projectGroups.map(({ hookSettings: _hooks, ...group }) => group) }
+      : {})
   }
 }

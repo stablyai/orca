@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { StrictMode, useRef, useState } from 'react'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
 

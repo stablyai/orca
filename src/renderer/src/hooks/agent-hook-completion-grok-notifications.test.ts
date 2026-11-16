@@ -1,12 +1,14 @@
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentStatusIpcPayload,
-  ParsedAgentStatusPayload
-} from '../../../shared/agent-status-types'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { normalizeAgentStatusEvent } from './ipc-events/normalize-agent-status-event'
 
 const dispatchTerminalNotification = vi.fn()
@@ -41,17 +43,17 @@ type MockStoreState = {
   tabsByWorktree: Record<string, { id: string; ptyId?: string | null }[]>
   terminalLayoutsByTabId: Record<string, unknown>
   agentLaunchConfigByPaneKey: Record<string, unknown>
-  agentStatusByPaneKey: Record<string, unknown>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   getAgentLaunchConfigForStatusEntry: () => undefined
 }
 
 let mockStoreState: MockStoreState
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mockStoreState } }))
-vi.mock('@/components/terminal-pane/use-notification-dispatch', () => ({
+vi.mock('@/components/terminal-pane/notifications/dispatch-terminal-notification', () => ({
   dispatchTerminalNotification
 }))
-vi.mock('@/components/terminal-pane/agent-hook-terminal-lifecycle', () => ({
+vi.mock('@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle', () => ({
   dispatchAgentHookTerminalLifecycle
 }))
 
@@ -76,7 +78,7 @@ describe('Grok hook completion notifications', () => {
       tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-1', ptyId: 'pty-1' }] },
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })

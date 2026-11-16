@@ -1,6 +1,9 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { FileDiffMetadata, PostRenderPhase } from '@pierre/diffs'
-import { diffScrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  diffScrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import type { PierreDiffInstance } from './PierreDiffSurface'
 import { getPierreDiffChangeTargets } from './pierre-diff-change-targets'
 import { scrollPierreDiffToLine } from './pierre-diff-scroll'
@@ -8,7 +11,8 @@ import { scrollPierreDiffToLine } from './pierre-diff-scroll'
 export function usePierreDiffScrollRestore(
   modelKey: string,
   containerRef: RefObject<HTMLElement | null>,
-  fileDiff: FileDiffMetadata | null
+  fileDiff: FileDiffMetadata | null,
+  pendingScrollCommentId: string | null = null
 ) {
   const restoredKey = useRef<string | null>(null)
   const frame = useRef<number | null>(null)
@@ -50,6 +54,9 @@ export function usePierreDiffScrollRestore(
           container.scrollTop = saved
           return
         }
+        if (pendingScrollCommentId) {
+          return
+        }
         const targets = getPierreDiffChangeTargets(fileDiff)
         const target = targets[0]
         if (target) {
@@ -64,6 +71,6 @@ export function usePierreDiffScrollRestore(
         }
       })
     },
-    [modelKey, containerRef, fileDiff]
+    [modelKey, containerRef, fileDiff, pendingScrollCommentId]
   )
 }

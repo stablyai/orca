@@ -1,13 +1,18 @@
-import { translate } from '@/i18n/i18n'
+import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
+import {
+  combinedDiffViewportAttributes,
+  combinedDiffRowAttributes
+} from '@/components/editor/combined-diff/scroll-viewport/combined-diff-viewport'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useAppStore } from '@/store'
-import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
+import { useTranslate } from '@/i18n/use-translate'
+import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/sections/diff-section-layout'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
@@ -18,7 +23,7 @@ import {
   gitHubPRFileToBranchEntry,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { prFilesDiffScrollTopCache, prFilesDiffViewStateCache } from '../cache/files-diff-view'
 import { PRFilesDiffToolbar } from './toolbar'
@@ -28,7 +33,7 @@ import { usePRFilesDiffViewPersistence } from './view-restore'
 import { buildInlineReviewComments } from './inline-comments'
 import { usePRFileSectionHeights } from './section-heights'
 import { usePRFileActiveSection } from './active-section'
-import { PierreDiffProviders } from '@/components/editor/pierre-diff/PierreDiffProviders'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRFilesCombinedDiffViewer({
   files,
@@ -45,7 +50,7 @@ export function PRFilesCombinedDiffViewer({
   onCommentAdded,
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  const t = useTranslate()
   const diffEntrySignature = useMemo(
     () =>
       JSON.stringify(
@@ -246,7 +251,7 @@ export function PRFilesCombinedDiffViewer({
   )
 
   const openFilesOnGitHub = useCallback(() => {
-    void window.api.shell.openUrl(`${prUrl.replace(/\/$/, '')}/files`)
+    openAppHttpLink(`${prUrl.replace(/\/$/, '')}/files`)
   }, [prUrl])
 
   const handleAddLineComment = useCallback(
@@ -326,7 +331,11 @@ export function PRFilesCombinedDiffViewer({
             onCollapsedChange={setFileTreeCollapsed}
             onNavigate={handleTreeNavigate}
           />
-          <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+          <div
+            {...combinedDiffViewportAttributes}
+            ref={scrollContainerRef}
+            className="min-w-0 flex-1 overflow-auto scrollbar-editor"
+          >
             <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
               {virtualizer.getVirtualItems().map((virtualItem) => {
                 const section = sections[virtualItem.index]
@@ -336,18 +345,18 @@ export function PRFilesCombinedDiffViewer({
                 return (
                   <div
                     key={virtualItem.key}
+                    {...combinedDiffRowAttributes}
                     data-index={virtualItem.index}
                     ref={virtualizer.measureElement}
                     className="absolute left-0 top-0 w-full"
                     style={{ top: `${virtualItem.start}px` }}
                   >
                     <DiffSectionItem
+                      editStateKey={`${viewStateKey}:${section.key}`}
                       section={section}
-                      editStateKey={`pr-page:${viewStateKey}:${section.key}`}
                       index={virtualItem.index}
                       isBranchMode={false}
                       sideBySide={sideBySide}
-                      settings={settings}
                       sectionHeight={sectionHeights[virtualItem.index]}
                       worktreeId={`github-pr:${repoId}:${prNumber}`}
                       inlineComments={inlineReviewComments}
@@ -355,17 +364,26 @@ export function PRFilesCombinedDiffViewer({
                       retrySection={retrySection}
                       toggleSection={toggleSection}
                       openSection={openFilesOnGitHub}
-                      openSectionTitle={translate(
+                      openSectionTitle={t(
                         'auto.components.GitHubItemDialog.85a2b66f54',
                         'Open files on GitHub'
                       )}
                       renderHeaderTrailingContent={renderViewedCheckbox}
+                      imageUploadAddress={() =>
+                        githubCommentImageUploadAddress({
+                          repoPath,
+                          repoId,
+                          sourceContext,
+                          type: 'pr',
+                          prRepo
+                        })
+                      }
                       onAddLineComment={handleAddLineComment}
-                      addLineCommentLabel={translate(
+                      addLineCommentLabel={t(
                         'auto.components.GitHubItemDialog.bf43425540',
                         'Comment'
                       )}
-                      addLineCommentPlaceholder={translate(
+                      addLineCommentPlaceholder={t(
                         'auto.components.GitHubItemDialog.86d84a17ca',
                         'Add a review comment'
                       )}

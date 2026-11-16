@@ -14,7 +14,7 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 
 const PROVIDER_SESSION_ID = 'e2e-quit-resume-session'
 

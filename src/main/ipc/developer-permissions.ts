@@ -1,15 +1,15 @@
 import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
 import { ipcMain, shell, systemPreferences } from 'electron'
-import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
-import { getTerminalHostsFullDiskAccessStatus } from '../daemon/daemon-full-disk-access-status'
+import { getMacosFullDiskAccessStatus } from '../macos-permissions/macos-full-disk-access-status'
+import { getTerminalHostsFullDiskAccessStatus } from '../daemon/permissions/daemon-full-disk-access-status'
 import { testLocalNetworkConnection } from './local-network-connection-test'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionRequestResult,
   DeveloperPermissionState,
   DeveloperPermissionStatus
-} from '../../shared/developer-permissions-types'
+} from '../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 const PRIVACY_PANE_URLS: Partial<Record<DeveloperPermissionId, string>> = {
   camera: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',

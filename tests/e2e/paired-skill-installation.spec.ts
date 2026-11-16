@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import type { SkillInstallDestination } from '../../src/shared/skill-install-contract'
+import type { SkillInstallDestination } from '../../src/shared/skills/installation/skill-install-contract'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -164,7 +164,7 @@ async function createHostFolderWorkspace(page: Page, folderPath: string): Promis
       name: 'Paired skill folder E2E',
       folderPath: path
     })
-    return workspace.id
+    return workspace.folderWorkspace.id
   }, folderPath)
 }
 

@@ -3,8 +3,8 @@ import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
-} from '../../../../shared/pty-renderer-delivery-health'
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+} from '../../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
   consumeHiddenRendererPtyDropMemory,
@@ -30,7 +30,7 @@ import { applyCumulativeAck } from '../delivery/accounting'
 import { sendModelRestoreNeededMarker } from '../delivery/payload'
 import { isMainWindowPtyIpcEvent } from './write-input'
 import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
-import type { PaintedRestoreAck } from '../../../../shared/painted-restore-ack'
+import type { PaintedRestoreAck } from '../../../../shared/terminal/replay/painted-restore-ack'
 import type { PtyIpcSession } from '../session'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {

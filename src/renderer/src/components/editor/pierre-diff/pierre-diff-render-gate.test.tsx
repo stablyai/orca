@@ -1,16 +1,18 @@
 // @vitest-environment happy-dom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import DiffViewer from '../DiffViewer'
+import DiffViewer from '@/components/editor/diff/monaco-view/DiffViewer'
 import { requestPierreFileDiff } from './pierre-diff-parse-client'
-import { getLargeDiffRenderLimit } from '../large-diff-render-limit'
+import { getLargeDiffRenderLimit } from '../../../../../shared/source-control/diff/large-diff-render-limit'
 
 vi.mock('@/store', () => {
   const state = { settings: undefined }
   return { useAppStore: (selector: (s: typeof state) => unknown) => selector(state) }
 })
-vi.mock('../editor-shortcuts', () => ({ installEditorSaveShortcut: () => () => {} }))
-vi.mock('../diff-navigation-context', () => ({
+vi.mock('@/components/editor/commands/editor-shortcuts', () => ({
+  installEditorSaveShortcut: () => () => {}
+}))
+vi.mock('@/components/editor/diff/review/diff-navigation-context', () => ({
   useDiffNavigatorRegistration: () => ({
     registerDiffNavigator: () => {},
     unregisterDiffNavigator: () => {}
@@ -23,7 +25,9 @@ vi.mock('./pierre-diff-parse-client', () => ({
 }))
 vi.mock('./PierreDiffProviders', () => ({ PierreDiffProviders: () => null }))
 vi.mock('./PierreDiffSurface', () => ({ PierreDiffSurface: () => null }))
-vi.mock('../LargeDiffFallback', () => ({ LargeDiffFallback: () => <div>Large diff fallback</div> }))
+vi.mock('@/components/editor/diff/large-files/LargeDiffFallback', () => ({
+  LargeDiffFallback: () => <div>Large diff fallback</div>
+}))
 
 afterEach(() => {
   cleanup()

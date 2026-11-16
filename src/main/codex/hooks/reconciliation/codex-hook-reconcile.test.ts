@@ -1,0 +1,478 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import type * as NodeOs from 'node:os'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { wrapPosixHookCommand } from '../../../agent-hooks/installation/commands/posix-hook-command'
+import type * as CodexCommand from '../../../codex-cli/command'
+import type * as TrustDerivation from '../../trust/hooks/codex-hook-trust-derivation'
+import type * as RealHomeInstall from './codex-real-home-hook-install'
+
+const mocks = vi.hoisted(() => {
+  const held: { holdRealHome: Promise<void> | null; holdCodexScan: Promise<void> | null } = {
+    holdRealHome: null,
+    holdCodexScan: null
+  }
+  return {
+    ...held,
+    homedir: vi.fn<() => string>(),
+    codexPath: '',
+    probeCodexVersion: vi.fn(),
+    deriveCodexHookHashes: vi.fn(),
+    realHomeRuns: 0
+  }
+})
+
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeOs>()),
+  homedir: mocks.homedir
+}))
+vi.mock('../../../codex-cli/command', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexCommand>()),
+  resolveCodexCommand: () => mocks.codexPath,
+  // Answers what PATH held when the scan began, as a scan that walked past a later install would.
+  resolveCodexCommandForSpawn: async () => {
+    const codexPath = mocks.codexPath
+    await mocks.holdCodexScan
+    return codexPath
+  }
+}))
+vi.mock('../../trust/hooks/codex-hook-trust-derivation', async (importOriginal) => ({
+  ...(await importOriginal<typeof TrustDerivation>()),
+  probeCodexVersion: mocks.probeCodexVersion,
+  deriveCodexHookHashes: mocks.deriveCodexHookHashes
+}))
+vi.mock('./codex-real-home-hook-install', async (importOriginal) => {
+  const actual = await importOriginal<typeof RealHomeInstall>()
+  return {
+    ...actual,
+    reconcileRealHomeCodexHookEntries: (
+      ...args: Parameters<typeof actual.reconcileRealHomeCodexHookEntries>
+    ) => {
+      mocks.realHomeRuns += 1
+      return (mocks.holdRealHome ?? Promise.resolve()).then(() =>
+        actual.reconcileRealHomeCodexHookEntries(...args)
+      )
+    }
+  }
+})
+
+import {
+  _internals,
+  reconcileCodexHooks,
+  reconcileCodexHooksForLaunch,
+  scheduleCodexHookReconcile,
+  startCodexHooks
+} from './codex-hook-reconcile'
+import { _internals as lookupInternals } from '../../trust/hooks/codex-hook-hash-lookup'
+import { readRealHomeHooksFileProblem } from './codex-real-home-hooks-json'
+import { writeCodexTrustGrantLedgerHome } from '../../trust/grants/codex-trust-grant-ledger'
+import { getCodexHookTrustSignature } from '../definitions/codex-hook-identity'
+import {
+  buildCodexManagedHook,
+  CODEX_EVENT_LABEL,
+  computeOrcaCodexHookHashes,
+  getCodexManagedHookInstallMaterial
+} from '../definitions/codex-hook-definition'
+import type { CodexHookHashes } from '../../trust/hooks/codex-hook-trust-derivation'
+import { readHookTrustEntries, upsertHookTrustEntries } from '../../trust/toml/config-toml-trust'
+import { computeCodexTrustKey as computeTrustKey } from '../../trust/identity/codex-trust-identity'
+
+let root: string
+let home: string
+let userData: string
+let enabled: boolean
+let usesRealHome: boolean
+
+const CODEX_HASHES: CodexHookHashes = Object.fromEntries(
+  Object.values(CODEX_EVENT_LABEL).map((label) => [label, `sha256:codex-${label}`])
+)
+const codexHome = (): string => join(home, '.codex')
+const hooksPath = (): string => join(codexHome(), 'hooks.json')
+const tomlPath = (): string => join(codexHome(), 'config.toml')
+const command = (): string => getCodexManagedHookInstallMaterial().command
+
+type Hooks = Record<string, { hooks: { type: string; command: string; timeout?: number }[] }[]>
+
+function readHooks(): Hooks {
+  return JSON.parse(readFileSync(hooksPath(), 'utf-8')).hooks
+}
+
+function writeHooks(hooks: Hooks): void {
+  mkdirSync(codexHome(), { recursive: true })
+  writeFileSync(hooksPath(), `${JSON.stringify({ hooks }, null, 2)}\n`)
+}
+
+function olderBuildStop(): Hooks[string][number] {
+  const script = join(home, '.orca', 'agent-hooks', 'codex-hook.sh')
+  return {
+    hooks: [
+      buildCodexManagedHook(
+        process.platform === 'win32' ? script : wrapPosixHookCommand(script),
+        'Stop'
+      )
+    ]
+  }
+}
+
+function snapshot(dir: string): Map<string, { bytes: string; mtimeMs: number }> {
+  return new Map(
+    existsSync(dir)
+      ? readdirSync(dir).map((name) => {
+          const path = join(dir, name)
+          return [name, { bytes: readFileSync(path, 'utf-8'), mtimeMs: statSync(path).mtimeMs }]
+        })
+      : []
+  )
+}
+
+async function start(pathReady: Promise<unknown> = Promise.resolve()): Promise<void> {
+  startCodexHooks({
+    isEnabled: () => enabled,
+    resolveLaunchHome: () => (usesRealHome ? null : join(userData, 'codex-runtime-home')),
+    pathReady
+  })
+  await _internals.settledForTesting()
+}
+
+async function settleSpawn(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve))
+  await _internals.settledForTesting()
+}
+
+async function finishHeldLookupWait(
+  operation: () => Promise<void>,
+  launchWait = false
+): Promise<void> {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const timeout = vi.spyOn(globalThis, 'setTimeout')
+  const runsBefore = mocks.realHomeRuns
+  const derivationsBefore = mocks.deriveCodexHookHashes.mock.calls.length
+  const filesBefore = snapshot(codexHome())
+  let completed = false
+  const pending = operation().then(() => {
+    completed = true
+  })
+  try {
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mocks.deriveCodexHookHashes.mock.calls.length).toBeGreaterThan(derivationsBefore)
+    expect(timeout).toHaveBeenCalledWith(expect.any(Function), 500)
+    if (launchWait) {
+      expect(timeout).toHaveBeenCalledWith(expect.any(Function), 3_000)
+    }
+    expect(completed).toBe(false)
+    await vi.advanceTimersByTimeAsync(499)
+    expect(completed).toBe(false)
+    expect(mocks.realHomeRuns).toBe(runsBefore)
+    expect(snapshot(codexHome())).toEqual(filesBefore)
+    await vi.advanceTimersByTimeAsync(1)
+    await pending
+    expect(completed).toBe(true)
+    expect(mocks.realHomeRuns).toBe(runsBefore + 1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    timeout.mockRestore()
+  }
+}
+
+beforeEach(() => {
+  // Resolve macOS /var symlinks to avoid a second trust-key spelling.
+  root = realpathSync.native(mkdtempSync(join(tmpdir(), 'orca-codex-reconcile-')))
+  home = join(root, 'home')
+  userData = join(root, 'user-data')
+  mkdirSync(home)
+  mkdirSync(userData)
+  vi.stubEnv('ORCA_USER_DATA_PATH', userData)
+  vi.stubEnv('CODEX_HOME', '')
+  mocks.homedir.mockReturnValue(home)
+  mocks.codexPath = join(userData, 'codex')
+  writeFileSync(mocks.codexPath, 'codex 0.160.1')
+  mocks.probeCodexVersion.mockResolvedValue('codex-cli 0.160.1')
+  mocks.deriveCodexHookHashes.mockResolvedValue({
+    kind: 'hashes',
+    codexVersion: 'codex-cli 0.160.1',
+    hashes: CODEX_HASHES
+  })
+  mocks.realHomeRuns = 0
+  mocks.holdRealHome = null
+  mocks.holdCodexScan = null
+  enabled = true
+  usesRealHome = true
+  _internals.resetForTesting()
+  lookupInternals.resetForTesting()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.clearAllMocks()
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+  rmSync(root, { recursive: true, force: true })
+})
+
+describe('reconcileCodexHooks', () => {
+  it('asks Codex and converts an older build only once PATH is hydrated, with launches waiting on it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    writeHooks({ Stop: [olderBuildStop()] })
+    let hydrate!: () => void
+    const started = start(
+      new Promise<void>((resolve) => {
+        hydrate = resolve
+      })
+    )
+    const launch = reconcileCodexHooksForLaunch()
+    // Exceed the 500ms lookup budget to detect a premature stopgap write.
+    await vi.advanceTimersByTimeAsync(600)
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(0)
+
+    hydrate()
+    await Promise.all([started, launch])
+
+    expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('holds the startup lookup and reconcile until startAfter settles', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    const published = Promise.withResolvers<void>()
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: published.promise
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(0)
+
+    published.resolve()
+    await _internals.settledForTesting()
+
+    expect(mocks.probeCodexVersion).toHaveBeenCalled()
+    expect(mocks.realHomeRuns).toBe(1)
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('never makes a launch wait for startAfter', async () => {
+    writeHooks({ Stop: [olderBuildStop()] })
+    startCodexHooks({
+      isEnabled: () => enabled,
+      resolveLaunchHome: () => null,
+      pathReady: Promise.resolve(),
+      startAfter: new Promise<void>(() => {})
+    })
+
+    await reconcileCodexHooksForLaunch()
+
+    expect(mocks.realHomeRuns).toBe(1)
+    // The launch takes the startup run, so app start's conversion still happens.
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('rechecks a spawn that lands while a run is still finding Codex, which may miss a fresh install', async () => {
+    const installed = mocks.codexPath
+    mocks.codexPath = join(userData, 'missing-codex')
+    await start()
+    const scan = Promise.withResolvers<void>()
+    mocks.holdCodexScan = scan.promise
+
+    scheduleCodexHookReconcile()
+    await new Promise((resolve) => setImmediate(resolve))
+    mocks.codexPath = installed
+    mocks.holdCodexScan = null
+    scheduleCodexHookReconcile()
+    scan.resolve()
+    await settleSpawn()
+
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it('rechecks a spawn that lands while Codex is still answering, so an upgrade that moved it is not missed', async () => {
+    await start()
+    rmSync(hooksPath())
+    const old = mocks.codexPath
+    // New bytes make the lookup ask this binary again.
+    writeFileSync(old, 'codex 0.161.0')
+    const probe = Promise.withResolvers<string | null>()
+    mocks.probeCodexVersion.mockReturnValueOnce(probe.promise)
+    const probesBefore = mocks.probeCodexVersion.mock.calls.length
+
+    scheduleCodexHookReconcile()
+    await vi.waitFor(() => expect(mocks.probeCodexVersion.mock.calls.length).toBe(probesBefore + 1))
+    rmSync(old)
+    const moved = join(userData, 'moved', 'codex')
+    mkdirSync(join(moved, '..'))
+    writeFileSync(moved, 'codex 0.161.0')
+    mocks.codexPath = moved
+    scheduleCodexHookReconcile()
+    probe.resolve(null)
+    await settleSpawn()
+
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it("leaves an older build's entry alone on a pane spawn, and converts it at app start", async () => {
+    await start()
+    writeHooks({ Stop: [olderBuildStop()] })
+
+    scheduleCodexHookReconcile()
+    await settleSpawn()
+    expect(readHooks().Stop).toEqual([olderBuildStop()])
+
+    await reconcileCodexHooks({ convertOlderForms: true })
+    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+  })
+
+  it("leaves Orca's entry and approvals in ~/.codex as they are while Codex cannot be found", async () => {
+    await start()
+    writeHooks({ Stop: [olderBuildStop()] })
+    const before = snapshot(codexHome())
+    mocks.codexPath = join(userData, 'missing-codex')
+
+    await reconcileCodexHooks({ convertOlderForms: true })
+
+    expect(snapshot(codexHome())).toEqual(before)
+  })
+})
+
+describe('while the lookup is still asking Codex', () => {
+  function holdDerivation(): () => void {
+    let release!: () => void
+    const answered = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    mocks.deriveCodexHookHashes.mockImplementation(async () => {
+      await answered
+      return { kind: 'hashes', codexVersion: 'codex-cli 0.161.0', hashes: CODEX_HASHES }
+    })
+    mocks.probeCodexVersion.mockResolvedValue('codex-cli 0.161.0')
+    return release
+  }
+
+  const stopApproval = (): string | undefined =>
+    readHookTrustEntries(tomlPath()).get(
+      computeTrustKey({
+        sourcePath: hooksPath(),
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: command()
+      })
+    )?.trustedHash
+
+  it("writes the entry with Orca's own hash within a launch's wait, then Codex's once it answers", async () => {
+    enabled = false
+    await start()
+    enabled = true
+    const release = holdDerivation()
+
+    const startedAt = Date.now()
+    await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
+
+    expect(Date.now() - startedAt).toBeLessThan(3_000)
+    expect(stopApproval()).toBe(computeOrcaCodexHookHashes().stop)
+
+    release()
+    await settleSpawn()
+    expect(stopApproval()).toBe(CODEX_HASHES.stop)
+  })
+})
+
+describe('a ~/.codex/hooks.json Orca cannot add to', () => {
+  it.each([
+    ['an unparseable file', '{ not json'],
+    ['unknown top-level fields', JSON.stringify({ hooks: {}, _managed: true })],
+    ['a hooks value that is not an object', JSON.stringify({ hooks: [] })],
+    ['an event that is not a list', JSON.stringify({ hooks: { Stop: { note: 'mine' } } })]
+  ])(
+    'is left byte-for-byte and named as the reason for %s, until it is fixed',
+    async (_case, content) => {
+      mkdirSync(codexHome(), { recursive: true })
+      writeFileSync(hooksPath(), content)
+
+      await start()
+
+      expect(readFileSync(hooksPath(), 'utf-8')).toBe(content)
+      expect(existsSync(tomlPath())).toBe(false)
+      expect(readRealHomeHooksFileProblem()).toBe(
+        `Orca cannot add its hook to ${hooksPath()}, so Orca shows no status for ~/.codex`
+      )
+
+      writeHooks({})
+      expect(readRealHomeHooksFileProblem()).toBeNull()
+    }
+  )
+})
+
+describe('an app start whose lookup has not answered within its wait', () => {
+  it("keeps the saved answer's entries, writing nothing, when the version probe is slow", async () => {
+    const before0150 = Object.fromEntries(
+      Object.entries(CODEX_HASHES).filter(([label]) => label !== 'interrupt')
+    )
+    mocks.probeCodexVersion.mockResolvedValue('codex-cli 0.149.0')
+    mocks.deriveCodexHookHashes.mockResolvedValue({
+      kind: 'hashes',
+      codexVersion: 'codex-cli 0.149.0',
+      hashes: before0150
+    })
+    await start()
+    const settled = snapshot(codexHome())
+    // Simulate a restart retaining disk answers with a slow version probe.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    _internals.resetForTesting()
+    lookupInternals.resetForTesting()
+    mocks.probeCodexVersion.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve('codex-cli 0.149.0'), 900))
+    )
+
+    const restarted = start()
+    await vi.advanceTimersByTimeAsync(500)
+    await restarted
+    await vi.advanceTimersByTimeAsync(1_000)
+    await _internals.settledForTesting()
+
+    expect(snapshot(codexHome())).toEqual(settled)
+  })
+
+  it("keeps the approval main's grant recorded for Orca's entry", async () => {
+    const stop = {
+      sourcePath: hooksPath(),
+      eventLabel: 'stop' as const,
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: command(),
+      timeoutSec: 10,
+      statusMessage: buildCodexManagedHook(command(), 'Stop').statusMessage
+    }
+    writeHooks({ Stop: [{ hooks: [buildCodexManagedHook(command(), 'Stop')] }] })
+    upsertHookTrustEntries(tomlPath(), [{ ...stop, trustedHash: 'sha256:main-granted' }])
+    writeCodexTrustGrantLedgerHome(codexHome(), {
+      binary: null,
+      entries: {
+        [computeTrustKey(stop)]: {
+          signature: getCodexHookTrustSignature(stop),
+          trustedHash: 'sha256:main-granted'
+        }
+      }
+    })
+    mocks.deriveCodexHookHashes.mockImplementation(() => new Promise(() => {}))
+
+    await finishHeldLookupWait(start)
+
+    expect(readHookTrustEntries(tomlPath()).get(computeTrustKey(stop))?.trustedHash).toBe(
+      'sha256:main-granted'
+    )
+  })
+})

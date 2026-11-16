@@ -1,20 +1,17 @@
-import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
-import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
+import { rendererStatusGraphAccepted } from '../agent-status/renderer-status-publication'
+import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
+import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/layout/reconciliation/terminal-lifecycle-diagnostics'
 import {
   collectParkedTerminalWatcherPtyIds,
   getParkedTerminalWatcherPaneIdsByPtyId
-} from '@/components/terminal-pane/terminal-parked-watcher-registry'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import type {
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeRendererSyncWindowGraph
-} from '../../../../shared/runtime-types'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'
-import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+} from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import { applyNativeChatLaunchDraftResolved } from '../native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
+import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
+import { withAcknowledgedBrowserPageInventory } from './browser-page-inventory'
 import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import { measureTerminalGroupGridSizes } from './terminal-group-grid-sizes'
@@ -34,10 +31,16 @@ import {
   findRegisteredTerminalTab,
   getMountedTerminalTabRegisteredAt,
   mountedTerminalTabEntries
-} from '../mounted-terminal-tab-registry'
+} from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { changedActiveGroups } from './active-group-publication'
+import type {
+  RuntimeMobileSessionTabsPublication,
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeRendererSyncWindowGraph
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
@@ -76,6 +79,7 @@ export async function syncRuntimeGraph(): Promise<void> {
   const activeGroupByWorkspace = ORCA_LAYOUT_OWNER_IS_MAIN
     ? changedActiveGroups(state.activeGroupIdByWorktree, graphState.publishedActiveGroups)
     : undefined
+  const senderBase = state.agentSenderPublicationsByHost?.local?.['*']?.revision
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -89,7 +93,9 @@ export async function syncRuntimeGraph(): Promise<void> {
     ...(projectSectionCatalog && projectSectionCatalog !== graphState.publishedProjectSectionCatalog
       ? { projectSectionCatalog }
       : {}),
-    ...(activeGroupByWorkspace ? { activeGroupByWorkspace } : {})
+    ...(activeGroupByWorkspace ? { activeGroupByWorkspace } : {}),
+    // Only what this window applied: main then answers "unchanged" instead of resending rows.
+    ...(senderBase ? { agentSenderBase: senderBase } : {})
   }
 
   for (const [registrationKey, registeredTab] of mountedTerminalTabEntries()) {
@@ -226,6 +232,7 @@ export async function syncRuntimeGraph(): Promise<void> {
 
   try {
     const result = await window.api.runtime.syncWindowGraph(graph)
+    rendererStatusGraphAccepted()
     graphState.publishedTerminalGroupGridSizesKey = JSON.stringify(gridSizes ?? null)
     graphState.publishedProjectSectionCatalog =
       projectSectionCatalog ?? graphState.publishedProjectSectionCatalog
@@ -234,6 +241,9 @@ export async function syncRuntimeGraph(): Promise<void> {
     }
     commitMobileSessionPublication(mobileSessionTabs, result?.mobileSessionResyncWorktrees)
     const currentState = graphState.getStoreState()
+    if (!result?.agentSenderRevision) {
+      currentState?.setAgentSenderPublication?.('local', result?.agentSenderAssociations)
+    }
     currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
     for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
       if (currentState) {
@@ -257,16 +267,17 @@ export function setTrailingGraphSyncScheduler(scheduler: () => void): void {
 }
 
 function partitionMobileSessionPublication(snapshots: RuntimeMobileSessionTabsSnapshot[]): {
-  changed: RuntimeMobileSessionTabsSnapshot[]
+  changed: RuntimeMobileSessionTabsPublication[]
   unchangedWorktrees: string[]
 } {
-  const changed: RuntimeMobileSessionTabsSnapshot[] = []
+  const changed: RuntimeMobileSessionTabsPublication[] = []
   const unchangedWorktrees: string[] = []
   for (const snapshot of snapshots) {
-    if (graphState.publishedMobileSessionSnapshotByWorktree.get(snapshot.worktree) === snapshot) {
+    const published = graphState.publishedMobileSessionSnapshotByWorktree.get(snapshot.worktree)
+    if (published === snapshot) {
       unchangedWorktrees.push(snapshot.worktree)
     } else {
-      changed.push(snapshot)
+      changed.push(withAcknowledgedBrowserPageInventory(snapshot, published))
     }
   }
   return { changed, unchangedWorktrees }

@@ -8,7 +8,8 @@
 !define ORCA_OTHER_INSTALL_KEY_READ_64 0x20119
 !define ORCA_ERROR_FILE_NOT_FOUND 2
 
-; OUT: "none", "other" (a different install dir that still has the app), or "unknown" (a read failed).
+; OUT: "none", "other" (a different install dir that still has the app), or "unknown" (a read
+; failed, or a registration names no location).
 !macro ORCA_CHECK_ONE_REGISTRATION HKEY HIVE OUT
   ${if} ${OUT} == "none"
     System::Call 'advapi32::RegOpenKeyEx(p ${HKEY}, t "${INSTALL_REGISTRY_KEY}", i 0, i ${ORCA_OTHER_INSTALL_KEY_READ_64}, *p .R6) i .R7'
@@ -16,8 +17,10 @@
       System::Call 'advapi32::RegCloseKey(p R6)'
       ReadRegStr $R5 ${HIVE} "${INSTALL_REGISTRY_KEY}" InstallLocation
       ; Our own registration names $INSTDIR; LogicLib == compares case-insensitively.
-      ${if} $R5 != ""
-      ${andIf} $R5 != $INSTDIR
+      ${if} $R5 == ""
+        ; A registration with no readable location could be another install: keep the hooks.
+        StrCpy ${OUT} "unknown"
+      ${elseIf} $R5 != $INSTDIR
       ${andIf} $R5 != "$INSTDIR\"
       ${andIf} ${FileExists} "$R5\${APP_EXECUTABLE_FILENAME}"
         StrCpy ${OUT} "other"

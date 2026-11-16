@@ -1,13 +1,12 @@
 # Orca Two Way Audio
 
-Vendored Expo module for capturing and playing PCM audio data in the Orca mobile app (iOS and Android).
+Vendored Expo module for capturing PCM microphone audio in the Orca mobile app (iOS and Android). Orca uses it for voice dictation; the upstream playback path was removed because nothing played audio through it.
 
-The aim of the module is to facilitate creating real-time conversational apps. The following features are provided:
+The following features are provided:
 
 - Request audio recording permissions
 - Get clean (applying Acoustic Echo Cancelling) microphone samples in PCM format (1 channel 16 bit at 16kHz)
-- Play audio samples in PCM format (1 channel 16 bit at 16kHz). Playback happens through main speaker unless external audio sources are connected.
-- Provide volume level both for the input and output samples. Float between 0 and 1.
+- Provide the input volume level. Float between 0 and 1.
 - [iOS only] Get microphone mode and prompt user to select a microphone mode.
 
 ## Installation
@@ -37,22 +36,6 @@ npm i @orca/expo-two-way-audio
        initializeAudio();
    }, []);
 
-   ```
-
-1. Play audio
-
-   > [!NOTE]
-   > The sample below uses the `buffer` module:
-   > `npm install buffer`
-
-   ```JSX
-    import { Buffer } from "buffer";
-
-    // As an example, play pcm data hardcoded in a variable.
-    const audioChunk = "SOME PCM DATA BASE64 ENCODED HERE"
-    const buffer = Buffer.from(audioChunk, "base64");
-    const pcmData = new Uint8Array(buffer);
-    playPCMData(pcmData);
    ```
 
 1. Get microphone samples

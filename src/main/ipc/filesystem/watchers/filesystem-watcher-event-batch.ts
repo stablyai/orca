@@ -1,5 +1,5 @@
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import { MAX_BUFFERED_FILE_WATCH_EVENTS } from '../../../../shared/filesystem-watch-event-buffer'
+import { MAX_BUFFERED_FILE_WATCH_EVENTS } from '../../../../shared/file-watch/filesystem-watch-event-buffer'
 
 export const MAX_BATCHED_WATCHER_EVENTS = MAX_BUFFERED_FILE_WATCH_EVENTS
 

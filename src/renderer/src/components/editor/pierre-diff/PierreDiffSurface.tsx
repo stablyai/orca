@@ -1,3 +1,10 @@
+import { countLinesEmptyAsZero } from '../../../../../shared/source-control/diff/large-diff-render-limit'
+import { resolvePierreDiffTheme } from './pierre-diff-theme'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
+import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { FileDiff } from '@pierre/diffs/react'
 import type {
@@ -30,7 +37,7 @@ import { PierreDiffSearchBar } from './PierreDiffSearchBar'
 import { usePierreDiffShiftWheel } from './use-pierre-diff-shift-wheel'
 import { usePierreDiffNativeView } from './use-pierre-diff-native-view'
 import { installPierreContextualCopy } from './pierre-diff-context-copy'
-import { editorShortcutMatches } from '../editor-shortcuts'
+import { editorShortcutMatches } from '@/components/editor/commands/editor-shortcuts'
 import { usePierreDiffNoteNavigation } from './use-pierre-diff-note-navigation'
 import { usePierreDiffNoteSelection } from './use-pierre-diff-note-selection'
 import { PierreDiffNarrowLayoutContext } from './pierre-diff-layout'
@@ -43,15 +50,18 @@ export type PierreDiffInstance = PierreFileDiff<PierreDiffAnnotationData> &
 
 export type PierreDiffSurfaceProps = {
   fileDiff: FileDiffMetadata
+  modifiedContent?: string
   sideBySide: boolean
   settings?: PierreDiffSettings | null
   isEditable: boolean
   editStateKey?: string
-  /** Collapse unchanged context. Combined diffs do; the single-file tab does not. */
+  /** Collapse unchanged context according to the surface preference. */
   collapseUnchanged: boolean
   /** Single-file tab only. Combined rows must not steal focus on mount. */
   autoFocusHost?: boolean
   worktreeId: string
+  commentOwner?: DiffCommentOwner | null
+  imageUploadAddress?: GitHubImageIntake['address']
   filePath: string
   comments: readonly DecoratedDiffComment[]
   formatCommentPrompt?: (comment: DecoratedDiffComment) => string
@@ -71,7 +81,7 @@ export type PierreDiffSurfaceProps = {
   addCommentPlaceholder?: string
   addCommentLabel?: string
   onCancelComment?: () => void
-  onSubmitComment?: (body: string) => Promise<void>
+  onSubmitComment?: (body: string) => Promise<boolean>
   className?: string
 }
 
@@ -81,6 +91,7 @@ export type PierreDiffSurfaceProps = {
  */
 export function PierreDiffSurface({
   fileDiff,
+  modifiedContent,
   sideBySide,
   settings,
   isEditable,
@@ -88,6 +99,8 @@ export function PierreDiffSurface({
   collapseUnchanged,
   autoFocusHost = false,
   worktreeId,
+  commentOwner,
+  imageUploadAddress,
   filePath,
   comments,
   formatCommentPrompt,
@@ -105,6 +118,12 @@ export function PierreDiffSurface({
   onSubmitComment,
   className
 }: PierreDiffSurfaceProps): React.JSX.Element {
+  const typography = useEditorTypography('diff')
+  const documentDark = useDocumentDarkTheme()
+  const editorTheme = useCodeEditorThemeStore((s) => s.monaco)
+  const diffTheme = useMemo(() => resolvePierreDiffTheme(editorTheme), [editorTheme])
+  const editorBase = useCodeEditorThemeStore((s) => s.override?.base)
+  const themeType = editorBase ?? (documentDark ? 'dark' : 'light')
   const narrowLayout = useContext(PierreDiffNarrowLayoutContext)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
@@ -236,10 +255,11 @@ export function PierreDiffSurface({
   const options = useMemo(
     () => ({
       ...buildPierreDiffOptions<PierreDiffAnnotationData>({
-        settings,
+        settings: { ...settings, theme: themeType },
         sideBySide: sideBySide && !narrowLayout,
         collapseUnchanged
       }),
+      theme: diffTheme,
       enableGutterUtility: Boolean(onAddComment),
       canUseGutterUtility: (range: SelectedLineRange) =>
         canCommentOnPierreRange(range, commentableLines),
@@ -251,6 +271,8 @@ export function PierreDiffSurface({
       onPostRender: handlePostRender
     }),
     [
+      diffTheme,
+      themeType,
       settings,
       sideBySide,
       narrowLayout,
@@ -263,17 +285,32 @@ export function PierreDiffSurface({
       noteSelection.onLineSelectionEnd
     ]
   )
-  const style = useMemo(
-    () => buildPierreDiffStyle(settings, editorFontZoomLevel),
-    [settings, editorFontZoomLevel]
-  )
+  const style = useMemo(() => {
+    const selection =
+      editorTheme?.data.colors['editor.selectionBackground'] ??
+      (themeType === 'dark' ? '#264f78' : '#add6ff')
+    return {
+      ...buildPierreDiffStyle(settings, editorFontZoomLevel, typography),
+      '--orca-diff-selection-bg': selection,
+      '--orca-diff-inactive-selection-bg':
+        editorTheme?.data.colors['editor.inactiveSelectionBackground'] ?? selection
+    }
+  }, [settings, editorFontZoomLevel, typography, editorTheme, themeType])
   const metrics = useMemo(
-    () => buildPierreDiffMetrics(settings, editorFontZoomLevel),
-    [settings, editorFontZoomLevel]
+    () => buildPierreDiffMetrics(settings, editorFontZoomLevel, typography),
+    [settings, editorFontZoomLevel, typography]
   )
   const lineAnnotations = useMemo(
-    () => buildPierreDiffCommentAnnotations(comments, filePath, pendingComment),
-    [comments, filePath, pendingComment]
+    () =>
+      buildPierreDiffCommentAnnotations(
+        comments,
+        filePath,
+        pendingComment,
+        modifiedContent === undefined
+          ? fileDiff.additionLines.length
+          : countLinesEmptyAsZero(modifiedContent)
+      ),
+    [comments, filePath, pendingComment, fileDiff.additionLines.length, modifiedContent]
   )
   const editorOptions = useMemo<EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>>(
     () =>
@@ -306,6 +343,8 @@ export function PierreDiffSurface({
     (annotation: PierreDiffCommentAnnotation) =>
       renderPierreDiffCommentAnnotation(annotation, {
         worktreeId,
+        commentOwner,
+        imageUploadAddress,
         filePath,
         activeGroupId,
         formatCommentPrompt,
@@ -319,6 +358,8 @@ export function PierreDiffSurface({
       }),
     [
       worktreeId,
+      commentOwner,
+      imageUploadAddress,
       filePath,
       activeGroupId,
       formatCommentPrompt,
@@ -341,7 +382,7 @@ export function PierreDiffSurface({
       ref={containerRef}
       data-editor-keyboard-scope
       tabIndex={-1}
-      className={className}
+      className={['editor-typography-surface', className].filter(Boolean).join(' ')}
       onMouseDown={(event) => {
         if (
           shouldFocusPierreDiffHost(event.currentTarget, document.activeElement, event.nativeEvent)

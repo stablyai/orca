@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import { isAllowedPluginGitUrl } from '../installation/plugin-install-lockfile'
 import { isQualifiedPluginKey } from '../manifest/plugin-manifest'
 import { pluginCatalogReleaseSchema } from './plugin-catalog-release'
@@ -105,7 +106,7 @@ export const catalogV2GitSourceSchema = z
 const QUALIFIED_PLUGIN_KEY_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 export const marketplaceEntryFields = {
-  /** Canonical `<publisher>.<id>` identity expected in the source manifest. */
+  /** Canonical `<publisher>.<id>` install identity; the manifest must carry the same `id`. */
   id: z
     .string()
     .regex(QUALIFIED_PLUGIN_KEY_RE, 'invalid qualified plugin key')
@@ -115,16 +116,13 @@ export const marketplaceEntryFields = {
     )
     .meta(
       pluginFieldDoc(
-        "`<publisher>.<id>`, matching the plugin's manifest. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused.",
+        "`<publisher>.<id>`: the publisher is the repository owner, lowercased (Orca installs under this key, whatever the manifest's deprecated `publisher` says), and the id is the manifest's `id`. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused.",
         NEXT,
         ['acme.gleam-syntax']
       )
     ),
   source: pluginMarketplaceGitSourceSchema,
-  description: z
-    .string()
-    .min(1)
-    .max(4_096)
+  description: safePluginDisplayText(z.string().min(1).max(4_096))
     .optional()
     .meta(pluginFieldDoc('Listing text shown in the marketplace.', NEXT)),
   categories: z
@@ -187,11 +185,9 @@ const pluginMarketplaceListingEntrySchema = z
   .superRefine(rejectDuplicateCategories)
 
 export const marketplaceHeaderFields = {
-  name: z
-    .string()
-    .min(1)
-    .max(256)
-    .meta(pluginFieldDoc('Catalog display name.', NEXT, ['Orca Plugins'])),
+  name: safePluginDisplayText(z.string().min(1).max(256)).meta(
+    pluginFieldDoc('Catalog display name.', NEXT, ['Orca Plugins'])
+  ),
   owner: marketplaceOwnerSchema.meta(
     pluginFieldDoc('Account that publishes the catalog.', NEXT, ['stablyai'])
   )
@@ -226,7 +222,6 @@ export type PluginMarketplace = z.infer<typeof pluginMarketplaceListingSchema>
 export type PluginMarketplaceEntry = z.infer<typeof pluginMarketplaceListingEntrySchema>
 export type PluginMarketplaceGitSource = z.infer<typeof pluginMarketplaceGitSourceSchema>
 export type PluginCatalogGitSource = z.infer<typeof catalogV2GitSourceSchema>
-export type PluginMarketplaceTrustMetadata = z.infer<typeof pluginMarketplaceTrustMetadataSchema>
 
 export const OFFICIAL_MARKETPLACE_GIT_SOURCE: PluginMarketplaceGitSource = {
   kind: 'git',
@@ -270,6 +265,9 @@ type GitRepositoryIdentity = {
   path: string
 }
 
+// Why only these: a self-hosted server may serve `team/Plugin` and `team/plugin` as two repositories.
+const CASE_INSENSITIVE_GIT_HOSTS = new Set(['github.com', 'gitlab.com', 'bitbucket.org'])
+
 /** Extracts the host and first owner segment from the HTTPS/SSH Git forms the
  * installer accepts. It is intentionally only a provenance parser. */
 export function parseGitRepositoryIdentity(url: string): GitRepositoryIdentity | null {
@@ -302,17 +300,21 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
   if (!repository) {
     return null
   }
-  const path = [...segments.slice(0, -1), repository].join('/').toLowerCase()
-  return { host: host.toLowerCase(), owner: segments[0]!, repository, path }
+  const lowerHost = host.toLowerCase()
+  const exactPath = [...segments.slice(0, -1), repository].join('/')
+  const path = CASE_INSENSITIVE_GIT_HOSTS.has(lowerHost) ? exactPath.toLowerCase() : exactPath
+  return { host: lowerHost, owner: segments[0]!, repository, path }
 }
 
 /** `host/owner` of a repository, with every GitLab subgroup (`gitlab.com/acme/tools`). */
 export function gitRepositoryOwnerLabel(url: string): string | null {
   const identity = parseGitRepositoryIdentity(url)
-  return identity ? [identity.host, ...identity.path.split('/').slice(0, -1)].join('/') : null
+  return identity
+    ? [identity.host, ...identity.path.split('/').slice(0, -1)].join('/').toLowerCase()
+    : null
 }
 
-/** Same repository regardless of URL spelling (https vs scp, `.git`, case). */
+/** Same repository regardless of URL spelling (https vs scp, `.git`, case where the host ignores it). */
 export function isSameGitRepository(left: string, right: string): boolean {
   const a = parseGitRepositoryIdentity(left)
   const b = parseGitRepositoryIdentity(right)

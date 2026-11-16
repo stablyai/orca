@@ -1,4 +1,4 @@
-import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
+import { mergePersistedWindowsPath } from '../pty/environment/windows-environment-path'
 import {
   readGuestWindowsDriveMounts,
   withoutWindowsDriveMountDirs

@@ -17,8 +17,6 @@ import { runBoundedProxyApplication } from './bounded-proxy-application'
 import { defaultProxySession, type ProxySession } from './electron-default-proxy-session'
 import { resolveProxyPolicyWithoutSession, type ProxyApplyResult } from './proxy-policy-resolution'
 
-export { setDefaultProxySessionResolver } from './electron-default-proxy-session'
-export type { ProxyApplyResult } from './proxy-policy-resolution'
 const PROXY_PROBE_URL = 'https://api.anthropic.com/'
 type SessionProxyApplicationState = {
   appliedKey: string | null

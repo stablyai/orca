@@ -44,7 +44,11 @@ function entryIdentity(point: PluginContributionPoint, entry: unknown): string {
   }
   if (point === 'commands') {
     const field = (key: string): unknown => (key in entry ? entry[key] : null)
-    return JSON.stringify([field('id'), field('action'), field('when') ?? 'global'])
+    const identity = [field('id'), field('action'), field('when') ?? 'global']
+    // Why only when set: commands from before `replaces` keep the identity they had.
+    return JSON.stringify(
+      entry.replaces === undefined ? identity : [...identity, field('replaces')]
+    )
   }
   return JSON.stringify(entry)
 }

@@ -1,18 +1,19 @@
-import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useState } from 'react'
+import { describeLoadError } from '../components/feedback/load-error-description'
 import {
-  SafeAreaView,
-  View,
-  Text,
-  Pressable,
-  AlertTriangle,
-  colors,
-  ActionSheetModal,
-  BottomDrawerModalHost,
-  GitBranch,
-  ConfirmModal,
-  useMobileColorScheme
-} from './mobile-tasks-dependencies'
+  MobileTasksOfflineBanner,
+  mobileTasksListShowsError
+} from './task-list/mobile-tasks-list-state'
+import type { ConnectionPresentationModel } from './screen-state/use-mobile-tasks-connection-presentation'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, Pressable } from 'react-native'
+import { AlertTriangle, GitBranch } from 'lucide-react-native'
+import { colors, pressedStyle } from '../theme/mobile-theme'
+import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
   getHostedReviewMergeMethodLabel,
@@ -21,22 +22,25 @@ import {
   getHostedStateConfirmTitle,
   getHostedStateConfirmMessage,
   getHostedStateConfirmLabel
-} from './mobile-tasks-legacy-foundation'
-import { renderMobileTasksChrome } from './mobile-tasks-screen-chrome'
-import { renderMobileTasksListSurface } from './mobile-tasks-list-surface'
+} from './hosted-review/mobile-tasks-hosted-review'
+import { renderMobileTasksChrome } from './screen/mobile-tasks-screen-chrome'
+import { renderMobileTasksListSurface } from './task-list/mobile-tasks-list-surface'
 import {
-  renderMobileTasksProviderPicker,
+  mobileTasksSearchVisible,
+  renderMobileTasksSearchControl
+} from './screen/mobile-tasks-search-control'
+import { renderMobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
+import {
   renderMobileTasksRepoPicker,
   renderMobileTasksGitHubIssueSourcePicker,
   renderMobileTasksGitHubViewPicker,
   renderMobileTasksGitHubPresetPicker,
   renderMobileTasksPagePicker
-} from './mobile-tasks-provider-pickers'
+} from './screen/mobile-tasks-provider-pickers'
 import {
   renderMobileTasksGitHubProjectPicker,
-  renderMobileTasksGitHubProjectViewPicker,
-  renderMobileTasksGitHubProjectSortPicker
-} from './mobile-tasks-github-project-pickers'
+  renderMobileTasksGitHubProjectViewPicker
+} from './project-board/mobile-tasks-github-project-pickers'
 import {
   renderMobileTasksGitHubProjectFieldsPicker,
   renderMobileTasksGitLabViewPicker,
@@ -47,43 +51,39 @@ import {
   renderMobileTasksLinearWorkspacePicker,
   renderMobileTasksLinearTeamPicker,
   renderMobileTasksLinearStatusPicker
-} from './mobile-tasks-filter-pickers'
-import {
-  renderMobileTasksLinearViewPicker,
-  renderMobileTasksLinearGroupPicker,
-  renderMobileTasksLinearOrderPicker,
-  renderMobileTasksLinearDisplayPicker,
-  renderMobileTasksSortPicker
-} from './mobile-tasks-list-display-pickers'
+} from './screen/mobile-tasks-filter-pickers'
+import { renderMobileTasksLinearDisplayPicker } from './task-list/mobile-tasks-list-display-pickers'
 import {
   renderMobileTasksCreateDrawer,
   renderMobileTasksCreateTargetPicker,
   renderMobileTasksLinearConnectDrawer,
   renderMobileTasksWorkspaceCreateTargetPicker
-} from './mobile-tasks-create-drawers'
+} from './workspace-creation/mobile-tasks-create-drawers'
 import {
   renderMobileTasksWorkspaceCreateDrawer,
   renderMobileTasksWorkspaceCreateRepoPicker,
   renderMobileTasksWorkspaceAgentPicker
-} from './mobile-tasks-workspace-create-drawer'
+} from './workspace-creation/mobile-tasks-workspace-create-drawer'
 import {
   renderMobileTasksWorkspaceBaseBranchPicker,
   renderMobileTasksWorkspaceSparsePicker
-} from './mobile-tasks-workspace-option-pickers'
+} from './workspace-creation/mobile-tasks-workspace-option-pickers'
 import {
   renderMobileTasksWorkspaceSparseDrawer,
   renderMobileTasksSetupTrustDrawer,
   renderMobileTasksOrcaYamlTrustDrawer
-} from './mobile-tasks-workspace-trust-drawers'
+} from './workspace-creation/mobile-tasks-workspace-trust-drawers'
 import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
-} from './mobile-tasks-project-detail-drawer'
-import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
+} from './project-board/mobile-tasks-project-detail-drawer'
+import { MobileTasksItemDetailDrawer } from './item-detail/mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
+  const [searchBarHeight, setSearchBarHeight] = useState(0)
+  const bottomBarHeight = mobileTasksSearchVisible(model) ? searchBarHeight : 0
   const {
     error,
     githubMode,
@@ -115,9 +115,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     <SafeAreaView style={styles.container} edges={['top']}>
       {renderMobileTasksChrome(model)}
 
-      {error ? (
+      {error && !mobileTasksListShowsError(model) ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{describeLoadError(error, t).message}</Text>
         </View>
       ) : null}
 
@@ -170,7 +170,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                     'Retry loading issues from {{source}}',
                     { source: `${sourceError.source.owner}/${sourceError.source.repo}` }
                   )}
-                  style={styles.sourceErrorRetry}
+                  style={({ pressed }) => [styles.sourceErrorRetry, pressed && pressedStyle]}
                   disabled={loading || isRetrying}
                   onPress={() => void retryGitHubIssueSourceFetch(sourceError.repoPath)}
                 >
@@ -200,12 +200,14 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         </View>
       ) : null}
 
-      {renderMobileTasksListSurface(model, colorScheme)}
+      <MobileTasksOfflineBanner model={model} />
+
+      {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
+
+      {renderMobileTasksSearchControl(model, setSearchBarHeight)}
 
       {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>
-        {renderMobileTasksProviderPicker(model)}
-
         {renderMobileTasksRepoPicker(model)}
 
         {renderMobileTasksGitHubIssueSourcePicker(model)}
@@ -219,8 +221,6 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         {renderMobileTasksGitHubProjectPicker(model)}
 
         {renderMobileTasksGitHubProjectViewPicker(model)}
-
-        {renderMobileTasksGitHubProjectSortPicker(model)}
 
         {renderMobileTasksGitHubProjectFieldsPicker(model)}
 
@@ -238,15 +238,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksLinearStatusPicker(model)}
 
-        {renderMobileTasksLinearViewPicker(model)}
-
-        {renderMobileTasksLinearGroupPicker(model)}
-
-        {renderMobileTasksLinearOrderPicker(model)}
-
         {renderMobileTasksLinearDisplayPicker(model)}
 
-        {renderMobileTasksSortPicker(model)}
+        {renderMobileTasksFilterSheet(model)}
 
         {renderMobileTasksCreateDrawer(model)}
 
@@ -276,7 +270,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksProjectDetailDrawer(model)}
 
-        {renderMobileTasksItemDetailDrawer(model)}
+        <MobileTasksItemDetailDrawer model={model} />
 
         <ActionSheetModal
           visible={taskUiReady && mergeMethodProjectRow != null}

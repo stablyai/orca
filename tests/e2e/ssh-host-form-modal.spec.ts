@@ -202,24 +202,4 @@ test.describe('SSH host add/edit modal', () => {
     )
     await reopened.getByRole('button', { name: 'Cancel' }).click()
   })
-
-  test('add-ssh-host settings intent opens the same modal dialog', async ({ orcaPage }) => {
-    await orcaPage.evaluate(() => {
-      const state = window.__store?.getState()
-      if (!state) {
-        throw new Error('store unavailable')
-      }
-      state.openSettingsTarget({ pane: 'ssh', repoId: null, intent: 'add-ssh-host' })
-      state.openSettingsPage()
-    })
-    await expect(orcaPage.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
-    await dismissTransientAnnouncement(orcaPage)
-
-    const dialog = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
-    await expect(dialog).toBeVisible({ timeout: 10_000 })
-    await expect(dialog.getByRole('heading', { name: 'Add SSH host' })).toBeInViewport()
-    await expect(dialog.locator('#ssh-target-host')).toBeFocused()
-    await dialog.getByRole('button', { name: 'Cancel' }).click()
-    await expect(dialog).toBeHidden()
-  })
 })

@@ -16,7 +16,7 @@ import {
 } from './helpers/paired-electron-client'
 import { pairMobileClient, type PairedMobileSocket } from './helpers/paired-mobile-client'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
-import { notificationExecutionHostForOwner } from '../../src/shared/notification-source'
+import { notificationExecutionHostForOwner } from '../../src/shared/notifications/notification-source'
 import { waitForSessionReady } from './helpers/store'
 import {
   fakeWslConnects,
@@ -207,7 +207,7 @@ test("a paired phone lists, opens, runs and launches on the desktop's WSL host, 
     try {
       const refused = await send(stopped, 'worktree.ps', { limit: 100 }, hostId)
       expect(refused.ok).toBe(false)
-      expect(JSON.stringify(refused.error)).toContain('isn’t running')
+      expect(refused.error?.code).toBe('remote_runtime_unavailable')
       await expect
         .poll(
           async () =>
@@ -221,7 +221,7 @@ test("a paired phone lists, opens, runs and launches on the desktop's WSL host, 
         .toEqual({ relay: 'unavailable', stopped: true, unavailable: false })
       // A second refused call: anything a phone's call could start would have started by its answer.
       const refusedAgain = await send(stopped, 'worktree.ps', { limit: 100 }, hostId)
-      expect(JSON.stringify(refusedAgain.error)).toContain('isn’t running')
+      expect(refusedAgain.error?.code).toBe('remote_runtime_unavailable')
       expect(fakeWslConnects(connectLogFile)).toEqual(connectsBeforeStop)
       // The fake boots a distro by rewriting this file, so it still reading stopped means nothing booted it.
       expect(

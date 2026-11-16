@@ -1,5 +1,5 @@
 import { basename, sep } from 'node:path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 
 // Follow the injected path flavor so Windows rules are testable on every host.
 function usesWindowsPaths(): boolean {

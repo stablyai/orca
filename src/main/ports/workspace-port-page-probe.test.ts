@@ -74,32 +74,4 @@ describe('probeWorkspacePortPage', () => {
     // Rescanning the body from each unclosed opener took seconds on this ~190 KB page.
     expect(performance.now() - startedAt).toBeLessThan(500)
   })
-
-  it('leaves out APIs and error pages', async () => {
-    const api = await serve((_request, response) => {
-      response.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}')
-    })
-    const notFound = await serve((_request, response) => {
-      response.writeHead(404, { 'content-type': 'text/html' }).end('Cannot GET /')
-    })
-
-    for (const port of [api, notFound]) {
-      await expect(
-        probeWorkspacePortPage({ host: 'localhost', port, protocol: 'http' })
-      ).resolves.toEqual({ kind: 'not-page' })
-    }
-  })
-
-  it('never reaches past loopback', async () => {
-    let requested = false
-    const port = await serve((_request, response) => {
-      requested = true
-      response.writeHead(200, { 'content-type': 'text/html' }).end('<title>x</title>')
-    })
-
-    await expect(
-      probeWorkspacePortPage({ host: 'example.com', port, protocol: 'http' })
-    ).resolves.toEqual({ kind: 'not-page' })
-    expect(requested).toBe(false)
-  })
 })

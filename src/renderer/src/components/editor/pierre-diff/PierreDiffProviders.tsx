@@ -1,3 +1,5 @@
+import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
+import { resolvePierreDiffTheme } from './pierre-diff-theme'
 import { useEffect, useState, type RefObject } from 'react'
 import { Virtualizer } from '@pierre/diffs'
 import { EditProvider, WorkerPoolContext, VirtualizerContext } from '@pierre/diffs/react'
@@ -23,6 +25,14 @@ export function PierreDiffProviders({
 }): React.JSX.Element {
   // Why: lazy initializer keeps worker startup off app launch until a diff opens.
   const [pool] = useState(createDiffHighlightPool)
+  const editorTheme = useCodeEditorThemeStore((s) => s.monaco)
+  useEffect(() => {
+    void pool
+      .setRenderOptions({ theme: resolvePierreDiffTheme(editorTheme) })
+      .catch((error: unknown) => {
+        console.error('Diff theme update failed:', error)
+      })
+  }, [pool, editorTheme])
   const [virtualizer] = useState(() => new Virtualizer())
   const [narrow, setNarrow] = useState(false)
   useEffect(() => {

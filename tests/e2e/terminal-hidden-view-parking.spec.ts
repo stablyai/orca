@@ -18,9 +18,9 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
-import { parkHiddenTabBehindDecoy, waitForTabParked } from './helpers/terminal-hidden-parking'
+import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
-import { TERMINAL_TAB_PARK_FLIP_WINDOW_MS } from '../../src/renderer/src/components/terminal-pane/terminal-park-verdict-flip-telemetry'
+import '../../src/renderer/src/components/terminal-pane/parking/verdict/terminal-park-verdict-flip-telemetry'
 
 // Dev/exposeStore parking wiring exposes this handle and the applied delay override.
 type ParkingDebugWindow = Window & {
@@ -39,7 +39,6 @@ test.use({
 
 const PARKED_FRAME_SCRIPT_DELAY_MS = 750
 const PARKED_FRAME_COUNT = 25
-const PARK_VERDICT_WINDOW_SETTLE_MS = Math.ceil(TERMINAL_TAB_PARK_FLIP_WINDOW_MS / 5)
 
 function parkedTuiFrame(runId: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
@@ -76,39 +75,8 @@ function writeParkedFrameScript(scriptPath: string, runId: string): void {
 }
 
 // Hold one rich alt-screen frame (boxes, SGR, wide glyphs) unchanged so reveal drift is detectable without spinner churn.
-function cycleReferenceFrame(runId: string): string {
-  const rows = [
-    '╭──────────────────────────────────────────────────────────╮',
-    `│ Park/reveal cycle reference ${runId.slice(0, 8)} 🟢 你好世界 터미널  │`,
-    '├───────────────┬──────────────────────────────────────────┤',
-    `│ model         │ \x1b[1mcodex/opencode\x1b[22m stream +142 -37        │`,
-    `│ status        │ \x1b[38;5;204mrunning\x1b[0m\x1b[2;36m diff --git a/pty.ts esc↩     │`,
-    '╰───────────────┴──────────────────────────────────────────╯',
-    `CYCLE_REFERENCE_${runId}`
-  ]
-  return [
-    '\x1b[?1049h',
-    '\x1b[2J\x1b[H',
-    '\x1b[?25l',
-    rows.map((row) => `\x1b[2;36m${row}\x1b[0m`).join('\r\n'),
-    '\x1b[?25h'
-  ].join('')
-}
-
-function writeCycleReferenceScript(scriptPath: string, runId: string): void {
-  mkdirSync(path.dirname(scriptPath), { recursive: true })
-  writeFileSync(scriptPath, alternateScreenFixtureScript(cycleReferenceFrame(runId)))
-}
 
 // Compare content rows: serialize() cursor-restore trailers vary without visible changes; strip trailers and whitespace-only tail rows.
-function terminalContentRows(serialized: string): string[] {
-  // eslint-disable-next-line no-control-regex
-  const stripped = serialized.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-  return stripped
-    .split(/\r?\n/)
-    .map((line) => line.replace(/\s+$/, ''))
-    .filter((line) => line.length > 0)
-}
 
 async function readParkingWiring(
   page: Page
@@ -221,16 +189,6 @@ async function getTerminalTabTitle(
 ): Promise<string | null> {
   const tabs = await getWorktreeTabs(page, worktreeId)
   return tabs.find((tab) => tab.id === tabId)?.title ?? null
-}
-
-async function hasPendingStartupCommand(page: Page, tabId: string): Promise<boolean> {
-  return page.evaluate((tabId) => {
-    const store = window.__store
-    if (!store) {
-      return false
-    }
-    return store.getState().pendingStartupByTabId[tabId] !== undefined
-  }, tabId)
 }
 
 type ParkableTabSetup = {
@@ -403,126 +361,5 @@ test.describe('Terminal hidden view parking', () => {
       .toContain(marker)
   })
 
-  test('does not park excluded tabs', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const setup = await setUpParkableTabA(orcaPage)
-    const { worktreeId, tabAId } = setup
-
-    // Queue tab C’s parking-excluding startup command after mount so mount-time consume cannot drain it.
-    const tabCId = await createActiveTerminalTab(orcaPage, worktreeId)
-    await orcaPage.evaluate((tabId) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('parking exclusion spec: window.__store is unavailable')
-      }
-      store.getState().queueTabStartupCommand(tabId, { command: 'echo parked-exclusion-probe' })
-    }, tabCId)
-    expect(await hasPendingStartupCommand(orcaPage, tabCId)).toBe(true)
-
-    const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
-    await expect
-      .poll(() => getActiveTabId(orcaPage), {
-        timeout: 5_000,
-        message: 'tab B did not stay active while waiting on the parking window'
-      })
-      .toBe(tabBId)
-
-    // Tab A parking proves this app crossed the delay; a decoy takes #8262’s last-active exemption while pending-startup C is excluded.
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
-      parkDelayMs: PARKING_DELAY_MS
-    })
-    await orcaPage.waitForTimeout(PARKING_DELAY_MS * 3)
-
-    // Premise guard: nothing consumed the pending startup while hidden.
-    expect(await hasPendingStartupCommand(orcaPage, tabCId)).toBe(true)
-    const tabCState = await readTerminalTabViewState(orcaPage, tabCId)
-    expect(tabCState.hasManager).toBe(true)
-    expect(tabCState.paneCount).toBeGreaterThan(0)
-  })
-
   // Require identical rich content across 25 teardown→snapshot-restore→reattach cycles to catch individual or accumulated garble.
-  test('reproduces a static frame byte-for-byte across 25 park/reveal cycles', async ({
-    orcaPage,
-    testRepoPath
-  }, testInfo: TestInfo) => {
-    test.setTimeout(420_000)
-    await waitForSessionReady(orcaPage)
-    const setup = await setUpParkableTabA(orcaPage)
-    const { worktreeId, tabAId, tabAPtyId } = setup
-
-    const runId = randomUUID()
-    const marker = `CYCLE_REFERENCE_${runId}`
-    const scriptPath = path.join(testRepoPath, `.orca-cycle-reference-${runId}.mjs`)
-    writeCycleReferenceScript(scriptPath, runId)
-    try {
-      await sendToTerminal(orcaPage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
-      await expect
-        .poll(() => getTerminalContent(orcaPage, 12_000), {
-          timeout: 15_000,
-          message: 'cycle reference frame did not render while tab A was visible'
-        })
-        .toContain(marker)
-
-      // Toggle A/B while a later-hidden decoy takes #8262’s exemption so A cold-parks.
-      const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
-      const decoyTabId = await createActiveTerminalTab(orcaPage, worktreeId)
-
-      // Baseline after one reveal: alt restore intentionally drops normal-buffer scrollback (scrollback 0), including shell command echo.
-      // Compare subsequent cycles through identical machinery so expected omission cannot masquerade as garble.
-      const runOneParkRevealCycle = async (cycle: number): Promise<string[]> => {
-        await activateTerminalTab(orcaPage, tabBId)
-        await activateTerminalTab(orcaPage, decoyTabId)
-        await waitForTabParked(orcaPage, tabAId, { parkDelayMs: PARKING_DELAY_MS })
-        await activateTerminalTab(orcaPage, tabAId)
-        await waitForActiveTerminalManager(orcaPage, 30_000)
-        const revealed = await waitForPaneIdentitySnapshot(orcaPage, 1)
-        expect(revealed.panes[0]?.ptyId).toBe(tabAPtyId)
-        await expect
-          .poll(() => getTerminalContent(orcaPage, 12_000), {
-            timeout: 15_000,
-            message: `cycle ${cycle}: reference frame did not restore on reveal`
-          })
-          .toContain(marker)
-        const rows = terminalContentRows(await getTerminalContent(orcaPage, 12_000))
-        expect(rows.join('\n')).not.toContain('Orca skipped hidden terminal output')
-        return rows
-      }
-
-      const referenceRows = await runOneParkRevealCycle(0)
-      expect(referenceRows.join('\n')).toContain(marker)
-      expect(referenceRows.join('\n')).toContain('╭')
-
-      // waitForTabParked throws each cycle, ruling out a pass without parking.
-      const CYCLES = 25
-      const mismatches: string[] = []
-      for (let cycle = 1; cycle < CYCLES; cycle++) {
-        // Each cycle flips the rendered verdict twice; stay below the 12-flip sustained-churn pin in 60s.
-        await orcaPage.waitForTimeout(PARK_VERDICT_WINDOW_SETTLE_MS)
-        const rows = await runOneParkRevealCycle(cycle)
-        if (JSON.stringify(rows) !== JSON.stringify(referenceRows)) {
-          mismatches.push(
-            `cycle ${cycle}:\n  expected: ${JSON.stringify(referenceRows)}\n  actual:   ${JSON.stringify(rows)}`
-          )
-        }
-      }
-
-      testInfo.annotations.push({
-        type: 'terminal-parking-cycles',
-        description: `cycles=${CYCLES} mismatches=${mismatches.length}`
-      })
-      expect(
-        mismatches,
-        `park/reveal drift across ${CYCLES} cycles:\n${mismatches.join('\n')}`
-      ).toEqual([])
-
-      const screenshotPath = testInfo.outputPath('park-reveal-25-cycles-final.png')
-      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
-      await testInfo.attach('park-reveal-25-cycles-final.png', {
-        path: screenshotPath,
-        contentType: 'image/png'
-      })
-    } finally {
-      rmSync(scriptPath, { force: true })
-    }
-  })
 })

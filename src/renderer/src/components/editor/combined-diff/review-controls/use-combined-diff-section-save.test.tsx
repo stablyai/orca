@@ -3,16 +3,25 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { useCombinedDiffSectionsState } from '../use-combined-diff-sections-state'
-import type { OpenFile } from '@/store/slices/editor'
-import type { DiffSection } from '../../diff-section-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
+import { acquireCombinedDiffSectionOperation } from '../load-sections/combined-diff-section-connection'
 import { useCombinedDiffSectionSave } from './use-combined-diff-section-save'
 
 const { writeFile, getContext } = vi.hoisted(() => ({
   writeFile: vi.fn(),
-  getContext: vi.fn(() => ({ connectionId: 'remote-connection' }))
+  getContext: vi.fn((..._args: unknown[]) => ({ connectionId: 'remote-connection' }))
 }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({ writeRuntimeFile: writeFile }))
-vi.mock('@/lib/editor-file-operation-owner', () => ({ getEditorFileOperationContext: getContext }))
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', () => ({
+  writeRuntimeFile: writeFile
+}))
+vi.mock('../load-sections/combined-diff-section-connection', () => ({
+  acquireCombinedDiffSectionOperation: (file: OpenFile) => ({
+    file,
+    assertCurrent: () => {},
+    mutationContext: () => getContext({}, file, null)
+  })
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ worktreesByRepo: {} }) } }))
 
 const file: OpenFile = {
@@ -42,6 +51,7 @@ const file: OpenFile = {
 function section(key = 'file.ts'): DiffSection {
   return {
     key,
+    operation: acquireCombinedDiffSectionOperation(file, key),
     path: key,
     status: 'modified',
     area: 'unstaged',
@@ -74,7 +84,7 @@ function setup(initial = [section()]) {
       setSections,
       setSectionHeights
     })
-    return { sections, setSections, sectionsRef, heights, save }
+    return { sections, setSections, sectionsRef, heights, save: save.handleSectionSaveRef }
   })
 }
 function deferred() {

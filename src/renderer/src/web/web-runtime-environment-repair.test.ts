@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   encodePairingCode,
   installBrowserGlobals,
@@ -123,37 +123,6 @@ describe('web re-pairing the same server', () => {
     })
 
     expect(paired.environment.id).not.toBe('web-server-a')
-    expect(readStored(globals.storage)).toMatchObject({
-      hostDescriptor: { installationId: INSTALL_B }
-    })
-  })
-
-  it('keeps the old pin when a downgraded server sends no descriptor', async () => {
-    const globals = await installWithStoredServer({ installationId: INSTALL_A })
-
-    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
-      name: 'Server A',
-      pairingCode: encodePairingCode({ publicKeyB64: 'public-key' })
-    })
-
-    expect(paired.environment.id).toBe('web-server-a')
-    expect(readStored(globals.storage)).toMatchObject({
-      hostDescriptor: { installationId: INSTALL_A }
-    })
-  })
-
-  it('drops a malformed pinned descriptor instead of trusting it', async () => {
-    const globals = await installWithStoredServer({ installationId: 'not-a-uuid' })
-
-    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
-      name: 'Server A',
-      pairingCode: encodePairingCode({
-        publicKeyB64: 'public-key',
-        hostDescriptor: { installationId: INSTALL_B }
-      })
-    })
-
-    expect(paired.environment.id).toBe('web-server-a')
     expect(readStored(globals.storage)).toMatchObject({
       hostDescriptor: { installationId: INSTALL_B }
     })

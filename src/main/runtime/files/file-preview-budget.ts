@@ -1,9 +1,9 @@
-import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../shared/file-preview-kind'
-import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
+import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../shared/file-preview/file-preview-kind'
+import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
   remoteRpcResultExceedsContentBudget
-} from '../../../shared/remote-rpc-content-budget'
+} from '../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 
 export const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 

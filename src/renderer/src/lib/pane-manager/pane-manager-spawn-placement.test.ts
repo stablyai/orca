@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { PaneManagerOptions } from './pane-manager-types'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 
 // Why: happy-dom has no canvas, so xterm cannot open; placement never touches the terminal.
 vi.mock('./pane-lifecycle', async (importOriginal) => {
@@ -18,6 +18,7 @@ const LEAF_C = '33333333-3333-4333-8333-333333333333'
 describe('PaneManager spawn placement hints', () => {
   let root: HTMLDivElement
   let onPaneCreated: Mock<NonNullable<PaneManagerOptions['onPaneCreated']>>
+  let onActivePaneChange: Mock<NonNullable<PaneManagerOptions['onActivePaneChange']>>
   let manager: InstanceType<typeof PaneManager>
 
   beforeEach(() => {
@@ -26,13 +27,15 @@ describe('PaneManager spawn placement hints', () => {
     root = document.createElement('div')
     document.body.appendChild(root)
     onPaneCreated = vi.fn()
-    manager = new PaneManager(root, { linkOpenHint: () => '', onPaneCreated })
+    onActivePaneChange = vi.fn()
+    manager = new PaneManager(root, { linkOpenHint: () => '', onPaneCreated, onActivePaneChange })
   })
 
   afterEach(() => {
     manager.destroy()
     root.remove()
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('publishes a split placed before a mounted subtree with its final order', () => {

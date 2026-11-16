@@ -1,57 +1,29 @@
-import { z } from 'zod'
+import type { z } from 'zod'
+import { PLUGIN_EVENT_PAYLOAD_SCHEMAS, PLUGIN_EVENT_SUMMARIES } from '../events/plugin-events'
 import type { PluginErrorCode } from '../frames/plugin-protocol'
+import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
+import { PLUGIN_HOOK_NAMES } from '../contributions/plugin-hook-contribution'
+import { PLUGIN_HOOK_DEFAULT_DEADLINE_MS, PLUGIN_HOOK_SPECS } from '../events/plugin-hook-payloads'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
-import { PLUGIN_HOST_API, PLUGIN_HOST_API_MINOR, PLUGIN_HOST_METHOD_NAMES } from './plugin-host-api'
-
-type JsonSchema = z.core.JSONSchema.BaseSchema
-
-function asSchema(node: z.core.JSONSchema._JSONSchema | undefined): JsonSchema {
-  return typeof node === 'object' ? node : {}
-}
-
-/** TypeScript-like type text, so a method reads as a signature rather than a JSON Schema dump. */
-function typeText(schema: JsonSchema): string {
-  if (schema.const !== undefined) {
-    return JSON.stringify(schema.const)
-  }
-  if (schema.enum) {
-    return schema.enum.map((value) => JSON.stringify(value)).join(' | ')
-  }
-  if (schema.anyOf) {
-    return schema.anyOf.map((node) => typeText(asSchema(node))).join(' | ')
-  }
-  if (schema.type === 'array') {
-    const item = typeText(asSchema(Array.isArray(schema.items) ? undefined : schema.items))
-    return item.includes(' ') && !item.startsWith('{') ? `(${item})[]` : `${item}[]`
-  }
-  if (schema.type === 'object' && schema.properties) {
-    const required = new Set(schema.required ?? [])
-    const fields = Object.entries(schema.properties).map(
-      ([key, node]) => `${key}${required.has(key) ? '' : '?'}: ${typeText(asSchema(node))}`
-    )
-    return fields.length === 0 ? '{}' : `{ ${fields.join('; ')} }`
-  }
-  if (schema.type === 'object' && typeof schema.additionalProperties === 'object') {
-    return `Record<string, ${typeText(schema.additionalProperties)}>`
-  }
-  if (schema.type === 'integer') {
-    return 'number'
-  }
-  if (Array.isArray(schema.type)) {
-    return schema.type.join(' | ')
-  }
-  return schema.type ?? 'JSON'
-}
+import {
+  PLUGIN_HOST_API,
+  PLUGIN_HOST_API_MINOR,
+  PLUGIN_HOST_METHOD_NAMES,
+  PLUGIN_STABLE_HOST_METHOD_NAMES,
+  type PluginHostMethodSpec
+} from './plugin-host-api'
+import { PLUGIN_HOST_API_MINOR_SINCE, PLUGIN_HOST_HAS_SINCE } from './plugin-host-api-releases'
+import { REFERENCE_TYPE_TEXT, zodTypeText } from './plugin-schema-type-text'
 
 function signature(params: z.ZodType, result: z.ZodType): string {
-  const options = { target: 'draft-2020-12', unrepresentable: 'any' } as const
-  const input = z.toJSONSchema(params, { ...options, io: 'input' })
-  const output = z.toJSONSchema(result, { ...options, io: 'output' })
-  return `(params: ${typeText(input)}) => ${typeText(output)}`
+  const input = zodTypeText(params, 'input', REFERENCE_TYPE_TEXT)
+  // Why parse: a top-level `.optional()` is lost in the type text, yet the call may omit params.
+  const omittable = params.safeParse(undefined).success
+  return `(params${omittable ? '?' : ''}: ${input}) => ${zodTypeText(result, 'output', REFERENCE_TYPE_TEXT)}`
 }
 
 // Why a Record: a new error code fails typecheck until it is documented here.
-const ERROR_CODES: Record<PluginErrorCode, string> = {
+export const PLUGIN_HOST_ERROR_CODE_MEANINGS: Record<PluginErrorCode, string> = {
   invalid_request: 'the call itself is malformed',
   invalid_params:
     'params do not match the method, including a field this Orca does not know; the message names it',
@@ -72,9 +44,22 @@ const ERROR_CODES: Record<PluginErrorCode, string> = {
 
 const version = (minor: number): string => `${PLUGIN_HOST_API_MAJOR}.${minor}`
 
+/** `workspace:create` (+`agent:launch` for `agent`): a passed param can need a second capability. */
+function capabilityCell(spec: PluginHostMethodSpec): string {
+  const base = spec.capability === null ? 'none' : `\`${spec.capability}\``
+  const extra = Object.entries(spec.paramCapabilities ?? {}).map(
+    ([param, kind]) => ` (+\`${kind}\` for \`${param}\`)`
+  )
+  return `${base}${extra.join('')}`
+}
+
 /** Author reference for the host API, rendered from the typed spec table. */
 export function renderPluginHostApiReference(): string {
-  const specs = PLUGIN_HOST_METHOD_NAMES.map((name) => ({ name, ...PLUGIN_HOST_API[name] }))
+  const specs = PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) => ({
+    name,
+    ...PLUGIN_HOST_API[name]
+  }))
+  const proposed = PLUGIN_HOST_METHOD_NAMES.filter((name) => PLUGIN_HOST_API[name].proposed)
   const lines = [
     '# Orca plugin host API reference',
     '',
@@ -84,13 +69,21 @@ export function renderPluginHostApiReference(): string {
     '',
     'Every call is checked against the capabilities the user approved, and params are validated before Orca runs anything: params are strict, so a field this Orca does not know is refused with `invalid_params` instead of being dropped. Mutations are recorded in the audit log as `plugin:<publisher>.<id>`.',
     '',
+    'Methods whose capability is `none` need no capability but still need the plugin enabled and approved. `shell.openExternal` and `files.saveAs` also need transient user activation (a click or key press in the calling frame, within a few seconds), are rate-limited, and run only in the desktop app; frames also reach them as `orca.shell.openExternal(url)` and `orca.files.saveAs({ suggestedName, mimeType, data })`, which resolves with `{ status: "saved" }`, or `{ status: "cancelled" }` when the person cancels the dialog. Saved files carry the OS mark for downloaded files.',
+    '',
     '## Methods',
     '',
     '| Method | Capability | Surfaces | Mutation | Since | Summary |',
     '| --- | --- | --- | --- | --- | --- |',
     ...specs.map(
       (spec) =>
-        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | \`${spec.capability}\` | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
+        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${capabilityCell(spec)} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${Object.entries(
+          spec.paramsSince ?? {}
+        )
+          .map(([param, minor]) => ` (\`${param}\`: ${version(minor)})`)
+          .join(
+            ''
+          )}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
     )
   ]
   for (const spec of specs) {
@@ -105,13 +98,69 @@ export function renderPluginHostApiReference(): string {
       '```'
     )
   }
+  if (proposed.length > 0) {
+    lines.push(
+      '',
+      '## Proposed',
+      '',
+      'Methods still being designed. Only development plugins (`orca plugin dev`) may call them; any other plugin gets `not_permitted`. They are not frozen: they may change or disappear in any release, they count toward no `api.minor`, and `orca/host` typings omit them.'
+    )
+    for (const name of proposed) {
+      const spec = PLUGIN_HOST_API[name]
+      lines.push(
+        '',
+        `### \`${name}\``,
+        '',
+        `${spec.summary} Capability: ${capabilityCell(spec)}; surfaces: ${spec.surfaces.join(', ')}.`,
+        '',
+        '```ts',
+        signature(spec.params, spec.result),
+        '```'
+      )
+    }
+  }
+  lines.push(
+    '',
+    '## Events',
+    '',
+    "A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`; editor events need none). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.",
+    '',
+    '| Event | Payload | Summary |',
+    '| --- | --- | --- |',
+    ...PLUGIN_EVENT_NAMES.map(
+      (name) =>
+        `| \`${name}\` | \`${zodTypeText(PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT).replaceAll('|', '\\|')}\` | ${PLUGIN_EVENT_SUMMARIES[name]} |`
+    )
+  )
+  const typeCell = (schema: z.ZodType | null): string =>
+    schema === null
+      ? 'none'
+      : `\`${zodTypeText(schema, 'output', REFERENCE_TYPE_TEXT).replaceAll('|', '\\|')}\``
+  lines.push(
+    '',
+    '## Hooks',
+    '',
+    `A worker changes or stops what Orca is about to do with \`orca.hooks.on(hook, (event, next) => ...)\`, which returns \`{ dispose() }\`. Each hook must be listed in \`contributes.hooks\` (\`main\` and the \`trusted-worker\` profile; no capability). Return \`next(event)\` to go on, with the fields the hook allows changed; return a result such as \`{ deny: reason }\` to stop; return nothing to pass. Plugins run one after another (installed plugins by key, then development folders), then Orca acts on what is left. Orca starts the workers of plugins that list hooks (or status bar items) as soon as they are enabled and keeps them running until they are disabled. A handler that takes longer than ${PLUGIN_HOOK_DEFAULT_DEADLINE_MS / 1000} s, a worker that does not start within the worker ready timeout, a throw, a crash or a disabled plugin counts as having passed, and \`orca plugin logs\` shows the hook, the plugin and how long it took. A guard that must fail closed sets \`"onError": "deny"\` on its \`contributes.hooks\` entry; then those failures refuse the action, naming the plugin. Decide before any other awaited call: an awaited host call ahead of your \`{ deny }\` can fail or time out and let the action through.`,
+    '',
+    "Hooks run in the workers of the Orca that handles the request, before it acts: for an SSH or WSL terminal or workspace, that is the desktop, before the work is sent to its host. A paired client reaching a remote Orca server is decided by that server's plugins. `orca plugin types` writes the events as `PluginHooks` in `orca/host`; `orca/testing` `mountWorker(...).hooks.fire(hook, event)` returns what the chain decided.",
+    '',
+    '| Hook | Event | Stop result | `next` may change | Summary |',
+    '| --- | --- | --- | --- | --- |',
+    ...PLUGIN_HOOK_NAMES.map((name) => {
+      const spec = PLUGIN_HOOK_SPECS[name]
+      const mutable = spec.mutable.map((key) => `\`${key}\``).join(', ') || 'nothing'
+      return `| \`${name}\` | ${typeCell(spec.payload)} | ${typeCell(spec.result)} | ${mutable} | ${spec.summary} |`
+    })
+  )
   lines.push(
     '',
     '## Errors',
     '',
     'A failed call rejects with an `Error` carrying `code`, `message`, `retryable` and, for `rate_limited`, `retryAfterMs`. Treat a code not listed here as `action_failed`:',
     '',
-    ...Object.entries(ERROR_CODES).map(([code, meaning]) => `- \`${code}\`: ${meaning}.`),
+    ...Object.entries(PLUGIN_HOST_ERROR_CODE_MEANINGS).map(
+      ([code, meaning]) => `- \`${code}\`: ${meaning}.`
+    ),
     '',
     '## Stability and deprecation',
     '',
@@ -120,7 +169,14 @@ export function renderPluginHostApiReference(): string {
     `- **Host API ${PLUGIN_HOST_API_MAJOR} is frozen.** Within \`pluginApi\` ${PLUGIN_HOST_API_MAJOR}, methods, params and results only grow: a new method or a new optional param arrives with a higher \`Since\` minor, and nothing listed here is removed, renamed or narrowed.`,
     '- **Deprecation.** A method to be retired is marked deprecated in this table and keeps working for the rest of the major.',
     '- **New majors.** A breaking change ships as a new `pluginApi` major beside the old one. Orca refuses a manifest whose `pluginApi` names a major it does not implement, with "update Orca", instead of loading it against the wrong API.',
-    '- **Detect, do not assume.** Check `orca.host.has(name)` or `orca.api.minor` before calling a method newer than the oldest Orca you support; a call that slips through fails with `unknown_method`.'
+    '- **Detect, do not assume.** Check `orca.host.has(name)` or `orca.api.minor` before calling a method newer than the oldest Orca you support; a call that slips through fails with `unknown_method`.',
+    `- **Checked at publish.** \`orca plugin validate\` and \`pnpm validate:plugin\` read the literal method names your worker, panel and editor code passes to \`orca.host.call\` (comments ignored), and the Orca plugin directory runs them against the latest Orca release. A method that release does not have fails the check unless the plugin calls \`orca.host.has\` anywhere, and a proposed one fails unless the plugin checks that name with a literal \`orca.host.has(name)\`; either is then a warning (guards need \`engines.orca\` ${PLUGIN_HOST_HAS_SINCE} or later). A method newer than your \`engines.orca\` or one the surface cannot call is a warning, since a text scan cannot see guards or which code a surface runs; \`orca.host.has(name)\` anywhere in the plugin silences the \`engines.orca\` warning. A deprecated method is a warning that starts \`deprecated host method <name>\`.`,
+    '',
+    'The first Orca release with each minor, which is what `engines.orca` must reach for a method of that minor. A few worker methods reached panels and editors in a later minor; the check uses that one for frame code:',
+    '',
+    '| Minor | Orca |',
+    '| --- | --- |',
+    ...PLUGIN_HOST_API_MINOR_SINCE.map((release, minor) => `| ${version(minor)} | ${release} |`)
   )
   return `${lines.join('\n')}\n`
 }

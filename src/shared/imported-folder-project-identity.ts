@@ -4,9 +4,9 @@ import {
   getProjectIdForProviderIdentity,
   getProjectIdentityKey,
   isHostLocalProjectId
-} from './project-host-setup-projection'
-import type { ProjectProviderIdentity } from './project-types'
-import type { Repo } from './repo-types'
+} from './project/host-setup/project-host-setup-projection'
+import type { ProjectProviderIdentity } from './project/project-types'
+import type { Repo } from './repository/repo-types'
 
 function sameOwnerAndRepo(left: ProjectProviderIdentity, right: ProjectProviderIdentity): boolean {
   return (

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 // Match the resting tab’s agent identity in the drag overlay.

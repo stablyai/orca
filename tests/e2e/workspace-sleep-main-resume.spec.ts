@@ -9,7 +9,7 @@ import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/termin
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { createHostRendererTerminalTab } from './helpers/host-created-terminal-retention-oracle'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 
 const SETTLE_MS = 6_000
 

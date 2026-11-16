@@ -10,7 +10,7 @@ import { ptyOwnership, ptyIncarnationById } from './provider/ownership-state'
 import { attachOnlyViewOf } from './pane/attach-only-view'
 import { pendingRuntimePaneCreatesByOwnerKey } from './pane/spawn-reservation'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
-import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-hook-relay-reattach'
+import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
 
 export async function beginPtySpawn(
   ctx: PtySpawnOperationState,
@@ -45,7 +45,12 @@ export async function beginPtySpawn(
   if (startup) {
     await startup
   }
-  ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
+  ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(
+    args.worktreeId,
+    args.cwd,
+    undefined,
+    args.connectionId
+  )
   // Inherited producers and replacements already own this acquisition and must never await themselves.
   if (
     ctx.paneSpawnOperation ||

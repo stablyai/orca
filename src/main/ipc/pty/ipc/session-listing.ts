@@ -1,15 +1,15 @@
 import type { ResourceViewAdmission } from '../../../../shared/resource-view-admission'
-import { assertResourceViewVisible } from '../../../window/resource-view-admission'
+import { assertResourceViewVisible } from '../../../window/visibility/resource-view-admission'
 import { getPtyIpc } from '../pty-host-bindings'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
-} from '../../../providers/pty-process-list-admission'
+} from '../../../providers/pty/process-list-admission'
 import {
   ptySessionIdentity,
   type PtyListedSession,
   type PtySessionListScope
-} from '../../../../shared/pty-listed-session'
+} from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { ptyOwnership } from '../provider/ownership-state'
 import { getProvider, registeredPtyProviders, type ResolvedPtyHost } from '../provider/registry'
 import {

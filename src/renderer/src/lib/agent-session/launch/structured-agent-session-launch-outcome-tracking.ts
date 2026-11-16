@@ -1,39 +1,43 @@
-import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
+import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { settleStructuredLaunchCreateOptions } from './structured-agent-session-launch-options'
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store/index'
-import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { agentSessionWriteFailureText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
   materializeStructuredLaunchSurface,
   findStructuredLaunchTab
-} from '../../structured-agent-session-launch-surface'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+} from './structured-agent-session-launch-surface'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import {
   settleStructuredLaunchCallers,
   structuredLaunchCallersHavePendingWork
-} from '@/lib/structured-agent-session-launch-callers'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
-import { structuredLaunchFailure } from '../../structured-agent-session-launch-failure'
+import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
+import { retireStructuredAgentSessionLaunchCancellationTombstone } from './structured-agent-session-launch-registry'
 import {
   deleteStructuredLaunchStateIfCurrent,
   notifyStructuredLaunchListeners,
-  retireStructuredAgentSessionLaunchCancellationTombstone,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
-import { recordUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
+} from './structured-agent-session-launch-state-store'
+import { recordUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
+import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
   if (deleteStructuredLaunchStateIfCurrent(state)) {
-    notifyStructuredLaunchListeners()
+    notifyStructuredLaunchListeners(state.intent.sessionId)
   }
 }
 
 export function maybeCleanupLaunchState(state: StructuredLaunchState): void {
   if (
     state.callers.outcome === 'failed' ||
-    structuredLaunchCallersHavePendingWork(state.callers) ||
-    Object.keys(state.selection.held).length > 0
+    state.callers.outcome === 'unknown' ||
+    (state.operationEnded && !!state.intent.params.firstMessage) ||
+    structuredLaunchCallersHavePendingWork(state.callers)
   ) {
     return
   }
@@ -47,7 +51,10 @@ function cleanupUnmaterializedLaunch(state: StructuredLaunchState): boolean {
       state.intent.worktreeId,
       state.intent.sessionId
     )
-    return deleteStructuredLaunchStateIfCurrent(state)
+    if (deleteStructuredLaunchStateIfCurrent(state)) {
+      forgetStructuredSessionSelection(state.intent.sessionId, state.intent.target)
+      return true
+    }
   }
   return false
 }
@@ -56,15 +63,27 @@ function settleStructuredLaunchRefusal(state: StructuredLaunchState): void {
   if (state.callers.outcome !== 'pending' && state.callers.outcome !== 'unknown') {
     return
   }
+  if (
+    state.visibilityUnknown &&
+    state.intent.params.firstMessage &&
+    state.callers.attempt.kind === 'retry'
+  ) {
+    state.operationEnded = true
+    state.callers.outcome = 'unknown'
+    notifyStructuredLaunchListeners(state.intent.sessionId)
+    return
+  }
   retireStructuredAgentSessionLaunchCancellationTombstone(
     state.intent.worktreeId,
     state.intent.sessionId
   )
+  state.visibilityUnknown = false
+  delete state.operationEnded
   settleStructuredLaunchCallers(state.callers, 'failed')
   if (cleanupUnmaterializedLaunch(state)) {
     retireStructuredAgentSessionReadOwner(state.intent.sessionId, state.intent.target)
   }
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
 }
 
 export function trackLaunchSettlement(
@@ -74,11 +93,28 @@ export function trackLaunchSettlement(
   void promise.then(
     (receipt) => {
       if (state.promise !== promise) {
+        if (
+          !state.cancelled &&
+          state.visibilityUnknown &&
+          receipt.sessionId === state.intent.sessionId &&
+          receipt.firstMessage?.clientMessageId ===
+            state.intent.params.firstMessage?.clientMessageId &&
+          receipt.firstMessage
+        ) {
+          settleStructuredAgentSessionSendsFromJournal(
+            receipt.sessionId,
+            [receipt.firstMessage],
+            [],
+            receipt.cursor
+          )
+        }
         return
       }
       if (state.cancelled) {
         return
       }
+      state.visibilityUnknown = false
+      delete state.failure
       materializeStructuredLaunchSurface(state.intent)
       if (!state.hostListed) {
         const { worktreeId, sessionId, executionHostId } = state.intent
@@ -90,7 +126,15 @@ export function trackLaunchSettlement(
         })
       }
       settleStructuredLaunchCallers(state.callers, 'published')
-      notifyStructuredLaunchListeners()
+      if (receipt.firstMessage) {
+        settleStructuredAgentSessionSendsFromJournal(
+          receipt.sessionId,
+          [receipt.firstMessage],
+          [],
+          receipt.cursor
+        )
+      }
+      notifyStructuredLaunchListeners(state.intent.sessionId)
     },
     (error) => {
       if (state.promise !== promise) {
@@ -118,11 +162,15 @@ export function trackLaunchSettlement(
       } else if (!state.visibilityUnknown) {
         settleStructuredLaunchCallers(state.callers, 'failed')
         cleanupUnmaterializedLaunch(state)
-        notifyStructuredLaunchListeners()
+        notifyStructuredLaunchListeners(state.intent.sessionId)
       } else {
+        if (state.intent.params.firstMessage) {
+          state.operationEnded = true
+          settleStructuredLaunchCreateOptions(state, { kind: 'unknown' })
+        }
         state.callers.outcome = 'unknown'
         materializeStructuredLaunchSurface(state.intent)
-        notifyStructuredLaunchListeners()
+        notifyStructuredLaunchListeners(state.intent.sessionId)
       }
     }
   )

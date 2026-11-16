@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { diffScrollTopCache } from '@/lib/scroll-cache'
+import { diffScrollTopCache } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { buildPierreFileDiff } from './pierre-diff-metadata'
 import type { PierreDiffInstance } from './PierreDiffSurface'
 import { usePierreDiffScrollRestore } from './use-pierre-diff-scroll-restore'
@@ -101,4 +101,21 @@ it('retries after a hidden renderer acquires a layout', () => {
   act(() => result.current(host, 'update', instance))
   act(() => vi.runOnlyPendingTimers())
   expect(container.scrollTop).toBe(700)
+})
+
+it('lets note navigation consume the initial scroll even after its request is acknowledged', () => {
+  const containerRef = { current: container }
+  const initialProps: { pending: string | null } = { pending: 'note' }
+  const { result, rerender } = renderHook(
+    ({ pending }: { pending: string | null }) =>
+      usePierreDiffScrollRestore('file', containerRef, diff, pending),
+    { initialProps }
+  )
+  act(() => result.current(host, 'mount', instance))
+  act(() => vi.runOnlyPendingTimers())
+  container.scrollTop = 350
+  rerender({ pending: null })
+  act(() => result.current(host, 'update', instance))
+  act(() => vi.runOnlyPendingTimers())
+  expect(container.scrollTop).toBe(350)
 })

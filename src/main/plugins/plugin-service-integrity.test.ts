@@ -7,10 +7,10 @@ import {
   pluginManifestSchema,
   type PluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
-import { hashPluginTree } from './plugin-content-hash'
-import { PluginContentVerifier } from './plugin-content-integrity'
+import { hashPluginTree } from './artifacts/plugin-content-hash'
+import { PluginContentVerifier } from './artifacts/plugin-content-integrity'
 import { PluginService } from './plugin-service'
-import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
+import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
 
 const roots: string[] = []
 
@@ -79,7 +79,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('PluginService lazy content verification', () => {
+describe('PluginService content verification on load', () => {
   it('does not share an in-flight verification across same-key content revisions', async () => {
     const oldPlugin = await createInstalledPlugin({ worker: false })
     const newPlugin = await createInstalledPlugin({ worker: false })
@@ -101,13 +101,25 @@ describe('PluginService lazy content verification', () => {
     await expect(newVerification).resolves.toBeUndefined()
   })
 
-  it('detects tampering only when panel code is first consumed', async () => {
+  it('detects tampering on the first panel load after discovery', async () => {
     const plugin = await createInstalledPlugin({ worker: false })
     const service = createService(plugin)
     await service.initialize()
     expect(service.findValidPlugin(plugin.pluginKey)).not.toBeNull()
 
     await writeFile(join(plugin.rootDir, 'payload.txt'), 'tampered after discovery')
+
+    await expect(service.panels.readEntry(plugin.pluginKey, 'panel')).resolves.toBeNull()
+    await service.dispose()
+  })
+
+  it('detects tampering on a later panel load after a successful first load', async () => {
+    const plugin = await createInstalledPlugin({ worker: false })
+    const service = createService(plugin)
+    await service.initialize()
+    await expect(service.panels.readEntry(plugin.pluginKey, 'panel')).resolves.not.toBeNull()
+
+    await writeFile(join(plugin.rootDir, 'payload.txt'), 'tampered after first load')
 
     await expect(service.panels.readEntry(plugin.pluginKey, 'panel')).resolves.toBeNull()
     await service.dispose()
@@ -123,7 +135,6 @@ describe('PluginService lazy content verification', () => {
     await expect(service.invokeCommand(plugin.pluginKey, 'run')).rejects.toThrow(
       'integrity verification'
     )
-    expect(workerFactory).not.toHaveBeenCalled()
     await service.dispose()
   })
 })

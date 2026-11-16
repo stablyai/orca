@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
+import { requireGitOwnerTarget } from './worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import { getRuntimeGitHistory } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { GitHistoryPanelState } from './git-history-panel'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 
-/** `wakeWslDistro`: showing Commits or its Refresh, a user act that may start a stopped WSL distro. */
+/** `wakeWslDistro`: the user opening Commits or its Refresh, a user act that may start a stopped WSL distro. */
 type HistoryRefresh = { wakeWslDistro?: boolean }
 const SHOWN_HISTORY_LOAD: HistoryRefresh = { wakeWslDistro: true }
 
@@ -16,6 +17,7 @@ export function useSourceControlGitHistory({
   activeRepoTarget,
   activeWorktreeId,
   worktreePath,
+  branchName,
   compareBaseRef,
   isFolder,
   isBranchVisible,
@@ -26,6 +28,7 @@ export function useSourceControlGitHistory({
   activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
+  branchName: string
   compareBaseRef: string | null
   isFolder: boolean
   isBranchVisible: boolean
@@ -37,6 +40,7 @@ export function useSourceControlGitHistory({
   refreshGitHistory: (options?: HistoryRefresh) => Promise<void>
   refreshGitHistoryRef: RefObject<() => Promise<void>>
 } {
+  const scope = useSourceControlScope()
   const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
     Record<string, GitHistoryPanelState>
   >({})
@@ -95,7 +99,7 @@ export function useSourceControlGitHistory({
         }
       })
       try {
-        const connectionId = getConnectionId(worktreeId) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, worktreeId)
         const result = await getRuntimeGitHistory(
           {
             // Read history on the repo owner, which may differ from the focused host.
@@ -134,6 +138,7 @@ export function useSourceControlGitHistory({
       }
     },
     [
+      scope,
       activeRepoTarget,
       activeWorktreeId,
       compareBaseRef,
@@ -150,16 +155,29 @@ export function useSourceControlGitHistory({
     refreshGitHistoryRef.current = refreshGitHistory
   }, [refreshGitHistory])
 
+  // Expanded at mount, or restored with another worktree's view, is not a click: only an expand
+  // within the same worktree counts as the user opening Commits.
+  const lastExpandedRef = useRef({ worktreeId: activeWorktreeId, expanded: isGitHistoryExpanded })
   useEffect(() => {
+    const last = lastExpandedRef.current
+    const userExpanded =
+      isGitHistoryExpanded && !last.expanded && last.worktreeId === activeWorktreeId
+    lastExpandedRef.current = { worktreeId: activeWorktreeId, expanded: isGitHistoryExpanded }
     // Defer Git subprocesses until Commits is expanded and visible, especially for large/remote repos.
     if (!isBranchVisible || !isGitHistoryExpanded || !isGitHistoryVisible) {
       return
     }
-    // The user is looking at Commits; refreshes after Git actions stay background (E9).
-    void refreshGitHistoryRef.current(SHOWN_HISTORY_LOAD)
+    // Only the user's own act may start a stopped WSL distro: opening Commits, or switching to this
+    // workspace (once per switch). A remount, restore or Orca's own re-show stays background (E9).
+    const userAct =
+      userExpanded ||
+      (activeWorktreeId !== null && takeRecentWorkspaceSwitchWake(activeWorktreeId, 'git-history'))
+    void refreshGitHistoryRef.current(userAct ? SHOWN_HISTORY_LOAD : undefined)
   }, [
     // History uses compareBaseRef, which can move independently of effectiveBaseRef.
     activeWorktreeId,
+    // A branch switch keeps the workspace and path; the open list must follow the new branch.
+    branchName,
     compareBaseRef,
     isBranchVisible,
     isFolder,

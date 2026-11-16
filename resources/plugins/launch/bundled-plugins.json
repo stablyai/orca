@@ -1,4 +1,15 @@
 {
   "version": 1,
-  "plugins": []
+  "plugins": [
+    {
+      "pluginKey": "stablyai.orca-github-vscode-theme",
+      "path": "stablyai.orca-github-vscode-theme",
+      "contentHash": "7e17af8557dd0163ee0bc74aca3a6eb227f00bdd4b2ca04a68d78d891a24afb3"
+    },
+    {
+      "pluginKey": "stablyai.orca-vscode-default-themes",
+      "path": "stablyai.orca-vscode-default-themes",
+      "contentHash": "ce11b29f4c21bedeaa3613e7ce9c4a6863f800e6945754ad1e36d04e24991139"
+    }
+  ]
 }
