@@ -259,27 +259,28 @@ export function useWorkerDockColdSeed(
   visible: boolean,
   presence?: WorkerDockPresence
 ) {
-  const windowVisible = useSyncExternalStore(
-    subscribeWindowParkVisibility,
-    getWindowParkVisible,
-    getWindowParkVisible
-  )
   const key = `${target.kind === 'local' ? 'local' : target.environmentId}\0${sessionId}`
   useEffect(() => {
-    if (
-      !visible ||
-      !windowVisible ||
-      presence ||
-      !isOrcaSessionId(sessionId) ||
-      seededSources.has(key)
-    ) {
+    if (!visible || presence || !isOrcaSessionId(sessionId) || seededSources.has(key)) {
       return
     }
-    seededSources.add(key)
-    void callRuntimeRpc(target, 'orchestration.workerDockRead', {
-      party: formatOrcaSessionAddress(sessionId),
-      seed: true,
-      includeRows: false
-    }).catch(() => {})
-  }, [target, sessionId, visible, windowVisible, presence, key])
+    let stop: (() => void) | undefined
+    const seed = () => {
+      if (!getWindowParkVisible() || seededSources.has(key)) {
+        return
+      }
+      seededSources.add(key)
+      stop?.()
+      void callRuntimeRpc(target, 'orchestration.workerDockRead', {
+        party: formatOrcaSessionAddress(sessionId),
+        seed: true,
+        includeRows: false
+      }).catch(() => {})
+    }
+    seed()
+    if (!seededSources.has(key)) {
+      stop = subscribeWindowParkVisibility(seed)
+    }
+    return () => stop?.()
+  }, [target, sessionId, visible, presence, key])
 }
