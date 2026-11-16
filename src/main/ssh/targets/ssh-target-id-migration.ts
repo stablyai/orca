@@ -4,7 +4,7 @@ import type { ProjectGroup } from '../../../shared/project/groups/project-group-
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 
 /** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Mutate in place and report changes for save scheduling. */
 

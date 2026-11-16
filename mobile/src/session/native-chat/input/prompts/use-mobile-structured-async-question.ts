@@ -12,6 +12,8 @@ export type MobileStructuredAskSession = Pick<
   ReturnType<typeof useMobileStructuredAgentSession>,
   'permission' | 'question' | 'sendWithOutcome' | 'sendFollowUp'
 > & {
+  /** The host's saved Skip; absent on a host that keeps none. */
+  asyncQuestionSkip?: ReturnType<typeof useMobileStructuredAgentSession>['asyncQuestionSkip']
   /** Cards waiting in the chat's queue; one quoting a question holds it as answered. */
   submissions?: ReturnType<typeof useMobileStructuredAgentSession>['submissions']
   queued?: { cards: readonly Pick<QueuedMessageCard, 'text'>[] }

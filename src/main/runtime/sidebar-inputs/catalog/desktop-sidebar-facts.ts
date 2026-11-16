@@ -7,7 +7,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
+import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'

@@ -1,4 +1,4 @@
-import type { ResourceViewAdmission } from '../../../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../../../shared/diagnostics/resource-view-admission'
 import { assertResourceViewVisible } from '../../../window/visibility/resource-view-admission'
 import { getPtyIpc } from '../pty-host-bindings'
 import {

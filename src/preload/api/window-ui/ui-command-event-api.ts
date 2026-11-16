@@ -68,7 +68,7 @@ import type {
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
-} from '../../../shared/session-tab-close'
+} from '../../../shared/workspace-layout/client-views/session-tab-close'
 import type { WorkspaceSleepNotice } from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RemoteCliBrowserScopeQuery,

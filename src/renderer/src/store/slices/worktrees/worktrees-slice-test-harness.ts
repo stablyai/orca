@@ -20,7 +20,7 @@ import type {
   HostQualifiedKnownWorktreeResult,
   ListKnownWorktreesForExecutionHostArgs,
   ListDetectedWorktreesArgs
-} from '../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { createWorktreeSlice } from './create-worktree-slice'
 import { resetAuthoritativelyRemovedWorktreeMemoryForTests } from './listing/authoritative-worktree-removal-memory'
 import { resetHostedReviewLinkMutationGenerationForTests } from './metadata/hosted-review-link-mutation'

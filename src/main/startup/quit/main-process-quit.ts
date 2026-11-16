@@ -17,7 +17,7 @@ import { shutdownPairedRuntimeBrowserClientHosts } from '../../browser/client-ho
 import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../../codex/history/index/codex-state-db-backfill-recovery'
-import { stopCodexAccountSessionBridges } from '../../codex/history/bridges/codex-account-session-bridge'
+import { stopCodexAccountHistoryWork } from '../../codex/history/shared-store/codex-account-history-index'
 import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
@@ -138,7 +138,7 @@ function installWillQuitHandler(): void {
     state.pluginUpdateReviewNotices = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
-    stopCodexAccountSessionBridges()
+    stopCodexAccountHistoryWork()
     // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()

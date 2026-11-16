@@ -9,7 +9,7 @@ import {
 } from '../../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
-import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceSelector } from '../../../shared/workspace/identity/floating-workspace-worktree'
 import { RuntimeMarkdownTabOperations } from '../files/paths/runtime-markdown-tab-operations'
 export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOperations {
   protected abstract floatingWorkspaceToResolvedWorktree(

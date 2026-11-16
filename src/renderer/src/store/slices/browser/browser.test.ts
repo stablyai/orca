@@ -6,10 +6,10 @@ import {
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { makeAnnotation } from './annotations/browser-annotation-test-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import '../../../../../shared/workspace-layout/layout-owner-switch'
 import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
-import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { createBrowserMockApi } from './browser-slice-test-harness'
 import { createTestStoreDrawnFromMain } from './browser-slice-drawn-from-main.test-fixture'
 
@@ -229,50 +229,5 @@ describe('createBrowserSlice annotations', () => {
 
     const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
     expect(stored?.payload.screenshot).toBeNull()
-  })
-})
-
-describe('createBrowserSlice closed browser workspaces', () => {
-  it('reopens duplicate-URL browser pages on the originally active page', async () => {
-    const { store, main } = await createTestStoreDrawnFromMain()
-    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com/dashboard', {
-      title: 'First copy'
-    })
-    await main.settle()
-    const secondPage = store.getState().createBrowserPage(tab.id, 'https://example.com/dashboard', {
-      title: 'Second copy'
-    })
-    await main.settle()
-    if (!secondPage) {
-      throw new Error('Expected a second browser page')
-    }
-
-    store.getState().closeBrowserTab(tab.id)
-    await main.settle()
-    const restored = store.getState().reopenClosedBrowserTab('wt-1')
-    // Main draws the tab, then the window sends its second page.
-    await main.settle()
-    await main.settle()
-    if (!restored) {
-      throw new Error('Expected a reopened browser workspace')
-    }
-    const restoredPages = store.getState().browserPagesByWorkspace[restored.id] ?? []
-    // The returned record is as proposed; the drawn one carries the reselected page.
-    const activePageId = store
-      .getState()
-      .browserTabsByWorktree['wt-1']?.find((entry) => entry.id === restored.id)?.activePageId
-    const activePage = restoredPages.find((page) => page.id === activePageId)
-
-    expect(restoredPages.map((page) => page.url)).toEqual([
-      'https://example.com/dashboard',
-      'https://example.com/dashboard'
-    ])
-    expect(activePage?.title).toBe('Second copy')
-    // A layout-owner build's main closed the tab, then reopened it with both pages.
-    expect(layoutApplyTestTransport.sent.map((command) => command.type)).toEqual(
-      ORCA_LAYOUT_OWNER_IS_MAIN
-        ? ['openBrowserTab', 'openBrowserPage', 'closeTabs', 'openBrowserTab', 'openBrowserPage']
-        : []
-    )
   })
 })

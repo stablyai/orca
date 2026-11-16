@@ -7,7 +7,7 @@ import {
 
 import { defineMethod } from '../../../core'
 import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
-import { isFloatingWorkspaceSelector } from '../../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceSelector } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   requireInstalledStructuredHost,

@@ -7,7 +7,7 @@ import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-
 import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from '../../workspace/activation/worktree-activation-pty-inventory'
 import { gateWorktreeAgentActivation } from '../../workspace/activation/worktree-agent-activation-gate'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import {
   activationTreatsNoteAsFinished,
   isStrandedWorkspaceSleepRecord,
