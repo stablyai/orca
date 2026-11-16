@@ -14,7 +14,7 @@ import { prepareStructuredAgentSessionFork } from '../structured-agent-session-f
 import type { StructuredAgentSessionHost } from '../../host/structured-agent-session-host'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { RestTestRig } from '../../host/testing/structured-agent-session-rest-test-rig.test-fixture'
-import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
+import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
 const COPY = '019e6b26-18e2-7103-b7a0-7ba6bb071124'

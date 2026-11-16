@@ -167,6 +167,16 @@ const answer = (
 ) => ctx.holds.answer({ dispatchId: ctx.dispatch.id, approvalId, decision, message: REASON })
 const deny = (ctx: ReturnType<typeof setup>, approvalId: string) => answer(ctx, approvalId)
 
+/** Allows, ticking only until answered: further ticks would fire its 10-minute evidence fallback. */
+async function answeredAllow(ctx: ReturnType<typeof setup>, approvalId: string) {
+  let answered: unknown = null
+  void answer(ctx, approvalId, 'allow').then((result) => (answered = result))
+  for (let i = 0; i < 40 && !answered; i++) {
+    await ctx.tick()
+  }
+  return answered
+}
+
 /** The dialog leaves without Orca's answer, then the lead's turn ends with `result` written. */
 async function closedInTerminal(ctx: ReturnType<typeof setup>, result: ClaudeToolResult) {
   const approvalId = await opened(ctx, hook('tool-1'))
@@ -197,6 +207,44 @@ describe('terminal worker approval holds', () => {
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: true })
     expect(asked.replies).toEqual([{ behavior: 'deny', message: REASON }])
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
+  })
+
+  it("takes Orca's allow once the dialog leaves, though Claude records it only with a slow tool's result", async () => {
+    const ctx = setup()
+    const approvalId = await opened(
+      ctx,
+      hook('tool-1', () => {
+        ctx.screen.lines = AFTER
+      })
+    )
+    expect(await answeredAllow(ctx, approvalId)).toMatchObject({ ok: true })
+    ctx.screen.record = record({ isError: false, text: 'built' }, 'allow')
+    ctx.holds.observe(postToolUse('tool-1'))
+    expect(ctx.closings()).toEqual([])
+  })
+
+  it("corrects an answered allow's receipt when the slow tool's result shows the person's No won", async () => {
+    const ctx = setup()
+    const approvalId = await opened(
+      ctx,
+      hook('tool-1', () => {
+        ctx.screen.lines = AFTER
+      })
+    )
+    expect(await answeredAllow(ctx, approvalId)).toMatchObject({ ok: true })
+
+    ctx.screen.record = record(USER_NO)
+    ctx.holds.observe({
+      paneKey: PANE,
+      connectionId: null,
+      hookEventName: 'Stop',
+      payload: { state: 'done', prompt: '', agentType: 'claude' }
+    })
+    await vi.waitFor(() =>
+      expect(ctx.closedWith()).toEqual([
+        expect.objectContaining({ by: 'worker-terminal', decision: 'deny' })
+      ])
+    )
   })
 
   it('names a Yes whose PostToolUse arrived while the deny was in flight', async () => {

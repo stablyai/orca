@@ -1,5 +1,5 @@
 import { Alert, Platform } from 'react-native'
-import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -9,7 +9,7 @@ import { translate } from '../i18n/mobile-i18n'
 import { triggerError } from '../platform/haptics/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
-import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { slugifyForWorkspaceName } from '../../../src/shared/workspace/naming/workspace-name'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'

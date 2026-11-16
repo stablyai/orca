@@ -5,7 +5,7 @@ import {
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/structured-agent-session-host-capability'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-host-capability'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { NativeChatMessageSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import type {

@@ -7,7 +7,7 @@ import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 
 const PARENT = '/home/neil/orca/workspaces/orca/react-use-effects'
 const CHILD = `${PARENT}/.context/wt-safe-merge`

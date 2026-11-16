@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/context/chat-fork-recap'
-import type { StructuredAgentSessionForkSource } from '../../../../src/shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionForkSource } from '../../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import {
   BRIDGE_CHAT_FORK_RECAP_MAX_CHARS,
   type BridgeChatForkParams,

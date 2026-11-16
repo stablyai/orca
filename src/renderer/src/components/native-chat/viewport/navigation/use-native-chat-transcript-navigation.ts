@@ -1,7 +1,7 @@
 // One navigation at a time — a rail pick or a diff reveal — pinned until it lands; rail picks and a subagent view's history page through one cancellable history loop.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { latestAgentSessionContextClearSequence } from '../../../../../../shared/agent-session/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSubagentRoster } from '../../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type {

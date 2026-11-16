@@ -6,7 +6,7 @@ import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreePushTargetStore } from '../../../git/remotes/worktree-push-target-cleanup'
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'

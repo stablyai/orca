@@ -2,7 +2,7 @@ import {
   githubRepoContext,
   withGitHubRepoExecution
 } from '../github/repositories/github-repository-identity'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import {
   cachedHostedReviewOutcome,
   type HostedReviewForBranchOutcome,

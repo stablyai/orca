@@ -24,7 +24,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
   type ParsedExecutionHost
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { clearSessionSearchInService } from '../../ai-vault/scan-service/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 import { getActiveRuntimeAiVaultHostInfosResult } from './ai-vault'

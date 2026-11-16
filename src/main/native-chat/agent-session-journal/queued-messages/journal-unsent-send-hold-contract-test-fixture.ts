@@ -7,7 +7,7 @@ import type { AgentSessionJournalIdentity } from '../../../../shared/agent-sessi
 import type {
   AgentMessageSource,
   AgentSessionMessageSource
-} from '../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../shared/agent-session/journal/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'

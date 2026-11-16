@@ -3,7 +3,7 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import type { AppState } from '../../../types'
 import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'

@@ -233,6 +233,7 @@ export async function acquireClaudeSession({
       attempt.delivery
     )
     acquisitions.assertCurrent(sessionId, attempt)
+    await connection.spawned
     if (connection.pid === undefined) {
       // Await the spawn diagnostic instead of reporting only a missing PID.
       await initProof.promise

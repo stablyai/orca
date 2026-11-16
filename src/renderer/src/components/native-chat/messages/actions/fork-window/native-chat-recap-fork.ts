@@ -9,7 +9,7 @@ import {
 } from '../../../../../../../shared/agent-session/context/chat-fork-recap'
 import type { ChatForkSurface } from '../../../../../../../shared/native-chat/chat-fork-path'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
 
 /** The hand-off recap of the chat through the fork point, built here without asking any model;

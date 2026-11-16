@@ -9,7 +9,7 @@ import {
   AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY
 } from '../../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { slugifyForWorkspaceName } from '../../../../../../../shared/workspace/naming/workspace-name'
-import type { ExecutionHostId } from '../../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import {
   nativeChatWorktreeForkPlan,
   nativeChatWorktreeForkSourceBranch,

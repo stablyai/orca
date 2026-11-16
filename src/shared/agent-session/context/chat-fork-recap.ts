@@ -2,7 +2,7 @@ import { buildAgentSessionHandoffContext } from '../../native-chat/transcript/ag
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { isNativeChatCompactionBoundary } from '../../native-chat/native-chat-context-usage'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
-import { isNativeChatContextClear } from '../agent-session-context-clear'
+import { isNativeChatContextClear } from '../conversation-context/agent-session-context-clear'
 import { buildAgentSessionContinuationPrompt } from './agent-session-continuation'
 
 /** What a fork's recap hands over: the whole history up to the fork point, or only what the agent

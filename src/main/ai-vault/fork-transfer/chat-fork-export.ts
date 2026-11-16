@@ -3,7 +3,7 @@ import type {
   AiVaultExportChatForkRequest,
   AiVaultExportChatForkResult
 } from '../../../shared/rpc-contract/ai-vault/ai-vault-fork-transfer-params'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { CHAT_FORK_TRANSFER_CHUNK_BYTES } from '../../../shared/ai-vault/fork-transfer/chat-fork-transfer-limits'
 import { sliceAtCodeUnitLimit } from '../../../shared/text/surrogate-safe-text-slice'
 import { resolveClaudeForkSource } from '../../claude/transcripts/claude-conversation-copy'

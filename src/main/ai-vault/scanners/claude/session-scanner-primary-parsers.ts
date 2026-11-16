@@ -5,7 +5,10 @@ import {
 import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/agent-session/journal/harness-injected-user-turns'
 import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import type {

@@ -1,6 +1,6 @@
 import { useCallback, type RefObject } from 'react'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatFork } from '../native-chat/history/use-mobile-native-chat-fork'
 import type { MobileSessionController } from '../use-mobile-session-controller'

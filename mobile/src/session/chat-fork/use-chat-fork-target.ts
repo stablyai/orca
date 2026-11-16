@@ -3,10 +3,10 @@ import * as z from 'zod'
 import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult
-} from '../../../../src/shared/agent-session/agent-session-registered-agents'
+} from '../../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
 import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import { isLocalExecutionHost } from '../../../../src/shared/execution-host'
+import { isLocalExecutionHost } from '../../../../src/shared/execution-host/execution-host'
 import { useHostQuery } from '../../query/host-query'
 import {
   HOST_LIST_TARGET,

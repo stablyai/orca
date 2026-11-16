@@ -6,7 +6,7 @@ import {
   type NativeChatSessionOptionRecord,
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
-import { setBoundedScopeCacheEntry } from '../../native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../composer/native-chat-scope-cache'
 
 const sessionOptionCache = new Map<string, NativeChatSessionOptionRecord>()
 

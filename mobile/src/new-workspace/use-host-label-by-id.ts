@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import {
   HOST_LIST_TARGET,
   hostRepoLabelsQuery,

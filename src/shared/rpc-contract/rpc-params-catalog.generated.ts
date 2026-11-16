@@ -663,6 +663,8 @@ import {
 } from './structured-agent-session/agent-session-attachment-params'
 import { CurrentRequestsParams } from './structured-agent-session/agent-session-current-requests-params'
 import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
+import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
+import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
@@ -876,6 +878,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
+  'agentSession.approveAutoReviewDenial': AutoReviewApprovalParams,
   'agentSession.cancel': CancelParams,
   'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
   'agentSession.close': OptionsParams,
@@ -916,6 +919,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.send': SendParams,
   'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
+  'agentSession.skipAsyncQuestions': SkipAsyncQuestionsParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeAvailability': AvailabilityParams,

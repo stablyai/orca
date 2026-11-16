@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'

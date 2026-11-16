@@ -7,7 +7,7 @@ import { makeTab } from '../testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../../slices/worktrees/worktree.test-fixture'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
-vi.mock('../../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }

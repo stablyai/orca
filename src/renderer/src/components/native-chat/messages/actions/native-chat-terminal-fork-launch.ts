@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { buildAiVaultCopiedSessionStartupForWorktree } from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/agent-session/resume/history/launch-ai-vault-session-and-reveal'
@@ -130,21 +130,18 @@ export async function resumeClaudeCopyInNewTerminalTab(input: {
   executionHostId: ExecutionHostId
   draft?: string
 }): Promise<void> {
-  const startup = buildAiVaultCopiedSessionStartupForWorktree(
-    {
-      state: useAppStore.getState(),
-      worktreeId: input.worktreeId,
-      session: {
-        agent: 'claude',
-        sessionId: input.sessionId,
-        ...(input.filePath ? { filePath: input.filePath } : {}),
-        cwd: input.cwd,
-        codexHome: null,
-        executionHostId: input.executionHostId
-      }
-    },
-    'claude'
-  )
+  const startup = buildAiVaultCopiedSessionStartupForWorktree({
+    state: useAppStore.getState(),
+    worktreeId: input.worktreeId,
+    session: {
+      agent: 'claude',
+      sessionId: input.sessionId,
+      ...(input.filePath ? { filePath: input.filePath } : {}),
+      cwd: input.cwd,
+      codexHome: null,
+      executionHostId: input.executionHostId
+    }
+  })
   const tabId = await launchAiVaultSessionAndReveal({
     agent: 'claude',
     worktreeId: input.worktreeId,

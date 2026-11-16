@@ -2,7 +2,7 @@ import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { getProjectIdentityKey } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { Repo } from '../../../../../shared/repository/repo-types'

@@ -16,7 +16,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../../shared/execution-host'
+} from '../../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../../shared/worktree/types'
 import type { NativeChatForkHostInput } from './native-chat-fork-window-choices'
 

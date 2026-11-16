@@ -5,7 +5,7 @@ import {
   type ChatForkRecapScope
 } from '../../../../src/shared/agent-session/context/chat-fork-recap'
 import { AI_VAULT_CHAT_FORK_EXPORT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { mobileSubagentForkAvailable } from '../mobile-structured-chat-worktree-fork'
 import type { MobileNativeChatFork } from '../native-chat/history/use-mobile-native-chat-fork'
 import type { MobileSessionController } from '../use-mobile-session-controller'

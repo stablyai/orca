@@ -1,4 +1,4 @@
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { EmulatorDevicePicker } from './emulator-device-picker'
 import type { SimulatorDeviceRow } from '../session/emulator-pane-types'

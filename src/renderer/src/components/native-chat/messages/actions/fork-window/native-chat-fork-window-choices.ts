@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { ExecutionHostId } from '../../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import type {
   ChatForkPath,
   ChatForkSurface

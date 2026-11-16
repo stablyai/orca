@@ -27,6 +27,7 @@ export const session = {
 }
 export const structuredSession = {
   asyncQuestionSourceScope: 'journal/host/session/epoch',
+  asyncQuestionSkip: null,
   session,
   isWorking: false,
   turnId: null,

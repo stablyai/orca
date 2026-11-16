@@ -1,5 +1,5 @@
 import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
-import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-create-capabilities'
+import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { Bot } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import { MobileForkIcon } from '../../../components/icons/MobileForkIcon'

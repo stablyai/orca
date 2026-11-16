@@ -1,5 +1,5 @@
 import type { AgentProviderSessionMetadata } from '../agent-session/lifecycle/agent-session-resume'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 
 /** Where a connector conversation comes from; `dev` is the CLI that drives one without a service. */
 export const CONNECTOR_SOURCES = ['slack', 'github', 'linear', 'discord', 'dev'] as const

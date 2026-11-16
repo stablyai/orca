@@ -6,7 +6,7 @@ import {
   HOST_TEST_SESSION
 } from './structured-agent-session-host-test-data.test-fixture'
 import type { AgentSessionAttachParams } from '../../acquisition/structured-agent-session-attach'
-import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionFirstMessage } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 
 export const CREATE_TEST_CALLER = { callerKey: 'client-1' }

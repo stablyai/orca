@@ -173,15 +173,12 @@ export function useAiVaultSessionLaunchActions({
         const target = await dropDeletedRemoteResumeCwd(prepared.session)
         // A copy the chat's host already made is the terminal's own conversation: a plain resume.
         const startup = prepared.copied
-          ? buildAiVaultCopiedSessionStartupForWorktree(
-              {
-                state: useAppStore.getState(),
-                worktreeId,
-                session: target,
-                commandOverride: agentCmdOverrides?.[target.agent]
-              },
-              session.agent
-            )
+          ? buildAiVaultCopiedSessionStartupForWorktree({
+              state: useAppStore.getState(),
+              worktreeId,
+              session: target,
+              commandOverride: agentCmdOverrides?.[target.agent]
+            })
           : buildAiVaultForkStartupForWorktree({
               state: useAppStore.getState(),
               worktreeId,

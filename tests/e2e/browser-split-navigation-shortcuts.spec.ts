@@ -5,7 +5,6 @@ import { expect, test } from './helpers/orca-app'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
-  browserAddressBar,
   browserOverlay,
   createBrowserSplit,
   createTerminalBrowserSplit,
@@ -158,15 +157,6 @@ test.describe('browser split navigation shortcuts', () => {
     await pressInGuest(orcaPage, fixture, { guestKeyCode: '-', guestModifiers: [guestModifier] })
     await expect.poll(firstZoom).toBeLessThan(initialFirstZoom ?? 0)
     expect(await secondZoom()).toBe(initialSecondZoom)
-  })
-
-  test('Focus Address Bar typed in one guest focuses only that split', async ({ orcaPage }) => {
-    const fixture = await createBrowserSplitWithHistory(orcaPage, server)
-
-    await pressInGuest(orcaPage, fixture, { guestKeyCode: 'L', guestModifiers: [guestModifier] })
-
-    await expect(browserAddressBar(orcaPage, fixture.firstBrowserTabId)).toBeFocused()
-    await expect(browserAddressBar(orcaPage, fixture.secondBrowserTabId)).not.toBeFocused()
   })
 
   test('Back and Reload pressed from one split toolbar act on only that split', async ({

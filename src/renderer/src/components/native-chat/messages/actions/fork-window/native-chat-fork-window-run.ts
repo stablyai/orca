@@ -1,6 +1,6 @@
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import {
   createNativeChatForkWorktree,
   nativeChatSubagentFirstMessage,

@@ -3,9 +3,9 @@ import { useAppStore } from '@/store/index'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { slugifyForWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { WorkspaceSource } from '../../../../../shared/workspace/creation/workspace-source'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
