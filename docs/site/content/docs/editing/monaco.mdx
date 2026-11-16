@@ -12,6 +12,10 @@ Files save on blur and after short idle periods. There is no "dirty" dot because
 
 Enable **Insert Final Newline** under [Settings → General → Editor](/docs/settings) to add a missing line break when saving a non-empty file from the code editor. It is off by default, keeps the file's LF or CRLF line endings, and leaves the cursor in place. Rich Markdown, notebook, and CSV editors are unchanged.
 
+## Line endings
+
+New files, and files with no line breaks yet, use the line ending of the machine that owns the file: LF on Linux and macOS hosts (including WSL and SSH hosts reached from Windows), CRLF on native Windows. Choose LF or CRLF under **End of Line** in [Settings → General → Editor](/docs/settings) to always use one. Files that already have line breaks keep their ending, and shell scripts always start with LF.
+
 ## Multi-cursor, go-to, find
 
 - `Cmd-D` — select next occurrence.

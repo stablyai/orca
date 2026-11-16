@@ -101,7 +101,7 @@ export type ExecutionHostTarget = {
   sshOwnerEnvironmentId: string | null
 }
 
-function resolveHostPlatform(
+export function resolveHostPlatform(
   state: HostFactsState,
   args: ExecutionHostTarget & {
     workspacePath: string | null | undefined
@@ -245,7 +245,7 @@ export function resolveWorktreeResourceTarget(
   return targetOnHost(state, worktreeId, getResourceExecutionHostIdForWorktree(state, worktreeId))
 }
 
-function targetOnHost(
+export function targetOnHost(
   state: Omit<WorktreeHostFactsState, 'settings'>,
   worktreeId: string,
   hostId: string,
