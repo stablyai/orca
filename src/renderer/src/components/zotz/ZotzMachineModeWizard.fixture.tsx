@@ -25,6 +25,7 @@ const QR_PLACEHOLDER =
 
 function stubServerSetup(): void {
   window.api.zotzNode = {
+    autoShowFirstRun: false,
     onSetupProgress: () => () => {},
     runServerSetup: async () => ({ steps: FINISHED_STEPS, tailscaleIp: '100.88.1.2' }),
     removeAutostart: async () => ({ ok: true, detail: '' })

@@ -20,7 +20,11 @@ export function ZotzMachineModeGate({
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => onZotzMachineModeWizardOpen(() => setRequested(true)), [])
 
-  const firstRun = mode === 'unset' && !dismissed && !onboardingVisible
+  const firstRun =
+    window.api.zotzNode.autoShowFirstRun === true &&
+    mode === 'unset' &&
+    !dismissed &&
+    !onboardingVisible
   if (!isZotzMachineModeHost() || (!firstRun && !requested)) {
     return null
   }

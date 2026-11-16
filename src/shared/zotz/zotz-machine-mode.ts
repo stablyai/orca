@@ -41,3 +41,19 @@ export function zotzServerNetworkSources(
     ? { allowPublic: false, refusePublic: true, pairingAddress: null }
     : null
 }
+
+/**
+ * Same first-run policy as upstream onboarding: automated launches (ORCA_E2E_USER_DATA_DIR, set by
+ * the Playwright and packaged e2e drivers) and dev builds never get the wizard on their own;
+ * ORCA_DEV_SHOW_FIRST_RUN_EDUCATION=1 brings it back in dev. Settings can always open it.
+ */
+export function shouldAutoShowZotzMachineModeWizard(input: {
+  e2eUserDataDir: string | undefined
+  devBuild: boolean
+  showFirstRunEducation: string | undefined
+}): boolean {
+  if (input.e2eUserDataDir) {
+    return false
+  }
+  return !input.devBuild || input.showFirstRunEducation === '1'
+}
