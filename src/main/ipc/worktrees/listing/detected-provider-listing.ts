@@ -9,7 +9,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
-import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
+import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 import {
   buildDetectedGitWorktrees,

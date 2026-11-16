@@ -11,7 +11,7 @@ import {
 import {
   adoptEndpointProjectHostSetup,
   adoptEndpointRepo
-} from '../../../../shared/endpoint-catalog-adoption'
+} from '../../../../shared/project/catalog/endpoint-catalog-adoption'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'

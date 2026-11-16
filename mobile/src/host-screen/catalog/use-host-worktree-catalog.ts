@@ -1,4 +1,4 @@
-import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
+import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
 import { WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { readWorktreeFirstPage } from '../../worktree/catalog/worktree-catalog-first-page'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'

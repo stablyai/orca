@@ -14,7 +14,7 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab

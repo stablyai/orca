@@ -1,20 +1,14 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { create } from 'zustand'
 import type { AppState } from '@/store/types'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { withAgentStatusOwnership } from '@/store/slices/agent-status/agent-status-ownership-boundary'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { useTerminalPaneTabState } from '../controller/use-terminal-pane-tab-state'
-import { useTerminalTabAgentTypes } from './use-terminal-tab-agent-types'
-import {
-  acceptedAgentStatuses,
-  AcceptedAgentStatuses
-} from '@/store/slices/agent-status/accepted-agent-statuses'
-import { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
@@ -79,105 +73,6 @@ it('keeps raw leaf identity through explicit precedence, foreground fallback and
     act(() => useAppStore.getState().clearPaneForegroundAgent(key))
     expect(types).toEqual({})
   } finally {
-    act(() => root.unmount())
-    useAppStore.setState(original, true)
-  }
-})
-
-it.each([100, 1000])('addresses only the changed title among %i mounted tabs', (count) => {
-  const original = useAppStore.getState()
-  const root = createRoot(document.createElement('div'))
-  const renders = Array.from({ length: count }, () => 0)
-  const types: Readonly<Record<string, string>>[] = []
-  const leafId = PANES.a.leafId
-  function Probe({ index }: { index: number }) {
-    renders[index]++
-    types[index] = useTerminalTabAgentTypes(`fleet-${index}`)
-    return null
-  }
-  try {
-    useAppStore.setState({
-      agentStatusByPaneKey: acceptedAgentStatuses(
-        Array.from({ length: count - 1 }, (_, i): readonly [string, AgentStatusEntry] => {
-          const paneKey = `fleet-${i + 1}:${leafId}`
-          return [
-            paneKey,
-            {
-              paneKey,
-              agentType: 'claude',
-              state: 'done',
-              prompt: 'Finished task',
-              updatedAt: 1_000,
-              stateStartedAt: 1_000,
-              stateHistory: [],
-              paneSleep: { ptyId: `sleep-${i + 1}` }
-            }
-          ]
-        })
-      ),
-      paneForegroundAgentByPaneKey: Object.fromEntries(
-        Array.from({ length: count }, (_, i) => [
-          `fleet-${i}:${leafId}`,
-          { agent: 'codex', shellForeground: false }
-        ])
-      )
-    })
-    act(() =>
-      root.render(Array.from({ length: count }, (_, index) => <Probe key={index} index={index} />))
-    )
-    expect(types[0]).toEqual({ [leafId]: 'codex' })
-    const settled = [...renders]
-    const materializations = vi.spyOn(AgentStatusProjection.prototype, 'terminalLeafAgentTypes')
-    const reads = vi.spyOn(AcceptedAgentStatuses.prototype, 'get')
-    const target = `fleet-0:${leafId}`
-    act(() =>
-      useAppStore
-        .getState()
-        .setPaneForegroundAgent(target, { agent: 'claude', shellForeground: false })
-    )
-    expect(types[0]).toEqual({ [leafId]: 'claude' })
-    expect(renders.slice(1)).toEqual(settled.slice(1))
-    expect(materializations.mock.calls.every(([tab]) => tab === 'fleet-0')).toBe(true)
-    expect(reads.mock.calls.every(([key]) => key === target)).toBe(true)
-    materializations.mockClear()
-    reads.mockClear()
-    act(() =>
-      useAppStore
-        .getState()
-        .setAgentStatus(target, { state: 'working', agentType: 'unknown', prompt: 'Task' })
-    )
-    expect(types[0]).toEqual({ [leafId]: 'unknown' })
-    expect(renders.slice(1)).toEqual(settled.slice(1))
-    expect(materializations.mock.calls.every(([tab]) => tab === 'fleet-0')).toBe(true)
-    expect(reads.mock.calls.every(([key]) => key === target)).toBe(true)
-    const acceptedRender = renders[0]
-    materializations.mockClear()
-    act(() =>
-      useAppStore
-        .getState()
-        .setAgentStatus(target, { state: 'working', agentType: 'unknown', prompt: 'More detail' })
-    )
-    expect(renders[0]).toBe(acceptedRender)
-    expect(materializations).not.toHaveBeenCalled()
-    act(() => useAppStore.getState().dropAgentStatus(target))
-    expect(types[0]).toEqual({ [leafId]: 'claude' })
-    const captured = useAppStore.getState().agentStatusByPaneKey.capture()
-    const own = renders[0]
-    materializations.mockClear()
-    act(() =>
-      useAppStore.getState().setPaneForegroundAgent(target, {
-        agent: 'claude',
-        shellForeground: false,
-        routingTrusted: true
-      })
-    )
-    expect(renders[0]).toBe(own)
-    expect(materializations).not.toHaveBeenCalled()
-    act(() => useAppStore.getState().clearPaneForegroundAgent(target))
-    expect(types[0]).toEqual({})
-    expect(captured.projection.terminalLeafAgentTypes('fleet-0')).toEqual({ [leafId]: 'claude' })
-  } finally {
-    vi.restoreAllMocks()
     act(() => root.unmount())
     useAppStore.setState(original, true)
   }

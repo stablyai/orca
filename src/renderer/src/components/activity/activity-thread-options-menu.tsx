@@ -23,7 +23,7 @@ import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount
 } from './activity-scope-filter-controls'
-import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
+import type { ActivityGroupBy } from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 
 const GROUP_BY_OPTIONS = [
   'none',

@@ -1,4 +1,4 @@
-import type { Tab } from '../../tab-types'
+import type { Tab } from '../tab-groups/tab-types'
 import type { TerminalTab } from '../terminal-tab-types'
 import type {
   LayoutContentTab,

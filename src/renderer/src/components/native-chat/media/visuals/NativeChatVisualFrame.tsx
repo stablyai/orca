@@ -5,6 +5,7 @@ import {
   NATIVE_CHAT_VISUAL_PONG_TIMEOUT_MS,
   buildNativeChatVisualDocument,
   nativeChatVisualPingMessage,
+  newNativeChatVisualChannel,
   nativeChatVisualThemeMessage,
   readNativeChatVisualFrameMessage,
   readNativeChatVisualPong
@@ -19,12 +20,6 @@ import { useWebviewDragPassthroughActive } from '../../../browser-pane/host-gues
 export const NATIVE_CHAT_VISUAL_RESERVED_HEIGHT = 160
 // Allow one link per Chromium activation window so one click cannot open multiple pages.
 const LINK_COOLDOWN_MS = 5_000
-
-function newChannel(): string {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
-}
 
 /** Use an opaque script-only frame and restyle in place; unanswered later loads retire it as a tripwire, not a security boundary. */
 export function NativeChatVisualFrame({
@@ -60,7 +55,7 @@ export function NativeChatVisualFrame({
 
   // Built once per revision: the theme at build time paints first, later themes arrive by message.
   const built = useMemo(() => {
-    const channel = newChannel()
+    const channel = newNativeChatVisualChannel()
     return {
       channel,
       srcDoc: buildNativeChatVisualDocument({

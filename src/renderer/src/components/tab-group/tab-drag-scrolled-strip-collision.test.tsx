@@ -16,7 +16,7 @@ import type {
   UniqueIdentifier
 } from '@dnd-kit/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '../../store'
 import { recordTabDragPointer } from './tab-drag-pointer'
 import { getTabPaneBodyDroppableId, useTabDragSplit, type TabDragItemData } from './useTabDragSplit'
