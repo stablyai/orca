@@ -1,5 +1,5 @@
 import type { NativeChatSubagentState } from '../../../../shared/native-chat/native-chat-types'
-import { readCodexSubagentAnnouncements } from './codex-subagent-activity'
+import { readCodexSubagentAnnouncements, type CodexChildLaunch } from './codex-subagent-activity'
 import { codexChildTurnState, type CodexSubagentExecutions } from './codex-subagent-executions'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import '../items/codex-structured-item-translation'
@@ -11,6 +11,7 @@ export type CodexAnnouncedChild = {
   label: string | null
   /** Set only by spawn announcements, whose reporting thread is the spawner. */
   spawnerThreadId: string | undefined
+  launch?: CodexChildLaunch
 }
 
 export type CodexBackgroundTaskFrame =
@@ -78,7 +79,8 @@ export function readCodexBackgroundTaskFrame(
       agentThreadId: announcement.agentThreadId,
       label: announcement.label,
       // Only a spawn names the spawner: other announcements ride whichever agent acted.
-      spawnerThreadId: announcement.spawned ? event.threadId : undefined
+      spawnerThreadId: announcement.spawned ? event.threadId : undefined,
+      launch: announcement.launch
     })
   )
   return children.length > 0 ? { kind: 'subagents', children } : null
@@ -92,7 +94,7 @@ export function observeCodexExecutionFrame(
 ): void {
   if (frame?.kind === 'subagents') {
     for (const child of frame.children) {
-      executions.register(child.agentThreadId, child.label, child.spawnerThreadId)
+      executions.register(child.agentThreadId, child.label, child.spawnerThreadId, child.launch)
     }
   } else if (frame?.kind === 'thread-closed') {
     executions.closeThread(frame.threadId)

@@ -3,11 +3,11 @@ import {
   clampUtf8TextTail,
   getUtf8ByteLength,
   isUtf8ByteLengthWithinLimit
-} from '../../../utf8-byte-limits'
+} from '../../../text/utf8-byte-limits'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../../ansi-escape-sequences'
+} from '../../../terminal/protocol/escape/ansi-escape-sequences'
 import { PR_CHECK_LOG_TAIL_BYTES, sanitizeCheckJobLogExcerpt } from './check-job-log-excerpt'
 
 export const PR_CHECK_LOG_TAIL_LINES = 200

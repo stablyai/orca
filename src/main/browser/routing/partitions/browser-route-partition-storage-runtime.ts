@@ -21,7 +21,7 @@ import {
   currentBrowserRoutePartitionBindingFilePath
 } from './browser-route-partition-binding-runtime'
 import { browserRoutePartitionStorageDependencies } from './browser-route-partition-storage-dependencies'
-import { getRuntimeEnvironmentRegistryRoot } from '../../../ipc/runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from '../../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 
 export type BrowserRoutePartitionStorageClear = {
   clearedPartitions: string[]
@@ -59,7 +59,7 @@ export async function collectOrphanedBrowserRoutePartitionStorage(
     })
   )
   const liveStorageScopes = new Set(
-    listEnvironments(getRuntimeEnvironmentRegistryRoot()).map((environment) =>
+    (await listEnvironments(getRuntimeEnvironmentRegistryRoot())).map((environment) =>
       deriveBrowserRoutePartitionStorageScope({ orcaProfileId, environmentId: environment.id })
     )
   )

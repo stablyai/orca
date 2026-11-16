@@ -3,7 +3,7 @@ import { BrowserError } from '../../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { startBrowserScreencast } from '../../../browser/cdp/screencast/browser-screencast-stream'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { mintBrowserScreencastSubscriptionId } from './browser-screencast-subscription-id'
 import {
   cancelScreencastSubscriberFrameRetry,
@@ -65,7 +65,9 @@ export class RuntimeBrowserScreencasts {
         'Client-hosted browser pages do not support server screencast.'
       )
     }
-    const target = await this.targets.resolveBrowserCommandTarget(params)
+    const target = await this.targets.resolveBrowserCommandTarget(params, {
+      waitForFirstLoad: false
+    })
     const { browserPageId, webContents: guest } = this.targets.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId

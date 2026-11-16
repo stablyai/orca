@@ -1,5 +1,5 @@
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   trustedCodexResumeHomes,
   type CodexSessionResumePreparation
@@ -18,7 +18,7 @@ import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -48,6 +48,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
     }
     if (!isSystemHome) {
+      await deps.getRuntimeHome()?.prepareAccountHistoryForPinnedHome(home)
       // Hook repair may skip or fail before its config mirror applies the guard.
       ensureCodexDaemonSocketGuard(home)
     }

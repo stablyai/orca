@@ -4,12 +4,18 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../shared/agent-accounts/managed-account-types'
 
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude-command-process'
 
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import { ClaudeAccountService } from './service'
+
+// Selection checks must never reach the real Keychain.
+vi.mock('../macos-keychain/generic-password', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readKeychainPassword: async () => null
+}))
 
 const roots: string[] = []
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
@@ -172,6 +178,31 @@ describe('ClaudeAccountService', () => {
     expect(existsSync(join(f.root, newId(f)))).toBe(false)
   })
 
+  it('names a signed-out account without touching its sign-in, keeps the name, and drops it on removal', async () => {
+    const f = fixture()
+    const records = f.settings().claudeManagedAccounts
+    const selection = f.settings().activeClaudeManagedAccountIdsByRuntime
+    expect(f.service.renameAccount('b', '  Work  ').accounts).toContainEqual(
+      expect.objectContaining({ id: 'b', email: 'b@example.test', displayName: 'Work' })
+    )
+    // Launch-relevant records and selection stay the same objects, so nothing re-reads them.
+    expect(f.settings().claudeManagedAccounts).toBe(records)
+    expect(f.settings().activeClaudeManagedAccountIdsByRuntime).toBe(selection)
+    f.runLogin.mockImplementationOnce(async () => {
+      f.signIn('b', 'b@example.test')
+      return ''
+    })
+    await f.service.reauthenticateAccount('b')
+    expect(f.service.listAccounts().accounts.find((entry) => entry.id === 'b')?.displayName).toBe(
+      'Work'
+    )
+    f.service.renameAccount('b', ' ')
+    expect(f.settings().managedAccountDisplayNames).toEqual({ claude: {} })
+    f.service.renameAccount('b', 'Work')
+    await f.service.removeAccount('b')
+    expect(f.settings().managedAccountDisplayNames).toEqual({ claude: {} })
+  })
+
   it('signs a saved account in again inside its own folder and keeps it on failure', async () => {
     const f = fixture()
     f.runLogin.mockImplementationOnce(async (_args, config) => {
@@ -189,5 +220,20 @@ describe('ClaudeAccountService', () => {
     await expect(f.service.reauthenticateAccount('b')).rejects.toThrow('cancelled')
     expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
+  })
+
+  it('refuses to select an account that has its identity but no login to start Claude with', async () => {
+    const f = fixture()
+    f.signIn('b', 'b@example.test')
+    await expect(f.service.selectAccount('b')).rejects.toThrow(
+      'Sign in to this Claude account again before selecting it.'
+    )
+    expect(f.settings().activeClaudeManagedAccountId).toBe('a')
+
+    writeFileSync(
+      join(f.home('b'), '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
+    )
+    await expect(f.service.selectAccount('b')).resolves.toMatchObject({ activeAccountId: 'b' })
   })
 })

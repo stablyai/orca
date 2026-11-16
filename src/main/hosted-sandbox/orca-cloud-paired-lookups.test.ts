@@ -20,7 +20,7 @@ vi.mock('electron', () => ({
     removeHandler: (channel: string) => handlers.delete(channel)
   }
 }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({ listEphemeralVmRuntimes: () => [] }))
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({ listEphemeralVmRuntimes: () => [] }))
 vi.mock('./hosted-sandbox-config', () => ({
   getHostedSandboxConfig: () => ({ controlPlaneUrl: 'https://cp.test' })
 }))

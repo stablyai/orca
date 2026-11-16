@@ -1,10 +1,11 @@
+import { isProjectGroupHookTrustKey } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { setPendingLaunchReadoptions } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import { continueReadoptedLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { AppState } from '../types'
-import type { SshRepoReadoption } from '../../../../shared/ssh-types'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
+import type { SshRepoReadoption } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import type { ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import {
   reconcileReadoptedSshRepoRows,
   type SshRepoReconciliation
@@ -12,14 +13,14 @@ import {
 
 import { reconcileReadoptedSshWorktreesByRepo } from './readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
 import { dropWorktreeRowsOfDroppedRepos } from './dropped-repo-worktree-rows'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { withoutPendingRuntimeRepoRemovals } from './pending-runtime-repo-removals'
 
 export type FetchedRepoCatalog = {
@@ -174,7 +175,7 @@ export function filterTrustedOrcaHooksToValidRepos(
 ): AppState['trustedOrcaHooks'] {
   const next: AppState['trustedOrcaHooks'] = {}
   for (const [repoId, entry] of Object.entries(trust)) {
-    if (validRepoIds.has(repoId)) {
+    if (validRepoIds.has(repoId) || isProjectGroupHookTrustKey(repoId)) {
       next[repoId] = entry
     }
   }

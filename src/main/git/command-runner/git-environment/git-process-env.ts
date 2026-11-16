@@ -1,4 +1,4 @@
-import { addWslEnvKeys } from '../../../../shared/wsl-env'
+import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 import { gitCredentialPromptGuardEnv } from '../../../../shared/git/commands/git-credential-prompt-env'
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../../../../shared/git/commands/git-output-locale'
 
@@ -9,6 +9,21 @@ export function gitOptionalLocksDisabledEnv(
     ...env,
     GIT_OPTIONAL_LOCKS: '0'
   }
+}
+
+/** Git 2.44+ skips partial-clone lazy fetches; older Git is refused every transport. */
+export const OFFLINE_GIT_ENV = { GIT_NO_LAZY_FETCH: '1', GIT_ALLOW_PROTOCOL: 'none' }
+
+/** For reads that must never reach a remote. */
+export function offlineGitEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const next = { ...env, ...OFFLINE_GIT_ENV }
+  if (platform === 'win32') {
+    addWslEnvKeys(next, Object.keys(OFFLINE_GIT_ENV))
+  }
+  return next
 }
 
 /** Pin Git diagnostics to English so parsers work under any user locale. */

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 
 const runtimes = vi.hoisted(() => {
   const state: { list: unknown[]; reads: number; fail: boolean } = {
@@ -9,7 +9,7 @@ const runtimes = vi.hoisted(() => {
   }
   return state
 })
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => {
     runtimes.reads += 1
     if (runtimes.fail) {
@@ -19,7 +19,7 @@ vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
   }
 }))
 
-import { notifyEphemeralVmRuntimesChanged } from '../../shared/ephemeral-vm-runtime-store-events'
+import { notifyEphemeralVmRuntimesChanged } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store-events'
 import {
   cloudWorkspaceStatusById,
   markCloudWorkspaceRows,

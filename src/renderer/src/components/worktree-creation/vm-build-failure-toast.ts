@@ -9,7 +9,7 @@ import { vmBuildFailureCopy } from './vm-build-failure-copy'
 import { sandboxLimitFromBilling } from './vm-build-sandbox-limit'
 import { isOrcaCloudBuild } from './vm-build-steps'
 import { orcaCloudRepoName } from './vm-build-repo-actions'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 /** The build sheet card's words for a failed VM build, for surfaces that show it off the sheet. */
 export function vmBuildFailureSummary(

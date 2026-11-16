@@ -10,7 +10,7 @@ import {
   type HostedWorkspaceStatus
 } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { CloudSyncView } from '../../../../shared/cloud-sync/cloud-sync-contract'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { CloudWorkspaceStatusPanel, type CloudCardLayer } from './CloudWorkspaceStatusPanel'
 import type { CloudCardAttention } from './cloud-workspace-card-model'

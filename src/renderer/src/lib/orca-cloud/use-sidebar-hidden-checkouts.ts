@@ -10,7 +10,7 @@ import {
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { orcaCloudAccountId } from '../../../../shared/hosted-sandbox/orca-cloud-account'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
   Partial<

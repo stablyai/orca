@@ -11,14 +11,14 @@
 // already up, never to one asleep, archived or manually disconnected, and stop after a budget.
 import { randomUUID } from 'node:crypto'
 import { CLOUD_QUEUED_PROMPT_MAX_CHARS } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { structuredAgentSessionMessageSendMutation } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   parseAgentSessionOperationTimestamp
 } from '../../shared/agent-session/agent-session-host-authority'
-import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { SendParams } from '../../shared/rpc-contract/structured-agent-session-params'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { SendParams } from '../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import {
   createSealedPromptDisk,
   currentFence,

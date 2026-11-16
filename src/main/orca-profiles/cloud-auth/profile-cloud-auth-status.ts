@@ -1,4 +1,4 @@
-import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles/orca-profiles'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
 import { readCloudSession } from '../cloud-session/profile-cloud-session-owner'

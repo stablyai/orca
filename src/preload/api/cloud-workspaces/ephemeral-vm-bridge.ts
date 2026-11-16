@@ -1,0 +1,84 @@
+import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../../api-types'
+import type {
+  HostedSessionIdleSleepEvent,
+  HostedSessionStateEvent,
+  HostedSessionWarningEvent
+} from '../../../shared/hosted-sandbox/hosted-session-events'
+import { EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store-events'
+import {
+  PENDING_VM_CHECKOUTS_CHANGED_CHANNEL,
+  type PendingVmCheckout
+} from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
+
+export const ephemeralVmApi = {
+  listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
+  listRecipeCatalog: () => ipcRenderer.invoke('ephemeralVm:listRecipeCatalog'),
+  forwardedEnvSummary: (args) => ipcRenderer.invoke('ephemeralVm:forwardedEnvSummary', args),
+  listCredentialEnvNames: () => ipcRenderer.invoke('ephemeralVm:listCredentialEnvNames'),
+  doctor: (args) => ipcRenderer.invoke('ephemeralVm:doctor', args),
+  provision: (args) => ipcRenderer.invoke('ephemeralVm:provision', args),
+  cancelProvision: (args) => ipcRenderer.invoke('ephemeralVm:cancelProvision', args),
+  notePhase: (args) => void ipcRenderer.invoke('ephemeralVm:notePhase', args).catch(() => {}),
+  onProvisionEvent: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }
+    ): void => callback(event)
+    ipcRenderer.on('ephemeralVm:provisionEvent', listener)
+    return () => ipcRenderer.removeListener('ephemeralVm:provisionEvent', listener)
+  },
+  onCloudSessionWarning: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: HostedSessionWarningEvent): void =>
+      callback(event)
+    ipcRenderer.on('orcaCloud:sessionWarning', listener)
+    return () => ipcRenderer.removeListener('orcaCloud:sessionWarning', listener)
+  },
+  onCloudIdleSleepRequested: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      event: HostedSessionIdleSleepEvent
+    ): void => callback(event)
+    ipcRenderer.on('orcaCloud:idleSleepRequested', listener)
+    return () => ipcRenderer.removeListener('orcaCloud:idleSleepRequested', listener)
+  },
+  onCloudSessionState: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: HostedSessionStateEvent): void =>
+      callback(event)
+    ipcRenderer.on('orcaCloud:sessionState', listener)
+    return () => ipcRenderer.removeListener('orcaCloud:sessionState', listener)
+  },
+  restartCloudSession: (args) => ipcRenderer.invoke('orcaCloud:restartNow', args),
+  listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),
+  attachWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:attachWorkspace', args),
+  resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
+  suspendWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:suspendWorkspace', args),
+  onRuntimesChanged: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL, listener)
+  },
+  suspendRuntime: (args) => ipcRenderer.invoke('ephemeralVm:suspendRuntime', args),
+  cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
+  preflightCloudDelete: (args) => ipcRenderer.invoke('ephemeralVm:preflightCloudDelete', args),
+  stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
+  forgetRuntime: (args) => ipcRenderer.invoke('ephemeralVm:forgetRuntime', args),
+  getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args),
+  cloudSshStatus: (args) => ipcRenderer.invoke('cloudSsh:status', args),
+  cloudSshCopyCommand: (args) => ipcRenderer.invoke('cloudSsh:copyCommand', args),
+  cloudSshOpenInEditor: (args) => ipcRenderer.invoke('cloudSsh:openInEditor', args),
+  cloudSshRevoke: (args) => ipcRenderer.invoke('cloudSsh:revoke', args),
+  cloudSshRemoveSshConfigInclude: () => ipcRenderer.invoke('cloudSsh:removeSshConfigInclude'),
+  cloudEnvironmentIds: () => ipcRenderer.invoke('ephemeralVm:cloudEnvironmentIds'),
+  openCloudRemoteDesktop: (args) => ipcRenderer.invoke('ephemeralVm:openCloudRemoteDesktop', args),
+  publishPendingCheckouts: (checkouts) => {
+    void ipcRenderer.invoke('ephemeralVm:publishPendingCheckouts', checkouts).catch(() => {})
+  },
+  listPendingCheckouts: () => ipcRenderer.invoke('ephemeralVm:listPendingCheckouts'),
+  onPendingCheckoutsChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, checkouts: PendingVmCheckout[]): void =>
+      callback(checkouts)
+    ipcRenderer.on(PENDING_VM_CHECKOUTS_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(PENDING_VM_CHECKOUTS_CHANGED_CHANNEL, listener)
+  }
+} satisfies PreloadApi['ephemeralVm']

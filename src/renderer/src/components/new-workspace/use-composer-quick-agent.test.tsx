@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { ORCA_CLOUD_IMAGE_AGENTS } from '../../../../shared/hosted-sandbox/orca-cloud-image-agents'
-import type { EphemeralVmRecipeOption } from './new-workspace-composer-card-props'
+import type { EphemeralVmRecipeOption } from './run-target/run-target-options'
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/lib/agent-session/launch/inventory/host-chat-program', () => ({

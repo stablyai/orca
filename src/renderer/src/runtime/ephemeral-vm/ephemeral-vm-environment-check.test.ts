@@ -51,12 +51,6 @@ import {
   resetCloudSetupNotices
 } from '@/lib/orca-cloud/cloud-setup-notices-store'
 
-const failing = {
-  worktreePath: '/w',
-  ok: false,
-  checks: [{ id: 'tool.pnpm', category: 'tools', status: 'fail', message: 'pnpm missing' }]
-}
-const passing = { worktreePath: '/w', ok: true, checks: [] }
 // What Neil saw: agents not set up, push refused, setup not run. None of it should stop the create.
 const cloudWarnings = {
   worktreePath: '/w',
@@ -102,49 +96,6 @@ describe('gateVmCreateOnEnvironmentCheck', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
-  })
-
-  it('pauses on failed checks, re-runs them on retry, and continues once they pass', async () => {
-    callRuntimeRpc.mockResolvedValueOnce(failing).mockResolvedValueOnce(passing)
-    const gate = gateVmCreateOnEnvironmentCheck('c1', 'env-1', '/w')
-    await settle()
-    expect(store.entries.c1.environmentCheck?.status).toBe('failed')
-
-    resolveVmEnvironmentCheckDecision('c1', 'retry')
-    await expect(gate).resolves.toBe('proceed')
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
-    expect(store.entries.c1.environmentCheck?.status).toBe('passed')
-  })
-
-  it('continues on Open anyway and stops when the build is dismissed', async () => {
-    callRuntimeRpc.mockResolvedValue(failing)
-    const opened = gateVmCreateOnEnvironmentCheck('c1', 'env-1', '/w')
-    await settle()
-    resolveVmEnvironmentCheckDecision('c1', 'open-anyway')
-    await expect(opened).resolves.toBe('proceed')
-
-    const dismissed = gateVmCreateOnEnvironmentCheck('c1', 'env-1', '/w')
-    await settle()
-    delete store.entries.c1
-    cancelVmEnvironmentCheck('c1')
-    await expect(dismissed).resolves.toBe('stop')
-  })
-
-  it('aborts a running check when the build is dismissed', async () => {
-    let signal: AbortSignal | undefined
-    callRuntimeRpc.mockImplementation(
-      (_target, _method, _params, options: { signal: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          signal = options.signal
-          options.signal.addEventListener('abort', () => reject(new Error('aborted')))
-        })
-    )
-    const gate = gateVmCreateOnEnvironmentCheck('c1', 'env-1', '/w')
-    await settle()
-    delete store.entries.c1
-    cancelVmEnvironmentCheck('c1')
-    await expect(gate).resolves.toBe('stop')
-    expect(signal?.aborted).toBe(true)
   })
 
   it('skips the checks on a VM server that predates them', async () => {

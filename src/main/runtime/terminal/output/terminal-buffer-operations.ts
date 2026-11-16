@@ -1,4 +1,4 @@
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type {
   HeadlessSeedMetadata,
   ProviderTerminalBufferWait,

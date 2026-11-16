@@ -1,12 +1,12 @@
 import '../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RemoteRuntimeTransportSubscription } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { BrowserNetworkTunnelEvent } from '../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY,
   WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY
-} from '../../shared/workspace-ports-runtime-capabilities'
+} from '../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import { BrowserNetworkTunnelClient } from '../browser/network/tunnels/browser-network-tunnel-client'
 import type { BrowserNetworkTunnelDuplex } from '../browser/network/tunnels/browser-network-tunnel-duplex'
 import { BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL } from '../browser/network/tunnels/browser-network-tunnel-stream-state'

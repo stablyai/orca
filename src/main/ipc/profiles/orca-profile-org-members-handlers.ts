@@ -5,7 +5,7 @@ import { ipcMain } from 'electron'
 import type {
   OrcaProfileOrgMembersListArgs,
   OrcaProfileOrgMembersListResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import type { OrcaAccountMfaResult } from '../../../shared/orca-account-mfa'
 import { getOrcaProfileAccountMfa } from '../../orca-profiles/cloud-mfa/profile-cloud-mfa-service'
 import type { OrcaTeamMfaPolicyResult } from '../../../shared/orca-team-mfa-policy'

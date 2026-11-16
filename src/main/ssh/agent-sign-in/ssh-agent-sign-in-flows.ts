@@ -8,7 +8,7 @@ import type {
   SshAgentSignInFlow,
   SshAgentSignInFlowError
 } from '../../../shared/ssh-agent-sign-in-types'
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import {
   DEVICE_AUTH_TIMEOUT_MS,
   parseCodexDeviceAuthPrompt

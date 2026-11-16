@@ -5,7 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   NATIVE_CHAT_ASK_ROW_COPY,
   type NativeChatAskRowSubject
-} from '../../../../../shared/native-chat/input/native-chat-ask-row'
+} from '../../../../../shared/native-chat/input/questions/native-chat-ask-row'
 import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatToolRunIcon } from '../tools/lines/NativeChatToolIcon'
 

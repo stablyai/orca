@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NewWorkspaceComposerFooter } from '../NewWorkspaceComposerFooter'
+import { NewWorkspaceComposerFooter } from '../composer/NewWorkspaceComposerFooter'
 import {
   ORCA_CLOUD_NEEDS_REPO_ID,
   isGitHubBackedProject,

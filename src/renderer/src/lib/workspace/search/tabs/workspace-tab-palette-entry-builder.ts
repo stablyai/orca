@@ -1,8 +1,8 @@
 import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
-} from '../../../../../../shared/tab-title-resolution'
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
+} from '../../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
+import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
 import { buildPaletteTabDocument } from '../../../../../../shared/palette-match/tab-document'
 import {
   getPaletteWorktreeIdentity,
@@ -30,7 +30,7 @@ import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
 import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-palette-current-tab'
 import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   BuildSearchableWorkspaceTabsOptions,
   SearchableWorkspaceTab,
@@ -49,7 +49,6 @@ export function buildSearchableWorkspaceTabEntries({
   tabsByWorktree,
   openFiles,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
   activeGroupIdByWorktree,
   groupsByWorktree,
@@ -79,7 +78,6 @@ export function buildSearchableWorkspaceTabEntries({
   }
   const agentIndex = buildAgentMetadataTabIndex({
     agentStatusByPaneKey,
-    retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey
   })
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
@@ -202,7 +200,6 @@ export function buildSearchableWorkspaceTabEntries({
             launchAgent: terminalTab?.launchAgent,
             layout: terminalLayoutsByTabId?.[tab.entityId],
             agentStatusByPaneKey,
-            retainedAgentsByPaneKey,
             sleepingAgentSessionsByPaneKey,
             paneForegroundAgentByPaneKey
           })

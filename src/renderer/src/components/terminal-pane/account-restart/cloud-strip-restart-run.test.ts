@@ -40,6 +40,7 @@ import {
 import { selectReadyAccountRestartPtyIds } from './pane-account-restart-readiness'
 import { runReadyPaneAccountRestarts } from './use-ready-pane-account-restarts'
 import { resolveTuiAgentLaunchRawArgs } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 const TAB = 'tab-1'
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -68,7 +69,7 @@ function seed(state: AgentStatusEntry['state']): void {
         ptyIdsByLeafId: { [LEAF]: PTY }
       }
     },
-    agentStatusByPaneKey: {
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({
       [PANE_KEY]: {
         paneKey: PANE_KEY,
         tabId: TAB,
@@ -80,7 +81,7 @@ function seed(state: AgentStatusEntry['state']): void {
         agentType: 'claude',
         providerSession: { key: 'session_id', id: 'sess-1' }
       }
-    }
+    }))
   })
 }
 
@@ -113,7 +114,7 @@ describe('RA-11 Restart through the account-restart runner', () => {
   afterEach(() => {
     resetCloudRunningSignoutForTest()
     resetCloudAgentRestartsForTest()
-    useAppStore.setState({ pendingPaneAccountRestarts: {}, agentStatusByPaneKey: {} })
+    useAppStore.setState({ pendingPaneAccountRestarts: {}, agentStatusByPaneKey: acceptedAgentStatuses() })
     vi.useRealTimers()
   })
 
@@ -223,16 +224,16 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
           ptyIdsByLeafId: { [OTHER_LEAF]: OTHER }
         }
       },
-      agentStatusByPaneKey: {
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({
         [PANE_KEY]: entry(TAB, LEAF),
         [makePaneKey(OTHER_TAB, OTHER_LEAF)]: entry(OTHER_TAB, OTHER_LEAF)
-      }
+      }))
     })
   })
   afterEach(() => {
     resetCloudRunningSignoutForTest()
     resetCloudAgentRestartsForTest()
-    useAppStore.setState({ pendingPaneAccountRestarts: {}, agentStatusByPaneKey: {} })
+    useAppStore.setState({ pendingPaneAccountRestarts: {}, agentStatusByPaneKey: acceptedAgentStatuses() })
     vi.useRealTimers()
   })
 
@@ -270,7 +271,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     // The other Claude pane on the same account is untouched and keeps its status.
     expect(stopRemotePane).not.toHaveBeenCalledWith(OTHER, expect.anything())
     expect(
-      useAppStore.getState().agentStatusByPaneKey[makePaneKey(OTHER_TAB, OTHER_LEAF)]?.state
+      useAppStore.getState().agentStatusByPaneKey.get(makePaneKey(OTHER_TAB, OTHER_LEAF))?.state
     ).toBe('blocked')
     expect(handleRestartPane).toHaveBeenCalledWith(
       7,
@@ -719,7 +720,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
   // RA-11c: an account switch on a paired pane reattached to the old agent and never relaunched.
   it('an account-switch restart on a paired pane stops that host terminal, then reconnects', async () => {
     useAppStore.setState({
-      agentStatusByPaneKey: { [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }))
     })
     useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
     const stopRemotePane = vi.fn(() => Promise.resolve())
@@ -736,7 +737,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     cloud.ids.add('env-1')
     try {
       useAppStore.setState({
-        agentStatusByPaneKey: { [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }))
       })
       useAppStore.getState().queuePaneAccountRestarts([REMOTE], 'claude')
       const handleRestartPane = runRemote(() => Promise.resolve())

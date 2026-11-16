@@ -17,7 +17,7 @@ import {
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
-} from '../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
+} from '../../src/shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionMessageSendMutation } from '../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { agentJournalSubmissionKey } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionHistoryResult } from '../../src/shared/agent-session/agent-session-wire'

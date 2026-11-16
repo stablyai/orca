@@ -1,5 +1,5 @@
 import { mintDeviceCredential } from './device-credential'
-import type { DelegatedPhone } from '../../../../../shared/delegated-mobile-device-contract'
+import type { DelegatedPhone } from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import type { DeviceEntry } from './device-entry'
 
 export type DelegatedMobileDeviceEntry = DeviceEntry & {

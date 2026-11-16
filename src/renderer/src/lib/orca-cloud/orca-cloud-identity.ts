@@ -2,7 +2,7 @@
 // repository (GitHub access, the team's GitHub repositories) belong to one identity; after a
 // sign-out or a team switch they must not keep showing as the new identity's state (np4-e2e).
 import { useAppStore } from '@/store'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 
 /** '' while signed out or not connected; otherwise stable for one account, team and role. */
 export function orcaCloudIdentityKey(status: OrcaProfileAuthStatus | null | undefined): string {

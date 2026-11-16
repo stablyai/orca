@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
@@ -33,7 +33,7 @@ describe('ProviderSegment calm error', () => {
   ] as const)(
     '%s %s renders "--", no warning icon, label kept for a11y',
     async (provider, kind, label) => {
-      const { ProviderSegment } = await import('./StatusBar')
+      const { ProviderSegment } = await import('./usage/StatusBarProviderSegment')
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal error-state fixture.
       const p = {
         provider,
@@ -55,7 +55,7 @@ describe('ProviderSegment calm error', () => {
   )
 
   it('owner not set up (e.g. "Not configured on Orca Cloud") is the same quiet "--"', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
+    const { ProviderSegment } = await import('./usage/StatusBarProviderSegment')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: minimal placeholder fixture.
     const p = {
       provider: 'codex',

@@ -1,5 +1,5 @@
-import type { Project } from '../../../../shared/project-types'
-import { mergeProjectCompatibilityProject } from '../../../../shared/project-compatibility-merge'
+import type { Project } from '../../../../shared/project/project-types'
+import { mergeProjectCompatibilityProject } from '../../../../shared/project/catalog/project-compatibility-merge'
 
 /**
  * Folds the project row a host returned from "set up existing folder" into the known projects.

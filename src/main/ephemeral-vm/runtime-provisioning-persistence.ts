@@ -1,21 +1,21 @@
-import { toEphemeralVmRuntimeRecipeSnapshot } from '../../shared/ephemeral-vm-recipe-timeouts'
+import { toEphemeralVmRuntimeRecipeSnapshot } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-timeouts'
 import { randomUUID } from 'node:crypto'
-import { assertEphemeralVmRuntimeCheckoutModeCanPersist } from '../../shared/ephemeral-vm-runtime-feature-store'
-import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
+import { assertEphemeralVmRuntimeCheckoutModeCanPersist } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-feature-store'
+import { getEphemeralVmRecipeResultConnection } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import {
   listEphemeralVmRuntimes,
   removeEphemeralVmRuntime,
   updateEphemeralVmRuntimeStatus,
   upsertEphemeralVmRuntime
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   ephemeralVmFailure,
   ephemeralVmFailureFromError,
   pickEphemeralVmFailureCode,
   type EphemeralVmFailure
-} from '../../shared/ephemeral-vm-failure-copy'
-import type { EphemeralVmRecipeStartFailure } from '../../shared/ephemeral-vm-recipe-runner'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import type { EphemeralVmRecipeStartFailure } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-runner'
 import type {
   ProvisionEphemeralVmRuntimeArgs,
   ProvisionEphemeralVmRuntimeResult
@@ -167,11 +167,9 @@ export function reconcileInterruptedEphemeralVmProvisionsOnStartup(userDataPath:
   } catch (error) {
     console.warn('[ephemeral-vm] Could not reconcile interrupted provisions:', error)
   }
-  try {
-    renameLegacyOrcaCloudEnvironments(userDataPath, listEphemeralVmRuntimes(userDataPath))
-  } catch (error) {
-    console.warn('[ephemeral-vm] Could not rename legacy Orca Cloud servers:', error)
-  }
+  void renameLegacyOrcaCloudEnvironments(userDataPath, listEphemeralVmRuntimes(userDataPath)).catch(
+    (error: unknown) => console.warn('[ephemeral-vm] Could not rename legacy Orca Cloud servers:', error)
+  )
 }
 
 /** Tracked VMs must go through Destroy; only result-less write-ahead rows can be dropped by hand. */

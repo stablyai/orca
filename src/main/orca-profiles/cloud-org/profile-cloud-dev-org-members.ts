@@ -2,7 +2,7 @@ import type {
   OrcaOrgMember,
   OrcaOrgMembersRoster,
   OrcaOrgPendingInvite
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 
 // With no dev-auth server, this roster mirrors real membership states (read-only: the team is
 // managed in the web console).

@@ -1,7 +1,7 @@
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
 import { useIsCloudPrimaryRow } from '@/lib/orca-cloud/cloud-host-rows'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-review-checks'
+import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'

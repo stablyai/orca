@@ -1,12 +1,12 @@
-import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { releaseEphemeralVmRuntimeEnvironments } from '../ephemeral-vm/runtime-environment-release'
 import {
   retireRemovedRuntimeEnvironment,
   type RemovedServerStore
-} from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
+} from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
-import { publishRuntimeEnvironmentCatalogChanged } from '../ipc/runtime-environments/runtime-environment-catalog-broadcast'
+import { publishRuntimeEnvironmentCatalogChanged } from '../ipc/runtime-environments/catalog/runtime-environment-catalog-broadcast'
 
 /**
  * A sandbox destroyed out of band goes the way the app's own delete takes a destroyed one

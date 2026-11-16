@@ -4,7 +4,7 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { CloudWorkspaceStatus } from '../../../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'

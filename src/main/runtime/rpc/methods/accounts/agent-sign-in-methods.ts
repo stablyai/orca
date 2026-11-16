@@ -12,7 +12,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   HostAgentSignInStatusParams,
   HostAgentSignOutParams
-} from '../../../../../shared/rpc-contract/accounts-params'
+} from '../../../../../shared/rpc-contract/accounts/accounts-params'
 
 const checkers = new WeakMap<OrcaRuntimeService, HostAgentSignInStatusChecker>()
 function checkerFor(runtime: OrcaRuntimeService): HostAgentSignInStatusChecker {

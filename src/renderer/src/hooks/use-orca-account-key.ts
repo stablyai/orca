@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles/orca-profiles'
 
 /** `${userId}:${activeOrgId}` for the signed-in Orca account, or 'signed-out'. */
 export function getOrcaAccountKey(status: OrcaProfileAuthStatus | null | undefined): string {

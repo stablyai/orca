@@ -2,7 +2,7 @@ import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { hookRowAgentPhase } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
-import type { RuntimeTerminalRead } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalRead } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem

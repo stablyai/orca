@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { daemonLaunchHeadStart } from './orcad-daemon-supervision'
+import { daemonLaunchHeadStart } from './daemon/orcad-daemon-supervision'
 
 vi.mock('../daemon/providers/lifecycle/daemon-provider-init', () => ({
   initDaemonPtyProvider: vi.fn()

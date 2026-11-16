@@ -1,5 +1,5 @@
 import { Trans } from 'react-i18next'
-import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { DialogDescription } from '@/components/ui/dialog'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -36,25 +36,5 @@ export function DeleteWorktreeDialogDescription({
         </span>
       )}
     </DialogDescription>
-  )
-}
-
-/** The generic dialog's title and description (Orca Cloud workspaces use DeleteCloudWorkspaceHeader). */
-export function DeleteWorktreeDialogHeading({
-  isBatchDelete,
-  ...description
-}: Parameters<typeof DeleteWorktreeDialogDescription>[0] & {
-  isBatchDelete: boolean
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <>
-      <DialogTitle className="text-sm">
-        {isBatchDelete
-          ? t('auto.components.sidebar.DeleteWorktreeDialog.86f0ae1257', 'Delete Workspaces')
-          : t('auto.components.sidebar.DeleteWorktreeDialog.fc23c4cbdf', 'Delete Workspace')}
-      </DialogTitle>
-      <DeleteWorktreeDialogDescription {...description} />
-    </>
   )
 }

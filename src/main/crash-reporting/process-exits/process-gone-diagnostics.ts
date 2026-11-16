@@ -1,8 +1,11 @@
 import { app } from 'electron'
-import { sanitizeCrashReportDetails } from '../../../shared/crash-report-redaction'
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import { sanitizeCrashReportDetails } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { getSystemMemoryDetails, memoryKBFieldMB } from '../memory/system-memory-details'
-import { getStartupRtPrioOutcome, readZeroRtTimeLimit } from '../../startup/linux-rttime-limit'
+import {
+  getStartupRtPrioOutcome,
+  readZeroRtTimeLimit
+} from '../../startup/linux-runtime/linux-rttime-limit'
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,

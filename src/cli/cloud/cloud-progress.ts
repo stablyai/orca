@@ -1,7 +1,7 @@
 // Private build only: progress lines on stderr for slow Orca Cloud calls (create, wake, sleep), so
 // a wait is always visible. Text mode prints "- …" lines; json mode prints NDJSON phase events;
 // stdout keeps only the result. No spinners: stderr is often not a TTY.
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export type CloudProgressMode = 'text' | 'json' | 'none'
 

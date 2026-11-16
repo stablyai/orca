@@ -1,4 +1,4 @@
-import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
+import type { ComposerModalData } from '@/components/new-workspace/composer/composer-modal-data'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 
 type ReturnSource = Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>

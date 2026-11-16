@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentListPublication } from '../../../../shared/agent-status/presentation/agent-list-status'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 

@@ -7,7 +7,7 @@ import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import { orcaCloudAgentMenuModel } from '@/lib/orca-cloud/orca-cloud-agent-picker'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { NewWorkspaceComposerAgentSection } from './NewWorkspaceComposerAgentSection'
+import { NewWorkspaceComposerAgentSection } from './composer/NewWorkspaceComposerAgentSection'
 
 const noop = (): void => {}
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 80))

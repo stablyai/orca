@@ -19,7 +19,7 @@ import {
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import type { Project } from '../../../shared/project-types'
+import type { Project } from '../../../shared/project/project-types'
 import { useDetectedAgents, type AgentDetectionTarget } from './useDetectedAgents'
 
 const initialState = useAppStore.getInitialState()

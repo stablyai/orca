@@ -1,7 +1,7 @@
 // DS-40: "Fix with agent" on a failed Orca Cloud environment build. Opens the composer on Orca Cloud
 // with the fix prompt prefilled; the new workspace boots from the environment's last good build
 // (or a blank sandbox if none succeeded), the way every new cloud workspace does.
-import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
+import type { ComposerModalData } from '@/components/new-workspace/composer/composer-modal-data'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { buildCloudEnvironmentFixPrompt } from '../../../shared/cloud-environment-agent-prompt'
 

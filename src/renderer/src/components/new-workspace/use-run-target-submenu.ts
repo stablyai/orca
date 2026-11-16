@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { RunTargetSubmenu } from './run-target-options'
+import type { RunTargetSubmenu } from './run-target/run-target-options'
 
 /**
  * Which submenu is open and which of its rows holds the keyboard arm. A null arm means focus is

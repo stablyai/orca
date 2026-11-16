@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,9 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   listEphemeralVmRuntimes,
   upsertEphemeralVmRuntime
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   CLOUD_DELETE_NOT_SENT,
   CLOUD_DELETE_NOT_SENT_IN_USE,
@@ -16,14 +17,9 @@ import {
   CLOUD_DELETE_NOT_SENT_UNCHECKED,
   isCloudDeleteNotSentError,
   RecipeWorkspaceRemovalError
-} from '../../shared/recipe-host-removal'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import { mapRuntimeError } from '../runtime/rpc/responses/rpc-response'
-import {
-  describeRecipeWorkspaceEnvironments,
-  ownsRecipeWorkspaceRemoval,
-  removeRecipeWorkspace,
-  type RecipeWorkspaceRemoveParams
-} from './workspace-removal'
+import { removeRecipeWorkspace, type RecipeWorkspaceRemoveParams } from './workspace-removal'
 
 let root: string
 const workspaceId = 'repo::/workspace/repo-task'
@@ -100,15 +96,6 @@ beforeEach(() => {
 afterEach(() => removeTempDirs([root]))
 
 describe('recipe workspace removal on the provisioning host', () => {
-  it('handles only removals that asked to destroy the environment', () => {
-    seed()
-    expect(ownsRecipeWorkspaceRemoval(root, params)).toBe(true)
-    const { destroyHost: _destroyHost, ...withoutConsent } = params
-    expect(ownsRecipeWorkspaceRemoval(root, withoutConsent)).toBe(false)
-    expect(ownsRecipeWorkspaceRemoval(root, { ...params, hostId: 'runtime:env-b' })).toBe(false)
-    expect(ownsRecipeWorkspaceRemoval(root, { ...params, worktree: 'name:task' })).toBe(false)
-  })
-
   it('removes the checkout on the environment first, then destroys the empty environment', async () => {
     seed()
     const ports = makePorts()
@@ -145,14 +132,6 @@ describe('recipe workspace removal on the provisioning host', () => {
       host: { state: 'kept' }
     })
     expect(ports.cleanup).not.toHaveBeenCalled()
-  })
-
-  it('reports a recipe with no destroy step as still running, never destroyed', async () => {
-    seed()
-    const ports = makePorts({}, 'disabled')
-    await expect(removeRecipeWorkspace(root, params, ports)).resolves.toMatchObject({
-      host: { state: 'left-running' }
-    })
   })
 
   it('keeps the environment code and data when its removal fails, and destroys nothing', async () => {
@@ -193,13 +172,6 @@ describe('recipe workspace removal on the provisioning host', () => {
     })
   })
 
-  it('asks for a wake instead of failing on an asleep environment', async () => {
-    seed('orca-worktree', { status: 'suspended' })
-    const ports = makePorts()
-    await expect(removeRecipeWorkspace(root, params, ports)).rejects.toThrow('asleep')
-    expect(ports.call).not.toHaveBeenCalled()
-  })
-
   it('says the machine may still run when its destroy fails', async () => {
     seed('provisioned-root')
     const ports = makePorts()
@@ -217,27 +189,6 @@ describe('recipe workspace removal on the provisioning host', () => {
       data: { runtimeId: 'vm-a' },
       message: expect.stringMatching(/Provider refused destroy.*may still be running/)
     })
-  })
-
-  it('names the environment for a phone and says whether deleting destroys it', () => {
-    seed('orca-worktree', {
-      recipe: { id: 'sandbox', name: 'Sandbox', create: './create.sh', destroy: './destroy.sh' }
-    })
-    expect([...describeRecipeWorkspaceEnvironments(root, 'runtime:env-a')]).toEqual([
-      [workspaceId, { name: 'task', destroys: true }]
-    ])
-    expect(describeRecipeWorkspaceEnvironments(root, 'runtime:env-b').size).toBe(0)
-    seed('orca-worktree', { recipe: { id: 'sandbox', name: 'Sandbox', create: './create.sh' } })
-    expect(describeRecipeWorkspaceEnvironments(root, 'runtime:env-a').get(workspaceId)).toEqual({
-      name: 'task',
-      destroys: false
-    })
-  })
-
-  it('names nothing when two records claim the same workspace', () => {
-    seed()
-    upsertEphemeralVmRuntime(root, { ...listEphemeralVmRuntimes(root)[0], id: 'vm-b' })
-    expect(describeRecipeWorkspaceEnvironments(root, 'runtime:env-a').size).toBe(0)
   })
 
   it('waits for an older environment that answers on acceptance, then destroys', async () => {

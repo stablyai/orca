@@ -3,8 +3,8 @@
 import { cleanup, renderHook, waitFor, act } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/repo-types'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import { orcaCloudIdentityKey } from './orca-cloud-identity'
 import { invalidateOrcaCloudRepoAccess, useOrcaCloudRepoAccess } from './use-orca-cloud-repo-access'
 

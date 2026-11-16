@@ -1,5 +1,5 @@
-import { structuredSessionIdFromNotificationPane } from '../../../../src/shared/structured-session-notification-pane'
-import type { StructuredSessionOpenSource } from '../../../../src/shared/open-structured-agent-session'
+import { structuredSessionIdFromNotificationPane } from '../../../../src/shared/agent-session/view/structured-session-notification-pane'
+import type { StructuredSessionOpenSource } from '../../../../src/shared/agent-session/view/open-structured-agent-session'
 import { useEffect, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'

@@ -18,7 +18,7 @@ import {
   listGenerationHostDirectories
 } from './generation-host-directories'
 import { isHostCacheKey } from './host-cache-key'
-import type { MobileWebShellUpdateFailure } from '../mobile-web-shell-update-failure'
+import type { MobileWebShellUpdateFailure } from '../update-recovery/mobile-web-shell-update-failure'
 import {
   forgetHostUpdateFailuresIn,
   readUpdateFailureLog,

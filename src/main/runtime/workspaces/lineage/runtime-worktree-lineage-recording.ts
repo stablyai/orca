@@ -9,7 +9,10 @@ import type {
   WorktreeLineageWarning,
   WorkspaceLineage
 } from '../../../../shared/worktree/lineage-types'
-import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  type WorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 

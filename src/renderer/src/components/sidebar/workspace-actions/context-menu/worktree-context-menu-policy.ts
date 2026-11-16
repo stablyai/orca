@@ -1,20 +1,24 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/workspace-lineage-graph'
+import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/lineage/workspace-lineage-graph'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
@@ -196,6 +200,7 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
   const previousScrollTop = sidebar.scrollTop
   const previousScrollHeight = sidebar.scrollHeight
   const desiredTop = row.getBoundingClientRect().top
+  supersedeVirtualizedScrollAnchorRestore(sidebar)
 
   return () => {
     let attempts = 0
@@ -209,6 +214,10 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
       const currentAnchor = currentTarget ?? findSidebarVirtualRowByKey(currentSidebar, anchorKey)
       if (currentAnchor) {
         const delta = currentAnchor.getBoundingClientRect().top - desiredTop
+        supersedeVirtualizedScrollAnchorRestore(
+          currentSidebar,
+          Math.abs(delta) > 1 ? currentSidebar.scrollTop + delta : undefined
+        )
         if (Math.abs(delta) > 1) {
           currentSidebar.scrollTop += delta
           stableFrames = 0
@@ -216,10 +225,12 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
           stableFrames += 1
         }
       } else {
-        currentSidebar.scrollTop = Math.max(
+        const target = Math.max(
           0,
           previousScrollTop + currentSidebar.scrollHeight - previousScrollHeight
         )
+        supersedeVirtualizedScrollAnchorRestore(currentSidebar, target)
+        currentSidebar.scrollTop = target
         stableFrames = 0
       }
       attempts += 1
@@ -230,6 +241,8 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
         })
       ) {
         window.requestAnimationFrame(restore)
+      } else {
+        requestVirtualizedScrollAnchorRecord(currentSidebar)
       }
     }
     restore()

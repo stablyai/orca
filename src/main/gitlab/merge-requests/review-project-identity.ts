@@ -1,12 +1,11 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../../git/remotes/coalesced-probe'
 import { codeHostReadExecutionScope } from '../../source-control/code-host-read-execution-scope'
-import { readLocalGitConfigSignature } from '../../github/local-git-config-signature'
+import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
-import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
-import { normalizeGitLabHost } from '../projects/project-ref-parser'
+import { type ProjectRef, normalizeGitLabHost } from '../projects/project-ref-parser'
 
 type ProjectIdentity = { id: number; path: string }
 type CachedIdentity = { value: ProjectIdentity; expiresAt: number; configSignature?: string }

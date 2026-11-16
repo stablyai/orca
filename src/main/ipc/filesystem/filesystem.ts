@@ -1,5 +1,5 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import { registerLocalLogTailHandlers } from '../local-log-tail'
 import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
 import {

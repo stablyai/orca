@@ -2,8 +2,8 @@
 // and opens this page when the account isn't ready yet. The page walks the missing steps, then
 // starts the saved prompt. One request at a time; a new Start replaces an older one.
 import { useSyncExternalStore } from 'react'
-import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
-import type { ComposerModalData } from '@/components/new-workspace/composer-modal-data'
+import type { OrcaCloudAvailability } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { ComposerModalData } from '@/components/new-workspace/composer/composer-modal-data'
 import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { cancelCloudCreateIntent } from './cloud-create-intent'

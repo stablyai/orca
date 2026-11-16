@@ -2,7 +2,7 @@
 // cloud rows in its sidebar menu as an owned one: Restart and Archive (Unarchive once archived).
 // No "Mirror to this computer": mirroring syncs this desktop's own workspaces only.
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedWorkspaceStatus } from '../../../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {

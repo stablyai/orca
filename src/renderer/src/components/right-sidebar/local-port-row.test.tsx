@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
-import { LocalPortRow } from './local-port-row'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
+import { LocalPortRow } from './ports/local-port-row'
 import { SharePortButton, SharePortMenuItem } from './cloud-share/use-share-port-action'
 
 const port: WorkspacePort = {

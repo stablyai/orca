@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   sanitizeCrashReportDetails,
   sanitizeCrashReportString
-} from '../../shared/crash-report-redaction'
+} from '../../shared/crash-reporting/crash-report-redaction'
 import { registerRedactedSecretValue } from '../../shared/redacted-secret-values'
 import { createDaemonFileLog } from '../daemon/observability/daemon-file-log'
 

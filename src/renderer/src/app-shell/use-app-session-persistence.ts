@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store/index'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { createSessionWriteSubscriber } from '../lib/workspace/persistence/session-write-subscriber'
 import { buildActiveViewUnloadPatch } from './startup/active-view-persist'
 import {
@@ -30,11 +30,12 @@ import {
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-} from '../../../shared/updater-renderer-events'
+} from '../../../shared/updater/updater-renderer-events'
 import {
+  ORCA_NATIVE_UNLOAD_FAILED_EVENT,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
-} from '../../../shared/renderer-shutdown-events'
+} from '../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 
 // Capture unchanged-skipping resume records each minute to bound hard-kill loss.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
@@ -98,6 +99,8 @@ export function useAppSessionPersistence(): void {
       shutdownCheckpoint,
       isPairedWebClientWindow() ? undefined : () => showShutdownCheckpointFailureToast('reload')
     )
+    const reportNativeUnloadFailure = (): void => showShutdownCheckpointFailureToast('reload')
+    window.addEventListener(ORCA_NATIVE_UNLOAD_FAILED_EVENT, reportNativeUnloadFailure)
     window.addEventListener('beforeunload', persistBeforeUnload)
     window.addEventListener(
       ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
@@ -110,6 +113,7 @@ export function useAppSessionPersistence(): void {
     )
     window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.abandonAttempt)
     return () => {
+      window.removeEventListener(ORCA_NATIVE_UNLOAD_FAILED_EVENT, reportNativeUnloadFailure)
       window.removeEventListener('beforeunload', persistBeforeUnload)
       window.removeEventListener(
         ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,

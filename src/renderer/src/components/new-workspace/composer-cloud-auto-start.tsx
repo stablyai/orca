@@ -2,7 +2,7 @@
 // Back and for its auto-start, and the hidden composer that submits once setup is done.
 import React, { useEffect, useState } from 'react'
 import { Dialog } from '@/components/ui/dialog'
-import type { ComposerModalData } from './composer-modal-data'
+import type { ComposerModalData } from './composer/composer-modal-data'
 
 /** How long a hidden Orca Cloud auto-start may take before the dialog shows instead. */
 const CLOUD_AUTO_START_REVEAL_MS = 8_000

@@ -1,7 +1,7 @@
 // EP-8: can this computer reach an Orca Cloud workspace's server right now? A short status call over
 // its saved pairing. A refused pairing (revoked by an owner change or a removal) is told apart from a
 // server that just doesn't answer, so the caller can say which.
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 
 const PROBE_TIMEOUT_MS = 5_000
 const REJECTED_CODES = new Set(['unauthorized', 'device_revoked', 'forbidden'])

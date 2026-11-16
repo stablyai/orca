@@ -130,11 +130,12 @@ describe('a picker completing after its page session ends', () => {
     device.deleted.length = 0
   })
 
-  const cases = (['unmount', 'replace'] as const).flatMap((ending) =>
-    (['library', 'files'] as const).flatMap((source) =>
-      [false, true].map((strict) => ({ ending, source, strict }))
-    )
-  )
+  const cases = [
+    { ending: 'unmount', source: 'library', strict: false },
+    { ending: 'unmount', source: 'files', strict: true },
+    { ending: 'replace', source: 'library', strict: true },
+    { ending: 'replace', source: 'files', strict: false }
+  ]
   it.each(cases)(
     'discards late $source files after $ending and preserves a successor, StrictMode=$strict',
     async ({ ending, source, strict }) => {

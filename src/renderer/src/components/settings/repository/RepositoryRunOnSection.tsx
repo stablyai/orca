@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { useCloudWorkspacesAvailable } from '@/components/cloud-workspaces/use-cloud-workspaces'
 import type { RunOnPreference } from '@/components/new-workspace/run-on/cloud-start-model'
 import { readRunOnMemory, setRunOnPreference } from '@/lib/orca-cloud/run-on-memory'

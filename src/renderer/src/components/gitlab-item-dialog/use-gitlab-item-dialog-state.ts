@@ -1,6 +1,9 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { GitLabAssignableUser, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
+import type {
+  GitLabAssignableUser,
+  GitLabWorkItemDetails
+} from '../../../../shared/gitlab/gitlab-types'
 import type { JobTraceState } from '../gitlab-item-dialog-parts'
 
 export function useGitLabItemDialogState(itemId: string | null, detailsOwner: string | null) {

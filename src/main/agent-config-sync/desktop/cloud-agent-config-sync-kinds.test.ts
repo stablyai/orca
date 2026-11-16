@@ -21,7 +21,7 @@ type FakeRuntime = {
   status: string
 }
 const runtimes = vi.hoisted((): { list: FakeRuntime[] } => ({ list: [] }))
-vi.mock('../../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => runtimes.list
 }))
 

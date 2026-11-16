@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
-import type { OrcaProfileAuthStatus } from '../../../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../../../shared/orca-profiles/orca-profiles'
 import type { GitHubIdentityState } from './github-identity-model'
 import { GitHubIdentityRowView } from './GitHubIdentityRow'
 import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'

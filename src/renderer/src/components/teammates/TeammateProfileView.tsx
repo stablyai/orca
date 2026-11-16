@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import type { OrcaOrgRole } from '../../../../shared/orca-profiles'
+import type { OrcaOrgRole } from '../../../../shared/orca-profiles/orca-profiles'
 import type { TeammateProfile } from '../../../../shared/cloud-workspaces/team-presence-wire'
 import { ProfilePicture } from '../billing/team/TeamAvatar'
 import { roleLabel } from '../billing/team/team-roles'

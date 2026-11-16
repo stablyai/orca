@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
 import type { HostedGithubRepoAccessResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
 import { useOrcaCloudIdentityKey } from './orca-cloud-identity'
 

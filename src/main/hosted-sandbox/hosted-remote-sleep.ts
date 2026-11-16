@@ -6,8 +6,8 @@
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { findCloudRuntime } from './hosted-workspace-runtime'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'

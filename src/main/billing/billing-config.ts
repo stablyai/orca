@@ -1,4 +1,4 @@
-import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
+import { cleanCloudServiceUrl } from '../../shared/network/cloud-service-url'
 import type { OrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import type { BillingEndpoints } from './billing-client'
 

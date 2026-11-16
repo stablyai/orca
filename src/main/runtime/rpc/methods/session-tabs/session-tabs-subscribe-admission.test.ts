@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
 

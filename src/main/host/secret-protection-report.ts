@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 
 /** Report protection gaps and recovery only on change; repeated startup warnings would obscure an unresolved keyring problem. */
 

@@ -1,6 +1,6 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { errnoCodeOrUnknown } from '../../../shared/errno-code'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import {
   CLAUDE_SETTINGS_PERMISSION_LISTS,
   CLAUDE_SETTINGS_SCALAR_KEYS,

@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
-import { useCustomEditorMerging } from '../use-custom-editor-outside-merge'
+import { useCustomEditorMerging } from '../plugin-editors/use-custom-editor-outside-merge'
 
 /** The external-change banner, hidden only while a custom editor is merging the change itself. */
 export function CustomEditorExternalChangeBanner(props: {

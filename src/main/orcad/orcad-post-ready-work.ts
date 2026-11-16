@@ -1,5 +1,5 @@
 // Work orcad's readiness never waited on, started once the ready line is out so wake answers sooner.
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import type { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import type { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 

@@ -5,7 +5,7 @@ import {
   WorkspacePortProbePageParams,
   WorkspacePortScanHostParams,
   WorkspacePortScanParams
-} from '../../../../../shared/rpc-contract/workspace-ports-params'
+} from '../../../../../shared/rpc-contract/workspaces/workspace-ports-params'
 import { probeWorkspacePortPage } from '../../../../ports/workspace-port-page-probe'
 import { createWorkspacePortForwardTunnelMethod } from './workspace-port-forward-tunnel'
 

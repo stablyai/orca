@@ -9,12 +9,17 @@ import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/agent-session-approval-blocked-path'
 import {
   isNewerApprovalSubject,
-  isPlanApprovalSubject
+  isPlanApprovalSubject,
+  isUrlApprovalSubject,
+  readApprovalUrl,
+  URL_APPROVAL_DECLINE_OPTION_ID,
+  URL_APPROVAL_OPEN_OPTION_ID
 } from '../../../../../shared/agent-session/agent-session-approval-subject'
 import { NativeChatCodeBlock } from '../markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import { NativeChatUrlTarget, openUrlRequestPage } from './NativeChatUrlRequest'
 
 export type NativeChatApprovalCardProps = {
   approval: ChatApproval
@@ -59,6 +64,20 @@ export function NativeChatApprovalCard({
   const neededPath = approvalBlockedPathToShow(approval)
   // A newer Orca's subject: its detail is shown, and only the card's cancel answers.
   const newerSubject = isNewerApprovalSubject(approval.subject)
+  // A page to open: its option opens it, and the back-out stays quiet.
+  const url = isUrlApprovalSubject(approval.subject) ? approval.subject.url : null
+  const title =
+    url === null
+      ? approval.title
+      : t('components.native-chat.urlRequest.title', 'Sign-in requested')
+  const optionLabel = (option: ChatApproval['options'][number]): string =>
+    url === null
+      ? option.label
+      : option.send === URL_APPROVAL_OPEN_OPTION_ID
+        ? t('components.native-chat.urlRequest.open', 'Open sign-in page')
+        : option.send === URL_APPROVAL_DECLINE_OPTION_ID
+          ? t('components.native-chat.urlRequest.decline', 'Decline')
+          : option.label
   const stacked = placement === 'stacked'
   const hasContext = Boolean(
     countdown ||
@@ -85,7 +104,7 @@ export function NativeChatApprovalCard({
             data-native-chat-prompt-card-focus={shouldFocus || undefined}
             data-native-chat-approval-card="true"
             role="group"
-            aria-label={approval.title}
+            aria-label={title}
             tabIndex={-1}
             onKeyDown={(event) => {
               if (event.key === 'Escape' && !event.nativeEvent.isComposing && escape) {
@@ -100,7 +119,7 @@ export function NativeChatApprovalCard({
               <ShieldQuestion className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 break-words text-sm font-semibold text-foreground">
-                  {approval.title}
+                  {title}
                 </p>
                 {worker ? (
                   <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -182,6 +201,8 @@ export function NativeChatApprovalCard({
                       </p>
                     ) : null}
                   </div>
+                ) : url !== null ? (
+                  <NativeChatUrlTarget url={url} />
                 ) : approval.detail ? (
                   <NativeChatApprovalDetail
                     detail={approval.detail}
@@ -199,29 +220,41 @@ export function NativeChatApprovalCard({
               </div>
             ) : null}
             <div data-native-chat-approval-actions="true" className="flex shrink-0 flex-wrap gap-2">
-              {approval.options.map((opt, i) => (
-                <button
-                  key={`${opt.label}-${i}`}
-                  type="button"
-                  disabled={newerSubject || isSubmitting}
-                  onClick={() => onChoose(opt.send)}
-                  className={cn(
-                    'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
-                    i === 0 && !approval.neutralOptions
-                      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                      : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
-                  )}
-                >
-                  {isSubmitting && opt.send === submittingOption ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                      {opt.label}
-                    </span>
-                  ) : (
-                    opt.label
-                  )}
-                </button>
-              ))}
+              {approval.options.map((opt, i) => {
+                const opensUrl = url !== null && opt.send === URL_APPROVAL_OPEN_OPTION_ID
+                return (
+                  <button
+                    key={`${opt.label}-${i}`}
+                    type="button"
+                    disabled={
+                      newerSubject || isSubmitting || (opensUrl && readApprovalUrl(url) === null)
+                    }
+                    onClick={() => {
+                      if (opensUrl) {
+                        openUrlRequestPage(url)
+                      }
+                      onChoose(opt.send)
+                    }}
+                    className={cn(
+                      'rounded-md px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+                      i === 0 && !approval.neutralOptions
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                        : url !== null
+                          ? 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                          : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    {isSubmitting && opt.send === submittingOption ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                        {optionLabel(opt)}
+                      </span>
+                    ) : (
+                      optionLabel(opt)
+                    )}
+                  </button>
+                )
+              })}
               {approval.options.length === 0 && onOpenTerminal ? (
                 <button
                   type="button"

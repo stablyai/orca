@@ -11,7 +11,7 @@
 //
 // No setup prompt: nobody is there to answer it, and the caller chose this repo for this sandboxed VM,
 // as unattended worktree creates run setup unless the project turned it off.
-import { parseOrcaYaml } from '../../../../src/shared/orca-yaml'
+import { parseOrcaYaml } from '../../../../src/shared/workspace-setup/orca-yaml'
 import { PROJECT_ROOT } from './api/vm-agent'
 import type { SandboxProviderApi } from './sandbox-provider'
 

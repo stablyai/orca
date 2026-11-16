@@ -1,7 +1,7 @@
 import {
   readPageDeviceStore,
   type PageDeviceStore
-} from '../mobile-web-shell/bridge/page-device-store'
+} from '../mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   DEVICE_STORE_MAX_VALUE_LENGTH,
   decodeDeviceStoreValue,

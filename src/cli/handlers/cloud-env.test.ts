@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CLOUD_ENV_HANDLERS } from './cloud-env'
-import type { HandlerContext } from '../dispatch'
+import type { HandlerContext } from '../dispatch/dispatch'
 import { CLOUD_ENVIRONMENT_METHODS } from '../../shared/hosted-sandbox/hosted-environment-cli-contract'
 
 const ENV = { id: 'env_03b89d4bf1c74787a7ce', name: 'Web' }

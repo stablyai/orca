@@ -8,8 +8,8 @@ import {
   pickCloudEnvironmentAgentRepo
 } from '@/lib/cloud-environment-agent-launch'
 import { useAppStore } from '@/store/index'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { OrcaOrgMember } from '../../../../shared/orca-profiles'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import type { OrcaOrgMember } from '../../../../shared/orca-profiles/orca-profiles'
 import { stalenessBannerCopy } from './cloud-environment-copy'
 import { environmentFailureFix } from './environment-failure-fix'
 import type {

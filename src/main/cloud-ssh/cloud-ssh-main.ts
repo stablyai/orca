@@ -4,9 +4,9 @@ import { hostname, homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, clipboard, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import { BUILT_IN_EDITOR_COMMANDS } from '../../shared/open-in-applications'
-import { getRemoteSshEditorKind } from '../../shared/remote-ssh-editor-launcher'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { BUILT_IN_EDITOR_COMMANDS } from '../../shared/editor/launch/open-in-applications'
+import { getRemoteSshEditorKind } from '../../shared/editor/launch/remote-ssh-editor-launcher'
 import {
   CLOUD_SSH_REMOTE_PORT,
   type CloudSshEditor,

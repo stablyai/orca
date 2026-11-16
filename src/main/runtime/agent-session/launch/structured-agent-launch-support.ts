@@ -1,7 +1,7 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/environment-overlay'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   resolveTuiAgentLaunchEnv,
@@ -16,20 +16,20 @@ import {
   resolveStructuredAgentSessionCreateSupport,
   warnStructuredAgentSessionCreateUnsupported,
   type StructuredAgentSessionCreateSupport
-} from '../../../native-chat/structured-agent-session-create-support'
+} from '../../../native-chat/agent-launch/structured-agent-session-create-support'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
 import {
   refreshHostAgentBaseEnvironmentAfterMiss,
   resolveHostAgentBaseEnvironment,
   createStructuredAgentEnvironmentResolvers
 } from '../environment/structured-agent-shell-environment'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
@@ -78,13 +78,30 @@ export async function observeStructuredAgentLaunch(
   )
 }
 
+/** Whether a new chat would start on the host's own program, as its account home selects one. */
+export async function structuredAgentHostAlternativeReady(
+  agent: string,
+  runtime: LaunchSettingsRuntime
+): Promise<boolean> {
+  const program = structuredAgentRuntimeMetadata(agent)?.chatProgram
+  if (!program?.hostAlternative) {
+    return false
+  }
+  const settings = runtime.requireStore().getSettings()
+  const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+  return program.hostAlternative(env, settings).catch(() => false)
+}
+
 /** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the
- *  terminal. */
+ *  terminal, or, where Orca installs no release, a host program that cannot serve the chat. */
 export async function structuredAgentSupportsLaunch(
   agent: string,
   cwd: () => Promise<string>,
   runtime: LaunchSettingsRuntime
 ): Promise<boolean> {
+  if (structuredAgentRuntimeMetadata(agent)?.chatProgram?.onlyHostAlternative?.()) {
+    return structuredAgentHostAlternativeReady(agent, runtime)
+  }
   try {
     const release = await observeStructuredAgentLaunch(agent, cwd, runtime, true)
     return release === null || launchableRelease(release)

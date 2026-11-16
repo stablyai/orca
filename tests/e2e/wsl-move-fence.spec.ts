@@ -45,7 +45,7 @@ async function createFolders(page: Page, folders: { name: string; folderPath: st
       if (!workspace) {
         throw new Error(`Could not create folder workspace ${entry.name}`)
       }
-      ids.push(workspace.id)
+      ids.push(workspace.folderWorkspace.id)
     }
     return ids
   }, folders)

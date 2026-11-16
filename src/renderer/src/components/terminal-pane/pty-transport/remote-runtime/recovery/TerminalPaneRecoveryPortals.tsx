@@ -35,7 +35,7 @@ import {
   useWakeProcessHintsVersion
 } from '@/lib/orca-cloud/cloud-wake-process-hints'
 import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
-import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
+import { withoutWslHostStoppedLines } from '../../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { makePaneKey } from '../../../../../../../shared/workspace-layout/stable-pane-id'
 import { cloudWokeActionFor, runCloudWokeAction } from '@/lib/orca-cloud/cloud-wake-hint-action'
 import { captureCloudPaneBeforeWake } from '@/lib/orca-cloud/cloud-wake-pane-capture'

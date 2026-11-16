@@ -29,7 +29,7 @@ export type CloudPairingRecoveryDeps = {
   /** The cloud workspace behind a server environment, or null when it isn't one. */
   target: (environmentId: string) => Promise<CloudPairingTarget | null>
   /** The environment's current pairing revision (the guard key), or null when it no longer exists. */
-  revision: (environmentId: string) => number | null
+  revision: (environmentId: string) => Promise<number | null> | number | null
   openGrant: (
     sandboxId: string
   ) => Promise<
@@ -151,7 +151,7 @@ export function createCloudPairingRecovery(deps: CloudPairingRecoveryDeps) {
   }
 
   async function recover(environmentId: string): Promise<CloudPairingRecoveryOutcome> {
-    const revision = deps.revision(environmentId)
+    const revision = await deps.revision(environmentId)
     if (revision === null) {
       return 'not_cloud'
     }

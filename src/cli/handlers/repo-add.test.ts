@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HandlerContext } from '../dispatch'
-import { REPO_HANDLERS } from './repo'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { REPO_HANDLERS } from '../projects/repo'
 
 function context(flags: Record<string, string | boolean>) {
   const call = vi.fn(async () => ({

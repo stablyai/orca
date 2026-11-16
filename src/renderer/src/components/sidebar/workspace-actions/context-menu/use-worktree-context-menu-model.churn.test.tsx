@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { useWorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
 afterEach(() => {

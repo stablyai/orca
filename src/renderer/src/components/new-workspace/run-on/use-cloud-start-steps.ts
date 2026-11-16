@@ -6,7 +6,7 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { orcaCloudGitHubSetupRow } from '@/lib/orca-cloud/orca-cloud-github-setup-row'
 import { useOrcaCloudRepoAccess } from '@/lib/orca-cloud/use-orca-cloud-repo-access'
 import { useCloudSetupSession } from '@/lib/orca-cloud/cloud-setup-session-seam'
-import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import {
   deriveCloudSetupSteps,

@@ -3,7 +3,7 @@ import type { PtyBindingFastLaneMiss } from './pty-binding-fast-lane'
 import {
   terminalPanePlacementAgreement,
   type TerminalPanePlacementAgreement
-} from '../../terminal-topology/terminal-pane-placement-agreement'
+} from '../../terminal-topology/pane-admission/terminal-pane-placement-agreement'
 import {
   findTerminalBindingConflict,
   type TerminalOwnerConflictReason

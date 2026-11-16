@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   listEphemeralVmRuntimes,
   upsertEphemeralVmRuntime
-} from '../../shared/ephemeral-vm-runtime-store'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 
 const sent = vi.hoisted((): string[] => [])
 vi.mock('electron', () => ({

@@ -1,6 +1,6 @@
 import { stopAgentSessionProviderRoot } from '../../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
 import { randomUUID } from 'node:crypto'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import * as provider from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import * as acquisition from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
@@ -96,7 +96,8 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       }
       const process = await spawned.read(session.connection.pid)
       if (session.connection.closed || attempt.signal.aborted) {
-        throw new Error('Pi exited while starting')
+        const ending = attempt.signal.aborted ? undefined : this.endings.get(id, session.generation)
+        throw ending ?? new Error('Pi exited while starting')
       }
       return {
         process,
@@ -141,7 +142,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)
-    const turnId = input.resolveLiveTurnId ? input.resolveLiveTurnId() : session.lane.openTurnId
+    const turnId = await (input.resolveLiveTurnId?.() ?? session.lane.openTurnId)
     if (input.turnId !== undefined && input.turnId !== turnId) {
       return { cancelled: false }
     }

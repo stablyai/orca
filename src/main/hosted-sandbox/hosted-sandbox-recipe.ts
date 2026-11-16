@@ -1,10 +1,10 @@
 // "Orca Cloud" as a built-in per-workspace environment: listed first wherever recipes are, run
 // in-process through the HostedSandboxDriver, and answering like a recipe process would.
 import { z } from 'zod'
-import { EphemeralVmRecipeResultSchema } from '../../shared/ephemeral-vm-recipes'
-import { ephemeralVmFailure, type EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import { EphemeralVmRecipeResultSchema } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { ephemeralVmFailure, type EphemeralVmFailure } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { normalizeGitRemoteUrl } from '../../shared/git/remotes/git-remote-identity'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   registerEphemeralVmRecipeStepProvider,
   type RecipeStepProvider,

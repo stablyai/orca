@@ -6,10 +6,10 @@ import {
   type CloudSshPrepareResult,
   type CloudSshTunnelResult
 } from '../../shared/cloud-ssh'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime-client'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 /** A cold workspace wakes in ~5-15 s; leave room for a slow resume before giving up. */
 const CLOUD_SSH_CALL_TIMEOUT_MS = 180_000

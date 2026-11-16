@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import type { OrcaProfileOrgMembersListResult } from '../../../../../shared/orca-profiles'
+import type { OrcaProfileOrgMembersListResult } from '../../../../../shared/orca-profiles/orca-profiles'
 
 // One shared read per org: the Team page, seat counts and workspace owner chips all use the
 // same roster, so several mounted readers cost one IPC call (and one auth roster read).

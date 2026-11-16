@@ -1,5 +1,5 @@
 // Private build only: routes `orca cloud …` to its handlers (loaded on demand).
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 export const CLOUD_HANDLER_GROUP: HandlerGroup = {
   name: 'cloud',

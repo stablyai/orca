@@ -6,8 +6,8 @@ import type {
   SkillInstallDestination,
   SkillInstallPreview,
   SkillInstallResult
-} from '../../../../../shared/skill-install-contract'
-import { parseSkillShareId } from '../../../../../shared/skill-share-link'
+} from '../../../../../shared/skills/installation/skill-install-contract'
+import { parseSkillShareId } from '../../../../../shared/skills/sharing/skill-share-link'
 import { skillInstallWorkspaceChoices } from './skill-install-workspace-choices'
 import {
   isSkillBundleVersion,
@@ -17,7 +17,7 @@ import { SkillBundleInstallFlow } from './SkillBundleInstallFlow'
 import { SkillInstallTargetFields } from './SkillInstallTargetFields'
 import { defaultSelectedSkillProviders } from './skill-install-provider-groups'
 import { useSkillInstallDetectedAgents } from './use-skill-install-detected-agents'
-import type { SkillInstallProviderId } from '../../../../../shared/skill-install-providers'
+import type { SkillInstallProviderId } from '../../../../../shared/skills/installation/skill-install-providers'
 import {
   SkillInstallOutcome,
   SkillInstallReview,
@@ -30,7 +30,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { resolveSkillShareForInstall } from './preview/skill-warning-preview-gate'
 import { useSkillInstallRisk } from './use-skill-install-risk'
 import { SkillInstallDialogFooter } from './SkillInstallDialogFooter'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

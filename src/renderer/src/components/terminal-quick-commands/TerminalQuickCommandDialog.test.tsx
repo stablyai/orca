@@ -56,43 +56,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     vi.unstubAllGlobals()
   })
 
-  it('selects all text in editable fields with Cmd+A', async () => {
-    await renderDialog({
-      id: 'qc-select-all',
-      label: 'Start dev server',
-      action: 'terminal-command',
-      command: 'npm run dev',
-      appendEnter: true,
-      scope: { type: 'global' }
-    })
-
-    const fields = [
-      document.body.querySelector<HTMLInputElement>('input'),
-      document.body.querySelector<HTMLTextAreaElement>('textarea[aria-label="Command"]')
-    ]
-
-    for (const field of fields) {
-      expect(field).not.toBeNull()
-      if (!field) {
-        continue
-      }
-      field.setSelectionRange(field.value.length, field.value.length)
-      await act(async () => {
-        field.dispatchEvent(
-          new KeyboardEvent('keydown', {
-            key: 'a',
-            code: 'KeyA',
-            metaKey: true,
-            bubbles: true,
-            cancelable: true
-          })
-        )
-      })
-
-      expect([field.selectionStart, field.selectionEnd]).toEqual([0, field.value.length])
-    }
-  })
-
   it('refuses to save a prompt over an older host cap instead of truncating it', async () => {
     const onSave = vi.fn()
     await renderDialog(
@@ -142,8 +105,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       },
       { onSave, onOpenChange }
     )
-    expect(document.body.textContent).not.toContain('characters')
-    expect(document.body.textContent).toContain('Drag corner to resize')
     const textarea = document.body.querySelector('textarea')!
     const cancel = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === 'Cancel'

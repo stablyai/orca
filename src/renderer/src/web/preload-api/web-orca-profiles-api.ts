@@ -2,7 +2,7 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   createDefaultLocalOrcaProfile
-} from '../../../../shared/orca-profiles'
+} from '../../../../shared/orca-profiles/orca-profiles'
 import { noopUnsubscribe } from './web-storage'
 
 export function createWebOrcaProfilesApi(): Partial<PreloadApi> {

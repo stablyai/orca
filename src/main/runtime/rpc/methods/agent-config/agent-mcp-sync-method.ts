@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
 import { AgentMcpSyncParams } from '../../../../../shared/agent-mcp-sync/mcp-sync-contract'
-import { getAppEnvironment } from '../../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import {
   AgentConfigSyncPlanParams,
   AgentConfigSyncPutParams

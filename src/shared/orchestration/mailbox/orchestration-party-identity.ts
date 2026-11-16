@@ -1,4 +1,4 @@
-import type { OrcaSessionId } from '../../orca-session-address'
+import type { OrcaSessionId } from '../../agent-session/identity/orca-session-address'
 
 /** PTY parties use terminal handle/pane, structured parties use Orca session identity (orca_session_id:<id>).
  * Structured workers also have handles/panes; ordinary chats do not. Build identity at lookup boundaries and pass it whole. */

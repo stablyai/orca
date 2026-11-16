@@ -29,10 +29,10 @@ vi.mock('@/store', () => {
     terminalLayoutsByTabId: {
       'tab-1': { ptyIdsByLeafId: { '11111111-1111-4111-8111-111111111111': 'pty-1' } }
     },
-    agentStatusByPaneKey: new Proxy(
-      {},
-      { get: () => ({ agentType: 'claude', state: 'done', mainAgent: true }) }
-    ),
+    // Every pane reads as a running Claude main agent (ReadonlyMap read API).
+    agentStatusByPaneKey: {
+      get: () => ({ agentType: 'claude', state: 'done', mainAgent: true })
+    },
     openSettingsTarget: () => undefined,
     openSettingsPage: () => undefined,
     queuePaneAccountRestarts: () => undefined

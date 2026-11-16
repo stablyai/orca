@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { evaluateCloudRuntimeSkew } from './cloud-runtime-skew'
 
 // Desktop speaks protocol 5 and still accepts sandboxes down to 3.

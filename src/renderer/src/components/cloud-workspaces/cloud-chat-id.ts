@@ -4,7 +4,7 @@
 // The control plane accepts 1-128 chars of [A-Za-z0-9_.:-]; other values are base64url-encoded
 // under `sb:` / `tb:`, and anything still too long has no shareable id.
 import { base64ToBytes, bytesToBase64 } from '../../../../shared/cloud-workspaces/sealed-grant'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
 export type CloudChatRef = { kind: 'session' | 'terminal'; id: string }
 

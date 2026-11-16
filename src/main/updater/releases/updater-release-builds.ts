@@ -8,8 +8,8 @@ import {
   sortReleaseBuildsNewestFirst,
   type ReleaseBuild,
   type ReleaseChannel
-} from '../../../shared/release-channel'
-import { parseRetryAfterHeaderMs } from '../../../shared/retry-after-header'
+} from '../../../shared/updater/release-channel'
+import { parseRetryAfterHeaderMs } from '../../../shared/network/retry-after-header'
 import {
   getGhRateLimitBlockedUntilMs,
   recordGhPrimaryRateLimit

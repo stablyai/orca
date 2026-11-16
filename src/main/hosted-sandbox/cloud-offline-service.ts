@@ -5,16 +5,16 @@
 // - the queued-prompt store that wakes the VM (only when the person queues) and delivers once.
 import { join } from 'node:path'
 import { ipcMain, type BrowserWindow } from 'electron'
-import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import { isEphemeralVmSuspended } from '../../shared/ephemeral-vm-environment-sleep'
+import { getEphemeralVmRecipeResultConnection } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { isEphemeralVmSuspended } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-environment-sleep'
 import {
   ORCA_CLOUD_OFFLINE_CHANNELS as CH,
   type CloudOfflineSnapshot
 } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import { RECIPE_VM_OPEN_HOLD_MS } from '../../shared/remote-runtime/recipe-vm-wake'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import {
   createCloudMessageQueue,
