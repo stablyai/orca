@@ -46,7 +46,9 @@ function managedAccounts(snapshot: AccountsSnapshot, provider: ProviderKey) {
         id: account.id,
         email: account.email,
         displayName: account.displayName,
-        subtitle: account.organizationName ?? null
+        subtitle: account.organizationName ?? null,
+        managedAuthRuntime: account.managedAuthRuntime,
+        wslDistro: account.wslDistro
       }))
     : snapshot.codex.accounts.map((account) => ({
         id: account.id,

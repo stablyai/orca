@@ -94,7 +94,7 @@ export type UsageRateLimitMetadata = {
   account?: { id: string | null; email: string | null }
   /** Claude/Codex: set only on a successful reading of one account slot; older hosts omit it. */
   readingAccount?: UsageReadingAccount
-  /** Codex: the slot this fetch tried, so `error` names its account even when older windows are kept. */
+  /** Claude/Codex: the slot this fetch tried, so a failure names its account like a success does. */
   attemptedAccount?: UsageReadingAccount
 }
 

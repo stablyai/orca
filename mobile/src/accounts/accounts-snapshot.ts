@@ -31,7 +31,7 @@ const RateLimitResetCreditsSchema = z
   })
   .passthrough()
 
-// Names whose login a reading came from; null id is System default. Malformed stamps name no one.
+// Names whose login a reading (or failed attempt) used; null id is System default. Malformed stamps name no one.
 const UsageReadingAccountSchema = z.object({
   accountId: AccountIdSchema.nullable(),
   runtime: z.enum(['host', 'wsl']),
@@ -39,7 +39,10 @@ const UsageReadingAccountSchema = z.object({
 })
 
 const UsageMetadataSchema = z
-  .object({ readingAccount: UsageReadingAccountSchema.optional().catch(undefined) })
+  .object({
+    readingAccount: UsageReadingAccountSchema.optional().catch(undefined),
+    attemptedAccount: UsageReadingAccountSchema.optional().catch(undefined)
+  })
   .passthrough()
 
 export const ProviderRateLimitsSchema = z

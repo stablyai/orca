@@ -2,6 +2,7 @@ import type {
   RateLimitWindow,
   ProviderRateLimits
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isSameUsageSlot } from '../../../shared/agent-usage/rate-limits/account-usage-observations'
 import { RateLimitServiceFetchControl } from './service-fetch-control'
 import {
   LONG_STALE_THRESHOLD_MS,
@@ -36,6 +37,26 @@ export function withoutResetWindows(limits: ProviderRateLimits, now: number): Pr
   }
 }
 
+// Another runtime's or login's last reading must not stand in for this one's failure.
+function hasKnownProvenanceChange(
+  previous: ProviderRateLimits | null,
+  fresh: ProviderRateLimits
+): boolean {
+  const previousProvenance = previous?.usageMetadata?.authProvenance
+  const freshProvenance = fresh.usageMetadata?.authProvenance
+  const previousSlot =
+    previous?.usageMetadata?.readingAccount ?? previous?.usageMetadata?.attemptedAccount
+  const freshSlot = fresh.usageMetadata?.attemptedAccount
+  return (
+    (previousProvenance !== undefined &&
+      freshProvenance !== undefined &&
+      previousProvenance !== freshProvenance) ||
+    (previousSlot !== undefined &&
+      freshSlot !== undefined &&
+      !isSameUsageSlot(previousSlot, freshSlot))
+  )
+}
+
 export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetchControl {
   protected applyStalePolicy(
     fresh: ProviderRateLimits,
@@ -57,7 +78,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       return fresh
     }
 
-    if (!previous) {
+    if (!previous || hasKnownProvenanceChange(previous, fresh)) {
       return fresh
     }
 

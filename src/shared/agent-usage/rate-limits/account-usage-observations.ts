@@ -1,8 +1,12 @@
 import type { UsageReadingAccount } from './rate-limit-types'
 
 type StampedReading = {
+  status: string
   updatedAt: number
-  usageMetadata?: { readingAccount?: UsageReadingAccount } | null
+  usageMetadata?: {
+    readingAccount?: UsageReadingAccount
+    attemptedAccount?: UsageReadingAccount
+  } | null
 }
 
 /** Readings keyed by the account slot each one names, from one owner's snapshot. */
@@ -18,6 +22,22 @@ function slotKey(slot: UsageReadingAccount): string | null {
     : null
 }
 
+export function isSameUsageSlot(
+  left: UsageReadingAccount | null | undefined,
+  right: UsageReadingAccount | null | undefined
+): boolean {
+  const key = left ? slotKey(left) : null
+  return key !== null && right !== null && right !== undefined && key === slotKey(right)
+}
+
+// A failure with no earlier windows is still that account's state, so it names the attempt.
+function readingSlot(reading: StampedReading): UsageReadingAccount | undefined {
+  const metadata = reading.usageMetadata
+  return (
+    metadata?.readingAccount ?? (reading.status === 'ok' ? undefined : metadata?.attemptedAccount)
+  )
+}
+
 /** Index by the slot each reading names, never by which row a roster marks selected: the
  *  selection can change while a fetch is in flight. Unstamped readings (older hosts) name no one. */
 export function indexAccountUsageObservations<T extends StampedReading>(
@@ -26,7 +46,7 @@ export function indexAccountUsageObservations<T extends StampedReading>(
 ): AccountUsageObservations<T> {
   const readings = new Map<string, T>()
   const add = (reading: T | null | undefined, cacheId?: string): void => {
-    const account = reading?.usageMetadata?.readingAccount
+    const account = reading ? readingSlot(reading) : undefined
     const key = account ? slotKey(account) : null
     // A cached entry must name the account it is cached under.
     if (

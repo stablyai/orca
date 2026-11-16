@@ -4,6 +4,7 @@ import type {
 } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexSystemDefaultIdentity } from '../../../../../../shared/agent-accounts/managed-account-types'
 import { isCodexAuthError } from '../../../../../../shared/agent-accounts/codex/codex-auth-errors'
+import { isSameUsageSlot } from '../../../../../../shared/agent-usage/rate-limits/account-usage-observations'
 
 type AccountRuntime = {
   runtime: 'host' | 'wsl'
@@ -49,9 +50,12 @@ export function getCodexAccountAuthWarning(args: {
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
     return null
   }
-  // Another window can switch accounts mid-fetch; only the account the fetch tried failed to sign in.
-  const attempted = args.limits.usageMetadata?.attemptedAccount
-  return attempted?.accountId === args.accountId && attempted.runtime === args.target.runtime
+  // Another window can switch accounts mid-fetch; only the slot the fetch tried failed to sign in.
+  return isSameUsageSlot(args.limits.usageMetadata?.attemptedAccount, {
+    accountId: args.accountId,
+    runtime: args.target.runtime,
+    wslDistro: args.target.wslDistro
+  })
     ? 'stale-sign-in'
     : null
 }

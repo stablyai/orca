@@ -10,9 +10,20 @@ import { OAuthUsageError } from './claude-oauth-usage-error'
 import type { ClaudeRateLimitFetchOptions } from './claude-usage-fetch-options'
 import { abortedClaudeRateLimitResult, makeClaudeUsageResult } from './claude-usage-result'
 import { CLAUDE_PROFILE_MISSING_MESSAGE } from '../../../../shared/agent-accounts/claude/claude-profile-routing'
+import { withUsageReadingAccount } from '../usage-reading-account'
 
 /** Usage observes the account; only a user-started Claude process may refresh its login. */
 export async function fetchActiveClaudeRateLimits(
+  options?: ClaudeRateLimitFetchOptions
+): Promise<ProviderRateLimits> {
+  // Name the login a reading came from so its plan and errors never follow another account's.
+  return withUsageReadingAccount(
+    await readActiveClaudeRateLimits(options),
+    options?.authPreparation?.readingAccount
+  )
+}
+
+async function readActiveClaudeRateLimits(
   options?: ClaudeRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
   const usageError = options?.authPreparation?.usageError
@@ -61,18 +72,11 @@ export async function fetchActiveClaudeRateLimits(
   }
   try {
     const usage = await fetchClaudeOAuthUsage(credentials.token, options?.signal)
-    // Name the login a reading came from so its plan never follows another account's reading.
     return usage.status === 'ok'
       ? {
           ...usage,
           ...(credentials.planType ? { planType: credentials.planType } : {}),
-          usageMetadata: {
-            ...usage.usageMetadata,
-            ...metadata,
-            ...(options?.authPreparation?.readingAccount
-              ? { readingAccount: options.authPreparation.readingAccount }
-              : {})
-          }
+          usageMetadata: { ...usage.usageMetadata, ...metadata }
         }
       : usage
   } catch (error) {

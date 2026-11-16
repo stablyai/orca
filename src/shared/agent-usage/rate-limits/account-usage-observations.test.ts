@@ -59,6 +59,22 @@ describe('indexAccountUsageObservations', () => {
     expect(getObservedAccountUsage(observations, { accountId: null, ...host })).toBeNull()
   })
 
+  it('shows a failure with no earlier windows on the account it tried', () => {
+    const failure: ProviderRateLimits = {
+      ...reading(),
+      session: null,
+      status: 'error',
+      error: 'Sign in again to use this account.',
+      usageMetadata: { attemptedAccount: { accountId: 'b', ...host } }
+    }
+    const observations = indexAccountUsageObservations(null, [
+      { accountId: 'b', rateLimits: failure }
+    ])
+
+    expect(getObservedAccountUsage(observations, { accountId: 'b', ...host })).toBe(failure)
+    expect(getObservedAccountUsage(observations, { accountId: 'a', ...host })).toBeNull()
+  })
+
   it('ignores a cached entry whose reading names another account', () => {
     // An outgoing reading seeded under a after another window had already switched to b.
     const observations = indexAccountUsageObservations(null, [

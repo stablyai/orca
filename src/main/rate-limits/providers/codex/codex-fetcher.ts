@@ -2,7 +2,7 @@ import type {
   CodexRateLimitResetOutcome,
   ProviderRateLimits
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { withCodexReadingAccount } from './codex-reading-account'
+import { withUsageReadingAccount } from '../usage-reading-account'
 import { isCodexAuthError } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
   buildWslExecArgs,
@@ -167,7 +167,7 @@ async function fetchBackendUsage(
 export async function fetchCodexRateLimits(
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
-  return withCodexReadingAccount(await readCodexRateLimits(options), options?.readingAccount)
+  return withUsageReadingAccount(await readCodexRateLimits(options), options?.readingAccount)
 }
 
 async function readCodexRateLimits(

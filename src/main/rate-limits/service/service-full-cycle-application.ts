@@ -8,19 +8,6 @@ import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
-function hasKnownProvenanceChange(
-  previous: ProviderRateLimits | null,
-  fresh: ProviderRateLimits
-): boolean {
-  const previousProvenance = previous?.usageMetadata?.authProvenance
-  const freshProvenance = fresh.usageMetadata?.authProvenance
-  return (
-    previousProvenance !== undefined &&
-    freshProvenance !== undefined &&
-    previousProvenance !== freshProvenance
-  )
-}
-
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
     signal: AbortSignal,
@@ -241,8 +228,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
-    // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
-    const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
     const zcodeAccount = zcode.usageMetadata?.authProvenance
     const sameZcodeAccount =
@@ -260,7 +245,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
-      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      cursor: this.applyStalePolicy(cursor, previousState.cursor),
       zcode: !shouldApplyZcode
         ? this.state.zcode
         : zcodeConfigChanged
@@ -268,12 +253,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
-      // Another runtime's last reading must not stand in for this runtime's failure.
-      antigravity: !shouldApplyAntigravity
-        ? this.state.antigravity
-        : hasKnownProvenanceChange(previousState.antigravity, antigravity)
-          ? antigravity
-          : this.applyStalePolicy(antigravity, previousState.antigravity)
+      antigravity: shouldApplyAntigravity
+        ? this.applyStalePolicy(antigravity, previousState.antigravity)
+        : this.state.antigravity
     })
 
     // Published separately so a slow Muse CLI never delays the sibling batch above.

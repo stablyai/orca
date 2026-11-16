@@ -36,6 +36,26 @@ describe('getCodexAccountAuthWarning', () => {
     expect(warningFor(authFailure(null), null)).toBe('stale-sign-in')
   })
 
+  it('names only the WSL distro the failed fetch tried', () => {
+    const limits = authFailure(null)
+    limits.usageMetadata = {
+      attemptedAccount: { accountId: null, runtime: 'wsl', wslDistro: 'Ubuntu' }
+    }
+    const warn = (wslDistro: string | null) =>
+      getCodexAccountAuthWarning({
+        limits,
+        target: { runtime: 'wsl', wslDistro },
+        runtime: { runtime: 'wsl', wslDistro },
+        activeAccountId: null,
+        accountId: null
+      })
+
+    // An unnamed default distro may no longer be the one that failed.
+    expect(warn(null)).toBeNull()
+    expect(warn('ubuntu-24.04')).toBeNull()
+    expect(warn('Ubuntu')).toBe('stale-sign-in')
+  })
+
   it('makes no claim about a failure that does not say which account it tried', () => {
     expect(warningFor(authFailure(), 'a')).toBeNull()
   })
