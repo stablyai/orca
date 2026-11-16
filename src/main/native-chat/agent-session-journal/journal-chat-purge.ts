@@ -28,13 +28,20 @@ export async function purgeOrphanedJournalChats(
   if (database.readOnly) {
     return 0
   }
-  const found = await database.serialize('', (writer) => writer.maintain({ kind: 'chat-orphans' }))
-  const orphans = found && typeof found === 'object' && 'orphans' in found ? found.orphans : []
   let purged = 0
-  for (const orphan of orphans) {
-    if (await owns(orphan.workspaceId)) {
-      await purgeForgottenJournalChat(database, orphan.sessionId)
-      purged++
+  let after: string | null = ''
+  while (after !== null) {
+    const cursor: string = after
+    const found = await database.serialize('', (writer) =>
+      writer.maintain({ kind: 'chat-orphans', after: cursor })
+    )
+    const page = found && typeof found === 'object' && 'orphans' in found ? found : null
+    after = page?.next ?? null
+    for (const orphan of page?.orphans ?? []) {
+      if (await owns(orphan.workspaceId)) {
+        await purgeForgottenJournalChat(database, orphan.sessionId)
+        purged++
+      }
     }
   }
   return purged

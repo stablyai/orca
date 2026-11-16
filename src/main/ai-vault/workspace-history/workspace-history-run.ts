@@ -111,7 +111,7 @@ export async function runWorkspaceHistory(
     if (SQLITE_AGENTS.has(session.agent)) {
       // Database rows name the database file; the session is a row inside it.
       const row = splitOpenCodeSqliteCandidate(
-        buildOpenCodeSqliteCandidatePath(session.filePath, session.sessionId),
+        workspaceHistorySessionKey(session),
         session.agent === 'zcode' ? 'zcode' : 'opencode'
       )
       if (row) {

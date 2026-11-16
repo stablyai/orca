@@ -14,6 +14,8 @@ import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault
 
 const scanAiVaultSessions = vi.hoisted(() => vi.fn())
 vi.mock('../session-scanner', () => ({ scanAiVaultSessions }))
+const deleteWorkspaceHistorySqliteSessions = vi.hoisted(() => vi.fn())
+vi.mock('./workspace-history-sqlite-delete', () => ({ deleteWorkspaceHistorySqliteSessions }))
 
 const { runWorkspaceHistory } = await import('./workspace-history-run')
 
@@ -141,5 +143,40 @@ describe('runWorkspaceHistory', () => {
 
     expect(result).toMatchObject({ total: 1, matched: 0, deleted: 0 })
     expect(existsSync(rollout)).toBe(true)
+  })
+
+  it('deletes an OpenCode session whose path already names its database row', async () => {
+    const dbPath = join(root, 'opencode', 'opencode.db')
+    const workspace = join(root, 'workspaces', 'gone')
+    deleteWorkspaceHistorySqliteSessions.mockResolvedValue({ deleted: ['ses_1'], busy: [] })
+    scanAiVaultSessions.mockResolvedValue({
+      sessions: [
+        {
+          ...codexSession(`${dbPath}#ses_1`, workspace, '2026-11-01T00:00:00.000Z'),
+          agent: 'opencode',
+          sessionId: 'ses_1'
+        }
+      ],
+      issues: [],
+      scannedAt: '2026-11-15'
+    })
+
+    const result = await runWorkspaceHistory(
+      {
+        mode: 'delete',
+        ownership: { scope: { kind: 'removed', paths: [workspace] }, keepPaths: [] },
+        inUseSince: Date.parse('2026-11-10T00:00:00.000Z'),
+        options: {}
+      },
+      new AbortController().signal
+    )
+
+    expect(deleteWorkspaceHistorySqliteSessions).toHaveBeenCalledWith(
+      dbPath,
+      ['ses_1'],
+      Date.parse('2026-11-10T00:00:00.000Z'),
+      expect.anything()
+    )
+    expect(result).toMatchObject({ deleted: 1, failed: 0 })
   })
 })

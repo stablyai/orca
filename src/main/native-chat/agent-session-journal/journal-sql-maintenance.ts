@@ -37,7 +37,7 @@ export type JournalSqlMaintenance =
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
   | { kind: 'chat-purge'; sessionId: string }
-  | { kind: 'chat-orphans' }
+  | { kind: 'chat-orphans'; after: string }
   | {
       kind: 'import-page'
       target: Pick<JournalDomainImportHeader, 'sessionId' | 'epoch'>
@@ -57,7 +57,7 @@ export type JournalSqlMaintenanceResult =
   | JournalDomainMaintenanceResult
   | JournalDomainImportDiscard
   | { more: boolean }
-  | { orphans: { sessionId: string; workspaceId: string }[] }
+  | { orphans: { sessionId: string; workspaceId: string }[]; next: string | null }
   | boolean
   | string
   | null
@@ -91,7 +91,7 @@ export function applyJournalSqlMaintenance(
     case 'chat-purge':
       return purgeJournalDomainChatPage(db, operation.sessionId)
     case 'chat-orphans':
-      return listJournalDomainOrphanChats(db)
+      return listJournalDomainOrphanChats(db, operation.after)
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

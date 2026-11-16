@@ -31,18 +31,26 @@ export function purgeJournalDomainChatPage(
   return { more }
 }
 
-/** Chats whose record is gone but whose journal remains: a purge an exit or error cut short. */
-export function listJournalDomainOrphanChats(db: Database.Database): {
+/** One page, after `after`, of chats whose record is gone but whose journal remains: a purge cut short. */
+export function listJournalDomainOrphanChats(
+  db: Database.Database,
+  after: string
+): {
   orphans: { sessionId: string; workspaceId: string }[]
+  next: string | null
 } {
   const rows = db
     .prepare(
       `SELECT c.session_id AS session_id, c.workspace_id AS workspace_id FROM journal_chat_state c
-       WHERE NOT EXISTS (SELECT 1 FROM agent_session_records r WHERE r.session_id = c.session_id)
-       LIMIT 256`
+       WHERE c.session_id > ?
+         AND NOT EXISTS (SELECT 1 FROM agent_session_records r WHERE r.session_id = c.session_id)
+       ORDER BY c.session_id LIMIT 256`
     )
-    .all()
+    .all(after)
+  const last = rows.at(-1)?.session_id
   return {
+    // Kept or held rows still advance the cursor, so later orphans are reached.
+    next: rows.length === 256 && typeof last === 'string' ? last : null,
     orphans: rows.flatMap((row) =>
       typeof row.session_id === 'string' &&
       typeof row.workspace_id === 'string' &&

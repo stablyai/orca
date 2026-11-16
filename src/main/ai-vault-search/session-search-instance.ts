@@ -78,8 +78,9 @@ export class SessionSearchInstance {
       try {
         await indexer.initialize()
         if (this.pendingForget.size > 0) {
-          await indexer.forgetFiles([...this.pendingForget])
+          const left = await indexer.forgetFiles([...this.pendingForget])
           this.pendingForget.clear()
+          left.forEach((path) => this.pendingForget.add(path))
         }
       } catch (error) {
         indexer.close()
@@ -138,12 +139,9 @@ export class SessionSearchInstance {
   }
   async forgetFiles(paths: readonly string[]): Promise<void> {
     await this.transition
-    if (this.live) {
-      await this.live.indexer.forgetFiles(paths)
-      return
-    }
-    // With search off the rows stay on disk; drop them before a re-enabled index answers queries.
-    for (const path of paths) {
+    // With search off, or closed part way, the rows stay on disk; drop them before a re-enabled index answers queries.
+    const left = this.live ? await this.live.indexer.forgetFiles(paths) : paths
+    for (const path of left) {
       this.pendingForget.add(path)
     }
   }

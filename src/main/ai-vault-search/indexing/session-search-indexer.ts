@@ -120,10 +120,11 @@ export class SessionSearchIndexer {
   }
 
   /** Drop rows for transcripts Orca just deleted instead of waiting for a sweep to prove them gone. */
-  async forgetFiles(paths: readonly string[]): Promise<void> {
+  /** Returns the paths a close left in the index, for the caller to remove later. */
+  async forgetFiles(paths: readonly string[]): Promise<readonly string[]> {
     for (const [index, path] of paths.entries()) {
       if (this.closed) {
-        return
+        return paths.slice(index)
       }
       this.store.removeFile(path)
       if ((index + 1) % 256 === 0) {
@@ -131,6 +132,7 @@ export class SessionSearchIndexer {
       }
     }
     await this.store.flush()
+    return []
   }
 
   generation(): number {
