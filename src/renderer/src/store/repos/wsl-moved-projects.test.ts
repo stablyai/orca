@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import {
-  wslMovedProjectKey,
-  type WslMovedProject
-} from '../../../../shared/wsl-move/wsl-moved-project'
+import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import {
   canHideWslMovedEntry,
   selectListedWslMovedChatWorkspaces,
@@ -81,7 +78,7 @@ describe('selectListedWslMovedChatWorkspaces', () => {
     { project: moved, workspaces: [] },
     { project: other, workspaces: [{ key: 'repo-2::/app', chats: [] }] }
   ]
-  const hidden = [wslMovedProjectKey(moved), wslMovedProjectKey(other)]
+  const hidden = ['ubuntu\u0000repo:repo-1', 'ubuntu\u0000repo:repo-2']
   function catalog(hostRepoIds: string[]) {
     return {
       repos: hostRepoIds.map((id) => ({

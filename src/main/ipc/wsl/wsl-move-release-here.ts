@@ -159,6 +159,7 @@ async function releaseWslMovesHereNow(
     const ports = createUndoPorts()
     for (const move of released) {
       ports.refocusHere?.(move)
+      ports.unhideMovedEntries?.(move)
     }
     fenceHandedToReload = true
     reloadWslMoveWindowWithWritesHeld(releaseSpawnFence)

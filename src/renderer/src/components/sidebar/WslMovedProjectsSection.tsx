@@ -104,10 +104,13 @@ const WslMovedProjectsSection = React.memo(function WslMovedProjectsSection() {
         aria-expanded={!collapsed}
         aria-controls={listId}
         onClick={() => useAppStore.getState().setWslMovedSectionCollapsed(!collapsed)}
-        className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] leading-none text-muted-foreground transition-colors hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-worktree-sidebar-ring"
+        className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-2xs leading-none text-muted-foreground transition-colors hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-worktree-sidebar-ring"
       >
         <ChevronRight
-          className={cn('size-3 shrink-0 transition-transform', !collapsed && 'rotate-90')}
+          className={cn(
+            'size-3 shrink-0 transition-transform motion-reduce:transition-none',
+            !collapsed && 'rotate-90'
+          )}
           aria-hidden="true"
         />
         <span className="min-w-0 flex-1 truncate">

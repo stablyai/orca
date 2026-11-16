@@ -210,7 +210,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />
-              <WslMovedWorkspaceUseHereMenuItem workspaceId={worktree.id} />
+              <WslMovedWorkspaceUseHereMenuItem worktree={worktree} />
             </>
           )}
           {isMultiContext && hasAnyContextLineage ? (

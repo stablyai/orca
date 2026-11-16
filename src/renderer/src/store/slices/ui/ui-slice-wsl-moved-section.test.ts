@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createUIStore, makePersistedUI } from './ui-slice-test-harness'
-import {
-  wslMovedProjectKey,
-  type WslMovedProject
-} from '../../../../../shared/wsl-move/wsl-moved-project'
+import { fetchWslMovedProjects } from '../../repos/wsl-moved-projects'
+import type { WslMovedProject } from '../../../../../shared/wsl-move/wsl-moved-project'
 
 const ubuntuRepo: WslMovedProject = {
   kind: 'repo',
@@ -19,54 +17,43 @@ const ubuntuFolder: WslMovedProject = {
   path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\notes',
   distro: 'Ubuntu'
 }
+const REPO_KEY = 'Ubuntu\u0000repo:repo-1'
+const FOLDER_KEY = 'Ubuntu\u0000folder:folder-1'
+
+const uiSet = vi.fn((_update: Record<string, unknown>) => Promise.resolve())
+const listWslMoved = vi.fn(() => Promise.resolve<WslMovedProject[]>([]))
+beforeEach(() => {
+  uiSet.mockClear()
+  vi.stubGlobal('window', { api: { ui: { set: uiSet }, repos: { listWslMoved } } })
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+/** The hidden keys the last write saved, as main would hold them. */
+function savedHiddenKeys(): unknown {
+  return uiSet.mock.calls.findLast(([update]) => 'hiddenWslMovedProjectKeys' in update)?.[0]
+    .hiddenWslMovedProjectKeys
+}
 
 describe('moved-to-WSL sidebar list state', () => {
-  const uiSet = vi.fn(() => Promise.resolve())
-  beforeEach(() => {
-    uiSet.mockClear()
-    vi.stubGlobal('window', { api: { ui: { set: uiSet } } })
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('persists the collapsed state only when it changes', () => {
+  it('saves the collapsed state', () => {
     const store = createUIStore()
-    store.getState().setWslMovedSectionCollapsed(true)
     store.getState().setWslMovedSectionCollapsed(true)
     expect(store.getState().wslMovedSectionCollapsed).toBe(true)
-    expect(uiSet).toHaveBeenCalledTimes(1)
-    expect(uiSet).toHaveBeenCalledWith({ wslMovedSectionCollapsed: true })
+    expect(uiSet).toHaveBeenLastCalledWith({ wslMovedSectionCollapsed: true })
   })
 
-  it('persists a hidden entry once', () => {
+  it('saves a hidden entry once, keyed by distro, kind and id', () => {
     const store = createUIStore()
     store.getState().hideWslMovedProject(ubuntuRepo)
     store.getState().hideWslMovedProject(ubuntuRepo)
-    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([wslMovedProjectKey(ubuntuRepo)])
-    expect(uiSet).toHaveBeenCalledTimes(1)
-  })
-
-  it('keys a hidden entry by distro, so a move to another host lists again', () => {
-    expect(wslMovedProjectKey(ubuntuRepo)).not.toBe(
-      wslMovedProjectKey({ ...ubuntuRepo, distro: 'Debian' })
-    )
-  })
-
-  it('drops hidden keys of projects no longer moved and writes nothing otherwise', () => {
-    const store = createUIStore()
-    store.getState().hideWslMovedProject(ubuntuRepo)
-    store.getState().hideWslMovedProject(ubuntuFolder)
-    uiSet.mockClear()
-
-    store.getState().retainHiddenWslMovedProjects([ubuntuRepo, ubuntuFolder])
-    expect(uiSet).not.toHaveBeenCalled()
-
-    store.getState().retainHiddenWslMovedProjects([ubuntuFolder])
-    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([wslMovedProjectKey(ubuntuFolder)])
-    expect(uiSet).toHaveBeenCalledWith({
-      hiddenWslMovedProjectKeys: [wslMovedProjectKey(ubuntuFolder)]
-    })
+    store.getState().hideWslMovedProject({ ...ubuntuRepo, distro: 'Debian' })
+    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([
+      REPO_KEY,
+      'Debian\u0000repo:repo-1'
+    ])
+    expect(savedHiddenKeys()).toEqual([REPO_KEY, 'Debian\u0000repo:repo-1'])
   })
 
   it('hydrates both fields across restarts and drops corrupt keys', () => {
@@ -75,15 +62,15 @@ describe('moved-to-WSL sidebar list state', () => {
       makePersistedUI({
         wslMovedSectionCollapsed: true,
         hiddenWslMovedProjectKeys: [
-          wslMovedProjectKey(ubuntuRepo),
-          wslMovedProjectKey(ubuntuRepo),
+          REPO_KEY,
+          REPO_KEY,
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercises a corrupt persisted value.
           7 as unknown as string
         ]
       })
     )
     expect(store.getState().wslMovedSectionCollapsed).toBe(true)
-    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([wslMovedProjectKey(ubuntuRepo)])
+    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
   })
 
   it('hydrates an older profile as expanded with nothing hidden', () => {
@@ -91,5 +78,40 @@ describe('moved-to-WSL sidebar list state', () => {
     store.getState().hydratePersistedUI(makePersistedUI())
     expect(store.getState().wslMovedSectionCollapsed).toBe(false)
     expect(store.getState().hiddenWslMovedProjectKeys).toEqual([])
+  })
+})
+
+describe('the startup read of moved projects', () => {
+  function storeHiding(keys: string[]) {
+    const store = createUIStore()
+    store.setState({ wslMovedProjects: [], hiddenWslMovedProjectKeys: keys })
+    uiSet.mockClear()
+    return store
+  }
+
+  it('forgets hidden keys of projects no longer moved', async () => {
+    const store = storeHiding([REPO_KEY, FOLDER_KEY])
+    listWslMoved.mockResolvedValueOnce([ubuntuFolder])
+    await fetchWslMovedProjects(store.setState, store.getState)
+    expect(store.getState().wslMovedProjects).toEqual([ubuntuFolder])
+    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([FOLDER_KEY])
+    expect(savedHiddenKeys()).toEqual([FOLDER_KEY])
+  })
+
+  it('keeps hidden keys while every project is still moved, writing nothing', async () => {
+    const store = storeHiding([REPO_KEY])
+    listWslMoved.mockResolvedValueOnce([ubuntuRepo, ubuntuFolder])
+    await fetchWslMovedProjects(store.setState, store.getState)
+    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
+    expect(savedHiddenKeys()).toBeUndefined()
+  })
+
+  it('keeps hidden keys when the read fails', async () => {
+    const store = storeHiding([REPO_KEY])
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    listWslMoved.mockRejectedValueOnce(new Error('journal unreadable'))
+    await fetchWslMovedProjects(store.setState, store.getState)
+    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
+    expect(savedHiddenKeys()).toBeUndefined()
   })
 })

@@ -6,9 +6,9 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { bringWslMovedProjectBack } from '@/lib/workspace/ownership/wsl-moved-project-use-here'
 import { movedProjectForKey, wslMovedProjectOnHost } from '@/store/repos/wsl-moved-projects'
-import { workspaceOwnerHostId } from '@/lib/workspace/ownership/workspace-row-owner-host'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 
 function UseHereItem({ project }: { project: WslMovedProject | null }): React.JSX.Element | null {
@@ -37,17 +37,20 @@ export function WslMovedRepoUseHereMenuItem({ repo }: { repo: Repo }): React.JSX
   return <UseHereItem project={project} />
 }
 
+/** The clicked row's own host: the same project id can be listed under several hosts. */
 export function WslMovedWorkspaceUseHereMenuItem({
-  workspaceId
+  worktree
 }: {
-  workspaceId: string
+  worktree: Pick<Worktree, 'id' | 'hostId'>
 }): React.JSX.Element | null {
   const project = useAppStore((s) =>
-    wslMovedProjectOnHost(
-      movedProjectForKey(s.wslMovedProjects, workspaceId),
-      s.runtimeEnvironments,
-      workspaceOwnerHostId(s, workspaceId)
-    )
+    worktree.hostId
+      ? wslMovedProjectOnHost(
+          movedProjectForKey(s.wslMovedProjects, worktree.id),
+          s.runtimeEnvironments,
+          worktree.hostId
+        )
+      : null
   )
   return <UseHereItem project={project} />
 }

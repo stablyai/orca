@@ -7,10 +7,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import {
-  wslMovedProjectKey,
-  type WslMovedProject
-} from '../../../../shared/wsl-move/wsl-moved-project'
+import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
@@ -115,7 +112,7 @@ it('offers Hide only on entries without chats, and a hidden entry stays hidden',
   expect(entries).toHaveLength(1)
   expect(entries[0]).toHaveTextContent('with-chats')
   expect(uiSet).toHaveBeenCalledWith({
-    hiddenWslMovedProjectKeys: [expect.stringContaining(withoutChats.id)]
+    hiddenWslMovedProjectKeys: ['Ubuntu\u0000repo:repo-plain']
   })
 })
 
@@ -138,14 +135,18 @@ it('disappears once every entry is hidden', () => {
   expect(screen.queryByTestId('wsl-moved-projects')).toBeNull()
 })
 
-it('keeps an entry, hidden or not, whose host no longer lists the project', () => {
+it('keeps a hidden entry whose host no longer lists the project, hiding the rest', () => {
+  const gone: WslMovedProject = { ...withoutChats, id: 'repo-gone', displayName: 'gone' }
   useAppStore.setState({
-    repos: [],
+    wslMovedProjects: [withoutChats, gone],
     unifiedTabsByWorktree: {},
-    hiddenWslMovedProjectKeys: [wslMovedProjectKey(withoutChats)]
+    // Only `plain` is still listed on its host; `gone` lost its host row, as after removing the host.
+    hiddenWslMovedProjectKeys: ['Ubuntu\u0000repo:repo-plain', 'Ubuntu\u0000repo:repo-gone']
   })
   renderSection()
-  // Its entry is the only way back here, as after removing the host.
-  expect(screen.getAllByTestId('wsl-moved-project')).toHaveLength(2)
+  const entries = screen.getAllByTestId('wsl-moved-project')
+  expect(entries).toHaveLength(1)
+  expect(entries[0]).toHaveTextContent('gone')
+  // Its entry is the only way back here, so it cannot be hidden.
   expect(screen.queryByTestId('wsl-moved-hide')).toBeNull()
 })

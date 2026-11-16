@@ -69,7 +69,8 @@ beforeEach(() => {
         record('copies')(move)
         return 'stopped'
       },
-      refocusHere: record('refocus')
+      refocusHere: record('refocus'),
+      unhideMovedEntries: record('unhide')
     })
   )
   setWslMoveReloadableWindow(() => null)
@@ -106,13 +107,23 @@ describe('undo of an older move while a newer one stands', () => {
 
   it('brings Q back alone, then P, each touching only its own move on the host', async () => {
     expect(await useHere('repo-q')).toMatchObject({ released: true, repoIds: ['repo-q'] })
-    expect(touched).toEqual(['automations:move-q', 'copies:move-q', 'refocus:move-q'])
+    expect(touched).toEqual([
+      'automations:move-q',
+      'copies:move-q',
+      'refocus:move-q',
+      'unhide:move-q'
+    ])
     expect(journal()).toEqual(['move-p'])
     expect([moved('repo-1'), moved('repo-q')]).toEqual([true, false])
 
     touched.length = 0
     expect(await useHere('repo-1')).toMatchObject({ released: true, repoIds: ['repo-1'] })
-    expect(touched).toEqual(['automations:move-p', 'copies:move-p', 'refocus:move-p'])
+    expect(touched).toEqual([
+      'automations:move-p',
+      'copies:move-p',
+      'refocus:move-p',
+      'unhide:move-p'
+    ])
     expect(journal()).toEqual([])
     expect(moved('repo-1')).toBe(false)
   })
