@@ -1,5 +1,11 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { Dialog, DialogContent, DialogFooter, DialogHeader } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import './delete-worktree-flow'
@@ -8,14 +14,10 @@ import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
-import { DeleteWorktreeDialogHeading } from './DeleteWorktreeDialogDescription'
+import { DeleteWorktreeDialogDescription } from './DeleteWorktreeDialogDescription'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
 import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
-import {
-  getDeleteWorktreeChangeCheckStates,
-  getDeleteWorktreeDirtyChangeCounts,
-  getDeleteWorktreeDirtyChangePreviews
-} from './delete-worktree-dirty-change-counts'
+import { useDeleteWorktreeDirtyChanges } from './use-delete-worktree-dirty-changes'
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
@@ -24,7 +26,7 @@ import {
 } from './delete-worktree-dialog-copy'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
 import { useDeleteWorktreeAtRiskLocalFiles } from './use-delete-worktree-at-risk-local-files'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
@@ -55,7 +57,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
     () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host, t)])),
@@ -195,24 +196,12 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     deleteTargets,
     repoMap
   })
-  const dirtyChanges = useMemo(() => {
-    const statusInput = { deleteTargets, gitStatusByWorktree, gitStatusByWorktreeIdentity, repoMap }
-    return {
-      checkStates: getDeleteWorktreeChangeCheckStates(statusInput),
-      counts: getDeleteWorktreeDirtyChangeCounts({ ...statusInput, deleteStateByWorktreeId }),
-      previews: getDeleteWorktreeDirtyChangePreviews(statusInput)
-    }
-  }, [
-    deleteStateByWorktreeId,
+  const { dirtyChanges, hasUnknownChangeState } = useDeleteWorktreeDirtyChanges({
     deleteTargets,
-    gitStatusByWorktree,
     gitStatusByWorktreeIdentity,
-    repoMap
-  ])
-  // Per-target hints only warn once changes are known; pending or failed checks still lose data.
-  const hasUnknownChangeState = [...dirtyChanges.checkStates].some(
-    ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
-  )
+    repoMap,
+    deleteStateByWorktreeId
+  })
 
   const handleOpenChange = useDeleteWorktreeDialogDismissal({
     isOpen,
@@ -327,8 +316,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       >
         <DialogHeader>
           <cloudDelete.CloudDeleteHeading cloud={cloud} dirtyCounts={dirtyChanges.counts}>
-            <DeleteWorktreeDialogHeading
-              isBatchDelete={isBatchDelete}
+            <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
+            <DeleteWorktreeDialogDescription
               showUnknownChangeLossWarning={hasUnknownChangeState}
               targetClassName={deleteCopy.targetClassName}
               targetName={isBatchDelete ? undefined : worktree?.displayName}
@@ -391,10 +380,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               isDetachingChildren={isDetachingChildren}
               deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
               canForceDelete={canForceDelete}
-              isBatchDelete={isBatchDelete}
-              worktreeCount={worktrees.length}
-              canDeleteAllLineage={deleteAllLineage}
-              lineageDeleteTargetCount={lineageDelete.deleteAllTargets.length}
               onCancel={() => handleOpenChange(false)}
               onForceDelete={
                 preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)

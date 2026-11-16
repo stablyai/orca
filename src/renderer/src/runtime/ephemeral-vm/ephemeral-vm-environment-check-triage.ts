@@ -1,7 +1,7 @@
 // Which environment-check results stop an Orca Cloud create, and which only become a notice in the
 // opened workspace. Peers (Conductor, Capy, Codex, Cursor) open the workspace and surface problems
 // there; only a sandbox nobody can work in should hold the create on the build sheet.
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 
 /** Failed checks that make the sandbox unusable: no checkout, no git, or orcad never answered. */
 const FATAL_CHECK_IDS: ReadonlySet<string> = new Set([

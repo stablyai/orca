@@ -92,7 +92,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     const acknowledgedIntent = intent ?? session.inferIntentFromExactTerminalInput(data)
     if (acknowledgedIntent && session.transport.sendInputAccepted) {
       const interruptStatusBaseline =
-        useAppStore.getState().agentStatusByPaneKey[session.cacheKey] ?? null
+        useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey) ?? null
       // Why: equal snapshots retain double-Escape semantics while older snapshots lose ack races.
       if (session.sequencedInterruptStatusBaseline !== interruptStatusBaseline) {
         session.sequencedInterruptStatusBaseline = interruptStatusBaseline
@@ -192,7 +192,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   const isAgentPane = (): boolean => {
     const state = useAppStore.getState()
     return (
-      state.agentStatusByPaneKey?.[session.cacheKey] !== undefined ||
+      state.agentStatusByPaneKey?.get(session.cacheKey) !== undefined ||
       findColdRestoreResumeSource(session, state) !== null
     )
   }

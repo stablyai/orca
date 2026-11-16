@@ -5,7 +5,7 @@ import {
   ORCAD_DISK_USAGE_METHOD,
   OrcadDiskUsageParamsSchema
 } from '../../../../../shared/orcad-disk-usage'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId,

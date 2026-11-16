@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { recoverUnavailableRuntimeBrowserClientPages } from './runtime-browser-client-page-recovery'
 
@@ -104,6 +104,9 @@ function harness(
   })
   const commands: { browserPageId: string; type: string; pageHostGeneration: number }[] = []
   const authority = {
+    clientPageInitializations: { canContinue: () => false },
+    admitClientPageInitialization: () => 'stale' as const,
+    claimLegacyClientPageRecovery: () => undefined,
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a',
     getPlacement: vi.fn((browserPageId: string) => placements.get(browserPageId)),
@@ -117,15 +120,21 @@ function harness(
       placements.set(retirement.browserPageId, undefined)
       return true
     }),
-    createClientPage: vi.fn(async (input: { browserPageId: string }) => {
-      if (options.creationFailures?.includes(input.browserPageId)) {
-        throw new Error('browser_host_page_creation_timeout')
+    createClientPage: vi.fn(
+      async (input: {
+        browserPageId: string
+        committed?(placement: RuntimeBrowserClientPlacement): void
+      }) => {
+        if (options.creationFailures?.includes(input.browserPageId)) {
+          throw new Error('browser_host_page_creation_timeout')
+        }
+        const index = pageIds.indexOf(input.browserPageId)
+        const placement = Object.freeze({ ...newPlacement, pageHostGeneration: 8 + index * 2 })
+        placements.set(input.browserPageId, placement)
+        input.committed?.(placement)
+        return placement
       }
-      const index = pageIds.indexOf(input.browserPageId)
-      const placement = Object.freeze({ ...newPlacement, pageHostGeneration: 8 + index * 2 })
-      placements.set(input.browserPageId, placement)
-      return placement
-    }),
+    ),
     issueClientPageCommand: vi.fn(
       (input: { browserPageId: string; pageHostGeneration: number }, command: { type: string }) => {
         commands.push({

@@ -15,12 +15,12 @@ import type { Page } from '@stablyai/playwright-test'
 import { test as base, expect } from './orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './store'
 import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
-import { resolveCliCommand } from '../../../src/shared/node-cli-command-resolution'
+import { resolveCliCommand } from '../../../src/shared/shell/command-resolution/node-cli-command-resolution'
 import { createStructuredAgentSessionId } from '../../../src/shared/agent-session/structured-agent-session-create'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint
-} from '../../../src/shared/agent-session/lifecycle/structured-agent-session-mutation'
+} from '../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 
 // Skip Windows until the POSIX stub wrapper has a verified .cmd equivalent.
 export const SUPPORTED = process.platform !== 'win32'

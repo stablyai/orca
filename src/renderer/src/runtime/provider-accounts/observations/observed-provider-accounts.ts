@@ -4,7 +4,7 @@ import {
   type ProviderAccountsSnapshot,
   type ProviderAccountsWatcher
 } from './runtime-provider-accounts-client'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type Provider = 'claude' | 'codex'
 type Answer<P extends Provider> = { accounts: ProviderAccountsSnapshot[P] | null; known: boolean }

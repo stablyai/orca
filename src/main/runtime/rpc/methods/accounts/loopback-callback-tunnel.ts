@@ -1,4 +1,4 @@
-import { LoopbackCallbackTunnelParams } from '../../../../../shared/rpc-contract/accounts-params'
+import { LoopbackCallbackTunnelParams } from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { defineStreamingMethod } from '../../core'
 import { requireCallbackTunnelClient, serveCallbackTunnel } from './auth-callback-tunnel'
 import { loopbackListenerPids } from './loopback-callback-listener'

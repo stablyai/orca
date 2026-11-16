@@ -2,8 +2,8 @@
 // run builds. The desktop app holds the Orca Cloud session, so every call goes through its runtime.
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { RuntimeClientError } from '../runtime-client'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   CLOUD_ENVIRONMENT_METHODS,
   type CloudEnvironmentBuildsData,

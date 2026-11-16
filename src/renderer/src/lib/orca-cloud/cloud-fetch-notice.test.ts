@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { CloudSetupNotice } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-triage'
 import {
   FETCH_CONFIRM_DELAYS_MS,

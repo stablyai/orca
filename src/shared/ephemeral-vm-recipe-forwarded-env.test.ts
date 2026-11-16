@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listCredentialLikeEnvNames } from './ephemeral-vm-recipe-env'
+import { listCredentialLikeEnvNames } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-env'
 import { summarizeRecipeForwardedEnv } from './ephemeral-vm-recipe-forwarded-env'
 
 describe('summarizeRecipeForwardedEnv', () => {

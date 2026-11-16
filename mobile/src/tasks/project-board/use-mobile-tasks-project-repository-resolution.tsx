@@ -1,5 +1,5 @@
 import type { ProjectProjectionModel } from './use-mobile-tasks-project-projection'
-import { githubProjectIdentityKey as githubProjectKey } from '../../../../src/shared/github/project-identity'
+import { githubProjectIdentityKey as githubProjectKey } from '../../../../src/shared/github/projects/project-identity'
 import { useEffect, useMemo } from 'react'
 import { GITHUB_REPO_CONCURRENCY } from '../task-list/mobile-tasks-options'
 import {

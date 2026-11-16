@@ -1,5 +1,5 @@
 import type { McpSyncStatus } from '../../../../../shared/agent-mcp-sync/mcp-sync-contract'
-import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles/orca-profiles'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { AgentApiKeysCloudDescription } from '../agent-api-keys/AgentApiKeysCloudDescription'
 import { CloudSecretsPane } from '../cloud-secrets/CloudSecretsPane'

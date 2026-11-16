@@ -7,7 +7,7 @@ import type {
   AgentApiKeysScanResult
 } from '../../shared/agent-api-keys/agent-api-key-cloud'
 import type { AgentApiKeysMutationResult } from '../../shared/agent-api-keys/agent-api-key-catalog'
-import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import { resolveLoginShellEnvironment } from '../startup/shell-environment/login-shell-environment'
 import type { AgentApiKeyCloudSync } from './agent-api-key-cloud-sync'
 import { importLocalAgentKeys, parseImportNames, scanSummary } from './agent-api-key-import'
 import { mutate, stateOf } from './agent-api-key-state'

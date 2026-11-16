@@ -5,7 +5,7 @@ import {
   type LocalProjectWorktreeGitOptions
 } from '../workspaces/execution-host/project-runtime-git-options'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 
 function comparableLocalPath(value: string): string {
   const normalized = resolve(value)

@@ -13,6 +13,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { AGENT_RELAUNCH_GRACE_MS } from '@/lib/orca-cloud/cloud-woke-agent-strip'
 import type { OrcaCloudAgentSetup } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import type * as LaunchHoldModule from '@/lib/orca-cloud/cloud-agent-launch-hold'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 const stub = vi.hoisted(() => {
   const state: {
@@ -29,7 +30,7 @@ const stub = vi.hoisted(() => {
 
 vi.mock('@/store', () => {
   const state = {
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     openSettingsTarget: () => undefined,
     openSettingsPage: () => undefined
   }

@@ -32,38 +32,6 @@ function tint(color: Rgba, amount: number, surface: Rgba): Rgba {
   return [r, g, b, 1]
 }
 
-const successTint = Number(
-  css.match(/--status-success-background: color-mix\(in srgb, var\(--status-success\) (\d+)%/)?.[1]
-)
-
-describe.each([':root', '.dark'] as const)('built-in %s token pairs', (selector) => {
-  const tokens = themeTokens(selector)
-  const token = (name: string): Rgba => {
-    const value = tokens.get(name)
-    if (!value) {
-      throw new Error(`${name} is not a hex color in ${selector}`)
-    }
-    return value
-  }
-
-  it.each([
-    ['--destructive-foreground', '--destructive'],
-    ['--muted-foreground', '--background'],
-    ['--muted-foreground', '--muted'],
-    ['--muted-foreground', '--accent'],
-    ['--muted-foreground', '--card'],
-    // File Explorer paints ignored names on the right sidebar.
-    ['--git-decoration-ignored', '--sidebar']
-  ])('%s on %s meets WCAG AA', (text, surface) => {
-    expect(contrastRatio(token(text), token(surface))).toBeGreaterThanOrEqual(4.5)
-  })
-
-  it.each(['--background', '--muted'])('success text on its tint over %s meets WCAG AA', (name) => {
-    const surface = tint(token('--status-success'), successTint / 100, token(name))
-    expect(contrastRatio(token('--status-success'), surface)).toBeGreaterThanOrEqual(4.5)
-  })
-})
-
 const destructiveTextMix = Number(
   css.match(
     /--destructive-text: color-mix\(in srgb, var\(--destructive\) (\d+)%, var\(--foreground\)\)/

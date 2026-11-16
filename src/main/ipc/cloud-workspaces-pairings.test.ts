@@ -5,8 +5,8 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
   listEphemeralVmRuntimes,
   upsertEphemeralVmRuntime
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
 
 const userData = vi.hoisted(() => ({ path: '' }))

@@ -76,7 +76,8 @@ export function installTerminalPaneMountEvents(args: {
       }
       const splitOptions = {
         ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
-        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {}),
+        ...(detail.activate === false ? { activate: false } : {})
       }
       if (detail.command) {
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>

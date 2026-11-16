@@ -1,14 +1,14 @@
 import type { AgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import type { AgentModelCatalogReadOperation } from './agent-model-catalog-operation'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentModelCatalogEntry,
   AgentModelCatalogLiveListing,
   AgentModelCatalogProbe
 } from './agent-model-catalog-store'
-import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentModelCatalogWorkspaceDeps,
   AgentModelCatalogRecord
@@ -62,6 +62,8 @@ export type AgentModelCatalogService = {
 
 export type AgentModelCatalogReadParams = {
   agent: string
+  /** Older readers follow only actual wait expiry, so retain their terminal wait. */
+  progress?: boolean
   records?: AgentModelCatalogReadRecords | null
   operation?: AgentModelCatalogReadOperation
   /** Original explicit operation budget, shared with compatibility saved-scope continuation. */

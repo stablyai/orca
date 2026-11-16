@@ -39,7 +39,7 @@ export function captureCloudPaneBeforeWake(args: {
   const state = useAppStore.getState()
   const lines = readTerminalTail(terminal)
   const facts: WakePaneFacts = {
-    agentType: state.agentStatusByPaneKey[makePaneKey(tabId, leafId)]?.agentType ?? null,
+    agentType: state.agentStatusByPaneKey.get(makePaneKey(tabId, leafId))?.agentType ?? null,
     alternateScreen: terminal.buffer.active.type === 'alternate',
     cursorBelowText: cursorBelowLastText(terminal)
   }

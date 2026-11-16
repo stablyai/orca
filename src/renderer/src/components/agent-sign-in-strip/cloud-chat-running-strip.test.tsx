@@ -31,9 +31,9 @@ vi.mock('@/store', () => {
     unifiedTabsByWorktree: {
       'wt-1': [{ id: TAB_ID, executionHostId: 'runtime:env-cloud', contentType: 'agent-session' }]
     },
-    agentStatusByPaneKey: {
+    agentStatusByPaneKey: new Map(Object.entries({
       [STATUS_KEY]: { agentType: 'claude', state: 'working', paneKey: STATUS_KEY }
-    },
+    })),
     openSettingsTarget: () => undefined,
     openSettingsPage: () => {
       stub.openedSettings += 1

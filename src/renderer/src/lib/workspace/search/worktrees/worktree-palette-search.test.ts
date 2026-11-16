@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { searchWorktrees } from './worktree-palette-search'
 import '../../../../../../shared/palette-match/worktree-palette-query-bounds'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {

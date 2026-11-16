@@ -15,8 +15,8 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-agent-picker'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewTabAgentMenuSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import { isOrcaCloudSelection } from './run-target-options'
-import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
+import { isOrcaCloudSelection } from './run-target/run-target-options'
+import type { NewWorkspaceComposerCardProps } from './composer/new-workspace-composer-card-props'
 
 type ComposerQuickAgentProps = Pick<
   NewWorkspaceComposerCardProps,

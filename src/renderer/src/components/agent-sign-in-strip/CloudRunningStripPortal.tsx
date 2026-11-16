@@ -75,7 +75,7 @@ export function CloudRunningStripPortal({
   )
   const cloud = environmentId !== null && isOrcaCloudEnvironmentId(environmentId)
   const entry = useAppStore((state) =>
-    cloud ? (state.agentStatusByPaneKey[paneKey] ?? null) : null
+    cloud ? (state.agentStatusByPaneKey.get(paneKey) ?? null) : null
   )
   const running = cloud && (entry?.agentType === 'claude' || entry?.agentType === 'codex')
   useCloudRunningAccountReads(running)

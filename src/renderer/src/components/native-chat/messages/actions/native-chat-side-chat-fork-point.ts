@@ -21,7 +21,7 @@ export function nativeChatSlotOffersFork(
   return nativeChatRowOffersFork(
     {
       message: slot.message,
-      inSubagentSection: slot.depth > 0,
+      inSubagentSection: false,
       turnWorking: slot.activeTurnIsWorking,
       inLatestTurn: slot.turnKey !== undefined && slot.turnKey === offer.latestTurnKey
     },

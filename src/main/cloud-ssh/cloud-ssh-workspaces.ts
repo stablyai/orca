@@ -1,7 +1,7 @@
 // Which of this desktop's recipe VMs are Orca Cloud workspaces, and finding one by what a user or
 // ssh_config names it.
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { getEphemeralVmRecipeResultProjectRoot } from '../../shared/ephemeral-vm-recipes'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { getEphemeralVmRecipeResultProjectRoot } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import type { CloudSshErrorCode, CloudSshFailure } from '../../shared/cloud-ssh'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'

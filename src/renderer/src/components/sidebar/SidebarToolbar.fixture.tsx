@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 import SidebarToolbar from './SidebarToolbar'
 import { registerPlanBillingMenuItem } from '../billing/register-plan-billing-menu-item'

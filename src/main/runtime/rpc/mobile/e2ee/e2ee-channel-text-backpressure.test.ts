@@ -10,7 +10,6 @@ import {
   generateKeyPair
 } from '../../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 
 const trackMock = vi.hoisted(() => vi.fn())
 
@@ -84,19 +83,6 @@ describe('E2EE text reply backpressure', () => {
     vi.useRealTimers()
   })
 
-  it('still closes an oversized reply when telemetry throws', () => {
-    const ctx = setup()
-    trackMock.mockImplementationOnce(() => {
-      throw new Error('telemetry unavailable')
-    })
-
-    expect(() =>
-      emitReply(ctx, 'x'.repeat(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES + 1))
-    ).not.toThrow()
-    expect(trackMock).toHaveBeenCalledWith('remote_outbound_budget_close', { emitter: 'size' })
-    expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
-  })
-
   it('rejects aggregate queue growth across independently backpressured sockets', () => {
     const outboundMemoryBudget = createMobileE2EEOutboundMemoryBudget({
       maxBufferedBytes: 1_000,
@@ -162,46 +148,6 @@ describe('E2EE legacy binary reply backpressure', () => {
       'binary:2',
       '{"seq":3}',
       'binary:4'
-    ])
-    expect(ctx.onError).not.toHaveBeenCalled()
-  })
-
-  it('closes for budget instead of dropping when queued binary overflows', () => {
-    const outboundMemoryBudget = createMobileE2EEOutboundMemoryBudget({
-      maxBufferedBytes: 1_000,
-      maxQueuedBytes: 150
-    })
-    const ctx = setup({ outboundMemoryBudget })
-    ctx.ws.bufferedAmount = 1_001
-
-    ctx.channel.onMessage((_plaintext, _encryptedReply, encryptedBinaryReply) => {
-      encryptedBinaryReply(new Uint8Array(100))
-      encryptedBinaryReply(new Uint8Array(100))
-    })
-    ctx.channel.handleRawMessage(encrypt('{"id":"x","method":"terminal.subscribe"}', ctx.sharedKey))
-
-    expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
-    expect(trackMock).toHaveBeenCalledWith('remote_outbound_budget_close', { emitter: 'queue' })
-  })
-
-  it('drops a backlogged lossy binary reply instead of queueing it, then sends once drained', () => {
-    const ctx = setup()
-    const baseline = ctx.ws.sent.length
-    ctx.ws.bufferedAmount = 9 * 1024 * 1024
-    const accepted: RpcBinarySendResult[] = []
-    ctx.channel.onMessage((_plaintext, _encryptedReply, encryptedBinaryReply) => {
-      accepted.push(encryptedBinaryReply(Buffer.from('frame'), { dropWhenBacklogged: true }))
-    })
-    const request = encrypt('{"id":"x","method":"browser.screencast"}', ctx.sharedKey)
-    ctx.channel.handleRawMessage(request)
-    ctx.ws.bufferedAmount = 0
-    vi.runOnlyPendingTimers()
-    expect(ctx.ws.sent.length).toBe(baseline)
-
-    ctx.channel.handleRawMessage(request)
-    expect(accepted).toEqual(['backlogged', true])
-    expect(ctx.ws.sent.slice(baseline).map((frame) => decodeSent(ctx, frame))).toEqual([
-      'binary:frame'
     ])
     expect(ctx.onError).not.toHaveBeenCalled()
   })

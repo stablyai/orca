@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import { isSignedOutOfOrcaCloud } from './LandingCloudSignInCard'
 
 const auth = (

@@ -1,5 +1,5 @@
-import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { isGitRepoKind } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   buildCloudEnvironmentAgentPrompt,
   type CloudEnvironmentAgentPromptFailure

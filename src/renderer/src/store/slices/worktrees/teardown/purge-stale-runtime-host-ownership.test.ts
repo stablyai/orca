@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -17,7 +17,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
 globalThis.window = { api: {} }
 
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
-import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')

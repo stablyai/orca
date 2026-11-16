@@ -13,7 +13,7 @@ import {
   isWorktreeSuspendCommitted,
   subscribeWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 type BrowserTabsByWorktree = Record<string, BrowserWorkspace[]>
 

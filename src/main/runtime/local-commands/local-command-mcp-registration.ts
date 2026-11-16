@@ -5,7 +5,7 @@ import {
   LOCAL_COMMAND_MCP_SERVER_NAME,
   LOCAL_COMMAND_RESULT_GRACE_MS
 } from '../../../shared/local-commands/local-command-contract'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import {
   defaultHostMcpSyncPaths,
   syncHostMcpServers,

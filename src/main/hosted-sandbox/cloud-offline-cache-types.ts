@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 /** Read-only methods whose answers stay meaningful while the VM sleeps. Nothing that mutates. */
 export const OFFLINE_READ_METHODS: ReadonlySet<string> = new Set([

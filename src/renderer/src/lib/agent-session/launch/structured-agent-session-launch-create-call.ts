@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
 } from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
   isAgentSessionForkSourceAdmissionRefusal,

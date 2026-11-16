@@ -5,8 +5,8 @@
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { HostedSandboxView } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'

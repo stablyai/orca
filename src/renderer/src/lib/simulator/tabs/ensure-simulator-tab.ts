@@ -2,7 +2,7 @@ import { useAppStore } from '@/store/index'
 import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import './simulator-tab-shutdown'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import {
   findAmbiguousWorktreeIds,
@@ -11,7 +11,7 @@ import {
 } from '../../workspace/ownership/unified-tab-host-ownership'
 import { isExecutionHostAliasForWorktree } from '../../workspace/ownership/worktree-execution-host-alias'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   frameDrawnServerOfSimulatorTab,
   noteSimulatorTabCreatedHere,

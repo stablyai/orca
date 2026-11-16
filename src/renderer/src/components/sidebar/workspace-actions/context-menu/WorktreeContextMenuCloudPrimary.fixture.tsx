@@ -2,7 +2,7 @@
 // here paired from another desktop) gets an enabled "Delete workspace…", with no primary-worktree
 // note and no "Remove Project". A local primary checkout keeps upstream's rule, unchanged.
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   refreshCloudWorktreeBindings,

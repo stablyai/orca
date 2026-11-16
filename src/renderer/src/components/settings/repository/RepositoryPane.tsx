@@ -1,14 +1,16 @@
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
-import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import { useCallback } from 'react'
+import type {
+  OrcaHooks,
+  RepoHookSettings
+} from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type {
   Project,
   ProjectHostSetup,
   ProjectUpdateArgs
-} from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+} from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
-import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
+import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
@@ -20,7 +22,9 @@ import { SparsePresetSettingsSection } from './worktrees/SparsePresetSettingsSec
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { RepositorySidebarVisibilitySection } from './RepositorySidebarVisibilitySection'
 import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection'
+import { useCopyOrcaYamlTemplate } from './hooks/use-copy-orca-yaml-template'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
@@ -32,27 +36,21 @@ import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
 import { RepositoryRunOnSection } from './RepositoryRunOnSection'
+import { RepositoryBrowserProfileSection } from './RepositoryBrowserProfileSection'
+import type { RepositoryPaneRepoUpdate } from './repository-pane-repo-update'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './worktrees/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
+import { RepositoryWorkspaceCleanupSection } from './workspace-cleanup/RepositoryWorkspaceCleanupSection'
 import { getProjectRuntimeSessionSummary } from './runtime/repository-runtime-session-summary'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
 } from './RepositoryFormatterSection'
-
-type RepositoryPaneRepoUpdate = Omit<
-  Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
-> & {
-  sourceControlAi?: Repo['sourceControlAi'] | null
-  externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
-  ghAccount?: GhAccountBinding | null
-}
 
 const EMPTY_WSL_DISTROS: string[] = []
 const EMPTY_REMOVAL_SETUPS: ProjectHostSetup[] = []
@@ -138,52 +136,14 @@ export function RepositoryPane({
   const runtimeSessionSummary = useAppStore(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
-  const [copiedTemplate, setCopiedTemplate] = useState(false)
-  const copiedTemplateResetTimerRef = useRef<number | null>(null)
-  // Clipboard IPC may outlive navigation; do not start timers after pane detach.
-  const isMountedRef = useRef(false)
+  const { copiedTemplate, handleCopyTemplate, setRepositoryPaneRootRef } = useCopyOrcaYamlTemplate()
   // Project-name search navigates to the project; it must not hide child controls that omit the name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
-
-  const clearCopiedTemplateResetTimer = useCallback((): void => {
-    if (copiedTemplateResetTimerRef.current !== null) {
-      window.clearTimeout(copiedTemplateResetTimerRef.current)
-      copiedTemplateResetTimerRef.current = null
-    }
-  }, [])
-
-  const setRepositoryPaneRootRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      isMountedRef.current = node !== null
-      if (node === null) {
-        clearCopiedTemplateResetTimer()
-      }
-    },
-    [clearCopiedTemplateResetTimer]
-  )
 
   const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
     updateSelectedRepo(repo.id, {
       hookSettings: nextSettings
     })
-  }
-
-  const handleCopyTemplate = async () => {
-    // Make missing-orca.yaml migration a one-click copy of the expected shared-template shape.
-    await window.api.ui.writeClipboardText(`scripts:
-  setup: |
-    pnpm worktree:setup
-  archive: |
-    echo "Cleaning up before archive"`)
-    if (!isMountedRef.current) {
-      return
-    }
-    clearCopiedTemplateResetTimer()
-    setCopiedTemplate(true)
-    copiedTemplateResetTimerRef.current = window.setTimeout(() => {
-      copiedTemplateResetTimerRef.current = null
-      setCopiedTemplate(false)
-    }, 1500)
   }
 
   const {
@@ -195,7 +155,8 @@ export function RepositoryPane({
     sourceControlAi: sourceControlAiEntries,
     hostSetups: hostSetupEntries,
     projectRuntime: projectRuntimeEntries,
-    removeProject: removeProjectEntry
+    removeProject: removeProjectEntry,
+    sidebarVisibility: sidebarVisibilityEntry
   } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
@@ -204,6 +165,7 @@ export function RepositoryPane({
       <RepositoryHooksSection
         key="hooks"
         repo={repo}
+        gitRepo={repo}
         yamlHooks={yamlHooks}
         hasHooksFile={hasHooksFile}
         hooksInspectionReady={hooksInspectionReady}
@@ -300,6 +262,12 @@ export function RepositoryPane({
           forceVisible={forceFullPaneForRepoMatch}
         />
 
+        <RepositoryBrowserProfileSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
         {!isFolder ? (
           <RepositoryRunOnSection repo={repo} forceVisible={forceFullPaneForRepoMatch} />
         ) : null}
@@ -360,6 +328,12 @@ export function RepositoryPane({
         ) : null}
       </SettingsGroup>
     ) : null,
+    <RepositoryWorkspaceCleanupSection
+      key={`workspace-cleanup:${selectedHostId}:${repo.id}`}
+      repo={repo}
+      updateRepo={updateSelectedRepo}
+      forceVisible={forceFullPaneForRepoMatch}
+    />,
     hooksSection,
     forceFullPaneForRepoMatch ||
     matchesSettingsSearch(searchQuery, [getRepositoryFormatterSearchEntry(t)]) ? (
@@ -390,6 +364,14 @@ export function RepositoryPane({
     ) : null,
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
+    ) : null,
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [sidebarVisibilityEntry]) ? (
+      <RepositorySidebarVisibilitySection
+        key="sidebar-visibility"
+        repo={repo}
+        searchEntry={sidebarVisibilityEntry}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
     ) : null,
     // Last on the page: removal is rare and should not sit above everyday settings.
     forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [removeProjectEntry]) ? (

@@ -6,7 +6,7 @@ import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 
 const {
   beginOrcaCloudPkceFlowMock,
@@ -102,6 +102,8 @@ describe('Orca cloud overlapping connect', () => {
       nonce: string
       redirectUri: string
       state: string
+      respond: (outcome: unknown) => void
+      redirect: (location: string) => void
     }) => void
     beginOrcaCloudPkceFlowMock
       .mockReturnValueOnce(
@@ -114,7 +116,9 @@ describe('Orca cloud overlapping connect', () => {
         codeVerifier: 'later-verifier',
         nonce: 'later-nonce',
         redirectUri: 'http://127.0.0.1:4101/auth/callback',
-        state: 'later-state'
+        state: 'later-state',
+        respond: vi.fn(),
+        redirect: vi.fn()
       })
     exchangeOrcaCloudAuthCodeMock.mockImplementation(async (_config, args) => ({
       accessToken: 'access-token',
@@ -135,7 +139,9 @@ describe('Orca cloud overlapping connect', () => {
       codeVerifier: 'earlier-verifier',
       nonce: 'earlier-nonce',
       redirectUri: 'http://127.0.0.1:4100/auth/callback',
-      state: 'earlier-state'
+      state: 'earlier-state',
+      respond: vi.fn(),
+      redirect: vi.fn()
     })
     await expect(first).resolves.toMatchObject({ status: 'cancelled' })
     expect(exchangeOrcaCloudAuthCodeMock).toHaveBeenCalledTimes(1)
@@ -153,6 +159,8 @@ describe('Orca cloud overlapping connect', () => {
       nonce: string
       redirectUri: string
       state: string
+      respond: (outcome: unknown) => void
+      redirect: (location: string) => void
     }
     let finishEarlierPkce!: (value: PkceCode) => void
     let finishLaterPkce!: (value: PkceCode) => void
@@ -183,7 +191,9 @@ describe('Orca cloud overlapping connect', () => {
       codeVerifier: 'earlier-verifier',
       nonce: 'earlier-nonce',
       redirectUri: 'http://127.0.0.1:4100/auth/callback',
-      state: 'earlier-state'
+      state: 'earlier-state',
+      respond: vi.fn(),
+      redirect: vi.fn()
     })
     // The later sign-in replaced the earlier one, so the earlier callback can't link anything.
     await expect(earlier).resolves.toMatchObject({ status: 'cancelled' })
@@ -195,7 +205,9 @@ describe('Orca cloud overlapping connect', () => {
       codeVerifier: 'later-verifier',
       nonce: 'later-nonce',
       redirectUri: 'http://127.0.0.1:4101/auth/callback',
-      state: 'later-state'
+      state: 'later-state',
+      respond: vi.fn(),
+      redirect: vi.fn()
     })
     await expect(later).resolves.toMatchObject({ status: 'cancelled' })
     expect(exchangeOrcaCloudAuthCodeMock).not.toHaveBeenCalled()

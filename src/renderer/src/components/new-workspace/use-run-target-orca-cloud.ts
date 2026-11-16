@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
-import { isOrcaCloudRecipe, type EphemeralVmRecipeOption } from './run-target-options'
+import type { OrcaCloudAvailability } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import { isOrcaCloudRecipe, type EphemeralVmRecipeOption } from './run-target/run-target-options'
 import { getOrcaCloudPick, type OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 import {
   invalidateOrcaCloudBilling,

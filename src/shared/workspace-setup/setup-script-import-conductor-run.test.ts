@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { parseOrcaYaml } from '../orca-yaml'
+import { parseOrcaYaml } from './orca-yaml'
 import { inspectSetupScriptImportCandidates } from './setup-script-imports'
 import { formatSetupScriptImportAsOrcaYaml } from './setup-script-import-orca-yaml'
 

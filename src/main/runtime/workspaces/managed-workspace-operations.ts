@@ -1,12 +1,15 @@
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
-import type { RuntimeWorktreeListResult } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import { stopMissingWorktreeTerminals } from './removal/missing-worktree-terminal-reconciliation'
-import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
+import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility/visibility-sources'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'

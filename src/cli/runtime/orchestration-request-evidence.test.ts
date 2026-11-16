@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { OrchestrationRequestEvidence } from './orchestration-compatibility-envelope'
+import { OrchestrationRequestEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
 
 describe('terminal evidence on secret requests', () => {
   const SHELL = {

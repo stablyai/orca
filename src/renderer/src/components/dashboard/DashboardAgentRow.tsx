@@ -4,7 +4,7 @@ import {
   opensClaudeParentConversation,
   viewClaudeAgentFromRow
 } from '@/lib/agent-session/navigation/claude-agent-row-view'
-import { useClaudeAgentRowView } from './use-claude-agent-row-view'
+import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -13,10 +13,10 @@ import {
 } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
-import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
-import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { DashboardAgentRowMessage } from './rows/DashboardAgentRowMessage'
+import { DashboardAgentRowTrailingControls } from './rows/DashboardAgentRowTrailingControls'
+import { DashboardAgentRowToolStep } from './rows/DashboardAgentRowToolStep'
+import { DashboardAgentRowStateDot } from './rows/DashboardAgentRowStateDot'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
 import {
   agentRowToolInput,
@@ -37,10 +37,10 @@ import {
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
-import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { useAgentRowConversationName } from './use-agent-row-conversation-name'
-import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
@@ -48,10 +48,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useCloudAgentRowStatus } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
-import {
-  CloudAgentRowSignInDot,
-  CloudAgentRowSignInLabel
-} from '@/components/orca-cloud/CloudAgentRowSignInTarget'
+import { CloudAgentRowSignInLabel } from '@/components/orca-cloud/CloudAgentRowSignInTarget'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
@@ -226,11 +223,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const displayLabel = cloudStatus?.label ?? promptLabel
   // Send-target mode owns row clicks, so only outside it is the status a link to Settings.
   const signIn = cloudStatus?.tooltip ? cloudStatus : null
-  const dotTooltipLabel = agentStateProgressLabel(
+  const dotStatusLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
     stateDotTooltipLabel(agent, dotState, now)
   )
+  const dotTooltipLabel =
+    isUnvisited && dotState === 'done'
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: dotStatusLabel })
+      : dotStatusLabel
   // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
@@ -313,28 +314,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       ) : null}
       <div className="flex items-center gap-1.5">
         {/* Why: state dot sits in the leading gutter so the eye can scan one column for row state. */}
-        {signIn ? (
-          <CloudAgentRowSignInDot status={signIn} size={stateDotSize} />
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                className="inline-flex shrink-0 items-center justify-center"
-                aria-label={dotTooltipLabel}
-              >
-                <AgentStateDot
-                  state={dotState}
-                  size={stateDotSize}
-                  title={null}
-                  progress={presentation.progress}
-                />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {dotTooltipLabel}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <DashboardAgentRowStateDot
+          signIn={signIn}
+          dotState={dotState}
+          size={stateDotSize}
+          progress={presentation.progress}
+          unread={isUnvisited}
+          tooltipLabel={dotTooltipLabel}
+        />
         {/* Why: subagent rows skip the icon — agentType holds a child's name, which AgentTypeIcon would draw as a misleading letter; nesting conveys identity. */}
         {!hideIdentityIcon && agent.rowSource !== 'subagent' && (
           <span className="inline-flex shrink-0" title={identityTitle}>

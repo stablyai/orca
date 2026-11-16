@@ -7,9 +7,9 @@
 import { runProcessSync } from '@orca/process-host'
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
-import type { HandlerContext } from '../dispatch'
-import { getOptionalStringFlag } from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { getOptionalStringFlag } from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { cloudWorkspaceStateLabel, formatCloudWorkspace, printCloudResult } from './cloud-format'
 import { cloudProgress, readCloudProgressMode } from './cloud-progress'
 import {

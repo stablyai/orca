@@ -51,7 +51,7 @@ export function useCloudChatAccountStrip(args: ChatAccountArgs): CloudRunningStr
   const environmentId = useChatEnvironmentId(args.tabId)
   const cloud = environmentId !== null && isOrcaCloudEnvironmentId(environmentId)
   const status = useAppStore((state) =>
-    cloud ? (state.agentStatusByPaneKey[args.statusKey] ?? null) : null
+    cloud ? (state.agentStatusByPaneKey.get(args.statusKey) ?? null) : null
   )
   const agentType = status?.agentType ?? args.agent
   const agent: HostAgentSignInAgent | null =

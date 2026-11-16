@@ -1,5 +1,5 @@
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { EphemeralVmWorkspaceRuntime } from '../slices/ephemeral-vm/ephemeral-vm-lifecycle'
 

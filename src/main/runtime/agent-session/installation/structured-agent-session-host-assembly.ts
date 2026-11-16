@@ -9,7 +9,7 @@ import {
   withProviderNaming
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-naming'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { scheduleNativeChatVisualsSweep } from '../../../native-chat/native-chat-visuals-sweep'
+import { scheduleNativeChatVisualsSweep } from '../../../native-chat/conversation-files/native-chat-visuals-sweep'
 import type { InstalledRuntime } from '../structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from '../records/agent-session-recovery-capsule'
 import type { OpenedAgentSessionRecordStore } from '../records/agent-session-record-store-slot'

@@ -1,8 +1,8 @@
 // Orca Cloud workspace lookups shared by the workspace service and its IPC: workspace id → runtime
 // record → sandbox id, error mapping for the window, and OOM-notice dedupe.
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type {
   CloudOomEvent,
   CloudWakeProgressEvent,
@@ -21,7 +21,7 @@ import {
 } from '../environment-providers/environment-provider-driver'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { isHostedEntitlementDenied } from './hosted-environment-provider'
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import type { HostedWorkspaceService } from './hosted-workspace-service'
 

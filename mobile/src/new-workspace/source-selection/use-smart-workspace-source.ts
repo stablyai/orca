@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GitHubWorkItem } from '../../../../src/shared/github/work-item-types'
-import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
+import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
+import type { GitLabWorkItem } from '../../../../src/shared/gitlab/gitlab-types'
 import {
   buildSmartWorkspaceSourceRows,
   getSmartWorkspaceEmptyHint,

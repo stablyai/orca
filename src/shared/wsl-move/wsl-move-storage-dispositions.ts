@@ -16,7 +16,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       44,
       'Chats stay local on the desktop (owner decision C), so their launch records stay as written.'
     ),
-  'src/renderer/src/components/editor/file-view-preference-storage.ts': {
+  'src/renderer/src/components/editor/view-mode/file-view-preference-storage.ts': {
     disposition: 'rewrite-desktop',
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
@@ -49,14 +49,14 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     ),
   ...Object.fromEntries(
     [
-      'src/renderer/src/components/browser-pane/annotate/use-markup-draw-hint.ts',
+      'src/renderer/src/components/browser-pane/annotate/markup-tools/use-markup-draw-hint.ts',
       'src/renderer/src/components/feature-tips/FeatureTipsModal.tsx',
-      'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-      'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',
-      'src/renderer/src/components/floating-terminal/use-floating-terminal-orchestration-dismissal.ts',
+      'src/renderer/src/components/feature-wall/setup/agent-capabilities/BrowserUseSkillSetupCard.tsx',
+      'src/renderer/src/components/feature-wall/completion/feature-wall-completion-persistence.ts',
+      'src/renderer/src/components/floating-terminal/geometry/floating-terminal-panel-bounds.ts',
+      'src/renderer/src/components/floating-terminal/state/floating-terminal-panel-view-state.ts',
+      'src/renderer/src/components/floating-terminal/trigger/floating-terminal-trigger-position.ts',
+      'src/renderer/src/components/floating-terminal/orchestration/use-floating-terminal-orchestration-dismissal.ts',
       'src/renderer/src/components/github-project/column-widths.ts',
       'src/renderer/src/components/github-project/columns.ts',
       'src/renderer/src/components/github-project/roadmap-zoom-preference.ts',
@@ -139,7 +139,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
     'test-fixture',
-  'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
+  'src/main/ai-vault/scanner-fixtures/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
   'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'

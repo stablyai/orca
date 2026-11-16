@@ -1,7 +1,7 @@
 // The Orca Cloud sandbox id (the control plane's workspaceId) behind a runtime environment on this
 // computer. Only an Orca Cloud runtime this desktop provisioned or paired resolves, so the renderer
 // can't name an arbitrary sandbox.
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import { cloudPairedSandboxesByEnvironment } from '../cloud-workspaces/cloud-paired-environment-ids'

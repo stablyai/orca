@@ -9,7 +9,7 @@ import type {
   SwitchOrcaProfileResult,
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
-} from '../../../../../shared/orca-profiles'
+} from '../../../../../shared/orca-profiles/orca-profiles'
 import type { AppState } from '../../types'
 import {
   createOrcaProfilesAuthActions,

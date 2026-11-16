@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import {
   ENV,

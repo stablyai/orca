@@ -1,3 +1,4 @@
+import { rendererStatusGraphAccepted } from '../agent-status/renderer-status-publication'
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/layout/reconciliation/terminal-lifecycle-diagnostics'
 import {
@@ -10,6 +11,7 @@ import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pan
 import { applyNativeChatLaunchDraftResolved } from '../native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
 import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
+import { withAcknowledgedBrowserPageInventory } from './browser-page-inventory'
 import { isWebOnlyMirroredTerminalTab } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
 import { measureTerminalGroupGridSizes } from './terminal-group-grid-sizes'
@@ -22,6 +24,7 @@ import {
 import {
   collectAmbiguousTerminalTabIds,
   graphState,
+  indexTerminalTabsByWorktree,
   mobilePublicationEpoch,
   NO_TRANSPORT_GRACE_MS
 } from './graph-state'
@@ -30,14 +33,14 @@ import {
   getMountedTerminalTabRegisteredAt,
   mountedTerminalTabEntries
 } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { changedActiveGroups } from './active-group-publication'
 import type {
+  RuntimeMobileSessionTabsPublication,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
-} from '../../../../shared/runtime-session-contracts'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
@@ -47,19 +50,7 @@ export async function syncRuntimeGraph(): Promise<void> {
   const state = graphState.getStoreState()
   const systemPrefersDark = getSystemPrefersDark()
   const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
-  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tabsById = new Map<string, TerminalTab>()
-    for (const tab of tabs) {
-      // Duplicate persisted tab IDs cannot prove mounted PTY ownership.
-      if (tabsById.has(tab.id)) {
-        tabsById.delete(tab.id)
-        continue
-      }
-      tabsById.set(tab.id, tab)
-    }
-    terminalTabsByWorktree.set(worktreeId, tabsById)
-  }
+  const terminalTabsByWorktree = indexTerminalTabsByWorktree(state.tabsByWorktree)
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const mobileSessionTabs = buildMobileSessionTabSnapshots(
     state,
@@ -229,6 +220,7 @@ export async function syncRuntimeGraph(): Promise<void> {
 
   try {
     const result = await window.api.runtime.syncWindowGraph(graph)
+    rendererStatusGraphAccepted()
     graphState.publishedTerminalGroupGridSizesKey = JSON.stringify(gridSizes ?? null)
     graphState.publishedProjectSectionCatalog =
       projectSectionCatalog ?? graphState.publishedProjectSectionCatalog
@@ -263,16 +255,17 @@ export function setTrailingGraphSyncScheduler(scheduler: () => void): void {
 }
 
 function partitionMobileSessionPublication(snapshots: RuntimeMobileSessionTabsSnapshot[]): {
-  changed: RuntimeMobileSessionTabsSnapshot[]
+  changed: RuntimeMobileSessionTabsPublication[]
   unchangedWorktrees: string[]
 } {
-  const changed: RuntimeMobileSessionTabsSnapshot[] = []
+  const changed: RuntimeMobileSessionTabsPublication[] = []
   const unchangedWorktrees: string[] = []
   for (const snapshot of snapshots) {
-    if (graphState.publishedMobileSessionSnapshotByWorktree.get(snapshot.worktree) === snapshot) {
+    const published = graphState.publishedMobileSessionSnapshotByWorktree.get(snapshot.worktree)
+    if (published === snapshot) {
       unchangedWorktrees.push(snapshot.worktree)
     } else {
-      changed.push(snapshot)
+      changed.push(withAcknowledgedBrowserPageInventory(snapshot, published))
     }
   }
   return { changed, unchangedWorktrees }

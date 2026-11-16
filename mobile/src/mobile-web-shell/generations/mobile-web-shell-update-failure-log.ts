@@ -7,7 +7,7 @@ import {
   MOBILE_WEB_SHELL_UPDATE_FAILURE_REASONS,
   MOBILE_WEB_SHELL_UPDATE_FAILURE_WALLS,
   type MobileWebShellUpdateFailure
-} from '../mobile-web-shell-update-failure'
+} from '../update-recovery/mobile-web-shell-update-failure'
 
 // Keep enough history to distinguish one bad download from repeated failures without growing diagnostic storage.
 export const MAX_UPDATE_FAILURES_PER_HOST = 5

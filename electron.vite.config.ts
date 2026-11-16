@@ -18,9 +18,19 @@ import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cach
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
+import {
+  ignoreIneffectiveDynamicImport,
+  RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
+} from './config/build-plugins/rollup-warning-filter'
 import { reactPluginOptions } from './config/build-plugins/react-compiler'
 import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 import { cloudBuildDefaultsDefine } from './config/build-plugins/cloud-build-defaults'
+import {
+  orcaBuildIdentity,
+  ORCA_BUILD_IDENTITY_LITERAL,
+  ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
+  ORCA_POSTHOG_WRITE_KEY_LITERAL
+} from './config/build-plugins/official-build-env-literals'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'stream-json',
@@ -41,24 +51,6 @@ const BUNDLED_MAIN_DEPENDENCIES = new Set([
   // Windows NSIS copies app.asar before external resources; bootstrap must not race resources/node_modules.
   'zod'
 ])
-// Official CI alone injects ORCA_BUILD_IDENTITY (stable|rc) and ORCA_POSTHOG_WRITE_KEY secrets; other builds substitute literal null.
-// Compile-time substitution gates telemetry at module load without runtime env fallback; declarations live in src/types/build-constants.d.ts.
-const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY
-const ORCA_BUILD_IDENTITY_LITERAL =
-  orcaBuildIdentity === 'stable' || orcaBuildIdentity === 'rc'
-    ? JSON.stringify(orcaBuildIdentity)
-    : 'null'
-const orcaPostHogWriteKey = process.env.ORCA_POSTHOG_WRITE_KEY
-const ORCA_POSTHOG_WRITE_KEY_LITERAL =
-  typeof orcaPostHogWriteKey === 'string' && orcaPostHogWriteKey.length > 0
-    ? JSON.stringify(orcaPostHogWriteKey)
-    : 'null'
-const orcaDiagnosticsTokenUrl = process.env.ORCA_DIAGNOSTICS_TOKEN_URL
-const ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL =
-  typeof orcaDiagnosticsTokenUrl === 'string' && orcaDiagnosticsTokenUrl.length > 0
-    ? JSON.stringify(orcaDiagnosticsTokenUrl)
-    : 'null'
-
 const darkBuildSwitches: {
   darkBuildDefines: () => Record<string, string>
   darkBuildMarkers: () => { fileName: string; text: string }[]
@@ -228,6 +220,7 @@ export const electronViteConfig: UserConfig = {
       },
       rollupOptions: {
         input: MAIN_BUILD_ENTRY_POINTS,
+        onwarn: ignoreIneffectiveDynamicImport,
         // CLI builds replace exported entries; keep their internals separate without moving startup paths.
         preserveEntrySignatures: 'exports-only',
         // Electron and sidecar launchers require stable CommonJS paths despite Rolldown’s SSR ESM default.
@@ -301,6 +294,7 @@ export const electronViteConfig: UserConfig = {
     build: {
       manifest: true,
       reportCompressedSize: false,
+      chunkSizeWarningLimit: RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB,
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',
@@ -308,6 +302,7 @@ export const electronViteConfig: UserConfig = {
       rollupOptions: {
         // Shared chunks must not import HTML entries that mount another React root.
         preserveEntrySignatures: 'strict',
+        onwarn: ignoreIneffectiveDynamicImport,
         output: { charset: 'ascii' },
         input: {
           index: resolve('src/renderer/index.html'),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getEphemeralVmRecipeResultConnection,
   parseEphemeralVmRecipeResult
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { runEnvironmentProviderDriverContract } from '../environment-providers/environment-provider-driver-contract.test-support'
 import {

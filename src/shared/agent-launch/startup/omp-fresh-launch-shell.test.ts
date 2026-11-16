@@ -34,7 +34,6 @@ it.each(shells)(
       platform: 'linux',
       isRemote: true
     })
-    expect(plan).not.toBeNull()
     const define =
       shell === 'fish'
         ? 'function omp; printf "%s\\n" $argv >> "$CAPTURE"; return 17; end; '

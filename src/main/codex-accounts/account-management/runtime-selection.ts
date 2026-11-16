@@ -2,13 +2,13 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type {
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection
-} from '../../../shared/managed-account-types'
+} from '../../../shared/agent-accounts/managed-account-types'
 // Share lane keys so renderer switch guards agree with launch routing.
 import {
   getWslSelectionKey,
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget
-} from '../../../shared/codex-selection-lane'
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
 
 export function normalizeCodexRuntimeSelection(
   settings: Partial<

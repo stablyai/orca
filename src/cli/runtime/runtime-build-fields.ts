@@ -1,4 +1,4 @@
-import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import type { CliStatusResult, RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type RuntimeBuildFields = Pick<
   CliStatusResult['runtime'],

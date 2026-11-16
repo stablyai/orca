@@ -1,4 +1,4 @@
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   LOCAL_COMMAND_APPROVAL_WINDOW_MS,
   LOCAL_COMMAND_DEFAULT_TIMEOUT_SEC,

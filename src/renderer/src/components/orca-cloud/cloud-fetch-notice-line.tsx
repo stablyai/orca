@@ -7,7 +7,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { repoOwner, repoSlug } from '@/lib/orca-cloud/cloud-setup-notice-actions'
 import type { CloudPushAccess } from '@/lib/orca-cloud/cloud-push-access'
 import { ownerRequestLabel } from '@/lib/orca-cloud/owner-request'
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { CloudSetupNoticeLine } from './CloudSetupNotices'
 
 export type CloudFetchLineHandlers = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import {
   environmentHeldNotice,
   missingToolCommand,

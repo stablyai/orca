@@ -2,8 +2,8 @@ import type {
   SkillDiscoveryResult,
   SkillDiscoveryTarget,
   SkillSourceKind
-} from '../../../../../shared/skills'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/skills/discovery/skills'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/skills/configuration/runtime-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import {

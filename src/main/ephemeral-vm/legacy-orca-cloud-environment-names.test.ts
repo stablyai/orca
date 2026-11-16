@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,8 +29,8 @@ describe('renameLegacyOrcaCloudEnvironments', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  function add(name: string, key: number): string {
-    return addEnvironmentFromPairingCode(userDataPath, {
+  async function add(name: string, key: number): Promise<string> {
+    const added = await addEnvironmentFromPairingCode(userDataPath, {
       name,
       source: 'ephemeral-vm',
       pairingCode: encodePairingOffer({
@@ -39,27 +40,28 @@ describe('renameLegacyOrcaCloudEnvironments', () => {
         deviceToken: `token-${key}`
       }),
       now: 100
-    }).id
+    })
+    return added.id
   }
 
-  it('renames an Orca Cloud server saved as a VM and leaves recipe VMs alone', () => {
-    const cloud = add('repo VM 22b5b1e7', 1)
-    const recipe = add('repo VM 9c0ffee1', 2)
+  it('renames an Orca Cloud server saved as a VM and leaves recipe VMs alone', async () => {
+    const cloud = await add('repo VM 22b5b1e7', 1)
+    const recipe = await add('repo VM 9c0ffee1', 2)
 
-    const renamed = renameLegacyOrcaCloudEnvironments(userDataPath, [
+    const renamed = await renameLegacyOrcaCloudEnvironments(userDataPath, [
       runtime(CLOUD_RUNTIME, cloud, 'cloud'),
       runtime(RECIPE_RUNTIME, recipe, 'docker')
     ])
 
     expect(renamed).toBe(1)
     const names = Object.fromEntries(
-      listEnvironments(userDataPath).map((environment) => [environment.id, environment.name])
+      (await listEnvironments(userDataPath)).map((environment) => [environment.id, environment.name])
     )
     expect(names[cloud]).toBe('repo sandbox 22b5b1e7')
     expect(names[recipe]).toBe('repo VM 9c0ffee1')
     // Idempotent: a second start finds nothing left to rename.
     expect(
-      renameLegacyOrcaCloudEnvironments(userDataPath, [runtime(CLOUD_RUNTIME, cloud, 'cloud')])
+      await renameLegacyOrcaCloudEnvironments(userDataPath, [runtime(CLOUD_RUNTIME, cloud, 'cloud')])
     ).toBe(0)
   })
 })

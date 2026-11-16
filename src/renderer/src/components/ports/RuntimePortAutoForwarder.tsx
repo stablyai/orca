@@ -20,8 +20,8 @@ import {
 } from '@/lib/runtime-port-forwards/runtime-port-forwards-store'
 import { planAutoForwards } from '@/lib/runtime-port-forwards/runtime-port-auto-forward-plan'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace/ports/workspace-ports'
 import {
   normalizeRuntimePortForwardSettings,
   type RuntimePortForward,

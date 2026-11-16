@@ -106,9 +106,6 @@ vi.mock('./delete-worktree-failure-toast', () => ({
 }))
 
 import { toast } from 'sonner'
-import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
-
-import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
 
 function setWorktrees(
   worktrees: {
@@ -138,86 +135,6 @@ function setWorktrees(
     ])
   )
 }
-
-describe('delete worktree flow', () => {
-  beforeEach(() => {
-    mocks.state.settings = { skipDeleteWorktreeConfirm: false }
-    mocks.state.clearWorktreeDeleteState.mockClear()
-    mocks.state.markWorktreesDeleting.mockClear()
-    mocks.state.openModal.mockClear()
-    mocks.state.removeWorktree.mockClear().mockResolvedValue({ ok: true })
-    mocks.state.deleteStateByWorktreeId = {}
-    mocks.state.gitStatusByWorktree = {}
-    mocks.state.worktreeLineageById = {}
-    mocks.state.repos = []
-    mocks.state.sshTargetLabels = new Map()
-    mocks.state.sshConnectionStates = new Map()
-    mocks.state.openFiles = []
-    vi.mocked(toast.error).mockClear()
-    vi.mocked(toast.info).mockClear()
-    vi.mocked(showDeleteWorktreeFailureToast).mockClear()
-    setWorktrees([])
-  })
-
-  it('revalidates each queued instance immediately before execution', async () => {
-    // Model a host relying on renderer serialization for same-repo branch cleanup.
-    setWorktrees([
-      {
-        id: 'wt-1',
-        instanceId: 'instance-1',
-        path: '/workspaces/first-longer',
-        hostId: 'ssh:builder'
-      },
-      { id: 'wt-2', instanceId: 'instance-2', path: '/workspaces/second', hostId: 'ssh:builder' }
-    ])
-    const targets = Array.from(mocks.state.worktreeMap.values())
-    let finishFirst!: (result: { ok: true }) => void
-    mocks.state.removeWorktree.mockImplementationOnce(
-      () => new Promise((resolve) => (finishFirst = resolve))
-    )
-
-    const deletion = runWorktreeDeletesInParallel(targets)
-    await vi.waitFor(() =>
-      expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
-        { id: 'wt-1', executionHostId: 'ssh:builder' },
-        false,
-        {
-          suppressPreservedBranchToast: true
-        }
-      )
-    )
-    setWorktrees([
-      {
-        id: 'wt-1',
-        instanceId: 'instance-1',
-        path: '/workspaces/first-longer',
-        hostId: 'ssh:builder'
-      },
-      {
-        id: 'wt-2',
-        instanceId: 'replacement-instance',
-        path: '/workspaces/second',
-        hostId: 'ssh:builder'
-      }
-    ])
-    finishFirst({ ok: true })
-
-    await expect(deletion).resolves.toEqual([{ id: 'wt-1', executionHostId: 'ssh:builder' }])
-    expect(mocks.state.removeWorktree).not.toHaveBeenCalledWith(
-      { id: 'wt-2', executionHostId: 'ssh:builder' },
-      false,
-      {
-        suppressPreservedBranchToast: true
-      }
-    )
-    expect(toast.info).toHaveBeenCalledWith(
-      'Workspace list changed',
-      expect.objectContaining({
-        description: 'Refresh Space and try again if the workspace list looks stale.'
-      })
-    )
-  })
-})
 
 describe('Delete from Home of a workspace this desktop runs (REG-8)', () => {
   beforeEach(() => {

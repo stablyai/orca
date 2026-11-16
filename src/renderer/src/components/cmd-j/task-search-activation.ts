@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
@@ -9,7 +10,7 @@ import {
   getLinearIssueWorkspaceName,
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 
@@ -56,7 +57,7 @@ export function findCmdJTaskWorkspace(
     return undefined
   }
   return workspaces
-    .filter((workspace) => !workspace.isArchived)
+    .filter((workspace) => !workspace.isArchived && !isWorktreeRetiredByRemoval(workspace))
     .find((workspace) =>
       getWorkspaceAttachments(workspace).some((item) => {
         if (

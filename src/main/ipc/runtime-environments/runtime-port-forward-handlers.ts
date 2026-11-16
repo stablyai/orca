@@ -17,7 +17,7 @@ import {
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
+import { prepareRecipeVm } from './managed-orcad/runtime-environment-recipe-vm-wake'
 
 function createPairedRuntimePortForwardConnector(
   getUserDataPath: () => string
@@ -27,11 +27,11 @@ function createPairedRuntimePortForwardConnector(
     // User actions wake a sleeping VM (held up to the open timeout); a stray connection is refused.
     await prepareRecipeVm(
       userDataPath,
-      resolveEnvironment(userDataPath, environmentId),
+      await resolveEnvironment(userDataPath, environmentId),
       wake ? 'wake' : 'none'
     )
     await ensureOrcadManagedTunnel(userDataPath, environmentId)
-    return getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, environmentId))
+    return getPreferredPairedRuntimeConnection(await resolveEnvironment(userDataPath, environmentId))
   })
 }
 

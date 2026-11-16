@@ -157,8 +157,8 @@ describe('OrcaRuntimeService', () => {
       listProcesses: async () => processLists.shift() ?? []
     })
     runtime.attachWindow(1)
-    const publishStaleGraph = (): void => {
-      runtime.syncWindowGraph(1, {
+    const publishStaleGraph = async (): Promise<void> => {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'host-tab',
@@ -179,11 +179,11 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     }
-    publishStaleGraph()
+    await publishStaleGraph()
 
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     // Another client can republish a pre-sleep graph after physical teardown.
-    publishStaleGraph()
+    await publishStaleGraph()
     const firstObserver = await runtime.getWorktreePs()
     const secondObserver = await runtime.getWorktreePs()
 
@@ -234,7 +234,7 @@ describe('OrcaRuntimeService', () => {
     createRootDispatch(orchestrationDb, task.id, workerHandle, paneKey)
     runtime.setOrchestrationDb(orchestrationDb)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -324,7 +324,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.onPtyData(
       'pty-1',
       '\x1b]9999;{"state":"working","prompt":"watch tests","agentType":"claude"}\x07',
@@ -348,7 +348,7 @@ describe('OrcaRuntimeService', () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',

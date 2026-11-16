@@ -1,4 +1,4 @@
-import type { OrcaOrgRole, OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaOrgRole, OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 
 /**
  * The signed-in user's role in the team they are acting as; null when signed out or on a personal

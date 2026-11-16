@@ -9,6 +9,7 @@ import { setSidebarLiveWidth } from './sidebar-live-width'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
+import HiddenProjectsSection from './hidden-projects/HiddenProjectsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -25,6 +26,7 @@ import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { TeamMfaSidebarBanner } from '@/components/team-mfa/TeamMfaAppBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
+import { WorktreeCardsUpdateNotice } from './WorktreeCardsUpdateNotice'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
@@ -219,6 +221,7 @@ function Sidebar({
                 <>
                   <LocalGitToolchainScanBanner />
                   <StartupWorktreeRefreshStatus />
+                  <WorktreeCardsUpdateNotice />
                   <WorktreeList
                     scrollOffsetRef={worktreeScrollOffsetRef}
                     scrollAnchorRef={worktreeScrollAnchorRef}
@@ -230,6 +233,7 @@ function Sidebar({
                     projectsCollapseTarget={projectsCollapseTarget}
                   />
                   <WslMovedProjectsSection />
+                  <HiddenProjectsSection />
                 </>
               )}
 

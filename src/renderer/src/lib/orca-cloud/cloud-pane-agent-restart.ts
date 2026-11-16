@@ -41,6 +41,6 @@ export function restartCloudPaneAgent(args: {
     worktreeId: args.worktreeId,
     ptyId,
     agent: args.agent,
-    resumable: Boolean(state.agentStatusByPaneKey[paneKey]?.providerSession)
+    resumable: Boolean(state.agentStatusByPaneKey.get(paneKey)?.providerSession)
   })
 }

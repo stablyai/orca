@@ -1,7 +1,7 @@
 import type {
   FindOrcaProfileProjectsByPathArgs,
   FindOrcaProfileProjectsByPathResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { getOrcaProfileListState } from '../profile-index-store'
 import { readProfileState } from '../project-transfer/profile-project-state-file'
 import { repoPhysicalKey } from '../project-transfer/profile-project-worktree-identity'

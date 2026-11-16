@@ -23,6 +23,8 @@ function hasInFlightOwners(stop: IntentionalStop): boolean {
 export class TerminalIntentionalStops {
   private readonly stopsByPtyId = new Map<string, IntentionalStop>()
 
+  constructor(private readonly onSettled?: (ptyId: string, stopped: boolean) => void) {}
+
   /** Registers one owner's stop; call the result once with whether the stop landed. */
   mark(
     ptyId: string,
@@ -55,6 +57,7 @@ export class TerminalIntentionalStops {
         owned.ownersByKind.delete(kind)
       }
       this.settleIfIdle(ptyId, owned)
+      this.onSettled?.(ptyId, stopped)
     }
   }
 

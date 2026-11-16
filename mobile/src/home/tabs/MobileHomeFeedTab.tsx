@@ -15,6 +15,7 @@ import { MobileHomeCloudSection } from '../MobileHomeCloudSection'
 import { homeFeedLayout } from '../home-feed-layout'
 import { MobileHomeEmptyState } from '../MobileHomeEmptyState'
 import { MobileHomeHostList } from '../MobileHomeHostList'
+import { MobileHomeAppMoveBanner } from '../MobileHomeAppMoveBanner'
 import { MobileHomeActiveAgents } from '../MobileHomeActiveAgents'
 import { MobileHomeTasksSection } from '../MobileHomeTasksSection'
 import type { MobileHomeData } from '../use-mobile-home-data'
@@ -82,6 +83,7 @@ export function MobileHomeFeedTab(props: {
           isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
         ]}
       >
+        <MobileHomeAppMoveBanner />
         <MobileHomeActiveAgents
           rows={data.activeAgents}
           hosts={data.sortedHosts}

@@ -1,6 +1,6 @@
 // Where the web console lives and how the desktop asks auth for a console ticket. One module so
 // the contract is easy to adjust (orca-cloud apps/auth/src/http/console-ticket-route.ts).
-import { cleanCloudServiceOrigin } from '../../../shared/cloud-service-url'
+import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
 
 /**

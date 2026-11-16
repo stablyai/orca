@@ -1,4 +1,4 @@
-import type { RunTargetRowModel, RunTargetSubmenu } from './run-target-options'
+import type { RunTargetRowModel, RunTargetSubmenu } from './run-target/run-target-options'
 
 export type RunTargetKeyboardState = {
   open: boolean

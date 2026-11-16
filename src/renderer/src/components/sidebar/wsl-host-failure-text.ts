@@ -7,7 +7,7 @@ import {
   type WslHostAddRefusalCode,
   type WslHostCopyParams,
   type WslHostStatusDetailCode
-} from '../../../../shared/wsl-host-failure-copy'
+} from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import {
   getWslHostsPausedLabel,
   getWslHostServerFilesMissingLabel,

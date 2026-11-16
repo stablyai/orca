@@ -5,8 +5,8 @@ import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeResult,
   type JsonValue
-} from '../../shared/ephemeral-vm-recipes'
-import type { EphemeralVmCheckoutMode } from '../../shared/orca-yaml-hook-types'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import type { EphemeralVmCheckoutMode } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import type { EnvironmentHandle } from './environment-provider-driver'
 
 const USER_DATA_KEY = 'environmentDriver'

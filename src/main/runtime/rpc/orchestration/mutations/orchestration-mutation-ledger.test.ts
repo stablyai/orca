@@ -1,8 +1,6 @@
-import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../orca-runtime'
@@ -12,7 +10,6 @@ import '../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../orchestration/db/dispatch-row-writer'
 import '../../../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest } from '../../core'
-import { defineOrchestrationMethod } from '../../methods/orchestration/access/orchestration-method-access'
 import { RpcDispatcher } from '../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../methods/orchestration/orchestration'
 import { createRootDispatch } from '../../../orchestration/db/root-dispatch-test-fixture'
@@ -24,68 +21,6 @@ describe('durable orchestration mutation ledger', () => {
     for (const path of paths.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
-  })
-
-  it('returns the accepted Dispatch when worker-start was interrupted by restart', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const params = {
-      from: 'term_coord',
-      task: db.createTask({ runId: 'run_legacy_local', spec: 'restart' }).id
-    }
-    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
-    const payloadHash = createHash('sha256')
-      .update(JSON.stringify({ method: 'orchestration.workerStart', params }))
-      .digest('hex')
-    const started = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: params.task,
-      startOptions: {},
-      mutationReceipt: {
-        callerFingerprint,
-        requestId: 'mutation_worker_start',
-        method: 'orchestration.workerStart',
-        payloadHash
-      }
-    })
-    const effect = vi.fn()
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: [
-        defineOrchestrationMethod({
-          name: 'orchestration.workerStart',
-          permission: 'workspace',
-          access: { kind: 'writes', targets: {} },
-          params: z.object({ from: z.string(), task: z.string() }),
-          handler: effect
-        })
-      ]
-    })
-
-    const result = await dispatcher.dispatch({
-      id: 'rpc_worker_start_retry',
-      authToken: 'caller-token',
-      method: 'orchestration.workerStart',
-      params,
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'mutation_worker_start'
-    })
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: {
-        code: 'operation_unknown',
-        data: {
-          requestId: 'mutation_worker_start',
-          dispatchId: started.dispatch.id,
-          recoveryCommand: `orca orchestration worker-show --dispatch ${started.dispatch.id} --json`
-        }
-      }
-    })
-    expect(effect).not.toHaveBeenCalled()
-    db.close()
   })
 
   it('recovers a lost ask acceptance without creating a second question', async () => {

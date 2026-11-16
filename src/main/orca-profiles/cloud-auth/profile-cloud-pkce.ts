@@ -5,7 +5,8 @@ import { app, shell } from 'electron'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import {
   ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS,
-  ORCA_CLOUD_CALLBACK_SUCCESS_PAGE
+  orcaCloudCallbackPage,
+  type OrcaCloudCallbackOutcome
 } from './profile-cloud-callback-page'
 import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../shared/orca-profile-reconnect-reason'
 
@@ -15,18 +16,19 @@ export type OrcaCloudAuthorizationCode = {
   nonce: string
   redirectUri: string
   state: string
+  /** Answers the waiting browser tab once Orca knows whether sign-in finished. */
+  respond: (outcome: OrcaCloudCallbackOutcome) => void
   /**
-   * Only with `holdBrowser`: finishes the browser tab, either sending it on to `location` (cloud
-   * setup continues in the same tab) or showing the usual "signed in" page when null.
+   * Cloud setup: answers the waiting tab by sending it on to `location` instead (setup continues in
+   * the same tab). Only an https page may follow a sign-in; anything else gets the "signed in" page.
    */
-  finishBrowser?: (location: string | null) => void
+  redirect: (location: string) => void
 }
-
-/** How long a held browser tab waits for the caller before it gets the "signed in" page. */
-const HOLD_BROWSER_MS = 30_000
 
 /** A sign-in the browser never answers ends after this, with "Sign-in didn’t finish. Try again." */
 export const ORCA_CLOUD_SIGN_IN_TIMEOUT_MS = 5 * 60 * 1000
+// Longer than the code exchange request timeout, so the app normally answers first.
+const BROWSER_RESPONSE_TIMEOUT_MS = 45 * 1000
 
 /** Dev automation only (unpackaged): ORCA_CLOUD_SIGN_IN_TIMEOUT_MS shortens the wait for a test run. */
 export function orcaCloudSignInTimeoutMs(
@@ -67,8 +69,6 @@ export function beginOrcaCloudPkceFlow(
     signal?: AbortSignal
     /** Extra authorize parameters (cloud setup: setup=1, device, setup_steps). */
     authorizeParams?: Record<string, string>
-    /** Keep the browser's callback request open until the caller calls finishBrowser. */
-    holdBrowser?: boolean
     /**
      * COPY-LINK-FIRST-CLICK: false starts the same flow without opening the browser (the person
      * copied the link to paste into a private window). The listener and its timeout are unchanged,
@@ -94,35 +94,54 @@ export function beginOrcaCloudPkceFlow(
       closeServer(server)
     }
 
-    function resolveFlow(code: string, held?: ServerResponse): void {
+    function resolveFlow(code: string, response: ServerResponse): void {
       if (settled) {
         return
       }
       settled = true
-      if (!held) {
-        resolve({ code, codeVerifier, nonce, redirectUri, state })
-        closeServer(server)
-        return
-      }
-      let finished = false
-      const finishBrowser = (location: string | null): void => {
-        if (finished) {
+      // Stop accepting callbacks but keep this response open until the app answers.
+      server.close()
+      let answered = false
+      const answer = (write: () => void): void => {
+        if (answered) {
           return
         }
-        finished = true
-        clearTimeout(holdTimer)
-        // Only an https page may follow a sign-in in the same tab.
-        if (location && location.startsWith('https://')) {
-          held.writeHead(302, { location, 'cache-control': 'no-store' })
-          held.end()
-        } else {
-          held.writeHead(200, ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS)
-          held.end(ORCA_CLOUD_CALLBACK_SUCCESS_PAGE)
-        }
+        answered = true
+        clearTimeout(responseTimeout)
+        write()
         closeServer(server)
       }
-      const holdTimer = setTimeout(() => finishBrowser(null), HOLD_BROWSER_MS)
-      resolve({ code, codeVerifier, nonce, redirectUri, state, finishBrowser })
+      const respond = (outcome: OrcaCloudCallbackOutcome): void =>
+        answer(() => {
+          response.writeHead(
+            outcome.status === 'failed' ? 500 : 200,
+            ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS
+          )
+          response.end(orcaCloudCallbackPage(outcome))
+        })
+      const redirect = (location: string): void => {
+        if (!location.startsWith('https://')) {
+          respond({ status: 'connected' })
+          return
+        }
+        answer(() => {
+          response.writeHead(302, { location, 'cache-control': 'no-store' })
+          response.end()
+        })
+      }
+      const responseTimeout = setTimeout(
+        () => respond({ status: 'failed', error: 'orca_cloud_auth_response_timeout' }),
+        BROWSER_RESPONSE_TIMEOUT_MS
+      )
+      resolve({
+        code,
+        codeVerifier,
+        nonce,
+        redirectUri,
+        state,
+        respond,
+        redirect
+      })
     }
 
     function writeInvalidCallback(response: ServerResponse): void {
@@ -173,13 +192,7 @@ export function beginOrcaCloudPkceFlow(
           writeInvalidCallback(response)
           return
         }
-        if (options.holdBrowser) {
-          resolveFlow(code, response)
-          return
-        }
-        response.writeHead(200, ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS)
-        response.end(ORCA_CLOUD_CALLBACK_SUCCESS_PAGE)
-        resolveFlow(code)
+        resolveFlow(code, response)
       } catch (error) {
         rejectFlow(error instanceof Error ? error : new Error('orca_cloud_auth_callback_failed'))
       }
@@ -255,14 +268,14 @@ export function connectCurrentArgsFromUnknown(args: unknown): ConnectCurrentArgs
 }
 
 /**
- * The PKCE options a sign-in passes: cloud setup's parameters and held tab, or a plain sign-in that
+ * The PKCE options a sign-in passes: cloud setup's parameters, or a plain sign-in that
  * may skip the browser (COPY-LINK-FIRST-CLICK; setup asks for that on its own `connect` args).
  */
 export function pkceSignInOptions(
   setup: ({ authorizeParams?: Record<string, string> } & ConnectCurrentArgs) | undefined
-): { openBrowser: boolean; authorizeParams?: Record<string, string>; holdBrowser?: boolean } {
+): { openBrowser: boolean; authorizeParams?: Record<string, string> } {
   return {
     openBrowser: setup?.openBrowser !== false,
-    ...(setup?.authorizeParams ? { authorizeParams: setup.authorizeParams, holdBrowser: true } : {})
+    ...(setup?.authorizeParams ? { authorizeParams: setup.authorizeParams } : {})
   }
 }

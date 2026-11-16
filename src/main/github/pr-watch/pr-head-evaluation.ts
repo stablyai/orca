@@ -1,5 +1,4 @@
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { evaluatePRCheckOccurrence } from './pr-check-occurrence'
 import {
   deleteInactiveCurrentPRHeads,
@@ -39,26 +38,28 @@ export function recentPRChatActions(
 
 /** Startup: the recent actions to watch, after dropping moved heads past their deadline. */
 export function activeSavedPRWatches(
-  database: JournalHostDatabase,
+  db: Database.Database,
   now: number,
   windowMs: number
 ): Map<string, PRChatAction> {
-  database.transaction((db) => deleteExpiredPRPendingHeads(db, now))
-  return recentPRChatActions(database.db, now, windowMs)
+  requireTransaction(db)
+  deleteExpiredPRPendingHeads(db, now)
+  return recentPRChatActions(db, now, windowMs)
 }
 
 /** Retires current heads no recent action and no live watch holds, both read in the same
  *  transaction as the delete, so an action saved while startup was waiting keeps its head. */
 export function retireInactiveCurrentPRHeads(
-  database: JournalHostDatabase,
+  db: Database.Database,
   now: number,
   windowMs: number,
   watchedPRKeys: Iterable<string>
 ): void {
-  database.transaction((db) => {
+  requireTransaction(db)
+  {
     const held = new Set([...recentPRChatActions(db, now, windowMs).keys(), ...watchedPRKeys])
     deleteInactiveCurrentPRHeads(db, held)
-  })
+  }
 }
 
 function insertActionWithHead(db: Database.Database, action: PRChatAction, movedAt: number | null) {
@@ -77,26 +78,28 @@ function insertActionWithHead(db: Database.Database, action: PRChatAction, moved
 /** A verified action; its head is kept so a push superseded before the next read still reports.
  *  `movedAt` is set for a head the PR had already moved off when the push was verified. */
 export function recordPRChatAction(
-  database: JournalHostDatabase,
+  db: Database.Database,
   action: PRChatAction,
   movedAt: number | null = null
 ): void {
-  database.transaction((db) => insertActionWithHead(db, action, movedAt))
+  requireTransaction(db)
+  insertActionWithHead(db, action, movedAt)
 }
 
 /** Decided obligations: their verified actions and their progress in the row commit together. */
 export function settlePRPendingObligations(
-  database: JournalHostDatabase,
+  db: Database.Database,
   row: PRPendingActionRow,
   indices: readonly number[],
   verified: readonly { action: PRChatAction; movedAt: number | null }[]
 ): void {
-  database.transaction((db) => {
+  requireTransaction(db)
+  {
     for (const { action, movedAt } of verified) {
       insertActionWithHead(db, action, movedAt)
     }
     markPRPendingObligationsDone(db, row, indices)
-  })
+  }
 }
 
 /**
@@ -104,7 +107,7 @@ export function settlePRPendingObligations(
  * event's deliveries commit together, so a crash neither loses a line nor writes one twice.
  */
 export function recordPRHeadObservation(
-  database: JournalHostDatabase,
+  db: Database.Database,
   read: {
     prKey: string
     headSha: string
@@ -114,7 +117,8 @@ export function recordPRHeadObservation(
   }
 ): { final: boolean; chatIds: string[] } {
   const { prKey, headSha, isCurrentHead, observedAt } = read
-  return database.transaction((db) => {
+  requireTransaction(db)
+  {
     if (isCurrentHead) {
       markPRPendingHeadsMoved(db, prKey, headSha, observedAt, MOVED_HEAD_TTL_MS)
     }
@@ -145,5 +149,11 @@ export function recordPRHeadObservation(
         }).chatIds
       : []
     return { final: evaluation.final, chatIds }
-  })
+  }
+}
+
+function requireTransaction(db: Database.Database): void {
+  if (!db.isTransaction) {
+    throw new Error('PR-watch state requires its writer transaction')
+  }
 }

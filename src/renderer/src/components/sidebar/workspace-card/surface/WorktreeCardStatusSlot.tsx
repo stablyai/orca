@@ -8,12 +8,13 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import '../activity/worktree-card-empty-inputs'
 import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
+import { laneStatusWithLineage } from './worktree-card-lineage-lane-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
@@ -26,7 +27,7 @@ import { getEphemeralVmHostState } from '../../../../../../shared/execution-host
 import { getVmStateLabel, VmStateIcon, WorktreeCardVmStateBadge } from './WorktreeCardVmStateBadge'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from '../review/worktree-review-presentation'
-import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-review-checks'
+import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import {
   WorkspaceReviewChecksIndicator,
   workspaceReviewChecksLabel
@@ -37,6 +38,8 @@ type WorktreeCardStatusSlotProps = {
   showStatus: boolean
   showUnreadAction: boolean
   isUnread: boolean
+  /** A collapsed descendant's needs-you, failed or working state; replaces a quieter own status. */
+  lineageStatus?: WorktreeStatus | null
   unreadTooltip: string
   onToggleUnread: React.MouseEventHandler<HTMLButtonElement>
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
@@ -60,14 +63,15 @@ function getSleepingStatusLabel(t: Translate = translate): string {
 }
 // Offset optically left-heavy branch glyphs to align with centered activity dots.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
-const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
+export const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
 // The whole sleeping row is dimmed; extra glyph tint would double-dim it.
 const sleepingStatusIconClassName = 'size-[13px] text-muted-foreground'
-// Overlay unread without widening the status lane; ring-sidebar separates the dot from busy glyphs.
+// Overlay unread on the glyph's corner without widening the lane; the ring separates it from busy glyphs.
+// Blue, not amber: the lane already spends yellow and orange on working, pending checks and needs-you.
 const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+  'pointer-events-none absolute right-0 bottom-0 size-[6px] rounded-full bg-unread ring-2 ring-worktree-sidebar'
 
-function overlayNewCardUnreadStatus(
+export function overlayNewCardUnreadStatus(
   status: React.JSX.Element,
   showUnreadAlert: boolean
 ): React.JSX.Element {
@@ -124,6 +128,7 @@ export function WorktreeCardStatusSlot({
   showStatus,
   showUnreadAction,
   isUnread,
+  lineageStatus = null,
   unreadTooltip,
   onToggleUnread,
   onPointerDown,
@@ -158,8 +163,11 @@ export function WorktreeCardStatusSlot({
   // From the Sleep click on (RA-13b): the sandbox is still up, but its agents are being stopped.
   const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
   const asleepCloud = isCloud && (cloudAsleep || goingToSleep || vmRuntime?.status === 'suspended')
-  const status: WorktreeStatus =
-    asleepCloud && (liveStatus === 'active' || liveStatus === 'working') ? 'inactive' : liveStatus
+  // A collapsed descendant's louder state still shows; only this card's own activity is quieted.
+  const status: WorktreeStatus = laneStatusWithLineage(
+    asleepCloud && (liveStatus === 'active' || liveStatus === 'working') ? 'inactive' : liveStatus,
+    lineageStatus
+  )
   const vmHostState =
     vmRuntime && !isCloud ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   // The host glyph's badge carries suspended, waking and provisioning; the lane keeps only the
@@ -202,9 +210,9 @@ export function WorktreeCardStatusSlot({
     newCardStyle && isUnread
       ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
       : reviewLabel
-  // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
-  const showNewCardUnreadAlert =
-    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
+  // The lane holds the card's only unread dot (agent rows and the folded pill draw none), so it
+  // stays on over working/permission glyphs; the corner ring keeps it legible against them.
+  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
   const reviewStaleRef = isReviewStale ? observeOffscreenAnimation : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,

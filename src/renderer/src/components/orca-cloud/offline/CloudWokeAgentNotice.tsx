@@ -32,7 +32,7 @@ export function CloudWokeAgentNotice({
   onRestart: () => void
   onDismiss: () => void
 }): React.JSX.Element | null {
-  const evidenceAt = useAppStore((state) => agentEvidenceAt(state.agentStatusByPaneKey[paneKey]))
+  const evidenceAt = useAppStore((state) => agentEvidenceAt(state.agentStatusByPaneKey.get(paneKey)))
   // Mounted once the workspace is live again; the grace and the watch count from here.
   const [sinceLiveMs, setSinceLiveMs] = useState(0)
   useEffect(() => {

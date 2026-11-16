@@ -3,7 +3,7 @@
 // auto-start; whichever path creates first consumes it, and every later attempt is dropped. Exit,
 // Back and Cancel consume it without creating. The id doubles as the create's idempotency key.
 
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 
 type IntentState = 'pending' | 'consumed'
 

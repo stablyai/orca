@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import {
   WORKSPACE_PORT_BLOCK_SIZE,
   WORKSPACE_PORT_RANGE_END,

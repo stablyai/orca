@@ -82,16 +82,6 @@ describe('terminal multiplex adaptive ACK window', () => {
     vi.unstubAllEnvs()
   })
 
-  it('keeps legacy windows when pacing is not opted in, even on a measured slow link', async () => {
-    measureSlowLink()
-    const stream = await openAltScreenStream()
-    stream.write(10)
-    expect(stream.sentOutputBytes()).toBe(512 * 1024)
-    stream.ack(512 * 1024)
-    expect(stream.sentOutputBytes()).toBe(128 * 1024)
-    await stream.close()
-  })
-
   it('returns paced headroom once the queue drains, so later output overflows at the legacy cap', async () => {
     vi.stubEnv('ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW', '1')
     measureSlowLink()

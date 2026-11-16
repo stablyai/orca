@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../../../codex/trust/toml/config-toml-trust'
 import '../../../codex/history/index/codex-state-db-test-fixture'
@@ -23,20 +23,15 @@ vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: () => testState.home }
 })
-// Prevent the selection-triggered history bridge from spawning a real app-server.
-vi.mock('../../../codex/history/index/codex-account-session-index-heal', () => {
-  const upToDate = async () => ({
+// Prevent the selection-triggered history indexing from spawning a real app-server.
+vi.mock('../../../codex/history/index/codex-account-session-index-heal', () => ({
+  healPendingCodexAccountThreads: async () => ({
     outcome: 'up-to-date',
     healedThreads: 0,
     missingThreads: 0,
     failedThreads: 0
   })
-  return {
-    createCodexAccountStateDb: async () => false,
-    healCodexAccountSessionIndex: upToDate,
-    healPendingCodexAccountThreads: upToDate
-  }
-})
+}))
 
 beforeEach(() => {
   vi.resetModules()
@@ -168,7 +163,8 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
-      codexHomePath: account.managedHomePath
+      codexHomePath: account.managedHomePath,
+      readingAccount: { accountId: 'account-1', runtime: 'host', wslDistro: null }
     })
     expect(existsSync(accountAuthPath)).toBe(false)
     expect(settings.activeCodexManagedAccountId).toBe(account.id)

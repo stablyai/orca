@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeBuildFields } from './runtime-build-fields'
 
 const base: RuntimeStatus = {

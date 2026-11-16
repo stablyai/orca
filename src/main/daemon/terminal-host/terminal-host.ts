@@ -4,7 +4,7 @@ import { runTerminalCreation, type PendingTerminalCreation } from './terminal-cr
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from '../sessions/session'
-import type { PtyProcessInspectionOptions } from '../../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
@@ -15,7 +15,7 @@ import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './termin
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from '../sessions/session-input-path'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
-import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/claimed-agent-pty-owner'
+import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import {
   createOrAttachClaimedAgentSession,
   type InternalCreateOrAttachOptions

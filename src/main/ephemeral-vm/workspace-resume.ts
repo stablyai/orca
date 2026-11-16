@@ -1,19 +1,19 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailureFromError,
   pickEphemeralVmFailureCode
-} from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
 import { isCloudWorkspaceArchivedOnControlPlane } from '../hosted-sandbox/hosted-workspace-runtime'
@@ -46,12 +46,12 @@ import {
   ensureRemoteRuntimeSharedControlConnection,
   getRuntimeEnvironmentStatusOwner,
   reconnectRemoteRuntimeSharedControlConnection
-} from '../ipc/runtime-environments/runtime-environment-request-connections'
+} from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import {
   clearRuntimeEnvironmentContactLoss,
   isRuntimeEnvironmentContactLost
-} from '../ipc/runtime-environments/runtime-environment-contact-loss'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
+} from '../ipc/runtime-environments/status/runtime-environment-contact-loss'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { getRegisteredSshState } from '../ssh/targets/ssh-target-registry'
 import { isRecipeVmLostContact } from './recipe-vm-lost-contact'
 
@@ -249,7 +249,7 @@ export async function resumeEphemeralVmWorkspace(
         connection
       })
       // The reconnect can move the server's tunnel and re-pair it; the waiting open expects that.
-      const reached = resolveEnvironment(userDataPath, ssh.environmentId)
+      const reached = await resolveEnvironment(userDataPath, ssh.environmentId)
       noteRecipeVmWakePairing(reached.id, reached.pairingRevision ?? reached.createdAt)
       const woken = updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
         connectionMode: 'ssh',
@@ -288,22 +288,29 @@ function reestablishWokenServer(
   environmentId: string,
   options: { preopenSharedControl?: boolean; wakeStartedAt?: number } = {}
 ): void {
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       if (options.preopenSharedControl) {
         ensureRemoteRuntimeSharedControlConnection(
           environmentId,
-          getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, environmentId))
+          getPreferredPairedRuntimeConnection(await resolveEnvironment(userDataPath, environmentId))
         )
       }
       reconnectSharedControlIfIdle({
         getDiagnostics: () => getRemoteRuntimeSharedControlDiagnostics(environmentId),
         reconnectNow: () => reconnectRemoteRuntimeSharedControlConnection(environmentId)
       })
-      const refreshStatus = (): void =>
-        void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
-          .refresh({ reconnect: true })
-          .catch(() => {})
+      const refreshStatus = async (): Promise<void> => {
+        try {
+          await (
+            await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
+          ).refresh({
+            reconnect: true
+          })
+        } catch {
+          // The status owner reports its own failures; this reopen is best effort.
+        }
+      }
       if (options.preopenSharedControl && options.wakeStartedAt !== undefined) {
         // Ride the control socket once it is up (one handshake) rather than open a second one.
         void waitForWokenControl(environmentId, options.wakeStartedAt).then(
@@ -311,7 +318,7 @@ function reestablishWokenServer(
           refreshStatus
         )
       } else {
-        refreshStatus()
+        void refreshStatus()
       }
     } catch (error) {
       console.warn('[ephemeral-vm] reconnect after wake failed', error)

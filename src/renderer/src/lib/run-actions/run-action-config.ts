@@ -3,7 +3,7 @@ import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
-import type { OrcaHooks, OrcaRunAction } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks, OrcaRunAction } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   isRunActionAvailableOn,
   pickDefaultRunAction,

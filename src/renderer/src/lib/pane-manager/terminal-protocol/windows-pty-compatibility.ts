@@ -1,11 +1,11 @@
 import type { ITerminalOptions } from '@xterm/xterm'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import {
   buildXtermConptyOptions,
   parseWindowsBuildNumber,
   windowsPtyForOwnerMachine
-} from '../../../../../shared/xterm-conpty-options'
+} from '../../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 
 export type WindowsPtyCompatibilityContext = {
   userAgent?: string

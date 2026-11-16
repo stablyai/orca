@@ -19,10 +19,10 @@ import {
 import {
   retireRemovedRuntimeEnvironment,
   type RemovedServerStore
-} from './runtime-environments/runtime-environment-removal-cleanup'
+} from './runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
-import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environments/runtime-environment-catalog-broadcast'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { publishRuntimeEnvironmentCatalogChanged } from './runtime-environments/catalog/runtime-environment-catalog-broadcast'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
 import { retireGoneCloudSandbox } from '../hosted-sandbox/cloud-sandbox-gone-retire'
@@ -192,10 +192,10 @@ export function createCloudWorkspacesPairings(
     presence: (id) => sandboxPresence(getService, id),
     removeEnvironment: async (environmentId) => {
       const userDataPath = app.getPath('userData')
-      if (!listEnvironments(userDataPath).some((e) => e.id === environmentId)) {
+      if (!(await listEnvironments(userDataPath)).some((e) => e.id === environmentId)) {
         return
       }
-      removeEnvironment(userDataPath, environmentId)
+      await removeEnvironment(userDataPath, environmentId)
       if (removedServerStore) {
         await retireRemovedRuntimeEnvironment(
           environmentId,

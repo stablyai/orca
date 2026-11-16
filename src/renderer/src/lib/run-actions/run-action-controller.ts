@@ -4,7 +4,7 @@ import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirme
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import type { AppState } from '@/store/types'
-import type { OrcaRunAction } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaRunAction } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { effectiveRunMode, type OrcaRunScripts } from '../../../../shared/orca-yaml-run-actions'
 import {
   deleteRunActionRun,

@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { Command, CommandList } from '../ui/command'
-import { WorktreeJumpPaletteActionRow } from '../worktree-jump/worktree-jump-palette-project-action-rows'
+import { WorktreeJumpPaletteActionRow } from '../worktree-jump/rows/worktree-jump-palette-project-action-rows'
 import type { WorktreeJumpPaletteController } from '../worktree-jump/use-worktree-jump-palette-controller'
 import type { QuickActionPaletteItem } from '../worktree-jump/worktree-jump-palette-model'
 import { getRemoteDesktopQuickAction } from './remote-desktop-quick-action'

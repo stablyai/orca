@@ -1,9 +1,9 @@
 // Team cloud workspaces in the desktop: the org registry, opening a teammate's workspace through a
 // per-device E2EE grant, live presence and keeping an opened workspace awake.
 import { hostname } from 'node:os'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { openSealedGrant } from '../../shared/cloud-workspaces/sealed-grant'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import type {
   CloudWorkspaceLinkTarget,
   CloudWorkspace,

@@ -140,6 +140,30 @@ describe('descendant exit verification across partial process-table reads', () =
     ])
   })
 
+  it('hangs up a lone SIGTERM-ignoring shell instead of waiting out the grace', async () => {
+    const shell = row(20)
+    const snapshot = collectDescendantRows(10, [row(10, 1), shell], CAPTURED_AT)
+    let shellHungUp = false
+    const sendSignal = vi.fn((_pid: number, signal: NodeJS.Signals) => {
+      shellHungUp ||= signal === 'SIGHUP'
+    })
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
+      readTable: async () => capture(shellHungUp ? [] : [shell]),
+      sendSignal,
+      requireIdentityBeforeSignal: true,
+      shellPid: shell.pid,
+      graceMs: 10_000,
+      verifyMs: 2_000
+    })
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(pending).resolves.toBe('exited')
+    expect(sendSignal.mock.calls).toEqual([
+      [20, 'SIGTERM'],
+      [20, 'SIGHUP']
+    ])
+  })
+
   it('escalates a birth-second descendant freshly re-derived from the same root', async () => {
     const rows = [row(10, 1), row(20, 10, STARTED_DURING)]
     const snapshot = collectDescendantRows(10, rows, CAPTURED_AT)

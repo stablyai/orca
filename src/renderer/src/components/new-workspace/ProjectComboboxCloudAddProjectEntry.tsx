@@ -4,7 +4,7 @@ import React from 'react'
 import { Github } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ProjectComboboxAddProjectMenu } from './ProjectComboboxAddProjectOption'
+import type { ProjectComboboxAddProjectMenu } from './project-selection/ProjectComboboxAddProjectOption'
 
 function FromGitHubItem({ onSelect }: { onSelect: () => void }): React.JSX.Element {
   const t = useTranslate()

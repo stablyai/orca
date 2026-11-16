@@ -17,3 +17,37 @@ export const advancedOpen = defineFixture({
     />
   )
 })
+
+export const invalidYaml = defineFixture({
+  width: 720,
+  render: () => (
+    <RepositoryHookCommandSourceSetting
+      searchQuery=""
+      selectedPolicy="run-both"
+      yamlState="invalid"
+      yamlHooks={null}
+      copiedTemplate={false}
+      isAdvancedOpen
+      onSelectPolicy={() => {}}
+      onCopyTemplate={() => {}}
+      onAdvancedOpenChange={() => {}}
+    />
+  )
+})
+
+export const missingYaml = defineFixture({
+  width: 720,
+  render: () => (
+    <RepositoryHookCommandSourceSetting
+      searchQuery=""
+      selectedPolicy="run-both"
+      yamlState="missing"
+      yamlHooks={null}
+      copiedTemplate={false}
+      isAdvancedOpen
+      onSelectPolicy={() => {}}
+      onCopyTemplate={() => {}}
+      onAdvancedOpenChange={() => {}}
+    />
+  )
+})

@@ -1,8 +1,11 @@
 import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
 import { appendFile, open } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import { wslGatedReaddir, wslGatedStat } from '../../native-chat/wsl-transcript-fs-access'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
+import {
+  wslGatedReaddir,
+  wslGatedStat
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { loadClaudeAgentSdk } from '../claude-stream-json-connection'
 
 export async function renameClaudeTranscript(

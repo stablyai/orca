@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { AppState } from '../../../types'
 import type { SparsePreset } from '../../../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'
-import type { SparsePresetFailure } from '../../../../../../shared/worktree/sparse-preset-failure'
+import type { SparsePresetFailure } from '../../../../../../shared/worktree/creation/sparse-preset-failure'
 
 const ERROR_TOAST_DURATION = 60_000
 

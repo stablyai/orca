@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { FileTreePath } from './files-params'
+import { FileTreePath } from './filesystem/files-params'
 
 /** Uncompressed bytes one folder archive may hold; ZIP without ZIP64 tops out at 4 GiB. */
 export const FOLDER_ARCHIVE_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024

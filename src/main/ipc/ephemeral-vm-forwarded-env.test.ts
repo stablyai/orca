@@ -14,7 +14,7 @@ vi.mock('electron', () => ({
     removeHandler: vi.fn()
   }
 }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: listRuntimesMock
 }))
 vi.mock('./ephemeral-vm-recipe-context', () => ({

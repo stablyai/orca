@@ -1,5 +1,6 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
+import { manageCodexSessionMcp } from './codex-session-mcp'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
@@ -20,10 +21,7 @@ import {
   applyCodexStructuredSessionOption,
   readLiveCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
-import {
-  prepareCodexMessageDispatch,
-  readCodexAppliedInputOptions
-} from '../turns/codex-structured-message-options'
+import * as messageOptions from '../turns/codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -87,6 +85,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+  manageMcp = manageCodexSessionMcp(this.sessions, () => this.deps.providerInvocation)
 
   supportsLocation = supportsCodexStructuredLocation
 
@@ -161,6 +160,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       return admission
     }
     if (event.type === 'notification') {
+      turnEnd.publishCodexTurnOpened(session, event, this.sessions)
       // Only an admitted turn end settles; a refused one settles on the retry that lands.
       turnEnd.settleCodexSendsInEndedTurn(session, event)
       // Child records observe refused frames only after a retry reaches the journal.
@@ -244,7 +244,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     try {
       const outcome = await dispatchCodexTurn(
         session,
-        await prepareCodexMessageDispatch(
+        await messageOptions.prepareCodexMessageDispatch(
           session,
           input,
           () => this.sessions.get(input.sessionId) === session
@@ -324,8 +324,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
-  readAppliedInputOptions: NonNullable<SessionAdapter['readAppliedInputOptions']> = (input) =>
-    readCodexAppliedInputOptions(this.sessions.get(input.sessionId), input)
+  captureMessageSteeringInputs: NonNullable<SessionAdapter['captureMessageSteeringInputs']> = (
+    input
+  ) => messageOptions.readCodexMessageSteeringInputs(this.sessions.get(input.sessionId), input)
 
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)
@@ -340,7 +341,6 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
-  private session(sessionId: string): CodexSession {
-    return requireLiveCodexSession(this.sessions, sessionId)
-  }
+  private session = (sessionId: string): CodexSession =>
+    requireLiveCodexSession(this.sessions, sessionId)
 }

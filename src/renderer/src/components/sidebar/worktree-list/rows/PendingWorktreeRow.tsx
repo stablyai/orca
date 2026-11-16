@@ -14,7 +14,7 @@ import {
   classifyVmBuildFailure,
   isAccountGate
 } from '@/components/worktree-creation/vm-build-failure'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 
 function statusLabel(

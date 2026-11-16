@@ -1,12 +1,15 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useMemo } from 'react'
 import type React from 'react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { normalizeSourceControlAiSettings } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { SourceControlAiSettingsPatch } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAppStore } from '../../../../store/index'
-import { getRepositorySourceControlAiSectionId } from '../repository-settings-targets'
+import {
+  getRepositorySourceControlAiSectionId,
+  REPOSITORY_SOURCE_CONTROL_AI_CARD_ID
+} from '../repository-settings-targets'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
 import { RepositorySourceControlAiCustomCommand } from './RepositorySourceControlAiCustomCommand'
 import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
@@ -83,6 +86,7 @@ export function RepositorySourceControlAiSection({
       data-settings-section={getRepositorySourceControlAiSectionId(repo.id)}
     >
       <SettingsGroup
+        id={REPOSITORY_SOURCE_CONTROL_AI_CARD_ID}
         title={t(
           'auto.components.settings.RepositorySourceControlAiSection.112f3b934f',
           'Source control AI'

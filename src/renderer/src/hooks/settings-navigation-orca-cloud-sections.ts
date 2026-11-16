@@ -20,7 +20,7 @@ import type {
   SettingsNavSection,
   SettingsNavTarget
 } from '@/components/settings/navigation/settings-navigation-types'
-import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles/orca-profiles'
 import {
   BookOpenText,
   Boxes,

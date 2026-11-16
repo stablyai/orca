@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaCloudSignInEnd, OrcaCloudSignInProgress } from '../../shared/orca-profiles'
+import type { OrcaCloudSignInEnd, OrcaCloudSignInProgress } from '../../shared/orca-profiles/orca-profiles'
 import {
   cancelOrcaCloudSignIn,
   endOrcaCloudSignInProgress,

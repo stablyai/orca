@@ -1,6 +1,6 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
   summarizeRecipeForwardedEnv,
   type RecipeForwardedEnvSummary

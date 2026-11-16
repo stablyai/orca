@@ -15,6 +15,22 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'terminal.expandPane',
+    title: 'Expand / collapse pane',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
+    defaultBindings: platformBindings(['Mod+Shift+Enter'])
+  },
+  {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.projects.toggleCollapse',
     title: 'Collapse / Expand All Projects',
     group: 'Global',
@@ -82,6 +98,14 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'terminal.copySessionId',
+    title: 'Copy Session ID',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'agent', 'copy', 'session id', 'fork'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.closePane',
     title: 'Close active pane',
     group: 'Terminal Panes',
@@ -146,5 +170,21 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'cloud', 'workspace', 'link', 'share', 'copy', 'team'],
     // Why: Mod+Shift+C is browser.annotateElement and Mod+Alt+Shift+C copies a relative path.
     defaultBindings: platformBindings(['Mod+Alt+Shift+L'])
+  },
+  {
+    id: 'tab.moveLeft',
+    title: 'Move active tab left',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'left', 'reorder'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.moveRight',
+    title: 'Move active tab right',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'right', 'reorder'],
+    defaultBindings: platformBindings([])
   }
 ]

@@ -1,13 +1,13 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { WORKSPACE_LINEAGE_DOMAINS } from '../../profile-save-domains'
-import type { WorkspaceKey } from '../../../../shared/workspace-scope'
+import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   isCrossStoreWorkspaceLineage,
   validCrossStoreLineage
-} from '../../../../shared/worktree/cross-store-lineage-records'
+} from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'

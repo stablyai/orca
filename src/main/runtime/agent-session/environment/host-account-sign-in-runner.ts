@@ -2,7 +2,7 @@ import type {
   HostAccountSignInChannel,
   HostAccountSignInProvider,
   HostAccountSignInStatus
-} from '../../../../shared/host-account-sign-in-types'
+} from '../../../../shared/agent-accounts/host-account-sign-in-types'
 import type { RuntimeAccountServices } from './runtime-account-controller'
 
 /** Adds a host account whose login a client on another device finishes. */

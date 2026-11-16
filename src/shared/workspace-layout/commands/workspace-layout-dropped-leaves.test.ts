@@ -7,7 +7,7 @@ import { droppedLeavesOf } from './workspace-layout-dropped-leaves'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
 import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 
-vi.mock('../../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const OTHER_WS = 'repo-1::/Users/dev/other'
 
