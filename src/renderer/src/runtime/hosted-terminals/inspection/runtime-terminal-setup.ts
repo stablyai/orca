@@ -1,6 +1,7 @@
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import type { TerminalSetupStatus } from '../../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import { classifyTerminalProcessInspectionFailure } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { toRemoteRuntimeClientErrorLike } from '../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { getRemoteRuntimePtyOwner } from '../identity/remote-runtime-pty-owner'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { TerminalSetupObservers } from './terminal-setup-observers'
@@ -33,7 +34,7 @@ export async function waitForRuntimeTerminalSetup(
           if (failure === 'old_host') {
             return null
           }
-          if (failure === 'transport_loss' && !readSignal.aborted) {
+          if (isSetupTransportLoss(error) && !readSignal.aborted) {
             terminalSetupObservers.setConnected(owner.target.environmentId, false)
           }
           throw error
@@ -110,7 +111,9 @@ export function terminalSetupStreamLifecycle(
         }
       },
       onError: (error: unknown) => {
-        disconnect()
+        if (isSetupTransportLoss(error)) {
+          disconnect()
+        }
         onError(error)
       },
       onClose: () => {
@@ -134,4 +137,13 @@ export function terminalSetupStreamLifecycle(
       }
     }
   }
+}
+
+function isSetupTransportLoss(error: unknown): boolean {
+  const failure = toRemoteRuntimeClientErrorLike(error)
+  // A live host also returns runtime_unavailable while its graph is reloading.
+  return (
+    failure.code !== 'runtime_unavailable' &&
+    classifyTerminalProcessInspectionFailure(error) === 'transport_loss'
+  )
 }

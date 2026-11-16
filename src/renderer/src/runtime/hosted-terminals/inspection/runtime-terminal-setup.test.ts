@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { terminalSetupStreamLifecycle } from './runtime-terminal-setup'
+import { terminalSetupObservers, terminalSetupStreamLifecycle } from './runtime-terminal-setup'
 
 describe('Setup stream ownership', () => {
   it.each([20, 200])(
@@ -42,4 +42,30 @@ describe('Setup stream ownership', () => {
       expect(next.isActive()).toBe(false)
     }
   )
+})
+
+it.each([
+  { code: 'runtime_unavailable', message: 'The runtime is unavailable' },
+  new Error('Invalid retained SSH connection state')
+])('keeps a live stream usable after a non-transport error: %j', async (error) => {
+  const stream = terminalSetupStreamLifecycle(
+    'healthy',
+    () => true,
+    () => {},
+    () => {}
+  )
+  stream.callbacks.onReady()
+  stream.callbacks.onError(error)
+  try {
+    await expect(
+      terminalSetupObservers.wait('healthy', 'terminal', async () => ({
+        runtimeId: 'runtime',
+        ptyId: 'pty',
+        dependencyId: null,
+        state: 'ready'
+      }))
+    ).resolves.toBeUndefined()
+  } finally {
+    stream.callbacks.onClose()
+  }
 })
