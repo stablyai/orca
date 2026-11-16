@@ -21,6 +21,8 @@ export type AgentSessionStoreState = {
   >
   /** Chat tab id → the conversation it shows; null until this store first records a tab. */
   sessionTabs: AgentSessionTabTable | null
+  /** Read at load: chats an older Orca wrote before tabs were recorded, shown beside the clients'. */
+  unrecordedTabSessionIds?: readonly string[]
   /** Prior runtime endings, read at load; missing/null evidence attributes no death to Orca. */
   runtimeEnds?: ReadonlyMap<string, AgentSessionOrcaStopCause> | null
 }
