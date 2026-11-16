@@ -21,6 +21,7 @@ import { useAppStore } from '@/store/index'
 import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   formatMarkdownReviewNotes,
+  getMarkdownReviewHighlightedText,
   type MarkdownReviewNote
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
@@ -215,7 +216,8 @@ export function useMonacoMarkdownAnnotations(params: {
           source: 'markdown',
           startLine: commentPopover.startLine,
           lineNumber: commentPopover.lineNumber,
-          selectedText: commentPopover.selectedText,
+          // Gutter notes keep their lines' text so later edits above them can't misdirect the agent.
+          selectedText: getMarkdownReviewHighlightedText(content, commentPopover) || undefined,
           body,
           side: 'modified'
         })
