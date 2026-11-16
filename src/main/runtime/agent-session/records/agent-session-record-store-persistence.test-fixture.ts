@@ -43,11 +43,12 @@ function writePersisted(db: Database.Database, persisted: PersistedTestAgentSess
       'agent_session_records',
       'agent_session_operations',
       'agent_session_retired_claim_keys',
-      'agent_session_tabs',
-      'agent_session_store_meta'
+      'agent_session_tabs'
     ]) {
       db.prepare(`DELETE FROM ${table}`).run()
     }
+    // The chat store's own provenance of the original journal is not record-store state.
+    db.prepare("DELETE FROM agent_session_store_meta WHERE key NOT LIKE 'journal.%'").run()
     const insertRecord = db.prepare(
       'INSERT OR REPLACE INTO agent_session_records (session_id, record_json) VALUES (?, ?)'
     )

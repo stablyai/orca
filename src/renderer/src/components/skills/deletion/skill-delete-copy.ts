@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { compareBaseSensitivityLocaleText } from '../../../../../shared/locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../../../shared/i18n/locale-text-collators'
 import type {
   SkillDeleteBlockReason,
   SkillDeletePlan,

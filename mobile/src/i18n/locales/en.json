@@ -3142,7 +3142,10 @@
       "chooseInAgentPicker": "Choose in agent picker…",
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
-      "sessionOptions": "Session options"
+      "sessionOptions": "Session options",
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · next message",
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",
@@ -3498,6 +3501,51 @@
       "openAgain": "Open again",
       "finished": "Sign-in finished",
       "finishedWith": "Sign-in finished · {{message}}"
+    },
+    "mcp": {
+      "source": {
+        "project": "Project",
+        "local": "Local",
+        "user": "User",
+        "plugin": "Plugin",
+        "session": "Session"
+      },
+      "status": {
+        "connected": "Connected",
+        "pending": "Connecting…",
+        "needsAuth": "Needs sign-in",
+        "failedReason": "Failed: {{error}}",
+        "failed": "Failed",
+        "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+        "finishOnPage": "Finish on the page that opened",
+        "waitingForSignIn": "Waiting for sign-in…",
+        "tools_one": "{{count}} tool",
+        "tools_other": "{{count}} tools",
+        "off": "Off"
+      },
+      "title": "MCP servers",
+      "notRunning": "MCP servers connect when you send your next message.",
+      "unsupported": "Update Orca on this chat's host to manage MCP servers here.",
+      "readFailed": "Couldn't load MCP servers.",
+      "retry": "Retry",
+      "empty": "No MCP servers are set up for this chat.",
+      "signIn": "Sign in",
+      "reconnect": "Reconnect",
+      "toggleLabel": "Use {{name}}",
+      "actionFailed": "Couldn't do that. Try again.",
+      "openAgain": "Open again",
+      "pastePlaceholder": "Paste address",
+      "pasteLabel": "Sign-in page address",
+      "finish": "Finish",
+      "signInUnfinished": "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done.",
+      "summary": {
+        "signingIn": "signing in to {{name}}",
+        "connected": "{{count}} connected",
+        "needsAuth_one": "{{count}} needs sign-in",
+        "needsAuth_other": "{{count}} need sign-in",
+        "failed": "{{count}} failed"
+      },
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
     }
   },
   "sourceControl": {

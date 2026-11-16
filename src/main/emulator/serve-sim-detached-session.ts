@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { EmulatorError } from './emulator-errors'
-import { emulatorFailureText } from '../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
 import type { EmulatorSessionInfo } from './emulator-types'
 
 const MJPEG_STREAM_SUFFIX = '/stream.mjpeg'

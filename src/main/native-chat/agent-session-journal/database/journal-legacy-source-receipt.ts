@@ -18,7 +18,7 @@ export type JournalLegacySourceReceipt = {
   | {
       disposition: 'copied-source'
       main: JournalLegacyFileIdentity
-      wal: { kind: 'empty' } | { kind: 'nonempty'; size: string }
+      wal: { kind: 'empty' } | { kind: 'nonempty'; size: string; ino?: string; mtimeNs?: string }
     }
   | { disposition: 'no-source-at-initialization' | 'uncertifiable' }
 )
@@ -74,6 +74,15 @@ function sourceReceipt(
     ...VERSION,
     disposition: 'copied-source',
     main,
-    wal: wal && wal.size > 0n ? { kind: 'nonempty', size: String(wal.size) } : { kind: 'empty' }
+    // Reused WAL frames can keep the size, so the file's own identity tells a new write apart.
+    wal:
+      wal && wal.size > 0n
+        ? {
+            kind: 'nonempty',
+            size: String(wal.size),
+            ino: String(wal.ino),
+            mtimeNs: String(wal.mtimeNs)
+          }
+        : { kind: 'empty' }
   }
 }

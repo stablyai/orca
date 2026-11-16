@@ -71,7 +71,8 @@ export function MobileNativeChatComposerSendSlot({
         value,
         structured.threadGoal?.changes === 'host',
         agent ?? undefined,
-        snapshot ?? []
+        snapshot ?? [],
+        structured.mcpPanel != null
       ),
     steerHead,
     pickerOpen,
