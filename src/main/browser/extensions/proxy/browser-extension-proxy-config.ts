@@ -94,16 +94,28 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
   if (!config.proxyRules) {
     return { mode: 'direct' }
   }
-  const server = (uri: string) => {
-    const url = new URL(uri.includes('://') ? uri : `http://${uri}`)
+  const server = (list: string, defaultScheme = 'http') => {
+    // Chrome's ProxyRules expose one server per scheme, not the native failover list.
+    const uri = list
+      .split(',')
+      .map((entry) => entry.trim())
+      .find(Boolean)
+    if (!uri || /^direct:\/\/$/i.test(uri)) {
+      return undefined
+    }
+    const url = new URL(uri.includes('://') ? uri : `${defaultScheme}://${uri}`)
+    const scheme = url.protocol.slice(0, -1)
     return proxyServerSchema.parse({
       host: url.hostname,
-      scheme: url.protocol.slice(0, -1),
+      scheme: scheme === 'socks' ? 'socks4' : scheme,
       ...(url.port ? { port: Number(url.port) } : {})
     })
   }
   const rules: z.infer<typeof proxyRulesSchema> = {}
-  for (const entry of config.proxyRules.split(';').filter(Boolean)) {
+  for (const entry of config.proxyRules
+    .split(';')
+    .map((rule) => rule.trim())
+    .filter(Boolean)) {
     const match = /^(http|https|ftp|socks)=(.*)$/.exec(entry)
     if (!match) {
       rules.singleProxy = server(entry)
@@ -120,12 +132,15 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
         key === 'proxyForFtp' ||
         key === 'fallbackProxy'
       ) {
-        rules[key] = server(match[2])
+        rules[key] = server(match[2], key === 'fallbackProxy' ? 'socks4' : 'http')
       }
     }
   }
   if (config.proxyBypassRules) {
-    rules.bypassList = config.proxyBypassRules.split(',')
+    rules.bypassList = config.proxyBypassRules
+      .split(/[;,]/)
+      .map((rule) => rule.trim())
+      .filter(Boolean)
   }
   return { mode: 'fixed_servers', rules }
 }

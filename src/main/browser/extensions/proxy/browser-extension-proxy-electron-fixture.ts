@@ -25,7 +25,11 @@ if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
   throw new Error('Proxy fixture requires background launch')
 }
 applyBackgroundActivationPolicy()
-app.commandLine.appendSwitch('proxy-server', 'http://baseline.invalid:8999')
+app.commandLine.appendSwitch(
+  'proxy-server',
+  'http=baseline.invalid:8999,backup.invalid:8998,direct://'
+)
+const baselineResolution = 'PROXY baseline.invalid:8999;PROXY backup.invalid:8998;DIRECT'
 app.commandLine.appendSwitch('host-resolver-rules', 'MAP direct.orca.test 127.0.0.1')
 
 const servers: Server[] = []
@@ -105,7 +109,30 @@ async function run(): Promise<void> {
   const body = async (url = 'http://proxied.orca.test/') =>
     (await sess.fetch(url, { cache: 'no-store' })).text()
   await whenBrowserExtensionProxyReady(sess)
-  assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), 'PROXY baseline.invalid:8999')
+  assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), baselineResolution)
+  assert.deepEqual(await invoke(first, 'get', {}), {
+    value: {
+      mode: 'fixed_servers',
+      rules: { proxyForHttp: { scheme: 'http', host: 'baseline.invalid', port: 8999 } }
+    },
+    levelOfControl: 'controllable_by_this_extension'
+  })
+  assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), baselineResolution)
+  await applyProxySettingsToSession(
+    sess,
+    {
+      httpProxyUrl: `http://127.0.0.1:${portA}`,
+      httpProxyBypassRules: ' localhost,*.internal;; '
+    },
+    { env: {} }
+  )
+  const appSetting = await invoke(first, 'get', {})
+  assert.ok(appSetting && typeof appSetting === 'object' && 'value' in appSetting)
+  await invoke(first, 'set', { value: appSetting.value })
+  assert.equal(await sess.resolveProxy('http://service.internal/'), 'DIRECT')
+  assert.equal(await body(), 'proxy-a')
+  await invoke(first, 'clear', {})
+  await applyProxySettingsToSession(sess, {}, { env: {} })
   await set(first, {
     mode: 'fixed_servers',
     rules: { singleProxy: { host: '127.0.0.1', port: portA } }
@@ -226,7 +253,7 @@ async function run(): Promise<void> {
   await applyProxySettingsToSession(sess, {}, { env: {} })
   await set(first, { mode: 'direct' })
   await invoke(first, 'clear', {})
-  assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), 'PROXY baseline.invalid:8999')
+  assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), baselineResolution)
   const entered = Promise.withResolvers<void>()
   const release = Promise.withResolvers<void>()
   const nativeSetProxy = sess.setProxy.bind(sess)
@@ -249,7 +276,7 @@ async function run(): Promise<void> {
     getBrowserExtensionProfileStateStore().readProfile('proxy-profile')[first.id],
     undefined
   )
-  assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), 'PROXY baseline.invalid:8999')
+  assert.equal(await sess.resolveProxy('http://proxied.orca.test/'), baselineResolution)
   getBrowserExtensionProfileStateStore().flush()
   console.log(
     JSON.stringify({
