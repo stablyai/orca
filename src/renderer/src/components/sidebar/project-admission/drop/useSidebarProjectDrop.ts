@@ -28,6 +28,24 @@ function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings
   )
 }
 
+/** Routes a drop; a drive mapped to a host's distro share goes to that host, any other as before. */
+export async function routeDroppedPath(path: string): Promise<SidebarProjectDropRoute> {
+  const sharePath =
+    getWslDropHosts(useAppStore.getState()).length > 0
+      ? await resolveWslMappedDrivePath(path)
+      : null
+  // Why: re-read live state; a runtime can be focused while the drop is prepared.
+  const state = useAppStore.getState()
+  const routeArgs = {
+    focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
+    wslHosts: getWslDropHosts(state)
+  }
+  const shareRoute = sharePath ? routeSidebarProjectDrop({ ...routeArgs, path: sharePath }) : null
+  return shareRoute?.kind === 'wsl-host'
+    ? shareRoute
+    : routeSidebarProjectDrop({ ...routeArgs, path })
+}
+
 function refuseSidebarProjectDrop(route: SidebarProjectDropRoute): boolean {
   if (route.kind === 'windows-drive-on-wsl-host') {
     toast.error(
@@ -87,6 +105,7 @@ export function useSidebarProjectDrop(): {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isHandlingDrop, setIsHandlingDrop] = useState(false)
+  const handlingDropRef = useRef(false)
   const dragDepthRef = useRef(0)
   const wslDropHosts = useMemo(
     () => getWslDropHosts({ runtimeEnvironments, settings }),
@@ -125,30 +144,17 @@ export function useSidebarProjectDrop(): {
         )
         return
       }
-      // A drive mapped to a host's distro share routes to that host; any other drive as before.
-      const sharePath =
-        getWslDropHosts(useAppStore.getState()).length > 0
-          ? await resolveWslMappedDrivePath(pathResolution.path)
-          : null
-      // Why: re-read live state; a runtime can be focused while the drop is prepared.
-      const state = useAppStore.getState()
-      const routeArgs = {
-        focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
-        wslHosts: getWslDropHosts(state)
-      }
-      const shareRoute = sharePath
-        ? routeSidebarProjectDrop({ ...routeArgs, path: sharePath })
-        : null
-      const route =
-        shareRoute?.kind === 'wsl-host'
-          ? shareRoute
-          : routeSidebarProjectDrop({ ...routeArgs, path: pathResolution.path })
-      if (refuseSidebarProjectDrop(route)) {
+      // One drop at a time: the share lookup below can take a moment.
+      if (handlingDropRef.current) {
         return
       }
-
+      handlingDropRef.current = true
       setIsHandlingDrop(true)
       try {
+        const route = await routeDroppedPath(pathResolution.path)
+        if (!mountedRef.current || refuseSidebarProjectDrop(route)) {
+          return
+        }
         const stat = await window.api.fs.stat({
           filePath: pathResolution.path,
           access: userNamedFileAccess()
@@ -184,6 +190,7 @@ export function useSidebarProjectDrop(): {
           )
         }
       } finally {
+        handlingDropRef.current = false
         if (mountedRef.current) {
           setIsHandlingDrop(false)
         }

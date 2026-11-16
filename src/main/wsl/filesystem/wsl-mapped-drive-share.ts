@@ -3,6 +3,7 @@
  * Orca only recognises in its UNC spelling. Windows resolves a mapped drive's root to its share.
  */
 import { realpath } from 'node:fs'
+import { win32 } from 'node:path'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 
 const RESOLVE_TIMEOUT_MS = 2_000
@@ -17,7 +18,8 @@ export type WslMappedDriveShareDeps = {
   timeoutMs: number
 }
 
-type CacheEntry = { at: number; share: Promise<string | null> }
+/** `settledAt` is null while the lookup is in flight; an in-flight lookup never expires. */
+type CacheEntry = { settledAt: number | null; lookup: Promise<string | null> }
 
 const cache = new Map<string, CacheEntry>()
 
@@ -36,29 +38,36 @@ const defaultDeps: WslMappedDriveShareDeps = {
 function resolveDriveShare(letter: string, deps: WslMappedDriveShareDeps): Promise<string | null> {
   const key = letter.toUpperCase()
   const cached = cache.get(key)
-  if (cached && deps.now() - cached.at < CACHE_TTL_MS) {
-    return cached.share
-  }
+  const entry =
+    cached && (cached.settledAt === null || deps.now() - cached.settledAt < CACHE_TTL_MS)
+      ? cached
+      : startDriveLookup(key, deps)
   let timer: ReturnType<typeof setTimeout> | undefined
-  const lookup = deps
-    .realpathRoot(`${key}:\\`)
-    .then((real) => (parseWslUncPath(real) ? real.replace(/[\\/]+$/, '') : null))
-    .catch(() => null)
-  // A hung share must not hold the add: it reads as unmapped, and the next add asks again.
+  // A slow share (a cold distro boots its VM) answers null now; its late answer serves the next add.
   const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => {
+    timer = setTimeout(() => resolve(null), deps.timeoutMs)
+  })
+  return Promise.race([entry.lookup, timeout]).finally(() => clearTimeout(timer))
+}
+
+/** One lookup per drive: a hung share pins one fs thread, never one per add. */
+function startDriveLookup(key: string, deps: WslMappedDriveShareDeps): CacheEntry {
+  const entry: CacheEntry = { settledAt: null, lookup: Promise.resolve(null) }
+  entry.lookup = deps.realpathRoot(`${key}:\\`).then(
+    (real) => {
+      entry.settledAt = deps.now()
+      return parseWslUncPath(real) ? real.replace(/[\\/]+$/, '') : null
+    },
+    () => {
+      // A failed lookup is asked again by the next add.
       if (cache.get(key) === entry) {
         cache.delete(key)
       }
-      resolve(null)
-    }, deps.timeoutMs)
-  })
-  const entry: CacheEntry = {
-    at: deps.now(),
-    share: Promise.race([lookup, timeout]).finally(() => clearTimeout(timer))
-  }
+      return null
+    }
+  )
   cache.set(key, entry)
-  return entry.share
+  return entry
 }
 
 /**
@@ -80,8 +89,12 @@ export async function resolveWslMappedDrivePath(
   if (!share) {
     return null
   }
-  const tail = (match[2] ?? '').replace(/\//g, '\\').replace(/\\+$/, '')
-  return tail ? `${share}\\${tail}` : share
+  const tail = win32.normalize(match[2] || '.').replace(/^\\+|\\+$/g, '')
+  // `..` past the drive root names no folder of the share.
+  if (tail === '..' || tail.startsWith('..\\')) {
+    return null
+  }
+  return tail === '' || tail === '.' ? share : `${share}\\${tail}`
 }
 
 export function clearWslMappedDriveShareCacheForTests(): void {

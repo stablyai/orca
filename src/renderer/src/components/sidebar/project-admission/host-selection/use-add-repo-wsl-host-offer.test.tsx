@@ -143,4 +143,52 @@ describe('useAddRepoWslHostOffer on a drive mapped to a distro share', () => {
     expect(held).toBe(false)
     expect(resolveMappedDrivePath).not.toHaveBeenCalled()
   })
+
+  it('skips the offer when the drive path is already a saved project', async () => {
+    setOfferState({
+      repos: [
+        {
+          id: 'repo-w',
+          path: 'W:\\home\\u\\repo',
+          displayName: 'repo',
+          badgeColor: '#000',
+          addedAt: 1
+        }
+      ]
+    })
+    const { result } = renderOffer()
+    let held = true
+    await act(async () => {
+      held = await result.current.offer('W:\\home\\u\\repo', 'local_folder_picker')
+    })
+    // Not held: the ordinary add finds the saved project instead of adding a UNC copy.
+    expect(held).toBe(false)
+    expect(result.current.notice(async () => undefined)).toBeNull()
+  })
+
+  it('shows no offer for an add closed or superseded while the drive resolved', async () => {
+    setOfferState()
+    let finish: (share: string | null) => void = () => {}
+    resolveMappedDrivePath.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const { result } = renderOffer()
+    let current = true
+    let pending: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      pending = result.current.offer('W:\\home\\u\\old', 'local_folder_picker', () => current)
+    })
+    // Closed and reopened: the caller's generation moved on.
+    current = false
+    let held = false
+    await act(async () => {
+      finish('\\\\wsl.localhost\\Ubuntu\\home\\u\\old')
+      held = await pending
+    })
+    expect(held).toBe(true)
+    expect(result.current.notice(async () => undefined)).toBeNull()
+  })
 })

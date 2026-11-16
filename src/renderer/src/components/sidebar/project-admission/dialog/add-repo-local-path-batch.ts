@@ -125,6 +125,53 @@ async function runPickedLocalPathsBatch({
   }
 }
 
+/** Holds one local path to offer its WSL distro as a host; `isCurrent` turns false on close. */
+export type OfferWslHost = (
+  path: string,
+  source: AddRepoExistingWorkspaceSource,
+  isCurrent: () => boolean
+) => Promise<boolean>
+
+/** True when the offer held `path`, or the add it answered for was closed meanwhile. */
+export async function heldByWslHostOffer(
+  offerWslHost: OfferWslHost | undefined,
+  path: string,
+  isCurrent: () => boolean
+): Promise<boolean> {
+  return (await offerWslHost?.(path, 'local_folder_picker', isCurrent)) === true || !isCurrent()
+}
+
+/** Adds a folder dropped onto the dialog once, unless the WSL host offer holds it. */
+export function useDroppedLocalPathAutoAdd({
+  isOpen,
+  droppedLocalPath,
+  droppedLocalPathHandledRef,
+  localAddGenRef,
+  offerWslHost,
+  addPath
+}: {
+  isOpen: boolean
+  droppedLocalPath: string
+  droppedLocalPathHandledRef: RefObject<string | null>
+  localAddGenRef: RefObject<number>
+  offerWslHost?: OfferWslHost
+  addPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
+}): void {
+  useEffect(() => {
+    if (!isOpen || !droppedLocalPath || droppedLocalPathHandledRef.current === droppedLocalPath) {
+      return
+    }
+    droppedLocalPathHandledRef.current = droppedLocalPath
+    const gen = localAddGenRef.current
+    void (async () => {
+      const isCurrent = (): boolean => gen === localAddGenRef.current
+      if (!(await heldByWslHostOffer(offerWslHost, droppedLocalPath, isCurrent))) {
+        await addPath(droppedLocalPath, 'local_folder_picker')
+      }
+    })()
+  }, [addPath, droppedLocalPath, droppedLocalPathHandledRef, isOpen, localAddGenRef, offerWslHost])
+}
+
 export function usePickedLocalPathsAutoAdd({
   isOpen,
   pickedLocalPaths,
@@ -140,7 +187,7 @@ export function usePickedLocalPathsAutoAdd({
   pickedLocalPaths: readonly string[] | null
   pickedLocalPathsHandledRef: RefObject<readonly string[] | null>
   localAddGenRef: RefObject<number>
-  offerWslHost?: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<boolean>
+  offerWslHost?: OfferWslHost
   addPaths: (
     paths: readonly string[],
     source: AddRepoExistingWorkspaceSource,
@@ -160,13 +207,12 @@ export function usePickedLocalPathsAutoAdd({
     pickedLocalPathsHandledRef.current = pickedLocalPaths
     const offerGen = localAddGenRef.current
     void (async () => {
+      const isCurrent = (): boolean => offerGen === localAddGenRef.current
       if (
-        pickedLocalPaths.length === 1 &&
-        (await offerWslHost?.(pickedLocalPaths[0], 'local_folder_picker'))
+        pickedLocalPaths.length === 1
+          ? await heldByWslHostOffer(offerWslHost, pickedLocalPaths[0], isCurrent)
+          : !isCurrent()
       ) {
-        return
-      }
-      if (offerGen !== localAddGenRef.current) {
         return
       }
       const gen = ++localAddGenRef.current

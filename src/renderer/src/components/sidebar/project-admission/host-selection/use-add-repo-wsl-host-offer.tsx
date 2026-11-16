@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -18,6 +18,7 @@ import {
 } from '../../wsl-host-offer'
 import type { WslHostOffer } from '../../wsl-host-offer-actions'
 import { resolveWslMappedDrivePath } from '../../wsl-mapped-drive-path'
+import { wslHostOfferProjectRef } from '../../wsl-host-offer-move'
 
 type PendingOffer =
   | ({ kind: 'run-host' } & WslHostOffer)
@@ -42,7 +43,12 @@ export function useAddRepoWslHostOffer(
   },
   droppedHostPath: DroppedHostPath | null
 ): {
-  offer: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<boolean>
+  /** `isCurrent` is false once the add it answers for was closed or superseded. */
+  offer: (
+    path: string,
+    source: AddRepoExistingWorkspaceSource,
+    isCurrent?: () => boolean
+  ) => Promise<boolean>
   notice: (
     addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
   ) => ReactNode
@@ -66,12 +72,12 @@ export function useAddRepoWslHostOffer(
     setSeenDrop(droppedHostPath)
     setHostPath(null)
   }
-  const openRef = useRef(isOpen)
-  useEffect(() => {
-    openRef.current = isOpen
-  }, [isOpen])
   const offer = useCallback(
-    async (path: string, source: AddRepoExistingWorkspaceSource): Promise<boolean> => {
+    async (
+      path: string,
+      source: AddRepoExistingWorkspaceSource,
+      isCurrent: () => boolean = () => true
+    ): Promise<boolean> => {
       if (selectedHostId !== LOCAL_EXECUTION_HOST_ID) {
         return false
       }
@@ -80,9 +86,13 @@ export function useAddRepoWslHostOffer(
       // Only a path an offer could take asks main; ordinary adds never wait on it.
       const mightOffer = hosts.length > 0 || shouldOfferWslHost(readWslHostOfferGate(before))
       const sharePath = mightOffer ? await resolveWslMappedDrivePath(path) : null
-      if (sharePath && !openRef.current) {
-        // Closed while main resolved the drive: nothing to offer, and nothing to add either.
+      if (!isCurrent()) {
+        // Closed or superseded while main resolved the drive: nothing to offer, nothing to add.
         return true
+      }
+      // Already saved at its drive spelling: the add finds that project, never a second copy.
+      if (sharePath && wslHostOfferProjectRef(path)) {
+        return false
       }
       const offerPath = sharePath ?? path
       const state = sharePath ? useAppStore.getState() : before
