@@ -95,7 +95,10 @@ export function structuredAgentSessionStatusSummary({
     ...(model ? { model } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(session.child?.permissionMode
-      ? { launchPermissionMode: runningPermissionMode ?? session.child.permissionMode }
+      ? {
+          launchPermissionMode: session.child.permissionMode,
+          runningPermissionMode: runningPermissionMode ?? session.child.permissionMode
+        }
       : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
