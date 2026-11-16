@@ -13,7 +13,7 @@ import type {
   RuntimeBrowserUnavailableReason,
   RuntimeDegradation
 } from '../protocol/runtime-capability-degradation'
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../../workspace-layout/tab-groups/tab-types'
 import type { TerminalPaneLayoutNode } from '../../workspace-layout/terminal-tab-types'
 import type {
   RuntimeMobileSessionClientTab,

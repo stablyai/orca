@@ -4,7 +4,7 @@ import {
   cloudConversation,
   CONNECTOR_CLIENT_LIMITS,
   type ConnectorEvent
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
 
 type Snapshot = Extract<ConnectorEvent, { kind: 'snapshot' }>

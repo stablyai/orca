@@ -17,16 +17,26 @@ import {
 } from '../../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain'
 import { readWslCodexAuths, type WslCodexAuthRead } from './wsl-codex-auth-batch-reader'
 import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
+import type { CodexRateLimitHomeResolution } from '../runtime-home-service-types'
 import { CodexRuntimeHomeWslCore } from '../credentials/runtime-home-service-wsl-core'
 
 export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
-  protected getPreparedWslRateLimitHomePath(
+  protected getPreparedWslRateLimitHome(
     target: CodexAccountSelectionTarget,
     pinnedWslDistro?: string
-  ): string | null {
+  ): CodexRateLimitHomeResolution {
     // Unpinned polls pin the resolved default, as they always read that distro's lane.
     const distro = pinnedWslDistro ?? this.resolveWslDefaultTarget(target).wslDistro?.trim()
-    return this.getWslCodexHomePathForSelection(target, { pinnedWslDistro: distro || undefined })
+    const home = this.resolveWslCodexHomeForSelection(target, {
+      pinnedWslDistro: distro || undefined
+    })
+    return {
+      kind: 'ready',
+      codexHomePath: home.path,
+      ...(home.account && distro
+        ? { readingAccount: { accountId: home.account.id, runtime: 'wsl', wslDistro: distro } }
+        : {})
+    }
   }
 
   /**
@@ -37,6 +47,14 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     target: CodexAccountSelectionTarget,
     options: { probeHome?: boolean; pinnedWslDistro?: string } = {}
   ): string | null {
+    return this.resolveWslCodexHomeForSelection(target, options).path
+  }
+
+  /** `account` is set only when the path is that account's own home, not a System default fallback. */
+  private resolveWslCodexHomeForSelection(
+    target: CodexAccountSelectionTarget,
+    options: { probeHome?: boolean; pinnedWslDistro?: string }
+  ): { path: string | null; account: CodexManagedAccount | null } {
     const settings = this.store.getSettings()
     const pathTarget: CodexAccountSelectionTarget = options.pinnedWslDistro
       ? { runtime: 'wsl', wslDistro: options.pinnedWslDistro }
@@ -49,10 +67,13 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     if (account) {
       const accountHome = this.getWslLaunchCodexHomePath(account, pathTarget.wslDistro?.trim())
       if (accountHome) {
-        return accountHome
+        return { path: accountHome, account }
       }
     }
-    return this.getWslSystemCodexHomePath(options.pinnedWslDistro ? pathTarget : target, options)
+    return {
+      path: this.getWslSystemCodexHomePath(options.pinnedWslDistro ? pathTarget : target, options),
+      account: null
+    }
   }
 
   protected getWslLaunchCodexHomePath(

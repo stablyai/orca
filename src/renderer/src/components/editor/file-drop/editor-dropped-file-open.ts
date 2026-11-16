@@ -14,7 +14,7 @@ import { describeSharedDropFailureReason } from '@/lib/files/drop/drop-skip-reas
 import { captureWorktreeSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { DROP_STAGING_RELATIVE_DIR } from '../../../../../shared/drop-staging-ignore'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../../shared/file-import/drop-staging-ignore'
 import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/workspace/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'

@@ -13217,7 +13217,7 @@
           "catalog": "Katalog",
           "clear": "Filter zurücksetzen",
           "themes": "Designs",
-          "codeLanguages": "Programmiersprachen",
+          "codeLanguages": "Sprachen",
           "translations": "Übersetzungen",
           "icons": "Symbole",
           "commands": "Befehle & Panels",
@@ -16033,13 +16033,6 @@
                       "c94ff11e91": "Einrichtungsstatus konnte nicht erneut geprüft werden."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Der mobile Emulator konnte nicht ausgeblendet werden."
-                    }
-                  }
                 }
               }
             }
@@ -16064,17 +16057,6 @@
             "5789936d9a": "iOS-Simulatoren in der Vorschau anzeigen, während Agenten den Bildschirm steuern.",
             "8014b4b80b": "Beibehalten",
             "6e051a40b7": "Ausblenden"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobiler Emulator ausgeblendet",
-                  "c46c979c1d": "Der mobile Emulator lässt sich jederzeit wieder aktivieren unter",
-                  "600f9a745a": "Einstellungen › Mobiler Emulator"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Der einzufügende Text ist für die Tastatureingabe des Emulators zu groß.",

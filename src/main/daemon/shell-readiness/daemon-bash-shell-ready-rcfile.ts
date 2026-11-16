@@ -1,5 +1,5 @@
 import { getPosixOmpShellWrapper } from '../../pty/shell-startup/omp-shell-wrapper'
-import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
+import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/shell/launch/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 import { getPosixCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'

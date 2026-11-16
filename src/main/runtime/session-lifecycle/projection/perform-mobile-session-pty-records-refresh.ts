@@ -8,7 +8,7 @@ import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pt
 import { isAgentLaunchRunningIn } from '../../../agent-launch/agent-launch-pane-attachment'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import type { TabActivationIntent } from '../../../../shared/tab-activation-intent'
+import type { TabActivationIntent } from '../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
@@ -19,7 +19,7 @@ import { includeTargetResolvedWorktree } from '../../workspaces/catalog/runtime-
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { navigationTargetsHost } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
-import { isAutomaticTabActivation } from '../../../../shared/tab-activation-intent'
+import { isAutomaticTabActivation } from '../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
 import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'

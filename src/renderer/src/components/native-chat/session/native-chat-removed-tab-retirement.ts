@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { retireNativeChatDraftPosition } from '../drafts/native-chat-composer-draft-memory'
 import { readNativeChatComposerDraft } from '../drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '../drafts/native-chat-draft-scope'

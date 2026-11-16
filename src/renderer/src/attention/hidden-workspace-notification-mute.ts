@@ -6,7 +6,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-
 import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/controls/sidebar-filter-actions'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
-import { NO_HIDDEN_PROJECTS } from '../../../shared/hidden-projects'
+import { NO_HIDDEN_PROJECTS } from '../../../shared/project/catalog/hidden-projects'
 import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-view/workspace-creator-visibility'
 import {
   selectFolderWorkspaces,

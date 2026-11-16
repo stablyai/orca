@@ -19,7 +19,7 @@ import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/worksp
 import {
   indexHiddenProjects,
   withoutHiddenFilterRepoIds
-} from '../../../../../../shared/hidden-projects'
+} from '../../../../../../shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 
 export function useSidebarExternalWorktreeCards(args: {

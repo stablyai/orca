@@ -30,7 +30,7 @@ function soundKey(key: string): string {
     .replace(/[cq]/g, 'k')
     .replace(/x/g, 'ks')
     .replace(/z/g, 's')
-    .replace(/(?<=[aeiouy])r(?![aeiouy])/g, '')
+    .replace(/([aeiouy])r(?![aeiouy])/g, '$1')
     .replace(/[aeiouy]+/g, 'a')
     .replace(/(.)\1+/g, '$1')
 }

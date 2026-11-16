@@ -9,7 +9,7 @@ import {
   SetOptionParams,
   SendParams
 } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 import { useAppStore } from '../../../store/index'
 import { registerStructuredSelectionCatalogStore } from '../options/structured-agent-session-selection-controller'

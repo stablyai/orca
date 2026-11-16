@@ -3,11 +3,11 @@ import type { TelemetrySettings } from './telemetry/telemetry-settings-types'
 import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
-import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
+import type { OrcaWorkspaceLayout } from './worktree/paths/orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/projects/project-types'
 import type { VoiceSettings } from './speech/speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
-import type { GitLabProjectSettings } from './gitlab-types'
+import type { GitLabProjectSettings } from './gitlab/gitlab-types'
 import type { TaskProvider } from './work-items/task-providers'
 import type { AppIconId } from './app-lifecycle/identity/app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
@@ -27,7 +27,7 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from './agent-accounts/managed-account-types'
 import type { NotificationSettings } from './notifications/notification-settings-types'
-import type { CtrlTabOrderMode } from './tab-types'
+import type { CtrlTabOrderMode } from './workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from './terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from './agent-accounts/usage-credentials/zcode-plan-sites'
@@ -500,5 +500,3 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
 }
-
-export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

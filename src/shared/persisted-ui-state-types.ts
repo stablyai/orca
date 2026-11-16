@@ -10,10 +10,9 @@ import type { FeatureInteractionState } from './feature-education/interactions/f
 import type { UsagePercentageDisplay } from './agent-usage/display/usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar/status-bar-usage-mode'
 import type { StatusBarUsageFormat } from './status-bar/status-bar-usage-format'
-import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from './workspace-setup/orca-yaml-hook-types'
 import type { CustomPet } from './pets/pet-types'
 import type {
-  ActivityGroupBy,
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
@@ -22,13 +21,16 @@ import type {
   RightSidebarTab,
   StatusBarItem,
   TaskResumeState,
-  ThreadReadFilter,
   TopLevelView,
   VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
   WorkspaceHostScope,
   WorktreeCardProperty
 } from './ui-chrome-types'
+import type {
+  ActivityGroupBy,
+  ThreadReadFilter
+} from './agent-status/presentation/agents-view-thread-filters'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './remote-runtime/host-catalog/pending-runtime-repo-removal'
