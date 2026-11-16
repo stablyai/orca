@@ -16613,7 +16613,8 @@
           "FloatingTerminalIconContextMenu": {
             "8e7d775287": "Hide Floating Workspace",
             "763f5fa2c1": "Move to Floating Button",
-            "0ee79e0674": "Move to Status Bar"
+            "0ee79e0674": "Move to Status Bar",
+            "a2fbd81c1b": "Reset Floating Workspace Position and Size"
           },
           "FloatingTerminalOrchestrationDialog": {
             "f726054620": "Enables agents to hand off context and coordinate work through Orca.",
