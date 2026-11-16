@@ -29,7 +29,7 @@ export async function handleRelayHookRequest(
     forwardClaudeAgentView?: (body: unknown) => Promise<unknown>
     env: string
     state: HookListenerState
-    checkAgentPresence: (paneKey: string) => Promise<void>
+    checkAgentPresence: (paneKey: string) => Promise<unknown>
     readHookRootEvidence?: HookRootEvidenceReader
     providerNormalization: RelayProviderHookNormalization
     isPaneSurfaceRetired: (paneKey: string) => boolean

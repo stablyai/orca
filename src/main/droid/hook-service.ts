@@ -27,6 +27,10 @@ import {
   buildWindowsHookEnvironmentGuardLines
 } from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import {
+  buildHookProcessCapture,
+  HOOK_PARENT_CAPTURE
+} from '../agent-hooks/installation/scripts/hook-process-capture'
 import { readManagedHookEventsFromJson } from '../agent-hooks/installation/configuration/managed-hooks-json-events'
 import {
   DROID_EVENTS,
@@ -50,11 +54,15 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
+function getPosixManagedCommand(scriptPath: string): string {
+  return `${HOOK_PARENT_CAPTURE}${wrapPosixHookCommand(scriptPath)}`
+}
+
 function getManagedCommand(scriptPath: string): string {
   // Factory runs hooks through cmd.exe, where unquoted profile spaces split the path.
   return process.platform === 'win32'
     ? wrapWindowsBatchHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+    : getPosixManagedCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -74,6 +82,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('droid'),
+    ...buildHookProcessCapture(),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -92,6 +101,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  --data-urlencode "agentProcess=${orca_agent_process:-}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
@@ -248,7 +258,7 @@ export class DroidHookService {
     const remoteSettingsPath = `${remoteFactoryDir}/settings.json`
     const remoteScriptPath = `${home}/.orca/agent-hooks/droid-hook.sh`
     try {
-      const command = wrapPosixHookCommand(remoteScriptPath)
+      const command = getPosixManagedCommand(remoteScriptPath)
       // Publish the script before config so interrupted installs cannot reference a missing file.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
 

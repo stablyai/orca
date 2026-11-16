@@ -24,7 +24,7 @@ import type { RelayProviderHookNormalization } from '../status/agent-hook-provid
 type RelayHookSpoolHost = {
   isCurrent?: () => boolean
   providerNormalization?: RelayProviderHookNormalization
-  checkAgentPresence?: (paneKey: string) => Promise<void>
+  checkAgentPresence?: (paneKey: string) => Promise<unknown>
   readHookRootEvidence?: HookRootEvidenceReader
   /** The drain's one answer deadline, shared by all its records. */
   answerBy?: number

@@ -1,7 +1,12 @@
 import type { AgentProcessIdentity } from '../agent-status/process/agent-process-presence'
+import type {
+  AgentExitWatchHost,
+  AgentProcessExitWatch
+} from '../agent-status/process/agent-process-exit-watch'
 import type { ParsedAgentStatusPayload } from '../agent-status/contracts/agent-status-types'
 import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
+import { isProcessExitSessionEnd } from './hook-envelope'
 import { DROID_HOOK_SESSION_PROVIDER } from './providers/droid/droid-hook-session'
 
 export type ProviderHookSessionInput = {
@@ -30,6 +35,7 @@ export type ProviderHookSessionResult =
 
 export type ProviderHookSession = {
   retainPaneRoot?: true
+  exitMarker?(state: HookListenerState, paneKey: string): object | undefined
   admit(input: ProviderHookSessionInput): ProviderHookSessionResult
   readPaneSession?(
     input: Pick<ProviderHookSessionInput, 'state' | 'paneKey' | 'hookPayload'> & {
@@ -44,6 +50,39 @@ const PROVIDERS: Readonly<Record<string, ProviderHookSession>> = {
 
 export function providerHookRetainsPaneRoot(source: string): boolean {
   return PROVIDERS[source]?.retainPaneRoot === true
+}
+
+/** Providers with an exit marker prove exit through the exit watch, not the SessionEnd reason. */
+export function isImmediateProcessExitSessionEnd(
+  source: string,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): boolean {
+  return (
+    PROVIDERS[source]?.exitMarker === undefined && isProcessExitSessionEnd(eventName, hookPayload)
+  )
+}
+
+export function watchProviderHookExit(
+  state: HookListenerState,
+  watch: AgentProcessExitWatch,
+  event: AgentHookEventPayload,
+  probe: AgentExitWatchHost['probe']
+): void {
+  if (event.hookEventName !== 'SessionEnd' || event.isReplay) {
+    return
+  }
+  const readMarker = event.source && PROVIDERS[event.source]?.exitMarker
+  if (!readMarker) {
+    return
+  }
+  const marker = readMarker(state, event.paneKey)
+  if (marker) {
+    watch.start(event.paneKey, {
+      isCurrent: () => readMarker(state, event.paneKey) === marker,
+      probe
+    })
+  }
 }
 
 export function prepareProviderHookSession(source: string, input: ProviderHookSessionInput) {

@@ -33,7 +33,8 @@ type RelayHookAdmissionHost = {
   clearPaneState: (paneKey: string) => void
   clearAssistantMessageRetry: (paneKey: string) => void
   forward: RelayHookForward
-  checkAgentPresence: (paneKey: string) => Promise<void>
+  checkAgentPresence: (paneKey: string) => Promise<unknown>
+  watchAgentExit: (event: AgentHookEventPayload) => void
 }
 
 export type RelayHookAdmissionOptions = {
@@ -176,6 +177,14 @@ export function applyRelayHookEvent(
     !isSameAgentProcess(sender, owner.process)
   ) {
     void host.checkAgentPresence(event.paneKey)
+  }
+  // Why: a replayed or retried SessionEnd is history; only a live one can start the exit watch.
+  if (
+    incoming.hookEventName === 'SessionEnd' &&
+    options.checkPresence !== false &&
+    !options.isReplay
+  ) {
+    host.watchAgentExit({ ...incoming, source })
   }
   // Why: retries compare against the cached row by identity, so they must hold that exact row.
   return host.state.lastStatusByPaneKey.get(event.paneKey)

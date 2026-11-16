@@ -1,12 +1,18 @@
 import type { ProviderHookSession } from '../../provider-hook-session'
 import { normalizeDroidEvent } from './droid-events'
-import { admitDroidHook, droidRowProviderSession, restatedDroidEvent } from './droid-sessions'
+import {
+  admitDroidHook,
+  droidExitMarker,
+  droidRowProviderSession,
+  restatedDroidEvent
+} from './droid-sessions'
 import { readDroidTranscriptCallingSessionId } from './droid-transcript-origin'
 
 export const DROID_HOOK_SESSION_PROVIDER: ProviderHookSession = {
   retainPaneRoot: true,
-  admit({ state, paneKey, eventName, hookPayload, promptText, previous, base }) {
-    const admission = admitDroidHook(state, paneKey, eventName, hookPayload, previous)
+  exitMarker: droidExitMarker,
+  admit({ state, paneKey, eventName, hookPayload, promptText, sender, previous, base }) {
+    const admission = admitDroidHook(state, paneKey, eventName, hookPayload, sender, previous)
     if (admission.kind === 'skip' || admission.kind === 'restate') {
       return {
         kind: 'handled',

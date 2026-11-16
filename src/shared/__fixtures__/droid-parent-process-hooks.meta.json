@@ -1,0 +1,17 @@
+{
+  "droid_versions": ["0.238.0", "0.244.0"],
+  "platforms": ["darwin", "linux"],
+  "recorded_at": "2026-10-17",
+  "clock": "none; rows are in arrival order",
+  "runs": {
+    "0.244.0/s1-init": "A headless droid (no TUI) starts session S1, takes one prompt, and closes.",
+    "0.244.0/s1-load": "A second headless droid loads the session that s1-init made, then closes.",
+    "linux-0.244.0/s1-init": "The s1-init scenario on Linux; the start time is `<boot id>:<ticks>` with the boot id zeroed.",
+    "tui-0.244.0/t1-new": "The TUI starts S1, then /new: SessionEnd clear for S1, SessionStart resume for S2, a late SessionEnd other for S1, and SessionEnd other for S2 at exit.",
+    "tui-0.238.0/t1-new": "The same /new sequence on 0.238.0.",
+    "tui-0.244.0/t2-resume": "The TUI resumes the session t1-new switched to, then exits.",
+    "tui-0.244.0/t3-hup": "The probe sends the TUI SIGHUP; the log holds only its SessionEnd other.",
+    "tui-0.244.0/t3-term": "The probe sends the TUI SIGTERM; the log holds only its SessionStart."
+  },
+  "note": "Logged by a research probe whose hook command recorded every Droid hook with the droid process it captured, the identity the listener keys presence on. Reduced to one row per hook: run, event, session relation, source, reason, and the captured platform and start time. Session relations are per run, so a session one run resumes from another gets a new S number. Scrubbed: session-id prefixes replaced by relations, pids, the hook script's ancestor chain, and the probe's process-table rows removed. Runs that repeat a kept sequence (0.238.0 and Linux 0.238.0 exec runs, s1-load on Linux, recon, t3b, t3c, rep1-rep6, and the 0.238.0 t2/t3 runs) were dropped."
+}

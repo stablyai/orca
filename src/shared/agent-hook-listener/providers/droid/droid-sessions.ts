@@ -1,3 +1,4 @@
+import type { AgentProcessIdentity } from '../../../agent-status/process/agent-process-presence'
 import type { ParsedAgentStatusPayload } from '../../../agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from '../../../agent-status/lifecycle/main-agent-status'
 import type { CodexSubagentRoster } from '../codex/codex-subagent-roster'
@@ -6,6 +7,7 @@ import { clearPaneTurnCacheState, type HookListenerState } from '../../listener-
 import { providerPaneStateSlot } from '../../state/provider-hook-state-slots'
 import { readString } from '../../tool-input-preview'
 import { readDroidTranscriptCallingSessionId } from './droid-transcript-origin'
+import { droidRowOwner, isEndedDroidOwner, isForeignDroidSender } from './droid-session-owner'
 
 const MAX_TRACKED_SESSIONS = 256
 
@@ -37,12 +39,19 @@ export type DroidPaneSessions = {
   /** The children on show: working or waiting. */
   roster: CodexSubagentRoster
   leaseUntil?: number
+  /** Set by the lead's SessionEnd; any later hook from the owner clears it. */
+  exitMarker?: object
+}
+
+/** The marker an exit watch holds; it goes stale when the lead speaks again or the pane is cleared. */
+export function droidExitMarker(state: HookListenerState, paneKey: string): object | undefined {
+  return droidPaneSessions(state, paneKey)?.exitMarker
 }
 
 export type DroidHookAdmission =
   | { kind: 'skip' }
   /** Re-publish the stored row so the host's owner check runs; `settled` also clears child work. */
-  | { kind: 'restate'; settled?: true }
+  | { kind: 'restate'; sessionEnd?: true; settled?: true }
   | { kind: 'lead'; sessions?: DroidPaneSessions }
   | { kind: 'child'; sessions: DroidPaneSessions; sessionId: string }
 
@@ -108,6 +117,13 @@ function repointProvisionalLead(sessions: DroidPaneSessions, parentId: string): 
   }
 }
 
+function clearExitMarker(state: HookListenerState, paneKey: string): void {
+  const sessions = droidPaneSessions(state, paneKey)
+  if (sessions) {
+    sessions.exitMarker = undefined
+  }
+}
+
 function restoredSessions(
   state: HookListenerState,
   paneKey: string,
@@ -146,11 +162,18 @@ function admitStart(
   paneKey: string,
   sessions: DroidPaneSessions | undefined,
   previous: AgentHookEventPayload | undefined,
-  ids: { sessionId: string; parentId?: string }
+  ids: { sessionId: string; parentId?: string },
+  sender: AgentProcessIdentity | undefined
 ): DroidHookAdmission {
   const { sessionId, parentId } = ids
   if (parentId) {
     adoptChild(state, paneKey, sessions, sessionId, parentId)
+    return SKIP
+  }
+  clearExitMarker(state, paneKey)
+  // Why: a stored row with no owner cannot tell a relaunch of the same session from /resume of it.
+  const rowLacksOwner = previous !== undefined && droidRowOwner(previous) === undefined
+  if (sessions?.leadId === sessionId && sender && !rowLacksOwner) {
     return SKIP
   }
   const hadChildWork = (sessions?.roster.size ?? 0) > 0
@@ -168,35 +191,61 @@ export function admitDroidHook(
   paneKey: string,
   eventName: unknown,
   hookPayload: Record<string, unknown>,
+  sender: AgentProcessIdentity | undefined,
   previous: AgentHookEventPayload | undefined
 ): DroidHookAdmission {
-  if (eventName === 'SessionEnd') {
+  if (isForeignDroidSender(previous, sender)) {
+    return previous ? { kind: 'restate' } : SKIP
+  }
+  if (isEndedDroidOwner(previous, sender)) {
     return SKIP
+  }
+  if (previous?.agentPresence?.ended) {
+    droidSessionsByPaneKey(state.providerState).delete(paneKey)
+    clearPaneTurnCacheState(state, paneKey)
   }
   const sessionId = readString(hookPayload, 'session_id')
   if (!sessionId) {
+    clearExitMarker(state, paneKey)
     return { kind: 'lead' }
   }
   const sessions = droidPaneSessions(state, paneKey) ?? restoredSessions(state, paneKey, previous)
+  if (eventName !== 'SessionEnd' || sessionId !== sessions?.leadId) {
+    clearExitMarker(state, paneKey)
+  }
   const isStart = eventName === 'SessionStart'
-  const unseen = sessionId !== sessions?.leadId && !sessions?.children.has(sessionId)
+  const unseen =
+    eventName !== 'SessionEnd' &&
+    sessionId !== sessions?.leadId &&
+    !sessions?.children.has(sessionId)
   const parentId =
     (isStart ? readString(hookPayload, 'calling_session_id') : undefined) ??
     (isStart || unseen ? readDroidTranscriptCallingSessionId(hookPayload) : undefined)
   if (isStart) {
-    return admitStart(state, paneKey, sessions, previous, { sessionId, parentId })
+    return admitStart(state, paneKey, sessions, previous, { sessionId, parentId }, sender)
   }
   if (parentId) {
     const known = adoptChild(state, paneKey, sessions, sessionId, parentId)
     return known ? { kind: 'child', sessions: known, sessionId } : SKIP
   }
   if (!sessions) {
+    if (eventName === 'SessionEnd') {
+      return SKIP
+    }
     return {
       kind: 'lead',
       sessions: createSessions(state, paneKey, sessionId, true)
     }
   }
   if (sessionId === sessions.leadId) {
+    if (eventName === 'SessionEnd') {
+      if (!sender || !droidRowOwner(previous)) {
+        return SKIP
+      }
+      sessions.exitMarker = {}
+      return { kind: 'restate', sessionEnd: true }
+    }
+    sessions.exitMarker = undefined
     return { kind: 'lead', sessions }
   }
   // Why: a prompt from an unseen session that names no caller is the user's, so it takes the pane.
@@ -235,6 +284,7 @@ export function restatedDroidEvent(
     connectionId: null,
     // Why: the restated row is kept for resume, so it names the lead the pane holds, not the sender's.
     providerSession: admission.settled ? base.providerSession : previous.providerSession,
+    ...(admission.sessionEnd ? { hookEventName: 'SessionEnd' } : {}),
     payload
   }
 }

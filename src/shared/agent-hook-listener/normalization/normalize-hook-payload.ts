@@ -7,13 +7,16 @@ import {
   normalizedHookHasExplicitPrompt,
   type HookNormalizationOptions
 } from '../hook-normalization-policy'
-import { prepareProviderHookSession } from '../provider-hook-session'
+import {
+  isImmediateProcessExitSessionEnd,
+  prepareProviderHookSession
+} from '../provider-hook-session'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed
 } from '../providers/claude/lifecycle/claude-compact-completion'
-import { isProcessExitSessionEnd, parseHookEnvelope } from '../hook-envelope'
+import { parseHookEnvelope } from '../hook-envelope'
 import { readFirstString } from '../interactive-tool'
 import type { AgentHookEventPayload } from '../listener-event'
 import { readHookPromptIdentity } from './hook-prompt-identity'
@@ -110,11 +113,8 @@ export function normalizeHookPayload(
   if (tuiAdmission !== 'preserve-poster') {
     trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
   }
-  const { providerPromptId, compactTrigger } = readHookPromptIdentity(
-    source,
-    eventName,
-    hookPayloadRecord
-  )
+  const promptIdentity = readHookPromptIdentity(source, eventName, hookPayloadRecord)
+  const { providerPromptId, compactTrigger } = promptIdentity
   // Reject malformed Claude compacts without suppressing other providers' normalizers.
   if (
     source === 'claude' &&
@@ -189,7 +189,7 @@ export function normalizeHookPayload(
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
-  if (agentPresence && isProcessExitSessionEnd(eventName, hookPayloadRecord)) {
+  if (agentPresence && isImmediateProcessExitSessionEnd(source, eventName, hookPayloadRecord)) {
     const payload =
       previousStatus?.payload ??
       normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })

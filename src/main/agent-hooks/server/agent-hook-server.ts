@@ -17,6 +17,8 @@ import {
   type AgentProcessVerdict
 } from '../../../shared/agent-status/process/agent-process-presence'
 import { probeAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence-probe'
+import { AgentProcessExitWatch } from '../../../shared/agent-status/process/agent-process-exit-watch'
+import { watchProviderHookExit } from '../../../shared/agent-hook-listener/provider-hook-session'
 import { AgentHookServerLifecycle } from './server-lifecycle'
 
 export class AgentHookServer extends AgentHookServerLifecycle {
@@ -29,6 +31,7 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     }
   >()
   private readonly claudeContinuations = new ClaudeSessionContinuationTracker()
+  private readonly exitWatch = new AgentProcessExitWatch()
 
   /** The runtime that answers workers' Claude PermissionRequests; null passes them all. */
   setClaudePermissionHolds(holds: ClaudePermissionHolds | null): void {
@@ -62,6 +65,14 @@ export class AgentHookServer extends AgentHookServerLifecycle {
         }
       })
     }
+    watchProviderHookExit(this.state, this.exitWatch, event, () =>
+      this.checkAgentPresence(row.paneKey)
+    )
+  }
+
+  override stop(options?: { keepStatus?: boolean }): void {
+    this.exitWatch.stopAll()
+    super.stop(options)
   }
 
   // A live sender means the owner's exit cannot establish pane exit.
