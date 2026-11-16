@@ -1,7 +1,7 @@
 import type { DiscoveredSkill } from '../skills/discovery/skills'
 import type { NativeChatSessionSkill } from './input/commands/native-chat-slash-commands'
 import type { NativeChatPickerItem } from './input/composer/native-chat-picker-items'
-import { isSafeDisplayCharacter, stripUnsafeDisplayCharacters } from '../display-text-safety'
+import { isSafeDisplayCharacter, stripUnsafeDisplayCharacters } from '../text/display-text-safety'
 
 export function locatedPickerSkill(
   skill: NativeChatSessionSkill,

@@ -1,4 +1,4 @@
-import { errnoCodeOrUnknown } from '../../../shared/errno-code'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import type { HookInstallAgent } from '../../../shared/telemetry/schemas/telemetry-daemon-event-schemas'
 import { track } from '../../telemetry/client'
 

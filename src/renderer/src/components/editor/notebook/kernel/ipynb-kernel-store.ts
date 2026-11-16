@@ -1,7 +1,7 @@
 import { useStore } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { createStore } from 'zustand/vanilla'
-import type { PythonEnvironment } from '../../../../../../shared/notebook-kernel-types'
+import type { PythonEnvironment } from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 import type { LiveOutputs } from './ipynb-kernel-outputs'
 import { isRecord } from '../document/ipynb-parse'
 

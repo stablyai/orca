@@ -1,4 +1,4 @@
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
@@ -21,7 +21,7 @@ import { applyRuntimeWorktreePsUnverifiableTerminals } from './runtime-worktree-
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../../workspaces/catalog/repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/structured-agent-session-runtime'
 import {
@@ -40,7 +40,7 @@ import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
 import { structuredChatNamingDeps } from '../../agent-session/naming/structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { chatWorkerTurnStopReporter } from '../../orchestration/workers/turn-stops/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../catalog/worktree-listing-host-scope'
 import {

@@ -82,7 +82,22 @@
       "exampleChildren": "1 child",
       "statusCaption": "Title flags agents that need you",
       "childrenCaption": "Parents sum up child worktrees",
+      "unreadCaption": "<label>Blue dot:</label> unread",
       "dismiss": "Dismiss"
+    },
+    "worktreeCardsIntroNotice": {
+      "title": "New card style",
+      "experimental": "Experimental",
+      "dismiss": "Not now",
+      "previewBody": "Agent status, unread dots and child summaries on every card. This is a preview of your list.",
+      "classicBody": "Back to your current cards. Flip to New to preview again.",
+      "switchLabel": "Card style",
+      "classic": "Classic",
+      "new": "New",
+      "keep": "Keep new",
+      "laterToast": "Try the new cards any time from Workspace options › Card style",
+      "keptTitle": "New cards are on",
+      "keptBody": "Change it here, under Card style."
     },
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
@@ -873,7 +888,7 @@
         "profile": "Browser profile",
         "empty": "No sites have been allowed or blocked yet.",
         "title": "Site permissions",
-        "description": "Sites ask before using your camera, microphone, location and more. Change what you allowed or blocked for each site.",
+        "description": "Sites ask before using your camera, microphone, location, opening other apps and more. Change what you allowed or blocked for each site.",
         "search": {
           "permissions": "permissions",
           "camera": "camera",
@@ -881,7 +896,8 @@
           "location": "location",
           "notifications": "notifications",
           "clipboard": "clipboard",
-          "localNetwork": "local network"
+          "localNetwork": "local network",
+          "apps": "apps"
         }
       },
       "profileScope": {
@@ -1009,6 +1025,20 @@
         "title": "Passwords",
         "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
         "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "Unviewed for",
+        "unviewedForDescription": "How long a tab goes unviewed before it's freed.",
+        "hoursSuffix": "hours",
+        "title": "Memory Saver",
+        "description": "Frees memory from tabs you haven't viewed. They reload when you open them.",
+        "searchKeywords": {
+          "memory": "memory",
+          "tabs": "tabs",
+          "idle": "idle",
+          "sleep": "sleep",
+          "performance": "performance"
+        }
       }
     },
     "agents": {
@@ -1124,7 +1154,8 @@
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
-      "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+      "codexRemoveHome": "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+      "claudeRemoveProfile": "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
@@ -1467,6 +1498,75 @@
       "supportedKeys": "Define only the supported keys: `scripts` and `setup`.",
       "supportedArchiveKeys": "Define only the supported keys: `scripts`, `setup`, and `archive`.",
       "invalidArchive": "The file is present, but Orca could not find a valid setup or archive script."
+    },
+    "uninstall": {
+      "groupTitle": "Uninstall",
+      "title": "Uninstall Orca",
+      "searchDescription": "Remove agent hooks, the orca command, the background service and SSH host files.",
+      "keywords": {
+        "uninstall": "uninstall",
+        "remove": "remove",
+        "delete": "delete",
+        "cleanup": "cleanup",
+        "hooks": "hooks"
+      },
+      "copyCommand": "Copy command",
+      "quit": "Quit Orca",
+      "next": {
+        "unknown": "Quit Orca, then delete the app.",
+        "macApp": "Quit Orca, then drag it from Applications to the Trash.",
+        "homebrew": "Orca was installed with Homebrew. Run this to remove the app:",
+        "linuxPackage": "Run this to remove the package:",
+        "windows": "Finish in the Windows uninstaller. Orca quits when it opens.",
+        "appImage": "Quit Orca, then delete <path>{{path}}</path>."
+      },
+      "openUninstaller": "Open uninstaller",
+      "agentStatusOff": "Agent status is off. Orca won't add hooks again unless you turn it on in Settings → Agents.",
+      "loadFailed": "Orca could not check what it installed.",
+      "tryAgain": "Try again",
+      "keeps": "Projects, worktrees and Orca settings stay.",
+      "keepsShared": "{{name}} is also installed, so hooks it shares stay too.",
+      "removing": "Removing…",
+      "button": "Uninstall",
+      "uninstalling": "Uninstalling…",
+      "rows": {
+        "agents_one": "Hooks in 1 agent",
+        "agents_other": "Hooks in {{count}} agents",
+        "hosts": "SSH hosts",
+        "hostCount_one": "1 host",
+        "hostCount_other": "{{count}} hosts",
+        "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
+        "service": "Background service",
+        "hookScripts": "Hook scripts"
+      },
+      "retry": "Retry",
+      "host": {
+        "connected": "Connected",
+        "offline": "Offline"
+      },
+      "summary": {
+        "agents_one": "hooks in 1 agent",
+        "agents_other": "hooks in {{count}} agents",
+        "cliCommand": "the <cmd>{{name}}</cmd> CLI",
+        "service": "a background service",
+        "hookScripts": "hook scripts",
+        "hosts_one": "1 SSH host",
+        "hosts_other": "{{count}} SSH hosts",
+        "nothing": "Nothing outside the app to remove.",
+        "loading": "Checking what Orca installed…",
+        "done": "Removed. Delete the app to finish.",
+        "problems_one": "1 item needs you before you delete the app.",
+        "problems_other": "{{count}} items need you before you delete the app.",
+        "stillInUse": "Some Orca files are still in use, so they stay for now."
+      },
+      "status": {
+        "running": "Removing",
+        "done": "Done",
+        "problem": "Needs attention",
+        "kept": "Kept"
+      },
+      "stepFailed": "Orca could not finish this step.",
+      "finishFailed": "Orca could not do that."
     }
   },
   "menu": {
@@ -2560,6 +2660,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+click to open in the system browser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Workspace comment",
+        "createdByAutomation": "Created by automation",
+        "linkedTask": "Linked task",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Linked issue",
+        "listeningPort": "Listening port"
       }
     },
     "hooks": {
@@ -4254,6 +4363,8 @@
           "draft": "Draft",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels",
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "allStates": "All",
           "filterPullRequests": "Filter pull requests",
           "filterIssues": "Filter issues",
@@ -5605,7 +5716,8 @@
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: one summary per provider",
             "footerDetailAria": "Usage footer detail",
-            "notChecked": "Not checked"
+            "notChecked": "Not checked",
+            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -7214,6 +7326,7 @@
           "branchIdentity": "Branch",
           "branchFolderPathIdentity": "Branch or folder path",
           "ef18787206": "Queued for deletion",
+          "notificationsMuted": "Notifications muted",
           "openPluginTask": "Open in {{value0}}"
         },
         "WorktreeCardAgents": {
@@ -7310,7 +7423,9 @@
           "copyPathOption": "Path",
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
-          "projectGroupSubmenu": "Project Group"
+          "projectGroupSubmenu": "Project Group",
+          "muteNotifications": "Mute Notifications",
+          "unmuteNotifications": "Unmute Notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -8207,7 +8322,6 @@
           "locationSaveFailed": "Account location could not be saved. Try again.",
           "dbb9626ed1": "Cancel",
           "63843e37e2": "Remove Claude Account?",
-          "380a7736cc": "Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.",
           "0d47394635": "Remove Codex Account?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Find this in the URL after logging into opencode.ai (e.g.",
@@ -14069,7 +14183,7 @@
           "catalog": "Catalog",
           "clear": "Clear filters",
           "themes": "Themes",
-          "codeLanguages": "Code languages",
+          "codeLanguages": "Languages",
           "translations": "Translations",
           "icons": "Icons",
           "commands": "Commands & panels",
@@ -14082,7 +14196,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "Couldn’t read this update",
-          "newAccess": "New: {{value0}}",
           "failed": "Couldn’t update {{value0}}. The others were updated.",
           "cancel": "Cancel",
           "updateOne": "Update 1 plugin",
@@ -14093,17 +14206,24 @@
           "updated": "Updated",
           "needsOrca": "Needs Orca {{value0}} or later",
           "current": "Already installed",
-          "sourceMoved": "New source: {{value0}} (was {{value1}})",
           "newShortcuts": "Keyboard shortcuts",
           "newCommands": "Commands",
-          "newPanels": "Panels",
-          "newEvents": "More events",
+          "newPanels": "Adds panels",
+          "newEvents": "Reacts to more Orca events",
           "newRecipes": "Machine recipes",
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
           "update": "Update",
-          "review": "Review",
-          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}",
+          "newFileTypes": "Changes which files it opens",
+          "newHooks": "Can change or stop what Orca and your agents do",
+          "newSettings": "A settings page",
+          "newStatusBarItems": "Status bar items",
+          "opensFileTypes": "Opens new file types: {{value0}}",
+          "becomesDefaultEditor": "Becomes the default editor for {{value0}}",
+          "needApproval": "Need your approval",
+          "readyToUpdate": "Ready to update",
+          "movedRepository": "Comes from a different repository"
         },
         "PluginAuthor": {
           "publisher": "Publisher",
@@ -14285,11 +14405,11 @@
         },
         "PluginUpdateReview": {
           "title": "Review update to {{value0}}",
-          "back": "Back",
           "approve": "Approve & update",
-          "explain": "This update asks for more than the version you approved. It installs only if you approve it here.",
-          "before": "Before",
-          "after": "After"
+          "uncompared": "Orca couldn’t compare this version with the one you approved. Check what it can access before you update.",
+          "newInVersion": "New in this version:",
+          "titleMany": "Review {{value0}} updates",
+          "history": "See its changes on GitHub"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "its publisher",
@@ -14297,17 +14417,22 @@
           "update": "Make sure you trust {{value0}} before updating. This plugin runs the publisher’s code inside Orca.",
           "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
           "label": "Not an official plugin:",
-          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
+          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}.",
+          "community": "Community plugin"
         },
         "PluginUpdateReviewToast": {
           "movedTitle": "{{value0}} {{value1}} comes from a different repository",
           "accessTitle": "{{value0}} {{value1}} wants more access",
           "manyTitle": "{{value0}} plugin updates need your review",
-          "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
-          "manyDescription": "They won’t update until you review them.",
-          "review": "Review",
           "dismiss": "Dismiss",
-          "movedInstalled": "It stays off until you review it."
+          "movedInstalled": "It stays off until you review it.",
+          "approveAll": "Approve & update all",
+          "approveOne": "Approve & update",
+          "details": "Details",
+          "failed": "Couldn’t update {{value0}}",
+          "morePlugins": "and {{value0}} more plugins",
+          "uncompared": "Orca couldn’t compare it with the version you approved.",
+          "held": "{{value0}} changed after you reviewed it, so it waits for your review in Settings → Plugins."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",
@@ -17052,13 +17177,6 @@
                       "c94ff11e91": "Could not re-check setup status."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Could not hide Mobile Emulator."
-                    }
-                  }
                 }
               }
             }
@@ -17083,17 +17201,6 @@
             "5789936d9a": "Preview iOS simulators while agents drive the screen.",
             "8014b4b80b": "Keep",
             "6e051a40b7": "Hide"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobile Emulator hidden",
-                  "c46c979c1d": "Re-enable Mobile Emulator anytime in",
-                  "600f9a745a": "Settings › Mobile Emulator"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Paste is too large for emulator keyboard input.",
@@ -19872,7 +19979,11 @@
           "confirm": "Open {{app}}",
           "confirmLink": "Open link",
           "cancel": "Cancel",
-          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed."
+          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed.",
+          "localFileDescription": "A local file wants to open another application.",
+          "tabSiteDescription": "A page on {{site}} wants to open another application.",
+          "alwaysAllowLocalFiles": "Always allow local files to open {{scheme}} links",
+          "alwaysAllow": "Always allow {{site}} to open {{scheme}} links"
         },
         "httpAuth": {
           "title": "Sign in",
@@ -19901,7 +20012,8 @@
             "midi": "MIDI devices",
             "windowManagement": "Window management",
             "idleDetection": "Device use",
-            "localNetwork": "Local network"
+            "localNetwork": "Local network",
+            "externalApp": "Open {{scheme}} links"
           },
           "ask": {
             "camera": "Use your camera",
@@ -20756,6 +20868,10 @@
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation.",
         "orcaStopUnnamedServer": "the remote server",
+        "restartContinued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+        "restartContinueRefused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+        "restartContinueUnconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message.",
+        "restartNotConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue.",
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReviewApproved": "{{agent}} approved this action. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
@@ -20886,6 +21002,7 @@
           "xhigh": "XHigh"
         },
         "imageUnavailable": "Preview unavailable",
+        "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
       },
@@ -21337,7 +21454,7 @@
       "queuedMessages": {
         "steer": "Steer",
         "send": "Send",
-        "steerHint": "Submit without interrupting the model",
+        "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
         "moreActions": "More actions",
@@ -21512,7 +21629,8 @@
         "export": "Export the session to HTML",
         "settings": "Open settings in Terminal",
         "extensions": "Open the extension dashboard in Terminal",
-        "hotkeys": "Show keyboard shortcuts in Terminal"
+        "hotkeys": "Show keyboard shortcuts in Terminal",
+        "mcpManage": "Manage MCP servers"
       },
       "modelDescriptions": {
         "grok_4_7": "xAI's latest frontier model",
@@ -21633,6 +21751,58 @@
           "alreadyRedeemed": "That reset credit was already used."
         }
       },
+      "mcp": {
+        "title": "MCP servers",
+        "close": "Close",
+        "loading": "Loading…",
+        "notRunning": "Connect when you send your next message",
+        "unsupported": "Update Orca on this chat’s host to manage them here",
+        "readFailed": "Couldn’t load",
+        "retry": "Retry",
+        "empty": "None set up for this chat",
+        "cancel": "Cancel",
+        "reconnect": "Reconnect",
+        "toggle": "Use {{name}}",
+        "actionFailed": "Couldn’t do that. Try again.",
+        "summary": {
+          "connected": "{{count}} connected",
+          "needsAuth_one": "{{count}} needs sign-in",
+          "needsAuth_other": "{{count}} need sign-in",
+          "failed": "{{count}} failed",
+          "signingIn": "signing in to {{name}}"
+        },
+        "source": {
+          "project": "Project",
+          "local": "Local",
+          "user": "User",
+          "plugin": "Plugin",
+          "session": "Session"
+        },
+        "status": {
+          "connected": "Connected",
+          "tools_one": "{{count}} tool",
+          "tools_other": "{{count}} tools",
+          "pending": "Connecting…",
+          "needsAuth": "Needs sign-in",
+          "failed": "Failed",
+          "failedReason": "Failed: {{error}}",
+          "disabled": "Disabled",
+          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+        },
+        "signIn": {
+          "action": "Sign in",
+          "waiting": "Waiting for sign-in…",
+          "waitingBrowser": "Waiting for your browser…",
+          "remote": "After you sign in, the browser lands on a page that won’t load. Copy that page’s address and paste it here.",
+          "external": "Finish on the page that opened",
+          "done": "Done",
+          "finish": "Finish",
+          "openAgain": "Open again",
+          "addressLabel": "Sign-in page address",
+          "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
+          "pastePlaceholder": "http://localhost:…"
+        }
+      },
       "cardKindHidden": {
         "description": "You can change this anytime in",
         "settingsLink": "Settings > Chat UI > Turn activity",
@@ -21666,6 +21836,15 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "urlRequest": {
+        "title": "Sign-in requested",
+        "open": "Open sign-in page",
+        "decline": "Decline",
+        "opened": "Opened the sign-in page in your browser.",
+        "openAgain": "Open again",
+        "finished": "Sign-in finished",
+        "finishedWith": "Sign-in finished · {{message}}"
       }
     },
     "tab": {
@@ -21980,8 +22159,20 @@
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
         },
-        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
-        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked",
+        "ignoredFiles": {
+          "none": "No ignored local files",
+          "unavailable": "Ignored files not checked",
+          "checking": "Checking ignored files…",
+          "lost_one": "{{count}} ignored file will be lost",
+          "lost_other": "{{count}} ignored files will be lost",
+          "lostIncomplete": "{{count}}+ ignored files will be lost",
+          "showPaths": "Show ignored paths",
+          "morePaths_one": "and {{count}} more ignored path",
+          "morePaths_other": "and {{count}} more ignored paths",
+          "listLabel": "Ignored local files that will be lost",
+          "incompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted."
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -22618,6 +22809,18 @@
       "keywordJira": "jira",
       "keywordDefaultProject": "default project",
       "keywordIssuePicker": "issue picker"
+    },
+    "RepositoryBrowserProfileSection": {
+      "title": "Browser profile",
+      "description": "New browser tabs in this project, including ones agents open, use this profile. Point several projects at one profile to share a sign-in.",
+      "keywordProfile": "browser profile",
+      "keywordCookies": "cookies",
+      "keywordSignIn": "sign in",
+      "selectLabel": "Profile for new tabs",
+      "inherit": "Browser setting ({{scope}})",
+      "deletedOption": "Deleted profile",
+      "deleted": "The profile picked for this project was deleted, so new tabs follow the Browser setting.",
+      "saveFailed": "Couldn't save the browser profile. The Orca on this project's host may need an update."
     },
     "managed-runtime": {
       "cancelled": "Installation cancelled.",
@@ -23891,7 +24094,17 @@
         "failed": "Sign-in failed. Try again."
       }
     },
-    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser."
+    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "rename": {
+      "action": "Rename",
+      "title": "Rename account",
+      "description": "Only the name Orca shows changes. Leave it blank to show {{email}}.",
+      "label": "Display name",
+      "reset": "Reset to default",
+      "cancel": "Cancel",
+      "save": "Save",
+      "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    }
   },
   "fileSearch": {
     "failed": "Search failed. Try again.",
@@ -24338,7 +24551,9 @@
       "chooseTransition": "Choose a status change:",
       "cancel": "Cancel",
       "noTransition": "No status change to {{column}} is available for {{key}}.",
-      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters."
+      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters.",
+      "reorderColumn": "Reorder {{column}}",
+      "reorderColumnHint": "Issues in this lane: {{count}}. Use the Left and Right arrow keys to move it."
     },
     "favourites": {
       "loadFailed": "Could not load Jira favourites.",
@@ -24578,21 +24793,13 @@
     "language": {
       "back": "Languages",
       "requestPrompt": "Which language would you like Orca to support?",
-      "requestSuccess": "Language request recorded. You can continue onboarding.",
       "requestError": "Could not record your request. Try again.",
       "retry": "Retry",
       "requestAction": "Request language",
       "title": "Display language",
-      "device": "System language: {{language}}",
-      "unsupported": "System language: {{language}}. This language is not supported yet.",
-      "unknown": "Your system language could not be detected. Choose a language below.",
-      "loadError": "Could not load this language. Try again.",
-      "saveError": "Could not save your language preference. Try again.",
-      "other": "Other language…",
       "settingsError": "Could not load your settings.",
       "loadingSettings": "Loading settings…",
-      "loading": "Loading language…",
-      "saving": "Saving language…"
+      "loading": "Loading language…"
     }
   },
   "resourceManager": {
@@ -25829,5 +26036,88 @@
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
+  },
+  "tabBar": {
+    "createRow": {
+      "label": "New tab actions. Left and Right choose; the last one customizes this row.",
+      "shownLabel": "In the + menu",
+      "hint": "Drag to reorder, or {{modifier}}↑/↓. Space shows or hides. Hidden items still open from search and their shortcuts.",
+      "reset": "Reset Order",
+      "allShortcuts": "All Keyboard Shortcuts…",
+      "hiddenLabel": "Hidden",
+      "hiddenEmpty": "Drag items here to hide them",
+      "locked": "Always shown",
+      "hide": "Hide",
+      "show": "Show",
+      "customize": "Customize",
+      "featureOff": "Off",
+      "turnOn": "Turned off. Show it to turn it back on.",
+      "moreOptions": "More options"
+    }
+  },
+  "emulatorPane": {
+    "tabIntro": {
+      "hiddenFromMenu": "Mobile Emulator removed from the + menu",
+      "hiddenFromMenuHint": "Bring it back from the gear at the end of the icon row.",
+      "undoHide": "Undo",
+      "saveFailed": "Could not update the + menu."
+    }
+  },
+  "languages": {
+    "search": "Search languages",
+    "searchPlaceholder": "Search languages",
+    "pluginsDisabled": "Community translations need plugins turned on.",
+    "community": "Community translations",
+    "loadingPacks": "Looking for community translations…",
+    "catalogFailed": "Couldn’t load community translations.",
+    "noPacks": "No community translations yet.",
+    "refresh": "Check for new translations",
+    "noMatches": "No languages match “{{query}}”.",
+    "managePacks": "Browse in Plugins",
+    "builtIn": "Built in",
+    "coverage": "{{percent}}% translated",
+    "installing": "Installing…",
+    "changing": "Changing…",
+    "current": "Current",
+    "incomplete": "Incomplete",
+    "description": "Built-in languages and community translations. Untranslated text stays in English.",
+    "continue": "Continue",
+    "done": "Done",
+    "requestRecorded": "Language request recorded.",
+    "nowUsing": "Now using {{language}}",
+    "switchBack": "Switch back",
+    "changeFailed": "Could not change language. Try again.",
+    "installedUnavailable": "Installed, but this translation can’t load yet.",
+    "installedSwitchFailed": "Installed, but couldn’t switch language. Try again from Settings → Language.",
+    "suggestionClose": "Close",
+    "moreLanguages": "More languages…",
+    "retry": "Retry",
+    "request": "Request a language",
+    "byPublisher": "by {{publisher}}",
+    "deviceTag": "your device",
+    "get": "Get",
+    "didNotLoad": "Didn’t load",
+    "requestQuery": "Request “{{query}}”",
+    "requestPlaceholder": "e.g. Polski, Tiếng Việt",
+    "requestDescription": "Tell us which language to add. Anyone can also publish a community translation.",
+    "turnOnPlugins": "Turn on in Plugins",
+    "languageDidNotLoad": "{{language}} didn’t load.",
+    "yourLanguage": "Your language",
+    "offerSentence": "Orca is available in {{language}} as a community translation.",
+    "offerInstall": "Install <lang>{{language}}</lang>…",
+    "offerUse": "Use <lang>{{language}}</lang>",
+    "offerInstalling": "Installing <lang>{{language}}</lang>…",
+    "offerSwitching": "Switching to <lang>{{language}}</lang>…",
+    "pluginsDisabledCount_one": "{{count}} community translation needs plugins turned on.",
+    "pluginsDisabledCount_other": "{{count}} community translations need plugins turned on.",
+    "preparing": "Preparing…",
+    "offerConfirming": "Waiting for confirmation…",
+    "offerRetry": "Try again",
+    "suggestionTitle": "Orca in <lang>{{language}}</lang>",
+    "systemResolved": "{{system}} ({{language}})",
+    "suggestionInstall": "Install",
+    "suggestionUse": "Use",
+    "browseOnline": "Browse",
+    "browseOnlineLabel": "Browse community translations on orca.dev (opens in your browser)"
   }
 }

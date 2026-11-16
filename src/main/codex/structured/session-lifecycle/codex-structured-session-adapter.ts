@@ -1,5 +1,6 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
+import { manageCodexSessionMcp } from './codex-session-mcp'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
 import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
@@ -14,7 +15,7 @@ import type { StructuredAgentSessionProviderOpenInput } from '../../../native-ch
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
@@ -84,6 +85,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+  manageMcp = manageCodexSessionMcp(this.sessions, () => this.deps.providerInvocation)
 
   supportsLocation = supportsCodexStructuredLocation
 

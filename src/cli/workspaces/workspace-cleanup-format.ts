@@ -1,4 +1,4 @@
-import { formatBytes } from '../../shared/format-bytes'
+import { formatBytes } from '../../shared/text/format-bytes'
 import { terminalSafeLine } from '../../shared/terminal/output/terminal-safe-text'
 import type {
   WorkspaceCleanupEvaluation,

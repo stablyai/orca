@@ -3,13 +3,13 @@ import type { agentPickerLaunchInputs } from '../../../../../../shared/agent-lau
 import { toAgentLaunchPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-preferences'
 import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef

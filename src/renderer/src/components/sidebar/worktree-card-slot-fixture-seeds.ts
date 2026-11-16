@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type {
   HostedReviewInfo,
   HostedReviewState
 } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import * as agentExpansion from './workspace-card/activity/worktree-card-agents-expansion-state'
@@ -197,7 +197,7 @@ export function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): vo
     tabsByWorktree: { ...state.tabsByWorktree, ...tabsByWorktree },
     unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, ...unifiedTabsByWorktree },
     ptyIdsByTabId: { ...state.ptyIdsByTabId, ...ptyIdsByTabId },
-    agentStatusByPaneKey: { ...state.agentStatusByPaneKey, ...agentStatusByPaneKey },
+    agentStatusByPaneKey: state.agentStatusByPaneKey.replace(Object.entries(agentStatusByPaneKey)),
     acknowledgedAgentsByPaneKey: { ...state.acknowledgedAgentsByPaneKey, ...acknowledged },
     agentStatusEpoch: state.agentStatusEpoch + 1,
     unreadAgentCompletionPanes: {

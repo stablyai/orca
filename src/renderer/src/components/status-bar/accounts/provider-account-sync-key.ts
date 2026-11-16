@@ -1,6 +1,6 @@
 import { sameProviderAccountData } from '@/runtime/provider-accounts/observations/observed-provider-accounts'
 import type { ClaudeAccountSettings } from './status-bar-claude-accounts'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 // Cache by settings identity because Zustand reevaluates selectors on every store write and roster serialization is expensive.
 const claudeKeyBySettings = new WeakMap<GlobalSettings, string>()
@@ -28,7 +28,7 @@ export function getClaudeAccountRosterSyncKey(settings: GlobalSettings | null | 
     claudeKeyBySettings,
     settings,
     (resolved) =>
-      `${resolved.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeClaudeManagedAccountIdsByRuntime ?? null)}:${resolved.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+      `${resolved.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeClaudeManagedAccountIdsByRuntime ?? null)}:${resolved.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}:${JSON.stringify(resolved.managedAccountDisplayNames?.claude ?? null)}`
   )
 }
 
@@ -43,7 +43,7 @@ export function getCodexAccountSyncKey(settings: GlobalSettings | null | undefin
     codexKeyBySettings,
     settings,
     (resolved) =>
-      `${resolved.activeRuntimeEnvironmentId?.trim() || 'local'}:${resolved.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeCodexManagedAccountIdsByRuntime ?? null)}:${resolved.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+      `${resolved.activeRuntimeEnvironmentId?.trim() || 'local'}:${resolved.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(resolved.activeCodexManagedAccountIdsByRuntime ?? null)}:${resolved.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}:${JSON.stringify(resolved.managedAccountDisplayNames?.codex ?? null)}`
   )
 }
 
@@ -63,7 +63,9 @@ export function getClaudeAccountSettings(
   const next: ClaudeAccountSettings = {
     claudeManagedAccounts: settings.claudeManagedAccounts,
     activeClaudeManagedAccountId: settings.activeClaudeManagedAccountId,
-    activeClaudeManagedAccountIdsByRuntime: settings.activeClaudeManagedAccountIdsByRuntime
+    activeClaudeManagedAccountIdsByRuntime: settings.activeClaudeManagedAccountIdsByRuntime,
+    // Only Claude's names, so a Codex rename leaves Claude consumers untouched.
+    managedAccountDisplayNames: { claude: settings.managedAccountDisplayNames?.claude }
   }
   const stable =
     previousClaudeProjection !== null && sameProviderAccountData(previousClaudeProjection, next)

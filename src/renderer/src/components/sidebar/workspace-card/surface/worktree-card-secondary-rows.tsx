@@ -28,7 +28,6 @@ export function WorktreeCardSecondaryRows({
     onLineageToggle,
     remoteBranchConflict,
     showInlineAgentList,
-    inlineAgentRows,
     showLineageChildChip,
     lineageChildAriaLabel,
     childWorkspaceShortLabel,
@@ -68,7 +67,6 @@ export function WorktreeCardSecondaryRows({
         <WorktreeCardAgents
           worktreeId={worktree.id}
           executionHostId={worktree.hostId}
-          agents={inlineAgentRows}
           className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}
         />
       )}

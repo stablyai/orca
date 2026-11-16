@@ -1,4 +1,4 @@
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import {
   applyAllRepoInsertAt,
   getProjectHeaderDragBucketKey,
@@ -7,7 +7,7 @@ import {
   mapSidebarRepoDropIndexToAllRepoInsertAt
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isSameRepoRow } from '@/store/repos/repo-host-identity'
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 

@@ -1,4 +1,4 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../execution-host/execution-host-registry'
 import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
 import {
@@ -13,7 +13,7 @@ import {
   type RuntimeEnvironmentStatus
 } from '../host-status/runtime-host-status'
 import type { SshConnectionState } from '../ssh/ssh-types'
-import { getPairedDeviceIdsByEnvironment } from '../../workspace-creator-visibility'
+import { getPairedDeviceIdsByEnvironment } from '../../workspace-view/workspace-creator-visibility'
 
 export type PairedServerHostInputs = {
   environments: readonly {

@@ -6,8 +6,8 @@ import type {
 } from '../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { AgentLaunchPaneAddress } from '../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import { parseExecutionHostId } from '../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { TerminalIdentityReadContext } from '../terminal/query/terminal-identity-read-context'
 

@@ -13,10 +13,13 @@ import type {
   ListDetectedWorktreesArgs,
   ListKnownWorktreesForExecutionHostArgs,
   ProviderRequestId
-} from '../../../shared/detected-worktree-provider-contract'
+} from '../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../../shared/workspace-sleep'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type {
+  WorkspaceSleepOutcome,
+  WorkspaceSleepRequest
+} from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type { RetiredNameRegistry } from '../../../shared/worktree/naming/retired-name-registry'
 import type {
   FolderWorkspacePathStatus,

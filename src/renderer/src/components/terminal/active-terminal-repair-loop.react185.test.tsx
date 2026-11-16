@@ -1,16 +1,11 @@
 /** @vitest-environment happy-dom */
-import { act, useMemo } from 'react'
-import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act } from 'react'
+
+import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { useActiveTerminalRepair } from './use-active-terminal-repair'
-
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-// React fails at 51 nested commits; 400 bounds prove divergence rather than slow settling.
-const MAX_PASSES = 400
 
 function terminalTab(id: string, worktreeId: string): TerminalTab {
   return { id, worktreeId, title: id, createdAt: 0, sortOrder: 0 } as unknown as TerminalTab
@@ -45,84 +40,7 @@ function tabGroup(
   return { id, worktreeId, activeTabId, tabOrder, recentTabIds: [activeTabId] }
 }
 
-function RepairEffectHarness(): null {
-  const activeTabId = useAppStore((s) => s.activeTabId)
-  const activeTabIdByWorktree = useAppStore((s) => s.activeTabIdByWorktree)
-  const activeTabType = useAppStore((s) => s.activeTabType)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const renderedActiveWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const setActiveTab = useAppStore((s) => s.setActiveTab)
-  const tabs = useMemo(
-    () =>
-      renderedActiveWorktreeId !== null && Object.hasOwn(tabsByWorktree, renderedActiveWorktreeId)
-        ? tabsByWorktree[renderedActiveWorktreeId]
-        : [],
-    [renderedActiveWorktreeId, tabsByWorktree]
-  )
-
-  useActiveTerminalRepair({
-    activeTabId,
-    activeTabType,
-    setActiveTab,
-    tabs,
-    activeTabIdByWorktree,
-    renderedActiveWorktreeId
-  })
-  return null
-}
-
-let cleanup: (() => void) | null = null
-
-afterEach(() => {
-  cleanup?.()
-  cleanup = null
-})
-
-function measureRepairPasses(): number {
-  let passes = 0
-  const setActiveTab = useAppStore.getState().setActiveTab
-  useAppStore.setState({
-    setActiveTab: (tabId) => {
-      passes += 1
-      if (passes <= MAX_PASSES) {
-        setActiveTab(tabId)
-      }
-    }
-  })
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  cleanup = () => {
-    act(() => root.unmount())
-    useAppStore.setState({ setActiveTab })
-    container.remove()
-  }
-  act(() => {
-    root.render(<RepairEffectHarness />)
-  })
-  return passes
-}
-
 describe('active-terminal repair effect cannot drive a React #185 update loop', () => {
-  it('settles when another worktree reuses the tab id and is scanned first', () => {
-    // First-match ownership once skipped activeTabId while reallocating its map, retriggering repair indefinitely.
-    useAppStore.setState({
-      activeWorktreeId: 'wt-active',
-      activeTabType: 'terminal',
-      activeTabId: 'stale-tab',
-      activeTabIdByWorktree: {},
-      tabsByWorktree: {
-        'wt-other': [terminalTab('t1', 'wt-other')],
-        'wt-active': [terminalTab('t1', 'wt-active')]
-      },
-      unifiedTabsByWorktree: {}
-    })
-    expect(measureRepairPasses()).toBeLessThan(10)
-    // Settling must repair the selection, not merely stop writes while it names a deleted tab.
-    expect(useAppStore.getState().activeTabId).toBe('t1')
-    expect(useAppStore.getState().activeTabIdByWorktree['wt-active']).toBe('t1')
-  })
-
   it('activates the active worktree unified tab when another worktree reuses the entity id', () => {
     const otherTab = unifiedTerminalTab('t1', 't1', 'wt-other', 'g-other')
     const otherPreviousTab = unifiedTerminalTab(

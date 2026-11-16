@@ -4,15 +4,15 @@ import { computeWorkspaceRootWithin, getWorktreePathSettings } from '../../workt
 import { wslHomeUnlessStopped } from '../../../wsl/discovery/wsl-home-unless-stopped'
 import { getWorktreeMirrorDistroForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import {
   buildProjectGroupChildIndex,
   collectProjectGroupSubtreeIds,
   type ProjectGroupChildIndex
-} from '../../../../shared/project-groups'
+} from '../../../../shared/project/groups/project-groups'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { hasRemoteFilesystemOwner } from '../../remote-filesystem-owner'
 
 type FolderScopeStore = Pick<RuntimeStore, 'getRepos'> &

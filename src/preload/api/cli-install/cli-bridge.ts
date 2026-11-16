@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import type { PreloadApi } from '../../api-types'
 
 export const cliApi = {

@@ -20,10 +20,10 @@ import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
 } from '../../../../../shared/automations/automation-definition'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SetupDecision } from '../../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../../shared/worktree/types'

@@ -8,7 +8,7 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 
-import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles'
+import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles/orca-profiles'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   linkOrcaProfileToCloud,

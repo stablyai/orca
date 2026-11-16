@@ -1,10 +1,10 @@
-import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
@@ -15,15 +15,15 @@ import type {
   WorkspaceHostOrder,
   WorkspaceHostScope,
   VisibleWorkspaceHostIds
-} from '../../../../../shared/ui-chrome-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
-import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
-import type { CustomPet } from '../../../../../shared/pet-types'
-import type { ReleaseChannel } from '../../../../../shared/release-channel'
-import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
+import type { CustomPet } from '../../../../../shared/pets/pet-types'
+import type { ReleaseChannel } from '../../../../../shared/updater/release-channel'
+import type { ChangelogData, UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 
@@ -69,6 +69,9 @@ export type UISlicePreferences = {
   setExplorerDisplayRootForWorktree: (worktreeId: string, value: string) => void
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
+  /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
+  notificationsMutedByWorktree: Record<string, boolean>
+  toggleWorktreeNotificationsMuted: (worktreeId: string) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */

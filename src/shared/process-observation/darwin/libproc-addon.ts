@@ -1,5 +1,9 @@
 import { createRequire } from 'node:module'
-import { DEADLINE_PASSED, beforeDeadline, monotonicNow } from '../../deadline-settle-notifier'
+import {
+  DEADLINE_PASSED,
+  beforeDeadline,
+  monotonicNow
+} from '../../concurrency/deadline-settle-notifier'
 
 /** One `kinfo_proc` from node-pty's patched macOS addon (config/patches/node-pty@1.1.0.patch). */
 export type LibprocProcessRow = {

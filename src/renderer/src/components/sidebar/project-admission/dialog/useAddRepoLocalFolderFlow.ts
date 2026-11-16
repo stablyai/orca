@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/diagnostics/telemetry/telemetry'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
   createNestedRepoTelemetryAttemptId
@@ -14,7 +14,7 @@ import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNested
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 import {
   addLocalPathsForGeneration,

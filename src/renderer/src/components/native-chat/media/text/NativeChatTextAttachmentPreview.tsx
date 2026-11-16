@@ -17,7 +17,7 @@ import { ATTACHMENT_TEXT_COPY_MAX_BYTES } from '../../../../../../shared/attachm
 import { AttachmentTextScrollView } from './AttachmentTextScrollView'
 import { formatAttachmentPreviewError } from './native-chat-text-attachment-error'
 import { createChatAttachmentReader } from './native-chat-text-attachment-read'
-import { chatTextAttachmentName } from '../../../../../../shared/native-chat-text-attachment-references'
+import { chatTextAttachmentName } from '../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 
 const useAttachmentTextPreview = createAttachmentTextPreviewHook({
   useState,

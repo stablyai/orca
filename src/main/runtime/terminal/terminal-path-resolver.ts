@@ -1,12 +1,15 @@
 import type { RuntimeNativeChatFileContext } from '../../../shared/native-chat/native-chat-file-context'
 import type { RuntimeTerminalPathResolution } from '../../../shared/terminal/runtime-terminal-file-path'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import { relativePathInsideRoot, resolveRuntimePath } from '../../../shared/cross-platform-path'
+import {
+  relativePathInsideRoot,
+  resolveRuntimePath
+} from '../../../shared/file-access/cross-platform-path'
 import { homedir } from 'node:os'
 import { resolveTerminalAbsolutePath } from './terminal-file-path'
 import { requireRuntimeFileProvider, runtimeFileRouteForTarget } from '../files/file-target'
 import { isSafeMobileRelativePath } from '../files/mobile-file-kind'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
 import type { RuntimeTerminalArtifacts } from './artifacts/terminal-artifacts'
 import { SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE } from '../../../shared/terminal/runtime-terminal-file-path'

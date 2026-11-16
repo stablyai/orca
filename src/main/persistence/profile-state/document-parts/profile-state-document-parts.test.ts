@@ -8,7 +8,7 @@ import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from '../database/profile-state-database'
-import { profileStateDatabaseFile } from '../../../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profile-state-storage-paths'
 import { writeProfileStateDomains } from '../documents/profile-state-domain-writes'
 import { readProfileStateDomainsWithRevisionFromDatabase } from '../documents/profile-state-domain-reader'
 import { hashProfileStatePayload, isRecord } from '../documents/profile-state-document-validation'

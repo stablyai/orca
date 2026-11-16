@@ -6,7 +6,10 @@
  * refuses instead of dropping a row. Deterministic for one store state and request, so the driver can
  * re-export under the fence and compare digests.
  */
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { resolveFolderWorkspaceHost } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
@@ -19,9 +22,9 @@ import {
   parseOrcadMigrationManifest
 } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { withoutOrcadRetainedMarker } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-retained-marker'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId, getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 import { hasDormantState } from '../../migrating-orcad-catalog/source/dormancy/orcad-migration-dormant-state'

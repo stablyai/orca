@@ -1,6 +1,10 @@
 import * as z from 'zod'
 import type { RuntimeSpeechModelSummary } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
-import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
+import {
+  hostUnionArms,
+  salvagedOptional,
+  salvagingArray
+} from '../../../src/shared/validation/zod-salvage'
 import { normalizeDictationTerms } from '../../../src/shared/speech/dictation/dictation-dictionary'
 
 export const SPEECH_MODEL_PROVIDERS = hostUnionArms<RuntimeSpeechModelSummary['provider']>({

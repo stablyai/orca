@@ -1,5 +1,5 @@
 import type { AiVaultAgent } from './ai-vault-types'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 // IPC payload for aiVault:deleteSession.
 export type AiVaultDeleteSessionArgs = {

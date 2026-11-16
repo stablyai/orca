@@ -5,7 +5,7 @@ import {
   formatShutdownCheckpointFailureReason,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   publishShutdownCheckpointFailureReason
-} from '../../../shared/renderer-shutdown-events'
+} from '../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 

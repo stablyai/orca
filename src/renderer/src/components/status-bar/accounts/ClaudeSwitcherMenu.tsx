@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
 import { useAppStore } from '../../../store/index'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'

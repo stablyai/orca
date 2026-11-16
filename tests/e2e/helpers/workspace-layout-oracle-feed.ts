@@ -1,6 +1,9 @@
 // Apply layout.subscribe frames to the oracle cache and partition them for model-rule checks.
 
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import type {
   LayoutLeaf,
   LayoutTab,

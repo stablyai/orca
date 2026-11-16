@@ -15,7 +15,7 @@ import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { useAppStore } from '../../store/index'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import {
   activateExistingLeafInLayout,
   addSplitLeafToLayout,

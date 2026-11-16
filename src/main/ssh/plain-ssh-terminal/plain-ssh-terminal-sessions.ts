@@ -5,7 +5,7 @@ import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult
-} from '../../../shared/plain-ssh-terminal'
+} from '../../../shared/terminal/runtime/plain-ssh-terminal'
 import { buildInheritedLocalPtyEnvironment } from '../../providers/local-pty/local-pty-spawn-environment'
 import { spawnPtyExecutable } from '../../providers/local-pty/local-pty-executable-spawn'
 import { destroyPtyProcess } from '../../providers/local-pty/local-pty-termination'

@@ -14,7 +14,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   getWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,

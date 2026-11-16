@@ -1,7 +1,7 @@
 import WebSocket from 'ws'
-import { abortSignalReason, throwIfSignalAborted } from '../../abort-signal-reason'
+import { abortSignalReason, throwIfSignalAborted } from '../../concurrency/abort-signal-reason'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
 import {
   formatRemoteRuntimeCloseMessage,
@@ -35,7 +35,7 @@ import type {
   RuntimeRpcResponse
 } from '../rpc/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
-import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../timer-delay'
+import { isSafeTimerDelayMs, MAX_TIMER_DELAY_MS } from '../../concurrency/timer-delay'
 
 export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   connection: PairedRuntimeConnection,

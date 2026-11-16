@@ -62,7 +62,7 @@ export async function collectHostPtyEvidence(
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
   const attentionByWorktreeId: HostPtyEvidence['attentionByWorktreeId'] = {}
   const completedTabIds = new Set<string>()
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
     if (tabId) {
       completedTabIds.add(tabId)

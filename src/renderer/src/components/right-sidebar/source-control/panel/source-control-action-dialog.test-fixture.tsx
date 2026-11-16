@@ -8,11 +8,11 @@ import {
   type SourceControlAgentActionDialogProps
 } from '../ai/SourceControlAgentActionDialog'
 import type { RunSourceControlAgentActionStartArgs } from '../ai/runSourceControlAgentActionStart'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { saveSourceControlAiActionRecipeForTarget } from '../ai/recipe-persistence'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { useAppStore } from '@/store/index'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY as SURFACE } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'

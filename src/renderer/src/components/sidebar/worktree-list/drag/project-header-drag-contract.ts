@@ -2,7 +2,7 @@ import type { RootProjectHeaderDrag } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 export type RepoDragState = {
   draggingRepoId: string | null

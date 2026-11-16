@@ -13,7 +13,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode
-} from '../../../../../shared/markdown-default-view-mode'
+} from '../../../../../shared/editor/markdown/markdown-default-view-mode'
 
 type MarkdownDefaultViewContextMenuProps = {
   /** Switches the right-clicked tab through the normal toggle path (leaves Changes/plugin editors). */

@@ -1,10 +1,13 @@
-import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared/execution-host'
-import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost
+} from '../../../shared/execution-host/execution-host'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
-import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
-import type { Repo } from '../../../shared/repo-types'
-import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { OrcaHooks } from '../../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   getEffectiveHooks,
   hasHooksFile,
@@ -12,10 +15,13 @@ import {
   loadHooks
 } from '../../workspace-hooks/hooks'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
-import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
-import { getSetupConfig, getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { resolveHookCommandSourcePolicy } from '../../../shared/workspace-setup/hooks/hook-command-source-policy'
+import {
+  getSetupConfig,
+  getSetupTrustContent
+} from '../../../shared/workspace-setup/hooks/orca-hook-setup-config'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'

@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock:
@@ -20,18 +23,14 @@ import {
   refreshLocalBaseRefForWorktreeCreate
 } from './worktree-base-refresh'
 
-const INDEX_LOCK_ERROR = Object.assign(new Error('Command failed: git merge --ff-only'), {
-  stderr:
-    "fatal: Unable to create '/repo/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository"
-})
-const OWNER_WORKTREE_LIST = 'worktree /repo\nHEAD old-main\nbranch refs/heads/main\n'
+// A real, empty Git common dir: no rebase or bisect reserves main.
+const commonDir = mkdtempSync(join(tmpdir(), 'orca-refresh-contention-common-'))
+afterAll(() => rmSync(commonDir, { recursive: true, force: true }))
 
 type GitFake = {
-  owner?: boolean
   mutate: () => Promise<{ stdout: string }>
   /** Whether local already contains the target when a failed move is re-checked. */
   localContainsTarget?: () => boolean
-  ownerHead?: () => string
 }
 
 /** The git subcommand, past leading `-c key=value` and `--flag` globals. */
@@ -51,27 +50,25 @@ function installGitFake(fake: GitFake): void {
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     const command = commandOf(args)
     if (command === 'rev-parse') {
+      if (args[1] === '--git-common-dir') {
+        return { stdout: `${commonDir}\n` }
+      }
       return { stdout: args[2] === 'refs/heads/main^{commit}' ? `${localMain}\n` : 'remote-main\n' }
     }
     if (command === 'rev-list') {
       return { stdout: '0\t3\n' }
     }
-    if (command === 'status') {
+    if (command === 'worktree') {
       return { stdout: '' }
     }
-    if (command === 'worktree') {
-      return { stdout: fake.owner ? OWNER_WORKTREE_LIST : '' }
-    }
-    if (command === 'symbolic-ref') {
-      return { stdout: `${fake.ownerHead?.() ?? 'refs/heads/main'}\n` }
-    }
     if (command === 'merge-base') {
-      if (fake.localContainsTarget?.()) {
+      // Local is still an ancestor of the target unless asked whether it already contains it.
+      if (args[2] !== 'remote-main' || fake.localContainsTarget?.()) {
         return { stdout: '' }
       }
       throw Object.assign(new Error('not an ancestor'), { code: 1 })
     }
-    if (command === 'merge' || command === 'update-ref') {
+    if (command === 'update-ref') {
       const result = await fake.mutate()
       localMain = 'remote-main'
       return result
@@ -92,24 +89,7 @@ function mutationCalls(): string[][] {
 
 describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
     gitExecFileAsyncMock.mockReset()
-  })
-  afterEach(() => vi.useRealTimers())
-
-  it('re-confirms the owner has the branch checked out before each retry', async () => {
-    let symbolicRefReads = 0
-    installGitFake({
-      owner: true,
-      mutate: () => Promise.reject(INDEX_LOCK_ERROR),
-      ownerHead: () => (++symbolicRefReads >= 2 ? 'refs/heads/develop' : 'refs/heads/main')
-    })
-
-    const pending = refresh()
-    await vi.runAllTimersAsync()
-
-    await expect(pending).resolves.toMatchObject({ status: 'skipped_error' })
-    expect(mutationCalls()).toHaveLength(1)
   })
 
   it('does not retry a failure that is not lock contention', async () => {
@@ -118,10 +98,7 @@ describe('refreshLocalBaseRefForWorktreeCreate lock contention', () => {
     })
     installGitFake({ mutate: () => Promise.reject(casMismatch) })
 
-    const pending = refresh()
-    await vi.runAllTimersAsync()
-
-    await expect(pending).resolves.toMatchObject({ status: 'skipped_error' })
+    await expect(refresh()).resolves.toMatchObject({ status: 'skipped_error' })
     expect(mutationCalls()).toEqual([
       [
         'update-ref',
@@ -157,36 +134,36 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
 
   function installRepoFake(repoPath: string) {
     let localOid = 'old-main'
-    let finishMerge!: () => void
-    const mergeStarted = new Promise<void>((resolve) => {
+    let finishMove!: () => void
+    const moveStarted = new Promise<void>((resolve) => {
       gitExecFileAsyncMock.mockImplementation(async (args: string[], opts: { cwd: string }) => {
         const command = commandOf(args)
         if (opts.cwd.replace(/\/+$/, '') !== repoPath) {
           return { stdout: command === 'rev-parse' ? 'current\n' : '' }
         }
         if (command === 'rev-parse') {
+          if (args[1] === '--git-common-dir') {
+            return { stdout: `${commonDir}\n` }
+          }
           return { stdout: args[2]?.startsWith('refs/heads/') ? `${localOid}\n` : 'remote-main\n' }
         }
         if (command === 'rev-list') {
           return { stdout: '0\t3\n' }
         }
         if (command === 'worktree') {
-          return { stdout: `worktree ${repoPath}\nHEAD ${localOid}\nbranch refs/heads/main\n` }
+          return { stdout: `worktree ${repoPath}\nHEAD ${localOid}\nbranch refs/heads/develop\n` }
         }
-        if (command === 'symbolic-ref') {
-          return { stdout: 'refs/heads/main\n' }
-        }
-        if (command === 'merge') {
+        if (command === 'update-ref') {
           resolve()
           await new Promise<void>((release) => {
-            finishMerge = release
+            finishMove = release
           })
           localOid = 'remote-main'
         }
         return { stdout: '' }
       })
     })
-    return { mergeStarted, finishMerge: () => finishMerge() }
+    return { moveStarted, finishMove: () => finishMove() }
   }
 
   it('folds creates that arrive mid-refresh into one follow-up that finds local current', async () => {
@@ -195,16 +172,16 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
 
     const first = refresh('/repo')
     const joiners = [refresh('/repo/'), refresh('/repo')]
-    await repo.mergeStarted
-    const callsWhileFirstMerges = gitExecFileAsyncMock.mock.calls.length
-    repo.finishMerge()
+    await repo.moveStarted
+    const callsWhileFirstMoves = gitExecFileAsyncMock.mock.calls.length
+    repo.finishMove()
 
     await expect(first).resolves.toMatchObject({ status: 'updated' })
     await expect(Promise.all(joiners)).resolves.toEqual([undefined, undefined])
     const commands = gitExecFileAsyncMock.mock.calls.map(([args]) => commandOf(args))
-    // Joiners share a follow-up inspection only after the first run releases the checkout.
-    expect(commands.slice(0, callsWhileFirstMerges).filter((c) => c === 'rev-list')).toHaveLength(1)
-    expect(commands.slice(callsWhileFirstMerges)).toEqual(['rev-parse', 'rev-parse', 'rev-parse'])
+    // Joiners share a follow-up inspection only after the first run releases the branch.
+    expect(commands.slice(0, callsWhileFirstMoves).filter((c) => c === 'rev-list')).toHaveLength(1)
+    expect(commands.slice(callsWhileFirstMoves)).toEqual(['rev-parse', 'rev-parse'])
     expect(mutationCalls()).toHaveLength(1)
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
@@ -214,9 +191,9 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
     const repo = installRepoFake('/repo')
 
     const first = refresh('/repo')
-    await repo.mergeStarted
+    await repo.moveStarted
     await expect(refresh('/other')).resolves.toBeUndefined()
-    repo.finishMerge()
+    repo.finishMove()
     await expect(first).resolves.toMatchObject({ status: 'updated' })
   })
 
@@ -227,7 +204,7 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
     let secondResult: unknown = 'pending'
 
     const first = refresh('/repo')
-    await repo.mergeStarted
+    await repo.moveStarted
     await vi.advanceTimersByTimeAsync(10_000)
     const second = refresh('/repo').then((result) => (secondResult = result))
 
@@ -240,7 +217,7 @@ describe('refreshLocalBaseRefForWorktreeCreate runs one refresh at a time per br
     expect(mutationCalls()).toHaveLength(1)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('stopped waiting'))
 
-    repo.finishMerge()
+    repo.finishMove()
     await vi.runAllTimersAsync()
     await vi.waitFor(() => expect(gitExecFileAsyncMock.mock.calls.at(-1)?.[0][0]).toBe('rev-parse'))
     expect(mutationCalls()).toHaveLength(1)

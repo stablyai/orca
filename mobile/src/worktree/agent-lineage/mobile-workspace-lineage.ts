@@ -2,13 +2,13 @@ import {
   buildWorktreeOccurrencePlan,
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrencePlan
-} from '../../../../src/shared/worktree-occurrence-plan'
+} from '../../../../src/shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type { WorkspaceListItem, Worktree } from '../workspace-list/workspace-list-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import { resolveLineageParentsByPolicy } from '../../../../src/shared/worktree/lineage/workspace-lineage-graph'
 import type { WorkspaceLineageEdge } from '../../../../src/shared/worktree/lineage-types'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'

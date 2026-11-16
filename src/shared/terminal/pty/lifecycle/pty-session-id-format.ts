@@ -1,6 +1,6 @@
 /** Share minted-session parsing across main/renderer hydration and memory attribution; divergent copies caused REMOTE mislabels. */
 
-import { parseWorkspaceKey } from '../../../workspace-scope'
+import { parseWorkspaceKey } from '../../../workspace/identity/workspace-scope'
 
 export const PTY_SESSION_ID_SEPARATOR = '@@'
 export const WORKTREE_ID_SEPARATOR = '::'

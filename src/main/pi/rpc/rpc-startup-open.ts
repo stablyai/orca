@@ -1,3 +1,5 @@
+import type { AgentSessionProcessIdentity } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
@@ -63,4 +65,19 @@ export async function openPiStart(
       session?.connection.rootVerdict === 'exited' && !session.requestedClose
     )
   }
+}
+
+/** Wait for the actual CLI before publishing its pre-handshake recovery identity. */
+export async function capturePiProcessIdentity(
+  session: PiRpcSession,
+  input: StructuredAgentSessionAcquireInput,
+  readStartTime?: (pid: number) => Promise<number | null>
+): Promise<AgentSessionProcessIdentity> {
+  await session.connection.spawned
+  const spawned = providerSpawnedProcessIdentity(input, 'Pi RPC', readStartTime)
+  const pid = session.connection.pid
+  if (pid !== undefined) {
+    await spawned.onSpawned(pid)
+  }
+  return spawned.read(pid)
 }

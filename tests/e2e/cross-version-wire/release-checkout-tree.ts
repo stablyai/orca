@@ -13,18 +13,15 @@ import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 
 // Extract runtime, renderer, codecs and the phone row reader; omit CLI to bound cold-CI extraction.
 // Add source workspace packages from each release’s own policy.
-const ARCHIVE_PATHS = [
-  'src/main',
-  'src/shared',
-  'src/preload',
-  'src/renderer',
-  'src/types',
-  'mobile/src/worktree/agent-row-display.ts'
-]
+const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
 // Why optional: a release may have either or both, and `git archive` refuses a missing pathspec.
 const OPTIONAL_ARCHIVE_PATHS = [
   'src/relay',
   'src/wsl-guest',
+  // The phone row reader, before and after its move under agent-lineage/.
+  'mobile/src/worktree/agent-row-display.ts',
+  'mobile/src/worktree/agent-lineage/agent-row-display.ts',
+  'mobile/src/i18n',
   // Released phone read operations and their runtime decoding dependencies.
   'mobile/src/agent-history/agent-history-reply-schema.ts',
   'mobile/src/agent-history/mobile-agent-history-operations.ts',
@@ -115,7 +112,8 @@ async function rewriteWorkspaceImports(
 async function prepareExtractedTree(
   root: string,
   workspacePaths: string[],
-  packageImports: PackageImports
+  packageImports: PackageImports,
+  hasMobileSource: boolean
 ): Promise<void> {
   const resolver = workspacePaths.length > 0 ? createWorkspaceSourceResolver(root) : null
   const rendererRoot = join(root, 'src', 'renderer', 'src')
@@ -144,6 +142,9 @@ async function prepareExtractedTree(
     }
   }
   await walk(join(root, 'src'))
+  if (hasMobileSource) {
+    await walk(join(root, 'mobile', 'src'))
+  }
   // Source packages outside src/ load from here too; native ones keep the current install.
   for (const path of workspacePaths) {
     if (path !== WORKSPACE_POLICY && !path.startsWith('src/') && !path.startsWith('native/')) {
@@ -251,7 +252,12 @@ export async function extractReleaseCheckoutTree(
     await rm(archive, { force: true })
   }
   const packageImports: PackageImports = new Map()
-  await prepareExtractedTree(staging, workspacePaths, packageImports)
+  await prepareExtractedTree(
+    staging,
+    workspacePaths,
+    packageImports,
+    optionalPaths.some((path) => path.startsWith('mobile/src/'))
+  )
   if (!sourceOnly) {
     await installMissingPackageStandIns(
       staging,

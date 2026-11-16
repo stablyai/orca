@@ -1,5 +1,5 @@
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef

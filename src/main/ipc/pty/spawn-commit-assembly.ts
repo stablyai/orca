@@ -2,7 +2,7 @@ import { readTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import type { AgentSessionClaimedSpawnResult } from '../../../shared/agent-session/agent-session-host-authority'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { Store, PtyBindingSourceExpectation } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -11,7 +11,7 @@ import { markNativeWindowsConptyPty } from '../../runtime/terminal/output/termin
 import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import type { CodexPaneHomeRoute } from '../../codex/configuration/homes/codex-pane-account-registry-types'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { CodexHomePtySpawnedLifecycleArgs } from './host-env/types'
 import {

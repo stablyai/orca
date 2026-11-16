@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 
 const closeWebRuntimeSessionTabMock = vi.fn(async (_args: unknown) => 'applied' as const)
@@ -11,7 +11,7 @@ vi.mock('../actions/web-runtime-session-tab-lifecycle', () => ({
 }))
 
 import { useAppStore } from '../../../store/index'
-import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { createWorkspaceTabCloseCommands } from '@/lib/workspace/tabs/close/workspace-tab-close-commands'
 import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import {

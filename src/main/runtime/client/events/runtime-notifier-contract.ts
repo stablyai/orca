@@ -4,7 +4,7 @@ import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../../../shared/file-access/runtime-editor-file-open'
-import type { ClaudeAccountSelectionChange } from '../../../../shared/managed-account-types'
+import type { ClaudeAccountSelectionChange } from '../../../../shared/agent-accounts/managed-account-types'
 import type { AgentLaunchPaneVerdictEvent } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneLaunchRecipe } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -21,7 +21,7 @@ import type {
   TerminalPaneMoveToNewTabRequest
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
+import type { WorkspaceSleepNotice } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type {

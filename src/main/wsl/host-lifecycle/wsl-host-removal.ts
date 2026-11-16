@@ -3,7 +3,7 @@
  * listed with a pending stop, so the next Remove retries it and Connect or Add can keep the host.
  * Dropping it would strand a still-running server that blocks the next add's activation.
  */
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { wslHostServerStopReason } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 import {
   removeWslHostEnvironment,

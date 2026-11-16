@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 
 export const AGENT_SKILL_SHARING_DISABLED_CODE = 'agent_skill_sharing_disabled'
 

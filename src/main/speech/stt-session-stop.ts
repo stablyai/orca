@@ -1,4 +1,4 @@
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import {
   sttEngineUsers,
   type SttEngine,

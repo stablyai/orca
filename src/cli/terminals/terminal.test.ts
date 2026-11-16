@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../runtime/client'
 import type { CliStatusResult } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import '../../shared/protocol-version'
+import '../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { TERMINAL_HANDLERS } from './terminal'
 

@@ -1,6 +1,9 @@
-import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
-import { githubAvatarIcon, githubAvatarSlug } from '../../../shared/repo-icon'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId
+} from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { githubAvatarIcon, githubAvatarSlug } from '../../../shared/repository/appearance/repo-icon'
 import { probeRepoUpstream } from '../../github/client/fetch/repo-slug-upstream'
 import { GhExecutableAbsenceBatch } from '../../git/command-runner/hosted-cli/gh-executable-absence-batch'
 import type { RuntimeStore } from '../construction/runtime-store-contract'

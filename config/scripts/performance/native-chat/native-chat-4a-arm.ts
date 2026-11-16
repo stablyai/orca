@@ -34,7 +34,6 @@ const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
 // The envelope builders each arm bundles from its own checkout.
 const MUTATION_SOURCE =
   'src/shared/agent-session/lifecycle/operations/structured-agent-session-mutation.ts'
-const CREATE_SOURCE = 'src/shared/agent-session/structured-agent-session-create.ts'
 const SEND_SOURCE = 'src/shared/agent-session/requests/structured-agent-session-send-mutation.ts'
 
 /** Envelope builders compiled from the arm's own source, so each host checks fingerprints it computes itself. */
@@ -51,7 +50,6 @@ export type ArmProtocol = {
     forkFrom?: unknown
   }) => string
   createStructuredAgentSessionOperationId: (randomUuid: () => string) => string
-  createStructuredAgentSessionId: (agent: string, randomUuid: () => string) => string
   structuredAgentSessionMessageSendMutation: (message: {
     sessionId: string
     clientOperationId: string
@@ -97,7 +95,6 @@ export async function resolveArm(spec: ArmSpec, scratch: string): Promise<Arm> {
     path.join(scratch, `${name}-protocol.cjs`),
     [
       ['*', MUTATION_SOURCE],
-      ['{ createStructuredAgentSessionId }', CREATE_SOURCE],
       [
         '{ structuredAgentSessionMessageSendMutation, agentSessionSendBodyFingerprint }',
         SEND_SOURCE

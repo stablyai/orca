@@ -1,4 +1,4 @@
-import { getUtf8ChunkEndIndex, measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { getUtf8ChunkEndIndex, measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 export const BROWSER_TEXT_INSERT_CHUNK_BYTES = 64 * 1024
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, type ComponentProps, type RefObject } from 'react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
-import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/text/emoji-shortcode-catalog'
 
 type WorkspaceEmojiSuggestionPopoverProps = {
   anchorRef: RefObject<HTMLInputElement | null>

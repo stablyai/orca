@@ -2,7 +2,10 @@ import { LayoutDashboard } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
-import { DASHBOARD_BUCKET_ORDER, type DashboardBucket } from '../../../../shared/dashboard-snapshot'
+import {
+  DASHBOARD_BUCKET_ORDER,
+  type DashboardBucket
+} from '../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { useAgentBucketCounts } from '@/components/dashboard/bucket-counts/useAgentBucketCounts'
 import { resolveAgentDashboardMode } from '@/components/dashboard/settings/agent-dashboard-open-mode'
 import { translate } from '@/i18n/i18n'

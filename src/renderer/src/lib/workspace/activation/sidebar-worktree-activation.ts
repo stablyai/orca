@@ -2,10 +2,10 @@ import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
 } from '@/lib/workspace/activation/worktree-activation'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { EphemeralVmWorkspaceLifecycleResult } from '../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { ephemeralVmFailureFromError } from '../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'

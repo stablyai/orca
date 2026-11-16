@@ -9,7 +9,7 @@ vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({
       recordTerminalInput: vi.fn(),
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: new Map(),
       paneForegroundAgentByPaneKey: {},
       runtimeStatusByEnvironmentId: new Map(),
       repos: [],

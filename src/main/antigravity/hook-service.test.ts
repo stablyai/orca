@@ -102,7 +102,7 @@ describe('AntigravityHookService', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'leaves non-gate Antigravity events silent when the managed script is missing',
+    'answers non-gate Antigravity events like the managed script when it is missing',
     () => {
       new AntigravityHookService().install()
       rmSync(join(homeDir, '.orca', 'agent-hooks'), { recursive: true, force: true })
@@ -118,7 +118,7 @@ describe('AntigravityHookService', () => {
       for (const command of [postToolUse, preInvocation]) {
         const result = spawnSync('/bin/sh', ['-c', command!], { input: '{}', encoding: 'utf8' })
         expect(result.status).toBe(0)
-        expect(result.stdout).toBe('')
+        expect(result.stdout).toBe('{}\n')
       }
     }
   )

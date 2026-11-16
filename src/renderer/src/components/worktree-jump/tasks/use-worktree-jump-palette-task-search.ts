@@ -3,7 +3,7 @@ import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useShallow } from 'zustand/react/shallow'
-import { forEachWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import { createCmdJTaskSearchRequests } from '../../cmd-j/task-search-requests'
 import {
   isCmdJTaskSearchQuery,
@@ -14,7 +14,10 @@ import {
 import type { WorktreeJumpPaletteStoreState } from '../state/use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteFilter } from '../results/use-worktree-jump-palette-filter'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
 const TASK_SEARCH_DEBOUNCE_MS = 600
 

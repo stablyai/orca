@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { ComposerModel } from './composer-model'
-import { pickerRepos } from '../../../../shared/hidden-projects'
+import { pickerRepos } from '../../../../shared/project/catalog/hidden-projects'
 
 export type DraftTargetSyncInput = Pick<
   ComposerModel,

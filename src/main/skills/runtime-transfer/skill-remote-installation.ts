@@ -1,4 +1,4 @@
-import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   SkillBundleInstallProgressSchema,

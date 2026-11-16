@@ -1,7 +1,7 @@
 // Wait for main’s terminal start and attach, or show its failure; the window cannot spawn a replacement.
 
 import { useAppStore } from '@/store/index'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import type { PaneStartStatus } from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

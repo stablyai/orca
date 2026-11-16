@@ -1,6 +1,6 @@
 import type { RefinementCtx } from 'zod'
 import { isPluginCommandAliasActionId } from '../contributions/plugin-command-actions'
-import { getKeybindingConflictIdentity } from '../../keybindings'
+import { getKeybindingConflictIdentity } from '../../keybindings/matching-key'
 import {
   PLUGIN_EVENT_CAPABILITY,
   type PluginEventName

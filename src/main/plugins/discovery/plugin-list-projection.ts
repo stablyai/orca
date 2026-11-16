@@ -19,7 +19,7 @@ import {
   splitQualifiedPluginKey
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { pluginCatalogTypes } from '../../../shared/plugins/catalog/plugin-catalog-types'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import type {
   PluginHostListEntry,
   PluginHostStatus

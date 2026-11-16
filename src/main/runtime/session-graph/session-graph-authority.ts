@@ -5,12 +5,12 @@ import {
   getRepoSshConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-lifecycle'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
@@ -25,7 +25,10 @@ import {
 } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import {
   folderCatalogOf,
   resolveKeyedFolderWorkspace,
@@ -74,6 +77,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.clearPtyIncarnationHandles()
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
+    this.releaseUnseededPhoneFrames()
   }
 
   protected shouldRestoreHeadlessGraph(windowId: number): boolean {
@@ -95,6 +99,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
+    this.releaseUnseededPhoneFrames()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })
