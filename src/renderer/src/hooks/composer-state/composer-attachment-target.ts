@@ -1,4 +1,7 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import type { ComposerModel } from './composer-model'

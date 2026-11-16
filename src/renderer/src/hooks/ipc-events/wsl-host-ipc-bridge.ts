@@ -4,7 +4,7 @@ import type {
   WslHostStatus
 } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { workspaceOwnerHostId } from '../../lib/workspace/ownership/workspace-row-owner-host'
 import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'

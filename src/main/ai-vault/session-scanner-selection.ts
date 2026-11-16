@@ -1,5 +1,5 @@
 import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import { buildOpenCodeSqliteCandidatePath } from '../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 
 export function isSelectedSessionFile(

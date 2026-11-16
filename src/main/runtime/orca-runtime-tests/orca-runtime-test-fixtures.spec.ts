@@ -13,7 +13,7 @@ import {
   buildAgentPromptPasteBytes,
   getTerminalPasteIngestMs
 } from '../../../shared/agent-launch/startup/agent-prompt-injection'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'

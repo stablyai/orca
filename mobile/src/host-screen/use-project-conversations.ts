@@ -4,7 +4,7 @@ import {
 } from './project-conversation-history-refresh'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import {
   rpcClientForExecutionHost,
   reachableServerClients

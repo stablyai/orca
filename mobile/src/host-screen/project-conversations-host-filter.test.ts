@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { buildProjectConversations } from './project-conversations'
 import {
   conversationAgent,

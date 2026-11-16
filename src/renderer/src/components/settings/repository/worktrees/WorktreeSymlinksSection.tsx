@@ -15,7 +15,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type WorktreeSymlinksSectionProps = {

@@ -4,7 +4,7 @@ import {
   isLegacySharedCodexHome,
   isPerAccountManagedCodexHome
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
 import { aiVaultResumePreparationRun } from './mobile-ai-vault-resume-operations'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { translate } from '../i18n/mobile-i18n'

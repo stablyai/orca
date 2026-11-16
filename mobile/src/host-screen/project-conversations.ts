@@ -16,7 +16,10 @@ import {
   getProjectGroupingForRepo
 } from '../../../src/shared/sidebar-list/sections/project-section-grouping'
 import type { ProjectSectionCatalog } from '../worktree/workspace-list/workspace-list-sections'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { agentDotState, agentRowTimeAt } from '../worktree/agent-lineage/agent-row-display'
 import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'

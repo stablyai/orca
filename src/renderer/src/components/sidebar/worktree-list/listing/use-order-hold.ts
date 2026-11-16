@@ -5,7 +5,7 @@ import {
   type SidebarFeedIndex
 } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
 import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { mergeHeldOrder } from './held-order'
 
 const LIST_SELECTOR = '[data-worktree-sidebar-container]'

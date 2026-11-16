@@ -1,6 +1,6 @@
 import { runAsAutomaticDeselection } from '@/store/workspaces/selection/active-worktree-deselection-intent'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey

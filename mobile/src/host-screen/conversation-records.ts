@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 
 const historySchema = z.looseObject({
   id: z.string(),

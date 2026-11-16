@@ -4,7 +4,7 @@ import type { ResolvedPtyHost } from './provider/registry'
 
 import type { PtyIpcSessionOptions } from './session'
 
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 
 export function createLocalPtyStartupPromises(options?: PtyIpcSessionOptions) {
   // Only local PTYs change ownership during this machine's daemon swap.

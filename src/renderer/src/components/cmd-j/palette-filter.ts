@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getVisibleWorkspaceHostIdSet } from '../sidebar/worktree-list/listing/visible-worktree-host-scope'
 import { resolveWorktreeFilterHostId, type PaletteFilterModel } from './palette-filter-options'

@@ -21,7 +21,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
 } from '../../../../shared/github/projects/project-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 

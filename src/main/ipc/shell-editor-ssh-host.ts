@@ -1,5 +1,8 @@
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
-import { parseExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {

@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type {
   SectionRepo,
