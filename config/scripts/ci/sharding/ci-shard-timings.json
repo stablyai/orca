@@ -4562,7 +4562,6 @@
       "src/shared/agent-launch/permissions/tui-agent-auto-permissions.test.ts": 293,
       "src/shared/agent-launch/startup/tui-agent-launch-command-argument-values.test.ts": 266,
       "src/shared/agent-launch/startup/tui-agent-launch-command-override.test.ts": 63,
-      "src/shared/agent-launch/permissions/tui-agent-permissions.test.ts": 42,
       "src/shared/agent-launch/startup/tui-agent-startup.test.ts": 636,
       "src/shared/utf8-byte-limits.test.ts": 132,
       "src/shared/windows-batch-spawn.win32.test.ts": 48,
