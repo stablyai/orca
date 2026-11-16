@@ -21,7 +21,9 @@ export function useNativeChatRailWake(): {
     if (rail && !('awake' in rail.dataset)) {
       rail.dataset.awake = ''
     }
-    awakeRail.current = rail
+    if (rail) {
+      awakeRail.current = rail
+    }
     if (timer.current !== null) {
       return
     }
