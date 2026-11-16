@@ -50,7 +50,7 @@ describe('chat read CLI', () => {
 
     await expect(
       CHAT_HANDLERS['chat read']({
-        flags: new Map<string, unknown>([
+        flags: new Map<string, string | boolean>([
           ['session', 'chat-1'],
           ['direction', 'before']
         ]),
