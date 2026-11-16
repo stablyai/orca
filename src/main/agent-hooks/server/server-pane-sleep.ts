@@ -11,6 +11,7 @@ import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { endedPresenceOf, recordAgentExit } from './agent-exit-evidence'
 import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { agentPaneSleepStatus } from '../../../shared/agent-status/lifecycle/agent-pane-sleep-status'
 
 export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityFences {
   abstract dropStatusEntry(paneKey: string, options?: { preserveResumeIdentity?: boolean }): void
@@ -137,26 +138,14 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     const row: EnrichedAgentHookEventPayload = {
       ...accepted,
       ...(midTurn ? { stateStartedAt: now } : {}),
-      payload: midTurn
-        ? {
-            ...payload,
-            state: 'done',
-            interrupted: true,
-            ...(payload.mainAgent
-              ? {
-                  mainAgent: {
-                    state: 'done' as const,
-                    outcome: 'cancellation' as const,
-                    stateStartedAt: now
-                  }
-                }
-              : {})
-          }
-        : {
-            ...payload,
-            state: identity.status.state,
-            ...(identity.status.sessionBoundary ? { sessionBoundary: true } : {})
-          },
+      payload: agentPaneSleepStatus(
+        {
+          ...payload,
+          state: identity.status.state,
+          ...(identity.status.sessionBoundary ? { sessionBoundary: true } : {})
+        },
+        now
+      ),
       paneSleep: { ptyId, ...(incarnationId ? { incarnationId } : {}) },
       agentPresence: endedPresenceOf(previous)
     }

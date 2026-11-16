@@ -46,12 +46,18 @@ const NEWER_STATUS: AgentStatusIpcPayload = {
 }
 
 describe('main-run sleep of a pane whose hook row is gone', () => {
-  it.each(['live', 'exited', 'expired exit'] as const)(
+  it.each(['live', 'working', 'interrupted', 'exited', 'expired exit'] as const)(
     'uses a saved live conversation unless an exit was recorded (%s)',
     async (scenario) => {
       const fixture = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({
-          sleepingAgentSessionsByPaneKey: { [PANE_KEY]: OLDER_CHECKPOINT }
+          sleepingAgentSessionsByPaneKey: {
+            [PANE_KEY]: {
+              ...OLDER_CHECKPOINT,
+              ...(scenario === 'working' ? { state: 'working' as const } : {}),
+              ...(scenario === 'interrupted' ? { interrupted: true } : {})
+            }
+          }
         })
       )
       const server = new AgentHookServer()
@@ -103,7 +109,7 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
         isPlaced: () => true,
         retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
       })
-      if (scenario !== 'live') {
+      if (scenario === 'exited' || scenario === 'expired exit') {
         server.reconcileEndedProcessForPaneKeys([PANE_KEY], {
           confirmedExit: true
         })
@@ -115,7 +121,7 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
       try {
         await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
         const record = fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]
-        if (scenario !== 'live') {
+        if (scenario === 'exited' || scenario === 'expired exit') {
           expect(record).toBeUndefined()
         } else {
           expect(record).toMatchObject({
@@ -123,6 +129,9 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
             restoreOnTabOpenOnly: true,
             providerSession: { key: 'session_id', id: 'claude-session-1' }
           })
+          if (scenario === 'working' || scenario === 'interrupted') {
+            expect(record?.interrupted).toBe(true)
+          }
         }
       } finally {
         server.stop()

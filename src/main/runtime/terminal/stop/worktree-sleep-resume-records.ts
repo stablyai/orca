@@ -12,6 +12,8 @@ import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import { launchStatement, type PtyLaunchFacts } from '../launch/launch-evidence'
+import { agentPaneSleepStatus } from '../../../../shared/agent-status/lifecycle/agent-pane-sleep-status'
+import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
@@ -103,6 +105,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
         prompt: row.prompt,
         // Why done: a pane-owned capture whose `--resume` waits for the tab open (#11598).
         state: 'done',
+        ...agentVerdictFields(agentPaneSleepStatus(row, args.capturedAt)),
         capturedAt: args.capturedAt,
         updatedAt: row.receivedAt,
         origin: 'worktree-sleep',

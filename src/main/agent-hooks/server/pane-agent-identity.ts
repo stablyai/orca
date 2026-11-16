@@ -1,6 +1,7 @@
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { promoteSavedLiveResumeRecord } from '../../../shared/agent-session/lifecycle/resume/promote-saved-live-resume-record'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { agentMainAgentVerdict } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 export type PaneAgentIdentity = {
   status: AgentStatusIpcPayload
@@ -32,7 +33,11 @@ export function paneAgentIdentity(args: {
       ...placeholder
     } = row
     const status: AgentStatusIpcPayload = row.providerSessionOnly
-      ? { ...placeholder, state: 'done', sessionBoundary: true }
+      ? {
+          ...placeholder,
+          state: 'done',
+          ...(agentMainAgentVerdict(row) === null ? { sessionBoundary: true } : {})
+        }
       : row
     // Sleep is a resumable physical stop: its exit retires the process, never the conversation.
     if (row.paneSleep) {
@@ -61,8 +66,10 @@ export function paneAgentIdentity(args: {
       receivedAt: saved.updatedAt,
       stateStartedAt: saved.updatedAt,
       providerSession: promoted.providerSession,
-      state: 'done',
-      ...(saved.state === 'done' ? {} : { sessionBoundary: true }),
+      state: saved.state,
+      ...(saved.state === 'done' && agentMainAgentVerdict(saved) === null
+        ? { sessionBoundary: true }
+        : {}),
       ...(saved.interrupted !== undefined ? { interrupted: saved.interrupted } : {}),
       ...(saved.mainAgent ? { mainAgent: saved.mainAgent } : {}),
       prompt: promoted.prompt,
