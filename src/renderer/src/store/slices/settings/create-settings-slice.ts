@@ -14,7 +14,7 @@ import { normalizeTerminalQuickCommands } from '../../../../../shared/terminal/q
 import { assertTerminalQuickCommandsStorable } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../../shared/work-items/task-providers'
-import { normalizeOpenInApplications } from '../../../../../shared/open-in-applications'
+import { normalizeOpenInApplications } from '../../../../../shared/editor/launch/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from '../runtime-status/runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'

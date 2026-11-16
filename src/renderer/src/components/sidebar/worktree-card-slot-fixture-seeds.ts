@@ -5,7 +5,7 @@ import type {
   HostedReviewInfo,
   HostedReviewState
 } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import * as agentExpansion from './workspace-card/activity/worktree-card-agents-expansion-state'

@@ -1,4 +1,4 @@
-import { DASHBOARD_MAX_LAUNCH_WORKTREES } from '../../shared/dashboard-snapshot'
+import { DASHBOARD_MAX_LAUNCH_WORKTREES } from '../../shared/agent-status/presentation/dashboard-snapshot'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 
 const MAX_ID_LENGTH = 4_096

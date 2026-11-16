@@ -19,6 +19,12 @@ export const MUSE_MANAGED_HOOK_ENV_VARS = [
   'USERPROFILE'
 ] as const
 
+export function hasOrcaEnvVars(config: Record<string, unknown>): boolean {
+  const names: readonly unknown[] = MUSE_MANAGED_HOOK_ENV_VARS
+  const listed = config.managed_hooks_env_vars
+  return Array.isArray(listed) && listed.some((name) => names.includes(name))
+}
+
 export type MuseSettingsSource = {
   text: string | null
   config: Record<string, unknown>
@@ -83,20 +89,30 @@ export function serializeMuseSettings(
       })
     )
   }
-  if (managedHooksPath !== undefined) {
-    const existing = current?.managed_hooks_env_vars
-    const names = Array.isArray(existing)
-      ? existing.filter((value): value is string => typeof value === 'string')
-      : []
-    const nextNames = [...new Set([...names, ...MUSE_MANAGED_HOOK_ENV_VARS])]
-    if (JSON.stringify(existing) !== JSON.stringify(nextNames)) {
-      text = applyEdits(
-        text,
-        modify(text, ['managed_hooks_env_vars'], nextNames, {
-          formattingOptions: { insertSpaces: true, tabSize: 2 }
-        })
-      )
-    }
+  const existing = current?.managed_hooks_env_vars
+  const listed = Array.isArray(existing) ? existing : []
+  const orcaNames: readonly string[] = MUSE_MANAGED_HOOK_ENV_VARS
+  // Removal keeps only names the user added; an emptied list goes with Orca's pointer.
+  const nextNames =
+    managedHooksPath !== undefined
+      ? [
+          ...new Set([
+            ...listed.filter((value): value is string => typeof value === 'string'),
+            ...MUSE_MANAGED_HOOK_ENV_VARS
+          ])
+        ]
+      : listed.filter((value) => typeof value !== 'string' || !orcaNames.includes(value))
+  const nextValue = managedHooksPath === undefined && nextNames.length === 0 ? undefined : nextNames
+  if (
+    (managedHooksPath !== undefined || Array.isArray(existing)) &&
+    JSON.stringify(existing) !== JSON.stringify(nextValue)
+  ) {
+    text = applyEdits(
+      text,
+      modify(text, ['managed_hooks_env_vars'], nextValue, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 }
+      })
+    )
   }
   return text
 }

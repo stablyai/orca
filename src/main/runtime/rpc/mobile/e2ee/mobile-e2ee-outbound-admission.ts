@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
-} from '../../../../../shared/ws-outbound-backpressure-queue'
+} from '../../../../../shared/network/websocket/ws-outbound-backpressure-queue'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES

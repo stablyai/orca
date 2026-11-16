@@ -22,6 +22,7 @@ import {
   AGENT_SESSION_MCP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
 } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-attention-capabilities'
@@ -88,6 +89,8 @@ export type StructuredAgentSessionHostSupport = {
   usageLimitContinueCancel: boolean
   /** A send may name the usage-limit cut it continues. */
   sendUsageLimitContinuation: boolean
+  /** The host saves Skip on an async question card for every device. */
+  skipAsyncQuestions?: boolean
 }
 
 export function structuredAgentSessionHostSupport(
@@ -137,6 +140,7 @@ export function structuredAgentSessionHostSupport(
     ),
     sendUsageLimitContinuation: capabilities.includes(
       AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY
-    )
+    ),
+    skipAsyncQuestions: capabilities.includes(AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY)
   }
 }

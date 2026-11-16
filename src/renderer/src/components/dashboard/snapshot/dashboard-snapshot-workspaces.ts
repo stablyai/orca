@@ -5,7 +5,7 @@ import {
   type DashboardCard,
   type DashboardCardHostKind,
   type DashboardCardWorkspaceKind
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import {
   getWorktreeExecutionHostId,

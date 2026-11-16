@@ -20,7 +20,7 @@ import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/ap
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
 import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-providers'
-import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
+import { normalizeOpenInApplications } from '../../../shared/editor/launch/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'

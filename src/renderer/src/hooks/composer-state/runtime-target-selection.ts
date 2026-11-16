@@ -24,7 +24,7 @@ import { selectProjectFirstReason } from './runtime-target-selection-copy'
 import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
-import { pickerRepos } from '../../../../shared/hidden-projects'
+import { pickerRepos } from '../../../../shared/project/catalog/hidden-projects'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const {

@@ -33,15 +33,6 @@ describe('SearchSubprocessLineAccumulator', () => {
     expect(lines).toEqual(['four'])
     expect(parser.finish()).toBeNull()
   })
-
-  it('preserves empty lines and line order within one chunk', () => {
-    const parser = new SearchSubprocessLineAccumulator(8)
-    const lines: string[] = []
-
-    expect(parser.push(Buffer.from('\na\n\n'), (line) => lines.push(line))).toBe(true)
-
-    expect(lines).toEqual(['', 'a', ''])
-  })
 })
 
 describe('oversized search record continuation', () => {

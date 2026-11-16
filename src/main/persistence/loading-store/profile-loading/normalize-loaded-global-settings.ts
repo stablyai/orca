@@ -2,8 +2,9 @@ import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/nat
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
+import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import { normalizeOpenInApplications } from '../../../../shared/editor/launch/open-in-applications'
 
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
 import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
@@ -151,6 +152,10 @@ export function normalizeLoadedGlobalSettings(
     terminalScrollbackRows: migratedTerminalScrollback.rows,
     terminalDefaultShell: normalizeTerminalDefaultShell(parsed.settings?.terminalDefaultShell),
     terminalQuickCommands: normalizeTerminalQuickCommands(parsed.settings?.terminalQuickCommands),
+    newTabMenuLayout: normalizeNewTabMenuLayout(parsed.settings?.newTabMenuLayout),
+    floatingTerminalNewTabMenuLayout: normalizeNewTabMenuLayout(
+      parsed.settings?.floatingTerminalNewTabMenuLayout
+    ),
     terminalCustomThemes: normalizeTerminalCustomThemes(parsed.settings?.terminalCustomThemes),
     ...pluginOwnedSettings,
     ...syncLegacyMatchTerminalSidebar(

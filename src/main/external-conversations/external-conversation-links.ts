@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   CONNECTOR_SOURCES,
   type ExternalConversationLink
-} from '../../shared/external-conversation-link'
+} from '../../shared/connectors/external-conversation-link'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

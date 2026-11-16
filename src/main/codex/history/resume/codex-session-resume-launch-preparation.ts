@@ -48,6 +48,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
     }
     if (!isSystemHome) {
+      await deps.getRuntimeHome()?.prepareAccountHistoryForPinnedHome(home)
       // Hook repair may skip or fail before its config mirror applies the guard.
       ensureCodexDaemonSocketGuard(home)
     }

@@ -1,5 +1,5 @@
 // "Add to chat" from a file, preview or terminal: the selection goes, unsent, to the agent the user picks.
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import {
   isTerminalLeafId,

@@ -10,7 +10,7 @@ import {
   resolveTerminalPtyOwner
 } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { locateTerminalTab } from '../ownership/terminal-tab-location'
 

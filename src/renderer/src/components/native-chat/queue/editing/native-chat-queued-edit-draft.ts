@@ -8,7 +8,7 @@ import {
   queuedEditKeptImages,
   queuedMessageEditableText,
   type QueuedMessageEdit
-} from '../../../../../../shared/queued-message-edit'
+} from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import { pickedSkillsInText } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { promptSkillRefs } from '../../composer/editor/native-chat-prompt-document'
