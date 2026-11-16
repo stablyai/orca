@@ -27,6 +27,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   wslUserAct?: true
   repoSelector: RuntimeRepoSelector
   name: string
+  pinOnCreate?: boolean
   nameWasGenerated?: boolean
   navigation?: RuntimeNavigationTarget
   baseBranch?: string

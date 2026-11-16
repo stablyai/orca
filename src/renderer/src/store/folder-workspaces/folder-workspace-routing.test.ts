@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
@@ -114,6 +115,54 @@ beforeEach(() => {
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
   })
+})
+
+describe('pin new folder workspaces', () => {
+  it.each([false, true])(
+    'persists the preference for a UI create (enabled: %s)',
+    async (enabled) => {
+      const workspace: FolderWorkspace = {
+        id: 'folder-1',
+        projectGroupId: projectGroup.id,
+        name: 'Notes',
+        folderPath: '/workspace/platform',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 1,
+        lastActivityAt: 0,
+        createdAt: 1,
+        updatedAt: 1
+      }
+      const store = createTestStore()
+      store.setState({
+        settings: { ...getDefaultSettings('/tmp'), pinNewWorkspaces: enabled },
+        projectGroups: [projectGroup]
+      })
+      folderWorkspacesCreate.mockResolvedValue({ folderWorkspace: workspace })
+      folderWorkspacesUpdate.mockResolvedValue({ ...workspace, isPinned: true })
+
+      const result = await store
+        .getState()
+        .createFolderWorkspace(
+          { projectGroupId: projectGroup.id, name: 'Notes' },
+          { runtimeEnvironmentId: null }
+        )
+
+      if (enabled) {
+        expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
+          folderWorkspaceId: 'folder-1',
+          updates: { isPinned: true }
+        })
+        expect(result?.folderWorkspace.isPinned).toBe(true)
+      } else {
+        expect(folderWorkspacesUpdate).not.toHaveBeenCalled()
+        expect(result?.folderWorkspace.isPinned).toBe(false)
+      }
+    }
+  )
 })
 
 describe('project group store routing', () => {

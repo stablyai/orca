@@ -86,6 +86,7 @@ function sharedCreateFields(
   const { options } = request
   return {
     name: attempt.name,
+    ...(request.pinOnCreate ? { pinOnCreate: true } : {}),
     ...(options?.nameWasGenerated ? { nameWasGenerated: true } : {}),
     baseBranch: request.baseBranch,
     ...(request.compareBaseRef ? { compareBaseRef: request.compareBaseRef } : {}),

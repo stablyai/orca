@@ -21,6 +21,7 @@ import {
 export type ProvisionedRootRequest = Pick<
   CreateWorktreeArgs,
   | 'name'
+  | 'pinOnCreate'
   | 'nameWasGenerated'
   | 'displayName'
   | 'displayNameKind'
@@ -143,6 +144,7 @@ export function buildProvisionedRootMeta(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: options.source,
+    ...(args.pinOnCreate && !args.automationProvenance ? { isPinned: true } : {}),
     creatorProvenance: { kind: 'host' },
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, store.getSettings()),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),

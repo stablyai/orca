@@ -63,6 +63,7 @@ export const FolderWorkspaceCreate = z
   .object({
     ...FolderWorkspaceHookCreateShape,
     projectGroupId: requiredString('Missing project group id'),
+    pinOnCreate: z.boolean().optional(),
     name: OptionalString,
     folderPath: OptionalString.nullable().optional(),
     connectionId: OptionalString.nullable().optional(),

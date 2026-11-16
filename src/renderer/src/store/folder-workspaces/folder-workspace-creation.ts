@@ -1,4 +1,6 @@
 import type { StateCreator } from 'zustand'
+import { translate } from '@/i18n/i18n'
+import { showWorktreeCreateWarningToast } from '../slices/worktrees/create/worktree-create-warning-toast'
 import type { AppState } from '../types'
 import type { RepoSlice } from '../repos/repo-state'
 import type { FolderWorkspaceCreateResult } from '../../../../shared/folder-workspaces/folder-workspace-create'
@@ -20,6 +22,7 @@ export function createFolderWorkspaceCreateAction(
 ): RepoSlice['createFolderWorkspace'] {
   return async (args, options) => {
     try {
+      const pinNewWorkspace = get().settings?.pinNewWorkspaces === true
       // Why: a new folder has no row yet, so creation goes to the host the caller picked.
       const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
       await assertWorkspaceAttachmentWriteCapability(target, args)
@@ -33,13 +36,14 @@ export function createFolderWorkspaceCreateAction(
           'Update the remote runtime to link Jira'
         )
       }
+      const createArgs = pinNewWorkspace ? { ...args, pinOnCreate: true } : args
       const result =
         target.kind === 'local'
-          ? await window.api.folderWorkspaces.create(args)
+          ? await window.api.folderWorkspaces.create(createArgs)
           : await callRuntimeRpc<FolderWorkspaceCreateResult>(
               target,
               'folderWorkspace.create',
-              args,
+              createArgs,
               {
                 timeoutMs: args.agentLaunchMode === 'structured' ? 120_000 : 15_000,
                 ...(args.agentLaunchMode === 'structured'
@@ -63,6 +67,27 @@ export function createFolderWorkspaceCreateAction(
         folderWorkspacePathStatuses: {}
       }))
       holdCreatedSidebarWorkspace({ folderWorkspace: ownedWorkspace })
+      if (pinNewWorkspace && !ownedWorkspace.isPinned) {
+        let pinned = false
+        try {
+          pinned = await get().updateFolderWorkspace(
+            ownedWorkspace.id,
+            { isPinned: true },
+            { executionHostId: getFolderWorkspaceHostId(ownedWorkspace, projectGroups) }
+          )
+        } catch (error) {
+          console.error('Failed to pin new folder workspace:', error)
+        }
+        if (pinned) {
+          return { ...result, folderWorkspace: { ...ownedWorkspace, isPinned: true } }
+        }
+        showWorktreeCreateWarningToast(
+          translate(
+            'auto.store.slices.worktrees.pinNewWorkspaceFailed',
+            'The workspace was created, but could not be pinned.'
+          )
+        )
+      }
       return { ...result, folderWorkspace: ownedWorkspace }
     } catch (err) {
       console.error('Failed to create folder workspace:', err)

@@ -6,6 +6,7 @@ import type { AgentLaunchPreferences } from '../agent-session/agent-session-host
 
 export type FolderWorkspaceCreateInput = {
   projectGroupId: string
+  pinOnCreate?: boolean
   name?: string
   folderPath?: string | null
   connectionId?: string | null

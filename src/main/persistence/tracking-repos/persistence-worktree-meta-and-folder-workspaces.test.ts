@@ -67,6 +67,25 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('persists a folder workspace pin as part of creation', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Notes',
+      pinOnCreate: true
+    })
+
+    expect(workspace.isPinned).toBe(true)
+    store.flush()
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.isPinned).toBe(true)
+  })
+
   it('drops corrupt worktreeMeta entries while still normalizing valid siblings', async () => {
     writeDataFile({
       schemaVersion: 1,

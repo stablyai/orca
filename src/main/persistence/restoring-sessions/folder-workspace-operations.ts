@@ -61,6 +61,7 @@ export class FolderWorkspacePersistenceOperations {
 
   createFolderWorkspace(input: {
     projectGroupId: string
+    pinOnCreate?: boolean
     name?: string
     folderPath?: string | null
     linkedTask?: FolderWorkspace['linkedTask']
@@ -110,7 +111,7 @@ export class FolderWorkspacePersistenceOperations {
       comment: '',
       isArchived: false,
       isUnread: false,
-      isPinned: false,
+      isPinned: input.pinOnCreate === true,
       sortOrder: now,
       ...(input.createdWithAgent ? { createdWithAgent: input.createdWithAgent } : {}),
       ...(input.pendingFirstAgentMessageRename === true && input.createdWithAgent

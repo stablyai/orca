@@ -58,6 +58,19 @@ function ports(worktrees: GitWorktreeInfo[], sparse = false) {
 }
 
 describe('adoptRuntimeProvisionedRoot', () => {
+  it('stores the requested pin with the adopted workspace metadata', async () => {
+    const { value, setWorktreeMeta } = ports([checkout()])
+    await adoptRuntimeProvisionedRoot(
+      'repo-vm',
+      { name: 'fix-login', expectedPath: root, pinOnCreate: true },
+      value
+    )
+    expect(setWorktreeMeta).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isPinned: true })
+    )
+  })
+
   it.each<[string, GitWorktreeInfo[], boolean, string]>([
     ['another branch', [checkout({ branch: 'refs/heads/other' })], false, 'requested branch'],
     ['another ref', [checkout({ head: 'def456' })], false, 'requested ref'],

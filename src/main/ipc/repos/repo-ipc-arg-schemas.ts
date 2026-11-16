@@ -154,6 +154,7 @@ export const FolderWorkspaceCreateArgs = z
   .object({
     ...FolderWorkspaceHookCreateShape,
     projectGroupId: z.string().min(1),
+    pinOnCreate: z.boolean().optional(),
     name: z.string().optional(),
     folderPath: z.string().nullable().optional(),
     connectionId: z.string().nullable().optional(),

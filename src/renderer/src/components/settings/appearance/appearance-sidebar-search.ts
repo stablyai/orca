@@ -119,6 +119,18 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getPinNewWorkspacesEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.pinNewWorkspaces.title',
+    'Pin new workspaces'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.pinNewWorkspaces.description',
+    'Automatically pin workspaces created in Orca. CLI and automation workspaces are excluded.'
+  ),
+  keywords: ['pin', 'workspace', 'worktree', 'sidebar']
+}))
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.9bc701a4d1', 'Show tasks button'),
@@ -185,5 +197,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
+  getPinNewWorkspacesEntry(),
   getShowPinnedWorktreesInGroupsEntry()
 ])

@@ -41,6 +41,7 @@ export function buildManagedWorktreeCreateArgs(
     creationId: params.creationId ?? params.clientMutationId,
     ...(viewerSupported !== undefined ? { terminalImageViewerSupported: viewerSupported } : {}),
     name: params.name ?? '',
+    ...(params.pinOnCreate === true ? { pinOnCreate: true } : {}),
     // Absent means the user typed the name, which must never be retired.
     ...(params.nameWasGenerated === true ? { nameWasGenerated: true } : {}),
     baseBranch: params.baseBranch,
