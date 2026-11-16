@@ -30,6 +30,7 @@ export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number
   timeoutMs?: number | null
+  includeNestedInsideGitRepo?: boolean
 }
 
 export type NestedRepoCandidate = {

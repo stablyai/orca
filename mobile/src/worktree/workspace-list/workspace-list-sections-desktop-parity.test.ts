@@ -7,7 +7,9 @@ import {
 } from '../../../../src/shared/sidebar-list/sections/project-section-parity.test-fixture'
 import { buildProjectSectionCatalog } from '../project-sections/project-section-catalog'
 import { readServedProjectSections } from '../project-sections/project-sections-operations'
-import { buildSections } from './workspace-list-sections'
+import { buildMobileWorkspacePlan, buildSections } from './workspace-list-sections'
+import { planSidebarRows } from '../../../../src/shared/sidebar-list/sidebar-row-plan'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace/status/workspace-status-defaults'
 import type { Worktree } from './workspace-list-types'
 import type { ServedProjectSections } from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
@@ -207,5 +209,247 @@ describe('readServedProjectSections', () => {
       })
     ).toEqual({ kind: 'kept' })
     expect(readServedProjectSections(null)).toEqual({ kind: 'kept' })
+  })
+
+  it('nests subfolder repo sections under their top umbrella repo on both desktop and mobile', () => {
+    const umbrellaRepo = {
+      id: 'repo-umbrella',
+      path: '/workspace/umbrella',
+      displayName: 'umbrella',
+      badgeColor: '#000000',
+      addedAt: 1,
+      executionHostId: 'local' as const
+    }
+    const webRepo = {
+      id: 'repo-web',
+      path: '/workspace/umbrella/web',
+      displayName: 'web',
+      badgeColor: '#111111',
+      addedAt: 2,
+      executionHostId: 'local' as const
+    }
+    const apiRepo = {
+      id: 'repo-api',
+      path: '/workspace/umbrella/api',
+      displayName: 'api',
+      badgeColor: '#222222',
+      addedAt: 3,
+      executionHostId: 'local' as const
+    }
+    const desktopPlan = planSidebarRows({
+      groupBy: 'repo',
+      sortBy: 'manual',
+      worktrees: [
+        {
+          id: 'repo-umbrella::/workspace/umbrella',
+          repoId: 'repo-umbrella',
+          path: '/workspace/umbrella',
+          head: 'abc',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true,
+          displayName: 'main',
+          comment: '',
+          linkedIssue: null,
+          linkedPR: null,
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 100
+        },
+        {
+          id: 'repo-web::/workspace/umbrella/web',
+          repoId: 'repo-web',
+          path: '/workspace/umbrella/web',
+          head: 'def',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true,
+          displayName: 'main',
+          comment: '',
+          linkedIssue: null,
+          linkedPR: null,
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 90
+        },
+        {
+          id: 'repo-api::/workspace/umbrella/api',
+          repoId: 'repo-api',
+          path: '/workspace/umbrella/api',
+          head: 'ghi',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true,
+          displayName: 'main',
+          comment: '',
+          linkedIssue: null,
+          linkedPR: null,
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 2,
+          lastActivityAt: 80
+        }
+      ],
+      repoMap: new Map([
+        [umbrellaRepo.id, umbrellaRepo],
+        [webRepo.id, webRepo],
+        [apiRepo.id, apiRepo]
+      ]),
+      prGroupOf: () => 'none',
+      repoOrder: new Map([
+        ['repo-umbrella', 0],
+        ['repo-web', 1],
+        ['repo-api', 2]
+      ]),
+      workspaceStatuses: DEFAULT_WORKSPACE_STATUSES,
+      projectOrderBy: 'manual',
+      lineageById: {},
+      worktreeMap: new Map(),
+      nestLineage: false,
+      projectGroups: [],
+      placeholderRepoIds: new Set(),
+      importedWorktreesByRepo: new Map(),
+      newExternalWorktreesInboxByRepo: new Map(),
+      pendingCreations: [],
+      folderWorkspaces: [],
+      defaultHostId: 'local',
+      pinnedDisplayPolicy: 'duplicate-in-groups',
+      filterRepoIds: []
+    })
+
+    expect(
+      desktopPlan.render(new Set(['repo:repo-web', 'repo:repo-api'])).map((row) => ({
+        type: row.type,
+        key: row.type === 'header' ? row.key : row.type === 'item' ? row.worktree.id : row.type,
+        depth:
+          row.type === 'header'
+            ? (row.projectGroupDepth ?? 0)
+            : row.type === 'item'
+              ? (row.groupDepth ?? 0)
+              : -1
+      }))
+    ).toEqual([
+      { type: 'header', key: 'repo:repo-umbrella', depth: 0 },
+      { type: 'item', key: 'repo-umbrella::/workspace/umbrella', depth: 0 },
+      { type: 'header', key: 'umbrella-subfolders:repo:repo-umbrella', depth: 1 },
+      { type: 'header', key: 'repo:repo-web', depth: 2 },
+      { type: 'header', key: 'repo:repo-api', depth: 2 }
+    ])
+    expect(
+      desktopPlan.render(new Set(['umbrella-subfolders:repo:repo-umbrella'])).map((row) => ({
+        type: row.type,
+        key: row.type === 'header' ? row.key : row.type === 'item' ? row.worktree.id : row.type
+      }))
+    ).toEqual([
+      { type: 'header', key: 'repo:repo-umbrella' },
+      { type: 'item', key: 'repo-umbrella::/workspace/umbrella' },
+      { type: 'header', key: 'umbrella-subfolders:repo:repo-umbrella' }
+    ])
+    expect(desktopPlan.render(new Set(['repo:repo-umbrella']))).toEqual([
+      expect.objectContaining({ type: 'header', key: 'repo:repo-umbrella' })
+    ])
+
+    const mobilePlan = buildMobileWorkspacePlan(
+      [
+        {
+          worktreeId: 'wt-umbrella',
+          repoId: 'repo-umbrella',
+          repo: 'umbrella',
+          branch: 'main',
+          displayName: 'main',
+          path: '/workspace/umbrella',
+          liveTerminalCount: 0,
+          hasAttachedPty: false,
+          unread: false,
+          isPinned: false,
+          isMainWorktree: true,
+          linkedPR: null
+        },
+        {
+          worktreeId: 'wt-web',
+          repoId: 'repo-web',
+          repo: 'web',
+          branch: 'main',
+          displayName: 'main',
+          path: '/workspace/umbrella/web',
+          liveTerminalCount: 0,
+          hasAttachedPty: false,
+          unread: false,
+          isPinned: false,
+          isMainWorktree: true,
+          linkedPR: null
+        },
+        {
+          worktreeId: 'wt-api',
+          repoId: 'repo-api',
+          repo: 'api',
+          branch: 'main',
+          displayName: 'main',
+          path: '/workspace/umbrella/api',
+          liveTerminalCount: 0,
+          hasAttachedPty: false,
+          unread: false,
+          isPinned: false,
+          isMainWorktree: true,
+          linkedPR: null
+        }
+      ],
+      'manual',
+      { ...NO_WORKSPACE_ROW_FILTERS },
+      '',
+      'repo',
+      new Set(),
+      {
+        repos: [umbrellaRepo, webRepo, apiRepo],
+        grouping: null,
+        projectGroups: [],
+        repoOrder: new Map([
+          ['repo-umbrella', 0],
+          ['repo-web', 1],
+          ['repo-api', 2]
+        ]),
+        projectOrderBy: 'manual'
+      }
+    )
+
+    expect(
+      mobilePlan.render(new Set(['repo:repo-web', 'repo:repo-api'])).map((s) => ({
+        key: s.key,
+        depth: s.projectGroupDepth ?? 0,
+        parent: s.parentSectionKey ?? null,
+        rows: s.data.map((item) => [item.row.worktreeId, item.view.projectGroupDepth ?? 0])
+      }))
+    ).toEqual([
+      { key: 'repo:repo-umbrella', depth: 0, parent: null, rows: [['wt-umbrella', 0]] },
+      {
+        key: 'umbrella-subfolders:repo:repo-umbrella',
+        depth: 1,
+        parent: 'repo:repo-umbrella',
+        rows: []
+      },
+      {
+        key: 'repo:repo-web',
+        depth: 2,
+        parent: 'umbrella-subfolders:repo:repo-umbrella',
+        rows: [['wt-web', 2]]
+      },
+      {
+        key: 'repo:repo-api',
+        depth: 2,
+        parent: 'umbrella-subfolders:repo:repo-umbrella',
+        rows: [['wt-api', 2]]
+      }
+    ])
+    expect(
+      mobilePlan.render(new Set(['umbrella-subfolders:repo:repo-umbrella'])).map((s) => s.key)
+    ).toEqual(['repo:repo-umbrella', 'umbrella-subfolders:repo:repo-umbrella'])
+    expect(mobilePlan.render(new Set(['repo:repo-umbrella'])).map((s) => s.key)).toEqual([
+      'repo:repo-umbrella'
+    ])
   })
 })
