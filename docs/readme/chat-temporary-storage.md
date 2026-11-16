@@ -4,23 +4,30 @@
 that directory. It is not a disposable build directory.
 
 Native chats with the inline visuals skill also receive `ORCA_CHAT_TEMP_DIR`, a private
-directory on the executing host. A new provider launch gets a new directory. It can hold
-disposable build output and test environments; never keep the only copy of source changes,
-reports or user files there. Move final artifacts to scratch or the workspace before replying.
-When visuals are unavailable Orca strips both inherited paths, preventing cross-chat writes.
-This works on the execution host, including remote hosts, without client filesystem access.
-Older hosts continue to provide only the scratch path.
+directory on the executing host for disposable data: dependency installs, private caches,
+source checkouts, build output and test environments. A chat keeps the same directory across
+launches, so a restarted agent finds its environments again. Never keep the only copy of source
+changes, reports or user files there. Move final artifacts to scratch or the workspace before
+replying. When visuals are unavailable Orca strips both inherited paths, preventing cross-chat
+writes. This works on the execution host, including remote hosts, without client filesystem
+access. Older hosts continue to provide only the scratch path.
 
-Cleanup runs with the existing chat-storage sweep (after two minutes, then every six hours).
-Only directories bearing Orca's ownership marker are considered. The owning Orca PID must no
-longer exist, and the marker and all nested data must have been unchanged for seven days.
-A live or uncheckable owner, recent changes, Git metadata, invalid markers, unreadable data,
-symlink roots or an incomplete scan prevent removal. Nested symlinks are never followed.
-PID reuse can conservatively retain old temporary data. Cleanup is retention-based, not a
-hard filesystem quota; an active task can still fill its disk. Temporary files are disposable
-after that retention period, including files from detached jobs that outlive Orca.
+Cleanup runs with the existing chat-storage sweep (after two minutes, then every six hours):
 
-Preview and optionally reclaim the executing host's new managed temporary data:
+- Removing a chat removes its whole temporary directory, like its scratch directory.
+- Inside a retained chat's directory each top-level entry ages on its own. An entry is removed
+  once nothing inside it has changed for seven days, even while the chat stays in use. This is
+  what bounds a long-lived chat that creates a new environment for every task.
+
+Size, file count and Git data never protect an entry: the directory is disposable by contract,
+and those are exactly what the largest abandoned environments consist of. A commit that exists
+only in a temporary checkout is lost with it. Symlinks are never followed, an unreadable entry
+is left alone, and entries Orca did not create in the temporary root are ignored. An entry is
+judged by modification and change times, so reading a cache does not keep it; a cache that is
+only read for seven days is downloaded again. Cleanup is retention-based, not a hard quota: an
+active task can still fill its disk.
+
+Preview and optionally reclaim the executing host's temporary data:
 
 ```sh
 pnpm reclaim-chat-temp --state-directory "/path/to/Orca/profile"
@@ -29,21 +36,19 @@ pnpm reclaim-chat-temp --state-directory "/path/to/Orca/profile" --apply
 ```
 
 The profile path is explicit: the command never guesses which local or remote profile owns
-the data. `--apply` revalidates candidates and directory identity before removal. At most 20
-directories are removed per run. Permission failures are reported, not treated as free space.
-Per-entry allocated sizes count an inode only once; shared hardlinks and APFS clones mean
-these are not guaranteed reclaimable bytes. Protected or incomplete scans may show no size.
+the data. It cannot read the chat roster, so it only ages entries; directories of removed chats
+are left to the running app. At most 200 entries are removed per run. Use the profile overview
+below for sizes.
 
 Legacy `chat-scratch` contents are never silently migrated or deleted. They may contain user
 reports and unmerged work mixed with old build caches. Audit and migrate them individually.
 Managed provider homes, credentials, SQLite databases and chat history are outside this cleanup.
 Compacting a conversation does not mean its append-only provider log becomes smaller.
 
-Use package managers' existing shared caches, not private per-task stores. Orca's pnpm
-configuration already enables a global virtual store outside CI. For old dependencies and
-generated files in registered Git worktrees, use the existing [worktree storage maintenance](./worktree-storage-maintenance.md).
-For removing worktrees themselves, use the existing workspace cleanup preview and its
-dirty-file, unpushed-commit, active-agent and branch-preservation checks.
+For old dependencies and generated files in registered Git worktrees, use the existing
+[worktree storage maintenance](./worktree-storage-maintenance.md). For removing worktrees
+themselves, use the existing workspace cleanup preview and its dirty-file, unpushed-commit,
+active-agent and branch-preservation checks.
 
 ## Profile overview
 

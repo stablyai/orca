@@ -7,7 +7,7 @@ import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permis
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',
-  temporaryFolder: '/state/chat-temporary/abc/files',
+  temporaryFolder: '/state/chat-temporary/abc',
   skill: { pluginDir: '/app/native-chat-visuals', skillsRoot: '/app/native-chat-visuals/skills' }
 }
 const MANUAL = codexStructuredPermissionPolicy('ask')

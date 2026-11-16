@@ -24,18 +24,13 @@ export async function runChatTemporaryStorage(args, output = console.log) {
   const entries = await inspectChatTemporaryStorage(directory)
   if (!json) {
     output(
-      'Preview of managed temporary data on this host. Reports, provider history and legacy scratch are retained.'
+      'Temporary chat data on this host. An entry is removed once nothing in it changed for 7 days.'
     )
     for (const entry of entries) {
-      output(
-        `${entry.reason}: ${JSON.stringify(entry.path)} (${entry.allocatedBytes} allocated bytes observed)`
-      )
+      output(`${entry.reason}: ${JSON.stringify(entry.path)}`)
     }
-    output(
-      'Sizes are unique within each scanned entry. Shared hardlinks/clones can reduce space actually reclaimed; protected entries may not be fully scanned.'
-    )
     if (!apply) {
-      output('No files removed. Add --apply to recheck and remove eligible entries.')
+      output('No files removed. Add --apply to remove the idle entries.')
     }
   }
   if (apply) {
