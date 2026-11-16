@@ -5,7 +5,7 @@ import {
   worktreeCopyPushTarget,
   worktreeGitCopyHostId
 } from '@/lib/workspace/ownership/worktree-git-copy'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   clearLandedBranchSwitchError,
   getWorktreeOperationStore

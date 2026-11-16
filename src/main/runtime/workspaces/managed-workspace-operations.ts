@@ -13,7 +13,7 @@ import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/v
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { RuntimeWorkspacePortOperations } from './ports/runtime-workspace-port-operations'
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspacePortOperations {

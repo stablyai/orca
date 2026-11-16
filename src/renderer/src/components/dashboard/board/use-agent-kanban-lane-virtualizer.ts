@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
-import type { DashboardCard } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCard } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { extractPinnedVirtualRange } from '@/lib/list-interaction/pinned-virtual-range'
 
 // Estimates follow the card's fixed rows; measurement replaces them for message/question variants.

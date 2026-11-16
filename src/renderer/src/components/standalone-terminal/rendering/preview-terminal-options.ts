@@ -1,6 +1,6 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { DashboardCardTerminalInput } from '../../../../../shared/dashboard-snapshot'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import {

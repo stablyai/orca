@@ -4,7 +4,7 @@ import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/
 import {
   toSshExecutionHostId,
   getConnectionExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { reconcilePaneOwner } from './stable-pane-attach'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'

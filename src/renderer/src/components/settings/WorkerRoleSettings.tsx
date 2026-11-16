@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   INITIAL_WORKER_ROLE_NAMES,
   WorkerRoleName,

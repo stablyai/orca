@@ -3,14 +3,17 @@
  * moves; this only names rows, counts what they hold, and maps blockers back to their project.
  */
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import '../terminal-pane/layout/terminal-layout-leaf-traversal'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'

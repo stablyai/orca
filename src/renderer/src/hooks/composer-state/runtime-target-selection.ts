@@ -1,7 +1,8 @@
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useEffect, useMemo, useRef } from 'react'
 import { getFolderSourceRepos } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
-import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host'
+// oxfmt-ignore
+import { parseExecutionHostId, getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getSelectedRepoSshGate } from '@/lib/workspace/creation/new-workspace-ssh-gate'
 import { selectRepoSshGateInput } from '@/lib/workspace/catalog/repo-ssh-connection'
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status'
@@ -24,7 +25,7 @@ import { selectProjectFirstReason } from './runtime-target-selection-copy'
 import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
-import { pickerRepos } from '../../../../shared/hidden-projects'
+import { pickerRepos } from '../../../../shared/project/catalog/hidden-projects'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const {

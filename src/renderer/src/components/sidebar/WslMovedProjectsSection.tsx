@@ -10,7 +10,7 @@ import { bringWslMovedProjectBack } from '@/lib/workspace/ownership/wsl-moved-pr
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

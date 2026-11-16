@@ -1,4 +1,4 @@
-import { COMPUTER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/computer-wait-timeout'
+import { COMPUTER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/computer/computer-wait-timeout'
 
 // File focus differs from terminal create's shared --focus help.
 const FILE_OPEN_FOCUS_HELP =

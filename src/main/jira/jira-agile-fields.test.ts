@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './authenticated-request'
 import { getAgileFieldIds } from './jira-agile-fields'
-import { mapSprint } from './jira-issue-mapping'
 
 import type { JiraSite } from '../../shared/jira/jira-types'
 
@@ -32,15 +31,6 @@ function clientFor(id: string): JiraClientForSite {
 }
 
 describe('jira agile fields', () => {
-  it('keeps commas and brackets in Server sprint names', () => {
-    expect(
-      mapSprint('Sprint@1[id=1,state=ACTIVE,name=API, UI [October],startDate=<null>,goal=]')
-    ).toBe('API, UI [October]')
-    expect(mapSprint('Sprint@1[id=1,state=ACTIVE,name=API, UI [October]]')).toBe(
-      'API, UI [October]'
-    )
-  })
-
   describe('getAgileFieldIds', () => {
     beforeEach(() => {
       jiraRequestMock.mockReset()

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { applyHostRename, getHostDisplayLabelOverride } from './host-rename-remove'
 
 type HostRenameDialogProps = {

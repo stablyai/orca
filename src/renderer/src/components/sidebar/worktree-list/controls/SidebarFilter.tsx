@@ -35,7 +35,7 @@ import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
+import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean

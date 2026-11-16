@@ -6,28 +6,44 @@ import { isRootAgentJournalItem } from '../journal/agent-session-journal-produce
 import { isStructuredAgentSessionCommandEntry } from '../structured-agent-session-command-entry'
 import { scanPendingAsks } from '../../native-chat/input/native-chat-ask'
 import { isDeliveredNativeChatUserMessage } from '../../native-chat/input/questions/native-chat-ask-answer'
-import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 
-/** The person's delivered message answers every earlier async question; one from another agent
- *  ends the read too, so a status check stays inside the current exchange. */
-export function endsStructuredAgentSessionAsyncQuestionRead(message: NativeChatMessage): boolean {
-  return (
-    isDeliveredNativeChatUserMessage(message) ||
-    (message.role === 'user' && message.from?.kind === 'agent')
-  )
+/** Rows the question rule reads: command entries never reach the agent, so they answer nothing. */
+export function isStructuredAgentSessionAsyncQuestionRow(item: AgentJournalRenderItem): boolean {
+  return isRootAgentJournalItem(item) && !isStructuredAgentSessionCommandEntry(item.body)
 }
 
-/** Codex's async question waits for the next delivered message, read the way the chat's question
- *  card reads it. Command entries never reach the agent, so they answer nothing. */
-export function hasOpenStructuredAgentSessionAsyncQuestion(
+/** The row of the newest Codex async question still waiting for the person's next delivered
+ *  message, read the way the chat's question card reads it (another agent's message answers none). */
+export function newestOpenStructuredAgentSessionAsyncQuestion(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]
-): boolean {
-  const rows = items.filter(
-    (item) => isRootAgentJournalItem(item) && !isStructuredAgentSessionCommandEntry(item.body)
+): string | undefined {
+  const messages = projectStructuredAgentSessionMessages(
+    items.filter(isStructuredAgentSessionAsyncQuestionRow),
+    [],
+    submissions
   )
-  const messages = projectStructuredAgentSessionMessages(rows, [], submissions)
-  const start = messages.findLastIndex(endsStructuredAgentSessionAsyncQuestionRead)
-  return scanPendingAsks(messages.slice(Math.max(start, 0))).contributors.length > 0
+  const start = messages.findLastIndex(isDeliveredNativeChatUserMessage)
+  return scanPendingAsks(messages.slice(Math.max(start, 0))).contributors.at(-1)?.sourceRowId
+}
+
+/** Skip hides the skipped row's questions and every earlier one; a row not among them hides none. */
+export function asyncQuestionsAfterSkip<T extends { sourceRowId: string }>(
+  contributors: readonly T[],
+  skippedThrough: string | undefined
+): readonly T[] {
+  const skipped =
+    skippedThrough === undefined
+      ? -1
+      : contributors.findLastIndex((contributor) => contributor.sourceRowId === skippedThrough)
+  return skipped < 0 ? contributors : contributors.slice(skipped + 1)
+}
+
+/** The host's waiting state: the newest open question is one the person has not skipped. */
+export function structuredAgentSessionAwaitsAnswer(
+  openQuestionRowId: string | undefined,
+  skippedThrough: string | undefined
+): boolean {
+  return openQuestionRowId !== undefined && openQuestionRowId !== skippedThrough
 }

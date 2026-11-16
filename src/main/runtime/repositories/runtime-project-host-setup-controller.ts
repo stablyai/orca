@@ -18,7 +18,7 @@ import {
   getSshTargetIdForExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { getProjectHostSetupForRepo } from '../../../shared/project/host-setup/project-host-setup-lookup'
 import {
   linkImportedFolderToProject,

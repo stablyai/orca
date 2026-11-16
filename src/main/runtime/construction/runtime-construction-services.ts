@@ -30,7 +30,7 @@ import type {
 } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeSyncedLeaf } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'

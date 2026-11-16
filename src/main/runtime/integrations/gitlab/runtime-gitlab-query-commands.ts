@@ -24,7 +24,7 @@ import {
   type GitLabIssueListState
 } from '../../../gitlab/requests/gitlab-preload-args'
 import { getWorkItemDetails } from '../../../gitlab/work-items/work-item-details'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 

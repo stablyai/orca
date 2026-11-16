@@ -22,7 +22,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
-  'src/shared/ws-inbound-message-queue.test.ts',
+  'src/shared/network/websocket/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
   'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
@@ -45,7 +45,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-exit-delivery.test.ts',
   'src/main/runtime/construction/orca-runtime.test.ts',
-  'src/main/runtime/workspaces/startup/worktree-agent-first-surface.test.ts',
   'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
   'src/main/persistence/**/*.test.ts',

@@ -17,7 +17,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { useAppStore } from '@/store'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   computeRenderedSidebarWorktreeOrder,
   computeRenderedSidebarWorktrees

@@ -7,8 +7,6 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
-  /** Unread completions, split out only for cards without a status-lane unread rollup. */
-  unread?: boolean
   agents: DashboardAgentRowData[]
 }
 
@@ -201,21 +199,10 @@ export function isUnreadDoneAgent(
   return isUnread !== undefined && getAgentDotState(agent) === 'done' && isUnread(agent)
 }
 
-/**
- * One group per state for the folded pill. Pass `isUnread` only when the card has no status-lane
- * unread rollup: then unread completions lead as their own group so the folded pill still shows it.
- */
-export function buildSummaryAgentGroups(
-  agents: DashboardAgentRowData[],
-  isUnread?: (agent: DashboardAgentRowData) => boolean
-): SummaryAgentGroup[] {
+/** One group per state for the folded pill; unread stays in the label, never a separate glyph. */
+export function buildSummaryAgentGroups(agents: DashboardAgentRowData[]): SummaryAgentGroup[] {
   const groups = new Map<AgentDotState, DashboardAgentRowData[]>()
-  const unreadDone: DashboardAgentRowData[] = []
   for (const agent of agents) {
-    if (isUnreadDoneAgent(agent, isUnread)) {
-      unreadDone.push(agent)
-      continue
-    }
     const dotState = getAgentDotState(agent)
     const group = groups.get(dotState)
     if (group) {
@@ -224,13 +211,10 @@ export function buildSummaryAgentGroups(
       groups.set(dotState, [agent])
     }
   }
-  const stateGroups = SUMMARY_STATE_ORDER.flatMap((state) => {
+  return SUMMARY_STATE_ORDER.flatMap((state) => {
     const groupAgents = groups.get(state)
     return groupAgents ? [{ state, agents: groupAgents }] : []
   })
-  return unreadDone.length > 0
-    ? [{ state: 'done', unread: true, agents: unreadDone }, ...stateGroups]
-    : stateGroups
 }
 
 export function summarizeAgents(

@@ -1,6 +1,6 @@
 import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import type { RuntimeRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   AutomationUpdateInput,

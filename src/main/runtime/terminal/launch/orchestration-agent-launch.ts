@@ -1,4 +1,4 @@
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { AgentLaunchScope } from '../../session-tabs/structured-session-tab-restoration'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'

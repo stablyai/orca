@@ -15,7 +15,7 @@ import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-se
 import { loadHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useAppStore } from '@/store'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 const LOCAL = { kind: 'local' } as const
 
