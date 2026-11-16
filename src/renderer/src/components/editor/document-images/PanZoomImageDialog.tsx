@@ -97,6 +97,7 @@ export function PanZoomImageDialog({
   ...contentProps
 }: PanZoomImageDialogProps): React.JSX.Element {
   const openerRef = useRef<Element | null>(null)
+  const canvasRef = useRef<HTMLDivElement | null>(null)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -113,6 +114,12 @@ export function PanZoomImageDialog({
           const step = navigationStep(event.key, navigation)
           if (step) {
             event.preventDefault()
+            // The canvas remounts per image; keep focus in the dialog instead of losing it to the body.
+            const content = event.currentTarget
+            const focused = document.activeElement
+            if (focused instanceof HTMLElement && canvasRef.current?.contains(focused)) {
+              content.focus()
+            }
             step()
           }
         }}
@@ -144,20 +151,58 @@ export function PanZoomImageDialog({
       >
         <DialogTitle className="sr-only">{title}</DialogTitle>
         {/* Mount with dialog content, and again per image, so each one starts fitted. */}
-        <PanZoomImageCanvas
-          key={navigation ? navigation.position : undefined}
-          src={src}
-          size={size}
-          title={title}
-          showTitle={showTitle}
-          background={background}
-          fallback={fallback}
-          toolbarActions={toolbarActions}
-          navigation={navigation}
-          onClose={() => onOpenChange(false)}
-        />
+        <div ref={canvasRef} className="contents">
+          <PanZoomImageCanvas
+            key={navigation ? navigation.position : undefined}
+            src={src}
+            size={size}
+            title={title}
+            showTitle={showTitle}
+            background={background}
+            fallback={fallback}
+            toolbarActions={toolbarActions}
+            navigation={navigation}
+            onClose={() => onOpenChange(false)}
+          />
+        </div>
+        {/* Outside the keyed canvas so the button keeps focus when the image changes. */}
+        {navigation && navigation.count > 1 ? (
+          <PanZoomImageNavigationButtons navigation={navigation} />
+        ) : null}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function PanZoomImageNavigationButtons({
+  navigation
+}: {
+  navigation: PanZoomImageNavigation
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <TooltipProvider>
+      <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+        <div className="pointer-events-auto rounded-md border border-border bg-background p-0.5 shadow-xs">
+          <ToolbarButton
+            label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
+            onClick={navigation.onPrevious}
+          >
+            <ChevronLeft />
+          </ToolbarButton>
+        </div>
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+        <div className="pointer-events-auto rounded-md border border-border bg-background p-0.5 shadow-xs">
+          <ToolbarButton
+            label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
+            onClick={navigation.onNext}
+          >
+            <ChevronRight />
+          </ToolbarButton>
+        </div>
+      </div>
+    </TooltipProvider>
   )
 }
 
@@ -285,30 +330,6 @@ function PanZoomImageCanvas({
             </ToolbarButton>
           </div>
         </div>
-        {navigation && navigation.count > 1 ? (
-          <>
-            <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-              <div className="pointer-events-auto rounded-md border border-border bg-background p-0.5 shadow-xs">
-                <ToolbarButton
-                  label={t('auto.components.editor.PanZoomImageDialog.previous', 'Previous image')}
-                  onClick={navigation.onPrevious}
-                >
-                  <ChevronLeft />
-                </ToolbarButton>
-              </div>
-            </div>
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-              <div className="pointer-events-auto rounded-md border border-border bg-background p-0.5 shadow-xs">
-                <ToolbarButton
-                  label={t('auto.components.editor.PanZoomImageDialog.next', 'Next image')}
-                  onClick={navigation.onNext}
-                >
-                  <ChevronRight />
-                </ToolbarButton>
-              </div>
-            </div>
-          </>
-        ) : null}
       </TooltipProvider>
     </>
   )

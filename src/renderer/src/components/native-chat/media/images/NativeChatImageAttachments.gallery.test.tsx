@@ -89,6 +89,38 @@ describe('NativeChatImageAttachments gallery', () => {
     expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1)
   })
 
+  it('keeps focus in the gallery when Previous, Next or an arrow key changes the image', async () => {
+    await act(async () => {
+      root.render(
+        createElement(NativeChatImageAttachments, { blocks: IMAGES, runtimeContext: null })
+      )
+    })
+    await click(container.querySelector('button'))
+    const next = dialog()?.querySelector<HTMLElement>('[aria-label="Next image"]')
+    await act(async () => next?.focus())
+
+    await click(next)
+    expect(dialog()?.textContent).toContain('2 of 3')
+    expect(dialog()?.querySelector('[aria-label="Next image"]')).toBe(next)
+    expect(document.activeElement).toBe(next)
+
+    await click(dialog()?.querySelector('[aria-label="Previous image"]'))
+    expect(dialog()?.textContent).toContain('1 of 3')
+    expect(document.activeElement).toBe(next)
+
+    // A toolbar button sits inside the per-image canvas, which remounts.
+    const close = dialog()?.querySelector<HTMLElement>('[aria-label="Close"]')
+    await act(async () => close?.focus())
+    await act(async () => {
+      close?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+    expect(dialog()?.textContent).toContain('2 of 3')
+    expect(document.activeElement).toBe(dialog())
+
+    await press('ArrowRight')
+    expect(dialog()?.textContent).toContain('3 of 3')
+  })
+
   it('never shows the previous image while the selected local image is still loading', async () => {
     const runtimeContext = {
       target: { kind: 'local' as const },
