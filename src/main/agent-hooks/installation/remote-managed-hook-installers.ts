@@ -27,6 +27,7 @@ import { zcodeHookService } from '../../zcode/hook-service'
 import { openClaudeHookService } from '../../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
+  platform?: 'linux' | 'darwin'
   /** Redirected runtime CODEX_HOME, including managed WSL homes. */
   codexHomeDir?: string
   /** Skip the trust write when a redirected runtime config is seeded by the launch path. */
@@ -82,7 +83,11 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
     (sftp, remoteHome, options) =>
       grokHookService.installRemote(sftp, remoteHome, options?.grokHomeDir)
   ],
-  ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
+  [
+    'droid',
+    (sftp, remoteHome, options) =>
+      droidHookService.installRemote(sftp, remoteHome, options?.platform)
+  ],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
   ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],

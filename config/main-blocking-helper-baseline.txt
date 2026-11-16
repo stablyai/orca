@@ -477,7 +477,8 @@
 1 src/main/daemon/transport/stream/daemon-stream-keep-tail-drop.ts
 6 src/main/devin/hook-service.ts
 2 src/main/diagnostics/main-thread-churn-probe.ts
-6 src/main/droid/hook-service.ts
+1 src/main/droid/droid-org-policy.ts # install and status check: the org settings file decides whether managed hooks can load
+7 src/main/droid/hook-service.ts # install and status check: Droid reads hooks from both hooks.json and legacy settings.json; was 6
 11 src/main/dsh/hook-service.ts
 2 src/main/emulator/android/android-avd-boot.ts
 2 src/main/emulator/android/android-command-runner.ts

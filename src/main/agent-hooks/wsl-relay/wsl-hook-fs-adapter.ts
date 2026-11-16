@@ -65,6 +65,7 @@ export async function installWslGuestHooks(options: {
   // Redirected Codex homes use the canonical runtime writer; the relay adapter handles other agents.
   const remoteAgents = agents.filter((agent) => agent !== 'codex')
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
+    platform: 'linux',
     agents: remoteAgents,
     ...(claudeVersion ? { claudeVersion } : {})
   })

@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import { posix } from 'node:path'
 
 import type { RelayDispatcher } from '../transport/publication/dispatcher'
+import { AGENT_HOOK_POLICY_READ_PATHS } from '../../shared/agent-hook-listener/transport/agent-hook-policy-read-paths'
 import {
   WSL_HOOK_FS_METHODS,
   type WslFsFailure,
@@ -56,7 +57,12 @@ export function registerWslHookFsHandlers(
     WSL_HOOK_FS_METHODS.readFile,
     async (params): Promise<WslFsResult<{ content: string }>> => {
       try {
-        const content = await fs.readFile(scoped(params.path), 'utf8')
+        // Organization policy reads may leave home; every mutation remains home-scoped.
+        const path = resolveRaw(params.path)
+        const content = await fs.readFile(
+          AGENT_HOOK_POLICY_READ_PATHS.has(path) ? path : scoped(path),
+          'utf8'
+        )
         return { ok: true, content }
       } catch (err) {
         return failure(err)
