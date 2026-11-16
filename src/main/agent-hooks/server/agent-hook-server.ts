@@ -81,6 +81,10 @@ export class AgentHookServer extends AgentHookServerLifecycle {
   /** Shells without command marks need the owning host's process-tree proof. */
   async reconcilePaneProcessExit(paneKey: string): Promise<void> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
+    // A verifiable process (e.g. a stopped job) owns its own exit; the quiet shell proves nothing.
+    if (this.hasVerifiableAgentProcess(resolved)) {
+      return
+    }
     const row = this.state.lastStatusByPaneKey.get(resolved)
     const identity = this.paneAgentIdentity(resolved)
     const agent = identity?.status.agentType
@@ -88,7 +92,6 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       identity &&
       agent &&
       identity.processTopology !== 'shared' &&
-      !this.hasVerifiableAgentProcess(resolved) &&
       (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, agent))
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
       return
@@ -169,6 +172,9 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       | undefined
     const binding = row?.providerSession
     const read = this.readPaneTmuxHost
+    if (!row) {
+      return this.releaseTmuxHostedCheckpoint(resolved)
+    }
     if (
       !read ||
       !row ||

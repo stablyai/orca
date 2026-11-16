@@ -162,3 +162,46 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
   })
   expect(capture.get('pty')?.records).toEqual([])
 })
+
+it('does not resume a checkpoint the pane reaches through its tmux client after a restart', async () => {
+  // A restart forgot the tmux row; the client still shows the agent before it hooks again.
+  const server = await createServer()
+  server.setHookRootEvidenceReader(
+    (request) => readHookRootEvidence(request, io),
+    (request) => readPaneTmuxHost(io, request)
+  )
+  runningPane(4050, CLIENT, ...TMUX)
+  let saved: SleepingAgentSessionRecord | undefined = {
+    paneKey: PANE,
+    worktreeId: 'wt-1',
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'restarted-session' },
+    prompt: 'In tmux',
+    state: 'done',
+    capturedAt: NOW,
+    updatedAt: NOW,
+    origin: 'live'
+  }
+  server.setTerminalPaneLifecycle({
+    ownsProcess: () => true,
+    isStopping: () => false,
+    isReversibleStop: () => true,
+    isPlaced: () => true,
+    readSavedRecord: () => saved,
+    retireSavedRecord: () => {
+      saved = undefined
+    }
+  })
+  const capture = await captureWorktreeSleepResumeRecords({
+    worktreeId: 'wt-1',
+    paneKeysByPtyId: new Map([['pty', [PANE]]]),
+    launchByPtyId: new Map(),
+    readRowsForPane: (key) => server.getStatusSnapshotForPane(key),
+    readSavedRecord: async () => saved,
+    readIdentity: (key, record) => server.paneAgentIdentity(key, record),
+    checkAgentPresence: (key, since) => server.checkAgentPresenceSince(key, since ?? 0),
+    capturedAt: NOW + 1_000
+  })
+  expect(saved).toBeUndefined()
+  expect(capture.get('pty')?.records).toEqual([])
+})

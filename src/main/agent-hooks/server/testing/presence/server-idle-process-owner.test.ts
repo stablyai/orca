@@ -266,6 +266,24 @@ describe('idle foreground process owns its provider session', () => {
     })
   })
 
+  it('keeps a verifiable owner when its shell takes the foreground', async () => {
+    const server = await start()
+    await idleClaude(server)
+    const before = server.getStatusSnapshot()
+    const confirmProcessExit = vi.fn(async () => true)
+    server.setTerminalPaneLifecycle({
+      ownsProcess: () => true,
+      isStopping: () => false,
+      isReversibleStop: () => false,
+      isPlaced: () => true,
+      confirmProcessExit
+    })
+    // Ctrl-Z returns the shell; the stopped process still answers for itself.
+    await server.reconcilePaneProcessExit(PANE)
+    expect(server.getStatusSnapshot()).toEqual(before)
+    expect(confirmProcessExit).not.toHaveBeenCalled()
+  })
+
   it.each(['live', 'unverifiable'] as const)(
     'retains mobile and resume selection after turn completion when owner is %s',
     async (verdict) => {

@@ -36,6 +36,26 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     this.readPaneTmuxHost = tmuxHost
   }
 
+  /** A restart forgets the tmux-selected row; a checkpoint shown through the pane's tmux client was
+   *  never the pane's own process. */
+  protected async releaseTmuxHostedCheckpoint(paneKey: string): Promise<void> {
+    const read = this.readPaneTmuxHost
+    const identity = read && !this.getTmuxSelectedStatus(paneKey) && this.paneAgentIdentity(paneKey)
+    if (
+      !read ||
+      !identity ||
+      identity.ended ||
+      identity.status.connectionId !== null ||
+      !identity.status.worktreeId ||
+      !(await read({ paneKey, worktreeId: identity.status.worktreeId }).catch(() => false)) ||
+      this.state.lastStatusByPaneKey.has(paneKey) ||
+      this.getTmuxSelectedStatus(paneKey)
+    ) {
+      return
+    }
+    this.releaseSharedPaneConversation(paneKey, identity.status)
+  }
+
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the
    *  owner's exit neither answers for the pane nor is forgotten. */
   protected readonly undecidedOwnerChallenges = new Map<string, number>()
