@@ -12,7 +12,10 @@ export const claudeAccountsApi = {
     ipcRenderer.invoke('claudeAccounts:reauthenticate', args),
   waitForSignInLink: (): Promise<string | null> =>
     ipcRenderer.invoke('claudeAccounts:waitForSignInLink'),
-  remove: (args: { accountId: string }) => ipcRenderer.invoke('claudeAccounts:remove', args),
+  remove: (args: { accountId: string; deleteRetainedHistory?: boolean }) =>
+    ipcRenderer.invoke('claudeAccounts:remove', args),
+  measureRetainedHistory: (args: { accountId: string }) =>
+    ipcRenderer.invoke('claudeAccounts:measureRetainedHistory', args),
   rename: (args: { accountId: string; displayName: string | null }) =>
     ipcRenderer.invoke('claudeAccounts:rename', args),
   select: (args: {

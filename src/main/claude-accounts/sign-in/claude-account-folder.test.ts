@@ -54,7 +54,7 @@ describe('claude account folder', () => {
       const older = join(dataRoot, 'claude-accounts', 'a')
       mkdirSync(older, { recursive: true })
 
-      await removeClaudeAccountFolder(dataRoot, 'a')
+      await removeClaudeAccountFolder(dataRoot, 'a', { deleteRetainedHistory: false })
       expect(existsSync(join(dataRoot, 'claude-profiles', 'a'))).toBe(false)
       expect(existsSync(join(history, 'chat.jsonl'))).toBe(true)
       expect(existsSync(older)).toBe(true)
@@ -73,7 +73,7 @@ describe('claude account folder', () => {
       const unrelated = claudeKeychainService(join(keychain.userHome, 'other'))
       keychain.items.set(unrelated, 1)
 
-      await removeClaudeAccountFolder(dataRoot, 'a')
+      await removeClaudeAccountFolder(dataRoot, 'a', { deleteRetainedHistory: false })
       for (const spelling of spellings) {
         expect(keychain.items.get(claudeKeychainService(spelling))).toBe(0)
       }

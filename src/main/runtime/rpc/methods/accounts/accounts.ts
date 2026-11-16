@@ -1,5 +1,6 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import { ACCOUNT_RENAME_METHODS } from './account-rename-methods'
+import { CLAUDE_ACCOUNT_REMOVAL_METHODS } from './claude-account-removal-methods'
 import type { OrcadFeature } from '../../startup/orcad-readiness'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
@@ -182,12 +183,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     handler: async (params, { runtime }) =>
       runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
   }),
-  defineMethod({
-    name: 'accounts.removeClaude',
-    permission: 'accounts-admin',
-    params: RemoveAccountParams,
-    handler: async (params, { runtime }) => runtime.removeClaudeAccount(params.accountId)
-  }),
+  ...CLAUDE_ACCOUNT_REMOVAL_METHODS,
   defineMethod({
     name: 'accounts.removeCodex',
     permission: 'accounts-admin',

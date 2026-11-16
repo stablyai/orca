@@ -15,7 +15,10 @@ import { runClaudeLoginSession } from './sign-in/claude-login-session'
 import { runClaudePastedCodeLogin } from './sign-in/claude-pasted-code-login'
 import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
-import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
+import {
+  getClaudeSelectionTargetForAccount,
+  type ClaudeAccountSelectionTarget
+} from './selection/runtime-selection'
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
@@ -30,7 +33,7 @@ export class ClaudeAccountService {
     private readonly store: ClaudeAccountStore,
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
-      Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
+      Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir' | 'measureAccountRetainedHistory'>,
     private readonly runLoginCommand = runClaudeCommandProcess
   ) {
     this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth)
@@ -101,9 +104,22 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.registration.cancel(signIn))
   }
 
-  removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+  /** Conversations only this account holds stay unless the user chose to delete them. */
+  removeAccount(
+    accountId: string,
+    options: { deleteRetainedHistory?: boolean } = {}
+  ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.remove(accountId))
+    return this.serializeMutation(() =>
+      this.selection.remove(accountId, {
+        deleteRetainedHistory: options.deleteRetainedHistory === true
+      })
+    )
+  }
+
+  async measureRetainedHistory(accountId: string): Promise<{ bytes: number }> {
+    const target = getClaudeSelectionTargetForAccount(this.selection.requireAccount(accountId))
+    return { bytes: await this.runtimeAuth.measureAccountRetainedHistory(accountId, target) }
   }
 
   // Outside the mutation queue: a pending sign-in can hold it for minutes, and this

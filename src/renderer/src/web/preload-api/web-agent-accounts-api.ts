@@ -121,12 +121,14 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: rejectHostOnlySignIn,
     waitForSignInLink: () => Promise.resolve(null),
-    remove: ({ accountId }) =>
+    remove: ({ accountId, deleteRetainedHistory }) =>
       callRuntimeResult<ClaudeRateLimitAccountsState>(
         'accounts.removeClaude',
-        { accountId },
+        { accountId, deleteRetainedHistory },
         ACCOUNT_MUTATION_TIMEOUT_MS
       ),
+    measureRetainedHistory: ({ accountId }) =>
+      callRuntimeResult<{ bytes: number }>('accounts.measureClaudeRetainedHistory', { accountId }),
     rename: ({ accountId, displayName }) =>
       callRuntimeResult<ClaudeRateLimitAccountsState>(
         'accounts.renameClaude',

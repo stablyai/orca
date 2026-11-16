@@ -154,7 +154,10 @@ export class ClaudeAccountSelection {
     }
   }
 
-  async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+  async remove(
+    accountId: string,
+    options: { deleteRetainedHistory: boolean }
+  ): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
     const settings = this.store.getSettings()
     const target = getClaudeSelectionTargetForAccount(account)
@@ -171,7 +174,7 @@ export class ClaudeAccountSelection {
     // Stop new launches from selecting the folder before deleting it.
     await this.runtimeAuth.syncForCurrentSelection(target)
     try {
-      await this.runtimeAuth.removeAccountFolder(accountId, target)
+      await this.runtimeAuth.removeAccountFolder(accountId, target, options)
     } catch (error) {
       // Keep the account available to retry folder deletion.
       console.warn('[claude-accounts] Could not delete the account folder:', error)

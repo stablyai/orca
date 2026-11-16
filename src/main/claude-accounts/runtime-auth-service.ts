@@ -115,20 +115,32 @@ export class ClaudeRuntimeAuthService {
 
   async removeAccountFolder(
     accountId: string,
-    target: ClaudeAccountSelectionTarget
+    target: ClaudeAccountSelectionTarget,
+    options: { deleteRetainedHistory: boolean }
   ): Promise<void> {
     const wsl = this.wslRouteFor(target)
     if (!wsl) {
-      await this.router.removeAccount(accountId)
+      await this.router.removeAccount(accountId, options)
       return
     }
     // Deleted distros must not block account removal.
-    await wsl.router.removeAccount(wsl.distro, accountId).catch((error: unknown) => {
+    await wsl.router.removeAccount(wsl.distro, accountId, options).catch((error: unknown) => {
       console.warn(
         `[claude-profile] Could not delete the Claude account folder in WSL ${wsl.distro}:`,
         error
       )
     })
+  }
+
+  /** Bytes of conversations only this account's folder holds. */
+  measureAccountRetainedHistory(
+    accountId: string,
+    target: ClaudeAccountSelectionTarget
+  ): Promise<number> {
+    const wsl = this.wslRouteFor(target)
+    return wsl
+      ? wsl.router.measureRetainedHistory(wsl.distro, accountId)
+      : this.router.measureRetainedHistory(accountId)
   }
 
   /** Install skills and plugins in System default so accounts can share them. */

@@ -1,19 +1,15 @@
-import {
-  existsSync,
-  lstatSync,
-  readdirSync,
-  rmdirSync,
-  rmSync,
-  statSync,
-  unlinkSync
-} from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { z } from 'zod'
 import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
 import { execSecurityCommand } from '../../macos-keychain/generic-password'
 import { describeClaudeProfile, readClaudeProfileObject } from '../profiles/claude-profile-paths'
+import {
+  measureRetainedClaudeHistory,
+  removeClaudeProfileFolder
+} from '../profiles/claude-profile-retained-history'
 import { claudeConfigDirSpellings, claudeKeychainService } from '../runtime-auth/keychain'
 
 export type ClaudeFolderLogin = {
@@ -161,12 +157,10 @@ async function readStateLogin(stateFile: string): Promise<ClaudeFolderLogin | nu
 /** Removes current profiles only; legacy `claude-accounts/` folders stay untouched. */
 export async function removeClaudeAccountFolder(
   dataRoot: string,
-  accountId: string
+  accountId: string,
+  options: { deleteRetainedHistory: boolean }
 ): Promise<void> {
-  const { home } = describeClaudeProfile(dataRoot, accountId, {
-    executionHostId: 'local',
-    runtime: 'host'
-  })
+  const home = claudeAccountHome(dataRoot, accountId)
   if (process.platform === 'darwin') {
     for (const spelling of claudeConfigDirSpellings(home, homedir())) {
       // Each delete removes only one Keychain item for this service.
@@ -185,35 +179,17 @@ export async function removeClaudeAccountFolder(
       }
     }
   }
-  const folder = dirname(home)
-  unlinkLinks(folder)
-  rmSync(folder, { recursive: true, force: true })
+  await removeClaudeProfileFolder(dirname(home), options)
 }
 
-// Unlink shared history before recursive deletion can follow Windows junctions.
-function unlinkLinks(dir: string): void {
-  let names: string[]
-  try {
-    names = readdirSync(dir)
-  } catch {
-    return
-  }
-  for (const name of names) {
-    const path = join(dir, name)
-    // Entries may vanish after listing.
-    const stat = lstatSync(path, { throwIfNoEntry: false })
-    if (!stat) {
-      continue
-    }
-    if (stat.isSymbolicLink()) {
-      try {
-        unlinkSync(path)
-      } catch {
-        // A Windows directory link is removed as a directory.
-        rmdirSync(path)
-      }
-    } else if (stat.isDirectory()) {
-      unlinkLinks(path)
-    }
-  }
+export function measureClaudeAccountRetainedHistory(
+  dataRoot: string,
+  accountId: string
+): Promise<number> {
+  return measureRetainedClaudeHistory(dirname(claudeAccountHome(dataRoot, accountId)))
+}
+
+function claudeAccountHome(dataRoot: string, accountId: string): string {
+  return describeClaudeProfile(dataRoot, accountId, { executionHostId: 'local', runtime: 'host' })
+    .home
 }

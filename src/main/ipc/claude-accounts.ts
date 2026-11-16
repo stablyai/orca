@@ -18,8 +18,15 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       claudeAccounts.reauthenticateAccount(args.accountId, args.copyLink)
   )
   ipcMain.handle('claudeAccounts:waitForSignInLink', () => claudeAccounts.waitForSignInLink())
-  ipcMain.handle('claudeAccounts:remove', (_event, args: { accountId: string }) =>
-    claudeAccounts.removeAccount(args.accountId)
+  ipcMain.handle(
+    'claudeAccounts:remove',
+    (_event, args: { accountId: string; deleteRetainedHistory?: boolean }) =>
+      claudeAccounts.removeAccount(args.accountId, {
+        deleteRetainedHistory: args.deleteRetainedHistory
+      })
+  )
+  ipcMain.handle('claudeAccounts:measureRetainedHistory', (_event, args: { accountId: string }) =>
+    claudeAccounts.measureRetainedHistory(args.accountId)
   )
   ipcMain.handle(
     'claudeAccounts:rename',

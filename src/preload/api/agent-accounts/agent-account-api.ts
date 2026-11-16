@@ -64,7 +64,12 @@ export type ClaudeAccountsApi = {
   }) => Promise<ClaudeRateLimitAccountsState>
   /** The pending sign-in's link once Claude hands it over; null if it ends without one. */
   waitForSignInLink: () => Promise<string | null>
-  remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
+  /** Conversations only this account holds stay unless `deleteRetainedHistory` is set. */
+  remove: (args: {
+    accountId: string
+    deleteRetainedHistory?: boolean
+  }) => Promise<ClaudeRateLimitAccountsState>
+  measureRetainedHistory: (args: { accountId: string }) => Promise<{ bytes: number }>
   rename: (args: {
     accountId: string
     displayName: string | null

@@ -254,17 +254,18 @@ export async function selectCodexProviderAccount(
 
 export async function removeClaudeProviderAccount(
   target: RuntimeClientTarget,
-  accountId: string
+  accountId: string,
+  deleteRetainedHistory = false
 ): Promise<ClaudeRateLimitAccountsState> {
   if (target.kind === 'environment') {
     return callRuntimeRpc<ClaudeRateLimitAccountsState>(
       target,
       'accounts.removeClaude',
-      { accountId },
+      { accountId, deleteRetainedHistory },
       { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
     )
   }
-  return window.api.claudeAccounts.remove({ accountId })
+  return window.api.claudeAccounts.remove({ accountId, deleteRetainedHistory })
 }
 
 export async function removeCodexProviderAccount(
