@@ -12,7 +12,6 @@ import type { ZotzNodeSetupEnvironment } from './zotz-node-setup-environment'
 import { runZotzNodeSetup } from './zotz-node-setup-orchestrator'
 import { buildZotzNodeSetupPhases } from './zotz-node-setup-phases'
 import { runZotzProcess } from './zotz-process-runner'
-import { readTailscaleStatus } from './zotz-tailscale'
 
 type ZotzNodeSetupHandlerDeps = {
   getRuntimeRpc: () => OrcaRuntimeRpcServer | null
@@ -75,9 +74,6 @@ function isWindowRenderer(event: IpcMainInvokeEvent): boolean {
 
 export function registerZotzNodeSetupHandlers(deps: ZotzNodeSetupHandlerDeps): void {
   let inFlight: Promise<ZotzNodeSetupResult> | null = null
-  ipcMain.handle('zotzNode:getTailscaleStatus', () =>
-    readTailscaleStatus({ platform: process.platform, env: process.env, run: runZotzProcess })
-  )
   ipcMain.handle('zotzNode:runServerSetup', (event) => {
     if (!isWindowRenderer(event)) {
       throw new Error('zotz node setup is only available from a desktop window')
