@@ -8,7 +8,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -39,11 +38,9 @@ function linkFolder(target: string, path: string): void {
   symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
-// Orca records the shared file's identity when it hardlinks prompt history on Windows.
+// Orca hardlinks prompt history to System default's on Windows.
 function linkPromptHistory(systemDefault: string, home: string): void {
   linkSync(join(systemDefault, 'history.jsonl'), join(home, 'history.jsonl'))
-  const { dev, ino } = statSync(join(systemDefault, 'history.jsonl'), { bigint: true })
-  writeFileSync(join(home, 'history.jsonl.orca-profile-link'), `${dev}:${ino}\n`)
 }
 
 // The guest scripts take paths as arguments; quotes and spaces must not split or expand them.
@@ -126,14 +123,17 @@ function expectDeleted(
 describe('Claude account retained history', () => {
   it('measures only the bytes this account alone holds', async () => {
     const f = fixture()
-    await expect(measureRetainedClaudeHistory(f.folder)).resolves.toBe(22)
+    await expect(measureRetainedClaudeHistory(f.folder, f.systemDefault)).resolves.toBe(22)
   })
 
   it('keeps retained conversations but removes the sign-in, settings and links', async () => {
     const f = fixture()
     const shared = snapshot(f.systemDefault)
     const other = snapshot(f.other)
-    await removeClaudeProfileFolder(f.folder, { deleteRetainedHistory: false })
+    await removeClaudeProfileFolder(f.folder, {
+      deleteRetainedHistory: false,
+      sharedHome: f.systemDefault
+    })
     expectKept(f, shared, other)
   })
 
@@ -141,7 +141,10 @@ describe('Claude account retained history', () => {
     const f = fixture()
     const shared = snapshot(f.systemDefault)
     const other = snapshot(f.other)
-    await removeClaudeProfileFolder(f.folder, { deleteRetainedHistory: true })
+    await removeClaudeProfileFolder(f.folder, {
+      deleteRetainedHistory: true,
+      sharedHome: f.systemDefault
+    })
     expectDeleted(f, shared, other)
   })
 
@@ -149,8 +152,11 @@ describe('Claude account retained history', () => {
     const f = fixture()
     rmSync(join(f.home, 'history.jsonl'))
     linkPromptHistory(f.systemDefault, f.home)
-    await expect(measureRetainedClaudeHistory(f.folder)).resolves.toBe(22)
-    await removeClaudeProfileFolder(f.folder, { deleteRetainedHistory: false })
+    await expect(measureRetainedClaudeHistory(f.folder, f.systemDefault)).resolves.toBe(22)
+    await removeClaudeProfileFolder(f.folder, {
+      deleteRetainedHistory: false,
+      sharedHome: f.systemDefault
+    })
     expect(existsSync(join(f.home, 'history.jsonl'))).toBe(false)
     expect(readFileSync(join(f.systemDefault, 'history.jsonl'), 'utf8')).toBe('shared prompts\n')
 
@@ -160,15 +166,21 @@ describe('Claude account retained history', () => {
     linkPromptHistory(h.systemDefault, h.home)
     rmSync(join(h.systemDefault, 'history.jsonl'))
     write(join(h.systemDefault, 'history.jsonl'), 'new shared\n')
-    await removeClaudeProfileFolder(h.folder, { deleteRetainedHistory: false })
+    await removeClaudeProfileFolder(h.folder, {
+      deleteRetainedHistory: false,
+      sharedHome: h.systemDefault
+    })
     expect(readFileSync(join(h.home, 'history.jsonl'), 'utf8')).toBe('shared prompts\n')
 
     const g = fixture()
     rmSync(join(g.home, 'history.jsonl'))
     write(join(g.home, 'history.jsonl'), 'mine\n')
     linkSync(join(g.home, 'history.jsonl'), join(g.root, 'backup.jsonl'))
-    await expect(measureRetainedClaudeHistory(g.folder)).resolves.toBe(27)
-    await removeClaudeProfileFolder(g.folder, { deleteRetainedHistory: false })
+    await expect(measureRetainedClaudeHistory(g.folder, g.systemDefault)).resolves.toBe(27)
+    await removeClaudeProfileFolder(g.folder, {
+      deleteRetainedHistory: false,
+      sharedHome: g.systemDefault
+    })
     expect(readFileSync(join(g.home, 'history.jsonl'), 'utf8')).toBe('mine\n')
   })
 
@@ -182,7 +194,10 @@ describe('Claude account retained history', () => {
       rmSync(join(f.home, name), { recursive: true })
     }
     mkdirSync(join(f.home, 'session-env'))
-    await removeClaudeProfileFolder(f.folder, { deleteRetainedHistory: false })
+    await removeClaudeProfileFolder(f.folder, {
+      deleteRetainedHistory: false,
+      sharedHome: f.systemDefault
+    })
     expect(existsSync(f.folder)).toBe(false)
   })
 
@@ -193,7 +208,7 @@ describe('Claude account retained history', () => {
       const f = fixture()
       chmodSync(join(f.home, 'projects.orca-profile-merge', 'p'), 0o000)
       try {
-        await expect(measureRetainedClaudeHistory(f.folder)).rejects.toThrow()
+        await expect(measureRetainedClaudeHistory(f.folder, f.systemDefault)).rejects.toThrow()
       } finally {
         chmodSync(join(f.home, 'projects.orca-profile-merge', 'p'), 0o700)
       }

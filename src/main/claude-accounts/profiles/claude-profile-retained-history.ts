@@ -1,12 +1,12 @@
 import type { Dirent } from 'node:fs'
-import { lstat, opendir, readdir, readFile, rmdir } from 'node:fs/promises'
+import { lstat, opendir, readdir, rmdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { scanWorkspaceSpaceEntryTree } from '../../../shared/workspace-disk-space/workspace-space-entry-traversal'
 import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
 import { CLAUDE_PROFILE_HISTORY_DIRS } from './setup/claude-profile-history'
-import { fileIdentity, PROMPT_HISTORY_LINK_RECORD } from './setup/claude-profile-prompt-history'
+import { fileIdentity } from './setup/claude-profile-prompt-history'
 
 const PROMPT_HISTORY = 'history.jsonl'
 // Set-aside prompt history: pending drains (`-N` generations, `.offset` cursors) and replaced copies.
@@ -26,20 +26,23 @@ function absentAsNull(error: unknown): null {
   throw error
 }
 
-// On Windows Orca hardlinks the profile's prompt history to the shared file and records its
-// identity; once the shared file is replaced, the old link holds this account's own prompts.
-async function isLinkedPromptHistory(home: string): Promise<boolean> {
-  const stats = await lstat(join(home, PROMPT_HISTORY), { bigint: true }).catch(absentAsNull)
-  if (!stats?.isFile() || stats.nlink < 2n) {
-    return false
-  }
-  const record = await readFile(join(home, PROMPT_HISTORY_LINK_RECORD), 'utf8').catch(absentAsNull)
-  return record?.trim() === fileIdentity(stats)
+// On Windows the profile's prompt history is a hardlink to System default's; once that file is
+// replaced, the old link holds only this account's prompts.
+async function isLinkedPromptHistory(home: string, sharedHome: string): Promise<boolean> {
+  const [own, shared] = await Promise.all(
+    [home, sharedHome].map((dir) =>
+      lstat(join(dir, PROMPT_HISTORY), { bigint: true }).catch(absentAsNull)
+    )
+  )
+  return own?.isFile() === true && shared !== null && fileIdentity(own) === fileIdentity(shared)
 }
 
 /** Decides per entry; read before anything in `home` is removed, the link record included. */
-async function retainedHistoryFilter(home: string): Promise<(entry: Dirent) => boolean> {
-  const linkedPromptHistory = await isLinkedPromptHistory(home)
+async function retainedHistoryFilter(
+  home: string,
+  sharedHome: string
+): Promise<(entry: Dirent) => boolean> {
+  const linkedPromptHistory = await isLinkedPromptHistory(home, sharedHome)
   // History only this account holds: what never became a link into System default. Links, the
   // sign-in, `.claude.json` and settings are never retained.
   return (entry) => {
@@ -93,12 +96,15 @@ async function measureEntry(path: string): Promise<number> {
 }
 
 /** Bytes of files in the retained entries; an unreadable entry fails the whole measurement. */
-export async function measureRetainedClaudeHistory(folder: string): Promise<number> {
+export async function measureRetainedClaudeHistory(
+  folder: string,
+  sharedHome: string
+): Promise<number> {
   const home = join(folder, 'home')
   if (!(await isRealDirectory(folder)) || !(await isRealDirectory(home))) {
     return 0
   }
-  const retained = await retainedHistoryFilter(home)
+  const retained = await retainedHistoryFilter(home, sharedHome)
   let bytes = 0
   for (const entry of await readdir(home, { withFileTypes: true })) {
     if (retained(entry)) {
@@ -144,13 +150,23 @@ async function removeIfEmpty(dir: string): Promise<void> {
   })
 }
 
+// Only rmdir: it refuses a folder a writer just put a file in, so pruning never deletes history.
+async function pruneEmptyDirectories(dir: string): Promise<void> {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      await pruneEmptyDirectories(join(dir, entry.name))
+    }
+  }
+  await removeIfEmpty(dir)
+}
+
 /**
  * Delete an account folder (`claude-profiles/<id>`). Its retained conversations stay unless the
- * user asked to delete them; a retained entry that holds nothing goes too.
+ * user asked to delete them; retained folders that hold no files go.
  */
 export async function removeClaudeProfileFolder(
   folder: string,
-  options: { deleteRetainedHistory: boolean }
+  options: { deleteRetainedHistory: boolean; sharedHome: string }
 ): Promise<void> {
   if (!(await isRealDirectory(folder))) {
     await removeWithoutFollowingLinks(folder)
@@ -159,17 +175,14 @@ export async function removeClaudeProfileFolder(
   const home = join(folder, 'home')
   const homeIsReal = await isRealDirectory(home)
   if (homeIsReal) {
-    const retained = await retainedHistoryFilter(home)
-    // Decide per entry as it is removed, so history a writer adds meanwhile is never swept up;
-    // an unmeasurable entry is kept.
+    const retained = await retainedHistoryFilter(home, options.sharedHome)
+    // Decided per entry as it is removed, so history a writer adds meanwhile is never swept up.
     for (const entry of await readdir(home, { withFileTypes: true })) {
       const path = join(home, entry.name)
-      const keep =
-        !options.deleteRetainedHistory &&
-        retained(entry) &&
-        (await measureEntry(path).catch(() => null)) !== 0
-      if (!keep) {
+      if (options.deleteRetainedHistory || !retained(entry)) {
         await removeWithoutFollowingLinks(path)
+      } else if (entry.isDirectory()) {
+        await pruneEmptyDirectories(path).catch(() => {})
       }
     }
   }
@@ -223,11 +236,11 @@ export const GUEST_REMOVE_KEEPING_HISTORY_SCRIPT = [
   'real_dir "$folder" || { rm -f -- "$folder"; exit; }',
   'failed=0',
   'remove() { rm -rf -- "$1" || failed=1; }',
-  // An unmeasurable entry is kept; one that holds nothing goes.
-  'keep() { [ "${2:-}" != delete ] && kept "$1" && [ "$(entry_bytes "$1" 2>/dev/null || echo unknown)" != 0 ]; }',
   'if listable_home; then',
   '  while IFS= read -r -d "" entry; do',
-  '    keep "$entry" "${2:-}" || remove "$entry"',
+  '    if [ "${2:-}" = delete ] || ! kept "$entry"; then remove "$entry"',
+  // find -delete on an empty folder is rmdir, which refuses one a writer just filled.
+  '    elif [ -d "$entry" ]; then find "$entry" -depth -type d -empty -delete 2>/dev/null; fi',
   '  done < <(entries "$home")',
   'fi',
   'while IFS= read -r -d "" entry; do',

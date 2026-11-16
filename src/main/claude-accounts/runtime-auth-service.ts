@@ -6,6 +6,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
 import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { measureClaudeAccountRetainedHistory } from './sign-in/claude-account-folder'
 import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
   installClaudeObservedConfigDirs,
@@ -121,7 +122,7 @@ export class ClaudeRuntimeAuthService {
   ): Promise<void> {
     const wsl = this.wslRouteFor(target)
     if (!wsl) {
-      await this.router.removeAccount(accountId, options)
+      await this.router.removeAccount(accountId, options.deleteRetainedHistory)
       return
     }
     // Deleted distros must not block account removal.
@@ -147,7 +148,11 @@ export class ClaudeRuntimeAuthService {
     const measurement = (
       wsl
         ? wsl.router.measureRetainedHistory(wsl.distro, accountId)
-        : this.router.measureRetainedHistory(accountId)
+        : measureClaudeAccountRetainedHistory(
+            this.dataRoot,
+            accountId,
+            this.router.systemDefaultHome()
+          )
     ).finally(() => this.measurements.delete(key))
     this.measurements.set(key, measurement)
     return measurement

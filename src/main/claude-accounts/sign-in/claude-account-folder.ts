@@ -158,7 +158,7 @@ async function readStateLogin(stateFile: string): Promise<ClaudeFolderLogin | nu
 export async function removeClaudeAccountFolder(
   dataRoot: string,
   accountId: string,
-  options: { deleteRetainedHistory: boolean }
+  options: { deleteRetainedHistory: boolean; sharedHome: string }
 ): Promise<void> {
   const home = claudeAccountHome(dataRoot, accountId)
   if (process.platform === 'darwin') {
@@ -184,9 +184,10 @@ export async function removeClaudeAccountFolder(
 
 export function measureClaudeAccountRetainedHistory(
   dataRoot: string,
-  accountId: string
+  accountId: string,
+  sharedHome: string
 ): Promise<number> {
-  return measureRetainedClaudeHistory(dirname(claudeAccountHome(dataRoot, accountId)))
+  return measureRetainedClaudeHistory(dirname(claudeAccountHome(dataRoot, accountId)), sharedHome)
 }
 
 function claudeAccountHome(dataRoot: string, accountId: string): string {

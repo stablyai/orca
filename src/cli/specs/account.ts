@@ -63,7 +63,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
       'orca account rm --agent claude|codex|opencode|devin|antigravity --account <id|email|label> [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'account'],
     notes: [
-      'Deletes the credentials Orca saved for that account (and, for OpenCode and Devin, the conversation data in its profile). Claude keeps conversations only that account holds; to delete them too, remove the account in Settings instead. Stop its running agents first. System credentials are never removed.',
+      'Deletes the credentials Orca saved for that account (and, for OpenCode and Devin, the conversation data in its profile). Stop its running agents first. System credentials are never removed.',
       'Select another Antigravity account before removing the one in use.'
     ]
   }

@@ -39,7 +39,6 @@ import { isDirectory, listClaudeProfileHistoryHomes } from '../claude-profile-ho
 import {
   claudeStateFile,
   readClaudeFolderLogin,
-  measureClaudeAccountRetainedHistory,
   removeClaudeAccountFolder,
   isSameClaudeLogin,
   type ClaudeFolderLogin
@@ -207,16 +206,13 @@ export class ClaudeProfileRouter {
   }
 
   /** Wait for setup before deleting so it cannot recreate the folder. */
-  async removeAccount(
-    accountId: string,
-    options: { deleteRetainedHistory: boolean }
-  ): Promise<void> {
+  async removeAccount(accountId: string, deleteRetainedHistory: boolean): Promise<void> {
     await this.setups.get(accountId)?.catch(() => {})
-    await removeClaudeAccountFolder(this.args.dataRoot, accountId, options)
-  }
-
-  measureRetainedHistory(accountId: string): Promise<number> {
-    return measureClaudeAccountRetainedHistory(this.args.dataRoot, accountId)
+    const sharedHome = this.systemDefaultHome()
+    await removeClaudeAccountFolder(this.args.dataRoot, accountId, {
+      deleteRetainedHistory,
+      sharedHome
+    })
   }
 
   /** A legacy snapshot records copy-based account switching. */
