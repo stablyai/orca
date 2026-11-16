@@ -61,4 +61,12 @@ describe('Perforce copy roots', () => {
     ])
     expect(listed.roots.has(resolve(copyPath))).toBe(false)
   })
+
+  it('ignores a copy that another host recorded under the same project id', async () => {
+    const remoteCopy = { ...baseMeta, orcaCreatedAt: 1, hostId: 'ssh:box' } as const
+    const [listed] = await listWorktreeRootsWithConcurrency(storeWith({ [copyId]: remoteCopy }), [
+      repo
+    ])
+    expect(listed.roots.has(resolve(copyPath))).toBe(false)
+  })
 })

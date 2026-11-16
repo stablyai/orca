@@ -4,4 +4,4 @@ import type { RuntimeStore } from '../../../runtime/construction/runtime-store-c
 export type RegisteredWorktreeRootStore = Pick<RuntimeStore, 'getRepos'> &
   Pick<ProjectRuntimeResolutionStore, 'getProjects' | 'getSettings'> &
   // Optional: only Perforce copies of folder projects need the metadata listing.
-  Partial<Pick<RuntimeStore, 'getAllWorktreeMeta'>>
+  Partial<Pick<RuntimeStore, 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost'>>
