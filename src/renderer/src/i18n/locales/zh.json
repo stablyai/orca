@@ -13344,8 +13344,8 @@
           "allAccess": "查看全部访问权限",
           "newCommands": "命令",
           "newContributions": "代你执行操作的功能",
-          "newEvents": "更多事件",
-          "newPanels": "面板",
+          "newEvents": "响应更多 Orca 事件",
+          "newPanels": "添加面板",
           "newRecipes": "机器配方",
           "newShortcuts": "键盘快捷键",
           "sourceMoved": "新来源：{{value0}}（原为 {{value1}}）",
@@ -13356,7 +13356,8 @@
           "newHooks": "可以更改或阻止 Orca 和你的智能体的操作",
           "newSettings": "一个设置页面",
           "newStatusBarItems": "状态栏项目",
-          "opensFileTypes": "打开新的文件类型：{{value0}}"
+          "opensFileTypes": "打开新的文件类型：{{value0}}",
+          "becomesDefaultEditor": "成为 {{value0}} 的默认编辑器"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",
@@ -13440,8 +13441,8 @@
           "title": "查看 {{value0}} 的更新",
           "back": "返回",
           "approve": "批准并更新",
-          "asksFor": "此版本比你批准的版本能做更多事情：",
-          "uncompared": "Orca 无法将此版本与你批准的版本进行比较。更新前请检查它可以访问的内容。"
+          "uncompared": "Orca 无法将此版本与你批准的版本进行比较。更新前请检查它可以访问的内容。",
+          "newInVersion": "此版本新增："
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其发布者",

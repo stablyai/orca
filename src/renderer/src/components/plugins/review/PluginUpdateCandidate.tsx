@@ -19,6 +19,7 @@ import { PluginConsentProvenance } from './PluginConsentProvenance'
 import { pluginPointsFromManifest, pluginTrust } from '../presentation/plugin-access-profile'
 import { pluginTrustWarnings } from '../presentation/plugin-consent-copy'
 import { pluginCapabilityDescription } from '../presentation/plugin-capability-presentation'
+import { editorGrowth, type EditorManifest } from './plugin-update-editor-growth'
 
 export type UpdateCandidate = {
   entry: PluginListEntry
@@ -68,10 +69,13 @@ const contributionGrowthLabel = (point: PluginContributionPoint): string => {
     return translate('auto.components.settings.PluginUpdateAllDialog.newCommands', 'Commands')
   }
   if (point === 'panels') {
-    return translate('auto.components.settings.PluginUpdateAllDialog.newPanels', 'Panels')
+    return translate('auto.components.settings.PluginUpdateAllDialog.newPanels', 'Adds panels')
   }
   if (point === 'events') {
-    return translate('auto.components.settings.PluginUpdateAllDialog.newEvents', 'More events')
+    return translate(
+      'auto.components.settings.PluginUpdateAllDialog.newEvents',
+      'Reacts to more Orca events'
+    )
   }
   if (point === 'vmRecipes') {
     return translate('auto.components.settings.PluginUpdateAllDialog.newRecipes', 'Machine recipes')
@@ -106,21 +110,38 @@ const contributionGrowthLabel = (point: PluginContributionPoint): string => {
   )
 }
 
-type EditorFiles = { extensions?: readonly string[]; filenames?: readonly string[] }
-
-/** The file types the update's editors open that the installed version's don't, as written. */
-export function addedEditorFiles(
-  installed: { contributes: { customEditors?: readonly EditorFiles[] } } | null | undefined,
-  next: { contributes: { customEditors?: readonly EditorFiles[] } }
+function editorGrowthLines(
+  installed: EditorManifest | null | undefined,
+  next: EditorManifest,
+  t: Translate
 ): string[] {
-  const files = (editors: readonly EditorFiles[] | undefined): string[] =>
-    (editors ?? []).flatMap((editor) => [...(editor.extensions ?? []), ...(editor.filenames ?? [])])
-  const held = new Set(
-    files(installed?.contributes.customEditors).map((file) => file.toLowerCase())
-  )
-  return [...new Set(files(next.contributes.customEditors))].filter(
-    (file) => !held.has(file.toLowerCase())
-  )
+  // Why generic without the installed manifest: nothing to compare against yet.
+  const growth = installed
+    ? editorGrowth(installed, next)
+    : { files: [], defaults: [], other: true }
+  const lines = [
+    ...(growth.files.length > 0
+      ? [
+          t(
+            'auto.components.settings.PluginUpdateAllDialog.opensFileTypes',
+            'Opens new file types: {{value0}}',
+            { value0: growth.files.join(', ') }
+          )
+        ]
+      : []),
+    ...(growth.defaults.length > 0
+      ? [
+          t(
+            'auto.components.settings.PluginUpdateAllDialog.becomesDefaultEditor',
+            'Becomes the default editor for {{value0}}',
+            { value0: growth.defaults.join(', ') }
+          )
+        ]
+      : [])
+  ]
+  return growth.other || lines.length === 0
+    ? [...lines, contributionGrowthLabel('customEditors')]
+    : lines
 }
 
 const replacementLine = (command: string, action: string, t: Translate = translate): string =>
@@ -134,8 +155,8 @@ const replacementLine = (command: string, action: string, t: Translate = transla
 export function updateChanges(
   preview: PluginMarketplaceHostInstallPreview,
   t?: Translate,
-  /** The installed manifest, when loaded: names the file types a new editor opens. */
-  installedManifest?: Parameters<typeof addedEditorFiles>[0]
+  /** The installed manifest, when loaded: names the file types a grown editor reaches. */
+  installedManifest?: EditorManifest | null
 ): {
   capabilities: string[]
   warnings: string[]
@@ -153,15 +174,10 @@ export function updateChanges(
   // Why: a panel profile has no trust warning of its own, but its growth still asks again.
   const executionLines =
     growth?.execution && execution.length === 0 ? [contributionGrowthLabel('panels')] : execution
-  const newFiles = installedManifest ? addedEditorFiles(installedManifest, preview.manifest) : []
-  const contributions = (growth?.contributions ?? []).map((point) =>
-    point === 'customEditors' && newFiles.length > 0
-      ? (t ?? translate)(
-          'auto.components.settings.PluginUpdateAllDialog.opensFileTypes',
-          'Opens new file types: {{value0}}',
-          { value0: newFiles.join(', ') }
-        )
-      : contributionGrowthLabel(point)
+  const contributions = (growth?.contributions ?? []).flatMap((point) =>
+    point === 'customEditors'
+      ? editorGrowthLines(installedManifest, preview.manifest, t ?? translate)
+      : [contributionGrowthLabel(point)]
   )
   // Why named: "Commands" alone would hide that one takes over an Orca action.
   const replacements = growth?.contributions.includes('commands')

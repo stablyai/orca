@@ -13311,8 +13311,8 @@
           "allAccess": "すべてのアクセスを表示",
           "newCommands": "コマンド",
           "newContributions": "あなたの代わりに動作する機能",
-          "newEvents": "追加のイベント",
-          "newPanels": "パネル",
+          "newEvents": "より多くの Orca イベントに反応します",
+          "newPanels": "パネルを追加します",
           "newRecipes": "マシンレシピ",
           "newShortcuts": "キーボードショートカット",
           "sourceMoved": "新しいソース: {{value0}} (以前: {{value1}})",
@@ -13323,7 +13323,8 @@
           "newHooks": "Orca と Agent の動作を変更または停止できます",
           "newSettings": "設定ページ",
           "newStatusBarItems": "ステータスバー項目",
-          "opensFileTypes": "新しいファイル形式を開きます: {{value0}}"
+          "opensFileTypes": "新しいファイル形式を開きます: {{value0}}",
+          "becomesDefaultEditor": "{{value0}} の既定のエディターになります"
         },
         "PluginDetailInfo": {
           "previous": "以前のバージョン",
@@ -13440,8 +13441,8 @@
           "title": "{{value0}} のアップデートを確認",
           "back": "戻る",
           "approve": "承認してアップデート",
-          "asksFor": "このバージョンは、承認したバージョンより多くのことができます:",
-          "uncompared": "Orca はこのバージョンを承認済みのバージョンと比較できませんでした。更新する前にアクセス内容を確認してください。"
+          "uncompared": "Orca はこのバージョンを承認済みのバージョンと比較できませんでした。更新する前にアクセス内容を確認してください。",
+          "newInVersion": "このバージョンの新機能:"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "公開元",

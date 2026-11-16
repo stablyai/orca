@@ -1,7 +1,6 @@
 import { Plus } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
-import { pluginCapabilityReachable } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
@@ -47,10 +46,13 @@ export function PluginUpdateReview({
         ]
       : []),
     ...warnings,
-    ...grown
-      .filter((kind) => pluginCapabilityReachable(kind, execution))
-      .map((kind) => pluginCapabilityDescription(kind, kind, t))
+    // Why unfiltered: main asks again for every new grant, even one this plugin type can't use yet.
+    ...grown.map((kind) => pluginCapabilityDescription(kind, kind, t))
   ]
+  // Why only a missing comparison: a moved source alone still has a comparison to show.
+  const compared = preview.accessGrowth !== undefined
+  // Why wait: editor lines name file types from the installed manifest, which loads after mount.
+  const ready = installedManifest !== undefined
 
   return (
     <div data-plugin-update-review={entry.pluginKey} className="space-y-4">
@@ -70,13 +72,18 @@ export function PluginUpdateReview({
           </span>
         </p>
       </div>
-      {additions.length > 0 ? (
+      {compared ? null : (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'auto.components.settings.PluginUpdateReview.uncompared',
+            'Orca couldn’t compare this version with the one you approved. Check what it can access before you update.'
+          )}
+        </p>
+      )}
+      {ready && additions.length > 0 ? (
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            {t(
-              'auto.components.settings.PluginUpdateReview.asksFor',
-              'This version can do more than the one you approved:'
-            )}
+            {t('auto.components.settings.PluginUpdateReview.newInVersion', 'New in this version:')}
           </p>
           <ul className="space-y-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm">
             {additions.map((line) => (
@@ -87,15 +94,8 @@ export function PluginUpdateReview({
             ))}
           </ul>
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {t(
-            'auto.components.settings.PluginUpdateReview.uncompared',
-            'Orca couldn’t compare this version with the one you approved. Check what it can access before you update.'
-          )}
-        </p>
-      )}
-      <AllAccess preview={preview} execution={execution} defaultOpen={additions.length === 0} />
+      ) : null}
+      <AllAccess preview={preview} execution={execution} defaultOpen={!compared} />
     </div>
   )
 }

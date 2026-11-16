@@ -13221,8 +13221,8 @@
           "sourceMoved": "Yeni kaynak: {{value0}} (önceki: {{value1}})",
           "newShortcuts": "Klavye kısayolları",
           "newCommands": "Komutlar",
-          "newPanels": "Paneller",
-          "newEvents": "Daha fazla olay",
+          "newPanels": "Paneller ekler",
+          "newEvents": "Daha fazla Orca olayına tepki verir",
           "newRecipes": "Makine tarifleri",
           "newContributions": "Sizin adınıza işlem yapan özellikler",
           "allAccess": "Tüm erişimi gör",
@@ -13231,14 +13231,15 @@
           "newHooks": "Orca'nın ve ajanlarınızın yaptıklarını değiştirebilir veya durdurabilir",
           "newSettings": "Bir ayarlar sayfası",
           "newStatusBarItems": "Durum çubuğu öğeleri",
-          "opensFileTypes": "Yeni dosya türlerini açar: {{value0}}"
+          "opensFileTypes": "Yeni dosya türlerini açar: {{value0}}",
+          "becomesDefaultEditor": "{{value0}} için varsayılan düzenleyici olur"
         },
         "PluginUpdateReview": {
           "title": "{{value0}} güncellemesini incele",
           "back": "Geri",
           "approve": "Onayla ve güncelle",
-          "asksFor": "Bu sürüm, onayladığınız sürümden daha fazlasını yapabilir:",
-          "uncompared": "Orca bu sürümü onayladığınız sürümle karşılaştıramadı. Güncellemeden önce nelere erişebildiğini kontrol edin."
+          "uncompared": "Orca bu sürümü onayladığınız sürümle karşılaştıramadı. Güncellemeden önce nelere erişebildiğini kontrol edin.",
+          "newInVersion": "Bu sürümde yeni:"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "yayıncı",

@@ -9675,8 +9675,8 @@
           "newAccess": "Novo: {{value0}}",
           "newCommands": "Comandos",
           "newContributions": "Recursos que agem por você",
-          "newEvents": "Mais eventos",
-          "newPanels": "Painéis",
+          "newEvents": "Reage a mais eventos do Orca",
+          "newPanels": "Adiciona painéis",
           "newRecipes": "Receitas de máquina",
           "newShortcuts": "Atalhos de teclado",
           "previewError": "Não foi possível ler esta atualização",
@@ -9696,7 +9696,8 @@
           "newHooks": "Pode alterar ou interromper o que o Orca e seus agentes fazem",
           "newSettings": "Uma página de configurações",
           "newStatusBarItems": "Itens da barra de status",
-          "opensFileTypes": "Abre novos tipos de arquivo: {{value0}}"
+          "opensFileTypes": "Abre novos tipos de arquivo: {{value0}}",
+          "becomesDefaultEditor": "Passa a ser o editor padrão para {{value0}}"
         },
         "PluginThemeUseNow": {
           "useForLight": "Usar no claro:",
@@ -9788,8 +9789,8 @@
           "title": "Revisar a atualização de {{value0}}",
           "back": "Voltar",
           "approve": "Aprovar e atualizar",
-          "asksFor": "Esta versão pode fazer mais do que a que você aprovou:",
-          "uncompared": "O Orca não conseguiu comparar esta versão com a que você aprovou. Confira o que ela pode acessar antes de atualizar."
+          "uncompared": "O Orca não conseguiu comparar esta versão com a que você aprovou. Confira o que ela pode acessar antes de atualizar.",
+          "newInVersion": "Novidades nesta versão:"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "seu editor",

@@ -54,7 +54,20 @@ const entry = pluginListEntryFromInstalled({
   panels: [],
   commands: [],
   hasWorker: false,
-  restarts: 0
+  restarts: 0,
+  source: {
+    kind: 'marketplace',
+    reference: 'https://github.com/stablyai/orca-plugins.git (plugins/excalidraw)',
+    url: 'https://github.com/stablyai/orca-plugins.git',
+    path: 'plugins/excalidraw',
+    resolvedCommit: 'a'.repeat(40),
+    contentHash: 'b'.repeat(64),
+    marketplace: {
+      reference: 'https://github.com/stablyai/orca-plugins.git',
+      ref: 'main',
+      resolvedCommit: 'c'
+    }
+  }
 })
 
 function preview(
@@ -126,5 +139,19 @@ export const newFileTypes = defineFixture({
 export const uncompared = defineFixture({
   width: 560,
   setup,
-  render: () => <Frame next={preview(newEditors, undefined)} />
+  render: () => <Frame next={{ ...preview(newEditors, undefined), repositoryMoved: true }} />
+})
+
+export const unusableGrant = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <Frame
+      next={preview(manifest('2.3.1'), {
+        capabilities: ['terminal:send'],
+        execution: null,
+        contributions: []
+      })}
+    />
+  )
 })

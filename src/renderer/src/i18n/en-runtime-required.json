@@ -695,9 +695,6 @@
           "refreshing": "Refreshing…",
           "tryAgain": "Try again"
         },
-        "PluginUpdateAllDialog": {
-          "opensFileTypes": "Opens new file types: {{value0}}"
-        },
         "PluginsSettingsSection": {
           "empty": "Browse the All tab to install plugins from a catalog.",
           "emptyTitle": "No plugins installed yet",

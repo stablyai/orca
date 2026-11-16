@@ -12929,8 +12929,8 @@
           "sourceMoved": "新來源：{{value0}}（原為 {{value1}}）",
           "newShortcuts": "鍵盤快速鍵",
           "newCommands": "命令",
-          "newPanels": "面板",
-          "newEvents": "更多事件",
+          "newPanels": "新增面板",
+          "newEvents": "回應更多 Orca 事件",
           "newRecipes": "機器配方",
           "newContributions": "代替你執行動作的功能",
           "allAccess": "查看所有存取權限",
@@ -12939,14 +12939,15 @@
           "newHooks": "可以變更或阻止 Orca 和你的代理程式的動作",
           "newSettings": "一個設定頁面",
           "newStatusBarItems": "狀態列項目",
-          "opensFileTypes": "開啟新的檔案類型：{{value0}}"
+          "opensFileTypes": "開啟新的檔案類型：{{value0}}",
+          "becomesDefaultEditor": "成為 {{value0}} 的預設編輯器"
         },
         "PluginUpdateReview": {
           "title": "檢視 {{value0}} 的更新",
           "back": "返回",
           "approve": "核准並更新",
-          "asksFor": "此版本比你核准的版本能做更多事情：",
-          "uncompared": "Orca 無法將此版本與你核准的版本比較。更新前請檢查它可以存取的內容。"
+          "uncompared": "Orca 無法將此版本與你核准的版本比較。更新前請檢查它可以存取的內容。",
+          "newInVersion": "此版本新增："
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其發布者",

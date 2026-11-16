@@ -13107,8 +13107,8 @@
           "sourceMoved": "Neue Quelle: {{value0}} (vorher {{value1}})",
           "newShortcuts": "Tastenkürzel",
           "newCommands": "Befehle",
-          "newPanels": "Bereiche",
-          "newEvents": "Weitere Ereignisse",
+          "newPanels": "Fügt Panels hinzu",
+          "newEvents": "Reagiert auf mehr Orca-Ereignisse",
           "newRecipes": "Maschinenrezepte",
           "newContributions": "Funktionen, die für dich handeln",
           "allAccess": "Alle Zugriffe anzeigen",
@@ -13117,14 +13117,15 @@
           "newHooks": "Kann ändern oder stoppen, was Orca und deine Agenten tun",
           "newSettings": "Eine Einstellungsseite",
           "newStatusBarItems": "Statusleisten-Elemente",
-          "opensFileTypes": "Öffnet neue Dateitypen: {{value0}}"
+          "opensFileTypes": "Öffnet neue Dateitypen: {{value0}}",
+          "becomesDefaultEditor": "Wird der Standardeditor für {{value0}}"
         },
         "PluginUpdateReview": {
           "title": "Update für {{value0}} prüfen",
           "back": "Zurück",
           "approve": "Genehmigen & aktualisieren",
-          "asksFor": "Diese Version kann mehr als die, die du genehmigt hast:",
-          "uncompared": "Orca konnte diese Version nicht mit der genehmigten vergleichen. Prüfe vor dem Update, worauf sie zugreifen kann."
+          "uncompared": "Orca konnte diese Version nicht mit der genehmigten vergleichen. Prüfe vor dem Update, worauf sie zugreifen kann.",
+          "newInVersion": "Neu in dieser Version:"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "seinem Herausgeber",
