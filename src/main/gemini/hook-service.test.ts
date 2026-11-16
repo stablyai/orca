@@ -25,9 +25,9 @@ afterEach(() => {
 
 function installedAfterAgentCommand(): string {
   expect(new GeminiHookService().install().state).toBe('installed')
-  const settings = JSON.parse(readFileSync(join(home, '.gemini', 'settings.json'), 'utf8')) as {
-    hooks: Record<string, { hooks: { command: string }[] }[]>
-  }
+  const settings: { hooks: Record<string, { hooks: { command: string }[] }[]> } = JSON.parse(
+    readFileSync(join(home, '.gemini', 'settings.json'), 'utf8')
+  )
   return settings.hooks.AfterAgent[0].hooks[0].command
 }
 
