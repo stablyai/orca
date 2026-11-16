@@ -1,9 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import type {
-  OrcaBillingOpenResult,
-  OrcaBillingOverageArgs,
-  OrcaBillingOverageResult,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult,
   OrcaBillingTrialClaimResult
@@ -14,9 +11,7 @@ import {
   claimOrcaBillingTrial,
   getOrcaBillingStatus,
   getOrcaBillingTeamPlans,
-  getOrcaPlanCatalog,
-  openOrcaBillingPortal,
-  setOrcaBillingOverage
+  getOrcaPlanCatalog
 } from '../../billing/billing-service'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { ensureActiveOrcaProfile } from '../../orca-profiles/profile-index-store'
@@ -36,14 +31,6 @@ import {
   getCloudSetupSession,
   startCloudSetup
 } from '../../billing/cloud-setup-service'
-
-// Cents; the billing service enforces the plan's maximum.
-const OverageArgs = z
-  .object({
-    enabled: z.boolean(),
-    spendCapCents: z.number().int().min(0).max(100_000_000).optional()
-  })
-  .strict()
 
 const TeamPlansArgs = z
   .object({
@@ -88,14 +75,6 @@ export function cloudSetupStartArgsFromUnknown(args: unknown): CloudSetupStartAr
   return parsed.data
 }
 
-export function billingOverageArgsFromUnknown(args: unknown): OrcaBillingOverageArgs {
-  const parsed = OverageArgs.safeParse(args)
-  if (!parsed.success) {
-    throw new Error('invalid_orca_billing_overage')
-  }
-  return parsed.data
-}
-
 /** `${userId}:${activeOrgId}` for the active profile's account (as the renderer keys it), or null. */
 function billingAccountKey(userDataPath: string): string | null {
   const cloud = ensureActiveOrcaProfile(userDataPath).profile.cloud
@@ -121,11 +100,6 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
   })
   ipcMain.handle('orcaProfiles:billingPlans', async (): Promise<OrcaPlanCatalogResult> =>
     getOrcaPlanCatalog(getProfileUserDataPath())
-  )
-  ipcMain.handle(
-    'orcaProfiles:billingSetOverage',
-    async (_event, rawArgs: unknown): Promise<OrcaBillingOverageResult> =>
-      setOrcaBillingOverage(getProfileUserDataPath(), billingOverageArgsFromUnknown(rawArgs))
   )
   ipcMain.handle(
     'orcaProfiles:billingTeamPlans',
@@ -160,8 +134,5 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
   )
   ipcMain.handle('orcaProfiles:billingClaimTrial', async (): Promise<OrcaBillingTrialClaimResult> =>
     claimOrcaBillingTrial(getProfileUserDataPath())
-  )
-  ipcMain.handle('orcaProfiles:billingOpenPortal', async (): Promise<OrcaBillingOpenResult> =>
-    openOrcaBillingPortal(getProfileUserDataPath())
   )
 }

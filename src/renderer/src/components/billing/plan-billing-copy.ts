@@ -1,10 +1,6 @@
 // User-facing copy for billing states, kept apart from the components that render it.
 import type { Translate } from '@/i18n/use-translate'
-import type {
-  OrcaBillingDenyReason,
-  OrcaBillingOverageResult
-} from '../../../../shared/orca-billing'
-import { formatCents } from '../../../../shared/orca-billing-usage-alerts'
+import type { OrcaBillingDenyReason } from '../../../../shared/orca-billing'
 
 export function denyReasonCopy(
   reason: OrcaBillingDenyReason,
@@ -100,44 +96,5 @@ export function statusLabel(status: string, t: Translate): string {
       return t('auto.components.billing.statusCanceled', 'Canceled')
     default:
       return t('auto.components.billing.statusInactive', 'Inactive')
-  }
-}
-
-function capTooHighCopy(maxCents: number, locale: string, t: Translate): string {
-  return t('auto.components.billing.capAtMost', 'The spend cap can be at most {{max}}.', {
-    max: formatCents(maxCents, locale)
-  })
-}
-
-export function overageFailureCopy(
-  result: OrcaBillingOverageResult,
-  t: Translate,
-  /** The service's highest allowed cap; null from older services that don't send it. */
-  maxCapCents: number | null = null,
-  locale = 'en-US'
-): string | null {
-  switch (result.status) {
-    case 'ok':
-      return null
-    case 'cap-too-high':
-      return maxCapCents === null
-        ? t('auto.components.billing.capTooHigh', 'That spend cap is above the allowed maximum.')
-        : capTooHighCopy(maxCapCents, locale, t)
-    case 'no-subscription':
-      return t('auto.components.billing.overageNoPlan', 'Overage needs an active plan.')
-    case 'forbidden':
-      return t(
-        'auto.components.billing.openForbidden2',
-        'Only an owner or admin can manage billing.'
-      )
-    case 'signed-out':
-      return t(
-        'auto.components.billing.openSignedOut2',
-        'Sign in to Orca again to manage your team.'
-      )
-    case 'unconfigured':
-      return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
-    case 'failed':
-      return t('auto.components.billing.openFailed', 'Couldn’t reach billing. Try again.')
   }
 }

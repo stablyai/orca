@@ -11,7 +11,8 @@ import {
   isPairedCloudStatusRow
 } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { wakeCloudWorkspace } from '@/components/orca-cloud/cloud-workspace-actions'
-import type { HostedWorkspaceStatus } from '../../../../../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { useCloudWorkspaceView } from '@/components/orca-cloud/use-cloud-workspace-view'
+import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
   resumeEphemeralVmWorkspace,
@@ -51,18 +52,30 @@ export function getWorkspaceVmLifecycleAction(
 
 /**
  * PAIRED-LIFECYCLE: a paired cloud workspace (one this desktop opened or created from a GitHub-only
- * project) has no VM record here, so its lifecycle item comes from the control plane's status:
- * asleep offers Wake, waking shows Waking…, anything else keeps the plain Sleep items (which reach
- * the sandbox). Before this an asleep paired row offered Sleep and never Wake (n79).
+ * project) has no VM record here, so its lifecycle item follows the same state the sidebar line
+ * shows (deriveCloudDotState: an in-flight wake first, then the control plane): Waking… while the
+ * row reads Waking, Wake while it reads Asleep, Try waking again after a failed wake, and otherwise
+ * the plain Sleep items (which reach the sandbox).
  */
-export function getPairedCloudLifecycleAction(
-  state: HostedWorkspaceStatus['state'] | undefined,
-  wakeInFlight: boolean
-): WorkspaceVmLifecycleAction {
-  if (wakeInFlight || state === 'waking') {
-    return 'waking'
+export function getPairedCloudLifecycleAction(state: CloudDotState): {
+  action: WorkspaceVmLifecycleAction
+  retry: boolean
+} {
+  switch (state) {
+    case 'waking':
+      return { action: 'waking', retry: false }
+    case 'sleeping':
+      return { action: 'resume', retry: false }
+    case 'wakeFailed':
+      return { action: 'resume', retry: true }
+    case 'running':
+    case 'starting':
+    case 'unresponsive':
+    case 'failed':
+    case 'archived':
+    case 'unknown':
+      return { action: null, retry: false }
   }
-  return state === 'sleeping' ? 'resume' : null
 }
 
 /**
@@ -128,24 +141,21 @@ export function WorkspaceVmLifecycleMenuItems({
     isArchivedCloudStatus(state.status[worktreeId]?.status)
   )
   const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, worktreeId))
-  const pairedAction = useCloudWorkspace((state) =>
-    paired
-      ? getPairedCloudLifecycleAction(
-          state.status[worktreeId]?.status?.state,
-          state.wake[worktreeId]?.phase === 'waking' || state.wake[worktreeId]?.phase === 'connecting'
-        )
-      : null
-  )
+  // The sidebar's own view of the row, so the menu never disagrees with the line beside it.
+  const view = useCloudWorkspaceView(worktreeId, { pairedRows: true })
+  const pairedLifecycle = paired
+    ? getPairedCloudLifecycleAction(view.state)
+    : { action: null, retry: false }
   const action = getWorkspaceVmLifecycleAction(status, waking, canSuspend)
   if (archived) {
     return null
   }
-  if (!action && pairedAction) {
+  if (!action && pairedLifecycle.action) {
     return (
       <VmLifecycleMenuItem
-        action={pairedAction}
+        action={pairedLifecycle.action}
         cloud
-        retry={false}
+        retry={pairedLifecycle.retry}
         disabled={disabled}
         t={t}
         onResume={() => void wakeCloudWorkspace(worktreeId)}

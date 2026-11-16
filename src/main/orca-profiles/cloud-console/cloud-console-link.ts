@@ -4,6 +4,7 @@
 import { app, shell } from 'electron'
 import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
 import {
+  cloudConsoleTicketPage,
   ORCA_CLOUD_CONSOLE_BILLING_HINT_CAPABILITY,
   type OrcaCloudConsoleBillingHint,
   type OrcaCloudConsoleOpenResult,
@@ -49,8 +50,8 @@ export function acceptedTicketUrl(
 }
 
 /**
- * The ticket request body. The billing hint goes only to an auth that advertises it: an older
- * ticket route takes a strict body and would refuse the extra fields, losing the signed-in landing.
+ * The ticket request body. The billing hint and the API pages go only to an auth that advertises
+ * them: an older ticket route takes a strict body and would refuse them, losing the signed-in landing.
  */
 export function cloudConsoleTicketBody(
   session: { capabilities?: { flags: Record<string, boolean> } },
@@ -67,7 +68,7 @@ export function cloudConsoleTicketBody(
       ? args.billingHint
       : null
   return {
-    page: args.section,
+    page: cloudConsoleTicketPage(args.section, session.capabilities?.flags, args.orgId),
     ...(args.orgId ? { orgId: args.orgId } : {}),
     ...(hint ? { plan: hint.plan, interval: hint.interval } : {})
   }

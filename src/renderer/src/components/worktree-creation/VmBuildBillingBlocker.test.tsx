@@ -4,33 +4,22 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   OrcaBillingDenyReason,
-  OrcaBillingOverageResult,
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import { sampleTeam } from '../billing/plan-billing-fixtures'
 import { VmBuildBillingBlocker, type BillingBlockKind } from './VmBuildBillingBlocker'
 
-const setOverage =
-  vi.fn<(args: { enabled: boolean; spendCapCents?: number }) => Promise<OrcaBillingOverageResult>>()
 const billingStatus = vi.fn<() => Promise<OrcaBillingStatusResult>>()
-vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({ openCloudConsole: vi.fn() }))
+const openCloudConsole = vi.fn((_section: string) => Promise.resolve())
+vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({
+  openCloudConsole: (section: string) => openCloudConsole(section)
+}))
 vi.mock('@/components/billing/plans/plans-dialog-store', () => ({ openPlansDialog: vi.fn() }))
 
-const openPortal = vi.fn(() => Promise.resolve({ status: 'opened' as const }))
-
 beforeEach(() => {
-  setOverage.mockReset()
   billingStatus.mockReset()
-  openPortal.mockClear()
-  Object.assign(window, {
-    api: {
-      orcaProfiles: {
-        billingSetOverage: setOverage,
-        billingStatus,
-        billingOpenPortal: openPortal
-      }
-    }
-  })
+  openCloudConsole.mockClear()
+  Object.assign(window, { api: { orcaProfiles: { billingStatus } } })
 })
 
 afterEach(() => {
@@ -74,63 +63,32 @@ function renderBlocker(
 }
 
 describe('billing blocker on the creating sheet (JA-21)', () => {
-  it('out of hours: Turn on with a $25 cap saves overage and continues the create', async () => {
-    setOverage.mockResolvedValue({ status: 'ok', entitlement: sampleTeam })
-    const { onContinue } = renderBlocker('hoursUsed')
-    expect(screen.getByRole('heading', { name: 'Out of sandbox hours' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Turn on with a $25 cap' }))
-    await waitFor(() => expect(onContinue).toHaveBeenCalledOnce())
-    expect(setOverage).toHaveBeenCalledWith({
-      enabled: true,
-      spendCapCents: 2500
-    })
-  })
-
-  it("without billing's default cap: plain Turn on overage, and billing applies its default", async () => {
-    setOverage.mockResolvedValue({ status: 'ok', entitlement: sampleTeam })
-    const { onContinue } = renderBlocker('hoursUsed', { offers: false })
-    fireEvent.click(screen.getByRole('button', { name: 'Turn on overage' }))
-    await waitFor(() => expect(onContinue).toHaveBeenCalledOnce())
-    expect(setOverage).toHaveBeenCalledWith({ enabled: true })
-  })
-
-  it('a failed save shows inline and does not continue', async () => {
-    setOverage.mockResolvedValue({ status: 'failed', error: 'boom' })
-    const { onContinue } = renderBlocker('hoursUsed')
-    fireEvent.click(screen.getByRole('button', { name: 'Turn on with a $25 cap' }))
-    await waitFor(() => expect(screen.getByRole('status').textContent).not.toBe(''))
-    expect(onContinue).not.toHaveBeenCalled()
-  })
-
-  it('spend cap reached: the field starts at the cap plus $25 and saving continues', async () => {
-    setOverage.mockResolvedValue({ status: 'ok', entitlement: sampleTeam })
-    const { onContinue } = renderBlocker('spendCap', { capCents: 4000 })
-    const field = screen.getByLabelText('Monthly spend cap')
-    expect(field).toHaveProperty('value', '65')
-    fireEvent.change(field, { target: { value: '100' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Raise spend cap and continue' }))
-    await waitFor(() => expect(onContinue).toHaveBeenCalledOnce())
-    expect(setOverage).toHaveBeenCalledWith({
-      enabled: true,
-      spendCapCents: 10_000
-    })
-  })
-
-  it('payment failed: Update payment method opens billing, and returning re-checks once', async () => {
-    billingStatus.mockResolvedValue({
-      status: 'ok',
-      entitlement: { ...sampleTeam, canStartSandbox: true }
-    })
-    const { onContinue } = renderBlocker('payment')
-    fireEvent.click(screen.getByRole('button', { name: 'Update payment method' }))
-    expect(openPortal).toHaveBeenCalledOnce()
-    expect(screen.getByText('Finish in your browser.')).toBeTruthy()
-    act(() => {
-      window.dispatchEvent(new Event('focus'))
-    })
-    await waitFor(() => expect(onContinue).toHaveBeenCalledOnce())
-    expect(billingStatus).toHaveBeenCalledOnce()
-  })
+  it.each([
+    ['hoursUsed', 'Out of sandbox hours', 'Turn on in browser'],
+    ['spendCap', 'Spend cap reached', 'Raise in browser'],
+    ['payment', 'Payment failed', 'Update in browser']
+  ] as const)(
+    '%s: the fix opens billing in the browser, and returning re-checks and continues',
+    async (kind, title, button) => {
+      billingStatus.mockResolvedValue({
+        status: 'ok',
+        entitlement: { ...sampleTeam, canStartSandbox: true }
+      })
+      const { onContinue } = renderBlocker(kind)
+      expect(screen.getByRole('heading', { name: title })).toBeTruthy()
+      // Nothing changes billing from the desktop: no form, no in-app save.
+      expect(screen.queryByLabelText('Monthly spend cap')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: button }))
+      expect(openCloudConsole).toHaveBeenCalledWith('billing')
+      expect(screen.getByText('Finish in your browser.')).toBeTruthy()
+      expect(onContinue).not.toHaveBeenCalled()
+      act(() => {
+        window.dispatchEvent(new Event('focus'))
+      })
+      await waitFor(() => expect(onContinue).toHaveBeenCalledOnce())
+      expect(billingStatus).toHaveBeenCalledOnce()
+    }
+  )
 
   it('still blocked after the browser: stays on the card with Check again', async () => {
     billingStatus.mockResolvedValue({
@@ -138,7 +96,7 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
       entitlement: { ...sampleTeam, canStartSandbox: false }
     })
     const { onContinue } = renderBlocker('payment')
-    fireEvent.click(screen.getByRole('button', { name: 'Update payment method' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Update in browser' }))
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
     await waitFor(() =>
       expect(
@@ -199,7 +157,7 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     const { onBackToDraft, onContinue } = renderBlocker('hoursUsed')
     fireEvent.click(screen.getByRole('button', { name: 'Back to draft' }))
     expect(onBackToDraft).toHaveBeenCalledOnce()
-    expect(setOverage).not.toHaveBeenCalled()
+    expect(openCloudConsole).not.toHaveBeenCalled()
     expect(onContinue).not.toHaveBeenCalled()
   })
 })

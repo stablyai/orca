@@ -1,5 +1,6 @@
-// Electron side of the usage alert: the native notification, and its click opening
-// Settings › Orca account (Plan & billing) in the main window.
+// Electron side of the usage alert: the native notification. Its click hands the main window the
+// billing target, which opens the web console's billing page for an owner or admin and Settings ›
+// Orca account for a member (settings-sidebar-ipc-bridge).
 import { app, Notification } from 'electron'
 import { retainNotificationUntilRelease } from '../ipc/native-notification-lifecycle'
 import { getTrustedUIRendererWindow } from '../ipc/ui'

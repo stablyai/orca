@@ -13,7 +13,7 @@ import type {
   LocalCommandsState,
   LocalCommandWorkspaceRow
 } from '../../../../../shared/local-commands/local-command-desktop-types'
-import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
+import { CloudEmptyState } from './CloudEmptyState'
 import { SettingsBadge, SettingsRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { LocalCommandText } from '../../local-commands/LocalCommandText'
@@ -119,7 +119,7 @@ export function OrcaCloudLocalCommandsView({
     <div className="space-y-8">
       {state.workspaces.length === 0 ? (
         <SettingsGroup>
-          <CloudApiEmptyState
+          <CloudEmptyState
             icon={SquareTerminal}
             title={t('localCommands.settings.emptyTitle', 'No cloud workspaces on this computer')}
             description={t(

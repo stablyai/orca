@@ -1,8 +1,5 @@
 import {
-  getCloudApiKeysSearchEntries,
-  getCloudRoutinesSearchEntries
-} from '@/components/settings/cloud-api/cloud-api-search'
-import {
+  getOrcaCloudApiConsoleSearchEntries,
   getOrcaCloudBillingSearchEntries,
   getOrcaCloudEnvironmentsSearchEntries,
   getOrcaCloudLocalCommandsSearchEntries,
@@ -30,11 +27,9 @@ import {
   LockKeyhole,
   LogIn,
   Plug,
-  SquareTerminal,
-  Workflow
+  SquareTerminal
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
-import { CLOUD_ROUTINES_UI_ENABLED } from '../../../shared/cloud-api/cloud-routines-ui'
 
 /** One home for everything Orca Cloud; only builds with a control plane show it. */
 export function buildOrcaCloudSettingsSections(
@@ -144,36 +139,16 @@ export function buildOrcaCloudSettingsSections(
       searchEntries: getOrcaCloudLocalCommandsSearchEntries(),
       group
     },
+    // API keys and connected apps are managed in the web console: the page is one link row.
     {
       id: 'cloud-api-keys',
-      title: t('auto.components.settings.cloudApi.sectionTitle', 'Orca API keys'),
+      title: t('settings.cloudConsole.api.title', 'API keys & connected apps'),
       description: t(
-        'auto.components.settings.cloudApi.sectionDescription',
-        'For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets.'
+        'settings.cloudConsole.api.navDescription',
+        'Keys for the Orca CLI and MCP clients, and the apps connected to your account. Managed in your browser.'
       ),
       icon: KeySquare,
-      searchEntries: getCloudApiKeysSearchEntries(),
-      group
-    },
-    // Parked until Routines join Automations (one flag, cloud-routines-ui.ts).
-    ...cloudRoutinesSection(t, group)
-  ]
-}
-
-function cloudRoutinesSection(t: Translate, group: string): SettingsNavSection[] {
-  if (!CLOUD_ROUTINES_UI_ENABLED) {
-    return []
-  }
-  return [
-    {
-      id: 'cloud-routines',
-      title: t('auto.components.settings.cloudRoutines.sectionTitle', 'Routines'),
-      description: t(
-        'auto.components.settings.cloudRoutines.sectionDescription',
-        'Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook.'
-      ),
-      icon: Workflow,
-      searchEntries: getCloudRoutinesSearchEntries(),
+      searchEntries: getOrcaCloudApiConsoleSearchEntries(),
       group
     }
   ]

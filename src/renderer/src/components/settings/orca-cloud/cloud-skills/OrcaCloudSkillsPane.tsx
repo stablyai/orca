@@ -16,7 +16,7 @@ import {
 } from '@/lib/cloud-agent-config-sync/cloud-agent-config-sync-client'
 import { useAppStore } from '@/store'
 import type { CloudAgentConfigSyncPreferences } from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
-import { CloudApiEmptyState } from '../../cloud-api/cloud-api-parts'
+import { CloudEmptyState } from '../CloudEmptyState'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import {
   runningOrcaCloudMcpWorkspaces,
@@ -170,7 +170,7 @@ export function OrcaCloudSkillsWorkspacesView({
   if (workspaces.length === 0) {
     return (
       <SettingsGroup>
-        <CloudApiEmptyState
+        <CloudEmptyState
           icon={BookOpenText}
           title={t('settings.orcaCloud.mcp.emptyTitle', 'No cloud workspace is running')}
           description={t(

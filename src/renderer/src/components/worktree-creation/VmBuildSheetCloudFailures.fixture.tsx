@@ -243,11 +243,12 @@ export const cloudPaymentFinishInBrowser = defineFixture({
   ...cloudPaymentDue,
   setup: () => {
     cloudPaymentDue.setup?.()
-    window.api.orcaProfiles.billingOpenPortal = () => Promise.resolve({ status: 'opened' })
+    window.api.orcaProfiles.openCloudConsole = () =>
+      Promise.resolve({ status: 'opened', signedIn: true })
   },
   interact: async (frameElement) => {
     Array.from(frameElement.querySelectorAll('button'))
-      .find((button) => button.textContent?.trim() === 'Update payment method')
+      .find((button) => button.textContent?.trim() === 'Update in browser')
       ?.click()
     await new Promise((resolve) => setTimeout(resolve, 200))
   }

@@ -143,7 +143,7 @@ describe('parsePlanCatalog', () => {
         plans: [{ ...enterprise, supportUrl }]
       })?.plans[0]?.supportUrl
     expect(read('https://orca.dev/enterprise')).toBe('https://orca.dev/enterprise')
-    expect(read('mailto:help@stably.ai')).toBeNull()
+    expect(read('mailto:help@example.com')).toBeNull()
     expect(read('javascript:alert(1)')).toBeNull()
     expect(read(undefined)).toBeNull()
   })

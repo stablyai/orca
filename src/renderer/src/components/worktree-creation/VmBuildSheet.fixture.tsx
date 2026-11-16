@@ -90,8 +90,8 @@ export const signInDone = frame(
   signInRow({
     kind: 'done',
     agents: [
-      { agent: 'claude', email: 'nw@stably.ai' },
-      { agent: 'codex', email: 'nw@stably.ai' }
+      { agent: 'claude', email: 'nw@example.com' },
+      { agent: 'codex', email: 'nw@example.com' }
     ]
   })
 )
@@ -103,8 +103,8 @@ export const signInOtherAccount = frame(
   signInRow({
     kind: 'done',
     agents: [
-      { agent: 'claude', email: 'nw@stably.ai' },
-      { agent: 'codex', email: 'nw@personal.dev', expectedEmail: 'nw@stably.ai' }
+      { agent: 'claude', email: 'nw@example.com' },
+      { agent: 'codex', email: 'nw@personal.dev', expectedEmail: 'nw@example.com' }
     ]
   })
 )

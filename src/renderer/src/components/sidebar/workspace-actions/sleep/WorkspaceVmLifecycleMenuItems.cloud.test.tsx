@@ -10,10 +10,9 @@ type MenuState = {
   waking: boolean
   ownedCloud: boolean
   archived: boolean
-  /** PAIRED-LIFECYCLE: a paired row's control-plane state, and a wake in flight. */
+  /** PAIRED-LIFECYCLE: a paired row and the state its sidebar line shows (CloudDotState). */
   paired: boolean
-  cloudState: string | null
-  wakePhase: string | null
+  cloudDot: string
 }
 
 const BLANK: MenuState = {
@@ -22,8 +21,7 @@ const BLANK: MenuState = {
   ownedCloud: false,
   archived: false,
   paired: false,
-  cloudState: null,
-  wakePhase: null
+  cloudDot: 'unknown'
 }
 
 const { state } = vi.hoisted(() => {
@@ -33,8 +31,7 @@ const { state } = vi.hoisted(() => {
     ownedCloud: false,
     archived: false,
     paired: false,
-    cloudState: null,
-    wakePhase: null
+    cloudDot: 'unknown'
   }
   return { state: initial }
 })
@@ -53,17 +50,11 @@ vi.mock('@/lib/orca-cloud/orca-cloud-workspace-store', () => ({
     select({
       ids: new Set(state.ownedCloud ? ['w'] : []),
       paired: state.paired ? { w: 'env-1' } : {},
-      status: {
-        w: {
-          status: state.archived
-            ? { state: 'archived' }
-            : state.cloudState
-              ? { state: state.cloudState }
-              : null
-        }
-      },
-      wake: state.wakePhase ? { w: { phase: state.wakePhase } } : {}
+      status: { w: { status: state.archived ? { state: 'archived' } : null } }
     })
+}))
+vi.mock('@/components/orca-cloud/use-cloud-workspace-view', () => ({
+  useCloudWorkspaceView: () => ({ state: state.cloudDot })
 }))
 const wakeCloudWorkspace = vi.hoisted(() => vi.fn())
 vi.mock('@/components/orca-cloud/cloud-workspace-actions', () => ({ wakeCloudWorkspace }))
@@ -152,26 +143,28 @@ describe('a cloud workspace has one lifecycle item for its state', () => {
     expect(items()).toEqual(['Close panels sleep'])
   })
 
-  // PAIRED-LIFECYCLE (n79): a workspace created from a GitHub-only project is a paired row; asleep it
-  // offered Sleep and never Wake.
+  // PAIRED-LIFECYCLE (n79/n80): a workspace created from a GitHub-only project is a paired row; asleep
+  // it offered Sleep and never Wake, and the menu must read the same state as the sidebar line.
   it('paired and running: the Sleep that reaches the sandbox', () => {
-    set({ paired: true, cloudState: 'running' })
+    set({ paired: true, cloudDot: 'running' })
     expect(items()).toEqual(['Close panels sleep'])
   })
 
   it('paired and asleep: Wake only, which wakes the sandbox', () => {
-    set({ paired: true, cloudState: 'sleeping' })
+    set({ paired: true, cloudDot: 'sleeping' })
     expect(items()).toEqual(['Wake'])
     screen.getByText('Wake').click()
     expect(wakeCloudWorkspace).toHaveBeenCalledWith('w')
   })
 
-  it('paired and waking (control plane or a wake in flight): Waking…, disabled', () => {
-    set({ paired: true, cloudState: 'waking' })
+  it('paired and Waking in the sidebar: Waking…, disabled (not Sleep)', () => {
+    set({ paired: true, cloudDot: 'waking' })
     expect(items()).toEqual(['Waking… (disabled)'])
-    cleanup()
-    set({ paired: true, cloudState: 'sleeping', wakePhase: 'connecting' })
-    expect(items()).toEqual(['Waking… (disabled)'])
+  })
+
+  it('paired after a failed wake: Try waking again', () => {
+    set({ paired: true, cloudDot: 'wakeFailed' })
+    expect(items()).toEqual(['Try waking again'])
   })
 
   it('paired and archived: nothing', () => {
