@@ -8,20 +8,34 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalQuickCommands } from '@/store/terminals/quick-commands/terminal-quick-command-hosts'
 
-const testState = vi.hoisted(() => ({
-  executionHostId: 'runtime:build' as ExecutionHostId,
-  loadRuntimeTerminalQuickCommands: vi.fn(async () => {}),
-  resolveExecutionHostId: vi.fn(() => 'runtime:build' as ExecutionHostId),
-  runtimeEnvironments: [] as { id: string; name: string }[],
-  runtimeStatusByEnvironmentId: new Map<string, { connectionGeneration?: number }>(),
-  runtimeTerminalQuickCommands: new Map<string, RuntimeTerminalQuickCommands>(),
-  settings: null as GlobalSettings | null,
-  subscribedSelectors: [] as ((state: unknown) => unknown)[]
-}))
+type TestState = {
+  executionHostId: ExecutionHostId
+  loadRuntimeTerminalQuickCommands: () => Promise<void>
+  resolveExecutionHostId: () => ExecutionHostId
+  runtimeEnvironments: { id: string; name: string }[]
+  runtimeStatusByEnvironmentId: Map<string, { connectionGeneration?: number }>
+  runtimeTerminalQuickCommands: Map<string, RuntimeTerminalQuickCommands>
+  settings: GlobalSettings | null
+  subscribedSelectors: ((state: TestState) => unknown)[]
+}
+
+const testState = vi.hoisted((): TestState => {
+  const buildHost: ExecutionHostId = 'runtime:build'
+  return {
+    executionHostId: buildHost,
+    loadRuntimeTerminalQuickCommands: vi.fn(async () => {}),
+    resolveExecutionHostId: vi.fn(() => buildHost),
+    runtimeEnvironments: [],
+    runtimeStatusByEnvironmentId: new Map(),
+    runtimeTerminalQuickCommands: new Map(),
+    settings: null,
+    subscribedSelectors: []
+  }
+})
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof testState) => unknown) => {
-    testState.subscribedSelectors.push(selector as (state: unknown) => unknown)
+  useAppStore: (selector: (state: TestState) => unknown) => {
+    testState.subscribedSelectors.push(selector)
     return selector(testState)
   }
 }))
