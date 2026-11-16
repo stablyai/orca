@@ -84,8 +84,8 @@ def reject_play_license_check(apk)
   end
   return unless protected_dex
   UI.user_error!(
-    "#{apk} carries Play's automatic-protection license check (#{protected_dex.name}), which closes the app " \
-    "when Google Play is disabled or unreachable. Turn off automatic protection in Play Console " \
+    "#{apk} carries Play's automatic-protection code (com.pairip, in #{protected_dex.name}), whose license " \
+    "check closes the app when Google Play is disabled or unreachable. Turn off automatic protection in Play Console " \
     "(Test and release > App integrity), then release a new versionCode.",
   )
 end
