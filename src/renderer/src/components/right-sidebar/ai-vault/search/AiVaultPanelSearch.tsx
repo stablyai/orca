@@ -101,7 +101,7 @@ export function AiVaultPanelSearch({
   if (needsLocalConsent) {
     message = t(
       'sessionSearch.panel.consentTranscriptIndex',
-      'Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted).'
+      'Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Authenticated paired clients can search the index.'
     )
   } else if (noAgents) {
     message = t('auto.components.right.sidebar.AiVaultPanel.noAgentsSelected', 'No agents selected')

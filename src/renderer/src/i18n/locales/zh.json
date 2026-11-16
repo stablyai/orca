@@ -23106,8 +23106,7 @@
         "unreachable": "无法连接",
         "scopeNotFound": "该主机上未找到搜索范围",
         "agentNotSupported": "不支持该智能体"
-      },
-      "consent": "启用全文搜索？Orca 会根据此计算机上的本地智能体记录创建索引，其中包括完整对话，内容不会被脱敏，已通过身份验证的配对客户端可以搜索这些内容"
+      }
     }
   },
   "sessionHistory": {

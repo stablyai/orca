@@ -23657,7 +23657,7 @@
         "scopeNotFound": "scope not found there",
         "agentNotSupported": "agent not supported"
       },
-      "consentTranscriptIndex": "Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted).",
+      "consentTranscriptIndex": "Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Authenticated paired clients can search the index.",
       "noMatchesToShow": "No matching sessions to show."
     }
   },
