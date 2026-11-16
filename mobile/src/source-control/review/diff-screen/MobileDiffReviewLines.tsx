@@ -106,16 +106,15 @@ export function MobileDiffReviewLines({
   // Long lines run on one line and the whole file scrolls sideways, so every row is as wide as the longest.
   const [charWidth, setCharWidth] = useState(0)
   const [viewportWidth, setViewportWidth] = useState(0)
-  const { digits, codeColumns } = useMemo(() => {
+  const { numberWidth, codeColumns } = useMemo(() => {
     let digits = 1
     let columns = 0
     for (const line of lines) {
       digits = Math.max(digits, String(line.newLineNumber ?? line.oldLineNumber ?? '').length)
       columns = Math.max(columns, lineColumns(line.text))
     }
-    return { digits, codeColumns: columns }
-  }, [lines])
-  const numberWidth = mobileDiffReviewNumberWidth(digits, charWidth)
+    return { numberWidth: mobileDiffReviewNumberWidth(digits, charWidth), codeColumns: columns }
+  }, [charWidth, lines])
   const gutterWidth = mobileDiffReviewGutterWidth(numberWidth)
   const rowFrame: ViewStyle =
     Platform.OS === 'web' && charWidth > 0

@@ -11,6 +11,11 @@ export type MobileDiffLine = {
 
 const MAX_DIFF_CELLS = 200_000
 const MAX_MOBILE_DIFF_LINES = 20_000
+// The file tab has no truncation footer, so the marker row is its only notice.
+const TRUNCATED_LINE: MobileDiffLine = {
+  kind: 'context',
+  text: '... diff truncated for mobile preview ...'
+}
 
 export function buildMobileDiffLines(
   originalContent: string,
@@ -34,7 +39,7 @@ export function buildMobileDiffLines(
 
   const truncated = lines.length > MAX_MOBILE_DIFF_LINES
   if (truncated) {
-    lines.pop()
+    lines[MAX_MOBILE_DIFF_LINES] = TRUNCATED_LINE
   }
   return { lines, truncated }
 }
