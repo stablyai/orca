@@ -718,7 +718,8 @@ function Find-OrcaProcess([string]$Query) {
     $needle = ""
     if ($null -ne $Query) { $needle = $Query.Trim() }
     if ([string]::IsNullOrWhiteSpace($needle)) { throw 'appNotFound("")' }
-    if ($needle.StartsWith("pid:", [System.StringComparison]::OrdinalIgnoreCase)) {
+    $byPid = $needle.StartsWith("pid:", [System.StringComparison]::OrdinalIgnoreCase)
+    if ($byPid) {
         $needle = $needle.Substring(4)
     }
 
@@ -731,6 +732,8 @@ function Find-OrcaProcess([string]$Query) {
             return $match
         }
     }
+    # Why: a pid: query names one process; matching its digits against window titles would pick another app.
+    if ($byPid) { throw "appNotFound(`"$Query`")" }
 
     $processNeedle = $needle
     if ($processNeedle.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) {
