@@ -8,7 +8,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { openNativeChatWorktreeFork } from '../../../native-chat/messages/actions/NativeChatWorktreeForkMenuItem'
 import { useNativeChatWorktreeForkOffered } from '../../../native-chat/messages/actions/native-chat-worktree-fork'
 
