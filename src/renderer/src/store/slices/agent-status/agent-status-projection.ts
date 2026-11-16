@@ -262,7 +262,14 @@ export class AgentStatusProjection {
       publishProjectionTopology(data, state, changes, topology, rows)
       const rowUpdates = publishProjectionRows(data, state, topology, rows)
       publishProjectionArrangement(data, state, topology, rows, rowUpdates)
-      this.changes.publish(fullResync || topology.moved.size > 0 ? null : changed)
+      // Membership changes can move a key across commits a reader skipped.
+      this.changes.publish(
+        fullResync ||
+          topology.moved.size > 0 ||
+          changes.some(({ previous, current }) => !previous || !current)
+          ? null
+          : changed
+      )
     }
   }
 }

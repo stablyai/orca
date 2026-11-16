@@ -43,6 +43,7 @@ export function createWorkspaceTabAgentIndex() {
         if (sleeping?.kind === 'full-resync') {
           full = true
         } else if (sleeping) {
+          for (const key of sleeping.added) sleepingOrder.set(key, nextOrder++)
           sleeping.keys.forEach((key) => keys.add(key))
         }
       }

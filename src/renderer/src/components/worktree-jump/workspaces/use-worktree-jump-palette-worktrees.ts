@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { shallow } from 'zustand/shallow'
 import { getStructuredChatWorktreeIds } from '@/components/sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import { filterWorkspaceRows } from '../../../../../shared/workspace-view/workspace-row-filters'
 import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/worktree-list/listing/desktop-workspace-row-facts'
@@ -166,22 +167,32 @@ export function useWorktreeJumpPaletteWorktrees({
     })
     return hasQuery && filterPredicate ? scope.filter(filterPredicate.matchesWorktree) : scope
   }, [workspaces, filterPredicate, hasQuery, switchableWorktreesForRows, hiddenProjects])
+  const reuseSortedWorktrees = useMemo(() => {
+    let previous: readonly Worktree[] = EMPTY_SORTED_WORKTREES
+    return (next: readonly Worktree[]) => {
+      if (!shallow(previous, next)) previous = next
+      return previous
+    }
+  }, [])
   const browserSortedWorktrees = useMemo(() => {
     if (!paletteStatusInputsActive) {
-      return EMPTY_SORTED_WORKTREES
+      return reuseSortedWorktrees(EMPTY_SORTED_WORKTREES)
     }
     const scope = filterPredicate ? workspaces.filter(filterPredicate.matchesWorktree) : workspaces
-    return sortWorktreesSmart(
-      scope,
-      tabsByWorktree,
-      repoMap,
-      agentStatusByPaneKey,
-      runtimePaneTitlesByTabId,
-      ptyIdsByTabId,
-      migrationUnsupportedByPtyId,
-      terminalLayoutsByTabId
+    return reuseSortedWorktrees(
+      sortWorktreesSmart(
+        scope,
+        tabsByWorktree,
+        repoMap,
+        agentStatusByPaneKey,
+        runtimePaneTitlesByTabId,
+        ptyIdsByTabId,
+        migrationUnsupportedByPtyId,
+        terminalLayoutsByTabId
+      )
     )
   }, [
+    reuseSortedWorktrees,
     paletteStatusInputsActive,
     workspaces,
     filterPredicate,

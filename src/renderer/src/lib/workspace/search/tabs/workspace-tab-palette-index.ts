@@ -1,4 +1,7 @@
 import { shallow } from 'zustand/shallow'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { getPaneKeyTabId } from './workspace-tab-agent-metadata'
 import {
   buildPaletteTabDocument,
   type PaletteTabDocumentInput
@@ -43,27 +46,51 @@ export function createWorkspaceTabPaletteIndex() {
   let entries: SearchableWorkspaceTab[] = []
   let documents = new Map<string, { input: PaletteTabDocumentInput; document: PaletteDocument }>()
   let terminalEntries = new Map<string, number[]>()
+  let terminalTabs = new Map<string, Map<string, TerminalTab>>()
   let ambiguousWorktreeIds: ReadonlySet<string> = new Set()
 
   return (options: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] => {
-    const dirtyTabs = agents.update(options)
+    const agentTabs = agents.update(options)
+    const dirtyTabs = agentTabs && new Set(agentTabs)
+    let addressed = dirtyTabs !== null
+    if (previous && dirtyTabs) {
+      for (const field of ['terminalLayoutsByTabId', 'paneForegroundAgentByPaneKey'] as const) {
+        const before = previous[field]
+        const after = options[field]
+        if (before === after) continue
+        if (!before || !after) {
+          addressed = false
+          break
+        }
+        const changes = readRecordChanges(after, before)
+        if (changes?.kind !== 'addressed') {
+          addressed = false
+          break
+        }
+        for (const key of changes.keys) {
+          const tabId = field === 'terminalLayoutsByTabId' ? key : getPaneKeyTabId(key)
+          if (tabId) dirtyTabs.add(tabId)
+        }
+      }
+    }
     const statusOnly =
       previous &&
       Object.keys(options).length === Object.keys(previous).length &&
       Object.entries(options).every(
         ([key, value]) =>
           key === 'agentStatusByPaneKey' ||
+          key === 'sleepingAgentSessionsByPaneKey' ||
+          key === 'terminalLayoutsByTabId' ||
+          key === 'paneForegroundAgentByPaneKey' ||
           value === previous![key as keyof BuildSearchableWorkspaceTabsOptions]
       )
     previous = options
-    if (statusOnly && dirtyTabs !== null) {
+    if (statusOnly && addressed && dirtyTabs !== null) {
       let next = entries
       for (const tabId of dirtyTabs) {
         for (const position of terminalEntries.get(tabId) ?? []) {
           const entry = entries[position]
-          const terminal = options.tabsByWorktree[entry.worktree.id]?.find(
-            (tab) => tab.id === tabId
-          )
+          const terminal = terminalTabs.get(entry.worktree.id)?.get(tabId)
           const updated = {
             ...entry,
             agentMetadata: collectAgentMetadataFromIndex(
@@ -120,6 +147,15 @@ export function createWorkspaceTabPaletteIndex() {
     documents = nextDocuments
     ambiguousWorktreeIds = findAmbiguousWorktreeIds(options.ownershipWorktrees ?? options.worktrees)
     terminalEntries = new Map()
+    terminalTabs = new Map()
+    for (const worktree of options.worktrees) {
+      if (!terminalTabs.has(worktree.id)) {
+        terminalTabs.set(
+          worktree.id,
+          new Map((options.tabsByWorktree[worktree.id] ?? []).map((tab) => [tab.id, tab]))
+        )
+      }
+    }
     next.forEach((entry, position) => {
       if (entry.tab.contentType !== 'terminal') return
       const positions = terminalEntries.get(entry.tab.entityId) ?? []
