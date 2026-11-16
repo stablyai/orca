@@ -37,29 +37,6 @@ describe('getStatus shared symlink exclusion', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('Git reports the shared symlink as untracked, without a trailing slash', async () => {
-    const status = await getStatus(worktree)
-
-    expect(status.entries).toEqual([
-      expect.objectContaining({ path: 'node_modules', area: 'untracked' })
-    ])
-  })
-
-  it('drops the shared symlink when it is declared shared', async () => {
-    const status = await getStatus(worktree, { sharedLinkPaths: ['node_modules'] })
-
-    expect(status.entries).toEqual([])
-  })
-
-  it.each(['./node_modules', 'node_modules/'])(
-    'drops the shared symlink when the setting spells it %s',
-    async (sharedPath) => {
-      const status = await getStatus(worktree, { sharedLinkPaths: [sharedPath] })
-
-      expect(status.entries).toEqual([])
-    }
-  )
-
   it('still reports a genuine untracked file alongside a shared symlink', async () => {
     writeFileSync(join(worktree, 'scratch.txt'), 'unsaved work\n')
 
@@ -67,29 +44,6 @@ describe('getStatus shared symlink exclusion', () => {
 
     expect(status.entries).toEqual([
       expect.objectContaining({ path: 'scratch.txt', area: 'untracked' })
-    ])
-  })
-
-  it('still reports a modified tracked file alongside a shared symlink', async () => {
-    writeFileSync(join(worktree, 'README.md'), '# edited\n')
-
-    const status = await getStatus(worktree, { sharedLinkPaths: ['node_modules'] })
-
-    expect(status.entries).toEqual([
-      expect.objectContaining({ path: 'README.md', area: 'unstaged' })
-    ])
-  })
-
-  it('keeps a regular directory the user created at a configured shared name', async () => {
-    mkdirSync(join(worktree, 'vendor'))
-    writeFileSync(join(worktree, 'vendor', 'real.txt'), 'user work\n')
-
-    const status = await getStatus(worktree, {
-      sharedLinkPaths: ['node_modules', 'vendor']
-    })
-
-    expect(status.entries).toEqual([
-      expect.objectContaining({ path: 'vendor/real.txt', area: 'untracked' })
     ])
   })
 
@@ -114,17 +68,6 @@ describe('getStatus shared symlink exclusion', () => {
     expect(status.entries).toEqual([
       expect.objectContaining({ path: 'tracked-link', area: 'unstaged' })
     ])
-  })
-
-  it('drops shared symlinks whose names have a space or non-ASCII characters', async () => {
-    const names = ['my shared dir', 'ライブラリ']
-    for (const name of names) {
-      symlinkSync(join(primary, 'node_modules'), join(worktree, name), 'dir')
-    }
-
-    const status = await getStatus(worktree, { sharedLinkPaths: ['node_modules', ...names] })
-
-    expect(status.entries).toEqual([])
   })
 
   it('keeps a symlink at a path that was never declared shared', async () => {

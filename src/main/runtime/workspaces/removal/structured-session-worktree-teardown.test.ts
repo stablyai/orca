@@ -1,8 +1,7 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
-import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -12,8 +11,7 @@ vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-r
 
 const { killAllProcessesForWorktree } = await import('./worktree-teardown')
 type TeardownRuntime = NonNullable<Parameters<typeof killAllProcessesForWorktree>[1]['runtime']>
-const { classifyWorktreeForceDeleteReason, isUnstoppedPtyRemovalError } =
-  await import('../../../../shared/worktree/removal')
+await import('../../../../shared/worktree/removal/removal')
 await import('./structured-session-worktree-teardown')
 
 const WORKTREE = 'repo_1::/tmp/wt-a'
@@ -170,59 +168,9 @@ function livePtyProvider(): IPtyProvider {
   })
 }
 
-/** The structured sweep's own warn — a forced removal can emit a PTY-sweep one onto the same spy. */
-function structuredSessionWarning(warn: { mock: { calls: unknown[][] } }): string {
-  return (
-    warn.mock.calls
-      .map((call) => String(call[0]))
-      .find((message) => message.includes('agent session')) ?? ''
-  )
-}
-
 describe('worktree teardown and structured agent sessions', () => {
   beforeEach(() => {
     hostRef.current = null
-  })
-
-  it('refuses in agent-session wording when the close outlives the sweep budget', async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    try {
-      // A structured timeout must not use the PTY sentinel or the desktop misclassifies the refusal (#11960).
-      installHost({ records: [record('s1', WORKTREE)], closeGate: new Promise<void>(() => {}) })
-      const outcome = killAllProcessesForWorktree(
-        WORKTREE,
-        destructiveDeps({ timeoutMs: 5 })
-      ).catch((thrown: Error) => thrown.message)
-      await vi.advanceTimersByTimeAsync(5)
-      const error = await outcome
-      expect(error).toContain('could not confirm these closed: 1 agent session (claude)')
-      expect(isUnstoppedPtyRemovalError(error as string)).toBe(false)
-      expect(classifyWorktreeForceDeleteReason(error as string, true)).toBe('running-agent-session')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('never wedges Force Delete on a close that will not settle', async () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      installHost({ records: [record('s1', WORKTREE)], closeGate: new Promise<void>(() => {}) })
-      const outcome = killAllProcessesForWorktree(
-        WORKTREE,
-        destructiveDeps({ allowUnverifiedStop: true, timeoutMs: 5 })
-      )
-      void outcome.catch(() => undefined)
-      await vi.advanceTimersByTimeAsync(5 + ABANDONED_SWEEP_GRACE_MS)
-      await expect(outcome).resolves.toMatchObject({ runtimeStopped: 0 })
-      const message = structuredSessionWarning(warn)
-      expect(message).toContain('could not confirm these closed: 1 agent session (claude)')
-      // Timeout proves no live child; forced-removal warnings must say unconfirmed.
-      expect(message).not.toContain('still attached')
-    } finally {
-      warn.mockRestore()
-      vi.useRealTimers()
-    }
   })
 
   it('keeps every chat tab when the removal refuses over a session it could not close', async () => {

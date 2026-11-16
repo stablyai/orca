@@ -1,3 +1,4 @@
+import { settleDesktopActivation } from './runtime-launch-activation'
 import { app, type BrowserWindow } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../runtime/terminal/adoption/unshown-live-terminal-placement'
@@ -9,12 +10,11 @@ import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { resolveServePinnedBindHost } from '../serve-launch/serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../../window/activation/foreground-activation-policy'
 import { registerMobileHandlers } from '../../ipc/mobile'
-import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/runtime-environment-mobile-relay-hosts'
-import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
+import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts'
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
-import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
 import { publishHeadlessRuntimeGraph } from '../../runtime/session-graph/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../../browser/backends/offscreen-browser-backend'
+import { memorySaverIdleMs } from '../../browser/backends/offscreen-page-idle-freeing'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { getDesktopRelayStatus } from '../cloud-startup/main-process-relay-status'
 import { startDesktopRelayService } from '../cloud-startup/main-process-relay-startup'
@@ -33,7 +33,6 @@ import { repairKnownPoisonedInstallDirBeforeWindow } from '../windows-install-pe
 import { installServeQuitHandling } from '../serve-launch/serve-quit-handling'
 import { installCloudSessionShutdownFlush } from '../cloud-startup/cloud-session-shutdown-flush'
 import { registerHeadlessServeSshHandlers } from '../serve-launch/headless-serve-ssh-registration'
-import { settleServeDesktopActivation } from '../serve-launch/serve-desktop-activation'
 import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
@@ -55,31 +54,16 @@ import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
+import { beginChatJournalStartup, chatJournalHostServing } from './chat-journal-startup'
+import { e2eHeadlessServeWithoutBrowser } from '../serve-launch/e2e-headless-serve-without-browser'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
 export type MainProcessRuntimeLaunchOptions = {
-  openMainWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
+  openMainWindow: (options?: {
+    revealOnDidFinishLoad?: boolean
+  }) => BrowserWindow | Promise<BrowserWindow>
   handleMacAppActivation: () => void
-}
-
-function settleDesktopActivation(): void {
-  const gate = state.desktopActivationGate
-  if (!gate) {
-    return
-  }
-  settleServeDesktopActivation(gate, {
-    hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
-  })
-}
-
-/** E2E only: a serve host with no browser of its own, as the WSL distro's server is. Never packaged. */
-function e2eHeadlessServeWithoutBrowser(): boolean {
-  return (
-    !app.isPackaged &&
-    process.env.ORCA_E2E_HEADLESS === '1' &&
-    process.env.ORCA_E2E_HEADLESS_SERVE_WITHOUT_BROWSER === '1'
-  )
 }
 
 /** Construct the runtime RPC server with serve-specific bind and port exposure settings. */
@@ -197,13 +181,15 @@ async function launchServeMode(
     runtime.setOffscreenBrowserBackend(
       new OffscreenBrowserBackend(browserManager, {
         getAgentBrowserBridge: () => state.agentBrowserBridge,
-        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page)
+        onPageNavigated: (page) => runtime.serveBrowserPageNavigated(page),
+        isPageSaved: (page) => runtime.serveBrowserTabs.isSaved(page),
+        idleFreeMs: () => memorySaverIdleMs(state.store?.getSettings())
       })
     )
   }
   publishHeadlessRuntimeGraph(runtime)
   // Register SSH before binding RPC so the first paired client sees targets.
-  registerHeadlessServeSshHandlers(state.store!, runtime)
+  await registerHeadlessServeSshHandlers(state.store!, runtime)
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
@@ -220,6 +206,7 @@ async function launchServeMode(
   void scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
   await printServeReady(serveOptions)
+  chatJournalHostServing()
   const store = state.store!
   setupHeadlessServeAutoUpdater(store, {
     onBeforeUpdateQuit: () =>
@@ -253,6 +240,7 @@ async function launchDesktopMode(
       )
   ])
   scheduleAgentLaunchRecordWarmup(win)
+  chatJournalHostServing()
   if (!runtimeRpcStartResult.ok) {
     // Await i18n only for the failure dialog; parallel launch must not show English fallback to non-English users.
     void state.mainProcessI18nReady.then(() =>
@@ -321,7 +309,7 @@ export async function initializeMainProcessRuntimeLaunch(
       shellPathReady,
       startServices: startTerminalRuntimeStartupServices
     })
-    desktopWindow = desktopStartup.window
+    desktopWindow = await desktopStartup.window
   } else {
     // Start AppImage extraction before daemon host selection briefly awaits it; serve manages its own bounded extraction.
     if (!serveOptions) {
@@ -330,6 +318,7 @@ export async function initializeMainProcessRuntimeLaunch(
     await shellPathReady
     bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
   }
+  beginChatJournalStartup(runtime, serveOptions !== null)
   app.on('activate', options.handleMacAppActivation)
   if (serveOptions) {
     await launchServeMode(runtime, runtimeRpc, serveOptions)

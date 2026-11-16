@@ -1,11 +1,11 @@
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
 } from '../environment-revisions/runtime-environment-revision'
 import { runtimeEnvironmentPairingChangedError } from '../environment-revisions/runtime-environment-pairing-refresh'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   runtimeCompatibilityChecks,
   RUNTIME_CAPABILITY_STATUS_TTL_MS

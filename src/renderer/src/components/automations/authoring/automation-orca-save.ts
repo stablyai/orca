@@ -17,7 +17,6 @@ import type {
   AutomationUpdateInput
 } from '../../../../../shared/automations/automation-definition'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { ensureHooksApproved } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'
@@ -28,7 +27,7 @@ import {
 import { buildDraftPrecheck, buildDraftSchedule } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
-import { reconfirmSkippedSetup } from './automation-setup-review'
+import { confirmAutomationSaveSetup } from './automation-setup-review'
 import {
   createAutomationOnDestination,
   moveAutomationToDestination,
@@ -135,14 +134,17 @@ export async function saveOrcaAutomation(
           draftSetupDecision: draft.setupDecision
         })
       : currentAutomation.setupDecision
-  const trust =
-    setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))
-      ? await ensureHooksApproved(useAppStore.getState(), draft.projectId, 'setup', setupHostId)
-      : null
-  // Stored with `run` so later runs execute only this content.
-  const setupTrustHash =
-    trust?.approvedContentHash ??
-    (await reconfirmSkippedSetup(context, trust, setupDecision, currentAutomation, setupHostId))
+  const { trust, setupTrustHash } = await confirmAutomationSaveSetup(context, {
+    // A new base can bring different orca.yaml setup, so it needs its own approval.
+    prompt:
+      setupDecision === 'run' &&
+      ((targetEdited && !recordedContext) || edited('setupDecision') || edited('baseBranch')),
+    repoId: draft.projectId,
+    hostId: setupHostId,
+    baseBranch: edited('baseBranch') ? draft.baseBranch : currentAutomation?.baseBranch,
+    setupDecision,
+    automation: currentAutomation
+  })
   if (trust?.decision === 'skip') {
     setupDecision = 'skip'
   }

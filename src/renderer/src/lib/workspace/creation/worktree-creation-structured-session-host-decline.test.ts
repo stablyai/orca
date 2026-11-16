@@ -44,7 +44,7 @@ import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
 
@@ -236,7 +236,7 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
             createFolderWorkspace: async () => {
               const workspace = makeFolderWorkspace()
               useAppStore.setState({ folderWorkspaces: [workspace] })
-              return workspace
+              return { folderWorkspace: workspace }
             },
             onOpenChange: vi.fn()
           })

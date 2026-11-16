@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
@@ -8,7 +8,10 @@ import { registerWorktreeActivation } from '@/lib/workspace/activation/worktree-
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import { notifyBlockedFolderWorkspacePath } from '../paths/folder-workspace-path-status'
 import { blocksFolderWorkspaceActivation } from '../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import {
@@ -17,10 +20,8 @@ import {
 } from '../ownership/folder-workspace-runtime-owner'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import {
-  ensureFolderWorkspaceInitialTerminal,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
+import { ensureFolderWorkspaceInitialTerminal } from '@/lib/workspace/activation/initial-surface/folder-workspace-initial-terminal'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/workspace/activation/worktree-nav-view-history-replay'
 import {
@@ -34,7 +35,7 @@ import {
   liftSidebarFiltersHidingWorktree
 } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
 import {
   buildActivationStateTransition,
@@ -105,6 +106,8 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
     !opts?.startup &&
+    !opts?.setup &&
+    !opts?.backendStartupTerminalSpawned &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -122,7 +125,9 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   const primaryTabId = shouldGateAgentActivation
     ? null
     : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface, {
-        seedUserDefaultSurface
+        seedUserDefaultSurface,
+        setup: opts?.setup,
+        backendStartupTerminalSpawned: opts?.backendStartupTerminalSpawned
       })
 
   if (opts?.showWorkspaceList) {
@@ -136,7 +141,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
     })
   }
 
-  if (opts?.providesInitialSurface !== true) {
+  if (opts?.providesInitialSurface !== true && !opts?.backendStartupTerminalSpawned) {
     ensureWebRuntimeWorktreeTerminalAfterWake(workspaceKey, {
       runtimeEnvironmentId,
       startup: opts?.startup,

@@ -8,11 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
 
 vi.mock('electron', () => ({

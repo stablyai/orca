@@ -9,7 +9,7 @@ import {
   computeSkillPackageDigest,
   parseSkillPackageManifest,
   type SkillPackageFile
-} from '../../../shared/skill-package-manifest'
+} from '../../../shared/skills/packages/skill-package-manifest'
 import { installSharedSkill } from '../install/skill-installation'
 import { createSkillBundleArchive } from '../bundle-archive/skill-bundle-creation'
 import { installSkillBundle } from '../install/skill-bundle-installation'

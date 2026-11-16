@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type { WorktreeHeadIdentity } from '../../../../shared/worktree/types'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import {
   FULL_HEAD_IDENTITY_SCOPE,
   headIdentityEntryKey,

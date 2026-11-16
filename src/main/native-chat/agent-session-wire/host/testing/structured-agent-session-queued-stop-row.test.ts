@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -9,7 +10,7 @@ import {
   HOST_TEST_THREAD,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER
@@ -73,14 +74,14 @@ function withdraw(clientMessageId: string, answeredInTurn?: AgentJournalAnswered
 }
 
 async function send(clientMessageId: string) {
-  return (await rig.host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+  return (await readTestHostJournal(rig.host, HOST_TEST_SESSION)).submissions.find(
     (entry) => entry.clientMessageId === clientMessageId
   )
 }
 
 /** How the shared projection every client runs draws this send, or null when it hides it. */
 async function drawn(clientMessageId: string) {
-  const { items, submissions } = await rig.host.journalSnapshot(HOST_TEST_SESSION)
+  const { items, submissions } = await readTestHostJournal(rig.host, HOST_TEST_SESSION)
   const message = projectStructuredAgentSessionMessages(items, [], submissions).find(
     (entry) => entry.id === agentJournalSubmissionKey(clientMessageId)
   )
@@ -92,7 +93,7 @@ describe("Stop's event", () => {
     await rig.workingSend()
     let pausedAtInterrupt: unknown = 'not interrupted'
     rig.cancelTurn.mockImplementationOnce(async () => {
-      pausedAtInterrupt = structuredQueuePauses(journal())[0]?.reason ?? null
+      pausedAtInterrupt = (await structuredQueuePauses(journal()))[0]?.reason ?? null
       return { cancelled: true }
     })
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -160,9 +161,11 @@ describe("Stop's event", () => {
       { messageId: opening, state: 'waiting' },
       { messageId: last, state: 'waiting' }
     ])
-    expect(journal().submissionBody(steer)).toEqual(hostTestMessage('sent now into the turn'))
-    expect(journal().queuedMessages.get(`recovery:${steer}`)).toBeNull()
-    expect(journal().submission(steer)?.options).toEqual({})
+    expect(await journal().reads.submissionBody(steer)).toEqual(
+      hostTestMessage('sent now into the turn')
+    )
+    expect(await journal().queuedMessages.get(`recovery:${steer}`)).toBeNull()
+    expect((await journal().reads.submission(steer))?.options).toEqual({})
     // The turn's message, unconfirmed, as an old client's projection draws it too.
     expect(await send(steer)).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await drawn(steer)).toEqual({ stoppedBeforeStart: undefined })
@@ -191,7 +194,9 @@ describe("Stop's event", () => {
     // Neither stopped card can come back, so a reopen holds nothing.
     await rig.restartHostProcess()
     await rig.queuePause()
-    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).not.toContain('restarted')
+    expect((await structuredQueuePauses(journal())).map((pause) => pause.reason)).not.toContain(
+      'restarted'
+    )
   })
 
   it('survives a host crash: Resume releases waiting work without resending the uncertain original', async () => {
@@ -209,13 +214,15 @@ describe("Stop's event", () => {
     expect((await rig.handoff(sentId))?.dispatchState).toBe('unknown')
     // The ordinary original never becomes queued work or resends automatically.
     await expectHeld(null, waiting)
-    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual([
+    expect((await structuredQueuePauses(journal())).map((pause) => pause.reason)).toEqual([
       'stopped',
       'restarted'
     ])
     const handoff = await rig.handoffId(sentId)
     expect(await rig.drafts()).toEqual([{ messageId: waiting, state: 'waiting' }])
-    expect(journal().submissionBody(handoff)).toEqual(hostTestMessage('sent now into the turn'))
+    expect(await journal().reads.submissionBody(handoff)).toEqual(
+      hostTestMessage('sent now into the turn')
+    )
     expect(await rig.deleteQueued(`recovery:${handoff}`)).toMatchObject({
       value: { deleted: false }
     })
@@ -245,10 +252,9 @@ describe("a /clear's carried cards", () => {
     }
     // Held there, unshown: nothing runs in the fresh conversation.
     expect(await rig.queuePause(replacementId)).toBeNull()
-    expect(structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)).toEqual([
-      'stopped',
-      'cleared'
-    ])
+    expect(
+      (await structuredQueuePauses(journal(replacementId))).map((pause) => pause.reason)
+    ).toEqual(['stopped', 'cleared'])
     // Idle there, so the person's send goes straight out rather than queueing.
     const text = hostTestMessage('hi')
     const person = rig.host.send(QUEUED_RIG_CALLER, {
@@ -267,7 +273,7 @@ describe("a /clear's carried cards", () => {
     }
     await eventually(async () =>
       expect(
-        (await rig.host.journalSnapshot(replacementId)).submissions.find(
+        (await readTestHostJournal(rig.host, replacementId)).submissions.find(
           (entry) => entry.clientMessageId === sent.value.clientMessageId
         )?.handedOverAt
       ).toBeDefined()
@@ -282,7 +288,7 @@ describe("a /clear's carried cards", () => {
         ordinal: 0
       }
     })
-    expect(journal(replacementId).queuedMessages.list()[0]?.messageId).toBe(carried)
-    expect(structuredQueuePauses(journal(replacementId))).toEqual([])
+    expect((await journal(replacementId).queuedMessages.list())[0]?.messageId).toBe(carried)
+    expect(await structuredQueuePauses(journal(replacementId))).toEqual([])
   })
 })

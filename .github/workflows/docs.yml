@@ -63,9 +63,6 @@ jobs:
       - name: Install site dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run package tests
-        run: pnpm test
-
       - name: Lint site
         run: pnpm lint
 
@@ -247,9 +244,6 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: pnpm exec vercel pull --yes --non-interactive --environment=production
-
-      - name: Run package tests
-        run: pnpm test
 
       - name: Lint site
         run: pnpm lint

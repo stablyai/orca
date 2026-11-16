@@ -25,7 +25,7 @@ import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-dec
 import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
 import type { ClaudeInitProof } from './claude-structured-init-proof'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
 import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
@@ -97,6 +97,8 @@ export type ClaudeDispatchWaiter = {
   requestedAt: number | null
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
+  /** Sent with priority `now`: the step it interrupts hands its open turn to this send. */
+  steers?: true
   /** Settled with no echo (failed write, child exit, doubt after start); a replay may name it. */
   retired?: boolean
   /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
@@ -106,6 +108,7 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
+  historyCatchUp?: AbortController
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */

@@ -1,7 +1,7 @@
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../../shared/process-table-index'
+} from '../../../../shared/process-observation/tables/process-table-index'
 import {
   readWindowsProcessIdentityTableFresh,
   readWindowsProcessTable,

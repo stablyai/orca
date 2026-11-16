@@ -13,7 +13,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     ;(
       runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
@@ -36,7 +36,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
     runtime.onPtyData(
@@ -86,7 +86,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     const handles: string[] = []
     for (let index = 0; index < 140; index += 1) {
@@ -133,7 +133,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'tab-bg',

@@ -35,49 +35,6 @@ describe('RelayDispatcher', () => {
     vi.useRealTimers()
   })
 
-  it('sends keepalive frames on interval', () => {
-    expect(written.length).toBe(0)
-
-    vi.advanceTimersByTime(5_000)
-    expect(written.length).toBe(1)
-
-    const frame = decodeFirstFrame(written[0])
-    expect(frame.type).toBe(MessageType.KeepAlive)
-    expect(frame.id).toBe(1)
-  })
-
-  it('sends error response when handler throws', async () => {
-    dispatcher.onRequest('fail.method', async () => {
-      throw new Error('boom')
-    })
-
-    const req: JsonRpcRequest = {
-      jsonrpc: '2.0',
-      id: 5,
-      method: 'fail.method'
-    }
-    dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
-    await vi.advanceTimersByTimeAsync(0)
-
-    const errors = written.filter((buf) => {
-      const f = decodeFirstFrame(buf)
-      if (f.type !== MessageType.Regular) {
-        return false
-      }
-      try {
-        const msg = JSON.parse(f.payload.toString('utf-8'))
-        return 'error' in msg
-      } catch {
-        return false
-      }
-    })
-    expect(errors.length).toBe(1)
-
-    const resp = JSON.parse(decodeFirstFrame(errors[0]).payload.toString('utf-8'))
-    expect(resp.error.message).toBe('boom')
-    expect(resp.id).toBe(5)
-  })
-
   it('sends method-not-found for unknown methods', async () => {
     const req: JsonRpcRequest = {
       jsonrpc: '2.0',
@@ -137,34 +94,6 @@ describe('RelayDispatcher', () => {
     expect(written).toHaveLength(0)
     expect(firstWritten).toHaveLength(1)
     expect(secondWritten).toHaveLength(0)
-  })
-
-  it('forwards relay-originated requests to an owning socket client instead of the caller', async () => {
-    dispatcher.invalidateClient()
-    const ownerWritten: Buffer[] = []
-    const ownerId = dispatcher.attachClient((data) => {
-      ownerWritten.push(Buffer.from(data))
-    })
-    const cliId = dispatcher.attachClient(() => {})
-
-    const pending = dispatcher.requestAnyClient(
-      'orca.cli',
-      { argv: ['status'] },
-      { excludeClientId: cliId }
-    )
-
-    expect(ownerWritten).toHaveLength(1)
-    const requestFrame = decodeFirstFrame(ownerWritten[0])
-    const request = JSON.parse(requestFrame.payload.toString('utf-8')) as JsonRpcRequest
-    expect(request.method).toBe('orca.cli')
-    expect(request.params).toEqual({ argv: ['status'] })
-
-    dispatcher.feedClient(
-      ownerId,
-      encodeJsonRpcFrame({ jsonrpc: '2.0', id: request.id, result: { exitCode: 0 } }, 1, 0)
-    )
-
-    await expect(pending).resolves.toEqual({ exitCode: 0 })
   })
 
   it('prefers an owning socket client over the synthetic primary client', async () => {

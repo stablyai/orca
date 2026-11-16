@@ -1,6 +1,6 @@
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from '../wait/terminal-interactive-probe-budget'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type {

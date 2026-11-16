@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -6,7 +6,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveCliCommand,
   resolveExecutableCommand
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   hasExplicitTuiLaunchCommand,
   structuredAgentCommandPlan

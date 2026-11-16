@@ -164,7 +164,7 @@ async function framesFor(
   for (const next of JOURNEY) {
     items = next
     sequence += 1
-    feed.observe(SESSION)
+    await feed.observe(SESSION)
   }
   return replies.map((reply) => reply.result)
 }

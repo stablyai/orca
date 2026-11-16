@@ -1,14 +1,14 @@
-import type { AntigravityChatAuthConfig } from '../../../../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../../../../shared/antigravity-account-types'
+} from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
-} from '../../../../../shared/account-runtime-capabilities'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { assertRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import {

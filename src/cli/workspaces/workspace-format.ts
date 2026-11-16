@@ -3,7 +3,7 @@ import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   formatListingHostScope,
   type WithAnnotatedHostScope

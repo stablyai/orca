@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { SidebarInputsReadResultSchema } from '../../../../../shared/sidebar-list/sidebar-inputs-feed-contract'
-import type { SidebarFeedDomains } from '../../../../../shared/sidebar-list/sidebar-feed-domains'
+import { SidebarInputsReadResultSchema } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-feed-contract'
+import type { SidebarFeedDomains } from '../../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 import {
   SidebarFeedReader,
   type SidebarFeedReaderRead,

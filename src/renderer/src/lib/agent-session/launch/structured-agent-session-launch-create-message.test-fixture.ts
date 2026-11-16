@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
@@ -7,7 +8,7 @@ import {
   CreateIntentParams,
   SetOptionParams,
   SendParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 import { useAppStore } from '../../../store/index'
@@ -20,7 +21,7 @@ import { resetStructuredAgentSessionReadOwnersForTests } from '../../../componen
 import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '../../../components/native-chat/drafts/native-chat-draft-reset'
 import { readNativeChatDraftCache } from '../../../components/native-chat/drafts/native-chat-draft-views'
 import { structuredAgentSessionDraftScopeKey } from '../../../components/native-chat/drafts/native-chat-draft-scope'
@@ -102,7 +103,7 @@ vi.mock('../../../store/index', () => {
     runtimeEnvironmentCatalogHydrated: true,
     settings: mocks.settings,
     unifiedTabsByWorktree: { 'workspace-1': mocks.tabs },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     runtimeStatusByEnvironmentId: mocks.runtimeStatusByEnvironmentId,
     groupsByWorktree: {},
     seedNativeChatLaunchDraft: vi.fn(),

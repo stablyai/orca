@@ -7,7 +7,7 @@ import { ScrollToCurrentWorkspaceToolbarButton } from './worktree-list/navigatio
 import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../../shared/feature-education/interactions/feature-interactions'
 
 const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'orca.workspaceBoardMovedHintSeen.v1'
 const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000

@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { getRichMarkdownCommentAnchorTop } from './rich-markdown-review-annotations'
 import { getRichMarkdownCommentBlocks } from './rich-markdown-comment-blocks'
 import {

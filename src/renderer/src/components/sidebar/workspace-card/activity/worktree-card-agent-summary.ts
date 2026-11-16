@@ -1,5 +1,5 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { agentRowDisplayDotState as getAgentDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
@@ -7,6 +7,8 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
+  /** Unread completions, split out only for cards without a status-lane unread rollup. */
+  unread?: boolean
   agents: DashboardAgentRowData[]
 }
 
@@ -119,7 +121,7 @@ export function formatStateCount(
 }
 
 // The _one form drops "All" because a lone agent reads "1 agent done".
-function formatAllAgentsInState(
+export function formatAllAgentsInState(
   state: AgentDotState,
   count: number,
   t: Translate = translate
@@ -191,9 +193,29 @@ function formatAllAgentsInState(
   }
 }
 
-export function buildSummaryAgentGroups(agents: DashboardAgentRowData[]): SummaryAgentGroup[] {
+/** Unread means an acknowledged-pending completion; live agents are never announced as unread. */
+export function isUnreadDoneAgent(
+  agent: DashboardAgentRowData,
+  isUnread: ((agent: DashboardAgentRowData) => boolean) | undefined
+): boolean {
+  return isUnread !== undefined && getAgentDotState(agent) === 'done' && isUnread(agent)
+}
+
+/**
+ * One group per state for the folded pill. Pass `isUnread` only when the card has no status-lane
+ * unread rollup: then unread completions lead as their own group so the folded pill still shows it.
+ */
+export function buildSummaryAgentGroups(
+  agents: DashboardAgentRowData[],
+  isUnread?: (agent: DashboardAgentRowData) => boolean
+): SummaryAgentGroup[] {
   const groups = new Map<AgentDotState, DashboardAgentRowData[]>()
+  const unreadDone: DashboardAgentRowData[] = []
   for (const agent of agents) {
+    if (isUnreadDoneAgent(agent, isUnread)) {
+      unreadDone.push(agent)
+      continue
+    }
     const dotState = getAgentDotState(agent)
     const group = groups.get(dotState)
     if (group) {
@@ -202,10 +224,13 @@ export function buildSummaryAgentGroups(agents: DashboardAgentRowData[]): Summar
       groups.set(dotState, [agent])
     }
   }
-  return SUMMARY_STATE_ORDER.flatMap((state) => {
+  const stateGroups = SUMMARY_STATE_ORDER.flatMap((state) => {
     const groupAgents = groups.get(state)
     return groupAgents ? [{ state, agents: groupAgents }] : []
   })
+  return unreadDone.length > 0
+    ? [{ state: 'done', unread: true, agents: unreadDone }, ...stateGroups]
+    : stateGroups
 }
 
 export function summarizeAgents(

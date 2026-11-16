@@ -13,11 +13,11 @@ import { filesSafeToShareWorker } from './scripts/test-runtime/execution-policy/
 import { gitSigningOffEnv } from './scripts/test-runtime/environment/vitest-git-signing-env.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
-import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
+import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool.ts'
 import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
-import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
-import { vitestReactCompiler } from './build-plugins/vitest-react-compiler'
+import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key.ts'
+import { vitestReactCompiler } from './build-plugins/vitest-react-compiler.ts'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
@@ -94,7 +94,12 @@ const testOptions = {
   env: { ...gitEnv, ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
-  execArgv: ['--no-experimental-webstorage', '--expose-gc'],
+  execArgv: [
+    '--no-experimental-webstorage',
+    '--expose-gc',
+    '--require',
+    resolve('config/scripts/test-runtime/node-worker/vitest-worker-parent-exit.cjs')
+  ],
   setupFiles: UNIT_SETUP_FILES.map((file) => resolve(file)),
   include: UNIT_INCLUDE,
   exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,

@@ -6,7 +6,7 @@ import type {
 } from './orcad-migration-client-state'
 import type { PersistedMobileClientTabSelections } from '../persisted-state-types'
 import type { ManualRepoOrderEntry, WorkspaceHostOrder } from '../ui-chrome-types'
-import type { SavedPortForward } from '../ssh-types'
+import type { SavedPortForward } from '../remote-runtime/ssh/ssh-types'
 import { isRecord } from './orcad-migration-manifest-fields'
 import {
   isWorkspaceHostId,

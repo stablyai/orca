@@ -1,27 +1,31 @@
 import {
   resolveWindowShortcutAction,
   type WindowShortcutInput
-} from '../../../../../shared/window-shortcut-policy'
+} from '../../../../../shared/keybindings/window-shortcut-policy'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
+import { hasModifier } from '../../../../../shared/keybindings/parser'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
-import type { BrowserFindTarget } from '../../../../../shared/browser-find-source'
-import type { BrowserPageTabShortcut } from '../../../../../shared/browser-page-command-target'
+import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserFindTarget } from '../../../../../shared/browser/guest-lifecycle/browser-find-source'
+import type { BrowserPageTabShortcut } from '../../../../../shared/browser/guest-lifecycle/browser-page-command-target'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 import { matchesGuestTabShortcut } from './browser-guest-tab-shortcut'
-import { textInputOwnsComposition } from '../../../../../shared/text-input-shortcut-policy'
+import { textInputOwnsComposition } from '../../../../../shared/keybindings/text-input-shortcut-policy'
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
 export type GuestShortcutInput = WindowShortcutInput & {
   isAutoRepeat?: boolean
   isComposing?: boolean
+  altGraph?: boolean
+  getModifierState?: (key: string) => boolean
 }
 
 export type GuestShortcutForwardContext = {
   browserTabId: string
   resolveRenderer: ResolveRenderer
+  isLocalRenderer?: (renderer: Electron.WebContents) => boolean
   shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
   isMobileEmulatorEnabled?: IsMobileEmulatorEnabled
   getKeybindings?: () => KeybindingOverrides | undefined
@@ -42,6 +46,7 @@ export function forwardGuestShortcutInput(
   const {
     browserTabId,
     resolveRenderer,
+    isLocalRenderer,
     shouldForwardDictationShortcut,
     isMobileEmulatorEnabled,
     getKeybindings,
@@ -56,6 +61,23 @@ export function forwardGuestShortcutInput(
     action?.type === 'dictationKeyDown' &&
     !textInputOwnsComposition(input) &&
     shouldForwardDictationShortcut?.() === true
+  // Why: Ctrl+Alt can be AltGr on Windows/Linux; leave those chords with the page.
+  const mayBeAltGraph =
+    process.platform !== 'darwin' && hasModifier(input, 'control') && hasModifier(input, 'alt')
+  // Why: non-primary guest chords stay on the page; primary app chords retain guest precedence.
+  const primaryModifier = process.platform === 'darwin' ? 'meta' : 'control'
+  const primaryDoubleTap = process.platform === 'darwin' ? 'Cmd' : 'Ctrl'
+  const matchesPlugins =
+    !mayBeAltGraph &&
+    (hasModifier(input, primaryModifier) || input.doubleTapModifier === primaryDoubleTap) &&
+    !textInputOwnsComposition(input) &&
+    keybindingMatchesAction('view.plugins', input, process.platform, keybindings, {
+      context: 'app'
+    }) &&
+    (() => {
+      const renderer = resolveRenderer(browserTabId)
+      return renderer !== null && isLocalRenderer?.(renderer) === true
+    })()
   if (action?.type === 'zoom') {
     if (!page) {
       // Why: a plugin frame has no page zoom; Orca zooms what it would with focus outside a pane.
@@ -69,6 +91,7 @@ export function forwardGuestShortcutInput(
   if (input.isAutoRepeat) {
     if (
       forwardsDictation ||
+      matchesPlugins ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -215,6 +238,7 @@ export function forwardGuestShortcutInput(
     }
     renderer.send('ui:dictationKeyDown')
   } else if (
+    matchesPlugins ||
     matchesGuestTabShortcut(
       input,
       process.platform,

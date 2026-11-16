@@ -1,10 +1,10 @@
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from '../cache/cache-model'
 import {
@@ -14,12 +14,13 @@ import {
 
 import type {
   GitHubPRRefreshCandidate,
-  PRRefreshOutcome
+  PRSnapshotReply
 } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   normalizeGitHubPRForBranchOutcome,
   githubPRTransportFailureOutcome
 } from '../../../../../shared/github/pull-requests/refresh/pull-request-for-branch-outcome'
+import { isPRRevalidationOnly } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
@@ -95,7 +96,7 @@ export function startPullRequestLookup(args: {
       const requestHeadOid = candidateWorktree?.head ?? null
       let transportFailed = false
       const response = runtimeRepo
-        ? callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
+        ? callRuntimeRpc<PRSnapshotReply | PRInfo | null>(
             runtimeRepo.target,
             'github.prForBranch',
             {
@@ -104,13 +105,23 @@ export function startPullRequestLookup(args: {
               linkedPRNumber,
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
+              ...(options?.reason === 'swr'
+                ? {
+                    acceptRevalidationOnly: true,
+                    ...(options.userRefresh !== true && options.selected === true
+                      ? { selected: true }
+                      : {})
+                  }
+                : {}),
               ...(options?.userRefresh === true ? { userRefresh: true } : {}),
               ...(fallbackPRNumber !== null
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
-            { timeoutMs: 30_000, ...checkContract.sourceRpcOptions }
-          ).then((result) => normalizeGitHubPRForBranchOutcome(result))
+            { timeoutMs: 30_000, signal: options?.signal, ...checkContract.sourceRpcOptions }
+          ).then((result) =>
+            isPRRevalidationOnly(result) ? result : normalizeGitHubPRForBranchOutcome(result)
+          )
         : (async () => {
             const candidate: GitHubPRRefreshCandidate = {
               repoId: repoId ?? '',
@@ -136,14 +147,26 @@ export function startPullRequestLookup(args: {
                   ...requestOptions,
                   repoOwnerExecutionHostId: options?.repoOwnerExecutionHostId
                 })
-            return normalizeGitHubPRForBranchOutcome(response)
+            // Why: a reply without data leaves the shown PR as it is; queued work delivers the newer one.
+            return isPRRevalidationOnly(response)
+              ? response
+              : normalizeGitHubPRForBranchOutcome(response)
           })()
       const outcome = await response.catch(() => {
         transportFailed = true
         return githubPRTransportFailureOutcome()
       })
-      if (!checkContract.sourceCurrent()) {
+      if (!checkContract.sourceCurrent() || options?.signal?.aborted) {
         return cached?.data ?? null
+      }
+      if (prRequestGenerations.get(cacheKey) === generation) {
+        const inflight = inflightPRRequests.get(cacheKey)
+        if (inflight?.generation === generation) {
+          inflight.outcome = outcome
+        }
+      }
+      if (isPRRevalidationOnly(outcome)) {
+        return get().prCache[cacheKey]?.data ?? null
       }
       const pr = outcome.kind === 'found' ? outcome.pr : null
       let acceptedPR: PRInfo | null = null

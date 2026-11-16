@@ -1,10 +1,14 @@
 import { join, win32 as pathWin32 } from 'node:path'
-import { parseWslUncPath, toLinuxPath, toWindowsWslUncPath } from '../../../../shared/wsl-paths'
+import {
+  parseWslUncPath,
+  toLinuxPath,
+  toWindowsWslUncPath
+} from '../../../../shared/file-access/wsl-paths'
 import { getSelectedCodexAccountIdForTarget } from '../../account-management/runtime-selection'
 import {
   getCodexSelectionLaneKey,
   type CodexAccountSelectionTarget
-} from '../../../../shared/codex-selection-lane'
+} from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { getDefaultWslDistro, getWslHome } from '../../../wsl/discovery/distro-catalog'
 import { hasRecordedLegacyWslCodexPane } from '../../../codex/configuration/homes/codex-pane-account-registry'
 import {
@@ -12,7 +16,7 @@ import {
   type LegacyWslRuntimeAuthDestination
 } from '../../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain'
 import { readWslCodexAuths, type WslCodexAuthRead } from './wsl-codex-auth-batch-reader'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { CodexRuntimeHomeWslCore } from '../credentials/runtime-home-service-wsl-core'
 
 export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {

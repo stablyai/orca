@@ -5,7 +5,7 @@ import {
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getLocalExecutionHostLabel,
@@ -25,17 +25,17 @@ import {
 import {
   addHostSectionRows,
   type HostSectionRow
-} from '../../../../../../shared/sidebar-list/host-section-rows'
-import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/host-section-order'
+} from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
 import { buildSidebarHostOptions } from '../controls/sidebar-host-options'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import { getRenderedWorktreesInSidebarOrder } from '../navigation/worktree-sidebar-row-preference'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from '../../../../../../shared/sidebar-list/host-filtering'
+} from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())

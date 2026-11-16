@@ -4,13 +4,13 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   isCodexAppServerRequestError,
   type CodexAppServerRequestError
 } from '../../app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import type { CodexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import type { CodexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { readCodexThreadId } from '../../app-server/codex-structured-thread-facts'
 import {
   readCodexSandboxPolicy,

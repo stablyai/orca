@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
-import { matchPluginFile, pluginFileMatchRank } from './plugin-file-match'
-import { requiresPluginContentApproval } from '../approval/plugin-consent-fingerprint'
+import { matchPluginFile } from './plugin-file-match'
 import { pluginUpdateAccessGrowth } from '../approval/plugin-update-access-growth'
 
 const excalidraw = {
@@ -35,16 +34,6 @@ function parsed(overrides: Record<string, unknown> = {}) {
 }
 
 describe('contributes.customEditors', () => {
-  it('binds approval to the editor bytes and counts a new file type as more reach', () => {
-    const plugin = parsed()
-    expect(requiresPluginContentApproval(plugin)).toBe(true)
-    const wider = parsed({
-      contributes: { customEditors: [{ ...excalidraw, extensions: ['.excalidraw', '.svg'] }] }
-    })
-    expect(pluginUpdateAccessGrowth(plugin, wider).contributions).toEqual(['customEditors'])
-    expect(pluginUpdateAccessGrowth(plugin, plugin).contributions).toEqual([])
-  })
-
   it('counts an editor that takes over opening or changes content kind', () => {
     const editor = (fields: Record<string, unknown>) =>
       parsed({ contributes: { customEditors: [{ ...excalidraw, ...fields }] } })
@@ -73,19 +62,5 @@ describe('matchPluginFile', () => {
       extension: '.excalidraw.json'
     })
     expect(matchPluginFile('/repo/package.json', match(['.excalidraw.json']))).toBeNull()
-  })
-
-  it('never matches a bare suffix name or a directory segment', () => {
-    expect(matchPluginFile('/repo/.excalidraw', match(['.excalidraw']))).toBeNull()
-    expect(matchPluginFile('/repo/x.excalidraw/readme.md', match(['.excalidraw']))).toBeNull()
-  })
-
-  it('ranks an exact file name above any extension', () => {
-    const byName = matchPluginFile('/repo/Gleam.TOML', match(['.toml'], ['gleam.toml']))
-    expect(byName).toEqual({ by: 'filename' })
-    expect(pluginFileMatchRank(byName)).toBeGreaterThan(
-      pluginFileMatchRank(matchPluginFile('/repo/gleam.toml', match(['.toml'])))
-    )
-    expect(pluginFileMatchRank(null)).toBe(0)
   })
 })

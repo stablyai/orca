@@ -1,12 +1,12 @@
 import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { prepareWslPrompt, stageLocalPromptFiles } from '../prompts/source-control-prompt-files'
 import { producePromptRecords } from '../prompts/source-control-prompt-producer'
 import { argumentBudgetFailure } from './source-control-command-line-budget'
-import { removeTree } from '../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { WindowsCmdLineBreakError } from '@orca/process-host/windows-command-line'
-import { WindowsCommandLineBudgetError } from '../../../shared/windows-command-line-budget'
+import { WindowsCommandLineBudgetError } from '../../../shared/shell/launch/windows-command-line-budget'
 import { supervisedProviderSpawnFailure } from '../../provider-process/provider-spawn-failure-report'
 import {
   finalizeFromAgentOutput,
@@ -32,7 +32,7 @@ export function runLocalSourceControlPlan(
   input: LocalSourceControlPlanInput
 ): LocalProcessExecution<InternalTextGenerationResult> {
   let { plan } = input
-  const { cwd, operation } = input
+  const { cwd, operation, laneId } = input
   const distro =
     plan.promptFile || plan.taskFiles?.length ? wslDistroForCommand(cwd, input.wslDistro) : null
   const guest = distro ? prepareWslPrompt(plan, distro) : undefined
@@ -108,7 +108,7 @@ export function runLocalSourceControlPlan(
     let outputLimitExceeded = false
     let settled = false
     let canceledByUser = false
-    const laneKey = localGenerationLaneKey(operation, cwd)
+    const laneKey = localGenerationLaneKey(operation, cwd, laneId)
     let timer: ReturnType<typeof setTimeout> | null = null
     let terminal = false
     let terminationComplete: Promise<void> | null = null

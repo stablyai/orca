@@ -1,4 +1,4 @@
-import { AGENT_OUTPUT_FAILURE_COPY } from './agent-output-failure-copy'
+import { AGENT_OUTPUT_FAILURE_COPY } from './text-generation/output/agent-output-failure-copy'
 
 // One English table for AI text-generation failures: main builds the wire `error`, the renderer translates by code.
 export const TEXT_GENERATION_FAILURE_COPY = {

@@ -10,7 +10,7 @@ import {
   stopOrcaRuntime,
   type CliResult
 } from './computer-cli-driver'
-import { quotePowerShellLiteral } from '../../../src/shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../src/shared/shell/launch/powershell-native-argument'
 
 const execFileAsync = promisify(execFile)
 let textEditTempDir: string | null = null
@@ -194,7 +194,7 @@ export async function killGedit(): Promise<void> {
   }
 }
 
-export async function ensureNotepadLaunched(): Promise<void> {
+export async function ensureNotepadLaunched(): Promise<string> {
   await killNotepad()
   windowsTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-windows-e2e-'))
   const filePath = join(windowsTempDir, `orca-notepad-${Date.now()}.txt`)
@@ -206,6 +206,7 @@ export async function ensureNotepadLaunched(): Promise<void> {
     `Start-Process notepad.exe -ArgumentList ${quotePowerShellLiteral(filePath)}`
   ])
   notepadAppSelector = `pid:${await findNotepadWindowPid(filePath)}`
+  return filePath
 }
 
 export async function killNotepad(): Promise<void> {

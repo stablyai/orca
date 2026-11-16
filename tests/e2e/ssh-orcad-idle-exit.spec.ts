@@ -14,7 +14,7 @@ import {
   startDockerSshHostTarget,
   type DockerSshHostTarget
 } from './helpers/docker-ssh-host-target'
-import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../src/shared/orcad-idle-exit'
+import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../src/shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 
 const HOST = process.env[ORCAD_CONVERT_HOST_ENV]
 const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { suggestionPathBasename } from '../../../../shared/worktree-name-suggestion'
+import { suggestionPathBasename } from '../../../../shared/worktree/naming/worktree-name-suggestion'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import type { PluginHostMethodContext } from './plugin-host-method-bind'
 import { pluginHostRpc as rpc } from './plugin-host-runtime-call'

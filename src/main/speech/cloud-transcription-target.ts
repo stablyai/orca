@@ -1,4 +1,4 @@
-import type { SpeechModelProvider } from '../../shared/speech-types'
+import type { SpeechModelProvider } from '../../shared/speech/speech-types'
 import { getCatalogModel, replaceRetiredSpeechModelId } from './model-catalog'
 import {
   canReadOpenAiSpeechApiKey,

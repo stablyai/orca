@@ -6,7 +6,7 @@ import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { createLiveAgentWorktreeIdsSelector } from '@/lib/workspace/activity/worktree-activity-state'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import './visible-worktrees'
@@ -14,13 +14,13 @@ import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../../../shared/workspace-creator-visibility'
+} from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,
   getStructuredChatWorktreeIds
 } from './visible-worktree-activity-inputs'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSleepingSweepRetention } from './use-sleeping-sweep-retention'

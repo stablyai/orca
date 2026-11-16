@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { UnrestoredPortForward } from '../../../../shared/ssh-types'
+import type { UnrestoredPortForward } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 /**
  * Saved forwards that aren't open, mirrored from main. Main pushes the list with every forward

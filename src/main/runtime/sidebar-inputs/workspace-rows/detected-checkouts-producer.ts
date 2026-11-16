@@ -1,8 +1,8 @@
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
-import type { Repo } from '../../../../shared/repo-types'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { CachedScan } from '../cached-scan'
 import { ProducerRevision } from '../producer-revision'
 

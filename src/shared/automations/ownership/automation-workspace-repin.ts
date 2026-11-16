@@ -1,7 +1,7 @@
 /** Generation mismatch may mean workspace movement or same-ID host replacement, requiring opposite decisions. Globally nonreissued generations prove the old pin only while another live registration carries the capture. Without positive evidence retain fencing; guessing could hand schedules to a replacement machine. */
 
 import type { AutomationWorkspaceSshPin } from './automation-workspace-pin'
-import { sanitizeSshTargetGeneration } from '../../ssh-target-generation'
+import { sanitizeSshTargetGeneration } from '../../remote-runtime/ssh/ssh-target-generation'
 
 /** The registration a generation was allocated to, if one still carries it. */
 export type SshTargetIdForGeneration = (generation: number) => string | undefined
