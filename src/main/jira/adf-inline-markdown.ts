@@ -114,8 +114,8 @@ function inlineTokens(
 function supportsBareAutolink(value: string): boolean {
   const authority = /^(?:https?:\/\/|www\.)([^/?#]*)/i.exec(value)?.[1]
   if (authority === undefined) {
-    // GFM's bare-email grammar is narrower than the angle-autolink local part the scanner accepts.
-    return /^[-.\w+]+@[-\w]+(?:\.[A-Za-z0-9][-\w]*)+$/.test(value) && !/[-\d_]$/.test(value)
+    // Narrower than GFM's bare email: the CJK emphasis pass can claim an underscore before the email literal.
+    return /^[-.a-zA-Z0-9+]+@[-\w]+(?:\.[A-Za-z0-9][-\w]*)+$/.test(value) && !/[-\d_]$/.test(value)
   }
   return /^[\p{L}\p{N}][\p{L}\p{N}.-]*(?::[0-9]+)?$/u.test(authority)
 }

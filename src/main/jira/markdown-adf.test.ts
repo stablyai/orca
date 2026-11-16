@@ -787,11 +787,7 @@ it('keeps ambiguous URL authorities active through real Markdown read-back', asy
     },
     { text: 'http://-foo.com/', markdown: '<http://-foo.com/>', href: 'http://-foo.com/' },
     { text: '*a*@b.com', markdown: '[\\*a\\*@b.com](mailto:*a*@b.com)', href: 'mailto:*a*@b.com' },
-    {
-      text: '_a_@b.-c.com',
-      markdown: '[\\_a\\_@b.-c.com](mailto:_a_@b.-c.com)',
-      href: 'mailto:_a_@b.-c.com'
-    },
+    { text: '_a_@b.com', markdown: '[\\_a\\_@b.com](mailto:_a_@b.com)', href: 'mailto:_a_@b.com' },
     {
       text: ['https://example.com', '/docs'],
       markdown: 'https://example.com/docs',
