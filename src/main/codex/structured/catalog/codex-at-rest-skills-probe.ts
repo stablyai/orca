@@ -26,7 +26,7 @@ import {
   isCodexSkillsListUnsupported
 } from './codex-skill-list'
 import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,

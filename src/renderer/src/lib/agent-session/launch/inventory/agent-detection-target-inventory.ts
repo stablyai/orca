@@ -16,7 +16,7 @@ import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runt
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
 type DetectionReadState = Pick<

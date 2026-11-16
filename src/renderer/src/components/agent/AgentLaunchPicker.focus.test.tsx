@@ -7,7 +7,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import * as inventoryModule from './use-agent-launch-picker-inventory'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))

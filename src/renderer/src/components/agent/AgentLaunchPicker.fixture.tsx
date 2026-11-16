@@ -8,12 +8,12 @@ import {
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-model-option'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 const level = (value: string, label: string) => ({ value, label })

@@ -2,7 +2,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { TabContentType } from '../tab-groups/tab-types'
 import type { PersistedOpenFile } from '../../workspace-session/workspace-session-state-types'
 import { editorTabFile } from './workspace-layout-editor-tab-file'

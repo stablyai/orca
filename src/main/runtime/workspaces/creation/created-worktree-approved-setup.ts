@@ -1,7 +1,7 @@
 import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host/execution-host'
 import { scopeHooksToRepoKind } from '../../../../shared/folder-workspaces/folder-workspace-hooks'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import type { RunApprovedWorktreeSetupResult } from '../../../../shared/worktree/create-types'

@@ -7,7 +7,7 @@ import {
   structuredAttentionOrigin,
   type StructuredAttentionState,
   type AgentSessionAttentionEdge
-} from '../../../shared/agent-session/agent-session-attention'
+} from '../../../shared/agent-session/view/agent-session-attention'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isCoordinatorOnlyChatNews } from '../../../shared/orchestration/workers/dispatched-worker-attention'

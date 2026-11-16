@@ -8,7 +8,7 @@ import {
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../../shared/linear/workspace-types'
 import { linearIssueViewError } from '@/lib/work-items/linear/linear-read-error'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useEffect, useMemo, useRef } from 'react'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/source-control/references/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/work-items/linear/linear-issue-url-lookup'

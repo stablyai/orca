@@ -9,7 +9,7 @@ import {
   getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost

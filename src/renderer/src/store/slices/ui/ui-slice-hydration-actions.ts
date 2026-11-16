@@ -11,14 +11,12 @@ import {
   normalizeExecutionHostScope,
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
-import {
-  DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeAgentActivityDisplayMode
-} from '../../../../../shared/constants'
+import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
+import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeActivityGroupBy,
@@ -62,7 +60,7 @@ import {
   preserveStringArrayIdentity,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
-  sanitizeExplorerPreferences,
+  sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizePersistedSidebarWidth,
   sanitizeActivityBarPosition,
@@ -155,7 +153,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why !== false: profiles written before #8873 have no key, and they are
           // precisely the ones showing the bug, so absence must mean "exempt".
           alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
-          ...sanitizeExplorerPreferences(ui),
+          ...sanitizePerWorktreePreferences(ui),
           gitGraphFiltersByWorktree: ui.gitGraphFiltersByWorktree ?? {},
           // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
           filterRepoIds:

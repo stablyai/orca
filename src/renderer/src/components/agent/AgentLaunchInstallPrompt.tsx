@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 /** An agent the host lacks: says so and links to the install page Settings uses. */

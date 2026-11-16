@@ -18,7 +18,7 @@ import {
   parseAppSshPtyId,
   toComparableRelaySshPtyId
 } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { sshRemotePtyLeaseAllowsReattach } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'

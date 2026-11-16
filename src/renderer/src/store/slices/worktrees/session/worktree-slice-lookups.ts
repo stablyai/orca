@@ -1,7 +1,7 @@
 import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { getTerminalActivationSpawnSuppression } from '../../../terminals/pty/terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { structuralValuesEqual } from '../../../../../../shared/collections/structural-value-equality'
 import { normalizeCodexAccountEmail } from '@/lib/provider-accounts/codex-account-display-label'

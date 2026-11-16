@@ -23,7 +23,7 @@ import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/t
 import { WslHostWindowsDriveRefusalError } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
-import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/agent-session-host-authority'
+import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'

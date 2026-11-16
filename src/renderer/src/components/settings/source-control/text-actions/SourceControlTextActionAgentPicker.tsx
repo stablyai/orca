@@ -12,7 +12,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   getRepoCommitMessageModelDiscoveryHostKey,
   LOCAL_COMMIT_MESSAGE_HOST_KEY

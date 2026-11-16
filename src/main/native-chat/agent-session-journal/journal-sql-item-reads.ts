@@ -12,11 +12,11 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
-import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/conversation-context/structured-agent-session-context-usage'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import {
   journalThreadGoalSource,
   type JournalThreadGoalSource

@@ -2,8 +2,11 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Store } from '../persistence/loading-store/store'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { isWslHostRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resolveLocalWorkspaceRuntime } from '../workspaces/execution-host/local-project-runtime-resolution'

@@ -10,7 +10,7 @@ import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
-import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
+import { chatUnavailableLabel } from './launch-menu/agent-menu-row-presentation'
 import {
   acceptAgentPickerArguments,
   applyAgentPickerEdit

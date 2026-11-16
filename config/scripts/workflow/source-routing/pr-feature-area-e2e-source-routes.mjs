@@ -30,11 +30,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute(
     'feature.floating-terminal',
-    [
-      'floating-terminal-switch-reveal',
-      'floating-terminal-tab-rename-focus',
-      'floating-workspace-pane-height'
-    ],
+    ['floating-terminal-switch-reveal', 'floating-terminal-tab-rename-focus'],
     [`${COMPONENTS}floating-terminal/`]
   ),
   featureRoute(
@@ -76,7 +72,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   // Pane geometry and the link tooltip share terminal.css and the pane DOM.
   featureRoute(
     'feature.terminal-pane-geometry',
-    ['issue-12656-terminal-link-tooltip', 'terminal-pane-padding-edges'],
+    ['issue-12656-terminal-link-tooltip'],
     [
       'src/renderer/src/assets/terminal.css',
       'src/renderer/src/lib/pane-manager/pane-layout/pane-divider.ts',

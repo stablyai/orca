@@ -1,6 +1,6 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { shallow } from 'zustand/shallow'
-import { sameAgentLaunchPickerModel } from '../tab-bar/new-tab-agent-menu-model'
+import { sameAgentLaunchPickerModel } from './launch-menu/new-tab-agent-menu-model'
 import {
   memo,
   useCallback,
@@ -23,8 +23,8 @@ import {
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
 import { useTranslate } from '@/i18n/use-translate'
-import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import { rowLabel } from './launch-menu/agent-menu-row-presentation'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import { AgentLaunchPickerDropdown } from './AgentLaunchPickerDropdown'

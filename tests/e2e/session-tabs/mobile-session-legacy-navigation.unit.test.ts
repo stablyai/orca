@@ -11,7 +11,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { electronMocks } from '../../../src/main/runtime/orca-runtime-test-mocks/setup.spec'
-import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
+import { getDefaultWorkspaceSession } from '../../../src/shared/orca-profiles/constants'
 
 const list = (runtime: OrcaRuntimeService) => runtime.listMobileSessionTabs(`id:${WT}`)
 

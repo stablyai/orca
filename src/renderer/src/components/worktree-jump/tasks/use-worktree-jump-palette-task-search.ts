@@ -14,7 +14,10 @@ import {
 import type { WorktreeJumpPaletteStoreState } from '../state/use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteLocalState } from '../state/use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteFilter } from '../results/use-worktree-jump-palette-filter'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
 const TASK_SEARCH_DEBOUNCE_MS = 600
 

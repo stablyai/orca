@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 
 export const initialStore = useAppStore.getState()
 export const LEAF = '11111111-1111-4111-8111-111111111111'

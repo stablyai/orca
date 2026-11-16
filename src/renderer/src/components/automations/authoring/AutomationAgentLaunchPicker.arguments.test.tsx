@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 import '../../settings/__fixtures__/settings-persistence-test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { AutomationAgentLaunchPicker } from './AutomationAgentLaunchPicker'
 import type { AutomationDraft } from './AutomationEditorDialog'
 

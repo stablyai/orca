@@ -7,11 +7,11 @@ import { getBranchCompare } from '../../../git/source-control/comparisons/branch
 import { getCommitCompare } from '../../../git/source-control/comparisons/commit-compare'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
-import { validateFullGitObjectId } from '../access/filesystem-path-containment'
+import { validateFullGitObjectId } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {

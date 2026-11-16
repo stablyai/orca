@@ -1,5 +1,5 @@
 import type { AppState } from '../types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { EditorBufferKeepRequest } from '../slices/editor/buffers/editor-buffer-kept'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { buildTerminalTabRetirementPlans } from '../terminals/retirement/terminal-tab-retirement'

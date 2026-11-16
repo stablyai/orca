@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { hasRemoteFilesystemOwner } from '../../remote-filesystem-owner'
 

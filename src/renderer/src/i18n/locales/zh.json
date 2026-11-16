@@ -6439,7 +6439,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} 已断开连接",
           "runtimeHostProject": "Orca 服务器上的项目",
           "runtimeHostProjectNamed": "{{hostName}} 上的项目",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "notificationsMuted": "通知已静音"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "代理",
@@ -6534,7 +6535,9 @@
           "copyNameOption": "工作树名称",
           "lineageSubmenu": "父级与子级",
           "projectGroupSubmenu": "项目组",
-          "newChildWorktree": "新建子工作树..."
+          "newChildWorktree": "新建子工作树...",
+          "muteNotifications": "静音通知",
+          "unmuteNotifications": "取消静音通知"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中",
@@ -23390,7 +23393,7 @@
         "dontAskAgainHint": "可在设置 → AI 服务商账户中关闭此选项",
         "listLabel": "待重启的 Claude 会话",
         "settingTitle": "Claude 在终端中运行期间切换账户时",
-        "settingDescription": "重启后，每个终端对话都会在新账户上继续。",
+        "settingDescription": "重启后，每个终端对话都会在新账户上继续。忙碌的会话会中断当前工作。",
         "settingRestart": "总是重启",
         "session": "Claude 会话",
         "restartingOther": "正在 {{account}} 上重启 {{count}} 个 Claude 会话",
@@ -23410,11 +23413,13 @@
         "notMovedOther": "另有 {{count}} 个会话未移动",
         "review": "查看",
         "restartCount_other": "重启 {{count}} 个会话",
-        "reviewBody_other": "其他 {{count}} 个 Claude 会话未移至 {{next}}",
-        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会等待空闲后再重启",
+        "reviewBody_other": "{{count}} 个 Claude 会话未移至 {{next}}",
+        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会中断当前工作并立即重启",
         "reasonSharedSession": "在另一个窗格中也已打开",
         "sharedOne": "由于另一个窗格打开了同一对话，1 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
-        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。"
+        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
+        "strandedOne": "1 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换",
+        "strandedOther": "{{count}} 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换"
       },
       "oauthUsage": {
         "title": "Claude 用量轮询",
@@ -24015,7 +24020,9 @@
       "chooseTransition": "选择状态更改：",
       "cancel": "取消",
       "noTransition": "{{key}} 没有可转到 {{column}} 的状态更改",
-      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件"
+      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件",
+      "reorderColumn": "重新排列 {{column}}",
+      "reorderColumnHint": "此列中的议题：{{count}}。使用左右方向键移动此列。"
     },
     "favourites": {
       "activeLabel": "Jira 收藏：{{name}}",
