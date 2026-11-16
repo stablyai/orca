@@ -9,7 +9,8 @@ import {
 import { resolveEditorFileHostPlatform } from '../identity/editor-file-host-platform'
 import {
   beginProgrammaticContentSync,
-  endProgrammaticContentSync
+  endProgrammaticContentSync,
+  isProgrammaticContentSyncInFlight
 } from './monaco-programmatic-sync'
 
 export function resolveOpenFileNewModelLineEnding(
@@ -36,6 +37,10 @@ type LineEndingModel = Pick<
   'getLineCount' | 'getEOL' | 'setEOL' | 'onDidChangeContent' | 'isDisposed'
 >
 
+// Models that held line breaks the user did not type (loaded or written in); their ending is the file's.
+// Why per model: retained models outlive editor mounts and are shared by split panes.
+const existingFileModels = new WeakMap<LineEndingModel, true>()
+
 /**
  * Sets the ending of a model that has at most one line. A model with line breaks is never
  * converted: its text and undo history already carry its ending.
@@ -45,7 +50,12 @@ export function applyNewModelLineEnding(
   lineEnding: EditorLineEnding | null,
   modelKey: string
 ): void {
-  if (!lineEnding || model.getLineCount() > 1 || model.getEOL() === lineEnding) {
+  if (
+    !lineEnding ||
+    existingFileModels.has(model) ||
+    model.getLineCount() > 1 ||
+    model.getEOL() === lineEnding
+  ) {
     return
   }
   // A one-line switch changes no text or undo offsets; keep its event from marking the file dirty.
@@ -64,9 +74,17 @@ export function trackNewModelLineEnding(
   lineEnding: EditorLineEnding | null,
   modelKey: string
 ): { dispose(): void } {
+  // Mount-time breaks came from disk or an outside write; emptying the file must not switch them.
+  if (model.getLineCount() > 1) {
+    existingFileModels.set(model, true)
+  }
   applyNewModelLineEnding(model, lineEnding, modelKey)
   let disposed = false
   const subscription = model.onDidChangeContent(() => {
+    if (isProgrammaticContentSyncInFlight(modelKey) && model.getLineCount() > 1) {
+      existingFileModels.set(model, true)
+      return
+    }
     // Why deferred: re-entrant edits would reach later listeners out of order.
     queueMicrotask(() => {
       if (!disposed && !model.isDisposed()) {
