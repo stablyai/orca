@@ -176,9 +176,17 @@ export function useMonacoGitBlame(params: {
         update()
         return
       }
+      if (headMoved && loadedRef.current) {
+        // The old baseline no longer matches HEAD: hide it (the status bar dims) until the reply.
+        loading = true
+        loadedRef.current = null
+        mapping = null
+        update()
+      }
       const known = loadedRef.current
       const sameFile =
-        known?.target.git.worktreeId === target.git.worktreeId &&
+        known !== null &&
+        known.target.git.worktreeId === target.git.worktreeId &&
         known.target.git.worktreePath === target.git.worktreePath &&
         known.target.relativePath === target.relativePath
       // Main answers `unchanged` when HEAD hasn't moved, so a focus reload resends nothing.
