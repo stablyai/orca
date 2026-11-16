@@ -12,15 +12,18 @@ export type PierreDiffInput = {
   originalContent: string
   modifiedContent: string
   cacheKey?: string
+  /** Shiki grammar from `resolvePierreDiffLanguage`; omitted means Pierre guesses from the name. */
+  lang?: string
   parseDiffOptions: CreatePatchOptionsNonabortable
 }
 
 function toFileContents(
   name: string,
   contents: string,
-  cacheKey: string | undefined
+  cacheKey: string | undefined,
+  lang: string | undefined
 ): FileContents {
-  return cacheKey ? { name, contents, cacheKey } : { name, contents }
+  return { name, contents, ...(cacheKey ? { cacheKey } : {}), ...(lang ? { lang } : {}) }
 }
 
 /**
@@ -36,6 +39,7 @@ export function buildPierreFileDiff(
     originalContent,
     modifiedContent,
     cacheKey,
+    lang,
     parseDiffOptions
   }: PierreDiffInput,
   requestedIdentity?: string
@@ -45,14 +49,14 @@ export function buildPierreFileDiff(
   const identity =
     requestedIdentity ??
     getPierreDiffCacheIdentity(
-      JSON.stringify([cacheKey, path, oldPath, status, parseDiffOptions]),
+      JSON.stringify([cacheKey, path, oldPath, status, lang, parseDiffOptions]),
       originalContent,
       modifiedContent
     )
   const oldFile = isAdded
     ? null
-    : toFileContents(oldPath ?? path, originalContent, `${identity}:old`)
-  const newFile = isDeleted ? null : toFileContents(path, modifiedContent, `${identity}:new`)
+    : toFileContents(oldPath ?? path, originalContent, `${identity}:old`, lang)
+  const newFile = isDeleted ? null : toFileContents(path, modifiedContent, `${identity}:new`, lang)
 
   return { ...parseDiffFromFile(oldFile, newFile, { ...parseDiffOptions }), cacheKey: identity }
 }

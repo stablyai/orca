@@ -24,6 +24,7 @@ import { usePierreFileDiff } from '@/components/editor/pierre-diff/use-pierre-fi
 import { PierreDiffLoading } from '@/components/editor/pierre-diff/PierreDiffLoading'
 import { buildPierreParseDiffOptions } from '@/components/editor/pierre-diff/pierre-diff-options'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
+import { usePierreDiffLanguage } from '@/components/editor/pierre-diff/pierre-diff-language'
 
 const EMPTY_DIFF_COMMENTS: readonly DecoratedDiffComment[] = []
 
@@ -73,6 +74,8 @@ export function DiffSectionItem({
     [allDiffComments, section.path]
   )
   const isEditable = section.area === 'unstaged'
+  const language = detectLanguage(section.path)
+  const lang = usePierreDiffLanguage(section.path, language, !isEditable)
   const hasLineCommentAction = Boolean(commentOwner || onAddLineComment)
 
   const sectionBodyRef = useRef<HTMLDivElement | null>(null)
@@ -115,9 +118,11 @@ export function DiffSectionItem({
             modifiedContent: section.modifiedContent,
             // Why: keyed by content generation so the worker AST cache survives virtualization remounts.
             cacheKey: `${worktreeId}:${section.key}:${section.contentGeneration ?? 0}`,
+            lang,
             parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace)
           },
     [
+      lang,
       section.path,
       section.oldPath,
       section.status,
@@ -276,7 +281,7 @@ export function DiffSectionItem({
             collapseUnchanged
             worktreeId={worktreeId ?? ''}
             filePath={section.path}
-            language={detectLanguage(section.path)}
+            language={language}
             imageUploadAddress={imageUploadAddress}
             commentOwner={commentOwner}
             comments={comments}
@@ -318,6 +323,7 @@ export function DiffSectionItem({
       editStateKey,
       renderKey,
       pendingComment,
+      language,
       section.path,
       section.modifiedContent,
       setPendingComment,

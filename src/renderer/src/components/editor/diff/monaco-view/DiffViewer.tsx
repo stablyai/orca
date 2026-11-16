@@ -29,6 +29,7 @@ import { buildPierreParseDiffOptions } from '@/components/editor/pierre-diff/pie
 import { scrollPierreDiffToLine } from '@/components/editor/pierre-diff/pierre-diff-scroll'
 import { usePierreDiffScrollRestore } from '@/components/editor/pierre-diff/use-pierre-diff-scroll-restore'
 import { getPierreDiffChangeTargets } from '@/components/editor/pierre-diff/pierre-diff-change-targets'
+import { usePierreDiffLanguage } from '@/components/editor/pierre-diff/pierre-diff-language'
 
 const EMPTY_DIFF_COMMENTS: readonly DecoratedDiffComment[] = []
 
@@ -90,6 +91,7 @@ export default function DiffViewer({
     [largeDiffRenderLimit, originalContent, modifiedContent]
   )
   const hasLineCommentAction = Boolean(commentOwner || onAddLineComment)
+  const lang = usePierreDiffLanguage(relativePath, language, !editable)
 
   const diffInput = useMemo<PierreDiffInput | null>(
     () =>
@@ -101,9 +103,11 @@ export default function DiffViewer({
             originalContent,
             modifiedContent,
             cacheKey: modelKey,
+            lang,
             parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace)
           },
     [
+      lang,
       relativePath,
       originalContent,
       modifiedContent,
