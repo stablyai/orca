@@ -29,10 +29,12 @@ const OPENCODE_SQLITE_PREVIEW_LIMIT = 5
 const OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW = 100
 // Bounds a pathological single message; a real typed prompt is a handful of parts.
 const FIRST_USER_PROMPT_PART_LIMIT = 512
+// Previews skip hidden blocks of up to 256K chars; reading more of a part only costs worker heap.
+const OPENCODE_SQLITE_PREVIEW_TEXT_CHARS = 512 * 1024
 
 type PreviewRow = {
   role: string | null
-  part_data: string
+  part_text: string | null
   time_created: number
   summary_title: string | null
   summary_body: string | null
@@ -184,7 +186,9 @@ function buildPreviewQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): strin
     return null
   }
   return `SELECT json_extract(m.data, '$.role') AS role,
-                 p.data AS part_data,
+                 CASE WHEN json_type(p.data, '$.text') = 'text'
+                   THEN substr(json_extract(p.data, '$.text'), 1, ${OPENCODE_SQLITE_PREVIEW_TEXT_CHARS})
+                 END AS part_text,
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
                  json_extract(m.data, '$.summary.body') AS summary_body
@@ -273,7 +277,7 @@ export function readOpenCodeSqliteSession(args: {
       if (!previewRow) {
         continue
       }
-      const text = extractPartText(previewRow.part_data)
+      const text = previewRow.part_text
       if (!text) {
         continue
       }
