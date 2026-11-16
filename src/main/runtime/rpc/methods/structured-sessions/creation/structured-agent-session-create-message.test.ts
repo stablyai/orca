@@ -285,3 +285,13 @@ it('answers an old client whose start failed before spawning in plain words', as
   })
   expect(JSON.stringify(answer)).not.toContain(raw)
 })
+
+it.each([
+  { name: 'capable', client: capable },
+  { name: 'legacy', client: legacy }
+])('allows legacy codex fastMode in create options for $name clients', async ({ client }) => {
+  expect(await call('agentSession.create', params({ fastMode: 'true' }), client)).toMatchObject({
+    ok: true,
+    result: { ok: true, value: { sessionId: SESSION } }
+  })
+})

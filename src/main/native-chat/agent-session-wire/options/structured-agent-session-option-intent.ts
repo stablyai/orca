@@ -41,10 +41,13 @@ export function structuredAgentSessionOptionOverridesRefusal(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
   provider: string,
   options: Readonly<Record<string, string>>,
-  accountHome?: Parameters<StructuredAgentDefinition['restingOptions']['acceptsKey']>[1]
+  accountHome?: Parameters<StructuredAgentDefinition['restingOptions']['acceptsKey']>[1],
+  overridePolicy?: { readonly allowLegacyCodexFastMode?: boolean }
 ) {
   const key = Object.keys(options).find(
-    (key) => !acceptsOptionPick(agents, provider, key, options[key] ?? '', accountHome)
+    (key) =>
+      !(overridePolicy?.allowLegacyCodexFastMode && provider === 'codex' && key === 'fastMode') &&
+      !acceptsOptionPick(agents, provider, key, options[key] ?? '', accountHome)
   )
   return key === undefined
     ? null

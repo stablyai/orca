@@ -46,10 +46,9 @@ export function captureStructuredExecutionOptions(
   const refusal = structuredAgentSessionOptionOverridesRefusal(
     ctx.agents,
     ctx.agent,
-    Object.fromEntries(
-      Object.entries(options).filter(([key]) => !(ctx.agent === 'codex' && key === 'fastMode'))
-    ),
-    ctx.accountHome
+    options,
+    ctx.accountHome,
+    { allowLegacyCodexFastMode: true }
   )
   return refusal ? { refusal } : { options }
 }

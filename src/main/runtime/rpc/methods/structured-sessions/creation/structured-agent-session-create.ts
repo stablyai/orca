@@ -155,7 +155,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       host.deps.agents,
       args.agent,
       args.options,
-      resolved.accountHome
+      resolved.accountHome,
+      { allowLegacyCodexFastMode: true }
     )
     if (refusal) {
       throw new AgentSessionRefusalError(refusal)
