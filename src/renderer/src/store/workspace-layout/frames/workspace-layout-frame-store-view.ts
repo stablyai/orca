@@ -17,7 +17,7 @@ import {
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree
 } from '@/lib/workspace/persistence/workspace-session-browser-tabs'
-import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session-editor-files'
+import { buildEditorSessionData } from '@/lib/workspace/persistence/workspace-session'
 import { buildUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import type { AppState } from '../../types'
 
