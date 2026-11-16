@@ -11,6 +11,7 @@ import { parseJsonObject } from '../../ai-vault/parsing/session-json-object'
 import { timestampMs } from '../../ai-vault/parsing/session-record-time'
 import { imageSourcePathFromText } from '../../../shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { isClaudeToolResultContent } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 import { isKnownRasterImageMimeType } from '../../../shared/file-preview/raster-image-preview-limits'
 import { unwrapClaudePastedContentBlock } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-pasted-content'
 import { unwrapClaudeBashInputBlock } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-bash-input'
@@ -148,7 +149,13 @@ export function decodeClaudeChatTranscriptLine(
   fallbackId: string
 ): NativeChatMessage | null {
   const record = line.includes('task-notification') ? parseJsonObject(line) : null
-  if (!record || !isClaudeTaskNotificationTurnStart(record)) {
+  const content = asRecord(record?.message)?.content
+  // One row per record: a notification that also settles a waiting call keeps its results instead.
+  if (
+    !record ||
+    !isClaudeTaskNotificationTurnStart(record) ||
+    (Array.isArray(content) && content.some(isClaudeToolResultContent))
+  ) {
     return decodeClaudeTranscriptLine(line, fallbackId)
   }
   return {

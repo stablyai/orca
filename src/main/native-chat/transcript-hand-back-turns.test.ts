@@ -120,4 +120,25 @@ describe('Claude chat transcript with a background task hand-back', () => {
     expect([...fold.foldedRows].map((index) => rows[index]!.id)).toEqual(['spawn'])
     expect(settled.get('prompt')?.workedSeconds).toBe(53)
   })
+
+  it('keeps the tool result a notification delivers to a waiting call', () => {
+    const decode = nativeChatLineDecoderForAgent('claude')!
+    const mixed = {
+      ...TRANSCRIPT[4],
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: '<task-notification>\n<task-id>t1</task-id>\n</task-notification>'
+          },
+          { type: 'tool_result', tool_use_id: 'toolu_2', content: 'real result' }
+        ]
+      }
+    }
+    expect(decode(JSON.stringify(mixed), 'line-0')).toMatchObject({
+      role: 'tool',
+      blocks: [{ type: 'tool-result', output: 'real result' }]
+    })
+  })
 })
