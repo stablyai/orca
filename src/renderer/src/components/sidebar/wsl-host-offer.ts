@@ -4,7 +4,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   listWslHostWindowsPathAccess,
   type WslHostWindowsPathAccess
