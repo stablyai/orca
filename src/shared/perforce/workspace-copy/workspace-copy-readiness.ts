@@ -21,9 +21,12 @@ const PROBE_CHUNK_BYTES = 1024 * 1024
 // open. 'unknown' is never kept, so a skewed measurement is retried.
 const NOT_CLONING_TTL_MS = 5 * 60_000
 const probedVolumes = new Map<string, { state: 'verified' | 'not-cloning'; at: number }>()
+// Why: two probes on one volume skew each other's free-space readings.
+const pendingProbes = new Map<string, Promise<BlockCloningState>>()
 
 export function resetBlockCloningProbeCacheForTests(): void {
   probedVolumes.clear()
+  pendingProbes.clear()
 }
 
 async function writeProbeFile(path: string, size: number): Promise<void> {
@@ -82,6 +85,20 @@ export async function probeBlockCloning(
   if (known && (known.state === 'verified' || Date.now() - known.at < NOT_CLONING_TTL_MS)) {
     return known.state
   }
+  const pending = pendingProbes.get(volume)
+  if (pending) {
+    return pending
+  }
+  const probe = measureVolume(host, dir, volume).finally(() => pendingProbes.delete(volume))
+  pendingProbes.set(volume, probe)
+  return probe
+}
+
+async function measureVolume(
+  host: WorkspaceCopyHost,
+  dir: string,
+  volume: string
+): Promise<BlockCloningState> {
   let state = await measureClone(host, dir)
   if (state !== 'verified') {
     // A second try rules out another writer on the drive skewing one measurement.

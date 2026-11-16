@@ -28,4 +28,11 @@ describe('probeBlockCloning', () => {
     await expect(probeBlockCloning(host, dir)).resolves.toBe('not-cloning')
     expect(host.copyCalls).toHaveLength(2)
   })
+
+  it('shares one probe between checks of the same volume', async () => {
+    const host = createFakeCopyHost(new FakePerforceServer(), dir, { blockClones: false })
+    const states = await Promise.all([probeBlockCloning(host, dir), probeBlockCloning(host, dir)])
+    expect(states).toEqual(['not-cloning', 'not-cloning'])
+    expect(host.copyCalls).toHaveLength(2)
+  })
 })
