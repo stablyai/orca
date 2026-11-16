@@ -184,7 +184,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     )
   }
 
-  prepareHostSystemDefaultSessionMigrationPass(fullScanRequired = false): boolean {
+  prepareHostSystemDefaultSessionMigrationPass(
+    fullScanRequired = false,
+    newFullScanRequest = false
+  ): boolean {
     if (this.isHostHistorySourceInWsl()) {
       return false
     }
@@ -201,7 +204,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     }
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= fullScanRequired
     if (this.pendingHostSystemDefaultSessionMigrationNeedsFullScan) {
-      markCodexSessionBackfillMarkerNeedsFullScan(paths.markerPath)
+      markCodexSessionBackfillMarkerNeedsFullScan(paths.markerPath, newFullScanRequest)
     }
     // Persist launch debt so force-quit recovery resumes the bounded walk.
     const markerOwesFullScan = markCodexSessionBackfillMarkerPending(

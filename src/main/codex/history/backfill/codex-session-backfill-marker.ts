@@ -91,6 +91,8 @@ export function writeCodexSessionBackfillMarker(
   const fullCoverage = options.coverage === 'full' || current?.hasBaseline === true
   // A racing launch can write behind the walk; preserve its pending dates.
   const generationCurrent = expectedGeneration === markerInvalidationGeneration
+  const replayFullScan =
+    generationCurrent && options.coverage === 'full' && current?.fullScanReplayRequired === true
   const clearCovered =
     generationCurrent && !options.progress.truncated && options.retainPendingScanDates !== true
   const currentPendingScanDates = current?.pendingScanDates ?? []
@@ -106,7 +108,7 @@ export function writeCodexSessionBackfillMarker(
     // Records the retained full-history baseline, including after a bounded pass.
     coverage: fullCoverage ? 'full' : 'bounded',
     completedAt: Date.now(),
-    launchActive: !clearCovered || options.resumed,
+    launchActive: !clearCovered || options.resumed || replayFullScan,
     scanFrom:
       generationCurrent && !options.progress.truncated
         ? options.resumed
@@ -124,6 +126,8 @@ export function writeCodexSessionBackfillMarker(
         ? options.scanFrom
         : undefined
       : current?.scanCursorFrom,
+    fullScanReplayRequired:
+      generationCurrent && options.coverage === 'full' ? false : current?.fullScanReplayRequired,
     // Empty bounded scans must not erase the count from the full-history baseline.
     baselineScannedFiles:
       options.coverage === 'full' ? summary.scannedFiles : current?.baselineScannedFiles,
@@ -131,7 +135,8 @@ export function writeCodexSessionBackfillMarker(
     // Clear full-scan demand only if no launch overtook the full walk.
     ...describePendingScanDates(
       pendingScanDates,
-      current?.needsFullScan === true && !(generationCurrent && options.coverage === 'full')
+      current?.needsFullScan === true &&
+        !(generationCurrent && options.coverage === 'full' && !replayFullScan)
     )
   })
 }
@@ -180,12 +185,18 @@ export function markCodexSessionBackfillMarkerPending(
 }
 
 /** Owe a full walk for launches whose rollout dates could not be recorded. */
-export function markCodexSessionBackfillMarkerNeedsFullScan(markerPath: string): void {
+export function markCodexSessionBackfillMarkerNeedsFullScan(
+  markerPath: string,
+  newFullScanRequest = false
+): void {
   // Prevent older in-flight passes from clearing this demand.
   markerInvalidationGeneration += 1
   const record = readMarkerRecord(markerPath)
   // No marker already means no baseline, so the next pass walks everything.
-  if (!record || record.needsFullScan) {
+  if (!record) {
+    return
+  }
+  if (record.needsFullScan && (!newFullScanRequest || record.fullScanReplayRequired)) {
     return
   }
   try {
@@ -193,9 +204,11 @@ export function markCodexSessionBackfillMarkerNeedsFullScan(markerPath: string):
       ...record.raw,
       pendingScanDates: [],
       needsFullScan: true,
-      scanCursor: undefined,
-      scanCursorFrom: undefined,
-      scanCheckpoint: undefined
+      // New demand replays the prefix after the owed tail, preserving tail progress.
+      fullScanReplayRequired: record.needsFullScan && newFullScanRequest,
+      scanCursor: record.needsFullScan ? record.scanCursor : undefined,
+      scanCursorFrom: record.needsFullScan ? record.scanCursorFrom : undefined,
+      scanCheckpoint: record.needsFullScan ? record.scanCheckpoint : undefined
     })
   } catch (error) {
     console.warn('[codex-session-backfill] Failed to record full-scan demand:', error)
@@ -209,6 +222,7 @@ type CodexSessionBackfillMarkerRecord = {
   hasBaseline: boolean
   pendingScanDates: CodexSessionBackfillDate[]
   needsFullScan: boolean
+  fullScanReplayRequired: boolean
   launchActive: boolean
   scanFrom?: CodexSessionBackfillDate
   scanCursor?: readonly string[]
@@ -229,6 +243,7 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       coverage?: unknown
       pendingScanDates?: unknown
       needsFullScan?: unknown
+      fullScanReplayRequired?: unknown
       scanFrom?: unknown
       scanCheckpoint?: unknown
       scanCursorFrom?: unknown
@@ -252,6 +267,7 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       hasBaseline: marker.version === 3 || marker.coverage === 'full',
       pendingScanDates: parseCodexSessionBackfillDates(marker.pendingScanDates),
       needsFullScan: marker.needsFullScan === true,
+      fullScanReplayRequired: marker.fullScanReplayRequired === true,
       launchActive: marker.launchActive === true,
       scanFrom: isCodexSessionBackfillDate(marker.scanFrom) ? marker.scanFrom : undefined,
       scanCursorFrom: isCodexSessionBackfillDate(marker.scanCursorFrom)

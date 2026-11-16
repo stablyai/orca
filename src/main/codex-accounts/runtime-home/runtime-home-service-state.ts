@@ -50,7 +50,10 @@ export abstract class CodexRuntimeHomeState {
     options?: { reattached?: boolean; launchEnv?: NodeJS.ProcessEnv }
   ): boolean | null
   abstract isHostSystemDefaultSessionMigrationEligible(): boolean
-  abstract prepareHostSystemDefaultSessionMigrationPass(fullScanRequired?: boolean): boolean
+  abstract prepareHostSystemDefaultSessionMigrationPass(
+    fullScanRequired?: boolean,
+    newFullScanRequest?: boolean
+  ): boolean
   abstract finishHostSystemDefaultSessionMigrationPass(): void
 
   protected abstract getSelfContainedManagedHostAccount(): CodexManagedAccount | null

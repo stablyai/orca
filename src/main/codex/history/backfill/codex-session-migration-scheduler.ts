@@ -25,7 +25,7 @@ export function createCodexSessionMigrationScheduler(args: {
   isEligible: () => boolean
   isQuitting: () => boolean
   resolveSystemCodexHomePathOverride: () => string | undefined
-  prepareScheduledRun?: (fullScanRequired: boolean) => boolean | void
+  prepareScheduledRun?: (fullScanRequired: boolean, newFullScanRequest?: boolean) => boolean | void
   finishScheduledRun?: () => void
   startBackfill: MigrationRun
   startIndexHeal: MigrationRun
@@ -161,7 +161,7 @@ export function createCodexSessionMigrationScheduler(args: {
     scheduledRunGeneration += 1
     scheduledFullScan ||= fullScanRequired
     if (fullScanRequired && args.isEligible() && !args.isQuitting()) {
-      args.prepareScheduledRun?.(true)
+      args.prepareScheduledRun?.(true, true)
     }
     armScheduledRun(scheduledRunGeneration)
   }
