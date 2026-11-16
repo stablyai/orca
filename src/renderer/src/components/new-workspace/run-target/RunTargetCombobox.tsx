@@ -8,7 +8,7 @@ import {
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
 } from '@/lib/workspace/creation/project-host-setup-options'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from '../type-ahead/use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {

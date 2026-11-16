@@ -5,7 +5,7 @@ import type {
 import {
   parseRoutableExecutionHostId,
   type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 import {
   aiVaultSessionResultCacheKey,

@@ -209,7 +209,7 @@
 2 src/renderer/src/components/native-chat/attachments/intake/use-native-chat-resolved-path-attachments.ts
 2 src/renderer/src/components/native-chat/composer/controls/NativeChatComposerToolbar.tsx
 1 src/renderer/src/components/native-chat/composer/editor/NativeChatComposerField.tsx
-11 src/renderer/src/components/native-chat/composer/editor/NativeChatPromptEditor.tsx
+9 src/renderer/src/components/native-chat/composer/editor/NativeChatPromptEditor.tsx
 1 src/renderer/src/components/native-chat/composer/editor/use-native-chat-composer-keydown.ts
 6 src/renderer/src/components/native-chat/composer/pickers/NativeChatAutocompleteMenus.tsx
 2 src/renderer/src/components/native-chat/composer/pickers/use-native-chat-skills.ts

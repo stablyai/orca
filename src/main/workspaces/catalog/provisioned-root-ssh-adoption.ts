@@ -5,7 +5,10 @@ import type {
   CreateWorktreeResult
 } from '../../../shared/worktree/create-types'
 import type { AutomationWorkspaceProvenance } from '../../../shared/worktree/types'
-import { isRuntimeOwnedSshTargetId, toSshExecutionHostId } from '../../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   getEphemeralVmRecipeResultCheckoutMode,
   getEphemeralVmRecipeResultProjectRoot

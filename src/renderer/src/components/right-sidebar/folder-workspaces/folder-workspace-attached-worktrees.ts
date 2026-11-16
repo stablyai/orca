@@ -1,5 +1,8 @@
 import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey

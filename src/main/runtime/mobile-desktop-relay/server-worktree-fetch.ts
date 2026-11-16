@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 // Default pages stop at 200; the phone has no pagination.
 export const SERVER_WORKTREE_LIMIT = 10_000

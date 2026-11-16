@@ -1,5 +1,5 @@
 import type { MobileProjectSectionCatalog } from '../../../../shared/sidebar-list/catalog/mobile-project-sections-contract'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import {
   buildSidebarProjectCatalog,
   type PairedServerCatalog

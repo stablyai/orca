@@ -6,7 +6,7 @@ import {
   editorFormatterSchema,
   type EditorFormatResult
 } from '../../shared/editor/formatting/editor-formatter'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../shared/execution-host/execution-host'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import type { RuntimeFileExplorerPath } from '../runtime/files/file-target'

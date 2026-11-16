@@ -2,7 +2,7 @@
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { useAppStore } from '@/store'
 import type { PreparedQuickSubmit } from './composer-submit-model'
 import { useQuickCreationExecution } from './quick-creation-execution'

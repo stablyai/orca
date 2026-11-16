@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron'
-import { getRepoDialableSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../../runtime/files/paths/runtime-relative-paths'

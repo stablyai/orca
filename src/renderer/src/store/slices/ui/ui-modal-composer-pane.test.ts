@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createUIStore } from './ui-slice-test-harness'
 import { MODAL_DISMISSED_KEY } from './modal-slot-dismissal'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import {
   resolveWorkspaceComposerPaneExit,
   selectWorkspaceComposerPaneActive

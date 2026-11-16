@@ -7,7 +7,7 @@ import {
   getConnectionExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 
 export function useRuntimeFileHostLifecycle(): void {
   const originalPlatform = process.platform

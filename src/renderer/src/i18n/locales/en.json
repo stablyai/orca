@@ -85,6 +85,20 @@
       "unreadCaption": "<label>Blue dot:</label> unread",
       "dismiss": "Dismiss"
     },
+    "worktreeCardsIntroNotice": {
+      "title": "New card style",
+      "experimental": "Experimental",
+      "dismiss": "Not now",
+      "previewBody": "Agent status, unread dots and child summaries on every card. This is a preview of your list.",
+      "classicBody": "Back to your current cards. Flip to New to preview again.",
+      "switchLabel": "Card style",
+      "classic": "Classic",
+      "new": "New",
+      "keep": "Keep new",
+      "laterToast": "Try the new cards any time from Workspace options › Card style",
+      "keptTitle": "New cards are on",
+      "keptBody": "Change it here, under Card style."
+    },
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
       "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
@@ -7277,7 +7291,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} disconnected",
           "runtimeHostProject": "Project on Orca server",
           "runtimeHostProjectNamed": "Project on {{hostName}}",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "notificationsMuted": "Notifications muted"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -7373,7 +7388,9 @@
           "copyPathOption": "Path",
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
-          "projectGroupSubmenu": "Project Group"
+          "projectGroupSubmenu": "Project Group",
+          "muteNotifications": "Mute Notifications",
+          "unmuteNotifications": "Unmute Notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -20819,6 +20836,10 @@
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation.",
         "orcaStopUnnamedServer": "the remote server",
+        "restartContinued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+        "restartContinueRefused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+        "restartContinueUnconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message.",
+        "restartNotConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue.",
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReviewApproved": "{{agent}} approved this action. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
@@ -22106,8 +22127,20 @@
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
         },
-        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
-        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked",
+        "ignoredFiles": {
+          "none": "No ignored local files",
+          "unavailable": "Ignored files not checked",
+          "checking": "Checking ignored files…",
+          "lost_one": "{{count}} ignored file will be lost",
+          "lost_other": "{{count}} ignored files will be lost",
+          "lostIncomplete": "{{count}}+ ignored files will be lost",
+          "showPaths": "Show ignored paths",
+          "morePaths_one": "and {{count}} more ignored path",
+          "morePaths_other": "and {{count}} more ignored paths",
+          "listLabel": "Ignored local files that will be lost",
+          "incompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted."
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -24486,7 +24519,9 @@
       "chooseTransition": "Choose a status change:",
       "cancel": "Cancel",
       "noTransition": "No status change to {{column}} is available for {{key}}.",
-      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters."
+      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters.",
+      "reorderColumn": "Reorder {{column}}",
+      "reorderColumnHint": "Issues in this lane: {{count}}. Use the Left and Right arrow keys to move it."
     },
     "favourites": {
       "loadFailed": "Could not load Jira favourites.",

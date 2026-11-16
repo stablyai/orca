@@ -6,7 +6,10 @@ import {
   type AiVaultSessionTitleKind
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { buildAiVaultResumeCommand } from '../../../shared/ai-vault/resume/ai-vault-resume-command'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type {
   FileWithMtime,
   ResumableSessionParseState,

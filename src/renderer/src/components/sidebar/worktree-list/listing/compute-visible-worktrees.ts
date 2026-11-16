@@ -4,7 +4,10 @@ import type { TerminalTab } from '../../../../../../shared/workspace-layout/term
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type {
+  ExecutionHostId,
+  ExecutionHostScope
+} from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectVisibleSidebarWorktrees } from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
 import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'

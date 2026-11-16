@@ -3,7 +3,7 @@ import { isChatUiLaunchTipTargeted } from '../../../../shared/feature-education/
 import { track } from '@/diagnostics/telemetry/telemetry'
 import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 export type OrcaCliFeatureTipSource = EventProps<'orca_cli_feature_tip_shown'>['source']
 export type OrcaCliFeatureTipSetupResult = EventProps<'orca_cli_feature_tip_setup_result'>['result']

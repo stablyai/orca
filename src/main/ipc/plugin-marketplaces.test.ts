@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../shared/constants'
+import { getDefaultSettings } from '../../shared/orca-profiles/constants'
 import type { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import type { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import type { PluginService } from '../plugins/plugin-service'

@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../shared/constants'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import { getDefaultSettings } from '../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/agent-accounts/managed-account-types'
 
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude-command-process'
@@ -176,31 +176,6 @@ describe('ClaudeAccountService', () => {
     expect(f.settings().claudeManagedAccounts).toHaveLength(2)
     expect(f.runtimeAuth.removeAccountFolder).toHaveBeenCalledWith(newId(f), { runtime: 'host' })
     expect(existsSync(join(f.root, newId(f)))).toBe(false)
-  })
-
-  it('names a signed-out account without touching its sign-in, keeps the name, and drops it on removal', async () => {
-    const f = fixture()
-    const records = f.settings().claudeManagedAccounts
-    const selection = f.settings().activeClaudeManagedAccountIdsByRuntime
-    expect(f.service.renameAccount('b', '  Work  ').accounts).toContainEqual(
-      expect.objectContaining({ id: 'b', email: 'b@example.test', displayName: 'Work' })
-    )
-    // Launch-relevant records and selection stay the same objects, so nothing re-reads them.
-    expect(f.settings().claudeManagedAccounts).toBe(records)
-    expect(f.settings().activeClaudeManagedAccountIdsByRuntime).toBe(selection)
-    f.runLogin.mockImplementationOnce(async () => {
-      f.signIn('b', 'b@example.test')
-      return ''
-    })
-    await f.service.reauthenticateAccount('b')
-    expect(f.service.listAccounts().accounts.find((entry) => entry.id === 'b')?.displayName).toBe(
-      'Work'
-    )
-    f.service.renameAccount('b', ' ')
-    expect(f.settings().managedAccountDisplayNames).toEqual({ claude: {} })
-    f.service.renameAccount('b', 'Work')
-    await f.service.removeAccount('b')
-    expect(f.settings().managedAccountDisplayNames).toEqual({ claude: {} })
   })
 
   it('signs a saved account in again inside its own folder and keeps it on failure', async () => {

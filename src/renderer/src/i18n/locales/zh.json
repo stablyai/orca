@@ -6443,7 +6443,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} 已断开连接",
           "runtimeHostProject": "Orca 服务器上的项目",
           "runtimeHostProjectNamed": "{{hostName}} 上的项目",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "notificationsMuted": "通知已静音"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "代理",
@@ -6538,7 +6539,9 @@
           "copyNameOption": "工作树名称",
           "lineageSubmenu": "父级与子级",
           "projectGroupSubmenu": "项目组",
-          "newChildWorktree": "新建子工作树..."
+          "newChildWorktree": "新建子工作树...",
+          "muteNotifications": "静音通知",
+          "unmuteNotifications": "取消静音通知"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中",
@@ -20141,6 +20144,10 @@
         "orcaStopRemote": "此回复进行期间，{{machine}} 上的 Orca 已停止",
         "orcaStopCanContinue": "你可以在此对话中继续",
         "orcaStopUnnamedServer": "远程服务器",
+        "restartContinued": "重启后 Orca 已让此智能体继续，你自己的提示词没有重新发送",
+        "restartContinueRefused": "重启后 Orca 无法继续此聊天，请发送一条消息来继续",
+        "restartContinueUnconfirmed": "重启后 Orca 已让此智能体继续，但无法确认它是否已继续，请先查看它的最新回复，再发送下一条消息",
+        "restartNotConnected": "重启后 Orca 无法重新连接此聊天，因此没有让智能体继续",
         "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
         "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
@@ -21059,7 +21066,6 @@
           "reopen": "重新打开",
           "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”"
         },
-        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
         "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
       },
       "atRiskLocalFiles": {
@@ -24016,7 +24022,9 @@
       "chooseTransition": "选择状态更改：",
       "cancel": "取消",
       "noTransition": "{{key}} 没有可转到 {{column}} 的状态更改",
-      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件"
+      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件",
+      "reorderColumn": "重新排列 {{column}}",
+      "reorderColumnHint": "此列中的议题：{{count}}。使用左右方向键移动此列。"
     },
     "favourites": {
       "activeLabel": "Jira 收藏：{{name}}",

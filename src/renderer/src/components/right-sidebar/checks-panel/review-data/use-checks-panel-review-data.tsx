@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useCallback, useEffect } from 'react'
 import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
 import { loadGitLabJobLogDetails } from '@/runtime/repository-gitlab/gitlab-job-trace-client'
