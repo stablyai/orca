@@ -94,7 +94,9 @@ describe('git as the sender', () => {
     expect(await t.proxied('github.com', '/acme/other.git/git-receive-pack', gitBasicAuthorization(alicePh))).toEqual({ status: 403, body: 'path_not_allowed' })
     expect(await t.proxied('github.com', '/acme/app.git/../other.git/info/refs', gitBasicAuthorization(alicePh))).toEqual({ status: 403, body: 'path_not_allowed' })
     expect((await t.proxied('api.github.com', '/repos/acme/app/pulls', `Bearer ${alicePh}`)).status).toBe(200)
-    expect(await t.proxied('api.github.com', '/user/repos', `Bearer ${alicePh}`)).toEqual({ status: 403, body: 'path_not_allowed' })
+    // GH-AS-MEMBER: outside the repository the member's gh goes out on the App's installation token, never theirs.
+    expect((await t.proxied('api.github.com', '/user/repos', `Bearer ${alicePh}`)).status).toBe(200)
+    expect(t.upstream.at(-1)!.authorization).toBe('Bearer ghs_app')
     // A teammate without a grant has no route at all, even if connected.
     await t.seed('bob', 'bob-gh', 22)
     const bobPh = await memberPlaceholder(t.id, 'bob')
@@ -104,6 +106,8 @@ describe('git as the sender', () => {
   it('adds a member to the policy and the VM git configs when they get a grant, and drops them on revoke', async () => {
     const t = await setup()
     await t.seed('alice', 'alice-gh', 11)
+    // Bob's send comes after Alice's: in a shared workspace the latest sender acts (memberMayAct).
+    t.h.advance(1_000)
     await t.seed('bob', 'bob-gh', 22)
     const bob = await t.as('bob')
     const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
@@ -141,18 +145,15 @@ describe('git as the sender', () => {
     expect(t.h.vercel.commands.some((c) => c.command === MEMBERS_COMMAND)).toBe(false)
   })
 
-  it('honors a member identity only within the window after their own client reported a send', async () => {
+  it('the only person who can use the workspace acts as themselves without a send, with no expiry (GH-AS-MEMBER)', async () => {
     const t = await setup()
     await t.seed('alice', 'alice-gh', 11, false)
     const ph = gitBasicAuthorization(await memberPlaceholder(t.id, 'alice'))
-    // Connected, but never sent: nothing in the VM can use Alice's identity.
-    expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).toEqual({ status: 403, body: 'credential_unavailable' })
-    await t.sent('alice')
     expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
     t.h.advance(31 * 60_000)
-    expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).toEqual({ status: 403, body: 'credential_unavailable' })
-    // A teammate cannot open Alice's window for her.
+    expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
+    // A teammate's send changes nothing for a workspace they can't use (no grant).
     expect((await t.h.call('POST', `/v1/team/workspaces/${t.id}/sent`, { bearer: await t.as('bob') })).status).toBe(200)
-    expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).toEqual({ status: 403, body: 'credential_unavailable' })
+    expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
   })
 })

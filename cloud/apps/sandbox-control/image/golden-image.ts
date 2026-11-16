@@ -29,6 +29,7 @@ export const VM_SCRIPTS = [
   'orca-git-identity',
   'orcad-boot',
   'git',
+  'gh',
   'docker'
 ] as const
 

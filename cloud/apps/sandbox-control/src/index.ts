@@ -219,7 +219,7 @@ import {
   storeUserToken,
   userAuthorizeUrl
 } from './github-user-tokens'
-import { MEMBER_GIT_WINDOW_MS, memberGitRoutes, memberSentWithin, recordMemberSend } from './member-git'
+import { memberGitRoutes, memberMayAct, recordMemberSend } from './member-git'
 import { egressAllowlistSetting, PlatformHostSuffixesConfigError } from './network-policy'
 import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
 import { getOrgSlug, putOrgSlug } from './org-slugs'
@@ -374,11 +374,13 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
   const memberGit = memberGitEnabled(env)
   const members = memberGitRoutes({
     db: env.SANDBOX_DB,
+    appAuthorization: (row) => broker.authorizationFor(row, 'api.github.com'),
+    ...(deps.egressFetch ? { fetch: deps.egressFetch } : {}),
     identity: async (row, userId) => {
       const keyring = keyringFor(env)
       const now = (deps.now ?? Date.now)()
-      // Only while the member is actively driving this workspace (their own client reported a send).
-      return keyring && memberGit(row.account_id) && (await memberSentWithin(env.SANDBOX_DB, row.id, userId, now, memberGitWindowMs(env)))
+      // GH-AS-MEMBER: the only person who can use the workspace, or its latest sender (member-git.ts memberMayAct).
+      return keyring && memberGit(row.account_id) && (await memberMayAct(env.SANDBOX_DB, row, userId, now, memberGitSharedMaxMs(env)))
         ? memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), row.account_id, userId, now)
         : null
     }
@@ -1047,6 +1049,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
       egressPreset: parseEgressPreset(env.SANDBOX_EGRESS_PRESET),
       codexFirewallSwap: env.CODEX_EGRESS_SWAP === 'firewall',
       egressSwapMode: parseEgressSwapMode(env.EGRESS_SWAP_MODE),
+      ghAsMember: env.GH_AS_MEMBER === 'on',
       ...(env.EGRESS_FIREWALL_CLASSES !== undefined ? { egressFirewallClasses: parseFirewallClasses(env.EGRESS_FIREWALL_CLASSES) } : {}),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
@@ -1237,9 +1240,13 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
  * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
  * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
  */
-function memberGitWindowMs(env: Env): number {
-  const minutes = Number(env.MEMBER_GIT_WINDOW_MINUTES)
-  return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : MEMBER_GIT_WINDOW_MS
+/** Shared workspaces: how long the latest sender keeps acting after their last send. Default 60 min; `0` = no cap. */
+function memberGitSharedMaxMs(env: Env): number | null {
+  if (env.MEMBER_GIT_SHARED_MAX_MINUTES === undefined || env.MEMBER_GIT_SHARED_MAX_MINUTES === '') {
+    return 60 * 60_000
+  }
+  const minutes = Number(env.MEMBER_GIT_SHARED_MAX_MINUTES)
+  return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : null
 }
 
 export function memberGitEnabled(env: Env): (accountId: string) => boolean {

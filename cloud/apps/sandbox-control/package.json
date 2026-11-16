@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "graphql": "17.0.2",
     "jose": "^6.2.13",
     "zod": "^4.6.7"
   },

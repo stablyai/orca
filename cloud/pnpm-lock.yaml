@@ -412,6 +412,9 @@ importers:
 
   apps/sandbox-control:
     dependencies:
+      graphql:
+        specifier: 17.0.2
+        version: 17.0.2
       jose:
         specifier: ^6.2.13
         version: 6.2.16
@@ -1294,6 +1297,10 @@ packages:
   google-logging-utils@2.1.0:
     resolution: {integrity: sha512-1R6uiq6XhXW2ZrcGtZpGgVDsYGzSmveVOn8Pp37qe1fbThHZ34e3t3eXj5mVu6PFSVx9fvB1KNVnYgVtq/BRcA==}
     engines: {node: '>=22'}
+
+  graphql@17.0.2:
+    resolution: {integrity: sha512-FRWbddMxfkjiB7z+aQDWIR+E34xo9I8c9mtK2RPv8PmMzKRvrdsreHL/Ui/TmwHJfhHChEtsFPyMHKI+xuarQQ==}
+    engines: {node: ^22.0.0 || ^24.0.0 || ^25.0.0 || >=26.0.0}
 
   hono@4.13.17:
     resolution: {integrity: sha512-vZIcbkvjOR5hHRWERbGkr8fGfF0GGM1ooYkuH448iO3b2AdVEr3AXZSw4Z3Kn+1L5z0CVoVeyV29VGYmFh05kQ==}
@@ -2235,6 +2242,8 @@ snapshots:
       - supports-color
 
   google-logging-utils@2.1.0: {}
+
+  graphql@17.0.2: {}
 
   hono@4.13.17: {}
 

@@ -180,6 +180,8 @@ export type LifecycleDeps = {
     codexFirewallSwap?: boolean
     /** EGRESS_SWAP_MODE: the default swap mode for sandboxes without their own (design §3). Unset: proxy. */
     egressSwapMode?: EgressSwapMode
+    /** GH_AS_MEMBER=on: gh in workspaces acts as the attested sender (member-git.ts pins what it may sign). */
+    ghAsMember?: boolean
     /** EGRESS_FIREWALL_CLASSES: the classes firewall mode swaps (default all); a removed class goes back to the proxy. */
     egressFirewallClasses?: readonly FirewallClass[]
     /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
@@ -744,6 +746,7 @@ async function boot(
         repo: options.repo,
         // Repos hosted outside github.com get no GitHub credential, not even the placeholder.
         githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
+        ghAsMember: Boolean(deps.config.ghAsMember),
         gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
         secretEnv: prep.secrets.env,
         docker: deps.config.dockerEnabled !== false,

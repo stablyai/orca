@@ -50,7 +50,11 @@ export type ProxiedRoute = {
    * The header value, or null (refused), or `{ deny }` to refuse with a specific reason. A deny may carry
    * the provider-shaped answer to give instead (a signed-out account answers like the provider's 401).
    */
-  credential: () => Promise<string | null | { deny: string; answer?: { status: number; contentType: string; body: string } }>
+  credential: (
+    request: { method: string; path: string; body: string | null }
+  ) => Promise<string | null | { deny: string; answer?: { status: number; contentType: string; body: string } }>
+  /** The credential decides on the request body too (GH-AS-MEMBER: GraphQL); only then is it read as text. */
+  readsBody?: (method: string, path: string) => boolean
   /** Extra headers set with the credential (e.g. an account id the client can't know). */
   extraHeaders?: () => Record<string, string>
   /** Sees the provider's status (e.g. a 401 revokes an account credential). Never sees the body. */
@@ -170,7 +174,10 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   if (route.pathAllowed && !route.pathAllowed(request.method, path)) {
     return deny('path_not_allowed')
   }
-  const credential = await route.credential()
+  const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
+  const bodyBytes = hasBody ? await request.arrayBuffer() : undefined
+  const bodyText = bodyBytes && route.readsBody?.(request.method, path) ? new TextDecoder().decode(bodyBytes) : null
+  const credential = await route.credential({ method: request.method, path, body: bodyText })
   if (!credential) {
     return deny('credential_unavailable')
   }
@@ -202,11 +209,10 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   for (const [name, value] of Object.entries(route.extraHeaders?.() ?? {})) {
     headers.set(name, value)
   }
-  const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
   const upstream = await (deps.fetch ?? fetch)(`https://${host}${path}`, {
     method: request.method,
     headers,
-    body: hasBody ? await request.arrayBuffer() : undefined,
+    body: bodyBytes,
     redirect: 'manual'
   })
   // Names only: which sandbox, host and credential were swapped, and what the provider answered.
