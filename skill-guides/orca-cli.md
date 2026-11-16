@@ -328,8 +328,8 @@ Chat rules:
 - `chat list` reports the host's structured chat sessions across workspaces: `sessionId`, `paneKey`, `agentType`, `state`, `conversationName`, `lastAssistantMessage`, and the owning worktree. Terminal agents are not chats and do not appear; chats whose tab was closed drop out — find those with `search` or Session History instead.
 - `chat read` renders the chat journal as transcript lines: `user:`/`assistant:`/`reasoning:` messages, `tool <name> (<state>):` calls with input and output heads, `diff <path>`, `status:` rows, `approval`/`question` prompts with resolutions, `turn` lifecycle, and `agent-start`/`agent-handoff` rows for spawned agents.
 - `--session` takes the session id `chat list`, `worktree ps`, or `agent launch` prints; a structured paneKey resolves too. Inside a chat it defaults to that chat; on a paired host it is required.
-- The default `--direction tail` reads the newest page. `--direction before|after` requires `--cursor` from a previous read's `window.nextCursor`. Poll incrementally with `--direction after --cursor <liveCursor>`; a `reset` field in the reply means the cursor went stale and the page is a bounded tail.
-- Rows a subagent produced carry an `[agentId]` prefix; `[truncated]` marks a tool output the host shortened.
+- The default `--direction tail` reads the newest page. `--direction before|after` requires `--cursor` from a previous read's footer. While `hasNewer` is true, continue with `window.nextCursor`; poll with `liveCursor` only once `hasNewer` is false — `liveCursor` skips rows a limited `after` page has not returned. A `reset` field in the reply means the cursor went stale and the page is a bounded tail.
+- Rows a subagent produced carry an `[agentId]` prefix; `[truncated]` marks a cut tool output and `[shortened]` a message the host trimmed for transport.
 - To write into a chat rather than read it, use `ORCA orchestration send --to orca_session_id:<sessionId>`; there is no `chat send`.
 
 <!-- host-capability: artifact-publishing -->
