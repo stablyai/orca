@@ -10,7 +10,6 @@ import { selectActiveTerminalChromeState } from './active-terminal-chrome-select
 import { hasCustomTitleBar } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import { RunActionButton } from '../components/run-actions/RunActionButton'
-import { CloudWorkspaceNumberChip } from '../components/cloud-workspaces/CloudWorkspaceNumberChip'
 import { CloudWorkspaceOwnerChangedChip } from '../components/cloud-workspaces/CloudWorkspaceOwnerChangedChip'
 import { CloudWorkspacePeople } from '../components/cloud-workspaces/CloudWorkspacePeople'
 
@@ -75,7 +74,6 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
         <>
           <CloudWorkspacePeople worktreeId={activeWorktreeId} />
           <CloudWorkspaceOwnerChangedChip worktreeId={activeWorktreeId} />
-          <CloudWorkspaceNumberChip worktreeId={activeWorktreeId} />
         </>
       ) : null}
       {layout.workspaceChromeActive && !layout.creationLayoutActive && activeWorktreeId ? (

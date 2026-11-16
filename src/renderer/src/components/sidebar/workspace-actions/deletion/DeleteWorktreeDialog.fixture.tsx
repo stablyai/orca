@@ -109,7 +109,7 @@ export const cloudWorkspaceArchiveTooltip = defineFixture({
   interact: () =>
     focusWhenShown(() =>
       [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) =>
-        button.textContent?.includes('Archive instead')
+        button.textContent?.trim() === 'Archive'
       )
     )
 })
