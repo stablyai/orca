@@ -26,7 +26,7 @@ import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
 import { ORCHESTRATION_RUNTIME_CAPABILITIES } from '../../orchestration/orchestration-runtime-capabilities'
 import { PREFLIGHT_RUNTIME_CAPABILITIES } from './preflight-runtime-capabilities'
-import { AGENT_UPDATES_RUNTIME_CAPABILITY } from './agent-updates/agent-updates-runtime-capability'
+import { AGENT_UPDATES_RUNTIME_CAPABILITY } from '../../agent-updates/agent-updates-runtime-capability'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_RUNTIME_CAPABILITIES

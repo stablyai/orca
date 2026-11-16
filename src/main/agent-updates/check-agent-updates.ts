@@ -4,7 +4,7 @@ import { AGENT_UPDATE_CATALOG } from '../../shared/agent-updates/agent-update-ca
 import type { AgentUpdateInfo, AgentUpdateRow } from '../../shared/agent-updates/agent-update-types'
 import { isUpdateAvailable, parseAgentVersion } from '../../shared/agent-updates/agent-version'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import {
   agentCommandOverrideDetectionOptions,
   detectInstalledAgentsWithShellPathHydration

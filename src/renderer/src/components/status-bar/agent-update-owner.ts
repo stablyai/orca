@@ -4,7 +4,7 @@ import { getKnownExecutionHostIdForWorktree } from '../../lib/workspace/ownershi
 import type { WorktreeRuntimeOwnerState } from '../../lib/workspace/ownership/worktree-runtime-owner-state'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /**
  * The focused workspace's machine: `''` is this app, otherwise a server's environment id. `null`

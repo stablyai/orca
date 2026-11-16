@@ -1,4 +1,4 @@
-import { compareAppVersions, parseCliVersion } from '../app-version'
+import { compareAppVersions, parseCliVersion } from '../app-lifecycle/identity/app-version'
 
 export type AgentVersionScheme = 'semver' | 'amp-build' | 'ignore-suffix'
 

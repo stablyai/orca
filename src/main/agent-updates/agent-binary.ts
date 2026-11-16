@@ -8,7 +8,7 @@ import {
 } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { parseAgentVersion } from '../../shared/agent-updates/agent-version'
 import type { InstallMethod } from '../../shared/agent-updates/agent-update-types'
-import { extractExecutableToken } from '../../shared/managed-agent-command-token'
+import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
 import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { findRunnableLocalCommand } from '../ipc/preflight-command-exec'
 import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
