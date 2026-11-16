@@ -5,7 +5,7 @@ La primera vez que abres Zotz (y cuando quieras desde **Ajustes → General → 
 - **Personal**: no toca nada del sistema. Zotz se comporta como siempre.
 - **Servidor remoto**: deja la máquina lista para recibir trabajo por Tailscale, sin dormirse y arrancando sola. Todo lo que pide administrador se hace con **un solo permiso** (una UAC en Windows; el diálogo del sistema en macOS/Linux, y solo si hace falta).
 
-Si eliges "Decidir después", el asistente vuelve a salir en el siguiente arranque. El modo se guarda en el setting `zotzMachineMode` (`unset` / `personal` / `server`).
+Si eliges "Decidir después", el asistente vuelve a salir en el siguiente arranque. El modo se guarda en el setting `zotzMachineMode` (`unset` / `personal` / `server`). Igual que el onboarding de upstream, no aparece solo en builds de desarrollo (salvo con `ORCA_DEV_SHOW_FIRST_RUN_EDUCATION=1`) ni en lanzamientos e2e (`ORCA_E2E_USER_DATA_DIR`); desde Ajustes siempre se puede abrir.
 
 ## Qué hace el modo servidor
 
