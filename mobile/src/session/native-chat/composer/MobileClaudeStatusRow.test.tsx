@@ -29,7 +29,7 @@ function render(status: ClaudeSessionStatus | null): ReactTestRenderer {
 
 const textOf = (renderer: ReactTestRenderer): string =>
   renderer.root
-    .findAll((node) => (node.type as unknown) === 'Text' && node.parent?.type !== 'Text')
+    .findAll((node) => String(node.type) === 'Text' && String(node.parent?.type) !== 'Text')
     .map((node) => node.children.join(''))
     .join(' | ')
 
