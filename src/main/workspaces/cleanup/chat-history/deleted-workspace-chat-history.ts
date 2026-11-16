@@ -12,13 +12,12 @@ import { WORKSPACE_CLEANUP_RULE_GRACE_MS } from '../../../../shared/workspace-cl
 import { listAiVaultSessions } from '../../../ai-vault/listing/cached-session-list'
 import { deleteHostAiVaultSessionsPermanently } from '../../../ai-vault/deletion/host-session-delete'
 import {
-  FolderSpellings,
-  holdsListedPath,
-  isMissing,
-  isMountedDirectory,
-  listedWorkspaceSpellings,
-  workspaceFolderOf,
-  workspaceParentDirectories
+  goneFolderKey,
+  goneFolderOf,
+  isStillGone,
+  readListedFolders,
+  readWorkspaceParents,
+  type GoneFolder
 } from './deleted-workspace-folders'
 
 export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
@@ -50,11 +49,11 @@ function isSweepableSession(session: AiVaultSession, now: number): boolean {
 /** Scope-only listing caps its paths, so a host with many workspace directories lists in batches. */
 async function listInScope(
   deps: ChatHistorySweepDeps,
-  parents: string[]
+  scopePaths: string[]
 ): Promise<AiVaultSession[]> {
   const sessions = new Map<string, AiVaultSession>()
-  for (let start = 0; start < parents.length; start += AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
-    const batch = parents.slice(start, start + AI_VAULT_SCOPE_PATHS_MAX_COUNT)
+  for (let start = 0; start < scopePaths.length; start += AI_VAULT_SCOPE_PATHS_MAX_COUNT) {
+    const batch = scopePaths.slice(start, start + AI_VAULT_SCOPE_PATHS_MAX_COUNT)
     for (const session of await deps.listSessions(batch, deps.signal)) {
       sessions.set(session.filePath, session)
     }
@@ -67,57 +66,47 @@ export async function sweepDeletedWorkspaceChatHistory(
   deps: ChatHistorySweepDeps
 ): Promise<ChatHistorySweepResult> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
-  const spellings = new FolderSpellings()
-  const listed = await listedWorkspaceSpellings(deps.store, spellings)
-  const parents = await workspaceParentDirectories(deps.store, listed, spellings)
-  if (parents.length === 0) {
+  const listed = await readListedFolders(deps.store)
+  const parents = await readWorkspaceParents(deps.store, listed)
+  if (parents.ids.size === 0) {
     return result
   }
-  const sessions = await listInScope(deps, parents)
-  const checks = new Map<string, Promise<boolean>>()
-  const once = (key: string, check: () => Promise<boolean>): Promise<boolean> => {
-    let result = checks.get(key)
-    if (!result) {
-      result = check()
-      checks.set(key, result)
-    }
-    return result
-  }
+  const sessions = await listInScope(deps, parents.scopePaths)
+  const goneByCwd = new Map<string, Promise<GoneFolder | null>>()
 
-  const byFolder = new Map<string, { parent: string; targets: ChatHistoryTarget[] }>()
+  const byFolder = new Map<string, { folder: GoneFolder; targets: ChatHistoryTarget[] }>()
   for (const session of sessions) {
     if (deps.signal?.aborted) {
       return result
     }
-    if (!isSweepableSession(session, deps.now)) {
-      continue
-    }
     // The recorded cwd only: cached scope aliases can describe an earlier symlink target.
-    const place = workspaceFolderOf(session.cwd, parents)
-    if (
-      !place ||
-      (await once(`listed:${place.folder}`, async () =>
-        holdsListedPath(await spellings.of(place.folder), listed)
-      )) ||
-      // A missing parent is an unmounted volume or a moved folder, not a deleted workspace.
-      !(await once(`parent:${place.parent}`, () => isMountedDirectory(place.parent))) ||
-      !(await once(`folder:${place.folder}`, () => isMissing(place.folder)))
-    ) {
+    const cwd = session.cwd
+    if (!cwd || !isSweepableSession(session, deps.now)) {
       continue
     }
-    const group = byFolder.get(place.folder) ?? { parent: place.parent, targets: [] }
+    let pending = goneByCwd.get(cwd)
+    if (!pending) {
+      pending = goneFolderOf(cwd)
+      goneByCwd.set(cwd, pending)
+    }
+    const folder = await pending
+    // Deleted means: the first missing folder sits directly in an Orca workspace parent, and Orca no
+    // longer lists it or anything inside it. A missing parent (unmounted volume) never qualifies.
+    if (!folder || !parents.ids.has(folder.ancestorId)) {
+      continue
+    }
+    const key = goneFolderKey(folder)
+    if (listed.gone.has(key)) {
+      continue
+    }
+    const group = byFolder.get(key) ?? { folder, targets: [] }
     group.targets.push({ agent: session.agent, filePath: session.filePath })
-    byFolder.set(place.folder, group)
+    byFolder.set(key, group)
   }
 
-  for (const [folder, { parent, targets }] of byFolder) {
+  for (const { folder, targets } of byFolder.values()) {
     // Earlier deletions took time: the volume may be gone, the folder recreated, the setting off.
-    if (
-      deps.signal?.aborted ||
-      !deps.isEnabled() ||
-      !(await isMountedDirectory(parent)) ||
-      !(await isMissing(folder))
-    ) {
+    if (deps.signal?.aborted || !deps.isEnabled() || !(await isStillGone(folder))) {
       continue
     }
     const deleted = await deps.deleteSessions(targets)

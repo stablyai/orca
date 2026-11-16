@@ -35,13 +35,11 @@ import {
   readWorkspaceCleanupRunHistory
 } from './workspace-cleanup-run-history'
 import { listEnabledWorkspaceCleanupRules } from './workspace-cleanup-enabled-rules'
-import { deleteChatHistoryOfDeletedWorkspaces } from './chat-history/deleted-workspace-chat-history'
+import { ChatHistorySweepSchedule } from './chat-history/chat-history-sweep-schedule'
 
 // Let the window restore its terminals and session drafts before the first evidence read.
 const STARTUP_DELAY_MS = 2 * 60 * 1000
 const HOURLY_MS = 60 * 60 * 1000
-// Listing every transcript costs a stat and a cache read per file, so hourly runs sweep chats less often.
-const CHAT_HISTORY_SWEEP_INTERVAL_MS = 6 * HOURLY_MS
 // One settings write per toggle; coalesce a burst of them into one run.
 const SETTINGS_DEBOUNCE_MS = 10 * 1000
 
@@ -68,12 +66,14 @@ export class WorkspaceCleanupRunner {
   private nextRunAt: number | null = null
   private enabledRules = new Set<string>()
   private chatHistoryOn = false
-  private lastChatHistorySweepAt = 0
   private unsubscribe: (() => void) | null = null
   private readonly abort = new AbortController()
 
+  private readonly chatHistory: ChatHistorySweepSchedule
+
   constructor(deps: WorkspaceCleanupRunnerDeps) {
     this.deps = deps
+    this.chatHistory = new ChatHistorySweepSchedule(deps.store)
   }
 
   start(): void {
@@ -81,7 +81,7 @@ export class WorkspaceCleanupRunner {
       return
     }
     this.enabledRules = listEnabledWorkspaceCleanupRules(this.deps.store)
-    this.chatHistoryOn = this.readChatHistoryOn()
+    this.chatHistoryOn = this.chatHistory.isOn()
     this.unsubscribe = this.deps.runtime.onClientEvent(
       (event) => {
         if (
@@ -155,19 +155,8 @@ export class WorkspaceCleanupRunner {
     }
   }
 
-  private readChatHistoryOn(): boolean {
-    return this.deps.store.getSettings().deleteChatHistoryWithWorkspace === true
-  }
-
   private hasWork(): boolean {
     return this.enabledRules.size > 0 || this.chatHistoryOn
-  }
-
-  private chatHistorySweepDue(trigger: WorkspaceCleanupRunTrigger, now: number): boolean {
-    return (
-      this.readChatHistoryOn() &&
-      (trigger !== 'hourly' || now - this.lastChatHistorySweepAt >= CHAT_HISTORY_SWEEP_INTERVAL_MS)
-    )
   }
 
   private globalRules(): WorkspaceCleanupRules {
@@ -193,7 +182,7 @@ export class WorkspaceCleanupRunner {
       // Off by default: with nothing due, a scheduled run costs nothing and leaves no record.
       if (
         this.unsubscribe &&
-        (this.enabledRules.size > 0 || this.chatHistorySweepDue(trigger, Date.now()))
+        (this.enabledRules.size > 0 || this.chatHistory.isDue(trigger, Date.now()))
       ) {
         await (this.current ?? this.track(this.execute(trigger)))
       }
@@ -211,7 +200,7 @@ export class WorkspaceCleanupRunner {
     const previous = this.enabledRules
     const chatHistoryWasOn = this.chatHistoryOn
     this.enabledRules = listEnabledWorkspaceCleanupRules(this.deps.store)
-    this.chatHistoryOn = this.readChatHistoryOn()
+    this.chatHistoryOn = this.chatHistory.isOn()
     if (
       [...this.enabledRules].some((rule) => !previous.has(rule)) ||
       (this.chatHistoryOn && !chatHistoryWasOn)
@@ -306,10 +295,7 @@ export class WorkspaceCleanupRunner {
         rows.push({ ...ref, reason, ...outcome })
       }
       // After removals, so this run's deleted workspaces are gone from disk when the sweep looks.
-      if (this.chatHistorySweepDue(trigger, startedAt) && !this.abort.signal.aborted) {
-        this.lastChatHistorySweepAt = startedAt
-        chatHistory = await deleteChatHistoryOfDeletedWorkspaces(this.deps.store, this.abort.signal)
-      }
+      chatHistory = await this.chatHistory.sweepIfDue(trigger, startedAt, this.abort.signal)
     } catch (cause) {
       error = errorMessage(cause)
     }

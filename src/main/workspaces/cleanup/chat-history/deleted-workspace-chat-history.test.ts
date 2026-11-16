@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -45,6 +45,14 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     mkdirSync(join(root, 'repos', 'sibling'), { recursive: true })
     // A flat workspace from before nesting, named like the `docs` repo.
     mkdirSync(join(workspaces, 'docs'), { recursive: true })
+    // A clone Orca never made, where repo `api`'s nested workspaces would go.
+    mkdirSync(join(workspaces, 'api', '.git'), { recursive: true })
+    // A folder project reached through a symlink to repo `tools`' nested workspace folder.
+    mkdirSync(join(workspaces, 'tools'), { recursive: true })
+    mkdirSync(join(root, 'links'), { recursive: true })
+    symlinkSync(join(workspaces, 'tools'), join(root, 'links', 'tools'))
+    // Agents record the physical cwd; the temp root can sit behind a symlink (macOS /var).
+    const physical = (path: string): string => join(realpathSync(root), path.slice(root.length))
     const gone = join(appWorkspaces, 'gone')
     const store = {
       getSettings: () => ({
@@ -83,6 +91,20 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
           displayName: 'docs',
           badgeColor: '',
           addedAt: 0
+        },
+        {
+          id: 'api',
+          path: join(root, 'repos', 'api'),
+          displayName: 'api',
+          badgeColor: '',
+          addedAt: 0
+        },
+        {
+          id: 'tools',
+          path: join(root, 'repos', 'tools'),
+          displayName: 'tools',
+          badgeColor: '',
+          addedAt: 0
         }
       ],
       // Archived: the row stays while its folder is gone, including one nested in a gone folder.
@@ -95,7 +117,10 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
           priorWorktreeIds: [`app::${join(appWorkspaces, 'old-name')}`]
         }
       }),
-      getFolderWorkspaces: () => [{ folderPath: join(appWorkspaces, 'folder-workspace') }]
+      getFolderWorkspaces: () => [
+        { folderPath: join(appWorkspaces, 'folder-workspace') },
+        { folderPath: join(root, 'links', 'tools') }
+      ]
     } as unknown as RuntimeStore
     const deleted: ChatHistoryTarget[] = []
 
@@ -116,7 +141,11 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('folder-workspace.jsonl', join(appWorkspaces, 'folder-workspace')),
         session('nested-archived.jsonl', join(appWorkspaces, 'team', 'feature')),
         session('not-a-workspace.jsonl', join(root, 'repos', 'sibling', 'old-tool')),
-        session('flat-workspace-subfolder.jsonl', join(workspaces, 'docs', 'packages', 'old'))
+        session('flat-workspace-subfolder.jsonl', join(workspaces, 'docs', 'packages', 'old')),
+        session('gone-physical.jsonl', physical(join(appWorkspaces, 'gone-two'))),
+        session('checkout-subfolder.jsonl', physical(join(root, 'repos', 'sibling', 'website'))),
+        session('unrelated-clone.jsonl', join(workspaces, 'api', 'old-package')),
+        session('symlinked-folder-project.jsonl', join(workspaces, 'tools', 'old'))
       ],
       isEnabled: () => true,
       deleteSessions: async (targets) => {
@@ -127,8 +156,9 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
 
     expect(deleted).toEqual([
       { agent: 'claude', filePath: 'gone.jsonl' },
-      { agent: 'claude', filePath: 'gone-subfolder.jsonl' }
+      { agent: 'claude', filePath: 'gone-subfolder.jsonl' },
+      { agent: 'claude', filePath: 'gone-physical.jsonl' }
     ])
-    expect(result).toEqual({ deleted: 2, failed: 0, freedBytes: 42 })
+    expect(result).toEqual({ deleted: 3, failed: 0, freedBytes: 63 })
   })
 })

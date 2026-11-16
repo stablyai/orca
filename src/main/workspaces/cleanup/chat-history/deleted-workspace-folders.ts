@@ -1,139 +1,69 @@
 import { lstat, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
-import {
-  createNormalizedPathInsideOrEqualMatcher,
-  getRuntimePathBasename,
-  isPathInsideOrEqual,
-  normalizeRuntimePathForComparison,
-  relativePathInsideRoot
-} from '../../../../shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildKnownOrcaWorkspaceLayouts } from '../../../../shared/worktree/visibility/ownership'
 import { isENOENT } from '../../../ipc/filesystem/access/filesystem-path-containment'
-import { listWorkspaceCleanupOwnedRepos } from '../workspace-cleanup-run-evidence'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { listWorkspaceCleanupOwnedRepos } from '../workspace-cleanup-run-evidence'
 
-/** True when the folder is provably gone; a permission or I/O error never reads as deleted. */
-export async function isMissing(path: string): Promise<boolean> {
-  return lstat(path).then(
-    () => false,
-    (error: unknown) => isENOENT(error)
-  )
-}
+// Folders are compared by filesystem identity, so symlinks, case and Unicode spellings are the OS's call.
+type Identity = string
 
-/** A parent counts only while mounted; a symlinked workspaces root follows its target. */
-export async function isMountedDirectory(path: string): Promise<boolean> {
+async function identityOf(path: string): Promise<Identity | null> {
   return stat(path).then(
-    (stats) => stats.isDirectory(),
-    () => false
+    (stats) => (stats.isDirectory() ? `${stats.dev}:${stats.ino}` : null),
+    () => null
   )
 }
 
-/**
- * `<workspaces root>/<repo name>` for each nested layout Orca has used, in the configured and the
- * resolved spelling, deepest first. Flat roots and a project's own flat base also hold folders Orca
- * never made (other tools' worktrees, the user's projects), so they are left out.
- */
-export async function workspaceParentDirectories(
-  store: RuntimeStore,
-  listed: ListedPaths,
-  spellings: FolderSpellings
-): Promise<string[]> {
-  const settings = store.getSettings()
-  const repoPaths = store.getRepos().map((repo) => repo.path)
-  const candidates: string[] = []
-  for (const repo of listWorkspaceCleanupOwnedRepos(store).values()) {
-    const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
-    // A WSL distro's transcripts carry Linux paths this process cannot check for absence.
-    if (!repoName || parseWslUncPath(repo.path)) {
-      continue
-    }
-    for (const layout of buildKnownOrcaWorkspaceLayouts(settings, repo)) {
-      if (layout.nestWorkspaces && !parseWslUncPath(layout.path)) {
-        candidates.push(join(layout.path, repoName))
-      }
-    }
-  }
-  const seen = new Set<string>()
-  const directories: string[] = []
-  for (const candidate of candidates) {
-    const real = await realpath(candidate).catch(() => null)
-    for (const directory of real ? [candidate, real] : [candidate]) {
-      const key = normalizeRuntimePathForComparison(directory)
-      if (
-        seen.has(key) ||
-        // A nested root that is or holds a checkout (a `..` base) also holds the user's own folders.
-        repoPaths.some((repoPath) => isPathInsideOrEqual(directory, repoPath)) ||
-        // A live flat workspace named like a repo: its subfolders are not workspaces.
-        (await spellings.of(directory)).some((parent) =>
-          listed.workspaces.some((workspace) => isPathInsideOrEqual(workspace, parent))
-        )
-      ) {
-        continue
-      }
-      seen.add(key)
-      directories.push(directory)
-    }
-  }
-  return directories.sort((left, right) => right.length - left.length)
+/** Whether the path exists: a permission or I/O error is `unknown`, never absence. */
+async function presence(path: string): Promise<'present' | 'missing' | 'unknown'> {
+  return lstat(path).then(
+    () => 'present' as const,
+    (error: unknown) => (isENOENT(error) ? 'missing' : 'unknown')
+  )
 }
 
-/** The workspace folder a session ran in: its cwd's first segment under a workspace parent. */
-export function workspaceFolderOf(
-  cwd: string | null,
-  parents: readonly string[]
-): { parent: string; folder: string } | null {
-  if (!cwd) {
-    return null
-  }
-  for (const parent of parents) {
-    // `/`-separated suffix; joined with the host's own rules so a POSIX `\` stays part of the name.
-    const name = relativePathInsideRoot(parent, cwd)?.split('/')[0]
-    if (name) {
-      return { parent, folder: join(parent, name) }
+/** A gone folder: the deepest existing ancestor of a path and the first missing name below it. */
+export type GoneFolder = { ancestor: string; ancestorId: Identity; name: string }
+
+/** Null when the path exists or its state can't be proven; byte-exact, never re-spelled. */
+export async function goneFolderOf(path: string): Promise<GoneFolder | null> {
+  let current = path
+  let name: string | null = null
+  for (;;) {
+    const state = await presence(current)
+    if (state === 'unknown') {
+      return null
     }
-  }
-  return null
-}
-
-// macOS and Windows volumes usually ignore case, so protection compares case-folded there.
-const FOLD_CASE = process.platform !== 'linux'
-
-/** Spellings of one path to compare: as written, and through its parent's real path (/tmp is /private/tmp). */
-export class FolderSpellings {
-  private readonly realParents = new Map<string, Promise<string | null>>()
-
-  private realParent(path: string): Promise<string | null> {
-    const parent = dirname(path)
-    let real = this.realParents.get(parent)
-    if (!real) {
-      real = realpath(parent).catch(() => null)
-      this.realParents.set(parent, real)
+    if (state === 'present') {
+      const ancestorId = name === null ? null : await identityOf(current)
+      return name !== null && ancestorId ? { ancestor: current, ancestorId, name } : null
     }
-    return real
-  }
-
-  async of(path: string): Promise<string[]> {
-    const real = await this.realParent(path)
-    return [path, ...(real ? [join(real, basename(path))] : [])].map((spelling) => {
-      const key = normalizeRuntimePathForComparison(spelling)
-      return FOLD_CASE ? key.toLowerCase() : key
-    })
+    const parent = dirname(current)
+    if (parent === current) {
+      return null
+    }
+    name = basename(current)
+    current = parent
   }
 }
 
-/** Normalized spellings of every checkout and workspace path Orca still lists. */
-export type ListedPaths = { repos: string[]; workspaces: string[]; all: string[] }
+// macOS and Windows names usually ignore case and Unicode form, so protection compares them folded.
+const foldName = (name: string): string =>
+  process.platform === 'linux' ? name : name.normalize('NFC').toLowerCase()
 
-/** Every path Orca still lists, renamed workspaces' earlier paths included: their chats are still theirs. */
-export async function listedWorkspaceSpellings(
-  store: RuntimeStore,
-  spellings: FolderSpellings
-): Promise<ListedPaths> {
-  const paths: string[] = []
+export function goneFolderKey(folder: GoneFolder): string {
+  return `${folder.ancestorId}/${foldName(folder.name)}`
+}
+
+/** What Orca still lists: checkouts, folder projects, workspaces and renamed workspaces' earlier paths. */
+function listedPaths(store: RuntimeStore): string[] {
+  const paths = store.getRepos().map((repo) => repo.path)
   for (const folderWorkspace of store.getFolderWorkspaces?.() ?? []) {
     paths.push(folderWorkspace.folderPath)
   }
@@ -150,18 +80,96 @@ export async function listedWorkspaceSpellings(
       }
     }
   }
-  const spell = async (list: string[]): Promise<string[]> =>
-    (await Promise.all(list.map((path) => spellings.of(path)))).flat()
-  const repos = await spell(store.getRepos().map((repo) => repo.path))
-  const workspaces = await spell(paths)
-  return { repos, workspaces, all: [...new Set([...repos, ...workspaces])] }
+  return paths
 }
 
-/** A folder holding any listed path, even a nested archived one, is not a deleted workspace. */
-export function holdsListedPath(folderSpellings: readonly string[], listed: ListedPaths): boolean {
-  return folderSpellings.some((folder) => {
-    // Both sides are already normalized; this runs on the main thread for every deleted folder.
-    const holds = createNormalizedPathInsideOrEqualMatcher(folder)
-    return listed.all.some(holds)
-  })
+export type ListedFolders = {
+  /** Existing listed folders, by identity. */
+  present: Set<Identity>
+  /** Missing listed paths, as the gone folder that holds them (an archived workspace keeps its row). */
+  gone: Set<string>
+}
+
+export async function readListedFolders(store: RuntimeStore): Promise<ListedFolders> {
+  const listed: ListedFolders = { present: new Set(), gone: new Set() }
+  for (const path of new Set(listedPaths(store))) {
+    const id = await identityOf(path)
+    if (id) {
+      listed.present.add(id)
+      continue
+    }
+    const gone = await goneFolderOf(path)
+    if (gone) {
+      listed.gone.add(goneFolderKey(gone))
+    }
+  }
+  return listed
+}
+
+/** Whether the folder or any ancestor is something Orca still lists, such as a flat workspace named like a repo. */
+async function isInsideListedFolder(directory: string, listed: ListedFolders): Promise<boolean> {
+  let current = directory
+  for (;;) {
+    const id = await identityOf(current)
+    if (id && listed.present.has(id)) {
+      return true
+    }
+    const parent = dirname(current)
+    if (parent === current) {
+      return false
+    }
+    current = parent
+  }
+}
+
+/**
+ * `<workspaces root>/<repo name>` for each nested layout Orca has used: the only folders whose
+ * children are Orca workspaces. Flat roots and a project's flat base also hold folders Orca never
+ * made (other tools' worktrees, the user's projects), and a folder with `.git` is a checkout.
+ */
+export async function readWorkspaceParents(
+  store: RuntimeStore,
+  listed: ListedFolders
+): Promise<{ scopePaths: string[]; ids: Set<Identity> }> {
+  const settings = store.getSettings()
+  const scopePaths: string[] = []
+  const ids = new Set<Identity>()
+  for (const repo of listWorkspaceCleanupOwnedRepos(store).values()) {
+    const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
+    // A WSL distro's transcripts carry Linux paths this process cannot check for absence.
+    if (!repoName || parseWslUncPath(repo.path)) {
+      continue
+    }
+    for (const layout of buildKnownOrcaWorkspaceLayouts(settings, repo)) {
+      if (!layout.nestWorkspaces || parseWslUncPath(layout.path)) {
+        continue
+      }
+      const directory = join(layout.path, repoName)
+      const id = await identityOf(directory)
+      if (
+        !id ||
+        ids.has(id) ||
+        (await presence(join(directory, '.git'))) !== 'missing' ||
+        (await isInsideListedFolder(directory, listed))
+      ) {
+        continue
+      }
+      ids.add(id)
+      // Scope both spellings: agents record the physical cwd, settings hold the configured one.
+      scopePaths.push(directory)
+      const real = await realpath(directory).catch(() => null)
+      if (real && real !== directory) {
+        scopePaths.push(real)
+      }
+    }
+  }
+  return { scopePaths, ids }
+}
+
+/** Re-reads the gone folder right before deletion: the volume may be gone or the folder recreated. */
+export async function isStillGone(folder: GoneFolder): Promise<boolean> {
+  return (
+    (await identityOf(folder.ancestor)) === folder.ancestorId &&
+    (await presence(join(folder.ancestor, folder.name))) === 'missing'
+  )
 }
