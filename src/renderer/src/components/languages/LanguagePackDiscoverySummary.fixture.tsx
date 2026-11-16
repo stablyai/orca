@@ -9,6 +9,7 @@ import {
 } from './LanguagePackDiscoverySummary'
 import type { LanguageOfferSummary } from './device-language-offer'
 import type { LanguageOfferProgress } from './use-language-offer-action'
+import { usePreviousUiLanguageCopy } from './previous-ui-language-name'
 
 const noop = (): void => {}
 
@@ -163,14 +164,14 @@ export const settingsRowOfferRtl = defineFixture({
   )
 })
 
+function CommunityActiveRow(): React.JSX.Element {
+  const copy = usePreviousUiLanguageCopy('system', true, 'ebbop')
+  return <LanguageRow hint={{ kind: 'community', copy }} value="plugin:ebbop.orca-italian/it" />
+}
+
 export const settingsRowCommunityActive = defineFixture({
   width: 720,
-  render: () => (
-    <LanguageRow
-      hint={{ kind: 'community', publisher: 'ebbop', previousName: 'English (System)' }}
-      value="plugin:ebbop.orca-italian/it"
-    />
-  )
+  render: () => <CommunityActiveRow />
 })
 
 export const settingsRowMoreLanguagesMenu = defineFixture({

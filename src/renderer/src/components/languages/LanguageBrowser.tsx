@@ -16,7 +16,7 @@ import { requestPluginBrowse } from '@/store/plugins/navigation/plugin-preview-r
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { LanguageRowModel } from './LanguagePackRow'
 import { LanguagePickerView } from './LanguagePickerView'
-import { previousUiLanguageName } from './previous-ui-language-name'
+import { usePreviousUiLanguageCopy } from './previous-ui-language-name'
 import {
   availableCatalogPacks,
   languageMatchesDevice,
@@ -216,17 +216,11 @@ export function LanguageBrowser({
     (pack) => selection.phaseOf(pack.listing.pluginKey)?.kind === 'installing'
   )
 
-  const previous = settings?.uiLanguageBeforePlugin
-  const switchBackTo =
-    settings && isPluginUiLanguage(settings.uiLanguage)
-      ? {
-          name: previousUiLanguageName(previous),
-          lang:
-            previous && previous !== UI_LANGUAGE_SYSTEM && !isPluginUiLanguage(previous)
-              ? previous
-              : 'en'
-        }
-      : null
+  const packActive = settings ? isPluginUiLanguage(settings.uiLanguage) : false
+  const previousCopy = usePreviousUiLanguageCopy(settings?.uiLanguageBeforePlugin, packActive)
+  const switchBackTo = packActive
+    ? { label: previousCopy.switchBack, lang: previousCopy.lang }
+    : null
 
   return (
     <LanguagePickerView

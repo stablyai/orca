@@ -27,8 +27,8 @@ export type LanguagePickerViewProps = LanguageListProps & {
   onRetryLanguage: () => void
   /** Errors no row owns, e.g. a failed switch back. Row-scoped errors live on their row. */
   error: string | null
-  /** Set while a community translation is active; names the language to return to. */
-  switchBackTo: { name: string; lang?: string } | null
+  /** Set while a community translation is active; the label reads in the language it returns to. */
+  switchBackTo: { label: string; lang?: string } | null
   onSwitchBack: () => void
   requesting: boolean
   /** Prefills the request form, e.g. from a search with no matches. */
@@ -173,20 +173,17 @@ export function LanguagePickerView(props: LanguagePickerViewProps): React.JSX.El
           <div className={LANGUAGE_PICKER_FOOTER_CLASS}>
             <div className="-ml-2.5 flex min-w-0 items-center">
               {switchBackTo ? (
-                // Why English literal: the active community pack may be partial or broken.
                 <Button
                   size="sm"
                   variant="ghost"
                   className="group/quiet"
-                  lang="en"
+                  lang={switchBackTo.lang}
                   disabled={footerBusy}
                   onClick={props.onSwitchBack}
                 >
                   <span className={QUIET_LABEL}>
                     <ArrowLeft className="size-3.5" />
-                    <span>
-                      Switch back to <span lang={switchBackTo.lang}>{switchBackTo.name}</span>
-                    </span>
+                    <span>{switchBackTo.label}</span>
                   </span>
                 </Button>
               ) : (

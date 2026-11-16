@@ -3,10 +3,12 @@ import { XIcon } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { SUPPORTED_UI_LOCALES } from '../../../../shared/i18n/ui-locale'
+import type { UiLanguage } from '../../../../shared/i18n/ui-language'
 import { getUiLanguageNativeLabel } from '@/i18n/supported-languages'
 import type { LanguageRowModel } from './LanguagePackRow'
 import { LanguagePickerView, type LanguagePickerViewProps } from './LanguagePickerView'
 import { languageNames } from './language-pack-options'
+import { usePreviousUiLanguageCopy } from './previous-ui-language-name'
 
 const noop = (): void => {}
 
@@ -118,16 +120,39 @@ function scrollToCommunity(frame: HTMLElement): void {
   }
 }
 
+// A community pack is active, so the footer offers to switch back to `previous`.
+function SwitchBackPicker({
+  previous,
+  ...props
+}: Partial<LanguagePickerViewProps> & { previous: UiLanguage }): React.JSX.Element {
+  const copy = usePreviousUiLanguageCopy(previous, true)
+  return (
+    <LanguagePickerView
+      {...base}
+      {...props}
+      switchBackTo={{ label: copy.switchBack, lang: copy.lang }}
+    />
+  )
+}
+
 function picker(
   props: Partial<LanguagePickerViewProps>,
-  { width = 544, scroll = false }: { width?: number; scroll?: boolean } = {}
+  {
+    width = 544,
+    scroll = false,
+    previous
+  }: { width?: number; scroll?: boolean; previous?: UiLanguage } = {}
 ) {
   return defineFixture({
     width,
     interact: scroll ? scrollToCommunity : undefined,
     render: () => (
       <DialogSurface>
-        <LanguagePickerView {...base} {...props} />
+        {previous ? (
+          <SwitchBackPicker previous={previous} {...props} />
+        ) : (
+          <LanguagePickerView {...base} {...props} />
+        )}
       </DialogSurface>
     )
   })
@@ -166,11 +191,13 @@ export const deviceBuiltIn = picker({ builtIns: builtIns('system', { id: 'en', d
 
 export const deviceBuiltInLoading = picker({ community: [], catalogStatus: 'loading' })
 
-export const communityActive = picker({
-  builtIns: builtIns('plugin:ebbop.lang/it'),
-  ...devicePinned({ ebbop: { selected: true } }),
-  switchBackTo: { name: 'System' }
-})
+export const communityActive = picker(
+  {
+    builtIns: builtIns('plugin:ebbop.lang/it'),
+    ...devicePinned({ ebbop: { selected: true } })
+  },
+  { previous: 'system' }
+)
 
 export const loadingCatalog = picker({ community: [], catalogStatus: 'loading' }, { scroll: true })
 
@@ -223,12 +250,14 @@ export const pluginsDisabled = picker({
   community: allCommunity().map((row) => ({ ...row, unavailable: true }))
 })
 
-export const languageLoadFailed = picker({
-  failedLanguage: { name: 'italiano' },
-  builtIns: builtIns('none', { id: 'en', effective: true }),
-  ...devicePinned({ ebbop: { failed: true } }),
-  switchBackTo: { name: 'System' }
-})
+export const languageLoadFailed = picker(
+  {
+    failedLanguage: { name: 'italiano' },
+    builtIns: builtIns('none', { id: 'en', effective: true }),
+    ...devicePinned({ ebbop: { failed: true } })
+  },
+  { previous: 'system' }
+)
 
 export const onboarding = picker({
   onboarding: true,
@@ -253,10 +282,9 @@ export const narrow = picker(devicePinned({ ebbop: { needsInstall: true } }), { 
 export const narrowCommunityActive = picker(
   {
     builtIns: builtIns('plugin:ebbop.lang/it'),
-    ...devicePinned({ ebbop: { selected: true } }),
-    switchBackTo: { name: 'English', lang: 'en' }
+    ...devicePinned({ ebbop: { selected: true } })
   },
-  { width: 452 }
+  { width: 452, previous: 'en' }
 )
 
 export const narrowNoMatches = picker(

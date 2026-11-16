@@ -25568,5 +25568,11 @@
       "title": "报告卡死",
       "uncheckAttachments": "取消勾选“附加已保存的卡死报告和诊断日志”并重试，或复制详细信息"
     }
+  },
+  "languages": {
+    "switchBackTo": "切换回{{language}}",
+    "switchBackToSystem": "切换回系统语言（{{language}}）",
+    "communityBy": "由 {{publisher}} 提供的社区翻译",
+    "communityTranslation": "社区翻译"
   }
 }

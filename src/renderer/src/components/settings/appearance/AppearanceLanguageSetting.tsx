@@ -20,7 +20,7 @@ import {
 import { useLanguagePackCatalog } from '@/components/languages/use-language-pack-catalog'
 import { packPublisher } from '@/components/languages/language-pack-options'
 import { currentFocusTarget, firstConnected } from '@/components/languages/focus-return'
-import { previousUiLanguageName } from '@/components/languages/previous-ui-language-name'
+import { usePreviousUiLanguageCopy } from '@/components/languages/previous-ui-language-name'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { UI_LANGUAGE_CHOICES, getUiLanguageNativeLabel } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
@@ -57,17 +57,15 @@ function useLanguageSettingOffer(
   const unsupported = detection?.status === 'unsupported'
   // Why on mount: a catalog read before the dropdown opens keeps the menu from growing under the pointer.
   const catalog = useLanguagePackCatalog(catalogSupported)
-  if (isPluginUiLanguage(uiLanguage)) {
-    const active = installed.find((pack) => pack.id === uiLanguage)
-    return {
-      hint: {
-        kind: 'community',
-        publisher: active ? packPublisher(active) : null,
-        previousName: previousUiLanguageName(previous)
-      },
-      offer: null,
-      catalog
-    }
+  const packActive = isPluginUiLanguage(uiLanguage)
+  const active = packActive ? installed.find((pack) => pack.id === uiLanguage) : undefined
+  const previousCopy = usePreviousUiLanguageCopy(
+    previous,
+    packActive,
+    active ? packPublisher(active) : null
+  )
+  if (packActive) {
+    return { hint: { kind: 'community', copy: previousCopy }, offer: null, catalog }
   }
   const offer = unsupported
     ? deviceLanguageOffer(installed, catalog.packs, detection.detectedTag)

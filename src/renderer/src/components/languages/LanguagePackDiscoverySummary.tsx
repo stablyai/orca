@@ -4,14 +4,15 @@ import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { LanguageOfferSummary } from './device-language-offer'
 import type { LanguageOfferProgress } from './use-language-offer-action'
+import type { PreviousUiLanguageCopy } from './previous-ui-language-name'
 
 export type LanguageSettingHint =
   /** Nothing to offer; the row shows no description unless an error needs one. */
   | { kind: 'browse' }
   /** The device language is only available as a community translation. */
   | { kind: 'offer'; offer: LanguageOfferSummary }
-  /** A community translation is active; `previousName` is what "Switch back" restores. */
-  | { kind: 'community'; publisher: string | null; previousName: string }
+  /** A community translation is active; its copy reads in the language "Switch back" restores. */
+  | { kind: 'community'; copy: PreviousUiLanguageCopy }
 
 const linkClassName =
   'rounded-sm font-medium whitespace-nowrap text-foreground underline decoration-muted-foreground/40 underline-offset-2 outline-none hover:decoration-foreground focus-visible:decoration-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50'
@@ -92,18 +93,11 @@ export function LanguagePackDiscoverySummary({
     )
   }
   if (hint.kind === 'community') {
-    // Why English literal: the active pack may be broken, so the escape hatch must stay readable.
     return (
-      <span lang="en">
-        {error ? (
-          <span className="text-destructive">{error}</span>
-        ) : hint.publisher ? (
-          `Community translation by ${hint.publisher}.`
-        ) : (
-          'Community translation.'
-        )}{' '}
+      <span lang={hint.copy.lang}>
+        {error ? <span className="text-destructive">{error}</span> : hint.copy.community}{' '}
         <button type="button" className={linkClassName} disabled={busy} onClick={onRestore}>
-          Switch back to {hint.previousName}
+          {hint.copy.switchBack}
         </button>
       </span>
     )
