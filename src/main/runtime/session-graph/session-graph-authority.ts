@@ -78,6 +78,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
     this.releaseUnseededPhoneFrames()
+    this.releaseAgentSenderHistoryIfUnobserved()
   }
 
   protected shouldRestoreHeadlessGraph(windowId: number): boolean {

@@ -103,7 +103,8 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     // The window applying graph replies reads senders too; releasing after each reply rebuilt history cold every time.
     if (
       this.authoritativeWindowId !== null &&
-      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.graphStatus !== 'unavailable'
     ) {
       return true
     }
