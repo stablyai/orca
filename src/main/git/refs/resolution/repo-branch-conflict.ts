@@ -1,3 +1,4 @@
+import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
 import { resolveConfiguredRemoteBranchName } from '../snapshot/branch-ref-snapshot-data'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
@@ -15,7 +16,7 @@ export type BranchConflictKind = 'local' | 'remote'
 /** Exact-name creates must refuse when a probe could not decide. */
 export type StrictBranchConflictKind = BranchConflictKind | 'unknown'
 
-class BranchNamespaceConflictError extends Error {}
+class BranchNamespaceConflictError extends WorktreeCreateCollisionError {}
 
 function runGit(
   exec: ExactRefProbeExec,

@@ -14,6 +14,7 @@ import { openWorktreeCreatePathClaim } from '../../../workspaces/creation/worktr
 import { exactNameLateCollision } from '../../../workspaces/creation/worktree-create-exact-name'
 import { pendingWorktreeRemovals } from '../../../workspaces/removal/worktree-removal-table'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
+import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
 import { WorktreeCreate } from '../../../../shared/rpc-contract/workspaces/worktree-create-params'
 import { buildManagedWorktreeCreateArgs } from '../../rpc/methods/workspaces/worktree-create-args'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
@@ -447,7 +448,7 @@ describe('derived branch namespace conflicts with real Git', () => {
       await git(f.repoPath, 'branch', 'feature')
       await expect(
         f.candidate({ name: 'feature/x', branchNameOverride: undefined, branchIntent })
-      ).rejects.toThrow()
+      ).rejects.toBeInstanceOf(WorktreeCreateCollisionError)
       expect(await git(f.repoPath, 'for-each-ref', '--format=%(refname)', 'refs/heads/')).toBe(
         'refs/heads/feature\nrefs/heads/main'
       )

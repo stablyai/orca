@@ -8,16 +8,8 @@ import {
 } from '../../shared/file-access/cross-platform-path'
 import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import {
-  containsEmoji,
-  replaceKnownEmojiWithShortcodes,
-  setEmojiShortcodeDatasetLoader
-} from '../../shared/text/emoji-shortcode-catalog'
-import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
 import { getWslHome, getWslHomeAsync } from '../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../wsl/filesystem/unc-path-access'
-
-setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
   /** Mirror Windows-drive repo worktrees into this project runtime's WSL distro; omitted retains default placement. */
@@ -25,38 +17,7 @@ type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDi
 }
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-function sanitizeNameSegment(input: string): string {
-  return input
-    .trim()
-    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
-    .replace(/-+/g, '-')
-    .replace(/\.{2,}/g, '.')
-    .replace(/^[.-]+|[.-]+$/g, '')
-}
-
-export function sanitizeWorktreeBranchName(input: string): string {
-  const sanitized = replaceKnownEmojiWithShortcodes(input)
-    .split('/')
-    .map(sanitizeNameSegment)
-    .filter(Boolean)
-    .join('/')
-  return sanitized || sanitizeWorktreeName(input)
-}
-
-export function sanitizeWorktreeName(input: string): string {
-  // Preserve Unicode letters/numbers: Git permits them and workspace names must support users' languages.
-  const sanitized = sanitizeNameSegment(replaceKnownEmojiWithShortcodes(input))
-
-  if (!sanitized && containsEmoji(input)) {
-    return 'workspace'
-  }
-
-  if (!sanitized || sanitized === '.' || sanitized === '..') {
-    throw new Error('Invalid worktree name')
-  }
-
-  return sanitized
-}
+export { sanitizeWorktreeName, sanitizeWorktreeBranchName } from './worktree-name-sanitization'
 
 export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
   const resolvedWorkspaceDir = resolve(workspaceDir)
