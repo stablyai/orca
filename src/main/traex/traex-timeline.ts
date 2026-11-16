@@ -223,19 +223,6 @@ export class TraexTimeline {
     if (this.streams.notification(method, params, turn)) {
       return
     }
-    if (method === 'queue/status') {
-      if (this.deps.producer) {
-        return
-      }
-      this.apply({
-        type: 'activity',
-        text:
-          params.state === 'ready'
-            ? null
-            : `Queued${typeof params.position === 'number' ? ` (position ${params.position})` : ''}`
-      })
-      return
-    }
     if (
       ![
         'thread/status/changed',
@@ -245,7 +232,8 @@ export class TraexTimeline {
         'thread/tokenUsage/updated',
         'item/reasoning/summaryPartAdded',
         'item/mcpToolCall/progress',
-        'rawResponse/completed'
+        'rawResponse/completed',
+        'queue/status'
       ].includes(method)
     ) {
       this.apply({

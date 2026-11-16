@@ -76,13 +76,44 @@ createInterface({ input: process.stdin })
         return
       }
       turnId = `turn-${++serial}`
+      const text = params.input[0].text
+      if (text === 'model-queue-history') {
+        notify('queue/status', {
+          turnId: 'past-turn',
+          state: 'queued',
+          position: 99,
+          operation: null,
+          modelQuotaLowPriority: false,
+          message: null
+        })
+      }
+      if (text.startsWith('model-queue')) {
+        notify('queue/status', {
+          turnId,
+          state: 'queued',
+          operation: null,
+          modelQuotaLowPriority: false,
+          position: text === 'model-queue-unknown' ? null : text === 'model-queue-zero' ? 0 : 12,
+          message: null
+        })
+      }
       reply(id, { turn: { id: turnId, status: 'inProgress', items: [] } })
       notify('turn/started', { turn: { id: turnId, status: 'inProgress', items: [] } })
       notify('item/completed', {
         turnId,
         item: { id: params.userMessageId, type: 'userMessage', content: params.input }
       })
-      const text = params.input[0].text
+      if (text.startsWith('model-queue')) {
+        notify('queue/status', {
+          turnId: 'other-turn',
+          state: 'ready',
+          position: null,
+          operation: null,
+          modelQuotaLowPriority: false,
+          message: null
+        })
+        return
+      }
       if (text === 'approval-and-question') {
         send({
           id: 'approval',
@@ -267,6 +298,44 @@ createInterface({ input: process.stdin })
         })
         complete('ROOT_CONTRACT_DONE')
       }
+    } else if (method === 'turn/steer') {
+      reply(id, { turnId })
+      notify('item/completed', {
+        turnId,
+        item: { id: params.userMessageId, type: 'userMessage', content: params.input }
+      })
+      notify('queue/status', {
+        turnId,
+        state: 'waiting',
+        position: 3,
+        operation: null,
+        modelQuotaLowPriority: false,
+        message: null
+      })
+      if (params.input[0].text === 'queue-update') {
+        return
+      }
+      if (params.input[0].text === 'queue-stream') {
+        notify('item/agentMessage/delta', { turnId, itemId: 'queue-stream', delta: 'STREAMING' })
+        return
+      }
+      notify('queue/status', {
+        turnId,
+        state: 'ready',
+        position: null,
+        operation: null,
+        modelQuotaLowPriority: false,
+        message: null
+      })
+      complete('QUEUE_DONE')
+      notify('queue/status', {
+        turnId,
+        state: 'queued',
+        position: 99,
+        operation: null,
+        modelQuotaLowPriority: false,
+        message: null
+      })
     } else if (id === 'approval') {
       if (request.result.decision !== 'accept') {
         complete('denied')
@@ -368,9 +437,22 @@ createInterface({ input: process.stdin })
         turn: { id: params.turnId ?? turnId, status: 'interrupted', items: [] }
       })
     } else if (method === 'thread/compact/start') {
-      reply(id, {})
       turnId = `compact-${++serial}`
+      if (params.userGuidance === 'queue-compaction') {
+        notify('queue/status', {
+          turnId,
+          state: 'queued',
+          position: 12,
+          operation: 'contextCompaction',
+          modelQuotaLowPriority: false,
+          message: null
+        })
+      }
+      reply(id, {})
       notify('turn/started', { turn: { id: turnId, status: 'inProgress', items: [] } })
+      if (params.userGuidance === 'queue-compaction') {
+        return
+      }
       if (params.userGuidance === 'fail-compaction') {
         notify('turn/completed', {
           turn: {

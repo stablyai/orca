@@ -38,6 +38,7 @@ export class TraexSession {
   commands: AgentSessionSlashCommand[] | undefined
   commandsRead: Promise<void> | null = null
   activeTurn: string | null = null
+  queuedModelTurn: string | null = null
   compacting = false
   ranOptions: Record<string, string> = {}
   reportedPermissionMode: string | null = null
@@ -191,6 +192,10 @@ export class TraexSession {
     }
   }
 
+  isCompletedTurn(turnId: string): boolean {
+    return this.completedTurns.has(turnId)
+  }
+
   promptOwner(itemId: string): TraexPromptRegistry {
     return (
       [...this.childThreads.values()].find((child) => child.prompts.has(itemId))?.prompts ??
@@ -221,8 +226,8 @@ export class TraexSession {
         type: 'turn.end',
         at: traexTimestampMs(turn?.completedAt) ?? Date.now(),
         durationMs: traexNonnegativeNumber(turn?.durationMs),
-        state: 'completed',
-        outcome: failed ? 'failure' : 'success',
+        state: turn?.status === 'interrupted' ? 'interrupted' : 'completed',
+        outcome: failed ? 'failure' : turn?.status === 'interrupted' ? undefined : 'success',
         ...(this.activeTurn ? { providerTurnId: this.activeTurn } : {})
       },
       () => {
@@ -254,6 +259,7 @@ export class TraexSession {
 
   private exited(error: Error): void {
     this.ended = true
+    this.queuedModelTurn = null
     this.failure ??= error
     if (!this.requestedClose) {
       this.input.events?.observeRootExit?.()

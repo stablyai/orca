@@ -1,6 +1,7 @@
 import type { TraexSession } from './traex-session'
 import {
   traexItemSchema,
+  traexContentText,
   traexRecord,
   traexText,
   traexTimestampMs,
@@ -11,6 +12,7 @@ import { TraexPromptRegistry } from './traex-prompt-registry'
 import { isTraexTerminalActivity } from './traex-child-work'
 import { refreshTraexBackgroundTerminals } from './traex-background-task-stops'
 import { isAgentSessionInteractionMode } from '../../shared/agent-session/options/agent-session-interaction-mode'
+import { clearTraexModelQueue, observeTraexModelQueue } from './traex-model-queue'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 export function observeTraexSessionNotification(
@@ -51,6 +53,10 @@ export function observeTraexSessionNotification(
     session.publishChildEvidence()
     return
   }
+  if (method === 'queue/status') {
+    observeTraexModelQueue(session, params)
+    return
+  }
   if (method === 'mode/changeRequested' && typeof params.requestId === 'string') {
     session.prompts?.handle({ id: params.requestId, method, params }, session.activeTurn)
     return
@@ -74,17 +80,34 @@ export function observeTraexSessionNotification(
   }
   const turn = traexRecord(params.turn)
   const turnId = traexText(params.turnId) ?? traexText(turn.id) ?? session.activeTurn
+  if (
+    [
+      'item/agentMessage/delta',
+      'item/reasoning/textDelta',
+      'item/reasoning/summaryTextDelta',
+      'item/plan/delta'
+    ].includes(method) &&
+    typeof params.delta === 'string' &&
+    params.delta.length > 0
+  ) {
+    clearTraexModelQueue(session, turnId)
+  }
   if (session.compacting && (method === 'thread/compacted' || method === 'turn/completed')) {
     if (method === 'thread/compacted') {
       session.timeline?.notification(method, params, turnId)
       return
     } else if (turnId) {
+      clearTraexModelQueue(session, turnId)
+      session.noteCompletedTurn(turnId)
       session.timeline?.completeTurn(turn, turnId)
     }
     session.finishCompaction(turn.status === 'failed', turn)
     return
   }
   if (method === 'turn/started' && turnId) {
+    if (session.queuedModelTurn && session.queuedModelTurn !== turnId) {
+      clearTraexModelQueue(session, session.queuedModelTurn)
+    }
     session.activeTurn = turnId
     if (!session.compacting) {
       session.timeline?.apply({
@@ -94,6 +117,7 @@ export function observeTraexSessionNotification(
       })
     }
   } else if (method === 'turn/completed' && turnId) {
+    clearTraexModelQueue(session, turnId)
     session.timeline?.completeTurn(turn, turnId)
     session.noteCompletedTurn(turnId)
     session.timeline?.flush()
@@ -115,6 +139,17 @@ export function observeTraexSessionNotification(
     )
   } else if ((method === 'item/started' || method === 'item/completed') && turnId) {
     const item = traexItemSchema.safeParse(params.item)
+    if (
+      method === 'item/completed' &&
+      item.success &&
+      ['agentMessage', 'reasoning', 'plan'].includes(item.data.type) &&
+      item.data.delivery !== 'async' &&
+      (traexContentText(item.data.text) ||
+        traexContentText(item.data.summary) ||
+        traexContentText(item.data.content))
+    ) {
+      clearTraexModelQueue(session, turnId)
+    }
     const clientId = item.success ? (traexText(item.data.clientId) ?? item.data.id) : undefined
     const send = clientId ? session.pending.get(clientId) : undefined
     if (send && item.success && item.data.type === 'userMessage') {
