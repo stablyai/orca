@@ -13297,7 +13297,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "このアップデートを読み取れませんでした",
-          "newAccess": "新規: {{value0}}",
           "failed": "{{value0}} をアップデートできませんでした。その他はアップデートされました。",
           "cancel": "キャンセル",
           "updateOne": "1 件のプラグインをアップデート",
@@ -13317,14 +13316,15 @@
           "newShortcuts": "キーボードショートカット",
           "sourceMoved": "新しいソース: {{value0}} (以前: {{value1}})",
           "update": "アップデート",
-          "review": "確認",
           "replacesAction": "Orca の {{value1}} の代わりに {{value0}} が実行されます",
           "newFileTypes": "開くファイルが変わります",
           "newHooks": "Orca と Agent の動作を変更または停止できます",
           "newSettings": "設定ページ",
           "newStatusBarItems": "ステータスバー項目",
           "opensFileTypes": "新しいファイル形式を開きます: {{value0}}",
-          "becomesDefaultEditor": "{{value0}} の既定のエディターになります"
+          "becomesDefaultEditor": "{{value0}} の既定のエディターになります",
+          "needApproval": "承認が必要",
+          "readyToUpdate": "更新の準備完了"
         },
         "PluginDetailInfo": {
           "previous": "以前のバージョン",
@@ -13439,10 +13439,10 @@
         },
         "PluginUpdateReview": {
           "title": "{{value0}} のアップデートを確認",
-          "back": "戻る",
           "approve": "承認してアップデート",
           "uncompared": "Orca はこのバージョンを承認済みのバージョンと比較できませんでした。更新する前にアクセス内容を確認してください。",
-          "newInVersion": "このバージョンの新機能:"
+          "newInVersion": "このバージョンの新機能:",
+          "titleMany": "{{value0}} 件の更新を確認"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "公開元",
@@ -13468,11 +13468,14 @@
           "movedTitle": "{{value0}} {{value1}} は別のリポジトリから提供されています",
           "accessTitle": "{{value0}} {{value1}} がより多くのアクセスを求めています",
           "manyTitle": "{{value0}} 件のプラグイン更新が確認待ちです",
-          "oneDescription": "公開元: {{value0}}。確認するまで更新されません。",
-          "manyDescription": "確認するまで更新されません。",
-          "review": "確認",
           "dismiss": "閉じる",
-          "movedInstalled": "確認するまでオフのままです。"
+          "movedInstalled": "確認するまでオフのままです。",
+          "approveAll": "すべて承認して更新",
+          "approveOne": "承認して更新",
+          "details": "詳細",
+          "failed": "{{value0}} を更新できませんでした",
+          "morePlugins": "ほか {{value0}} 件のプラグイン",
+          "uncompared": "Orca は承認済みのバージョンと比較できませんでした。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "このフォルダーを信頼できることを確認してください",

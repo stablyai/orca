@@ -13151,7 +13151,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "Impossible de lire cette mise à jour",
-          "newAccess": "Nouveau : {{value0}}",
           "failed": "Impossible de mettre à jour {{value0}}. Les autres ont été mis à jour.",
           "cancel": "Annuler",
           "updateOne": "Mettre à jour 1 plugin",
@@ -13171,13 +13170,14 @@
           "newShortcuts": "Raccourcis clavier",
           "sourceMoved": "Nouvelle source : {{value0}} (avant {{value1}})",
           "update": "Mettre à jour",
-          "review": "Examiner",
           "newFileTypes": "Change les fichiers qu’il ouvre",
           "newHooks": "Peut modifier ou arrêter ce que font Orca et vos agents",
           "newSettings": "Une page de réglages",
           "newStatusBarItems": "Éléments de la barre d’état",
           "opensFileTypes": "Ouvre de nouveaux types de fichiers : {{value0}}",
-          "becomesDefaultEditor": "Devient l’éditeur par défaut pour {{value0}}"
+          "becomesDefaultEditor": "Devient l’éditeur par défaut pour {{value0}}",
+          "needApproval": "Nécessitent votre approbation",
+          "readyToUpdate": "Prêtes à être mises à jour"
         },
         "PluginDetailInfo": {
           "previous": "Précédente",
@@ -13289,10 +13289,10 @@
         },
         "PluginUpdateReview": {
           "title": "Examiner la mise à jour de {{value0}}",
-          "back": "Retour",
           "approve": "Approuver et mettre à jour",
           "uncompared": "Orca n’a pas pu comparer cette version à celle que vous avez approuvée. Vérifiez ce à quoi elle peut accéder avant de mettre à jour.",
-          "newInVersion": "Nouveau dans cette version :"
+          "newInVersion": "Nouveau dans cette version :",
+          "titleMany": "Examiner {{value0}} mises à jour"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "son éditeur",
@@ -13318,11 +13318,14 @@
           "movedTitle": "{{value0}} {{value1}} provient d’un autre dépôt",
           "accessTitle": "{{value0}} {{value1}} demande plus d’accès",
           "manyTitle": "{{value0}} mises à jour de plugins attendent votre vérification",
-          "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
-          "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
-          "review": "Vérifier",
           "dismiss": "Ignorer",
-          "movedInstalled": "Il reste désactivé jusqu’à ce que vous l’examiniez."
+          "movedInstalled": "Il reste désactivé jusqu’à ce que vous l’examiniez.",
+          "approveAll": "Tout approuver et mettre à jour",
+          "approveOne": "Approuver et mettre à jour",
+          "details": "Détails",
+          "failed": "Impossible de mettre à jour {{value0}}",
+          "morePlugins": "et {{value0}} autres plugins",
+          "uncompared": "Orca n’a pas pu la comparer à la version que vous avez approuvée."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Assurez-vous de faire confiance à ce dossier",

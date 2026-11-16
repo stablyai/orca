@@ -13440,9 +13440,7 @@
           }
         },
         "PluginUpdateAllDialog": {
-          "review": "Проверить",
           "previewError": "Не удалось прочитать это обновление",
-          "newAccess": "Новое: {{value0}}",
           "failed": "Не удалось обновить {{value0}}. Остальные обновлены.",
           "cancel": "Отмена",
           "updateOne": "Обновить 1 плагин",
@@ -13467,14 +13465,16 @@
           "newSettings": "Страница настроек",
           "newStatusBarItems": "Элементы строки состояния",
           "opensFileTypes": "Открывает новые типы файлов: {{value0}}",
-          "becomesDefaultEditor": "Становится редактором по умолчанию для {{value0}}"
+          "becomesDefaultEditor": "Становится редактором по умолчанию для {{value0}}",
+          "needApproval": "Требуют вашего одобрения",
+          "readyToUpdate": "Готовы к обновлению"
         },
         "PluginUpdateReview": {
           "title": "Проверка обновления {{value0}}",
-          "back": "Назад",
           "approve": "Одобрить и обновить",
           "uncompared": "Orca не удалось сравнить эту версию с одобренной. Перед обновлением проверьте, к чему у неё есть доступ.",
-          "newInVersion": "Новое в этой версии:"
+          "newInVersion": "Новое в этой версии:",
+          "titleMany": "Проверьте обновления: {{value0}}"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "его издателю",
@@ -13686,11 +13686,14 @@
           "movedTitle": "{{value0}} {{value1}} поставляется из другого репозитория",
           "accessTitle": "{{value0}} {{value1}} запрашивает больше доступа",
           "manyTitle": "{{value0}} обновлений плагинов ждут вашей проверки",
-          "oneDescription": "Издатель: {{value0}}. Обновление не будет установлено, пока вы его не проверите.",
-          "manyDescription": "Они не будут установлены, пока вы их не проверите.",
-          "review": "Проверить",
           "dismiss": "Закрыть",
-          "movedInstalled": "Он останется выключенным, пока вы его не проверите."
+          "movedInstalled": "Он останется выключенным, пока вы его не проверите.",
+          "approveAll": "Одобрить и обновить все",
+          "approveOne": "Одобрить и обновить",
+          "details": "Подробнее",
+          "failed": "Не удалось обновить {{value0}}",
+          "morePlugins": "и ещё плагинов: {{value0}}",
+          "uncompared": "Orca не удалось сравнить её с одобренной версией."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} установлена как светлая тема",

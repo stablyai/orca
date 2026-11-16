@@ -13205,9 +13205,7 @@
           }
         },
         "PluginUpdateAllDialog": {
-          "review": "İncele",
           "previewError": "Bu güncelleme okunamadı",
-          "newAccess": "Yeni: {{value0}}",
           "failed": "{{value0}} güncellenemedi. Diğerleri güncellendi.",
           "cancel": "İptal",
           "updateOne": "1 eklentiyi güncelle",
@@ -13232,14 +13230,16 @@
           "newSettings": "Bir ayarlar sayfası",
           "newStatusBarItems": "Durum çubuğu öğeleri",
           "opensFileTypes": "Yeni dosya türlerini açar: {{value0}}",
-          "becomesDefaultEditor": "{{value0}} için varsayılan düzenleyici olur"
+          "becomesDefaultEditor": "{{value0}} için varsayılan düzenleyici olur",
+          "needApproval": "Onayınızı bekliyor",
+          "readyToUpdate": "Güncellemeye hazır"
         },
         "PluginUpdateReview": {
           "title": "{{value0}} güncellemesini incele",
-          "back": "Geri",
           "approve": "Onayla ve güncelle",
           "uncompared": "Orca bu sürümü onayladığınız sürümle karşılaştıramadı. Güncellemeden önce nelere erişebildiğini kontrol edin.",
-          "newInVersion": "Bu sürümde yeni:"
+          "newInVersion": "Bu sürümde yeni:",
+          "titleMany": "{{value0}} güncellemeyi incele"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "yayıncı",
@@ -13451,11 +13451,14 @@
           "movedTitle": "{{value0}} {{value1}} farklı bir depodan geliyor",
           "accessTitle": "{{value0}} {{value1}} daha fazla erişim istiyor",
           "manyTitle": "{{value0}} eklenti güncellemesi incelemenizi bekliyor",
-          "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
-          "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
-          "review": "İncele",
           "dismiss": "Kapat",
-          "movedInstalled": "Siz inceleyene kadar kapalı kalır."
+          "movedInstalled": "Siz inceleyene kadar kapalı kalır.",
+          "approveAll": "Tümünü onayla ve güncelle",
+          "approveOne": "Onayla ve güncelle",
+          "details": "Ayrıntılar",
+          "failed": "{{value0}} güncellenemedi",
+          "morePlugins": "ve {{value0}} eklenti daha",
+          "uncompared": "Orca bunu onayladığınız sürümle karşılaştıramadı."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",

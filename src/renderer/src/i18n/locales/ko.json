@@ -12597,7 +12597,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "이 업데이트를 읽지 못했습니다",
-          "newAccess": "새로움: {{value0}}",
           "failed": "{{value0}}을(를) 업데이트할 수 없습니다. 나머지는 업데이트되었습니다.",
           "cancel": "취소",
           "updateOne": "플러그인 1개 업데이트",
@@ -12617,13 +12616,14 @@
           "newShortcuts": "키보드 단축키",
           "sourceMoved": "새 소스: {{value0}} (이전 {{value1}})",
           "update": "업데이트",
-          "review": "검토",
           "newFileTypes": "여는 파일이 바뀝니다",
           "newHooks": "Orca와 에이전트의 동작을 변경하거나 중지할 수 있습니다",
           "newSettings": "설정 페이지",
           "newStatusBarItems": "상태 표시줄 항목",
           "opensFileTypes": "새 파일 형식을 엽니다: {{value0}}",
-          "becomesDefaultEditor": "{{value0}}의 기본 편집기가 됩니다"
+          "becomesDefaultEditor": "{{value0}}의 기본 편집기가 됩니다",
+          "needApproval": "승인 필요",
+          "readyToUpdate": "업데이트 준비됨"
         },
         "PluginDetailInfo": {
           "previous": "이전 버전",
@@ -12735,10 +12735,10 @@
         },
         "PluginUpdateReview": {
           "title": "{{value0}} 업데이트 검토",
-          "back": "뒤로",
           "approve": "승인 후 업데이트",
           "uncompared": "Orca가 이 버전을 승인한 버전과 비교하지 못했습니다. 업데이트하기 전에 접근 범위를 확인하세요.",
-          "newInVersion": "이 버전의 새로운 점:"
+          "newInVersion": "이 버전의 새로운 점:",
+          "titleMany": "업데이트 {{value0}}개 검토"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "게시자",
@@ -12764,11 +12764,14 @@
           "movedTitle": "{{value0}} {{value1}}이(가) 다른 저장소에서 제공됩니다",
           "accessTitle": "{{value0}} {{value1}}이(가) 더 많은 접근 권한을 요청합니다",
           "manyTitle": "플러그인 업데이트 {{value0}}개가 검토를 기다리고 있습니다",
-          "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
-          "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
-          "review": "검토",
           "dismiss": "닫기",
-          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다.",
+          "approveAll": "모두 승인 및 업데이트",
+          "approveOne": "승인 및 업데이트",
+          "details": "세부 정보",
+          "failed": "{{value0}}을(를) 업데이트할 수 없습니다",
+          "morePlugins": "외 플러그인 {{value0}}개",
+          "uncompared": "Orca가 승인한 버전과 비교하지 못했습니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",

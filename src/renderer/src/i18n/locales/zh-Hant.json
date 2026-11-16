@@ -12913,9 +12913,7 @@
           }
         },
         "PluginUpdateAllDialog": {
-          "review": "檢視",
           "previewError": "無法讀取此更新",
-          "newAccess": "新增：{{value0}}",
           "failed": "無法更新 {{value0}}。其他外掛已更新。",
           "cancel": "取消",
           "updateOne": "更新 1 個外掛",
@@ -12940,14 +12938,16 @@
           "newSettings": "一個設定頁面",
           "newStatusBarItems": "狀態列項目",
           "opensFileTypes": "開啟新的檔案類型：{{value0}}",
-          "becomesDefaultEditor": "成為 {{value0}} 的預設編輯器"
+          "becomesDefaultEditor": "成為 {{value0}} 的預設編輯器",
+          "needApproval": "需要你的核准",
+          "readyToUpdate": "可以更新"
         },
         "PluginUpdateReview": {
           "title": "檢視 {{value0}} 的更新",
-          "back": "返回",
           "approve": "核准並更新",
           "uncompared": "Orca 無法將此版本與你核准的版本比較。更新前請檢查它可以存取的內容。",
-          "newInVersion": "此版本新增："
+          "newInVersion": "此版本新增：",
+          "titleMany": "審核 {{value0}} 個更新"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其發布者",
@@ -13159,11 +13159,14 @@
           "movedTitle": "{{value0}} {{value1}} 來自不同的儲存庫",
           "accessTitle": "{{value0}} {{value1}} 要求更多存取權限",
           "manyTitle": "{{value0}} 個外掛程式更新等待你審查",
-          "oneDescription": "發佈者：{{value0}}。在你審查之前不會更新。",
-          "manyDescription": "在你審查之前不會更新。",
-          "review": "審查",
           "dismiss": "關閉",
-          "movedInstalled": "在你審查之前會保持關閉。"
+          "movedInstalled": "在你審查之前會保持關閉。",
+          "approveAll": "全部核准並更新",
+          "approveOne": "核准並更新",
+          "details": "詳細資料",
+          "failed": "無法更新 {{value0}}",
+          "morePlugins": "以及另外 {{value0}} 個外掛程式",
+          "uncompared": "Orca 無法將其與你核准的版本比較。"
         },
         "PluginThemeUseNow": {
           "assignedLight": "已將 {{value0}} 設為淺色主題",

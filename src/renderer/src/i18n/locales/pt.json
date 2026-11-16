@@ -9672,7 +9672,6 @@
           "allAccess": "Ver todo o acesso",
           "current": "Já instalado",
           "needsOrca": "Requer Orca {{value0}} ou posterior",
-          "newAccess": "Novo: {{value0}}",
           "newCommands": "Comandos",
           "newContributions": "Recursos que agem por você",
           "newEvents": "Reage a mais eventos do Orca",
@@ -9682,7 +9681,6 @@
           "previewError": "Não foi possível ler esta atualização",
           "sourceMoved": "Nova fonte: {{value0}} (antes {{value1}})",
           "update": "Atualizar",
-          "review": "Revisar",
           "failed": "Não foi possível atualizar {{value0}}. Os outros foram atualizados.",
           "cancel": "Cancelar",
           "updateOne": "Atualizar 1 plugin",
@@ -9697,7 +9695,9 @@
           "newSettings": "Uma página de configurações",
           "newStatusBarItems": "Itens da barra de status",
           "opensFileTypes": "Abre novos tipos de arquivo: {{value0}}",
-          "becomesDefaultEditor": "Passa a ser o editor padrão para {{value0}}"
+          "becomesDefaultEditor": "Passa a ser o editor padrão para {{value0}}",
+          "needApproval": "Precisam da sua aprovação",
+          "readyToUpdate": "Prontas para atualizar"
         },
         "PluginThemeUseNow": {
           "useForLight": "Usar no claro:",
@@ -9787,10 +9787,10 @@
         },
         "PluginUpdateReview": {
           "title": "Revisar a atualização de {{value0}}",
-          "back": "Voltar",
           "approve": "Aprovar e atualizar",
           "uncompared": "O Orca não conseguiu comparar esta versão com a que você aprovou. Confira o que ela pode acessar antes de atualizar.",
-          "newInVersion": "Novidades nesta versão:"
+          "newInVersion": "Novidades nesta versão:",
+          "titleMany": "Revisar {{value0}} atualizações"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "seu editor",
@@ -9896,11 +9896,14 @@
           "movedTitle": "{{value0}} {{value1}} vem de outro repositório",
           "accessTitle": "{{value0}} {{value1}} quer mais acesso",
           "manyTitle": "{{value0}} atualizações de plugins precisam da sua revisão",
-          "oneDescription": "Publicado por {{value0}}. Não será atualizado até você revisar.",
-          "manyDescription": "Não serão atualizadas até você revisá-las.",
-          "review": "Revisar",
           "dismiss": "Dispensar",
-          "movedInstalled": "Ele fica desativado até você revisá-lo."
+          "movedInstalled": "Ele fica desativado até você revisá-lo.",
+          "approveAll": "Aprovar e atualizar tudo",
+          "approveOne": "Aprovar e atualizar",
+          "details": "Detalhes",
+          "failed": "Não foi possível atualizar {{value0}}",
+          "morePlugins": "e mais {{value0}} plugins",
+          "uncompared": "O Orca não conseguiu compará-la com a versão que você aprovou."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Confirme que você confia nesta pasta",

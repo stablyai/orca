@@ -1,10 +1,8 @@
 import { Check, ChevronDown } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
-import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
-import {
-  pluginCapabilityReachable,
-  reachablePluginCapabilities
-} from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
+import { reachablePluginCapabilities } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import { builtInActionTitle } from '../page/PluginCommandReplacementRow'
 import type { PluginContributionPoint } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import { pluginUpdateGrowsAccess } from '../../../../../shared/plugins/approval/plugin-update-access-growth'
@@ -31,14 +29,14 @@ export type UpdateCandidate = {
 
 /** The installed repository when main found the catalog now points the update somewhere else. */
 export function movedFromSource(
-  entry: PluginListEntry,
+  installed: Pick<PluginHostListEntry, 'source'> | null | undefined,
   preview: PluginMarketplaceHostInstallPreview
 ): string | null {
   if (!preview.repositoryMoved) {
     return null
   }
-  const installed = entry.installed?.source
-  return installed?.kind === 'marketplace' ? installed.reference : ''
+  const source = installed?.source
+  return source?.kind === 'marketplace' ? source.reference : ''
 }
 
 /**
@@ -198,17 +196,6 @@ export function isCurrent(
   return Boolean(preview && entry.installed?.source?.contentHash === preview.contentHash)
 }
 
-function NewLine({ children }: { children: string }): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <li className="text-status-warning-text">
-      {t('auto.components.settings.PluginUpdateAllDialog.newAccess', 'New: {{value0}}', {
-        value0: children
-      })}
-    </li>
-  )
-}
-
 /** Everything the update can reach, for the rare reader who wants more than what's new. */
 export function AllAccess({
   preview,
@@ -245,6 +232,7 @@ export function AllAccess({
             ))}
           </ul>
           <PluginConsentProvenance
+            badge={false}
             official={preview.official}
             publisher={preview.manifest.publisher ?? ''}
             source={{
@@ -266,31 +254,22 @@ export function AllAccess({
   )
 }
 
-/** One line per plugin; only an update that needs approval opens up, and only to what's new. */
+/** One line per update that asks for nothing new, or that can't be installed and says why. */
 export function CandidateRow({
   candidate,
   done,
   checked,
   disabled,
-  onCheckedChange,
-  onReview
+  onCheckedChange
 }: {
   candidate: UpdateCandidate
   done: boolean
   checked: boolean
   disabled: boolean
   onCheckedChange: (checked: boolean) => void
-  /** Set when the update needs its own approval; it replaces the checkbox. */
-  onReview?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const { entry, preview, error, needsOrca } = candidate
-  const { capabilities: requestedAdded, warnings } = preview
-    ? updateChanges(preview, t)
-    : { capabilities: [], warnings: [] }
-  const execution = preview ? pluginExecutionProfile(preview.manifest) : 'data'
-  const added = requestedAdded.filter((kind) => pluginCapabilityReachable(kind, execution))
-  const movedFrom = preview ? movedFromSource(entry, preview) : null
   const checkboxId = `plugin-update-${entry.pluginKey}`
   let note: React.ReactNode = null
   if (done) {
@@ -335,29 +314,6 @@ export function CandidateRow({
         )}
       </p>
     )
-  } else if (preview && (added.length > 0 || warnings.length > 0 || movedFrom !== null)) {
-    note = (
-      <>
-        <ul className="space-y-0.5 text-xs">
-          {movedFrom !== null ? (
-            <li className="text-status-warning-text">
-              {t(
-                'auto.components.settings.PluginUpdateAllDialog.sourceMoved',
-                'New source: {{value0}} (was {{value1}})',
-                { value0: sourceLabel(preview.source), value1: movedFrom }
-              )}
-            </li>
-          ) : null}
-          {warnings.map((warning) => (
-            <NewLine key={warning}>{warning}</NewLine>
-          ))}
-          {added.map((kind) => (
-            <NewLine key={kind}>{pluginCapabilityDescription(kind, kind, t)}</NewLine>
-          ))}
-        </ul>
-        <AllAccess preview={preview} execution={execution} />
-      </>
-    )
   }
   return (
     <li data-plugin-update={entry.pluginKey} className="py-2">
@@ -369,18 +325,12 @@ export function CandidateRow({
             {entry.installed?.version} → {preview?.manifest.version ?? entry.updateVersion}
           </span>
         </label>
-        {onReview ? (
-          <Button variant="outline" size="xs" disabled={disabled} onClick={onReview}>
-            {t('auto.components.settings.PluginUpdateAllDialog.review', 'Review')}
-          </Button>
-        ) : (
-          <Checkbox
-            id={checkboxId}
-            checked={checked}
-            disabled={disabled}
-            onCheckedChange={(next) => onCheckedChange(next === true)}
-          />
-        )}
+        <Checkbox
+          id={checkboxId}
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={(next) => onCheckedChange(next === true)}
+        />
       </div>
       {note ? <div className="mt-1 ml-10">{note}</div> : null}
     </li>
