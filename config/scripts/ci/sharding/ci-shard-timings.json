@@ -4345,7 +4345,6 @@
       "src/shared/libproc-process-table-real-ps.test.ts": 75,
       "src/shared/libproc-ps-fallback.test.ts": 184,
       "src/shared/linear/issue-attribute-filter.test.ts": 49,
-      "src/shared/linear/issue-view-resume-state.test.ts": 80,
       "src/shared/linear/links.test.ts": 58,
       "src/shared/local-build-compatibility.test.ts": 46,
       "src/shared/local-windows-terminal-runtime.test.ts": 41,
