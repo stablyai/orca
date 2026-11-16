@@ -240,9 +240,10 @@ it('keeps an indexed account copy whose mtime differs from the preferred archive
       }
     })}\n`
   )
+  await utimes(managed, new Date(2026, 0, 1), new Date(2026, 0, 1))
   await sweep()
   await writeFile(`${real}.zst`, archived)
-  await utimes(`${real}.zst`, new Date(2026, 0, 1), new Date(2026, 0, 1))
+  await utimes(`${real}.zst`, new Date(2026, 2, 1), new Date(2026, 2, 1))
   await sweep()
   await sweep()
   expect(
