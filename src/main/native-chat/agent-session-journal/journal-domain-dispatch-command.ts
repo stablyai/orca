@@ -14,6 +14,7 @@ import { journalDomainStoppedHistoryInputs } from './journal-domain-stopped-inpu
 import { journalDomainSubmission } from './journal-domain-status-inputs'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
+import { readJournalDomainQueueFailure } from './journal-domain-queue-failures'
 
 /** Claim stopped text with its carrier's pending handover, before any provider write. */
 export function applyJournalDomainDispatchCommand(
@@ -28,6 +29,14 @@ export function applyJournalDomainDispatchCommand(
   const { input } = operation
   const scope = new JournalSqlScope(db, target.sessionId, target.epoch)
   const submission = journalDomainSubmission(scope, input.clientMessageId)
+  if (
+    submission?.origin === 'host' &&
+    submission.queuedMessageId !== undefined &&
+    submission.handedOverAt === undefined &&
+    readJournalDomainQueueFailure(db, target)
+  ) {
+    throw new Error('failure recovery no longer authorizes this handover')
+  }
   const canCarry =
     input.turnScope.kind === 'thread' &&
     submission &&

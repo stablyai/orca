@@ -15,6 +15,7 @@ import type { AgentSessionHeldDelivery } from '../../../shared/agent-session/age
 import { ORCHESTRATION_FAILURE_RESUME_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
+import { sendDeliveryOutput, unconfirmedSendReceipt } from './send-delivery-output'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { isDevCliInvocation } from '../recovery/runtime-compatibility'
 import { refuseAgentServerRoute, requirePeerMailCarrier } from '../identity/agent-server-route'
@@ -173,13 +174,22 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
+    if (
+      !['worker_done', 'heartbeat'].includes(type ?? '') &&
+      !('deliveryMessage' in result.result) &&
+      !('recoveryMessage' in result.result) &&
+      !('delivery' in result.result)
+    ) {
+      process.exitCode = 1
+      const unknown = { ...result, result: unconfirmedSendReceipt(result.result, to) }
+      printResult(unknown, json, sendDeliveryOutput)
+      return
+    }
     if ('deliveryMessage' in result.result && result.result.deliveryMessage) {
       if ('state' in result.result && ['held', 'unknown'].includes(result.result.state)) {
         process.exitCode = 1
       }
-      printResult(result, json, (value) =>
-        [value.deliveryMessage, value.deliveryHint].filter(Boolean).join('\n')
-      )
+      printResult(result, json, sendDeliveryOutput)
       return
     }
     if ('recoveryMessage' in result.result) {

@@ -28,7 +28,7 @@ import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
-import { relayedDeliveryUnknownWarning, finishStoredSend } from './send-delivery-hold'
+import { finishStoredSend, unknownStoredDelivery } from './send-delivery-hold'
 import { resumeWorkerFailure } from './resume-worker-failure'
 import { passHeldWorkerMail } from './settled-worker-follow-through'
 
@@ -246,9 +246,6 @@ export const ORCHESTRATION_SEND_METHODS = [
               sendWarnings.push(runBound.warning)
             }
           }
-          if (federatedTarget) {
-            sendWarnings.push(relayedDeliveryUnknownWarning(to))
-          }
           const federatedControl = sendFederatedControlMail({
             params,
             runtime,
@@ -261,7 +258,9 @@ export const ORCHESTRATION_SEND_METHODS = [
             withSendWarnings
           })
           if (federatedControl !== undefined) {
-            return federatedControl
+            return params.type === 'worker_done' || params.type === 'heartbeat'
+              ? federatedControl
+              : unknownStoredDelivery(federatedControl, to)
           }
           const sent = sendPointToPointMessage({
             params,

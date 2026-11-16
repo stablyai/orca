@@ -11,8 +11,7 @@ import {
 import { replayMutationNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
 import { followThroughWorkerReport, settledDispatchId } from './settled-worker-follow-through'
-import { withDeliveryHoldWarning } from './send-delivery-hold'
-import { createStructuredMailboxPointerHost } from '../../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import { observeStoredSend } from './stored-message-delivery'
 import type { OrchestrationPartyIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 
 /** An accepted send's replay redelivers its nudge and follow-through; undefined when it carries none. */
@@ -31,7 +30,7 @@ export function replayAcceptedSend(
     readMutationReplayNudge(replayedMutationReceipt) ??
     (legacyReplayNudge ? { kind: 'messages' as const, targets: [legacyReplayNudge] } : undefined)
   if (!replayNudge) {
-    return undefined
+    return { receipt: observeStoredSend(runtime, replayedMutationReceipt, caller) }
   }
   const db = runtime.getOrchestrationDb()
   replayMutationNudge(runtime, replayNudge)
@@ -43,70 +42,7 @@ export function replayAcceptedSend(
   }
   followThroughWorkerReport(runtime, db, settled)
   const receipt = stripMutationReplayNudge(replayedMutationReceipt)
-  return { receipt: refreshHeldReceipt(runtime, receipt, caller) }
-}
-
-async function refreshHeldReceipt(
-  runtime: OrcaRuntimeService,
-  receipt: unknown,
-  caller?: OrchestrationPartyIdentity
-) {
-  if (
-    !receipt ||
-    typeof receipt !== 'object' ||
-    !('state' in receipt) ||
-    receipt.state !== 'held' ||
-    !('message' in receipt) ||
-    !receipt.message ||
-    typeof receipt.message !== 'object' ||
-    !('id' in receipt.message) ||
-    typeof receipt.message.id !== 'string' ||
-    !('to_handle' in receipt.message) ||
-    typeof receipt.message.to_handle !== 'string'
-  ) {
-    return receipt
-  }
-  const { state: _state, ...saved } = receipt
-  const clean = Object.fromEntries(
-    Object.entries(saved).filter(
-      ([key]) =>
-        ![
-          'delivered',
-          'reason',
-          'failureId',
-          'target',
-          'waiting',
-          'resetsAt',
-          'recoveryUsed',
-          'workerName',
-          'provider',
-          'deliveryMessage',
-          'deliveryHint'
-        ].includes(key)
-    )
-  )
-  const recipient = receipt.message.to_handle
-  const db = runtime.getOrchestrationDb()
-  const current = await withDeliveryHoldWarning(clean, runtime, db, recipient, caller)
-  if ('state' in current) {
-    return current
-  }
-  const attempt = db.getStructuredMailSend(recipient, receipt.message.id)
-  const observed = attempt
-    ? await createStructuredMailboxPointerHost().observeMail?.(attempt)
-    : undefined
-  const accepted = observed?.state.kind === 'accepted'
-  const waiting = observed?.state.kind === 'waiting'
-  return {
-    ...current,
-    delivered: accepted,
-    state: accepted ? 'delivered' : waiting ? 'queued' : 'unknown',
-    deliveryMessage: accepted
-      ? 'Delivered.'
-      : waiting
-        ? 'Queued. Delivers when the worker is ready.'
-        : 'Message kept. Delivery is unconfirmed.'
-  }
+  return { receipt: observeStoredSend(runtime, receipt, caller) }
 }
 
 export function replayAcceptedSendForCaller(

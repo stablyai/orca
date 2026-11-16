@@ -116,7 +116,8 @@ it('reports individually held messages separately and leaves them held after rec
   expect((await f.resume(token, 'resume-1')).value).toEqual({
     status: 'resumed',
     waiting: 2,
-    stillHeld: 1
+    stillHeld: 1,
+    heldReason: 'held individually'
   })
   expect((await f.claim('handoff', f.prepare())).value).toMatchObject({ kind: 'claimed' })
   expect(f.card('ready')?.state).toBe('dispatched')
@@ -128,9 +129,44 @@ it('requires the owner when the coordinator recovery itself fails again', async 
   await f.enqueue('kept')
   const token = await f.failure('first')
   await f.resume(token, 'resume-1')
+  await f.claim('recovery-attempt', f.prepare())
+  await f.run({
+    kind: 'dispatch',
+    input: {
+      clientMessageId: 'recovery-attempt',
+      state: 'accepted',
+      fence: 1,
+      providerIdentity: null
+    }
+  })
+  await f.enqueue('next')
   const second = await f.failure('second')
   expect((await f.resume(second, 'repeat')).value).toEqual({ status: 'already-used', waiting: 1 })
   expect((await f.claim('still-held', f.prepare())).value).toEqual({ kind: 'waiting' })
+})
+
+it('does not attribute a later unrelated failure to a recovery with no saved input', async () => {
+  const f = fixture()
+  const first = await f.failure('first')
+  expect((await f.resume(first, 'empty')).value).toMatchObject({ status: 'resumed', waiting: 0 })
+  await f.enqueue('unrelated', {
+    body: {
+      ...automaticBody('unrelated'),
+      from: { kind: 'agent', senders: [], orchestration: null }
+    }
+  })
+  await f.claim('unrelated-attempt', f.prepare())
+  await f.run({
+    kind: 'dispatch',
+    input: {
+      clientMessageId: 'unrelated-attempt',
+      state: 'accepted',
+      fence: 1,
+      providerIdentity: null
+    }
+  })
+  const second = await f.failure('second')
+  expect((await f.resume(second, 'fresh')).value).toMatchObject({ status: 'resumed' })
 })
 
 it('leaves a failed worker unchanged when recovery has attached text and lets an owner Resume end the retry chain', async () => {

@@ -2,15 +2,27 @@ import { formatUsageLimitResetClock } from './failures/agent-session-usage-limit
 
 export type WorkerFailureKind = 'network' | 'sign-in' | 'usage-limit' | 'provider' | 'unknown'
 
+export function unconfirmedMessageDelivery<T>(saved: T, recipient: string) {
+  return {
+    ...saved,
+    delivered: false as const,
+    state: 'unknown' as const,
+    reason: { kind: 'delivery_unconfirmed' },
+    target: { address: recipient },
+    deliveryMessage: 'Message kept. Delivery is unconfirmed.'
+  }
+}
+
 export type AgentSessionHeldDelivery = {
   delivered: false
   state: 'held'
   reason: { kind: 'worker_failed'; failure: WorkerFailureKind }
   failureId: string
-  target: { sessionId: string; dispatchId?: string }
+  target: { sessionId: string; dispatchId?: string; address?: string }
   waiting: number
   individuallyHeld?: number
   resetsAt?: number
+  failedAtTime?: number
   recoveryUsed?: boolean
   workerName?: string
   provider?: string
@@ -28,6 +40,7 @@ export type AgentSessionFailureResumeResult = {
     | 'message-attached'
   waiting: number
   stillHeld?: number
+  heldReason?: string
 }
 
 export function heldWorkerDeliveryText(
@@ -60,7 +73,7 @@ export function heldWorkerDeliveryText(
   const hint = transient
     ? names.canResume && held.target.dispatchId
       ? `Resume once: orca orchestration send --to dispatch:${held.target.dispatchId} --resume --failure-id ${held.failureId}`
-      : `Ask ${coordinator ?? owner} to resume it.`
+      : `Ask ${coordinator ?? 'its coordinator'} to resume it.`
     : failure === 'sign-in'
       ? `Ask ${owner} to sign in.`
       : failure === 'usage-limit'
