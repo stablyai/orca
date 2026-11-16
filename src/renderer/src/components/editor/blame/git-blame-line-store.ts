@@ -46,10 +46,14 @@ export function publishFocusedLineBlame(next: FocusedLineBlame | null): void {
   }
 }
 
-/** Clear only if `ownerId` still owns the published blame, so another pane keeps its own. */
-export function clearFocusedLineBlame(ownerId: string): void {
-  if (focusedLineBlameStore.getState()?.ownerId === ownerId) {
-    focusedLineBlameStore.setState(null, true)
+/**
+ * Mark the owner's blame stale when its editor goes away; the status bar only shows it while its
+ * file is active, and the next active editor takes it over.
+ */
+export function releaseFocusedLineBlame(ownerId: string): void {
+  const current = focusedLineBlameStore.getState()
+  if (current?.ownerId === ownerId && !current.stale) {
+    focusedLineBlameStore.setState({ ...current, stale: true }, true)
   }
 }
 

@@ -10,7 +10,8 @@ const UNAVAILABLE: GitBlameResult = { kind: 'unavailable' }
 /** Blame is passive: older hosts and failed reads show nothing rather than an error. */
 export async function getRuntimeGitBlame(
   context: RuntimeGitContext,
-  filePath: string
+  filePath: string,
+  knownHeadOid?: string
 ): Promise<GitBlameResult> {
   const target = context.target
   try {
@@ -18,6 +19,7 @@ export async function getRuntimeGitBlame(
       return await window.api.git.blame({
         worktreePath: resolveLocalWorktreePath(context),
         filePath,
+        knownHeadOid,
         connectionId: context.connectionId
       })
     }
@@ -27,7 +29,7 @@ export async function getRuntimeGitBlame(
     return await callRuntimeRpc<GitBlameResult>(
       target,
       'git.blame',
-      { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath },
+      { worktree: toRuntimeWorktreeSelector(context.worktreeId), filePath, knownHeadOid },
       // Large files with long history take seconds to blame.
       { timeoutMs: 120_000 }
     )

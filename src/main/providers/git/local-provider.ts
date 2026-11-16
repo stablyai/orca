@@ -97,7 +97,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
         ...interactive,
         ...(oldPath ? { oldPath } : {})
       }),
-    getBlame: (worktreePath, filePath) => getBlame(worktreePath, filePath, base),
+    getBlame: (worktreePath, filePath, knownHeadOid) =>
+      getBlame(worktreePath, filePath, base, knownHeadOid),
     stageFile: (worktreePath, filePath) => stageFile(worktreePath, filePath, interactive),
     resolveConflict: (worktreePath, filePath, resolution) =>
       resolveConflict(worktreePath, filePath, resolution, interactive),

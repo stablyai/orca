@@ -20,4 +20,5 @@ export type GitBlameResult =
       /** The HEAD blob, the baseline unsaved and uncommitted edits are mapped against. */
       headText: string
     }
-  | { kind: 'untracked' | 'too-large' | 'unavailable' }
+  /** `unchanged`: HEAD still matches the caller's `knownHeadOid`, so nothing is resent. */
+  | { kind: 'untracked' | 'too-large' | 'unavailable' | 'unchanged' }

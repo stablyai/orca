@@ -276,6 +276,7 @@ export const gitApi = {
   blame: (args: {
     worktreePath: string
     filePath: string
+    knownHeadOid?: string
     connectionId?: string
   }): Promise<GitBlameResult> => ipcRenderer.invoke('git:blame', args)
 } satisfies PreloadApi['git']

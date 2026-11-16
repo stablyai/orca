@@ -1,10 +1,13 @@
 import { defineMethod } from '../../../core'
-import { remoteRpcContentBudget } from '../../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
+import {
+  remoteRpcContentBudget,
+  remoteRpcResultExceedsContentBudget
+} from '../../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 import {
   GitBranchDiff,
   GitCommitDiff,
-  GitDiff,
-  GitFilePath
+  GitBlame,
+  GitDiff
 } from '../../../../../../shared/rpc-contract/source-control/git-params'
 
 // Only WebSocket callers set clientKind; local/in-process diffs retain uncapped fidelity.
@@ -62,14 +65,18 @@ export const GIT_DIFF_METHODS = [
   defineMethod({
     name: 'git.blame',
     permission: 'workspace',
-    params: GitFilePath,
+    params: GitBlame,
     handler: async (params, { runtime, clientKind, requestId }) => {
-      const result = await runtime.getRuntimeGitBlame(params.worktree, params.filePath)
+      const result = await runtime.getRuntimeGitBlame(
+        params.worktree,
+        params.filePath,
+        params.knownHeadOid
+      )
       const budget = remoteDiffContentBudget(clientKind, requestId)
       // The reply carries the HEAD text; past the remote reply budget it would be refused anyway.
       return result.kind === 'ready' &&
         budget !== undefined &&
-        Buffer.byteLength(result.headText) > budget
+        remoteRpcResultExceedsContentBudget(result, budget, ['headText'])
         ? { kind: 'too-large' as const }
         : result
     }

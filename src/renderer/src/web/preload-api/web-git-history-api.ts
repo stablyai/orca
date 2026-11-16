@@ -24,11 +24,12 @@ export function createGitHistoryApi(): Pick<PreloadApi['git'], 'history' | 'refs
         skip
       })
     },
-    blame: async ({ worktreePath, filePath }) => {
+    blame: async ({ worktreePath, filePath, knownHeadOid }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.blame', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
-        filePath
+        filePath,
+        knownHeadOid
       })
     }
   }

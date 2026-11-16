@@ -68,7 +68,7 @@ export type IGitProvider = {
     compareAgainstHead?: boolean,
     oldPath?: string
   ): Promise<GitDiffResult>
-  getBlame(worktreePath: string, filePath: string): Promise<GitBlameResult>
+  getBlame(worktreePath: string, filePath: string, knownHeadOid?: string): Promise<GitBlameResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
   resolveConflict(
     worktreePath: string,

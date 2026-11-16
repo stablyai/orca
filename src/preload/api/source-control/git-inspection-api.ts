@@ -162,6 +162,7 @@ export type GitInspectionApi = {
   blame: (args: {
     worktreePath: string
     filePath: string
+    knownHeadOid?: string
     connectionId?: string
   }) => Promise<GitBlameResult>
 }

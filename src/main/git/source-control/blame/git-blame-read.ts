@@ -11,6 +11,7 @@ import { isMaxBufferOverflowError } from '../../command-runner/process-capture/m
 import { blobConversion, readGitBlobAtOidPath } from '../diffs/git-blob-read'
 import { readGitCommandFailureStderr } from '../../../../shared/git/commands/git-command-failure-text'
 import { GitBlameResultCache } from './git-blame-result-cache'
+import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 
 const UNAVAILABLE: GitBlameResult = { kind: 'unavailable' }
 
@@ -25,12 +26,16 @@ const blameReadDedupe = new InFlightPromiseDedupe<GitBlameResult>(180_000)
 export async function getBlame(
   worktreePath: string,
   filePath: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  knownHeadOid?: string
 ): Promise<GitBlameResult> {
   const fileDir = join(worktreePath, dirname(filePath))
   const head = await resolveHead(fileDir, options)
   if (!head) {
     return UNAVAILABLE
+  }
+  if (head.oid === knownHeadOid) {
+    return { kind: 'unchanged' }
   }
   const fileName = basename(filePath)
   const repoPath = `${head.prefix}${fileName}`
@@ -70,6 +75,13 @@ async function resolveHead(
   }
 }
 
+function withoutGlobalGitConfig(): NodeJS.ProcessEnv {
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' }
+  // WSL git only sees variables listed in WSLENV.
+  addWslEnvKeys(env, ['GIT_CONFIG_GLOBAL'])
+  return env
+}
+
 async function runBlame(
   fileDir: string,
   fileName: string,
@@ -82,7 +94,7 @@ async function runBlame(
       ['blame', '--root', '--incremental', oid, '--', fileName],
       {
         ...gitReadOptionsForWorktree(fileDir, options),
-        ...(withoutGlobalConfig ? { env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } } : {})
+        ...(withoutGlobalConfig ? { env: withoutGlobalGitConfig() } : {})
       }
     )
     return { stdout }

@@ -59,7 +59,12 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
     'git:blame',
     async (
       _event,
-      args: { worktreePath: string; filePath: string; connectionId?: string }
+      args: {
+        worktreePath: string
+        filePath: string
+        knownHeadOid?: string
+        connectionId?: string
+      }
     ): Promise<GitBlameResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
       // Passive: never wakes a stopped WSL distro.

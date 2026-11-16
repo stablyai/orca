@@ -6,7 +6,7 @@ import type { GitBlameResult } from '../../../../../shared/git/blame/git-blame-t
 import { canUseChangesModeForFile } from '../view-mode/editor-panel-file-mode'
 import { mapBufferLinesToHead, splitBlameLines, UNCOMMITTED_LINE } from './blame-line-mapping'
 import {
-  clearFocusedLineBlame,
+  releaseFocusedLineBlame,
   getFocusedLineBlame,
   publishFocusedLineBlame,
   type LineBlame
@@ -103,12 +103,12 @@ export function useMonacoGitBlame(params: {
     const publish = (line: LineBlame | null): void => {
       const current = getFocusedLineBlame()
       const owns = current?.ownerId === ownerId
-      // Only the focused pane publishes; on open, the active file claims an empty status bar.
-      if (
-        !ed.hasTextFocus() &&
-        !owns &&
-        (current || useAppStore.getState().activeFileId !== fileId)
-      ) {
+      // The focused pane publishes; the active file also takes over from another file or a closed
+      // tab, but never from a live split pane of itself.
+      const claimable =
+        useAppStore.getState().activeFileId === fileId &&
+        (!current || current.fileId !== fileId || current.stale)
+      if (!ed.hasTextFocus() && !owns && !claimable) {
         return
       }
       if (line) {
@@ -116,7 +116,7 @@ export function useMonacoGitBlame(params: {
         publishFocusedLineBlame({ ownerId, fileId, line, stale: false, git })
       } else if (current && (typing || loading)) {
         // Keep the last value, dimmed, so the status bar doesn't shift while typing or loading.
-        publishFocusedLineBlame({ ...current, ownerId, stale: true })
+        publishFocusedLineBlame({ ...current, ownerId, fileId, stale: true })
       } else {
         publishFocusedLineBlame(null)
       }
@@ -166,13 +166,31 @@ export function useMonacoGitBlame(params: {
       }
       loads.generation += 1
       const generation = loads.generation
-      void getRuntimeGitBlame(target.git, target.relativePath).then((result) => {
+      const known = loadedRef.current
+      const sameFile =
+        known?.target.git.worktreePath === target.git.worktreePath &&
+        known.target.relativePath === target.relativePath
+      // Main answers `unchanged` when HEAD hasn't moved, so a focus reload resends nothing.
+      const knownHeadOid = sameFile ? known.blame.headOid : undefined
+      void getRuntimeGitBlame(target.git, target.relativePath, knownHeadOid).then((result) => {
         if (disposed || generation !== loads.generation) {
           return
         }
+        const wasLoading = loading
         loading = false
         const previous = loadedRef.current
-        if (result.kind === 'ready' && previous?.blame.headOid === result.headOid) {
+        const keep =
+          sameFile &&
+          previous &&
+          (result.kind === 'unchanged' ||
+            // A transient failure (reconnect, timeout) must not wipe blame that's still valid.
+            result.kind === 'unavailable' ||
+            (result.kind === 'ready' && result.headOid === previous.blame.headOid))
+        if (keep) {
+          loadedRef.current = { ...previous, target }
+          if (wasLoading) {
+            update()
+          }
           return
         }
         loadedRef.current =
@@ -221,7 +239,8 @@ export function useMonacoGitBlame(params: {
       }
       unsubscribeHead()
       decorations.clear()
-      clearFocusedLineBlame(ownerId)
+      // Dimmed, not cleared: the next active editor takes it over without the status bar shifting.
+      releaseFocusedLineBlame(ownerId)
     }
   }, [mountedEditor, enabled, fileId, inlineEnabled])
 }

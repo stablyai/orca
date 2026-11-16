@@ -134,11 +134,16 @@ export class RuntimeGitDiffCommands {
     return requireRuntimeGitProvider(target).getRemoteCommitUrl(target.worktree.path, sha)
   }
 
-  async getRuntimeGitBlame(worktreeSelector: string, filePath: string): Promise<GitBlameResult> {
+  async getRuntimeGitBlame(
+    worktreeSelector: string,
+    filePath: string,
+    knownHeadOid?: string
+  ): Promise<GitBlameResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).getBlame(
       target.worktree.path,
-      normalizeRuntimeGitRelativePath(filePath)
+      normalizeRuntimeGitRelativePath(filePath),
+      knownHeadOid
     )
   }
 }
