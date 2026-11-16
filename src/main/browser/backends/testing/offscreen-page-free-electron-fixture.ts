@@ -60,9 +60,10 @@ async function run(): Promise<void> {
   await savedGuest.loadURL(`${origin}/second`)
   releaseNavigation()
 
-  await waitUntil(() => !backend.ownsTab(saved.browserPageId))
+  // Electron destroys a closed window's WebContents in a later task, after ownership is dropped.
+  await waitUntil(() => savedGuest.isDestroyed())
   const unsavedKept = backend.ownsTab(unsaved.browserPageId)
-  const savedFreed = savedGuest.isDestroyed()
+  const savedFreed = !backend.ownsTab(saved.browserPageId)
 
   // The next use starts the saved tab again under its id, as ServeBrowserTabs.restore does.
   await backend.createTab({
