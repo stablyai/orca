@@ -42,6 +42,11 @@ describe('parseOpenedEntries', () => {
     const out = '... clientFile /elsewhere/x.txt\n... action edit\n'
     expect(parseOpenedEntries('/ws', out)).toEqual([])
   })
+
+  it('keeps a file whose name starts with two dots', () => {
+    const out = '... clientFile /ws/..notes.txt\n... action edit\n'
+    expect(parseOpenedEntries('/ws', out).map((entry) => entry.path)).toEqual(['..notes.txt'])
+  })
 })
 
 describe('parseReconcilePreview', () => {

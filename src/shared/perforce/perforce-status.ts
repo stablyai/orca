@@ -1,4 +1,4 @@
-import { isAbsolute, relative } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 import type {
   PerforceChangelist,
   PerforceEntry,
@@ -32,7 +32,7 @@ function toAction(raw: string | undefined): PerforceFileAction {
 
 export function toRelativePath(cwd: string, localPath: string | undefined): string | null {
   const rel = localPath ? relative(cwd, localPath) : ''
-  if (!rel || rel.startsWith('..') || isAbsolute(rel)) {
+  if (!rel || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     return null
   }
   return toPosix(rel)
