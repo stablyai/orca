@@ -1,4 +1,8 @@
 import type { BrowserWindow } from 'electron'
+import {
+  isMainWindowVisible,
+  onMainWindowBecameVisible
+} from '../../../window/visibility/main-window-visibility'
 import type { Store } from '../../../persistence/loading-store/store'
 import {
   createWorktreeHeadIdentityRefreshState,
@@ -31,11 +35,39 @@ import {
   handleWatchOverflow,
   type ActiveWatch
 } from './worktree-base-directory-watch-events'
+import {
+  nextWorktreeCatalogWatchEpoch,
+  setWorktreeCatalogWatchEpochReader
+} from '../listing/worktree-catalog-watch-epoch'
 
 const activeWatches = new Map<string, ActiveWatch>()
 let syncGeneration = 0
 let scheduledSync: ReturnType<typeof setTimeout> | null = null
 let latestSyncContext: { mainWindow: BrowserWindow; store: Store } | null = null
+
+// Hidden windows park polling watches, so a reveal may follow missed changes.
+onMainWindowBecameVisible(() => {
+  for (const watch of activeWatches.values()) {
+    watch.catalogEpoch = nextWorktreeCatalogWatchEpoch()
+  }
+})
+
+function readActiveWorktreeCatalogWatchEpoch(repoId: string): number | null {
+  for (const watch of activeWatches.values()) {
+    if (watch.kind === 'git-common' && watch.repos.has(repoId)) {
+      if (
+        watch.disposed ||
+        !isMainWindowVisible(watch.mainWindow) ||
+        !watch.subscription.coversCatalog?.()
+      ) {
+        return null
+      }
+      return watch.catalogEpoch
+    }
+  }
+  return null
+}
+
 export function setWorktreeGitStatusRefWatch(
   args: GitStatusRefBindingRequest,
   resolveUpstreamRef: (signal: AbortSignal) => Promise<string | undefined>
@@ -62,6 +94,7 @@ function createActiveWatch(
     headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
     gitStatusRefPaths,
     watcherFailureRefresh: new WorktreeWatcherFailureRefreshCooldown(),
+    catalogEpoch: nextWorktreeCatalogWatchEpoch(),
     disposed: false
   }
 }
@@ -119,6 +152,7 @@ async function replaceWatch(
   if (previous) {
     previous.repos = target.repos
     previous.mainWindow = mainWindow
+    previous.catalogEpoch = nextWorktreeCatalogWatchEpoch()
     applyActiveGitStatusRefBinding(previous)
     return
   }
@@ -190,6 +224,7 @@ export function setWorktreeBaseDirectoryWatcherSyncContext(
   mainWindow: BrowserWindow
 ): void {
   latestSyncContext = { store, mainWindow }
+  setWorktreeCatalogWatchEpochReader(readActiveWorktreeCatalogWatchEpoch)
   // Real windows release retained sync context on close; lean test windows may lack event methods.
   if (typeof mainWindow.once === 'function') {
     mainWindow.once('closed', () => {
@@ -226,6 +261,7 @@ export function scheduleCurrentWorktreeBaseDirectoryWatcherSync(): void {
 export async function disposeWorktreeBaseDirectoryWatchers(): Promise<void> {
   syncGeneration++
   latestSyncContext = null
+  setWorktreeCatalogWatchEpochReader(null)
   clearActiveGitStatusRefBinding()
   if (scheduledSync) {
     clearTimeout(scheduledSync)

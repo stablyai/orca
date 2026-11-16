@@ -16,7 +16,12 @@ import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoSshConnectionId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host'
+import { readWorktreeCatalogWatchEpoch } from '../../../ipc/worktrees/listing/worktree-catalog-watch-epoch'
 import {
   blockedWslDistroForPath,
   wslDistroForPath
@@ -92,7 +97,11 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
             ceilingMs: WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
             timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS,
             probe: () => this.startRepoWorktreeAdminFingerprintProbe(repo),
-            onUnknown: (reason: string) => warnFingerprintUnknownOnce(repo.id, reason)
+            onUnknown: (reason: string) => warnFingerprintUnknownOnce(repo.id, reason),
+            watchEpoch: () =>
+              getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+                ? readWorktreeCatalogWatchEpoch(repo.id)
+                : null
           }
         : undefined
     const store = this.store

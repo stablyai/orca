@@ -209,6 +209,7 @@ export async function startGitCommonPrimaryWatch(
   }
 
   return {
+    coversCatalog: () => !disposed && watcher !== null,
     unsubscribe: async () => {
       disposed = true
       unsubscribeBindingChanges()
