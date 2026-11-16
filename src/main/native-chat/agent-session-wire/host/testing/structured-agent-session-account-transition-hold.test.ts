@@ -8,7 +8,6 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { reportedChildWork } from './structured-agent-session-host.test-fixture'
-import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { appendRewindUsageLimitedTurn } from './structured-agent-session-rewind-usage-limit.test-fixture'
 import { weekly } from './structured-agent-session-usage-limit-fleet.test-fixture'
 import type { UsageLimitAccountScope } from '../../recovery/structured-agent-session-usage-limit-account-hold'
@@ -215,24 +214,5 @@ it('sends no usage-limit continue to the old account while its subagent still ru
   await chat.sweep(15_000)
   await eventually(() => expect(chat.dispatchedTo('Continue where you left off')).toHaveLength(1))
   expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.child()!.fence])
-  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
-})
-
-it('holds a steer the person sends into a turn still running on the old account', async () => {
-  const chat = await chatOnAccountA()
-  const working = await rig!.workingSend()
-  await openRigTurnFor(rig!, working)
-  chat.switchTo('/homes/b')
-  const steer = rig!.send('also do this')
-  await steer.result
-  await eventually(async () =>
-    expect(await rig!.drafts()).toEqual([{ messageId: steer.id, state: 'waiting' }])
-  )
-  expect(await rig!.sendNow(steer.id)).toMatchObject({ ok: false })
-  expect(chat.dispatchedTo('also do this')).toEqual([])
-  await openRigTurnFor(rig!, working, 'completed', 'success')
-  await rig!.settleAccepted(working, 'work')
-  await eventually(() => expect(chat.dispatchedTo('also do this')).toHaveLength(1))
-  expect(chat.dispatchedTo('also do this')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
 })

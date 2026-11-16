@@ -137,3 +137,50 @@ it('keeps live capture and custody through committed receipt adoption on the jou
   })
   await journal.close()
 })
+
+it('claims mail past a person card while the chat waits for an account move, then the card', async () => {
+  const { journal } = await fixture()
+  await journal.queuedMessages.insert({
+    messageId: 'person',
+    body: automaticBody('mine'),
+    options: {}
+  })
+  await journal.queuedMessages.insert({
+    messageId: 'mail',
+    body: { ...automaticBody('notice'), from: automaticMail },
+    options: {}
+  })
+  const selection = (awaitsAccountMove: boolean): JournalAutomaticSelection => ({
+    authority: {
+      handle: journal.observationHandle(),
+      record: {
+        currentFence: 1,
+        ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
+      },
+      child: null,
+      handingOver: [],
+      continuingUnadmitted: [],
+      finalizing: [],
+      openedThrough: journal.openingCursor(),
+      operationalRevision: 0
+    },
+    child: null,
+    steering: { kind: 'codex-unavailable' },
+    ...(awaitsAccountMove ? { awaitsAccountMove: true as const } : {})
+  })
+  const claim = (id: string, awaitsAccountMove: boolean) =>
+    journal.claimAutomaticSubmission(
+      { clientMessageId: id, fence: 1 },
+      async () => selection(awaitsAccountMove),
+      () => 'owed'
+    )
+  expect(await claim('send-1', true)).toMatchObject({ kind: 'claimed', messageId: 'mail' })
+  await journal.resolveDispatch({
+    clientMessageId: 'send-1',
+    fence: 1,
+    state: 'accepted',
+    providerIdentity: { provider: 'codex', threadId: 'thread', turnId: 'turn-1', ordinal: 0 }
+  })
+  expect(await claim('send-2', true)).toMatchObject({ kind: 'waiting' })
+  expect(await claim('send-3', false)).toMatchObject({ kind: 'claimed', messageId: 'person' })
+})
