@@ -20,6 +20,10 @@ const OPEN_BRACE = 0x7b
 const CLOSE_BRACE = 0x7d
 const OPEN_BRACKET = 0x5b
 const CLOSE_BRACKET = 0x5d
+const JSON_SCALAR = /^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)$/
+const LITERAL_LETTERS: ReadonlySet<number> = new Set(
+  [...'truefalsn'].map((letter) => letter.charCodeAt(0))
+)
 
 /**
  * Raw JSON text of the wanted top-level members of a one-line JSON object, or null when the line
@@ -105,6 +109,7 @@ function jsonStringEnd(line: string, start: number): number {
   }
 }
 
+// Not a validator: it rejects truncated and interleaved writes; values the caller wants still go through JSON.parse.
 function jsonValueEnd(line: string, start: number): number {
   const first = line.charCodeAt(start)
   if (first === QUOTE) {
@@ -115,9 +120,9 @@ function jsonValueEnd(line: string, start: number): number {
     while (index < line.length && !isJsonScalarEnd(line.charCodeAt(index))) {
       index++
     }
-    return index > start ? index : -1
+    return index > start && JSON_SCALAR.test(line.slice(start, index)) ? index : -1
   }
-  let depth = 0
+  const closers: number[] = []
   let index = start
   while (index < line.length) {
     const code = line.charCodeAt(index)
@@ -128,17 +133,42 @@ function jsonValueEnd(line: string, start: number): number {
       }
       continue
     }
-    if (code === OPEN_BRACE || code === OPEN_BRACKET) {
-      depth++
+    if (code === OPEN_BRACE) {
+      closers.push(CLOSE_BRACE)
+    } else if (code === OPEN_BRACKET) {
+      closers.push(CLOSE_BRACKET)
     } else if (code === CLOSE_BRACE || code === CLOSE_BRACKET) {
-      depth--
-      if (depth === 0) {
+      if (closers.pop() !== code) {
+        return -1
+      }
+      if (closers.length === 0) {
         return index + 1
       }
+    } else if (!isJsonStructuralOrScalarCode(code)) {
+      return -1
     }
     index++
   }
   return -1
+}
+
+// Whitespace, separators, and the characters of numbers and true/false/null.
+function isJsonStructuralOrScalarCode(code: number): boolean {
+  return (
+    code === 0x20 ||
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0d ||
+    code === COMMA ||
+    code === COLON ||
+    (code >= 0x30 && code <= 0x39) ||
+    code === 0x2d ||
+    code === 0x2b ||
+    code === 0x2e ||
+    code === 0x45 ||
+    code === 0x65 ||
+    LITERAL_LETTERS.has(code)
+  )
 }
 
 function isJsonScalarEnd(code: number): boolean {

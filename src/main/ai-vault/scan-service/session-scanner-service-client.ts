@@ -51,6 +51,8 @@ export class AiVaultScannerServiceClient {
   private disposed = false
   private ranOutOfMemory = false
   private readonly awaitingExit = new Set<AiVaultServicePendingCall>()
+  // Set from a fault until the dead child says whether it ran out of heap; the next spawn needs that.
+  private exitVerdict: PromiseWithResolvers<void> | null = null
 
   private readonly stopForwardingWslNotes = forwardWslDistroNotesToChild(() => this.child)
 
@@ -131,13 +133,14 @@ export class AiVaultScannerServiceClient {
     this.active.clear()
     this.queue.length = 0
     this.awaitingExit.clear()
+    this.exitVerdict?.resolve()
+    this.exitVerdict = null
     this.invalidations.rejectAll(error)
     this.retireChild()
   }
 
   private pump(): void {
-    // Held scans decide this respawn's heap.
-    if (this.restartPolicy.restartScheduled || this.awaitingExit.size > 0) {
+    if (this.restartPolicy.restartScheduled || this.exitVerdict) {
       return
     }
     for (const lane of ['cache', 'interactive'] as const) {
@@ -192,6 +195,13 @@ export class AiVaultScannerServiceClient {
   }
 
   private ensureChild(): Promise<ChildProcess> {
+    if (this.exitVerdict) {
+      return this.exitVerdict.promise.then(() =>
+        this.disposed
+          ? Promise.reject(new Error('AI Vault service client was disposed.'))
+          : this.ensureChild()
+      )
+    }
     if (this.child && !this.readyWaiter) {
       return Promise.resolve(this.child)
     }
@@ -296,14 +306,24 @@ export class AiVaultScannerServiceClient {
     const active = [...this.active.values()]
     this.active.clear()
     // A scan that exhausted the heap would exhaust it again; hold it until the exit says why.
-    const held = this.ranOutOfMemory
-      ? []
-      : active.filter((call) => call.sent && call.request.operation === 'scan')
+    // Retired children were alive at the fault, so they did not run out of heap.
+    const held =
+      this.ranOutOfMemory || retire
+        ? []
+        : active.filter((call) => call.sent && call.request.operation === 'scan')
     for (const call of held) {
       this.awaitingExit.add(call)
     }
+    const verdict = retire ? null : Promise.withResolvers<void>()
+    this.exitVerdict = verdict ?? this.exitVerdict
     recordAiVaultServiceExit(child, error, (outOfMemory) => {
       this.ranOutOfMemory ||= outOfMemory
+      if (verdict) {
+        if (this.exitVerdict === verdict) {
+          this.exitVerdict = null
+        }
+        verdict.resolve()
+      }
       this.settleHeldCalls(held, error, outOfMemory)
     })
     for (const call of active) {
@@ -324,6 +344,8 @@ export class AiVaultScannerServiceClient {
         continue
       }
       if (outOfMemory && !call.cancelled) {
+        // The replacement child never saw this request; cancelling it there must not await an ack.
+        call.sent = false
         this.queue.unshift(call)
       } else {
         rejectAiVaultServiceCall(call, error)

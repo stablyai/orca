@@ -45,8 +45,10 @@ function aiVaultServiceHeapMb(afterOutOfMemory: boolean): number {
   if (!afterOutOfMemory) {
     return AI_VAULT_SERVICE_HEAP_MB
   }
-  // Small remote hosts give the scanner at most a quarter of their memory.
-  const quarterOfMemoryMb = Math.floor(totalmem() / 4 / 1024 ** 2)
+  // Small or containerized hosts give the scanner at most a quarter of their memory.
+  const constrained = process.constrainedMemory()
+  const memory = constrained > 0 ? Math.min(constrained, totalmem()) : totalmem()
+  const quarterOfMemoryMb = Math.floor(memory / 4 / 1024 ** 2)
   return Math.max(
     AI_VAULT_SERVICE_HEAP_MB,
     Math.min(AI_VAULT_SERVICE_HEAP_AFTER_OOM_MB, quarterOfMemoryMb)

@@ -34,7 +34,8 @@ const OPENCODE_SQLITE_PREVIEW_TEXT_CHARS = 512 * 1024
 
 type PreviewRow = {
   role: string | null
-  part_text: string | null
+  // JSON-quoted so text containing NUL survives the driver.
+  part_text_json: string | null
   time_created: number
   summary_title: string | null
   summary_body: string | null
@@ -131,6 +132,18 @@ export function extractPartText(partData: string): string | null {
   }
 }
 
+function previewTextFromJson(json: string | null): string | null {
+  if (json === null) {
+    return null
+  }
+  try {
+    const text: unknown = JSON.parse(json)
+    return typeof text === 'string' ? text : null
+  } catch {
+    return null
+  }
+}
+
 function readFirstUserPromptFromOpenCodeDb(
   db: SyncDatabase,
   sessionId: string,
@@ -187,8 +200,8 @@ function buildPreviewQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): strin
   }
   return `SELECT json_extract(m.data, '$.role') AS role,
                  CASE WHEN json_type(p.data, '$.text') = 'text'
-                   THEN substr(json_extract(p.data, '$.text'), 1, ${OPENCODE_SQLITE_PREVIEW_TEXT_CHARS})
-                 END AS part_text,
+                   THEN json_quote(substr(json_extract(p.data, '$.text'), 1, ${OPENCODE_SQLITE_PREVIEW_TEXT_CHARS}))
+                 END AS part_text_json,
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
                  json_extract(m.data, '$.summary.body') AS summary_body
@@ -277,7 +290,7 @@ export function readOpenCodeSqliteSession(args: {
       if (!previewRow) {
         continue
       }
-      const text = previewRow.part_text
+      const text = previewTextFromJson(previewRow.part_text_json)
       if (!text) {
         continue
       }
