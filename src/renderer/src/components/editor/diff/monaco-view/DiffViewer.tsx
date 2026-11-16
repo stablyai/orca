@@ -4,6 +4,8 @@ import {
   useOwnedDiffCommentTarget
 } from '@/components/diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { PostRenderPhase } from '@pierre/diffs'
 import { useAppStore } from '@/store'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
@@ -260,7 +262,10 @@ export default function DiffViewer({
       if (result) {
         setPendingComment(null)
       } else {
-        console.error('Failed to add diff comment — draft preserved')
+        // The draft stays open for retry.
+        toast.error(
+          translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
+        )
       }
       return Boolean(result)
     },
