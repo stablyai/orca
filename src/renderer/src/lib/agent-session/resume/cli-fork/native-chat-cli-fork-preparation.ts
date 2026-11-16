@@ -18,7 +18,7 @@ import { aiVaultSessionListArgs } from '@/components/right-sidebar/ai-vault/scan
 import {
   findTabSessionHistoryRow,
   type TabSessionHistorySubject
-} from '@/components/tab-bar/tab-session-history-switch'
+} from '@/components/tab-bar/session-actions/tab-session-history-switch'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { waitForPromiseWithSignal } from '../../../../../../shared/concurrency/abort-signal-reason'
 import { translate } from '@/i18n/i18n'

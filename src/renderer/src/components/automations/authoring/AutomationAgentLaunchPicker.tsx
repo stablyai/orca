@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { useAgentPickerDraftScope } from '@/components/agent/agent-launch-picker-drafts'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import {
   buildAgentLaunchRouteInput,
   selectAgentLaunchRouteView,
@@ -20,7 +20,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { NewTabAgentMenuModel } from '@/components/tab-bar/new-tab-agent-menu-model'
+import type { NewTabAgentMenuModel } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import { useAutomationAgentPickerEntries } from './use-automation-agent-picker-entries'
 import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import { AutomationSurfaceField } from './AutomationSurfaceField'

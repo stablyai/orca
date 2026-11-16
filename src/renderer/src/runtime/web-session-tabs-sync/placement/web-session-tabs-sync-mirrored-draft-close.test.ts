@@ -11,7 +11,7 @@ vi.mock('../actions/web-runtime-session-tab-lifecycle', () => ({
 }))
 
 import { useAppStore } from '../../../store/index'
-import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { createWorkspaceTabCloseCommands } from '@/lib/workspace/tabs/close/workspace-tab-close-commands'
 import { ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import {
