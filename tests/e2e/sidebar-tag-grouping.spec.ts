@@ -100,8 +100,9 @@ test.describe('Sidebar tag grouping', () => {
     await expect(orcaPage.getByRole('textbox', { name: 'Find or create a tag…' })).toBeFocused()
     await orcaPage.keyboard.press('Escape')
     await orcaPage.keyboard.press('Escape')
-    // Why wait: the closing menu restores focus to its row, which would close a menu opened too early.
+    // Why wait: the closing menu hands focus back to the list, which would close a menu opened too early.
     await expect(orcaPage.getByRole('menu')).toHaveCount(0)
+    await expect(orcaPage.getByRole('listbox', { name: 'Worktrees' })).toBeFocused()
 
     await openHeaderMenu(orcaPage, 'billing team')
     await orcaPage.getByRole('menuitem', { name: 'Rename tag' }).click()
