@@ -1,4 +1,3 @@
-import { runCoordinatorKey } from '../../addressing/orchestration-caller-identity'
 import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
@@ -195,16 +194,5 @@ function historicalAnswerSender(
   ) {
     return
   }
-  const actor = runCoordinatorKey(run)
-  const party = {
-    address: message.from_handle,
-    terminalHandle: actor.terminalHandle,
-    orcaSessionId: actor.orcaSessionId
-  }
-  const known = snapshot(party)
-  return {
-    party: { ...party, terminalHandle: null },
-    name: known.name,
-    ...(known.agent ? { agent: known.agent } : {})
-  }
+  return agentMessageSender(message.from_handle, db, snapshot)
 }
