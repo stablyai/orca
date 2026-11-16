@@ -13,15 +13,25 @@ vi.setConfig({ expect: { poll: { timeout: 45_000, interval: 200 } } })
 
 // Creates its menus and script only on the first run, as extensions that use onInstalled do.
 const WORKER_SCRIPT = `
-chrome.commands.onCommand.addListener((name, tab) =>
-  console.log('ORCA_EXT_COMMAND ' + JSON.stringify({ name, hasTab: Boolean(tab && tab.id) }))
-);
+chrome.commands.onCommand.addListener(function(name, tab) {
+  'use strict';
+  console.log('ORCA_EXT_COMMAND ' + JSON.stringify({ name, hasTab: Boolean(tab && tab.id), globalReceiver: this === globalThis }));
+});
 chrome.webRequest.onCompleted.addListener(
   (d) => console.log('ORCA_EXT_WEBREQUEST ' + JSON.stringify({ path: new URL(d.url).pathname, type: d.type, tabId: d.tabId, statusCode: d.statusCode })),
   { urls: ['http://127.0.0.1/*'], types: ['main_frame'] }
 );
 chrome.storage.sync.get(null).then((items) => console.log('ORCA_EXT_SYNC ' + JSON.stringify(items)));
 chrome.storage.local.get('setup').then(async ({ setup }) => {
+  await new Promise((resolve, reject) => chrome.commands.getAll(function() {
+    'use strict';
+    this === globalThis ? resolve() : reject(new Error('Invalid successful callback receiver'));
+  }));
+  await new Promise((resolve, reject) => chrome.windows.get(2147483647, function() {
+    'use strict';
+    void chrome.runtime.lastError;
+    this === globalThis ? resolve() : reject(new Error('Invalid failed callback receiver'));
+  }));
   if (setup) return;
   await chrome.storage.sync.set({ remembered: { dark: true } });
   chrome.contextMenus.create({ id: 'fill', title: 'Fill field', contexts: ['editable'] });
@@ -211,7 +221,9 @@ describe('browser extension state across a restart', () => {
     await pollStatus('second', (current) => Boolean(current.commands))
     // ast-grep-ignore: test-no-real-time-wait -- Observe late forbidden shortcut deliveries from the separate Electron worker.
     await new Promise((resolve) => setTimeout(resolve, 500))
-    expect(readStatus('second').commands).toEqual([{ name: 'fill_login', hasTab: true }])
+    expect(readStatus('second').commands).toEqual([
+      { name: 'fill_login', hasTab: true, globalReceiver: true }
+    ])
     expect(status.windowsHidden).toBe(true)
     expect(status.presentationCalls).toEqual([])
   }, 180_000)

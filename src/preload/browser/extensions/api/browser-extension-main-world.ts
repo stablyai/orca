@@ -158,7 +158,8 @@ export function installBrowserExtensionApis(
       }
       const last = args.at(-1)
       const callback = isCallable(last)
-        ? (value?: unknown) => (value === undefined ? last() : last(value))
+        ? (value?: unknown) =>
+            value === undefined ? last.call(globalThis) : last.call(globalThis, value)
         : undefined
       if (callback) {
         args.pop()
@@ -225,7 +226,7 @@ export function installBrowserExtensionApis(
     for (const [callback, filter] of registered) {
       if (isCallable(callback) && bridge.passesFilter(namespace, args, filter)) {
         try {
-          callback(...args)
+          callback.apply(globalThis, args)
         } catch (error) {
           console.error(error)
         }
