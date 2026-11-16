@@ -621,7 +621,7 @@ export function openApiDocument(origin: string) {
       title: 'Orca Cloud API',
       version: '1.0.0',
       description:
-        'Create and drive Orca Cloud workspaces, message their agents and run routines. Authenticate with `Authorization: Bearer orca_sk_…` (create one on the API keys page of the Orca Cloud console). Each key is limited to 120 requests a minute; responses carry `x-ratelimit-*` headers.'
+        'Create and drive Orca Cloud workspaces, message their agents and run routines. Authenticate with `Authorization: Bearer orca_sk_…` (create one on the API & apps page of the Orca Cloud console). Each key is limited to 120 requests a minute; responses carry `x-ratelimit-*` headers.'
     },
     servers: [{ url: origin }],
     security: [{ bearer: [] }],
@@ -663,7 +663,7 @@ a{color:var(--accent)}
 <h1>Orca Cloud API</h1>
 <p>Create cloud workspaces, message their agents, and run routines from scripts, CI and MCP clients. Base URL <code>${o}</code>. Machine-readable spec: <a href="/v1/openapi.json">/v1/openapi.json</a>.</p>
 <h2>Authenticate</h2>
-<p>Create a key on the API keys page of the Orca Cloud console (in Orca: Settings → API keys &amp; connected apps → Manage in browser). Keys belong to your team, have Read only, Full access or Custom permissions, and are shown once. Claude or Codex keys go in Cloud secrets instead.</p>
+<p>Create a key on the API &amp; apps page of the Orca Cloud console (in Orca: Settings → API keys &amp; connected apps → Manage in browser). Keys belong to your team, have Read only, Full access or Custom permissions, and are shown once. Claude or Codex keys go in Cloud secrets instead.</p>
 <pre>export ORCA_API_KEY=orca_sk_…
 curl -s ${o}/v1/me -H "Authorization: Bearer $ORCA_API_KEY"</pre>
 <h2>Start a workspace and give an agent a task</h2>
@@ -677,7 +677,7 @@ curl -X POST ${o}/v1/workspaces/$ID/wake    -H "Authorization: Bearer $ORCA_API_
 curl -X POST ${o}/v1/workspaces/$ID/archive -H "Authorization: Bearer $ORCA_API_KEY"
 curl -X DELETE ${o}/v1/workspaces/$ID       -H "Authorization: Bearer $ORCA_API_KEY"</pre>
 <h2>MCP</h2>
-<p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from the API keys page of the Orca Cloud console, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
+<p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from Connected apps on the API &amp; apps page of the Orca Cloud console, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
 <pre>claude mcp add --transport http orca-cloud ${o}/mcp
 claude mcp add --transport http orca-cloud ${o}/mcp --header "Authorization: Bearer $ORCA_API_KEY"</pre>
 <p>Tools: whoami, list_models, list_projects, list_workspaces, get_workspace, create_workspace, rename_workspace, sleep_workspace, wake_workspace, archive_workspace, unarchive_workspace, destroy_workspace, create_session, list_sessions, read_session, rename_session, cancel_session, upload_attachment, send_message, get_message, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>

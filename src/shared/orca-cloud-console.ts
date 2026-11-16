@@ -34,13 +34,17 @@ export const ORCA_CLOUD_CONSOLE_CLOUD_API_CAPABILITY = 'console.cloud_api'
 
 const CLOUD_API_CONSOLE_SECTIONS: readonly OrcaCloudConsoleSection[] = ['api', 'routines']
 
-/** The page the ticket asks for: an API page only when auth advertises it, else the console home. */
+/**
+ * The page the ticket asks for: an API page only when auth advertises it and there is an active
+ * team (auth refuses `api`/`routines` without an orgId); otherwise the console home.
+ */
 export function cloudConsoleTicketPage(
   section: OrcaCloudConsoleSection,
-  flags: Record<string, boolean> | undefined
+  flags: Record<string, boolean> | undefined,
+  orgId: string | null
 ): OrcaCloudConsoleSection {
   return CLOUD_API_CONSOLE_SECTIONS.includes(section) &&
-    flags?.[ORCA_CLOUD_CONSOLE_CLOUD_API_CAPABILITY] !== true
+    (flags?.[ORCA_CLOUD_CONSOLE_CLOUD_API_CAPABILITY] !== true || !orgId)
     ? 'home'
     : section
 }

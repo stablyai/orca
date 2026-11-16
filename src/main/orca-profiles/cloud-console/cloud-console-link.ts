@@ -68,7 +68,7 @@ export function cloudConsoleTicketBody(
       ? args.billingHint
       : null
   return {
-    page: cloudConsoleTicketPage(args.section, session.capabilities?.flags),
+    page: cloudConsoleTicketPage(args.section, session.capabilities?.flags, args.orgId),
     ...(args.orgId ? { orgId: args.orgId } : {}),
     ...(hint ? { plan: hint.plan, interval: hint.interval } : {})
   }

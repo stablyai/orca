@@ -97,7 +97,7 @@ export function consentPage(view: ConsentView, csrf: string, formAction: string,
     `<p class="field" id="scopes-label">It will be able to</p><ul aria-labelledby="scopes-label">${scopes}</ul>` +
     `<label class="field" for="credential">Approval code or API key</label>` +
     `<input type="password" id="credential" name="credential" autocomplete="off" spellcheck="false" required aria-describedby="credential-help" placeholder="orca_ap_… or orca_sk_…">` +
-    `<p class="muted" id="credential-help" style="margin-top:6px">Get a one-time code on the API keys page of the Orca Cloud console (in Orca: Settings → API keys &amp; connected apps → <b>Manage in browser</b>), or paste one of your API keys. The app gets at most what that key may do; the code or key itself is never shared with it.</p>` +
+    `<p class="muted" id="credential-help" style="margin-top:6px">Get a one-time code under Connected apps on the API &amp; apps page of the Orca Cloud console (in Orca: Settings → API keys &amp; connected apps → <b>Manage in browser</b>), or paste one of your API keys. The app gets at most what that key may do; the code or key itself is never shared with it.</p>` +
     `<div class="row"><button type="submit" name="decision" value="deny" formnovalidate>Cancel</button><button class="primary" type="submit" name="decision" value="approve">Approve</button></div>` +
     `</form>` +
     `<p class="muted" style="margin:16px 0 0">Client <code>${esc(view.clientId)}</code></p>`

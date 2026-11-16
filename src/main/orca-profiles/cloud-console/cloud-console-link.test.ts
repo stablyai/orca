@@ -82,7 +82,7 @@ describe('console ticket', () => {
     ).toEqual({ page: 'team', orgId: 'org_1' })
   })
 
-  it('asks for the API pages only from an auth that advertises them, else the console home', () => {
+  it('asks for the API pages only from an auth that advertises them, with a team, else home', () => {
     const advertised = { capabilities: { flags: { 'console.cloud_api': true } } }
     for (const section of ['api', 'routines'] as const) {
       expect(cloudConsoleTicketBody(advertised, { section, orgId: 'org_1' })).toEqual({
@@ -93,6 +93,8 @@ describe('console ticket', () => {
         cloudConsoleTicketBody({ capabilities: { flags: {} } }, { section, orgId: null })
       ).toEqual({ page: 'home' })
       expect(cloudConsoleTicketBody({}, { section, orgId: null })).toEqual({ page: 'home' })
+      // A personal account (no team): auth refuses the API pages without an orgId.
+      expect(cloudConsoleTicketBody(advertised, { section, orgId: null })).toEqual({ page: 'home' })
     }
   })
 
