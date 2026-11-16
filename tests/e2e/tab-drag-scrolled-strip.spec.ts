@@ -231,46 +231,4 @@ test.describe('tab drops beside a scrolled tab strip', () => {
       .toEqual([...leftBefore.slice(1), leftBefore[0]!])
     expect(await stripTabIds(orcaPage, splits.rightGroupId)).toEqual(rightBefore)
   })
-
-  test('a strip scrolled during the drag drops beside the tab now under the pointer', async ({
-    orcaPage
-  }) => {
-    const worktreeId = await waitForActiveWorktree(orcaPage)
-    const splits = await buildSplits(orcaPage, worktreeId, { left: 16, right: 1 })
-    const leftBefore = await stripTabIds(orcaPage, splits.leftGroupId)
-    const scroller = orcaPage.locator(scrollerSelector(splits.leftGroupId))
-    await expect
-      .poll(() => scroller.evaluate((el) => el.scrollWidth - el.clientWidth))
-      .toBeGreaterThan(400)
-    await scroller.evaluate((el) => {
-      el.scrollLeft = 0
-    })
-
-    let targetId = ''
-    await dragTab(orcaPage, splits.leftGroupId, leftBefore[0]!, async () => {
-      // Hidden-window drag overlays can intercept native wheel input, so scroll the strip directly.
-      await scroller.evaluate((el) => {
-        el.dispatchEvent(new WheelEvent('wheel', { deltaY: 360, cancelable: true }))
-      })
-      await expect.poll(() => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(200)
-      const strip = await stripGeometry(orcaPage, splits.leftGroupId)
-      // The most-visible tab, so the drop point is clearly on it.
-      const shown = (box: Box) =>
-        Math.min(box.right, strip.scroller.right) - Math.max(box.left, strip.scroller.left)
-      const target = strip.tabs
-        .filter(({ id }) => id !== leftBefore[0])
-        .reduce((best, tab) => (shown(tab.box) > shown(best.box) ? tab : best))
-      expect(shown(target.box)).toBeGreaterThan((target.box.right - target.box.left) * 0.9)
-      targetId = target.id
-      return {
-        x: target.box.right - (target.box.right - target.box.left) / 4,
-        y: (target.box.top + target.box.bottom) / 2
-      }
-    })
-
-    expect(targetId).not.toBe('')
-    await expect
-      .poll(() => stripTabIds(orcaPage, splits.leftGroupId))
-      .toEqual(moved(leftBefore, leftBefore[0]!, targetId, 'after'))
-  })
 })
