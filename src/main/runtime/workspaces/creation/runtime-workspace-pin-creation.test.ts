@@ -44,7 +44,7 @@ describe.each(cases)('workspace pin on create: %s', (_label, overrides, expected
     const result = await materializeRuntimeLocalWorktree({
       request: { repoSelector: 'repo', name: 'work', ...overrides },
       repo,
-      // SAFETY: this test exercises the metadata write; other store services are unused.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This path only reads the supplied store methods.
       store: store as never,
       settings: { workspaceDir: '/workspaces', nestWorkspaces: false },
       created: {
@@ -86,8 +86,9 @@ describe.each(cases)('workspace pin on create: %s', (_label, overrides, expected
       request: { repoSelector: 'repo', name: 'work', ...overrides },
       repo,
       deps: {
-        // SAFETY: the test supplies the store and terminal members this create path uses.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This path only reads the supplied store methods.
         store: store as never,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Disabled terminal spawning uses no other terminal methods.
         terminals: { canSpawn: false } as never,
         invalidateResolvedWorktrees: () => {},
         notifyWorktreesChanged: () => {},
