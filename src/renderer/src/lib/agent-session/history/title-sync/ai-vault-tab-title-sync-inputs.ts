@@ -64,34 +64,48 @@ function relevantRecordEqual<T extends object>(
   return index === before.length
 }
 
-const REQUEST_INPUT_KEYS = [
-  'agentStatusByPaneKey',
-  'agentConversationsByPaneKey',
-  'sleepingAgentSessionsByPaneKey',
-  'tabsByWorktree',
-  'terminalLayoutsByTabId',
-  'repos',
-  'worktreesByRepo',
-  'detectedWorktreesByRepo',
-  'folderWorkspaces',
-  'projectGroups',
-  'settings',
-  'activeWorktreeId',
-  'activeWorkspaceExecutionHostId',
-  'restoredRuntimeHostIdByWorkspaceSessionKey',
-  'runtimeEnvironments',
-  'runtimeEnvironmentCatalogHydrated',
-  'removedRuntimeEnvironmentIds'
-] as const satisfies readonly (keyof AppState)[]
-
 /** Only what collectAiVaultTitleRequests reads, so a kept copy doesn't pin the rest of the store. */
-export type AiVaultTitleRequestInputs = Pick<AppState, (typeof REQUEST_INPUT_KEYS)[number]>
+export type AiVaultTitleRequestInputs = Pick<
+  AppState,
+  | 'agentStatusByPaneKey'
+  | 'agentConversationsByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'tabsByWorktree'
+  | 'terminalLayoutsByTabId'
+  | 'repos'
+  | 'worktreesByRepo'
+  | 'detectedWorktreesByRepo'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'settings'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
+  | 'runtimeEnvironments'
+  | 'runtimeEnvironmentCatalogHydrated'
+  | 'removedRuntimeEnvironmentIds'
+>
 
 export function aiVaultTitleRequestInputs(state: AppState): AiVaultTitleRequestInputs {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: built from exactly REQUEST_INPUT_KEYS.
-  return Object.fromEntries(
-    REQUEST_INPUT_KEYS.map((key) => [key, state[key]])
-  ) as AiVaultTitleRequestInputs
+  return {
+    agentStatusByPaneKey: state.agentStatusByPaneKey,
+    agentConversationsByPaneKey: state.agentConversationsByPaneKey,
+    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+    tabsByWorktree: state.tabsByWorktree,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups,
+    settings: state.settings,
+    activeWorktreeId: state.activeWorktreeId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    runtimeEnvironments: state.runtimeEnvironments,
+    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
+  }
 }
 
 function agentRecordsEqual(

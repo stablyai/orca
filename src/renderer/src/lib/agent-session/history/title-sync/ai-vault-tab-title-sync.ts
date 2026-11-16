@@ -231,11 +231,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
           Math.max(
             0,
             (lastSettledAttemptAt.get(aiVaultTitleRequestKey(request)) ?? Date.now()) +
-              titleRefreshInterval(
-                currentState,
-                request,
-                currentStoredTitles(request)
-              ) -
+              titleRefreshInterval(currentState, request, currentStoredTitles(request)) -
               Date.now()
           )
         )
