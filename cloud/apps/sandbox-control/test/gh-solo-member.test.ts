@@ -132,4 +132,17 @@ describe('the control plane marks a workspace solo only while one person can use
     expect(write).toBeGreaterThanOrEqual(0)
     expect(drop).toBeGreaterThan(write)
   })
+
+  it('a teammate whose grant is still being revoked (device not yet unpaired) keeps it from being solo', async () => {
+    const t = await workspace()
+    await t.connect('alice', 11)
+    t.h.raw
+      .prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('grt_out', ?, 'org:acme', 'bob', 'desktop', 'b', 'revoking', 1)`)
+      .run(t.id)
+    const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
+    expect(await soloMember(t.h.env.SANDBOX_DB, row)).toBeNull()
+    t.h.raw.prepare(`UPDATE workspace_grants SET status = 'revoked' WHERE id = 'grt_out'`).run()
+    expect(await soloMember(t.h.env.SANDBOX_DB, row)).toBe('alice')
+  })
 })
+
