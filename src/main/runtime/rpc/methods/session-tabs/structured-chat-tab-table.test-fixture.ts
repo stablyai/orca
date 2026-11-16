@@ -1,4 +1,4 @@
-import { availableRevealWorkspace } from '../../../session-tabs/structured-workspace-authority.test-fixture'
+import { availableRevealWorkspace } from '../../../session-tabs/chat/structured-workspace-authority.test-fixture'
 /** Drive chat tab pointers through real disk records, structured host, runtime and RPC; fake only the provider. */
 
 import { mkdtemp, rm } from 'node:fs/promises'

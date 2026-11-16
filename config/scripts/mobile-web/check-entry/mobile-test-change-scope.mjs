@@ -13,7 +13,9 @@ const NON_TEST_FILES = new Set([
   'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs',
   'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs',
   'config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs',
-  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs'
+  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs',
+  'src/main/runtime/agent-session/launch/agent-session-launch-directory.test.ts',
+  'src/main/runtime/session-tabs/chat/agent-session-tab-layout.test.ts'
 ])
 
 const DESKTOP_SUITE_PREFIXES = [

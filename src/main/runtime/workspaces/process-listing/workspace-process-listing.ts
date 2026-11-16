@@ -23,11 +23,11 @@ import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../../workspaces/catalog/repo-git-remote-identity-enrichment'
-import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/structured-agent-session-runtime'
+import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/installation/structured-agent-session-runtime'
 import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
-} from '../../agent-session/structured-agent-session-mobile-attention'
+} from '../../agent-session/lifecycle/structured-agent-session-mobile-attention'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger
@@ -59,8 +59,8 @@ import {
 import { isWorkspaceNotificationMuted } from '../../push/notifications/workspace-notification-mute'
 import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authority/release/worker-auto-release-activity'
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
-import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
-import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
+import { prWatchWorkspaceSources } from '../../agent-session/lifecycle/pr-watch-workspace-sources'
+import { startPRWatchRuntime } from '../../agent-session/lifecycle/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
