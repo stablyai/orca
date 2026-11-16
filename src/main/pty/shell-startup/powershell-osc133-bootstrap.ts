@@ -44,8 +44,16 @@ ${getPowerShellAgentWrappers()}
         $result = ""
 
         if ($PWD.Provider.Name -eq 'FileSystem') {
-            $cwdUri = [System.Uri]::new($PWD.ProviderPath).AbsoluteUri
-            $result += "$($Global:__OrcaOsc133State.Esc)]7;$cwdUri$($Global:__OrcaOsc133State.Bel)"
+            $cwdPath = $PWD.ProviderPath.Replace([char]92, [char]47)
+            $cwdHost = 'localhost'
+            if ($cwdPath.StartsWith('//')) {
+                $cwdHost = $cwdPath.Split('/')[2]
+                $cwdPath = $cwdPath.Substring(2 + $cwdHost.Length)
+            } elseif ($cwdPath -match '^[A-Za-z]:/') {
+                $cwdPath = '/' + $cwdPath
+            }
+            $cwdPath = ($cwdPath.Split('/') | ForEach-Object { [System.Uri]::EscapeDataString($_) }) -join '/'
+            $result += "$($Global:__OrcaOsc133State.Esc)]7;file://$cwdHost$cwdPath$($Global:__OrcaOsc133State.Bel)"
         }
 
         # Emit D from prompt, not readline state. Some profile setups bypass

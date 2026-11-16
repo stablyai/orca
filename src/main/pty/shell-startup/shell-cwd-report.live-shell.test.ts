@@ -12,14 +12,14 @@ import { getFishShellReadyInitCommand } from './shell-templates'
 import { getPowerShellOsc133Bootstrap } from './powershell-osc133-bootstrap'
 
 const hasShell = (shell: string) => spawnSync(shell, ['--version']).status === 0
-const folderReport = '\x1b]7;file://localhost/HOME/sub%20%C3%A9%25%2341%3F\x07'
+const folderReport = '\x1b]7;file://localhost/HOME/sub%20%C3%A9%2541%23%3F\x07'
 const promptMark = '\x1b]133;A\x07'
 
 describe('prompt cwd reports', () => {
   let home: string
   beforeEach(() => {
     home = realpathSync(mkdtempSync(join(tmpdir(), 'orca-prompt-cwd-')))
-    mkdirSync(join(home, process.platform === 'win32' ? 'sub é%#41' : 'sub é%#41?'))
+    mkdirSync(join(home, process.platform === 'win32' ? 'sub é%41#' : 'sub é%41#?'))
   })
   afterEach(() => rmSync(home, { recursive: true, force: true }))
 
@@ -108,7 +108,7 @@ fish_prompt
   it.skipIf(process.platform !== 'win32')(
     'PowerShell reports the filesystem folder before the next prompt',
     () => {
-      const sub = join(home, 'sub é%#41')
+      const sub = join(home, 'sub é%41#')
       const result = spawnSync(
         'powershell.exe',
         [
@@ -124,7 +124,7 @@ prompt
         { encoding: 'utf8', timeout: 20_000 }
       )
       expect(result.status).toBe(0)
-      expect(result.stdout).toContain(`/sub%20%C3%A9%25%2341\x07${promptMark}USER> `)
+      expect(result.stdout).toContain(`/sub%20%C3%A9%2541%23\x07${promptMark}USER> `)
     }
   )
 })
