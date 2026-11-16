@@ -23,7 +23,10 @@ import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { listingMetadataCoverage } from './workspace-metadata-coverage'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
-import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,
@@ -52,6 +55,8 @@ export function createFetchWorktrees(
     try {
       const ownerState = get()
       const requestStartedWorktrees = selectWorktreesByRepo(ownerState)[repoId]
+      const requestStartedDetectedWorktrees =
+        selectDetectedWorktreesByRepo(ownerState)[repoId]?.worktrees
       const repoOwners = ownerState.repos.filter((repo) => repo.id === repoId)
       const ownerWasMissingAtStart = repoOwners.length === 0
       const hasLocalOwner = repoOwners.some(
@@ -107,6 +112,7 @@ export function createFetchWorktrees(
             ? ownerState.repos
             : undefined,
         requestStartedWorktrees,
+        requestStartedDetectedWorktrees,
         setup,
         refresh: metadata.refresh
       })
