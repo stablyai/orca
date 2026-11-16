@@ -109,6 +109,7 @@ describe('idle foreground process owns its provider session', () => {
       })
       await server.checkAgentPresence(PANE)
       expect(emitted.mock.lastCall?.[0].agentPresence?.suspended).toBe(true)
+      expect(server.paneAgentIdentity(PANE)?.suspended).toBe(true)
       probe.mockImplementation(async (_identity, _read, _platform, observe) => {
         if (verdict === 'live') {
           observe?.(false)
@@ -127,6 +128,7 @@ describe('idle foreground process owns its provider session', () => {
       expect(probe).toHaveBeenCalledTimes(2)
       assertClaudeSession(server)
       expect(emitted.mock.lastCall?.[0].agentPresence?.suspended).toBeUndefined()
+      expect(server.paneAgentIdentity(PANE)?.suspended).toBeUndefined()
     }
   )
 

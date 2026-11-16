@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type {
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
@@ -240,6 +243,7 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
 
   it.each([
     ['quit', ['0'], false],
+    ['quit without command marks', ['unmarked'], false],
     ['suspended', ['148'], true],
     ['macOS suspended', ['146'], true],
     ['suspended, then another command', ['148', '0'], true],
@@ -265,8 +269,11 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       isReversibleStop: () => false,
       isPlaced: () => true,
       readSavedRecord: (paneKey) => fixture.getSession().sleepingAgentSessionsByPaneKey?.[paneKey],
+      confirmProcessExit: async () => true,
       retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
     })
+    const clears: AgentStatusClearIpcPayload[] = []
+    server.subscribePaneStatusClear((clear) => clears.push(clear))
     const live = new Set<string>()
     runtime.setPtyController({
       write: () => true,
@@ -327,8 +334,25 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
       await wake('pty-3')
       for (const status of finishes) {
         tick()
-        runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${status}\x07`, Date.now())
+        if (status === 'unmarked') {
+          await server.reconcilePaneProcessExit(PANE_KEY)
+        } else {
+          runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${status}\x07`, Date.now())
+        }
       }
+      expect(clears.filter((clear) => 'paneKey' in clear && clear.refusedResume)).toEqual(
+        keepsRecovery
+          ? []
+          : [
+              expect.objectContaining({
+                paneKey: PANE_KEY,
+                refusedResume: expect.objectContaining({
+                  agent: 'codex',
+                  providerSession: { key: 'session_id', id: 'woken-codex' }
+                })
+              })
+            ]
+      )
       // A quit retires the saved conversation itself, before its exit evidence can expire.
       expect(await saved()).toEqual(keepsRecovery ? expect.objectContaining(resumable) : undefined)
       server.forgetAgentExit(PANE_KEY)
@@ -346,32 +370,45 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
   })
 })
 
-it('does not declare an identified stopped process ended when its title returns to the shell', async () => {
-  const fixture = makeRuntimeStoreWithWorkspaceSession(makeWorkspaceSessionWithHeadlessTerminal())
-  const exits: string[] = []
-  const checked = deferred<void>()
-  const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
-    checkHookAgentPresence: async () => {
-      checked.resolve()
-      return 'unverifiable'
-    },
-    onTerminalSideEffects: (batch) => {
-      for (const fact of batch.facts) {
-        if (fact.kind === 'agent-exited') {
-          exits.push(fact.kind)
+it.each([
+  ['locally suspended', true, 'zsh', []],
+  ['SSH or undecided owner at the shell', false, 'zsh', ['agent-exited']],
+  ['unanswered foreground', false, null, []],
+  ['agent still foreground', false, 'claude', []]
+] as const)(
+  'confirms title exit using process evidence: %s',
+  async (_, suspended, foreground, expected) => {
+    const fixture = makeRuntimeStoreWithWorkspaceSession(makeWorkspaceSessionWithHeadlessTerminal())
+    const exits: string[] = []
+    const checked = deferred<void>()
+    const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
+      checkHookAgentPresence: async () => {
+        checked.resolve()
+        return 'unverifiable'
+      },
+      getPaneAgentIdentity: () => ({
+        status: NEWER_STATUS,
+        ended: false,
+        ...(suspended ? { suspended: true } : {})
+      }),
+      onTerminalSideEffects: (batch) => {
+        for (const fact of batch.facts) {
+          if (fact.kind === 'agent-exited') {
+            exits.push(fact.kind)
+          }
         }
       }
-    }
-  })
-  runtime.setPtyController({
-    write: () => true,
-    kill: () => false,
-    getForegroundProcess: async () => 'zsh'
-  })
-  await syncSinglePty(runtime)
-  runtime.onPtyData('pty-1', '\x1b]0;✳ Claude Code\x07', 100)
-  runtime.onPtyData('pty-1', '\x1b]0;zsh\x07\x1b]133;D;146\x07', 101)
-  await checked.promise
-  await new Promise<void>((resolve) => setImmediate(resolve))
-  expect(exits).toEqual([])
-})
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      getForegroundProcess: async () => foreground
+    })
+    await syncSinglePty(runtime)
+    runtime.onPtyData('pty-1', '\x1b]0;✳ Claude Code\x07', 100)
+    runtime.onPtyData('pty-1', '\x1b]0;zsh\x07', 101)
+    await checked.promise
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(exits).toEqual(expected)
+  }
+)

@@ -7,47 +7,48 @@ export function settlePaneShellForeground(
   session: ConnectPanePtySession,
   reason: 'visible-pty' | 'command-finished' | 'process-exit'
 ): void {
-  // The shell owns input even when a stopped job still exists.
-  session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
+  const state = useAppStore.getState()
   const ptyId = session.transport.getPtyId()
+  const sleepingRecord = session.getSleepingRecordForPane(state)
+  const wake = session.hibernatedWakeTarget
+  const isHibernationWakeRecord =
+    (ptyId && state.suppressedPtyExitIds[ptyId]) ||
+    (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
+  session.clearStaleAgentTabTitleOnConfirmedShell()
+  session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
+  if (!isHibernationWakeRecord) {
+    session.deps.onAgentExitedRef.current(session.pane.leafId)
+  }
+  if (reason === 'process-exit') {
+    session.visibleForegroundSamplePending = false
+    session.visibleForegroundSampleSettled = false
+  }
+  if (reason === 'visible-pty' || reason === 'process-exit') {
+    state.clearAgentLaunchConfig(session.cacheKey)
+  } else {
+    session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
+  }
+  // Only the monitor's settled no-agent/no-children proof can retire recovery without command marks.
+  if (reason !== 'process-exit' || !sleepingRecord || isHibernationWakeRecord) {
+    return
+  }
   const acceptedStatusSeq = useAppStore
     .getState()
     .agentStatusByPaneKey.get(session.cacheKey)?.acceptedStatusSeq
-  // Foreground shell ownership cannot prove that a stopped agent process ended.
   void Promise.resolve(window.api?.agentStatus?.hasVerifiableAgentProcess?.(session.cacheKey))
     .then((verifiable) => {
+      const current = useAppStore.getState()
       if (
         verifiable === true ||
         session.transport.getPtyId() !== ptyId ||
-        useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)?.acceptedStatusSeq !==
-          acceptedStatusSeq
+        current.agentStatusByPaneKey.get(session.cacheKey)?.acceptedStatusSeq !==
+          acceptedStatusSeq ||
+        session.getSleepingRecordForPane(current)?.record !== sleepingRecord.record ||
+        (ptyId && current.suppressedPtyExitIds[ptyId])
       ) {
         return
       }
-      // Retire stale agent occupancy when a normal exit returns to the shell.
-      const state = useAppStore.getState()
-      const sleepingRecord = session.getSleepingRecordForPane(state)
-      const wake = session.hibernatedWakeTarget
-      // A delayed shell read can settle after exit consumes suppression; preserve only that PTY's exact wake record.
-      const isHibernationWakeRecord =
-        (ptyId && state.suppressedPtyExitIds[ptyId]) ||
-        (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
-      session.clearStaleAgentTabTitleOnConfirmedShell()
-      // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
-      if (!isHibernationWakeRecord) {
-        session.deps.onAgentExitedRef.current(session.pane.leafId)
-      }
-      // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.
-      if (reason === 'process-exit') {
-        // Why: reopen the one-shot visible sample so the next agent typed here is identified.
-        session.visibleForegroundSamplePending = false
-        session.visibleForegroundSampleSettled = false
-      }
-      if (reason === 'visible-pty' || reason === 'process-exit') {
-        state.clearAgentLaunchConfig(session.cacheKey)
-        return
-      }
-      session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
+      session.clearSleepingRecordProviderDuplicates(current, sleepingRecord)
     })
     .catch(console.warn)
 }

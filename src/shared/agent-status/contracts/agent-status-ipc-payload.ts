@@ -116,7 +116,7 @@ export type AgentStatusCacheIdentity = {
   stateStartedAt: number
 }
 
-/** A pane's saved resume the host refused because a native chat is that conversation's home. */
+/** A pane's resume identity the host retired after an exit or refused restore. */
 export type RefusedPaneResume = {
   expectedStatus?: AgentStatusCacheIdentity
   expectedSavedRecord?: { paneKey: string; capturedAt: number; updatedAt: number }

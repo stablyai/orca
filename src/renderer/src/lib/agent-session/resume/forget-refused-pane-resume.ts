@@ -21,27 +21,25 @@ export function namesRefusedResume(
   )
 }
 
-/**
- * Main refused `paneKey`'s saved resume because a native chat owns that conversation. Forgets it as
- * this pane's, whether or not the pane is mounted, so nothing offers or retries it here. Another
- * pane holding the same conversation is refused and forgotten at its own restore. Main already
- * forgot its own copy, so nothing is sent back.
- */
+/** Forget the host-retired conversation even in unmounted panes; newer observations survive. */
 export function forgetRefusedPaneResume(
   state: AppState,
   paneKey: string,
   refused: RefusedPaneResume
 ): void {
   const expected = refused.expectedSavedRecord
-  const saved = expected && state.sleepingAgentSessionsByPaneKey[expected.paneKey]
+  const savedKey = expected?.paneKey ?? paneKey
+  const saved = state.sleepingAgentSessionsByPaneKey[savedKey]
   if (
-    expected &&
     saved &&
-    saved.capturedAt === expected.capturedAt &&
-    saved.updatedAt === expected.updatedAt &&
+    ((expected &&
+      saved.capturedAt === expected.capturedAt &&
+      saved.updatedAt === expected.updatedAt) ||
+      // Main and window may capture the same accepted status at different times.
+      (refused.expectedStatus && saved.updatedAt <= refused.expectedStatus.receivedAt)) &&
     namesRefusedResume(refused, saved)
   ) {
-    state.clearSleepingAgentSession(expected.paneKey)
+    state.clearSleepingAgentSession(savedKey)
   }
   const identity = refused.expectedStatus
   if (!identity) {

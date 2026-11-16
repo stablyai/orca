@@ -105,11 +105,13 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
         return
       }
-      // No identified owner keeps legacy rules; an unverifiable owned process cannot be declared exited from silence.
-      if (verdict === null) {
-        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, false)
-      } else if (verdict === 'unverifiable') {
+      const suspended = Array.from(this.collectAgentStatusPaneKeysForPty(ptyId)).some(
+        (paneKey) => this.readPaneAgentIdentity(paneKey)?.suspended === true
+      )
+      if (verdict === 'unverifiable' && suspended) {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
+      } else if (verdict === null || verdict === 'unverifiable') {
+        this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
       } else if (verdict === 'exited' && !recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
       } else if (verdict === 'live') {

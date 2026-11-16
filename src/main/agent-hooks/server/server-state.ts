@@ -53,6 +53,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   protected terminalPaneLifecycle: {
     retireSavedRecord?(paneKey: string, exitedAt: number): void
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
+    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean
@@ -94,6 +95,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     return identity
       ? {
           ...identity,
+          ...(row?.connectionId === null &&
+          row.agentPresence?.process &&
+          row.agentPresence.suspended &&
+          !row.agentPresence.ended
+            ? { suspended: true as const }
+            : {}),
           processTopology: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
         }
       : null
@@ -107,9 +114,40 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
       }
     }
     const exitedAt = Date.now()
+    const status = this.paneAgentIdentity(paneKey)?.status
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
     for (const key of paneKeys) {
+      const saved = this.terminalPaneLifecycle?.readSavedRecord?.(key)
       this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
+      const agent = status?.agentType ?? saved?.agent
+      const providerSession = status?.providerSession ?? saved?.providerSession
+      if (agent && providerSession) {
+        this.emitPaneStatusCleared({
+          paneKey: key,
+          refusedResume: {
+            agent,
+            providerSession,
+            ...(status
+              ? {
+                  expectedStatus: {
+                    paneKey: key,
+                    receivedAt: status.receivedAt,
+                    stateStartedAt: status.stateStartedAt
+                  }
+                }
+              : {}),
+            ...(saved && saved.updatedAt <= exitedAt
+              ? {
+                  expectedSavedRecord: {
+                    paneKey: key,
+                    capturedAt: saved.capturedAt,
+                    updatedAt: saved.updatedAt
+                  }
+                }
+              : {})
+          }
+        })
+      }
     }
     this.scheduleStatusPersist()
   }

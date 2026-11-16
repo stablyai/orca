@@ -7,6 +7,8 @@ export type PaneAgentIdentity = {
   status: AgentStatusIpcPayload
   /** The agent left the pane; its identity names what to retire, not what to resume. */
   ended: boolean
+  /** Positive local process observation; shell foreground does not end a stopped job. */
+  suspended?: true
   /** Shared servers survive the pane; their conversation must not be launched again on wake. */
   processTopology?: 'pane-owned' | 'shared' | 'unverifiable'
 }

@@ -78,6 +78,25 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     return presence?.process !== undefined && !presence.ended
   }
 
+  /** Shells without command marks need the owning host's process-tree proof. */
+  async reconcilePaneProcessExit(paneKey: string): Promise<void> {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    const identity = this.paneAgentIdentity(resolved)
+    const confirmedExit =
+      identity &&
+      identity.processTopology !== 'shared' &&
+      !this.hasVerifiableAgentProcess(resolved) &&
+      (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, identity.status.agentType))
+    if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
+      return
+    }
+    this.reconcileEndedProcessForPaneKeys([resolved], {
+      preserveResumeIdentity: true,
+      confirmedExit: confirmedExit === true
+    })
+  }
+
   /** Pin inspection to this row so a replacement owner cannot become its subject. */
   readCliWriterObservation(expected: AgentStatusIpcPayload): CliWriterObservation | null {
     const resolved = this.resolvePaneKeyAlias(expected.paneKey)

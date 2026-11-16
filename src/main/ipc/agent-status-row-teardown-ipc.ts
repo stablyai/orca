@@ -72,10 +72,9 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     }
     try {
       // Confirmed process exit must clear latches with the row (STA-4612).
-      agentHookServer.reconcileEndedProcessForPaneKeys([paneKey], {
-        // The shell still owns the PTY, so keep its usable resume identity.
-        preserveResumeIdentity: true
-      })
+      void agentHookServer
+        .reconcilePaneProcessExit(paneKey)
+        .catch((err) => console.warn('[agent-hooks] reconcilePaneProcessExit failed:', err))
       clearMigrationUnsupportedPtysForPaneKey(paneKey)
     } catch (err) {
       console.warn('[agent-hooks] reconcileEndedProcessForPaneKeys failed:', err)
