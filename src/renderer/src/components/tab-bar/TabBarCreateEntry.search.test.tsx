@@ -1,6 +1,8 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { createAgentPickerInventorySource } from '../agent/agent-picker-inventory-source'
 import { buildAgentPickerLaunchOptions } from './tab-agent-launch-options'
+import { TabBarAgentPickerEntry } from './TabBarAgentPickerEntry'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 // @vitest-environment happy-dom
 
@@ -175,3 +177,139 @@ it.each([false, true])(
     expect(document.querySelector('[data-sonner-toast]')).toBeNull()
   }
 )
+
+function renderAgentPickerEntry(
+  entries: AgentPickerEntry[],
+  props: Record<string, unknown> = {}
+): void {
+  const inventory = createAgentPickerInventorySource(entries)
+  act(() => {
+    root.render(
+      <TooltipProvider>
+        <DropdownMenu defaultOpen modal={false}>
+          <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <TabBarAgentPickerEntry
+              inventory={inventory}
+              worktreeId="wt"
+              groupId="g"
+              menuOpen
+              onOpenEntry={vi.fn().mockResolvedValue(undefined)}
+              {...props}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TooltipProvider>
+    )
+  })
+}
+
+it('lists an agent named by the query before other agents’ model setups and targets it on Enter', () => {
+  const omp: AgentPickerEntry = {
+    agent: 'omp',
+    label: 'OMP',
+    defaultSurface: 'terminal',
+    surfaces: ['terminal'],
+    terminal: {},
+    structured: {},
+    rows: [{ kind: 'cli', agent: 'omp' }],
+    catalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [
+        { id: 'antigravity-agent', label: 'Antigravity Agent', isDefault: false, efforts: [] },
+        { id: 'custom-agy-pro', label: 'Custom AGY Pro', isDefault: false, efforts: [] }
+      ]
+    }
+  }
+  const antigravity: AgentPickerEntry = {
+    agent: 'antigravity',
+    label: 'Antigravity',
+    aliases: ['custom-agy'],
+    defaultSurface: 'terminal',
+    surfaces: ['terminal'],
+    terminal: {},
+    structured: {},
+    rows: [{ kind: 'cli', agent: 'antigravity' }],
+    catalog: { origin: 'probe', fetchedAt: 1, models: [] }
+  }
+  const onLaunchAgentOption = vi.fn(() => true)
+  renderAgentPickerEntry([omp, antigravity], { onLaunchAgentOption })
+
+  setQuery('antigra')
+  const options = screen.getAllByRole('option')
+  expect(options[0].getAttribute('aria-selected')).toBe('true')
+  expect(options[0].textContent).toContain('Antigravity')
+  expect(options[0].textContent).not.toContain('OMP')
+  expect(options[1].textContent).toContain('OMP · Antigravity Agent')
+  submit()
+  expect(onLaunchAgentOption).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'cli:antigravity',
+      agent: 'antigravity',
+      row: { kind: 'cli', agent: 'antigravity' }
+    })
+  )
+
+  onLaunchAgentOption.mockClear()
+  setQuery('custom-agy')
+  submit()
+  expect(onLaunchAgentOption).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'cli:antigravity',
+      agent: 'antigravity'
+    })
+  )
+})
+
+it('keeps a ready chat model setup ahead of a waiting terminal agent match', () => {
+  const omp: AgentPickerEntry = {
+    agent: 'omp',
+    label: 'OMP',
+    defaultSurface: 'chat',
+    surfaces: ['chat'],
+    terminal: {},
+    structured: {},
+    rows: [{ kind: 'chat', agent: 'omp' }],
+    catalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [
+        { id: 'antigravity-agent', label: 'Antigravity Agent', isDefault: false, efforts: [] }
+      ]
+    }
+  }
+  const antigravity: AgentPickerEntry = {
+    agent: 'antigravity',
+    label: 'Antigravity',
+    defaultSurface: 'terminal',
+    surfaces: ['terminal'],
+    terminal: {},
+    structured: {},
+    rows: [{ kind: 'cli', agent: 'antigravity' }],
+    catalog: { origin: 'probe', fetchedAt: 1, models: [] }
+  }
+  const onLaunchAgentOption = vi.fn(() => true)
+  renderAgentPickerEntry([omp, antigravity], {
+    terminalPending: true,
+    onLaunchAgentOption
+  })
+
+  setQuery('antigra')
+  const options = screen.getAllByRole('option')
+  expect(options[0].getAttribute('aria-selected')).toBe('true')
+  expect(options[0].textContent).toContain('OMP · Antigravity Agent')
+  expect(options[1].hasAttribute('disabled')).toBe(true)
+  submit()
+  expect(onLaunchAgentOption).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agent: 'omp',
+      row: expect.objectContaining({ kind: 'chat', agent: 'omp' }),
+      setup: expect.objectContaining({
+        agent: 'omp',
+        surface: 'chat',
+        choices: { model: 'antigravity-agent' }
+      })
+    })
+  )
+})
