@@ -33,8 +33,13 @@ function write(path: string, content: string): void {
   writeFileSync(path, content)
 }
 
-// The guest scripts take paths as arguments; a quote and space must not split or expand them.
-function fixture(name = `it's a "folder"`) {
+// Links as Orca makes them: junctions and a hardlinked prompt history on Windows.
+function linkFolder(target: string, path: string): void {
+  symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir')
+}
+
+// The guest scripts take paths as arguments; quotes and spaces must not split or expand them.
+function fixture(name = process.platform === 'win32' ? "it's a folder" : `it's a "folder"`) {
   const root = mkdtempSync(join(tmpdir(), 'claude-retained-'))
   roots.push(root)
   const systemDefault = join(root, 'user', '.claude')
@@ -49,15 +54,18 @@ function fixture(name = `it's a "folder"`) {
   write(join(home, 'projects.orca-profile-merge', 'p', 'conflict.jsonl'), '0123456789')
   write(join(home, 'todos', 't.json'), 'todo!')
   write(join(home, 'history.jsonl.orca-profile-merge-1'), 'prompt\n')
-  symlinkSync(join(systemDefault, 'projects'), join(home, 'projects'))
-  symlinkSync(join(systemDefault, 'history.jsonl'), join(home, 'history.jsonl'))
-  // A history name that links elsewhere is not this account's, even inside a kept folder's name.
-  symlinkSync(join(systemDefault, 'projects'), join(home, 'file-history'))
+  linkFolder(join(systemDefault, 'projects'), join(home, 'projects'))
+  if (process.platform === 'win32') {
+    linkSync(join(systemDefault, 'history.jsonl'), join(home, 'history.jsonl'))
+  } else {
+    symlinkSync(join(systemDefault, 'history.jsonl'), join(home, 'history.jsonl'))
+  }
+  linkFolder(join(systemDefault, 'projects'), join(home, 'file-history'))
   write(join(home, '.credentials.json'), 'fixture-not-a-secret')
   write(join(home, '.claude.json'), '{"oauthAccount":{"emailAddress":"a@example.test"}}')
   write(join(home, 'settings.json'), '{}')
   mkdirSync(join(home, 'plugins'))
-  symlinkSync(join(systemDefault, 'plugins'), join(home, 'plugins', 'shared'))
+  linkFolder(join(systemDefault, 'plugins'), join(home, 'plugins', 'shared'))
   write(join(folder, 'profile.json'), '{}')
   return { root, systemDefault, other, folder, home }
 }
@@ -99,8 +107,7 @@ function expectDeleted(f: Fixture, sharedBefore: Record<string, string>, otherBe
   expect(snapshot(f.other)).toEqual(otherBefore)
 }
 
-// Real symlinks need Developer Mode on Windows; the guest scripts need GNU find and stat.
-describe.skipIf(process.platform === 'win32')('Claude account retained history', () => {
+describe('Claude account retained history', () => {
   it('measures only the bytes this account alone holds', async () => {
     const f = fixture()
     await expect(measureRetainedClaudeHistory(f.folder)).resolves.toBe(22)
@@ -132,16 +139,21 @@ describe.skipIf(process.platform === 'win32')('Claude account retained history',
     expect(readFileSync(join(f.systemDefault, 'history.jsonl'), 'utf8')).toBe('shared prompts\n')
   })
 
-  it.skipIf(process.getuid?.() === 0)('fails the measurement rather than undercount', async () => {
-    const f = fixture()
-    chmodSync(join(f.home, 'projects.orca-profile-merge', 'p'), 0o000)
-    try {
-      await expect(measureRetainedClaudeHistory(f.folder)).rejects.toThrow()
-    } finally {
-      chmodSync(join(f.home, 'projects.orca-profile-merge', 'p'), 0o700)
+  // Windows ignores the mode, and root reads anything.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'fails the measurement rather than undercount',
+    async () => {
+      const f = fixture()
+      chmodSync(join(f.home, 'projects.orca-profile-merge', 'p'), 0o000)
+      try {
+        await expect(measureRetainedClaudeHistory(f.folder)).rejects.toThrow()
+      } finally {
+        chmodSync(join(f.home, 'projects.orca-profile-merge', 'p'), 0o700)
+      }
     }
-  })
+  )
 
+  // The guest scripts need GNU find and stat.
   describe.skipIf(process.platform !== 'linux')('in a WSL guest', () => {
     it('measures the same bytes', () => {
       const f = fixture()
