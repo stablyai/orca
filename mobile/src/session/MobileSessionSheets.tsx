@@ -93,6 +93,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     closeWithBulkActions,
     createTabAgentStatusRow,
     createTabAgentOptions,
+    createTabAgentSurfaceChoice,
     sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
@@ -121,6 +122,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         visible={showCreateTabDrawer}
         workspaceName={worktreeName}
         agentOptions={createTabAgentOptions}
+        surfaceChoice={createTabAgentSurfaceChoice}
         agentStatusRow={createTabAgentStatusRow}
         // Why: browser/markdown creation resolve a real worktree on the host
         // (browser.tabCreate, files.createFile); the floating sentinel is
@@ -128,7 +130,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         canCreateBrowser={!isFloatingWorkspaceRoute}
         canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
-        onCreateAgent={(agent) => void handleCreateTerminal(agent)}
+        onCreateAgent={(agent, surface) => void handleCreateTerminal(agent, undefined, surface)}
         onCreateTerminal={() => void handleCreateTerminal()}
         onCreateBrowser={() => {
           if (browserScreencastSupported !== true) {

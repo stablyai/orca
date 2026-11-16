@@ -68,7 +68,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
   type CreateOutcome = 'created' | 'accepted' | 'busy' | 'unavailable' | 'reported-failure'
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
-    options?: MobileSessionTerminalCreateOptions
+    options?: MobileSessionTerminalCreateOptions,
+    surface?: MobileNewTabAgentOption['surface']
   ): Promise<CreateOutcome | undefined> {
     const sourceFork = options?.sourceChatFork
     const sourceOutcome = (value: CreateOutcome): CreateOutcome | undefined =>
@@ -112,6 +113,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           worktreeId,
           agent,
           options,
+          ...(surface ? { surface } : {}),
           lock: clientMutationId,
           activeSessionTabId,
           pendingSelectionRef,
