@@ -39,9 +39,14 @@ vi.mock('electron', () => ({
 }))
 
 const { Store } = await import('../store')
-afterEach(closeTestStores)
+afterEach(() => {
+  closeTestStores()
+  vi.useRealTimers()
+})
 
 it('loads a newer local saved binding as the same physical terminal and saves the older-readable spelling', () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-11-16T00:00:00Z'))
   const dataFile = join(
     realpathSync(mkdtempSync(join(tmpdir(), 'orca-host-id-reader-'))),
     'state.json'
@@ -77,7 +82,7 @@ it('loads a newer local saved binding as the same physical terminal and saves th
         ptyId: 'local|repo::/a|b@@closed',
         incarnationId: 'inc',
         worktreeId: 'repo::/a|b',
-        closedAt: Date.now()
+        closedAt: 1794787200000
       }
     },
     terminalSurfaceTombstonesByPaneKey: {
@@ -87,7 +92,7 @@ it('loads a newer local saved binding as the same physical terminal and saves th
         worktreeId: 'repo::/a|b',
         parentTabId: 'tab',
         leafId: leaf,
-        retiredAt: Date.now()
+        retiredAt: 1794787200000
       }
     }
   }
