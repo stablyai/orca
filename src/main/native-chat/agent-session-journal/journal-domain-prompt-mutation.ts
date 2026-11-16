@@ -69,10 +69,18 @@ export function applyJournalDomainPromptMutation(
     input.resolution.state === 'resolved'
       ? input.resolution.selectedOptionId
       : undefined
+  const selectedOption = choice
+    ? pending.prompt.options.find((option) => option.id === choice)
+    : undefined
+  const intent = selectedOption && 'intent' in selectedOption ? selectedOption.intent : undefined
   const planApprovalMode =
-    choice === 'allow' || choice === 'allowForSession'
+    choice === 'allow' ||
+    choice === 'allowForSession' ||
+    choice === 'allow_always' ||
+    intent === 'allow_once' ||
+    intent === 'allow_always'
       ? ('default' as const)
-      : choice === 'deny'
+      : choice === 'deny' || intent === 'reject_once' || intent === 'reject_always'
         ? ('plan' as const)
         : undefined
   return {

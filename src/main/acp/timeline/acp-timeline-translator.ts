@@ -277,6 +277,7 @@ export class AcpTimelineTranslator {
 
   // Write failure reasons before ending the turn so their rows join it.
   private endTurn(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
+    this.subagents.endTurn(turn, ending.stopReason, ending.at)
     const events = this.prompts.endCompaction(turn, ending, this.failures) ?? [
       ...this.failures.ended(turn, ending),
       ...acpTurnEndEvents(this.options.sessionId, turn, ending)

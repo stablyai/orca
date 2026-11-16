@@ -7,6 +7,7 @@ import type { AgentSessionOptionResult } from '../../../../shared/agent-session/
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+import type { StructuredAgentDefinition } from '../providers/structured-agent-definition'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type {
   AgentSessionTurnContext,
@@ -23,7 +24,8 @@ function acceptsOptionPick(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
   provider: string,
   key: string,
-  value: string
+  value: string,
+  accountHome?: Parameters<StructuredAgentDefinition['restingOptions']['acceptsKey']>[1]
 ): boolean {
   const definition = agents.definition(provider)
   return key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
@@ -31,7 +33,7 @@ function acceptsOptionPick(
         agentChatPermissionModes(provider) !== null &&
         (value === 'own' ||
           agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true)
-    : definition?.restingOptions.acceptsKey(key) === true &&
+    : definition?.restingOptions.acceptsKey(key, accountHome) === true &&
         (key !== 'interactionMode' || isAgentSessionInteractionMode(value))
 }
 
@@ -65,7 +67,10 @@ export async function recordStructuredAgentSessionOptionIntent(
 ): Promise<TurnOutcome<AgentSessionOptionResult>> {
   const { sessionId, fence } = ctx
   const record = deps.store.getRecord(sessionId)
-  if (!record || !acceptsOptionPick(deps.agents, record.provider, input.key, input.value)) {
+  if (
+    !record ||
+    !acceptsOptionPick(deps.agents, record.provider, input.key, input.value, record.accountHome)
+  ) {
     return {
       ok: false,
       refusal: refuse(

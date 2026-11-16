@@ -55,6 +55,8 @@ export type AcpLaunchSpec = {
     /** `args` grants full access; its session mode can equal another mode's. */
     fullAccessAtLaunch?: true
   }
+  /** Session `mode` config option advertises a native `plan` mode mapped to `interactionMode`. */
+  supportsPlanMode?: true
   /** Enables /compact as a prompt command. */
   compaction?: true
   /** The agent's `/compact` honours text after the command; others would silently drop it. */

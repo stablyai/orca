@@ -22,9 +22,9 @@ const KIMI_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
   modes: ['ask', 'auto', 'full-access']
 }
 
-// No Auto: the server has no reviewer that answers approvals for the person.
+// Host `agy acp` (>= 1.5.4 on personal/ADC accounts) offers native `auto`; unsupported backends reject it at start.
 const ANTIGRAVITY_CHAT_PERMISSION_MODES: AgentChatPermissionModeSupport = {
-  modes: ['ask', 'accept-edits', 'full-access']
+  modes: ['ask', 'accept-edits', 'auto', 'full-access']
 }
 
 const AGENT_CHAT_PERMISSION_MODES_BY_AGENT = new Map<string, AgentChatPermissionModeSupport>([

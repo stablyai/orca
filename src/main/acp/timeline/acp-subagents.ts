@@ -22,6 +22,7 @@ type KnownSubagent = {
   replyDigest?: string
   /** Preserve the first terminal state; only completed runs can publish replies. */
   ended?: NativeChatSubagentState
+  settlesWithTurn?: boolean
 }
 
 const OUTCOMES: Record<
@@ -89,6 +90,12 @@ export class AcpSubagents {
       if (update.restart && subagent.ended !== undefined) {
         subagent.ended = undefined
         subagent.replyDigest = undefined
+        if (turn !== undefined) {
+          subagent.placement = { ...subagent.placement, turn }
+        }
+      }
+      if (update.settlesWithTurn) {
+        subagent.settlesWithTurn = true
       }
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
       // Late live reports must not resurrect an ended run after the host retires its record.
@@ -103,6 +110,21 @@ export class AcpSubagents {
       }
     }
     return replies
+  }
+
+  endTurn(turn: string, stopReason: string, at: number): void {
+    const terminal: Exclude<NativeChatSubagentState, 'working' | 'idle'> =
+      stopReason === 'end_turn' ? 'completed' : stopReason === 'cancelled' ? 'stopped' : 'failed'
+    for (const [id, subagent] of this.known) {
+      if (
+        subagent.settlesWithTurn &&
+        subagent.ended === undefined &&
+        subagent.placement.turn === turn
+      ) {
+        subagent.ended = terminal
+        this.pending.push(subagentEvidence({ id, state: terminal }, at))
+      }
+    }
   }
 
   private reply(id: string, subagent: KnownSubagent, text: string): ProviderTimelineEvent[] {

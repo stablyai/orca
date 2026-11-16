@@ -114,7 +114,13 @@ export async function readStructuredAgentSessionOptions(
     ))
   let options: Omit<AgentSessionOptionsResult, 'rewind'>
   if (live) {
-    const { catalogListing, effortFixed: _fixed, projectCurrent: _project, ...answer } = live
+    const {
+      catalogListing,
+      effortFixed: _fixed,
+      interactionModeSupported: _interactionModeSupported,
+      projectCurrent: _project,
+      ...answer
+    } = live
     options = answer
     // Fill missing live listings from saved catalog state; absent records keep the child’s answer.
     if (!catalogListing && !answer.listedModelIds && store.getConversation(sessionId)) {
@@ -164,14 +170,20 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
-  const current = {
+  const { interactionMode: _liveInteractionMode, ...mergedCurrent } = {
     ...selected.current,
-    ...options.current,
+    ...options.current
+  }
+  const current = {
+    ...mergedCurrent,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
     fastMode: selected.current.fastMode ?? options.current.fastMode,
     // The saved tier as the shared speed rule runs it under the saved model.
-    ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
+    ...(live?.interactionModeSupported !== false &&
+    context.deps.agents
+      .definition(agent)
+      ?.restingOptions.acceptsKey('interactionMode', record?.accountHome)
       ? {
           interactionMode:
             saved.interactionMode === 'plan' ? ('plan' as const) : ('default' as const)

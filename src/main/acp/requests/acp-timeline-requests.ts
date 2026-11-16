@@ -9,11 +9,12 @@ import type { AcpToolTimeline } from '../timeline/acp-tool-timeline'
 import { AcpRpcError } from '../transport/acp-errors'
 import { ACP_FORM_ELICITATION_METHOD, acpFormElicitationPresentation } from './acp-form-elicitation'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
+import type { AgentJournalApprovalSubject } from '../../../shared/agent-session/journal/agent-session-journal-approval-subject'
 import { isAgentJournalPromptIntent } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export function acpPermissionPresentation(
   params: unknown,
-  description?: string
+  extra?: string | { description?: string; subject?: AgentJournalApprovalSubject }
 ): AcpRequestPresentation {
   // Runtime parsing already reported dropped fields.
   const request = readAcpPermissionRequest(params, () => {})
@@ -21,11 +22,14 @@ export function acpPermissionPresentation(
     throw new AcpRpcError(-32602, 'Invalid ACP permission request')
   }
   const { toolCall, options } = request
+  const description = typeof extra === 'string' ? extra : extra?.description
+  const subject = typeof extra === 'string' ? undefined : extra?.subject
   return {
     body: {
       kind: 'approval',
       title: toolCall.title ?? 'Permission requested',
       ...(description ? { description } : {}),
+      ...(subject ? { subject } : {}),
       detail: null,
       options: options.map((option) => ({
         id: option.optionId,
