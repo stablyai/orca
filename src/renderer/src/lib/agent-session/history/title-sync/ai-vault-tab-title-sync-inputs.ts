@@ -8,6 +8,7 @@ import type { AppState } from '@/store/types'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
 import { placedPanesEqual, titleRelevant } from './ai-vault-tab-title-placement-inputs'
+import type { AiVaultTitleRequestInputs } from './ai-vault-tab-title-request-inputs'
 import { worktreeOwnerRowsTokenOf } from '../../../workspace/ownership/worktree-owner-rows-token'
 import {
   selectDetectedWorktreesByRepo,
@@ -62,50 +63,6 @@ function relevantRecordEqual<T extends object>(
     }
   }
   return index === before.length
-}
-
-/** Only what collectAiVaultTitleRequests reads, so a kept copy doesn't pin the rest of the store. */
-export type AiVaultTitleRequestInputs = Pick<
-  AppState,
-  | 'agentStatusByPaneKey'
-  | 'agentConversationsByPaneKey'
-  | 'sleepingAgentSessionsByPaneKey'
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'repos'
-  | 'worktreesByRepo'
-  | 'detectedWorktreesByRepo'
-  | 'folderWorkspaces'
-  | 'projectGroups'
-  | 'settings'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
-  | 'runtimeEnvironments'
-  | 'runtimeEnvironmentCatalogHydrated'
-  | 'removedRuntimeEnvironmentIds'
->
-
-export function aiVaultTitleRequestInputs(state: AppState): AiVaultTitleRequestInputs {
-  return {
-    agentStatusByPaneKey: state.agentStatusByPaneKey,
-    agentConversationsByPaneKey: state.agentConversationsByPaneKey,
-    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    tabsByWorktree: state.tabsByWorktree,
-    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
-    repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-    folderWorkspaces: state.folderWorkspaces,
-    projectGroups: state.projectGroups,
-    settings: state.settings,
-    activeWorktreeId: state.activeWorktreeId,
-    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
-    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
-    runtimeEnvironments: state.runtimeEnvironments,
-    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
-    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
-  }
 }
 
 function agentRecordsEqual(

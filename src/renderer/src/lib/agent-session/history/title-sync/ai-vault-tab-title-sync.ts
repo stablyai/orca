@@ -10,11 +10,13 @@ import {
 } from './ai-vault-tab-title-requests'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import {
-  aiVaultTitleRequestInputs,
   aiVaultTitleRequestInputsChanged,
-  aiVaultTitleSyncInputsChanged,
-  type AiVaultTitleRequestInputs
+  aiVaultTitleSyncInputsChanged
 } from './ai-vault-tab-title-sync-inputs'
+import {
+  aiVaultTitleRequestInputs,
+  type AiVaultTitleRequestInputs
+} from './ai-vault-tab-title-request-inputs'
 
 import {
   aiVaultTitleRequestKey,
