@@ -57,8 +57,14 @@ test('recovers rejected language catalogs without reloading', async ({
     })
   }, language)
   const failedRequest = await rejected
-  await orcaPage.getByRole('button', { name: 'Switch language' }).click()
-  await expect(orcaPage.getByRole('alert')).toContainText('Could not load this language')
+  await orcaPage.getByRole('button', { name: /^Language/ }).click()
+  // Why by title: onboarding is a dialog too; the picker's title follows the active language.
+  const picker = orcaPage.getByRole('dialog', {
+    name: new RegExp(`^(Display language|${first.title}|${second.title})$`)
+  })
+  // Why a prefix match: a row's name also carries its muted English gloss and state text.
+  const row = (name: string) => picker.getByRole('button', { name: new RegExp(`^${name}`) })
+  await expect(picker.getByRole('alert')).toContainText(first.name)
   await orcaPage.screenshot({ path: testInfo.outputPath('catalog-request-rejected.png') })
 
   await electronApp.evaluate(({ session }) => {
@@ -67,11 +73,11 @@ test('recovers rejected language catalogs without reloading', async ({
   expect(
     await orcaPage.evaluate(async (url) => (await fetch(url)).status, failedRequest.url())
   ).toBe(200)
-  await orcaPage.getByRole('button', { name: 'Retry', exact: true }).click()
+  await picker.getByRole('alert').getByRole('button', { name: 'Retry', exact: true }).click()
 
-  await expect(orcaPage.getByRole('radio', { name: first.name, exact: true })).toBeChecked()
-  await expect(orcaPage.getByRole('radiogroup', { name: first.title, exact: true })).toBeVisible()
-  await expect(orcaPage.getByRole('alert')).toHaveCount(0)
+  await expect(row(first.name)).toHaveAttribute('aria-current', 'true')
+  await expect(orcaPage.getByRole('dialog', { name: first.title, exact: true })).toBeVisible()
+  await expect(picker.getByRole('alert')).toHaveCount(0)
   await expect
     .poll(() => orcaPage.evaluate(() => window.api.settings.get().then((s) => s.uiLanguage)))
     .toBe(language)
@@ -91,10 +97,12 @@ test('recovers rejected language catalogs without reloading', async ({
   const nextRejected = orcaPage.waitForEvent('requestfailed', {
     predicate: (request) => nextPattern.test(request.url())
   })
-  await orcaPage.getByRole('radio', { name: nextName, exact: true }).click()
+  await row(nextName).click()
   await nextRejected
-  await expect(orcaPage.getByRole('alert')).toBeVisible()
-  await expect(orcaPage.getByRole('radio', { name: previousName, exact: true })).toBeChecked()
+  // Why on the row: a failed switch reports under the language that was chosen.
+  await expect(row(nextName)).toHaveAttribute('aria-describedby', /.+/)
+  await expect(picker.getByRole('alert')).toBeVisible()
+  await expect(row(previousName)).toHaveAttribute('aria-current', 'true')
   await expect
     .poll(() => orcaPage.evaluate(() => window.api.settings.get().then((s) => s.uiLanguage)))
     .toBe(language)
@@ -102,15 +110,11 @@ test('recovers rejected language catalogs without reloading', async ({
   await electronApp.evaluate(({ session }) => {
     session.defaultSession.webRequest.onBeforeRequest(null)
   })
-  await orcaPage.getByRole('alert').getByRole('button').click()
-  await expect(orcaPage.getByRole('radio', { name: nextName, exact: true })).toBeChecked()
-  await expect(
-    orcaPage.getByRole('radiogroup', {
-      name: second.title,
-      exact: true
-    })
-  ).toBeVisible()
-  await expect(orcaPage.getByRole('alert')).toHaveCount(0)
+  // Why the row: choosing the failed language again is the retry.
+  await row(nextName).click()
+  await expect(row(nextName)).toHaveAttribute('aria-current', 'true')
+  await expect(orcaPage.getByRole('dialog', { name: second.title, exact: true })).toBeVisible()
+  await expect(picker.getByRole('alert')).toHaveCount(0)
   await expect
     .poll(() => orcaPage.evaluate(() => window.api.settings.get().then((s) => s.uiLanguage)))
     .toBe(nextLanguage)

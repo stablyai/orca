@@ -85,7 +85,7 @@ export function LanguageBrowser({
   const failedName = failedPack
     ? languageNames(failedPack.locale).native
     : failedId && !isPluginUiLanguage(failedId) && failedId !== UI_LANGUAGE_SYSTEM
-      ? languageNames(failedId).native
+      ? getUiLanguageNativeLabel(failedId)
       : t('languages.yourLanguage', 'Your language')
   const searching = query.trim() !== ''
   // Why per kind: each hook clears its own error only when it runs again.
