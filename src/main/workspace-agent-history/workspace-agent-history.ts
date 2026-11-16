@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { OrcaWorkspaceLayout } from '../../shared/orca-workspace-layout'
+import type { OrcaWorkspaceLayout } from '../../shared/worktree/paths/orca-workspace-layout'
 import type {
   WorkspaceAgentHistoryChatTally,
   WorkspaceAgentHistoryDeleteResult,
