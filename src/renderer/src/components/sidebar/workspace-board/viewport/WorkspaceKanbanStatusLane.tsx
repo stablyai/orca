@@ -17,6 +17,7 @@ import WorkspaceKanbanLaneCardList from './WorkspaceKanbanLaneCardList'
 import { serializeWorkspaceLaneFullIds } from '../drag/workspace-kanban-filtered-drop-index'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'
+import { translateWorkspaceBoardStatusLabel } from '../../workspace-board-status-label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -94,10 +95,11 @@ function WorkspaceKanbanStatusLane({
       undefined
     )
   }, [fullWorktreeIds, hasQuery, items])
+  const statusLabel = translateWorkspaceBoardStatusLabel(status, t)
   const createTooltip = t(
     'auto.components.sidebar.WorkspaceKanbanStatusLane.newWorkspaceIn',
     'New workspace in {{status}}',
-    { status: status.label }
+    { status: statusLabel }
   )
   const createButton = (
     <Button
@@ -166,7 +168,7 @@ function WorkspaceKanbanStatusLane({
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <meta.icon className={cn('size-3.5 shrink-0', meta.tone)} />
           <div className="min-w-0 truncate text-[12px] font-semibold text-foreground">
-            {status.label}
+            {statusLabel}
           </div>
           <div className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
             {isFiltered ? `${items.length} / ${laneTotalCount}` : items.length}
