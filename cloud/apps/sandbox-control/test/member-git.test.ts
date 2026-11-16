@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { generateGrantRecipientKey } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
 import { memberPlaceholder } from '../src/github-user-tokens'
 import { MEMBERS_COMMAND } from '../src/lifecycle'
+import { githubActingViews } from '../src/git-actor'
+import { memberCoauthors } from '../src/member-git'
+import { getSandbox } from '../src/store'
 import { gitBasicAuthorization } from '../src/network-policy'
 import { createHarness } from './harness'
 
@@ -12,12 +15,12 @@ const KEK = Buffer.alloc(32, 7).toString('base64')
 const OP = 'o'.repeat(40)
 const REPO = 'https://github.com/acme/app'
 
-async function setup(memberGit: string | undefined = undefined) {
+async function setup(memberGit: string | undefined = undefined, extra: Record<string, string> = {}) {
   const { privateKey, publicKey } = await generateKeyPair('RS256')
   const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
   const upstream: { url: string; authorization: string | null }[] = []
   const h = await createHarness(
-    { EGRESS_PROXY_URL: PROXY_URL, SECRETS_KEK: KEK, OPERATOR_TOKEN: OP, ...(memberGit ? { MEMBER_GIT_IDENTITY: memberGit } : {}) },
+    { EGRESS_PROXY_URL: PROXY_URL, SECRETS_KEK: KEK, OPERATOR_TOKEN: OP, ...(memberGit ? { MEMBER_GIT_IDENTITY: memberGit } : {}), ...extra },
     {
       egressKeysForIssuer: () => createLocalJWKSet(jwks),
       credentials: { authorizationFor: async () => 'Bearer ghs_app' },
@@ -137,6 +140,28 @@ describe('git as the sender', () => {
     expect(await t.proxied('github.com', '/acme/app.git/info/refs', bobPh)).toEqual({ status: 403, body: 'placeholder_missing' })
   })
 
+  it('GIT-COAUTHOR: a connected member whose identity cannot be used is sent as a co-author only, never a token', async () => {
+    const t = await setup()
+    await t.seed('alice', 'alice-gh', 11)
+    t.h.advance(1_000)
+    await t.seed('bob', 'bob-gh', 22)
+    const bob = await t.as('bob')
+    const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
+      bearer: bob,
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
+    })
+    expect(issued.status).toBe(200)
+    const sync = t.h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND).at(-1)!
+    // Both usable: no co-authors.
+    expect(JSON.parse(Buffer.from(sync.env.ORCA_COAUTHORS_B64!, 'base64').toString())).toEqual([])
+    const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
+    const coauthors = await memberCoauthors(t.h.env.SANDBOX_DB, row, new Set(['alice']))
+    expect(coauthors).toEqual([
+      { userId: 'bob', coauthor: 'bob-gh name <22+bob-gh@users.noreply.github.com>', deviceIds: [[...t.h.vercel.boxes.values()][0]!.devices.at(-1)] }
+    ])
+    expect(JSON.stringify(coauthors)).not.toContain('ghs_')
+  })
+
   it('MEMBER_GIT_IDENTITY=off turns it off: member placeholders get no credential, the VM no member configs', async () => {
     const t = await setup('off')
     await t.seed('alice', 'alice-gh', 11)
@@ -157,3 +182,70 @@ describe('git as the sender', () => {
     expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
   })
 })
+
+describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail)', () => {
+  const detail = async (t: Awaited<ReturnType<typeof setup>>, user: string) =>
+    (await t.h.call('GET', `/v1/team/workspaces/${t.id}`, { bearer: await t.as(user) })).body.workspace
+  const listed = async (t: Awaited<ReturnType<typeof setup>>, user: string) =>
+    (await t.h.call('GET', '/v1/team/workspaces', { bearer: await t.as(user) })).body.workspaces.find((w: { id: string }) => w.id === t.id)
+
+  it('solo: the owner once connected, uncapped; "off" with GH_AS_MEMBER off', async () => {
+    const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
+    expect(await detail(t, 'alice')).toMatchObject({ githubActing: { actingAs: 'bot', reason: 'sender_not_connected' }, you: { connected: false } })
+    await t.seed('alice', 'alice-gh', 11, false)
+    const solo = await detail(t, 'alice')
+    expect(solo.githubActing).toEqual({ actingAs: 'member', userId: 'alice', login: 'alice-gh' })
+    expect(solo.you).toEqual({ connected: true, login: 'alice-gh' })
+    expect((await listed(t, 'alice')).githubActing).toEqual(solo.githubActing)
+    // Expired with no refresh token: reconnect.
+    t.h.advance(2 * 60 * 60_000)
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'reconnect' })
+    const off = await setup()
+    await off.seed('alice', 'alice-gh', 11, false)
+    expect((await detail(off, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'off' })
+  })
+
+  it('shared: the latest sender until the 60 min window lapses (until), then window_expired', async () => {
+    const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
+    await t.seed('alice', 'alice-gh', 11, false)
+    const bob = await t.as('bob')
+    const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
+      bearer: bob,
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
+    })
+    expect(issued.status).toBe(200)
+    expect((await detail(t, 'bob')).githubActing).toEqual({ actingAs: 'bot', reason: 'no_sender_yet' })
+    await t.sent('alice')
+    const sentAt = t.h.now()
+    const shared = await detail(t, 'bob')
+    expect(shared.githubActing).toEqual({ actingAs: 'member', userId: 'alice', login: 'alice-gh', until: sentAt + 60 * 60_000 })
+    // Bob isn't connected: only he is shown the connect prompt.
+    expect(shared.you).toEqual({ connected: false })
+    t.h.advance(1_000)
+    await t.sent('bob')
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'sender_not_connected' })
+    t.h.advance(1_000)
+    await t.sent('alice')
+    t.h.advance(61 * 60_000)
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'window_expired' })
+  })
+
+  it('the list reads a fixed number of times whatever its size (no per-row lookups)', async () => {
+    const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
+    await t.seed('alice', 'alice-gh', 11, false)
+    const db = t.h.env.SANDBOX_DB
+    let reads = 0
+    const counting = new Proxy(db, {
+      get: (target, prop) => (prop === 'prepare' ? (sql: string) => (reads++, target.prepare(sql)) : Reflect.get(target, prop, target))
+    }) as D1Database
+    const row = (await getSandbox(db, t.id))!
+    // Four rows of the same owner (ids differ): a list of any size.
+    const results = [row, ...[1, 2, 3].map((n) => ({ ...row, id: `${row.id.slice(0, -1)}${n}` }))]
+    const options = { enabled: () => true, sharedMaxMs: 60 * 60_000 }
+    const views = await githubActingViews(counting, results as never, 'alice', t.h.now(), options)
+    expect([...views.values()].map((v) => v.githubActing)).toEqual(Array(4).fill({ actingAs: 'member', userId: 'alice', login: 'alice-gh' }))
+    // grants + sends + one connections read for the account.
+    expect(reads).toBe(3)
+  })
+})
+

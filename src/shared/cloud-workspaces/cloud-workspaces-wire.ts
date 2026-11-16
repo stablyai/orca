@@ -69,7 +69,23 @@ export const CloudWorkspaceSchema = z.object({
   following: z.boolean().optional().catch(undefined),
   // OWNER-TRANSFER: set once its owner was ever changed (a workspace made from one inherits it).
   // From then on it runs like a shared workspace for good. Older control planes omit it.
-  ownershipTransferredAt: z.number().nullable().optional().catch(undefined)
+  ownershipTransferredAt: z.number().nullable().optional().catch(undefined),
+  // GIT-ACTOR: who pushes and PRs go out as right now (the control plane's own rule: the only person, or a shared
+  // workspace's latest sender within the window; else the Orca bot). `until`: when a shared workspace's window
+  // lapses (re-read then). Approvals always, and merges in shared workspaces, still go out as the bot. Present only
+  // on rows the caller may open; older control planes omit it.
+  githubActing: z
+    .discriminatedUnion('actingAs', [
+      z.object({ actingAs: z.literal('member'), userId: Id, login: z.string().max(39), until: z.number().optional() }),
+      z.object({
+        actingAs: z.literal('bot'),
+        reason: z.enum(['not_github', 'off', 'no_sender_yet', 'sender_not_connected', 'reconnect', 'window_expired']).catch('off')
+      })
+    ])
+    .optional()
+    .catch(undefined),
+  // The caller's own GitHub connection (shows "Connect GitHub" only to a viewer who isn't connected).
+  you: z.object({ connected: z.boolean(), login: z.string().max(39).optional() }).optional().catch(undefined)
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>

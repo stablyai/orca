@@ -21,6 +21,32 @@ set -e
 case "$status" in
   0)
     trap 'rm -f "$file"' EXIT
+    # GIT-COAUTHOR: a member whose GitHub identity can't be used right now: the workspace identity commits, with
+    # them as co-author (the trailer goes right after the `commit` subcommand). Never for any other command.
+    coauthor="$(git config -f "$file" orca.coauthor 2>/dev/null || true)"
+    if [ -n "$coauthor" ] && [ -z "$(git config -f "$file" user.email 2>/dev/null || true)" ]; then
+      if [ -n "$expect" ]; then
+        echo "orca-git-as: $expect's GitHub connection can't be used right now; refusing to act as them. Reconnect GitHub in Settings → Account." >&2
+        exit 4
+      fi
+      echo 'orca-git-as: no teammate identity for this turn; using the workspace identity' >&2
+      args=()
+      skip=0
+      placed=0
+      for arg in "$@"; do
+        args+=("$arg")
+        [ "$placed" = 0 ] || continue
+        if [ "$skip" = 1 ]; then skip=0; continue; fi
+        case "$arg" in
+          -C | -c | --git-dir | --work-tree | --namespace | --exec-path | --config-env) skip=1 ;;
+          -*) ;;
+          commit) args+=(--trailer "Co-authored-by: $coauthor"); placed=1 ;;
+          *) placed=1 ;;
+        esac
+      done
+      git -c "include.path=$file" "${args[@]}"
+      exit
+    fi
     git -c "include.path=$file" "$@"
     ;;
   3)

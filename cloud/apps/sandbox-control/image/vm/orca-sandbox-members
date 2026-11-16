@@ -32,7 +32,24 @@ while IFS= read -r row; do
   case "$gh_token" in orca-ph-* | orca-mph-*) git config -f "$file" orca.ghtoken "$gh_token" ;; esac
   count=$((count + 1))
 done < <(jq -c '.[]' <<<"$json")
-jq -c '[.[] | select(.userId | test("^[A-Za-z0-9_.:-]+$")) | .userId as $u | (.deviceIds // [])[] | select(test("^[A-Za-z0-9_-]{1,128}$")) | {key: ., value: $u}] | from_entries' <<<"$json" >"$tmp/devices.json"
+# GIT-COAUTHOR: members whose GitHub identity can't be used right now get only a co-author line (no header,
+# no author: their commits fall back to the workspace identity, with a Co-authored-by trailer for them).
+# Env: ORCA_COAUTHORS_B64 = base64 JSON [{userId, coauthor: "Name <id+login@users.noreply.github.com>", deviceIds}]
+coauthors="$(printf '%s' "${ORCA_COAUTHORS_B64:-W10=}" | base64 -d)"
+jq -e 'type == "array"' <<<"$coauthors" >/dev/null 2>&1 || coauthors='[]'
+while IFS= read -r row; do
+  user="$(jq -r '.userId' <<<"$row")"
+  case "$user" in '' | *[!A-Za-z0-9_.:-]*) continue ;; esac
+  file="$tmp/$(printf '%s' "$user" | tr ':' '_').gitconfig"
+  [ -e "$file" ] && continue
+  line="$(jq -r '.coauthor' <<<"$row")"
+  [[ "$line" =~ ^[^\<\>[:cntrl:]]{1,80}\ \<[0-9]{1,20}\+[A-Za-z0-9-]{1,39}@users\.noreply\.github\.com\>$ ]] || continue
+  git config -f "$file" orca.coauthor "$line"
+done < <(jq -c '.[]' <<<"$coauthors")
+# A device id claimed by more than one member maps to nobody (never "last wins": one member's device must
+# never attest as another's). Both lists.
+DEVICES_JQ='add | [.[] | select(.userId | test("^[A-Za-z0-9_.:-]+$")) | .userId as $u | (.deviceIds // [])[] | select(test("^[A-Za-z0-9_-]{1,128}$")) | {key: ., value: $u}] | group_by(.key) | map(select((map(.value) | unique | length) == 1) | .[0]) | from_entries'
+jq -c -s "$DEVICES_JQ" <(printf '%s' "$json") <(printf '%s' "$coauthors") >"$tmp/devices.json"
 devices="$(jq 'length' "$tmp/devices.json")"
 chmod 0700 "$tmp" && chmod 0600 "$tmp"/*
 rm -rf "$DIR.old"

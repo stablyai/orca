@@ -8,7 +8,7 @@
 // risk: members share the VM user, so a member with a shell could subvert orcad itself.
 import type { ProxiedRoute } from './egress-proxy'
 import { parseGitHubRepo } from './github-app'
-import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
+import { getUserTokenRow, memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { gitBasicAuthorization } from './network-policy'
 import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, approves, classifyGraphqlRequest, merges, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
 import { settledCache } from './settled-cache'
@@ -55,23 +55,57 @@ export type MemberGitDeps = {
  * merges do only in a one-person workspace (review M2).
  */
 export async function memberMayAct(db: D1Database, row: SandboxRow, userId: string, now: number, sharedMaxMs: number | null): Promise<boolean> {
-  const ownerToo = row.ownership_transferred_at == null
+  const acting = await actingMember(db, row, now, sharedMaxMs)
+  return 'userId' in acting && acting.userId === userId
+}
+
+/**
+ * Who the identity rule above picks right now, before checking their GitHub connection: the only person, or a
+ * shared workspace's latest sender (`until`: when their window lapses; null = no cap). The one source for
+ * both the egress choice (memberMayAct) and what the UI shows (git-actor.ts).
+ */
+export async function actingMember(db: D1Database, row: SandboxRow, now: number, sharedMaxMs: number | null): Promise<ActingMember> {
   const { results } = await db
     .prepare(`SELECT DISTINCT user_id FROM workspace_grants WHERE sandbox_id = ? AND status = 'active'`)
     .bind(row.id)
     .all<{ user_id: string }>()
-  const people = new Set(results.map((r) => r.user_id))
-  if (ownerToo) {
-    people.add(row.user_id)
-  }
-  if (people.size === 1) {
-    return people.has(userId)
+  const grantees = results.map((r) => r.user_id)
+  const solo = pickActing(row, grantees, null, now, sharedMaxMs)
+  if ('userId' in solo) {
+    // One person: no send needed (and no read on the egress path).
+    return solo
   }
   const latest = await db
     .prepare('SELECT user_id, sent_at FROM workspace_member_sends WHERE sandbox_id = ? ORDER BY sent_at DESC LIMIT 1')
     .bind(row.id)
     .first<{ user_id: string; sent_at: number }>()
-  return latest?.user_id === userId && people.has(userId) && (sharedMaxMs === null || now - latest.sent_at <= sharedMaxMs)
+  return pickActing(row, grantees, latest, now, sharedMaxMs)
+}
+
+export type ActingMember = { userId: string; until: number | null } | { none: 'no_send' | 'stale' }
+
+/** The rule itself, on already-read rows (the workspace list reads them for every row in one go). */
+export function pickActing(
+  row: Pick<SandboxRow, 'user_id' | 'ownership_transferred_at'>,
+  grantees: readonly string[],
+  latest: { user_id: string; sent_at: number } | null,
+  now: number,
+  sharedMaxMs: number | null
+): ActingMember {
+  const people = new Set(grantees)
+  if (row.ownership_transferred_at == null) {
+    people.add(row.user_id)
+  }
+  if (people.size === 1) {
+    return { userId: [...people][0]!, until: null }
+  }
+  if (!latest || !people.has(latest.user_id)) {
+    return { none: 'no_send' }
+  }
+  if (sharedMaxMs !== null && now - latest.sent_at > sharedMaxMs) {
+    return { none: 'stale' }
+  }
+  return { userId: latest.user_id, until: sharedMaxMs === null ? null : latest.sent_at + sharedMaxMs }
 }
 
 /** Members whose GitHub identity this workspace may use: owner + active grantees, connected only. */
@@ -162,6 +196,36 @@ export async function memberGitConfigs(deps: MemberGitDeps, row: SandboxRow) {
     }
   }
   return out
+}
+
+/**
+ * GIT-COAUTHOR: members who connected GitHub but whose identity can't be used right now (token expired and
+ * not refreshable, or member git off for the account). Their commits fall back to the workspace identity, so
+ * the VM adds a `Co-authored-by` trailer with their GitHub noreply address: attribution survives, no token.
+ */
+export async function memberCoauthors(db: D1Database, row: SandboxRow, installed: ReadonlySet<string>) {
+  const out: { userId: string; coauthor: string; deviceIds: string[] }[] = []
+  for (const userId of await connectedMembers(db, row)) {
+    if (installed.has(userId)) {
+      continue
+    }
+    const token = await getUserTokenRow(db, row.account_id, userId)
+    const coauthor = token ? coauthorTrailer(token.github_login, token.github_user_id, token.github_name) : null
+    const deviceIds = coauthor ? await memberDeviceIds(db, row.id, userId) : []
+    if (coauthor && deviceIds.length > 0) {
+      out.push({ userId, coauthor, deviceIds })
+    }
+  }
+  return out
+}
+
+/** `Name <id+login@users.noreply.github.com>` (GitHub attributes by that address), or null if the parts are odd. */
+export function coauthorTrailer(login: string, githubUserId: number, name: string | null): string | null {
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(login) || !Number.isSafeInteger(githubUserId) || githubUserId <= 0) {
+    return null
+  }
+  const display = name && /^[\p{L}\p{N} .'_-]{1,80}$/u.test(name.trim()) ? name.trim() : login
+  return `${display} <${githubUserId}+${login}@users.noreply.github.com>`
 }
 
 async function memberDeviceIds(db: D1Database, sandboxId: string, userId: string): Promise<string[]> {

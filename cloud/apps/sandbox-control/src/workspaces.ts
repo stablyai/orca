@@ -9,6 +9,7 @@
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
 // departed member's workspaces can be reassigned or archived — metadata only, never access.
+import { githubActingViews, type GithubActingOptions, type GithubActingView } from './git-actor'
 import type { TeamMembershipCheck } from './team-membership'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
@@ -170,19 +171,38 @@ export function costView(row: SandboxRow, settledMs: number, now: number) {
   }
 }
 
+async function githubActingFor(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number, acting: GithubActingOptions) {
+  // A failed read leaves the fields out; it never fails the list.
+  return githubActingViews(
+    db,
+    rows.filter((row) => canOpen(caller, row)),
+    caller.userId,
+    now,
+    acting
+  ).catch(() => new Map<string, GithubActingView>())
+}
+
 function repoView(row: SandboxRow) {
   return row.repo_url ? { url: row.repo_url, branch: row.repo_branch } : null
 }
 
-export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number) {
+export async function workspaceViews(
+  db: D1Database,
+  caller: SandboxCaller,
+  rows: readonly SandboxRow[],
+  now: number,
+  acting?: GithubActingOptions
+) {
   const ids = rows.map((r) => r.id)
-  const [presence, compute, granted, readAt, slug, follows] = await Promise.all([
+  const [presence, compute, granted, readAt, slug, follows, githubActing] = await Promise.all([
     presenceFor(db, ids, now),
     computeMsFor(db, ids),
     activeGrantUsers(db, ids, caller.userId),
     readSnapshotTimes(db, ids),
     rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null),
-    followersFor(db, ids)
+    followersFor(db, ids),
+    // GIT-ACTOR: who pushes and PRs go out as, only on rows the caller may open.
+    acting ? githubActingFor(db, caller, rows, now, acting) : Promise.resolve(new Map<string, GithubActingView>())
   ])
   const followersOf = (row: SandboxRow) => visibleFollowers(row, canSee(caller, row), follows.get(row.id) ?? [])
   const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
@@ -218,6 +238,7 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       ownerUserId: row.user_id,
       // Set once the owner was ever changed: the workspace runs in shared mode for credentials.
       ownershipTransferredAt: row.ownership_transferred_at,
+      ...(githubActing.get(row.id) ?? {}),
       lastActivityAt: row.last_activity_at ?? row.updated_at,
       lastActivityBy: row.last_activity_by,
       cost: costView(row, compute.get(row.id) ?? 0, now),
@@ -251,7 +272,7 @@ export function isRoutineRun(row: SandboxRow): boolean {
   return (row as { origin?: string | null }).origin === 'routine' || row.workspace_id.startsWith('routine-')
 }
 
-export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url: URL, now: number) {
+export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url: URL, now: number, acting?: GithubActingOptions) {
   const query = ListQuery.safeParse(Object.fromEntries(url.searchParams))
   if (!query.success) {
     throw new WorkspaceError('invalid_request')
@@ -287,7 +308,7 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
   const rows = q.routines === 'include' ? matching : matching.filter((row) => !isRoutineRun(row))
   const hidden = q.routines === 'include' ? [] : runs
   const [views, routineCount, hiddenCompute, routineNames] = await Promise.all([
-    workspaceViews(db, caller, rows, now),
+    workspaceViews(db, caller, rows, now, acting),
     db.prepare('SELECT COUNT(*) AS n FROM routines WHERE account_id = ? AND deleted_at IS NULL').bind(caller.accountId).first<{ n: number }>(),
     computeMsFor(db, hidden.map((row) => row.id)),
     routineNamesFor(db, caller.accountId, rows.filter(isRoutineRun))

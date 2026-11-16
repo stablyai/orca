@@ -220,6 +220,7 @@ import {
   userAuthorizeUrl
 } from './github-user-tokens'
 import { memberGitRoutes, memberMayAct, recordMemberSend } from './member-git'
+import type { GithubActingOptions } from './git-actor'
 import { egressAllowlistSetting, PlatformHostSuffixesConfigError } from './network-policy'
 import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
 import { getOrgSlug, putOrgSlug } from './org-slugs'
@@ -1240,6 +1241,15 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
  * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
  * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
  */
+/** GIT-ACTOR (git-actor.ts): GH-AS-MEMBER on, and member git on for the account. */
+function githubActingOptions(env: Env): GithubActingOptions {
+  const memberGit = memberGitEnabled(env)
+  return {
+    enabled: (accountId) => env.GH_AS_MEMBER === 'on' && env.MEMBER_GIT_IDENTITY !== 'off' && memberGit(accountId),
+    sharedMaxMs: memberGitSharedMaxMs(env)
+  }
+}
+
 /** Shared workspaces: how long the latest sender keeps acting after their last send. Default 60 min; `0` = no cap. */
 function memberGitSharedMaxMs(env: Env): number | null {
   if (env.MEMBER_GIT_SHARED_MAX_MINUTES === undefined || env.MEMBER_GIT_SHARED_MAX_MINUTES === '') {
@@ -2394,7 +2404,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     return (await dismissNotice(db, caller, noticeDismiss[1]!, now)) ? json({ dismissed: true }) : fail('not_found', 404)
   }
   if (url.pathname === '/v1/team/workspaces') {
-    return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
+    return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now, githubActingOptions(env))) : fail('not_found', 404)
   }
   if (url.pathname.startsWith('/v1/team/members/') || url.pathname.startsWith('/v1/team/pokes')) {
     try {
@@ -2423,7 +2433,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const [, id, action, grantId] = match
   const row = await requireVisible(db, caller, id!)
   const route = `${request.method} ${action ?? ''}${grantId ? ' :grant' : ''}`
-  const view = async (r = row) => (await workspaceViews(db, caller, [r], clock()))[0]
+  const view = async (r = row) => (await workspaceViews(db, caller, [r], clock(), githubActingOptions(env)))[0]
   if (route === 'GET ') {
     return json({ workspace: await view() })
   }
