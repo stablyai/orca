@@ -704,6 +704,10 @@
       "mark": "Rama ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Rama: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Citar",
+      "hint": "Añade el texto seleccionado al mensaje como cita"
     }
   },
   "common": {

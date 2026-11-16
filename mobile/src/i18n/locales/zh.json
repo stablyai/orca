@@ -770,6 +770,10 @@
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "将所选文本作为引用添加到消息中"
     }
   },
   "common": {
