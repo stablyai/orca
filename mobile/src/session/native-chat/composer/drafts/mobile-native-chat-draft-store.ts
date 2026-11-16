@@ -1,6 +1,6 @@
 import { useSyncExternalStore, type SetStateAction } from 'react'
 import type { AgentJournalSkillRef } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { appendReturnedDraftText } from '../../../../../../src/shared/returned-draft-text'
+import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import {
   returnMobileNativeChatDraftAttachments,
   closeMobileNativeChatEditInputs,

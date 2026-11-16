@@ -1,4 +1,4 @@
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
@@ -139,11 +139,13 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full'],
+    usage:
+      'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--run <run_id>] [--full] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'full'],
     identityFlagRoles: { terminal: 'target' },
     notes: [
-      'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.'
+      'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.',
+      'Without --terminal or --run it lists every mailbox on this Orca. --run <run_id> keeps all mail in that Run, including mail to its workers; --terminal run:<run_id> keeps only the coordinator mailbox.'
     ]
   },
   {

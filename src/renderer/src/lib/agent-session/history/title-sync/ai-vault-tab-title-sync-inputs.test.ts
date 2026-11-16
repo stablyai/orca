@@ -1,3 +1,5 @@
+import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import * as worktreeCatalog from '@/store/slices/worktrees/listing/worktree-catalog-index'
@@ -14,7 +16,7 @@ import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
 afterEach(() => vi.restoreAllMocks())
 
 function makeState(count = 1): AppState {
-  const live: AppState['agentStatusByPaneKey'] = {}
+  const live: Record<string, AgentStatusEntry> = {}
   const sleeping: AppState['sleepingAgentSessionsByPaneKey'] = {}
   const tabs: TerminalTab[] = []
   for (let index = 0; index < count * 2; index++) {
@@ -52,8 +54,9 @@ function makeState(count = 1): AppState {
       }
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this selector fixture supplies every field the title collector reads.
   return {
-    agentStatusByPaneKey: live,
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(live)),
     sleepingAgentSessionsByPaneKey: sleeping,
     tabsByWorktree: { 'wt-title': tabs },
     terminalLayoutsByTabId: {},
@@ -80,7 +83,7 @@ async function collectGarbage(): Promise<void> {
 describe('AI Vault title subscription inputs', () => {
   it.each([100, 1000])('compares only addressed title facts among %i associations', (count) => {
     const state = makeState(count)
-    state.agentStatusByPaneKey = {}
+    state.agentStatusByPaneKey = acceptedAgentStatuses(Object.entries({}))
     state.sleepingAgentSessionsByPaneKey = {}
     const key = 'tab-0:00000000-0000-4000-8000-000000000001'
     state.agentConversationsByPaneKey = Object.fromEntries(
@@ -205,7 +208,7 @@ describe('AI Vault title subscription inputs', () => {
 
   it.each([100, 1000])('compares %i restored rootless layouts in one source pass', (count) => {
     const state = makeState(count)
-    state.agentStatusByPaneKey = {}
+    state.agentStatusByPaneKey = acceptedAgentStatuses(Object.entries({}))
     state.sleepingAgentSessionsByPaneKey = {}
     const a = '00000000-0000-4000-8000-000000000001'
     const b = '00000000-0000-4000-8000-000000000002'
@@ -265,7 +268,7 @@ describe('AI Vault title subscription inputs', () => {
 
   it.each([100, 1000])('does no ownership lookups for %i unusable title identities', (count) => {
     const state = makeState(count)
-    state.agentStatusByPaneKey = {}
+    state.agentStatusByPaneKey = acceptedAgentStatuses(Object.entries({}))
     state.sleepingAgentSessionsByPaneKey = {}
     for (const tab of state.tabsByWorktree['wt-title']) {
       state.terminalLayoutsByTabId[tab.id] = {
@@ -375,8 +378,10 @@ describe('AI Vault title subscription inputs', () => {
       const ownerOnly: AppState = { ...open, settings: structuredClone(open.settings) }
       expect(aiVaultTitleSyncInputsChanged(ownerOnly, open)).toBe(false)
       // Closing a tab replaces membership maps and returns before any owner comparison.
-      const [closedPane] = Object.keys(open.agentStatusByPaneKey)
-      const { [closedPane]: _closed, ...agentStatusByPaneKey } = open.agentStatusByPaneKey
+      const [closedPane] = Array.from(open.agentStatusByPaneKey.keys())
+      const agentStatusByPaneKey = acceptedAgentStatuses(
+        [...open.agentStatusByPaneKey].filter(([key]) => key !== closedPane)
+      )
       const closed: AppState = {
         ...ownerOnly,
         agentStatusByPaneKey,

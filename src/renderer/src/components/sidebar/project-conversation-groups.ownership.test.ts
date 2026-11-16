@@ -7,7 +7,7 @@ import {
 } from './ProjectConversationList.test-fixture'
 import { MIXED_FOLDER } from '../../../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { buildAiVaultSessionProjectById } from '../right-sidebar/ai-vault/scope/ai-vault-session-projects'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

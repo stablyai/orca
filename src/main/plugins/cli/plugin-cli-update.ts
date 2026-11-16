@@ -1,4 +1,7 @@
-import { compareAppVersions, isValidAppVersion } from '../../../shared/app-version'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import {
   PLUGIN_APPROVAL_REQUIRED_CODE,
   PLUGIN_NOT_FOUND_CODE,

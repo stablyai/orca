@@ -1,4 +1,4 @@
-import { sortByUpdatedAtDescending } from '../../../shared/updated-at-order'
+import { sortByUpdatedAtDescending } from '../../../shared/collections/updated-at-order'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 import { LINEAR_ISSUE_API_PAGE_SIZE_MAX } from '../../../shared/linear/issue-read-limits'

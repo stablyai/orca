@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState, type MutableRefObject } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useTranslate } from '@/i18n/use-translate'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   type BrowserReloadTrigger,
   reloadBrowserPageWebview,

@@ -1,6 +1,6 @@
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import type { JournalSqlDatabase } from '../native-chat/agent-session-journal/database/journal-sql-database'
 
 export type StructuredConversationJournalPreview = {

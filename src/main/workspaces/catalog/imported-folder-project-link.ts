@@ -7,9 +7,9 @@ import {
   getProjectIdentityKey,
   getProjectIdForProviderIdentity,
   hasProjectRemoteIdentity
-} from '../../../shared/project-host-setup-projection'
-import type { ProjectHostSetupExistingFolderArgs } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/host-setup/project-host-setup-projection'
+import type { ProjectHostSetupExistingFolderArgs } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { assertWslMoveHostSetupWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { readCurrentGitRemoteIdentity } from './repo-git-remote-identity'

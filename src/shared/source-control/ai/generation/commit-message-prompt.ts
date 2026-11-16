@@ -1,4 +1,4 @@
-import { extractLeadingEnvAssignments } from '../../../command-environment'
+import { extractLeadingEnvAssignments } from '../../../shell/launch/command-environment'
 // Share prompt wording between renderer preview/tests and main generation.
 
 const COMMIT_MESSAGE_BASE_PROMPT = `You are generating a single git commit message.

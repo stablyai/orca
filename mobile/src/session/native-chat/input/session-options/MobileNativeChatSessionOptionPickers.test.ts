@@ -148,6 +148,31 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     renderer = null
   })
 
+  it('names both the saved and running permission on the model pill and in the drill-in', () => {
+    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'permissionMode')
+    expect(pill('Model').props.accessibilityLabel).toMatch(/Full access.*Ask for approval$/)
+    const texts = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text').map(
+      (node) => node.props.children
+    )
+    expect(texts.some((text) => /Full access.*Ask for approval/.test(String(text)))).toBe(true)
+  })
+
+  it('shows the saved permission as the home row value and the running one in its subtitle', () => {
+    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'model')
+    const row = renderer!.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        typeof node.props.accessibilityLabel === 'string' &&
+        node.props.accessibilityLabel.startsWith('Permissions')
+    )
+    expect(row.props.accessibilityLabel).toMatch(/Full access.*Ask for approval/)
+    const texts = findAllByHostType(row, 'Text').map((node) => String(node.props.children))
+    expect(texts).toContain('Full access')
+    expect(
+      texts.some((text) => !text.includes('Full access') && text.includes('Ask for approval'))
+    ).toBe(true)
+  })
+
   it('consumes a refused page without replay, then permits a fresh open and permission pick', async () => {
     const placeholder: SessionOptionDescriptor = {
       ...MODEL_DESCRIPTOR,
@@ -183,4 +208,12 @@ const PERMISSION_DESCRIPTOR: SessionOptionDescriptor = {
   valueSource: 'applied',
   transport: 'agent-session',
   settable: true
+}
+
+const DEFERRED_PERMISSION_DESCRIPTOR: SessionOptionDescriptor = {
+  ...PERMISSION_DESCRIPTOR,
+  kind: { type: 'select', currentValue: 'full-access', choices: PERMISSION_CHOICES },
+  valueSource: 'dispatched',
+  activeValue: 'ask',
+  description: 'Full access'
 }

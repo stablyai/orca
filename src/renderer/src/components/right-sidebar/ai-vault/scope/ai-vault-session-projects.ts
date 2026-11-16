@@ -1,7 +1,7 @@
 import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts
-} from '../../../../../../shared/repo-host-identity'
+} from '../../../../../../shared/repository/repo-host-identity'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { managedWorktreeDirectories } from '../../../../../../shared/worktree/visibility/ownership'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
@@ -12,13 +12,13 @@ import {
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { ProjectHostSetupProjection } from '../../../../../../shared/project-host-setup-projection'
+import type { ProjectHostSetupProjection } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { getProjectHostSetupLookup } from '../../../../../../shared/project-host-setup-lookup'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { getProjectHostSetupLookup } from '../../../../../../shared/project/host-setup/project-host-setup-lookup'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   compareAiVaultProjectCandidates,
   folderProject,

@@ -4,7 +4,10 @@ let terminalSessionIdsKeyBySnapshot = new WeakMap<object, string>()
 
 export function getAgentSessionIdsKey(
   agentStatusByPaneKey:
-    | Record<string, { providerSession?: { id?: string } | null; terminalResumeEligible?: false }>
+    | ReadonlyMap<
+        string,
+        { providerSession?: { id?: string } | null; terminalResumeEligible?: false }
+      >
     | undefined,
   terminalOnly = false
 ): string {
@@ -17,7 +20,7 @@ export function getAgentSessionIdsKey(
     return cached
   }
   const ids: string[] = []
-  for (const entry of Object.values(agentStatusByPaneKey)) {
+  for (const entry of Array.from(agentStatusByPaneKey.values())) {
     if (terminalOnly && entry.terminalResumeEligible === false) {
       continue
     }

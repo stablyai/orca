@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayAgentHookServer } from './agent-hook-server'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { sanitizeWslHookInstanceKey } from '../../../shared/wsl-hook-relay-contract'
+import { sanitizeWslHookInstanceKey } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const PANE_KEY = makePaneKey('tab-2', LEAF_ID)

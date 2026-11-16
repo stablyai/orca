@@ -3,9 +3,9 @@ import type {
   OrcadMigrationCatalogReference,
   OrcadMigrationCatalogReferenceAbortResult
 } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import { ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY } from '../../../../shared/orcad-runtime-capabilities'
+import { ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   ORCAD_MIGRATION_DESTINATION_UNSUPPORTED,
   sendSupportedMigrationRequest,

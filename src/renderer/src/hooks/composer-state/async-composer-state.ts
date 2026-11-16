@@ -23,7 +23,10 @@ type ComposerAsyncStateInput = Pick<
 >
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
+import type {
+  OrcaHooks,
+  SetupAgentStartupPolicy
+} from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'

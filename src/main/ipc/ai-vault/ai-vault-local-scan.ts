@@ -1,6 +1,6 @@
 import {
-  AiVaultLocalScanError,
-  listAiVaultSessions as listCachedLocalAiVaultSessions
+  listAiVaultSessions as listCachedLocalAiVaultSessions,
+  AiVaultLocalScanError
 } from '../../ai-vault/listing/cached-session-list'
 import { aiVaultScanIssueResult } from '../../ai-vault/listing/session-list-results'
 import { classifyAiVaultScanError } from '../../../shared/ai-vault/scanning/ai-vault-scan-error-message'

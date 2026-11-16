@@ -1,4 +1,4 @@
-import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   BrowserAnnotationIntent,
@@ -7,7 +7,7 @@ import type {
   GrabIntent
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
@@ -149,6 +149,7 @@ export type BrowserPagePaneProps = {
   isAutomationVisible: boolean
   isMobileDriven: boolean
   isRemotelyViewed: boolean
+  isMountAdmitted?: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter

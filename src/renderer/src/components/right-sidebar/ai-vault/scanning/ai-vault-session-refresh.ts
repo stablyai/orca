@@ -23,7 +23,7 @@ import { useAiVaultNewSessionRescan } from './ai-vault-new-session-rescan'
 import { useAiVaultConversationRefresh } from './ai-vault-conversation-refresh'
 import { saveAiVaultSessionList } from './ai-vault-saved-session-lists'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   claimAiVaultForcedRescan,
   resetAiVaultForcedRescanBudgetForTest

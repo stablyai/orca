@@ -1,8 +1,11 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
-import { getWorkspaceStatus, getWorkspaceStatusGroupKey } from '../../workspace-statuses'
+import {
+  getWorkspaceStatus,
+  getWorkspaceStatusGroupKey
+} from '../../workspace/status/workspace-statuses'
 import {
   compareFolderWorkspacesForDisplay,
   getFolderWorkspaceLaneKey,
@@ -11,8 +14,8 @@ import {
 import './group-keys'
 import { PR_GROUP_ORDER, getPRLaneKey } from '../../workspace-view/workspace-pr-groups'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
-import { buildProjectSections, type ProjectGroupingIndex } from '../../project-section-grouping'
-import { orderProjectSections } from '../../project-section-order'
+import { buildProjectSections, type ProjectGroupingIndex } from './project-section-grouping'
+import { orderProjectSections } from './project-section-order'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,

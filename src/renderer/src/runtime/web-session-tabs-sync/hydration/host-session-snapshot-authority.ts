@@ -1,7 +1,7 @@
 import {
   CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
   UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type SnapshotPublication = {
   publicationEpoch: string

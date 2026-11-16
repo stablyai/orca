@@ -6,7 +6,7 @@ import type {
   BrowserIdentityModeSnapshot,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../../../shared/browser-user-agent-mode'
+} from '../../../../shared/browser/identity/browser-user-agent-mode'
 import {
   BROWSER_IDENTITY_MODE_VERSION,
   browserIdentityModeRecordPath,

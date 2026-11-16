@@ -232,7 +232,7 @@ Mobile and desktop talk over a versioned protocol. Because mobile updates lag de
 
 Constants live in two files (Metro can't resolve outside `mobile/`):
 
-- `src/shared/protocol-version.ts` — `DESKTOP_PROTOCOL_VERSION`, `MIN_COMPATIBLE_MOBILE_VERSION`
+- `src/shared/remote-runtime/protocol/protocol-version.ts` — `DESKTOP_PROTOCOL_VERSION`, `MIN_COMPATIBLE_MOBILE_VERSION`
 - `mobile/src/transport/connection/protocol-version.ts` — `MOBILE_PROTOCOL_VERSION`, `MIN_COMPATIBLE_DESKTOP_VERSION`
 
 Today all four are set so `evaluateCompat` always returns `{ kind: 'ok' }` — nothing blocks. The wire format is in place to flip a switch when needed.

@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createDefaultLocalOrcaProfile } from '../../../../src/shared/orca-profiles'
+import { createDefaultLocalOrcaProfile } from '../../../../src/shared/orca-profiles/orca-profiles'
 import { seedDevProfile } from './dev-profile-seed.mjs'
 
 const roots = []

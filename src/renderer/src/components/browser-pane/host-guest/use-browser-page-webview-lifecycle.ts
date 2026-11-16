@@ -10,19 +10,20 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
 import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   EMPTY_BROWSER_ANNOTATIONS,
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
 import { syncGuestAnnotationViewportBridge } from '../annotate/viewport/guest-annotation-viewport-bridge'
 import { attachBrowserPageWebview } from './lifecycle/attach-browser-page-webview'
+import { webviewRegistry } from './webview-registry'
 import { setBrowserPageWebviewInputLock } from './lifecycle/browser-page-webview'
 import type {
   BrowserPageRecoveryNavigationValidation,
@@ -40,6 +41,7 @@ export function useBrowserPageWebviewLifecycle({
   webviewPartition,
   isActive,
   isPaintable,
+  isMountAdmitted,
   slotViewport,
   viewportPresetId,
   addressBarInputRef,
@@ -78,6 +80,7 @@ export function useBrowserPageWebviewLifecycle({
   webviewPartition: string
   isActive: boolean
   isPaintable: boolean
+  isMountAdmitted: boolean
   slotViewport: HTMLDivElement | null
   viewportPresetId: BrowserViewportPresetId | null
   addressBarInputRef: RefObject<HTMLInputElement | null>
@@ -259,10 +262,12 @@ export function useBrowserPageWebviewLifecycle({
   useEffect(() => {
     const becamePaintable = isPaintable && !wasPaintableForGuestValidationRef.current
     wasPaintableForGuestValidationRef.current = isPaintable
-    if (becamePaintable) {
+    if ((isPaintable || isMountAdmitted) && !webviewRegistry.has(browserTabId)) {
+      setGuestRecoveryGeneration((generation) => generation + 1)
+    } else if (becamePaintable) {
       validateVisibleGuestRegistrationRef.current()
     }
-  }, [isPaintable])
+  }, [browserTabId, isPaintable, isMountAdmitted])
 
   useEffect(() => {
     syncBrowserAnnotationViewportBridge()

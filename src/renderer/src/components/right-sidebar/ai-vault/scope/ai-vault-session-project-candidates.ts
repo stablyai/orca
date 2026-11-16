@@ -11,7 +11,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 
 export {
   aiVaultSessionProjectCwdKey,

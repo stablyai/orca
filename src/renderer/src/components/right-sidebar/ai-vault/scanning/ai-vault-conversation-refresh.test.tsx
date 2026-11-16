@@ -10,8 +10,9 @@ import type {
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
@@ -176,36 +177,42 @@ it('publishes creation and rename without provider IDs, tab state, or a forced d
   const beforeNativeProvider = list.mock.calls.length
   await act(async () =>
     useAppStore.setState({
-      agentStatusByPaneKey: {
-        native: {
-          state: 'working',
-          agentType: 'gemini',
-          prompt: '',
-          updatedAt: 1,
-          stateStartedAt: 1,
-          paneKey: 'native',
-          stateHistory: [],
-          providerSession: { key: 'session_id', id: 'native-provider' },
-          terminalResumeEligible: false
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [
+          'native',
+          {
+            state: 'working',
+            agentType: 'gemini',
+            prompt: '',
+            updatedAt: 1,
+            stateStartedAt: 1,
+            paneKey: 'native',
+            stateHistory: [],
+            providerSession: { key: 'session_id', id: 'native-provider' },
+            terminalResumeEligible: false
+          }
+        ]
+      ])
     })
   )
   expect(list).toHaveBeenCalledTimes(beforeNativeProvider)
   await act(async () =>
     useAppStore.setState({
-      agentStatusByPaneKey: {
-        terminal: {
-          state: 'working',
-          agentType: 'claude',
-          prompt: '',
-          updatedAt: 1,
-          stateStartedAt: 1,
-          paneKey: 'terminal',
-          stateHistory: [],
-          providerSession: { key: 'session_id', id: 'terminal-provider' }
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [
+          'terminal',
+          {
+            state: 'working',
+            agentType: 'claude',
+            prompt: '',
+            updatedAt: 1,
+            stateStartedAt: 1,
+            paneKey: 'terminal',
+            stateHistory: [],
+            providerSession: { key: 'session_id', id: 'terminal-provider' }
+          }
+        ]
+      ])
     })
   )
   expect(list.mock.calls.at(-1)?.[0]?.force).toBe(true)

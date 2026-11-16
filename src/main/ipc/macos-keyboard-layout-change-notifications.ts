@@ -2,7 +2,7 @@ import { app, BrowserWindow, systemPreferences } from 'electron'
 import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
-} from '../../shared/keyboard-layout-events'
+} from '../../shared/keybindings/keyboard-layout-events'
 import { waitForMacKeyboardLayoutSnapshotIdle } from './macos-keyboard-layout-snapshot'
 
 const INPUT_SOURCE_CHANGED_NOTIFICATION =

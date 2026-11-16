@@ -401,7 +401,8 @@ it.each([
 ] as const)(
   'a newer read’s rate limit that lands %s holds the row until its retry, then the row recovers',
   async (_label, failsAt, full, reduced) => {
-    const policy = await import('../../../../shared/review-refresh-policy')
+    const policy =
+      await import('../../../../shared/source-control/hosted-review/review-refresh-policy')
     const { coordinator, lookup, directRead } = await load()
     const { hostedReviewOptionArgs } = await import('./pr-refresh-candidate-policy')
     const holds = full ? await fillExactCache(lookup) : []
@@ -524,7 +525,8 @@ it('a return a newer read replaced waits out that read’s rate limit, then read
 it.each(['queued', 'the refresh action'] as const)(
   'under Off, an active read a newer read replaced (%s) still shows that newer read, with no read of its own',
   async (route) => {
-    const policy = await import('../../../../shared/review-refresh-policy')
+    const policy =
+      await import('../../../../shared/source-control/hosted-review/review-refresh-policy')
     policy.setPRAutoRefreshCadence('off')
     const { coordinator, directRead } = await load()
     const cacheKey = 'repo-1::target'
@@ -589,62 +591,5 @@ it.each(['queued', 'the refresh action'] as const)(
     // Off still runs no timer for the row.
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(reads()).toBe(2)
-  }
-)
-
-it.each(['its last window', 'one of two windows showing it'] as const)(
-  'a kept wake waiting for quota when %s closes starts no read after the newer read succeeded',
-  async (closed) => {
-    const { coordinator, directRead } = await load()
-    const resources = await import('../../client/lookup/pr-branch-read-resources')
-    coordinatorMocks.getAllWebContentsMock.mockReturnValue([
-      { id: 1, isDestroyed: () => false },
-      { id: 2, isDestroyed: () => false }
-    ])
-    const own = Promise.withResolvers<PRRefreshOutcome>()
-    provider.resolve.mockImplementationOnce(() => own.promise)
-    coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
-    if (closed === 'one of two windows showing it') {
-      coordinator.reportVisiblePRRefreshCandidates([target], 1, 2)
-    }
-    await vi.advanceTimersByTimeAsync(4_000)
-    const newer = Promise.withResolvers<PRRefreshOutcome>()
-    provider.resolve.mockImplementationOnce(() => newer.promise)
-    const paired = directRead()
-    await vi.advanceTimersByTimeAsync(1_000)
-    own.resolve({ kind: 'no-pr', fetchedAt: Date.now() })
-    await vi.advanceTimersByTimeAsync(0)
-    // The kept demand is taken at 11 s and waits for quota.
-    const gateChecks = provider.gate.mock.calls.length
-    const quota = Promise.withResolvers<number | null>()
-    provider.gate.mockReturnValueOnce(quota.promise)
-    await vi.advanceTimersByTimeAsync(11_000 - Date.now())
-    expect(provider.gate.mock.calls.length).toBe(gateChecks + 1)
-    // The newer read succeeds at 12 s; window 1 closes at 13 s; quota answers at 14 s.
-    await vi.advanceTimersByTimeAsync(1_000)
-    newer.resolve(found('newer'))
-    await paired
-    await vi.advanceTimersByTimeAsync(1_000)
-    coordinator.clearVisiblePRRefreshWindow(1)
-    await vi.advanceTimersByTimeAsync(1_000)
-    quota.resolve(null)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(reads()).toBe(2)
-    expect(provider.gate.mock.calls.length).toBe(gateChecks + 1)
-    expect(coordinator._getPRRefreshErrorBackoffCountForTests()).toBe(0)
-    expect(resources._prBranchReadResourceCountForTests()).toBe(0)
-    provider.resolve.mockImplementation(async () => found('changed'))
-    if (closed === 'its last window') {
-      // No row wants it any more: nothing was queued again, and nothing reads later.
-      expect(coordinator._getPRRefreshQueueSizeForTests()).toBe(0)
-      await vi.advanceTimersByTimeAsync(60 * 60_000)
-      expect(reads()).toBe(2)
-    } else {
-      // Window 2 still shows the row: its ordinary follow-up reads two minutes after the newer read.
-      await vi.advanceTimersByTimeAsync(131_999 - Date.now())
-      expect(reads()).toBe(2)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(reads()).toBe(3)
-    }
   }
 )

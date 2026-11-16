@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { ProjectConversationList } from './ProjectConversationList'
 import {
   conversationListProps,

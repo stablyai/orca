@@ -1,7 +1,7 @@
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderWorkspaceWorktreeHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId

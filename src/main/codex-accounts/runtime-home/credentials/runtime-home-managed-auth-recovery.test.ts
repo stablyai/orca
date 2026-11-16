@@ -111,7 +111,8 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.isHostSystemDefaultRealHomeSelected()).toBe(false)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
-      codexHomePath: managedHomePath1
+      codexHomePath: managedHomePath1,
+      readingAccount: { accountId: 'account-1', runtime: 'host', wslDistro: null }
     })
     expect(service.prepareForCodexLaunch()).toBe(managedHomePath1)
     expect(existsSync(join(managedHomePath1, 'auth.json'))).toBe(false)

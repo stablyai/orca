@@ -41,7 +41,7 @@ on:
       - 'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs'
       - 'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs'
       - 'config/scripts/zip-extractor-command.mjs'
-      - 'src/shared/zip-extractor-command.ts'
+      - 'src/shared/archives/zip-extractor-command.ts'
       - 'config/scripts/electron-installation/shared-dist-cache/shared-electron-dist-cache.mjs'
       - 'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs'
       - 'config/patches/**'

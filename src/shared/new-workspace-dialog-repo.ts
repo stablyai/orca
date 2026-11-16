@@ -4,9 +4,9 @@ import {
   isRuntimeOwnedSshTargetId,
   type ExecutionHostScope
 } from './execution-host'
-import { isGitRepoKind } from './repo-kind'
+import { isGitRepoKind } from './repository/repo-kind'
 import { isRepoHidden } from './hidden-projects'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 
 type NewWorkspaceDialogRepo = Pick<
   Repo,

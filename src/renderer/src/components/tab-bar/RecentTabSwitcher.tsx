@@ -12,7 +12,7 @@ import {
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
-} from '../../../../shared/window-shortcut-policy'
+} from '../../../../shared/keybindings/window-shortcut-policy'
 import {
   buildRecentTabSwitcherModel,
   getNextRecentTabSwitcherIndex,

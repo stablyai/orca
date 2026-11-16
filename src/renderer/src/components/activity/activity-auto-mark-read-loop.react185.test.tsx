@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 /** @vitest-environment happy-dom */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -5,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import ActivityPrototypePage from './ActivityPrototypePage'
@@ -75,19 +76,21 @@ function seedCompletedThread(stampedAt: number, lastAssistantMessage: string): v
     repos: [repo],
     worktreesByRepo: { [repo.id]: [worktree] },
     tabsByWorktree: { [worktree.id]: [tab] },
-    agentStatusByPaneKey: {
-      [PANE_A]: {
-        state: 'done',
-        prompt: PROMPT,
-        updatedAt: stampedAt,
-        stateStartedAt: stampedAt,
-        paneKey: PANE_A,
-        terminalTitle: 'Claude',
-        stateHistory: [],
-        agentType: 'claude',
-        lastAssistantMessage
-      }
-    },
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_A]: {
+          state: 'done',
+          prompt: PROMPT,
+          updatedAt: stampedAt,
+          stateStartedAt: stampedAt,
+          paneKey: PANE_A,
+          terminalTitle: 'Claude',
+          stateHistory: [],
+          agentType: 'claude',
+          lastAssistantMessage
+        }
+      })
+    ),
     activeRepoId: repo.id,
     activeWorktreeId: worktree.id
   })

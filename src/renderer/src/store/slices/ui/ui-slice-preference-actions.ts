@@ -1,16 +1,16 @@
 import {
   DEFAULT_STATUS_BAR_USAGE_FORMAT,
   normalizeStatusBarUsageFormat
-} from '../../../../../shared/status-bar-usage-format'
+} from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
-  DEFAULT_STATUS_BAR_ITEMS,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
+import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
 import {
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
@@ -19,11 +19,11 @@ import {
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   normalizeUsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import {
   DEFAULT_STATUS_BAR_USAGE_MODE,
   normalizeStatusBarUsageMode
-} from '../../../../../shared/status-bar-usage-mode'
+} from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -39,7 +39,7 @@ import {
   cloneDefaultWorkspaceStatuses,
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
-} from '../../../../../shared/workspace-statuses'
+} from '../../../../../shared/workspace/status/workspace-statuses'
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */

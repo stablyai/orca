@@ -8,7 +8,7 @@ import {
   type AgentSessionAccountHome,
   isLegacyAgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import type { StructuredProviderSessionOwnership } from '../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 

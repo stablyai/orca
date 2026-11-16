@@ -1,13 +1,13 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
 import { suspendEphemeralVmRuntime } from './runtime-service'
 import { disconnectRuntimeOwnedSshTarget } from './runtime-ssh'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import {
   EphemeralVmFailureError,
   pickEphemeralVmFailureCode
-} from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
 export async function suspendEphemeralVmWorkspace(
   store: Store,

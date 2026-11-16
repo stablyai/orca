@@ -15,7 +15,7 @@ import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
   createActivityThreadSearchMatcher,
@@ -63,7 +63,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
       if (
         badgeOnly &&
         Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
-        !Object.values(storeData.agentStatusByPaneKey).some((entry) =>
+        !Array.from(storeData.agentStatusByPaneKey.values()).some((entry) =>
           freshActivityLiveAgentState(entry, now)
         )
       ) {

@@ -41,9 +41,9 @@ it('a close deadline leaves native capacity charged until the real retirement jo
     expect(h.pages.getPage('a')).toBeUndefined()
     expect(h.commands.some((event) => event.browserPageId === 'queued')).toBe(false)
     expect(
-      h.hostRuntime
-        .snapshotForClient('repo-1::/tmp/worktree-a', 'device-a')
-        .tabs.find((tab) => tab.id === 'queued')
+      (await h.hostRuntime.snapshotForClient('repo-1::/tmp/worktree-a', 'device-a')).tabs.find(
+        (tab) => tab.id === 'queued'
+      )
     ).toMatchObject({ type: 'browser', url: 'https://example.internal/queued' })
     expect(h.executor.snapshotPageInventory().some((page) => page.browserPageId === 'a')).toBe(true)
     retirement.release()
@@ -68,7 +68,7 @@ it.each([false, true])(
   'same-ledger inventory keeps an outstanding create with fast sibling=%s',
   async (withFast) => {
     const h = createRecoveryLoop(['slow'])
-    publishRecoveryTabsGraph(h.hostRuntime)
+    await publishRecoveryTabsGraph(h.hostRuntime)
     const firstDelivery = Promise.withResolvers<void>()
     const stream = openRecoveryTabsStream(h.hostRuntime, `outstanding-${withFast}`)
     let held = false
@@ -102,7 +102,7 @@ it.each([false, true])(
         await h.published('fast')
       }
       expect(
-        h.hostRuntime.snapshotForClient('repo-1::/tmp/worktree-a', 'device-a')
+        (await h.hostRuntime.snapshotForClient('repo-1::/tmp/worktree-a', 'device-a'))
           .clientHostedPagesUnreconciled
       ).toBe(true)
       first.abort()
@@ -123,9 +123,9 @@ it.each([false, true])(
       await navigation
       h.release('slow')
       await h.published('slow')
-      await vi.waitFor(() =>
+      await vi.waitFor(async () =>
         expect(
-          h.hostRuntime.snapshotForClient('repo-1::/tmp/worktree-a', 'device-a')
+          (await h.hostRuntime.snapshotForClient('repo-1::/tmp/worktree-a', 'device-a'))
             .clientHostedPagesUnreconciled
         ).toBeUndefined()
       )

@@ -18,7 +18,7 @@ import {
 } from './helpers/orcad-managed-workspace'
 import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
-import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
+import { folderWorkspaceKey } from '../../src/shared/workspace/identity/workspace-scope'
 import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 skipUnlessManagedDockerHost()

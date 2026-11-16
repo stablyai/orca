@@ -1,12 +1,15 @@
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   WorkspaceLineage,
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../../shared/workspace/identity/workspace-scope'
 import { buildParentPrChecksRows } from '@/components/right-sidebar/hosted-review/folder-checks/parent-pr-checks-rows'
 import type { ParentPrChecksRow } from '@/components/right-sidebar/hosted-review/folder-checks/parent-pr-checks-row-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'

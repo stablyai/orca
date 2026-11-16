@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserGuestMetadata } from '../../../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import {
+  acceptBrowserGuestMetadata,
   clearBrowserGuestMetadata,
+  issueBrowserGuestNavigation,
   subscribeBrowserGuestMetadata
 } from '../metadata/browser-guest-metadata-cache'
 import { registerPersistentWebview, unregisterPersistentWebview } from '../webview-registry'
+import { closePersistentBrowserPage, replacePersistentWebview } from '../browser-webview-disposal'
 import {
   getBrowserOverlaySlotViewport,
   ensureBrowserPageViewport,
@@ -75,9 +78,6 @@ describe('local guest metadata disposal', () => {
       webview,
       observed,
       detach,
-      makeUnreadable: () => {
-        readable = false
-      },
       finish: () =>
         finish({
           browserPageId: 'page-1',
@@ -97,16 +97,48 @@ describe('local guest metadata disposal', () => {
     }
   }
 
-  it('ends guests under a removed slot even when their native identity is already unreadable', async () => {
-    const rig = prepareGuest()
-    await Promise.resolve()
-    rig.root.remove()
-    rig.makeUnreadable()
-    registerBrowserOverlaySlotViewport('workspace-1', null)
-    rig.finish()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(rig.observed).toEqual([null])
-    rig.detach()
-  })
+  it.each(['destroy', 'replace'] as const)(
+    'ends an unpublished guest on %s and ignores its late query',
+    async (mode) => {
+      const rig = prepareGuest()
+      if (mode === 'replace') {
+        issueBrowserGuestNavigation(rig.webview, () => {})
+      }
+      await Promise.resolve()
+      if (mode === 'replace') {
+        rig.detach()
+      }
+      await (mode === 'destroy'
+        ? closePersistentBrowserPage('page-1')
+        : replacePersistentWebview('page-1', { preserveViewport: true }))
+      rig.finish()
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(rig.observed).toEqual(mode === 'destroy' ? [null] : [])
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: DOM tag with the only native method used by the cache.
+      const replacement = Object.assign(document.createElement('webview'), {
+        getWebContentsId: () => 42
+      }) as Electron.WebviewTag
+      const receive = vi.fn()
+      const detach = subscribeBrowserGuestMetadata('page-1', replacement, receive)
+      acceptBrowserGuestMetadata({
+        browserPageId: 'page-1',
+        webContentsId: 42,
+        revision: 1,
+        navigationRevision: 1,
+        kind: 'snapshot',
+        url: 'https://replacement.test/',
+        title: 'Replacement',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        errorPage: false,
+        loadError: null,
+        hasCertificateFailure: false
+      })
+      expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Replacement' }))
+      detach()
+      rig.detach()
+    }
+  )
 })

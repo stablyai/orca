@@ -1,4 +1,4 @@
-import { structuredChatDisplayName } from '../../../../../../shared/structured-chat-row-name'
+import { structuredChatDisplayName } from '../../../../../../shared/agent-session/view/structured-chat-row-name'
 import { useAppStore } from '@/store/index'
 import { structuredChatTabBySessionId } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useStructuredChatNaming } from '@/runtime/native-chat/naming/structured-conversation-name'

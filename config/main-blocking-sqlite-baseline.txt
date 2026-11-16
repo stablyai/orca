@@ -41,6 +41,8 @@
 2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 20 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
+32 src/main/native-chat/agent-session-journal/database/journal-legacy-reconcile.ts
+18 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 12 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 18 src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts
 14 src/main/native-chat/agent-session-journal/journal-domain-command-turn.ts

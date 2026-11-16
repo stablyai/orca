@@ -5,14 +5,14 @@ import {
   folderGroupKey,
   type AiVaultSessionProject
 } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceWorktreeHostId
 } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
+import type { ProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import type { ProjectOrderBy, ManualRepoOrderEntry } from '../../../../shared/ui-chrome-types'
 import {
   getRepoExecutionHostId,
@@ -27,8 +27,8 @@ import {
   buildProjectSections,
   getProjectGroupingForRepo,
   type ProjectSectionEntry
-} from '../../../../shared/project-section-grouping'
-import { sortProjectEntries } from '../../../../shared/project-section-order'
+} from '../../../../shared/sidebar-list/sections/project-section-grouping'
+import { sortProjectEntries } from '../../../../shared/sidebar-list/sections/project-section-order'
 
 type ConversationItem = { session: AiVaultSession; repo: Repo; lastActivityAt?: number }
 export type ConversationProjectGroup = {

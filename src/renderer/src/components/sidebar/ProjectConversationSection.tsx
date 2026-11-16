@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RepoIcon } from '../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../shared/repository/appearance/repo-icon'
 
 export function ProjectConversationSection({
   label,

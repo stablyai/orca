@@ -1,4 +1,5 @@
 import {
+  composeQuickOpenText,
   QuickOpenPathRanker,
   rankQuickOpenFiles,
   type QuickOpenIndexedFile
@@ -80,7 +81,7 @@ export function findExistingFileMatches(
   if (!normalizedQuery || limit <= 0) {
     return []
   }
-  const lowerQuery = normalizedQuery.toLowerCase()
+  const lowerQuery = composeQuickOpenText(normalizedQuery.toLowerCase())
   const exactPathMatches = indexedFiles
     .filter((file) => file.lowerPath === lowerQuery)
     .map((file) => ({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeGraphStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeGraphStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
 
 class InventoryPublicationRuntime extends OrcaRuntimeService {

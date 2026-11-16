@@ -18,8 +18,8 @@ import { parseAiVaultListResult } from './listing/session-list-result-validation
 import { restampAiVaultListResult } from './listing/session-list-results'
 import { aiVaultOrchestrationChildSessionIds } from './structured-conversation-navigation'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
-import { formatOrcaSessionAddress } from '../../shared/orca-session-address'
+import { testOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../shared/agent-session/identity/orca-session-address'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

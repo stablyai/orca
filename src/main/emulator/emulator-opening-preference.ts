@@ -1,9 +1,9 @@
-import { getEmulatorOpeningMode } from '../../shared/emulator-opening-preferences'
+import { getEmulatorOpeningMode } from '../../shared/emulator/emulator-opening-preferences'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type {
   EmulatorDevicePreference,
   EmulatorSelectionRequired
-} from '../../shared/emulator-opening-preferences'
+} from '../../shared/emulator/emulator-opening-preferences'
 import type { EmulatorDevice } from './backends/emulator-backend'
 import { findBootedWorkspaceDevice } from './emulator-default-attach-device'
 

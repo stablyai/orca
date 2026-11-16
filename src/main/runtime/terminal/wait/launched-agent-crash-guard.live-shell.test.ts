@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import * as pty from 'node-pty'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
-import { getStrictProcessTableSnapshotWithAge } from '../../../../shared/process-table-snapshot-reader'
+import { getStrictProcessTableSnapshotWithAge } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { createPtyForegroundProcessTracker } from '../../../daemon/pty-subprocess/foreground-process-tracker'
 import { resolveRemoteForegroundEvidence } from '../../../providers/foreground/agent-process-batch'
 import {

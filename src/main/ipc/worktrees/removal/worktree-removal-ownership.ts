@@ -5,7 +5,7 @@ import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'

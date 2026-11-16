@@ -8,7 +8,7 @@ import {
 } from '../../runtime/orca-runtime-tests/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../shared/workspace-sleep'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../shared/workspace/lifecycle/workspace-sleep'
 import { registerPtyHandlers } from './register-handlers'
 
 type IpcHandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>

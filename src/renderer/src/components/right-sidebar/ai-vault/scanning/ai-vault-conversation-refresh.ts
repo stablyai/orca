@@ -4,7 +4,7 @@ import {
   parseRoutableExecutionHostId,
   requestedExecutionHostScope
 } from '../../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { useAppStore } from '@/store'
 

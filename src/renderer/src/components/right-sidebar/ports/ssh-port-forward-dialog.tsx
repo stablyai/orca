@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import type { PortForwardEntry } from '../../../../../shared/ssh-types'
+import type { PortForwardEntry } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'

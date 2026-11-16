@@ -8,7 +8,7 @@ import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query
 import { createTaskPageDialogWorkItemReader } from '@/components/task-page/task-page-dialog-work-item'
 import { useTaskPageWorkItemsCacheSelection } from './cache/use-task-page-work-items-cache-selection'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { startGitHubListScrollRestore } from './listing/task-page-github-list-scroll-restore'
 

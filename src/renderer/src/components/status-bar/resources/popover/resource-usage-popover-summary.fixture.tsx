@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { renderResourceUsageSummary } from './resource-usage-popover-summary'
 import { ResourceUsageStatusSegment } from '../ResourceUsageStatusSegment'
-import type { MemorySnapshot } from '../../../../../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../../../../../shared/diagnostics/process-stats-types'
 import {
   getResourceMemoryMetricCopy,
   getResourceCommitMetricCopy

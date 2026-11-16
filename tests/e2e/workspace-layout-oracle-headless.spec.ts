@@ -6,12 +6,12 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { TestInfo } from '@stablyai/playwright-test'
 import type { RuntimeClient } from '../../src/cli/runtime/client'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeTerminalCreate,
   RuntimeTerminalListResult,
   RuntimeTerminalSplit
-} from '../../src/shared/runtime-terminal-contracts'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../src/shared/terminal/runtime/runtime-terminal-create-contract'
 import { expect, test } from './helpers/orca-app'
 import { pickNextActiveTabAfterClose } from '../../src/shared/workspace-session/workspace-session-terminal-tab-close'
 import {

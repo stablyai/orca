@@ -1,5 +1,5 @@
-import type { Repo } from '../../../../shared/repo-types'
-import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { toAiVaultProjectKey } from '../../../../shared/ai-vault/scanning/ai-vault-project-key'
 
 export function buildProjectLabelByKey(

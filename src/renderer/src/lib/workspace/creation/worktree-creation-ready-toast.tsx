@@ -7,7 +7,7 @@ import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-def
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import { resolveIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../shared/worktree/types'

@@ -12,7 +12,7 @@ import {
   type ClaudeControlSurface
 } from './sdk-transport/claude-agent-sdk-control-requests'
 import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
 import { createClaudeCodeProcessSpawn } from './child-process/claude-agent-sdk-process-spawn'

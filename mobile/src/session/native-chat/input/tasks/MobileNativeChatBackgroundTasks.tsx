@@ -234,7 +234,7 @@ function MobileNativeChatBackgroundTasksImpl({
             {groups.length > 0 ? (
               groups.map((group) => (
                 <View key={group.kind} style={styles.group}>
-                  <Text style={styles.groupLabel}>{backgroundTaskGroupLabel(group.kind, say)}</Text>
+                  <Text style={strip.groupLabel}>{backgroundTaskGroupLabel(group.kind, say)}</Text>
                   {group.tasks.map((entry) => (
                     <TaskRow
                       key={entry.row.id}
@@ -328,14 +328,6 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs
-  },
-  groupLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.monoFamily,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingBottom: spacing.xs / 2
   },
   row: {
     minHeight: 32,
