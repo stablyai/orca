@@ -1,4 +1,4 @@
-// Neil: Orca Cloud's sign-ins moved from Settings › Agent accounts to Settings › Orca Cloud › Cloud
+// Orca Cloud's sign-ins moved from Settings › Agent accounts to Settings › Orca Cloud › Cloud
 // agent sign-ins. This one row stays in Agent accounts so someone who looks there isn't lost.
 import type React from 'react'
 import { ArrowRight, Cloud } from 'lucide-react'

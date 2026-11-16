@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: the wizard's GitHub access step. Checked with the create, held before Open only
+// The create wizard's GitHub access step. Checked with the create, held before Open only
 // when access is missing, released by a grant (polled) or Skip, and a skip is remembered per repo.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

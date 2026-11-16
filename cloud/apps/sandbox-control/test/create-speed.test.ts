@@ -137,7 +137,7 @@ describe('repo-backed create', () => {
     expect(h.billing.requests[0]).toMatchObject({ runningSandboxes: 3, runningSandboxesForUser: 3 })
   })
 
-  it('an Idempotency-Key makes one sandbox per intent, for that account and member only (PC-8)', async () => {
+  it('an Idempotency-Key makes one sandbox per intent, for that account and member only', async () => {
     const h = await createHarness()
     const key = { 'idempotency-key': 'create-press-0001' }
     const first = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w-a', machineSize: 'standard' }, headers: key })
@@ -176,7 +176,7 @@ describe('repo-backed create', () => {
   })
 })
 
-describe('VM hostname (JA-27)', () => {
+describe('VM hostname', () => {
   it('is the workspace name (else the repo), as a hostname label, set at every start', async () => {
     const { workspaceHostname } = await import('../src/sandbox-vm-commands')
     expect(workspaceHostname('Fix Login Bug!')).toBe('fix-login-bug')

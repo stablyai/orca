@@ -1,5 +1,5 @@
-// One read of the Orca Cloud agent accounts per renderer, shared by S0 and the composer's Agent row,
-// plus the setup step main reports. Holds states and codes only; main keeps every credential.
+// One read of the Orca Cloud agent accounts per renderer, shared by Cloud agent sign-ins and the
+// composer's Agent row, plus the setup step main reports. Holds states and codes only; main keeps every credential.
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   IDLE_ORCA_CLOUD_AGENT_SETUPS,
@@ -26,9 +26,9 @@ export type OrcaCloudAgentAccountsState = {
   load: OrcaCloudAgentAccountsLoad
   setups: OrcaCloudAgentSetups
   keyKinds: Record<OrcaCloudAccountAgent, AgentKeyKind | null>
-  /** Names (never values) of the Cloud secrets a new workspace gets; null until read (JA-22). */
+  /** Names (never values) of the Cloud secrets a new workspace gets; null until read. */
   cloudSecretNames?: ReadonlySet<string> | null
-  /** The build sheet's R2 Set up: agents set up in turn; `index` is the one running now. */
+  /** The build sheet's Set up: agents set up in turn; `index` is the one running now. */
   queue: { agents: readonly OrcaCloudAccountAgent[]; index: number }
 }
 
@@ -126,7 +126,10 @@ function startQueued(agent: OrcaCloudAccountAgent): void {
   void bridge()?.start({ agent })
 }
 
-/** Moves R2's queue on when the running agent's setup finishes; a failure holds it for Try again. */
+/**
+ * Moves the build sheet's Set up queue on when the running agent's setup finishes; a failure holds
+ * it for Try again.
+ */
 function advanceQueue(setups: OrcaCloudAgentSetups): void {
   const { agents, index } = state.queue
   const current = agents[index]
@@ -148,7 +151,10 @@ function advanceQueue(setups: OrcaCloudAgentSetups): void {
   }
 }
 
-/** R2's Set up (and Try again): S0's setup for each agent in turn, inside the build sheet's row. */
+/**
+ * The build sheet's Set up (and Try again): the Cloud agent sign-ins setup for each agent in turn,
+ * inside the build sheet's row.
+ */
 export function runOrcaCloudAgentSetups(agents: readonly OrcaCloudAccountAgent[]): void {
   const { agents: queued, index } = state.queue
   // Try again after a failure resumes the queue at the failed agent.
@@ -192,7 +198,7 @@ export function orcaCloudAgentAccountsLoadedAt(): number {
   return loadedAt
 }
 
-/** A ready read from within the last 30 s; older reads may miss a revoke (RA-1). */
+/** A ready read from within the last 30 s; older reads may miss a revoke. */
 export function isOrcaCloudAgentAccountsFresh(): boolean {
   return state.load.kind === 'ready' && Date.now() - loadedAt <= FRESH_MS
 }
@@ -204,7 +210,7 @@ export async function ensureFreshOrcaCloudAgentAccounts(): Promise<OrcaCloudAgen
   return state
 }
 
-/** S0 and the Agent row; reads once on mount when the last read is stale. */
+/** Cloud agent sign-ins and the Agent row; reads once on mount when the last read is stale. */
 export function useOrcaCloudAgentAccounts(enabled = true): OrcaCloudAgentAccountsState {
   const snapshot = useSyncExternalStore(
     subscribe,

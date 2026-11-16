@@ -25,7 +25,7 @@ export function setupPageUrl(env: Env, path: string, params: Record<string, stri
   return url.toString()
 }
 
-/** Checkout return URLs for a setup session: success continues the chain, cancel goes back to T3. */
+/** Checkout return URLs for a setup session: success continues the chain, cancel goes back to the plan page. */
 export function setupCheckoutReturnUrls(env: Env, id: string): { success: string; cancel: string } {
   return {
     success: setupPageUrl(env, '/next', { session: id, from: 'checkout', checkout: 'success' }),

@@ -145,13 +145,13 @@ export function TerminalPaneRecoveryPortals({
   const cloudAwake = cloud !== null && !cloudWaking && !cloudAsleep
   useWakeProcessHintsVersion()
   // While asleep (or waking) the pane still holds the pre-sleep scrollback: note what was running,
-  // so after the wake the pane can say it stopped and offer it back (JA-15).
+  // so after the wake the pane can say it stopped and offer it back.
   const isCloud = cloud !== null
   const asleepSince = cloud?.asleepSince ?? null
   // Sleep was asked for: look now, before the transport's resubscribes (while the VM suspends)
-  // replace the pane's buffer with the host's 1000-row snapshot (WAKE-SCROLLBACK).
+  // replace the pane's buffer with the host's 1000-row snapshot.
   // A Sleep or Archive the person chose, until a wake starts (or the hold runs out): its dropped
-  // streams are on purpose, so no "Reattaching terminal" while the status catches up (n64 P3).
+  // streams are on purpose, so no "Reattaching terminal" while the status catches up.
   const deliberateStop = useIsDeliberateCloudStopHeld(controller.worktreeId)
   const goingToSleep = useIsWorktreeGoingToSleep(controller.worktreeId)
   const stoppingOnPurpose = goingToSleep || deliberateStop
@@ -201,7 +201,7 @@ export function TerminalPaneRecoveryPortals({
     controller.worktreeId,
     asleepSince
   ])
-  // WAKE-SCROLLBACK: a person scrolling the pane while it sleeps or wakes keeps that place after the
+  // A person scrolling the pane while it sleeps or wakes keeps that place after the
   // restore, across the wake's remount. Wheel only: writes also scroll, and must not count.
   useEffect(() => {
     if (!isCloud || !(cloudAsleep || cloudWaking)) {
@@ -242,7 +242,7 @@ export function TerminalPaneRecoveryPortals({
     pairingRefusedEnvironmentId === null &&
     !cloudWaking &&
     !cloudAsleep &&
-    // SLEEP-RECONNECT-BANNER: a sleep the person asked for drops the connection on purpose.
+    // A sleep the person asked for drops the connection on purpose.
     !stoppingOnPurpose
   const serverDown = retryingOutageEnvironmentId !== null
   const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
@@ -310,7 +310,7 @@ export function TerminalPaneRecoveryPortals({
             `wsl-host-stopped-${pane.id}`
           )
         }
-        // Asleep: nothing to reconnect to; one calm line with Wake instead of a reconnect card (RA-12).
+        // Asleep: nothing to reconnect to; one calm line with Wake instead of a reconnect card.
         if (cloudAsleep) {
           return createPortal(
             <CloudAsleepTerminalNotice
@@ -323,7 +323,7 @@ export function TerminalPaneRecoveryPortals({
             `cloud-asleep-${pane.id}`
           )
         }
-        // Waking: the pre-sleep scrollback is still there and must not read as live (JA-15).
+        // Waking: the pre-sleep scrollback is still there and must not read as live.
         if (cloudWaking && wakeShowsStaleHistory(pane.leafId)) {
           return createPortal(
             <CloudAsleepTerminalNotice
@@ -338,11 +338,11 @@ export function TerminalPaneRecoveryPortals({
         }
         // Up again after a sleep: the process that was running is gone; say so once, never rerun it.
         const wokeHint = cloudAwake ? getWakeProcessHint(pane.leafId) : null
-        // An agent pane: the host relaunches its agent; Restart only if that never comes (RA-WAKE).
+        // An agent pane: the host relaunches its agent; Restart only if that never comes.
         if (wokeHint && 'restartAgent' in wokeHint) {
           const wokeAction = cloudWokeActionFor(wokeHint)
           const paneKey = makePaneKey(tabId, pane.leafId)
-          // CHAT-BANNERS: an open chat view shows this one (Restart only); the Rerun notice stays here.
+          // An open chat view shows this one (Restart only); the Rerun notice stays here.
           return (
             <CloudPaneBannerPortal
               key={pane.id}
@@ -406,7 +406,7 @@ export function TerminalPaneRecoveryPortals({
             heldByServer={
               cloudWaking ||
               stoppingOnPurpose ||
-              // ASLEEP-RECONNECT-BANNER: asleep on purpose, so not a dropped connection.
+              // Asleep on purpose, so not a dropped connection.
               cloudAsleep ||
               (!isolated &&
                 !awaitingSignIn &&

@@ -1,4 +1,4 @@
-// How long each part of an owner hand-off took (OWNER-TRANSFER, TRANSFER-SLOW-N60). The desktop
+// How long each part of an owner hand-off took. The desktop
 // keeps its confirmation open until the whole request answers, so when that is slow this says
 // which part was: one log line per completed hand-off, step names and milliseconds only. Never an
 // id, a name or anything from the request.

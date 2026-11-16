@@ -1,4 +1,4 @@
-// PAIRED-STATUS: which sandbox a window's cloud workspace id means. This desktop's own runtime
+// Which sandbox a window's cloud workspace id means. This desktop's own runtime
 // record first, else a PAIRED server (a "<name> (cloud)" pairing) that is bound to a sandbox. Only
 // bound pairings answer, so a window can never name an arbitrary sandbox.
 import { ipcMain } from 'electron'
@@ -47,7 +47,7 @@ export function registerCloudArchiveInfoHandler(
 }
 
 /**
- * PAIRED-WAKE (2/2): Restart for a PAIRED workspace (no runtime record here to re-pair). The control
+ * Restart for a PAIRED workspace (no runtime record here to re-pair). The control
  * plane reboots the same disk; the bound server's dead connection is dropped so it reconnects at
  * once. Reports the same waking → connecting → ready / failed progress as an owned restart.
  */

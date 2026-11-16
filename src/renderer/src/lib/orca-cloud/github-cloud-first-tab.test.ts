@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// PAIRED-HELD-ACTIVE (n39): after a GitHub-only Orca Cloud create (GH-CREATE-SHEET hand-off) whose
+// After a GitHub-only Orca Cloud create (after the build sheet's hand-off) whose
 // agent isn't set up, the held placeholder is the workspace's one tab and it is in front, so its
 // "Set up once" strip is what the person sees. The mirror's initial-terminal seeder must not add a
 // plain shell over it; if the seeder got there first, the held tab is brought forward once, but
@@ -131,13 +131,13 @@ const create = () =>
   })
 const HELD = () => toWebTerminalSurfaceTabId('h1')
 const tabIds = () => (useAppStore.getState().tabsByWorktree['wt-1'] ?? []).map((tab) => tab.id)
-/** The seeder's plain shell landing late, activated (what hid the strip on n39). */
+/** The seeder's plain shell landing late, activated (what used to hide the strip). */
 function seederShellLands(): void {
   mirrorTab('web-terminal-seeded-shell', true)
   endWebRuntimeInitialTerminalBootstrap('env-paired', 'wt-1')
 }
 
-describe('PAIRED-HELD-ACTIVE: the held placeholder is in front after a GitHub-only create', () => {
+describe('the held placeholder is in front after a GitHub-only create', () => {
   it('exactly one tab, the held placeholder, active; the seeder is held off meanwhile', async () => {
     await expect(create()).resolves.toBe(true)
     // While the agent's launch is on its way, the seeder can't claim the first terminal.

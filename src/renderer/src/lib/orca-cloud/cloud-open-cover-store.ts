@@ -1,4 +1,4 @@
-// JA-12: a just-created Orca Cloud workspace showed a blank pane for ~1 s between the start screen
+// A just-created Orca Cloud workspace showed a blank pane for ~1 s between the start screen
 // and its terminal (the create finishes, then the terminal's PTY attaches over the network). The
 // start screen's last frame stays up over the new workspace until its PTY is attached, or a cap.
 import { useSyncExternalStore } from 'react'

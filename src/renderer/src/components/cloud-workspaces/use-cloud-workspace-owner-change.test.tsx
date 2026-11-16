@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// OWNER-TRANSFER: the confirmation makes the change itself, shows a refusal in place, and tells
+// The confirmation makes the change itself, shows a refusal in place, and tells
 // the person who made it whether the previous owner will hear about it.
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,7 +55,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('useCloudWorkspaceOwnerChange (OWNER-TRANSFER)', () => {
+describe('useCloudWorkspaceOwnerChange', () => {
   it('changes the owner and says the previous owner will see a notice', async () => {
     changeOwner.mockResolvedValue(
       changed('user_linus', { userId: 'user_grace', notified: true, inApp: true, emailed: false })
@@ -119,7 +119,7 @@ describe('useCloudWorkspaceOwnerChange (OWNER-TRANSFER)', () => {
     ).toEqual([])
   })
 
-  it('TRANSFER-TOAST-OTHER-DEVICE: giving away your own marks this device as the one that did it', async () => {
+  it('giving away your own marks this device as the one that did it', async () => {
     const mine = workspace({ title: 'Docs search' })
     changeOwner.mockResolvedValue({
       ok: true,
@@ -183,7 +183,7 @@ describe('useCloudWorkspaceOwnerChange (OWNER-TRANSFER)', () => {
   })
 })
 
-describe('Make owner confirmation (OWNER-TRANSFER)', () => {
+describe('Make owner confirmation', () => {
   const dialog = (props: { busy?: boolean; error?: string | null; onConfirm?: () => void }) =>
     render(
       <CloudWorkspaceConfirmDialog

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// #568 FAIL-CLOSED on the GH-CREATE-SHEET path: a GitHub-only Orca Cloud create whose agent isn't set
+// Fails closed on the build sheet path: a GitHub-only Orca Cloud create whose agent isn't set
 // up never launches Claude on the paired host, even before the renderer's catalog flags it as Orca
 // Cloud. The build sheet hands off to the opened workspace; its first agent launch goes through the
 // account hold, which asks main when the flag is absent, and opens only the plain placeholder shell.
@@ -93,7 +93,7 @@ beforeEach(() => {
   })
 })
 
-describe('GH-CREATE-SHEET create on a paired host, Claude not set up (FAIL-CLOSED, #568)', () => {
+describe('GitHub-only create on a paired host, Claude not set up', () => {
   it('never launches Claude: only the placeholder shell opens, held on "Set up once"', async () => {
     await expect(
       startCloudWorkspaceFromGitHub({

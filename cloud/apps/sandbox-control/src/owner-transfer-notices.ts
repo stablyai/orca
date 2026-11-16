@@ -1,4 +1,4 @@
-// Telling the previous owner that their workspace changed owner (OWNER-TRANSFER). Everything on
+// Telling the previous owner that their workspace changed owner. Everything on
 // its disk went with it, so personal secrets they used there may still be on it: they are told,
 // and advised to rotate.
 //

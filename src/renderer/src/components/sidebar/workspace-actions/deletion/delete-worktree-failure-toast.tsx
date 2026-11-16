@@ -32,7 +32,7 @@ type DeleteWorktreeFailureToastOptions = {
   onForceDelete: () => void
   onAlwaysForceDelete?: () => Promise<void>
   onDeleteAnyway: () => void
-  /** REG-12: a delete that failed before any sandbox delete was sent offers Try again. */
+  /** A delete that failed before any sandbox delete was sent offers Try again. */
   onRetry?: () => void
   worktreeId: string
   executionHostId?: ExecutionHostId | null
@@ -135,7 +135,7 @@ function DeleteWorktreeFailureToastBody({
   )
 }
 
-/** REG-12: an Orca Cloud delete refused before anything was deleted, in design-squad's copy. */
+/** An Orca Cloud delete refused before anything was deleted. */
 function cloudDeleteNotSentCopy(
   worktreeName: string,
   error: string
@@ -194,7 +194,7 @@ export function showDeleteWorktreeFailureToast({
     executionHostId: executionHostId ?? null
   })
   const nestedTarget = isNestedWorktreeRemovalError(error) ? nestedRemovalTarget : undefined
-  // Only where nothing was destroyed yet: then trying again is safe (REG-12).
+  // Only where nothing was destroyed yet: then trying again is safe.
   const retryable = onRetry && isCloudDeleteNotSentError(error) ? onRetry : undefined
 
   // Custom content gives multiline errors their own line instead of squeezing them into Sonner’s action/title row.

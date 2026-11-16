@@ -1,11 +1,11 @@
 import { z } from 'zod'
 
-// N10 (cloud-start onboarding): how the one-trip setup goes, step by step. Enum-only on purpose:
+// Cloud setup onboarding: how the one-trip setup goes, step by step. Enum-only on purpose:
 // no email, team name, repository, org or session id may leave; unknown values become `other`.
 
 export const CLOUD_SETUP_STEP_VALUES = ['account', 'team', 'plan', 'github', 'agent'] as const
 
-/** X1 setup errors; matches the setup session's `error.kind`. */
+/** Setup errors; matches the setup session's `error.kind`. */
 export const CLOUD_SETUP_ERROR_KIND_VALUES = [
   'timed_out',
   'checkout_canceled',
@@ -25,7 +25,7 @@ export const CLOUD_SETUP_DURATION_BUCKETS = [
   'gte_15m'
 ] as const
 
-/** Which hours the first sandbox runs on (O4). */
+/** Which hours the first sandbox runs on. */
 export const CLOUD_SETUP_HOURS_SOURCE_VALUES = ['trial', 'plan', 'unknown'] as const
 
 const step = z.enum(CLOUD_SETUP_STEP_VALUES)

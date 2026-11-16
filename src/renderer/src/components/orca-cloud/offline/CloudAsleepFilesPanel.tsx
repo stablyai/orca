@@ -34,7 +34,7 @@ export function formatWhen(at: number, now: number, locale: string, t: Translate
 }
 
 /**
- * The Files tab of an Orca Cloud workspace that is asleep (RA-10). There is no file tree without
+ * The Files tab of an Orca Cloud workspace that is asleep. There is no file tree without
  * the VM, so instead of a read error and Retry: what had changed when it went to sleep (from its
  * read snapshot or this computer's cache) and its recent commits, read-only, then Wake for the
  * full view. With no snapshot, a neutral note and Wake; while waking, a note that files follow.
@@ -63,7 +63,7 @@ export function CloudAsleepFilesPanel({
   const now = useNow(30_000)
   const git = snapshot?.git ?? null
   if (goingToSleep || copySave === 'saving') {
-    // Sleep was just chosen: its copy is being saved, and nothing here should wake it (RA-13b).
+    // Sleep was just chosen: its copy is being saved, and nothing here should wake it.
     // Never "Files aren't available" yet: that is only the answer once the copy is in.
     return (
       <div className="flex h-full min-h-0 flex-col px-3 py-3" data-cloud-asleep-files="saving">

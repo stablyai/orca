@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { checkoutCompleted, stripeEvent } from './stripe-fake'
 import { createHarness, CONTROL_TOKEN } from './harness'
 
-// TEAM-DELETE: auth asks whether a team still has an open subscription before deleting it.
+// Auth asks whether a team still has an open subscription before deleting it.
 const MEMBERSHIP_TOKEN = 'ms_test_0123456789abcdef0123456789abcdef'
 const PERIOD_START = Math.floor(Date.now() / 1000) - 5 * 24 * 3600
 
@@ -51,7 +51,7 @@ describe('GET /v1/internal/accounts/:accountId/subscription', () => {
   })
 })
 
-describe('EP-10: deleting a team whose plan is already set to end', () => {
+describe('deleting a team whose plan is already set to end', () => {
   async function team(h: Awaited<ReturnType<typeof createHarness>>) {
     const owner = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner' })
     await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 1 }, headers: { authorization: `Bearer ${owner}` } })

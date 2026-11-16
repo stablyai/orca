@@ -61,7 +61,7 @@ export type OrcaProfileApi = {
   findProjectProfiles: (
     args: FindOrcaProfileProjectsByPathArgs
   ) => Promise<FindOrcaProfileProjectsByPathResult>
-  /** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+  /** `openBrowser: false` starts sign-in without opening the browser. */
   connectCurrent: (args?: { openBrowser?: boolean }) => Promise<ConnectCurrentOrcaProfileResult>
   signInProgress: () => Promise<OrcaCloudSignInProgress | null>
   onSignInProgressChanged: (
@@ -86,7 +86,7 @@ export type OrcaProfileApi = {
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
   /** Main asks for a billing re-read (cloud workspace created/woken, or the usage poll). */
   onBillingRefreshRequested: (callback: () => void) => () => void
-  /** Fires when the setup done page opens orca://cloud/setup/return?session=… (N9). */
+  /** Fires when the setup done page opens orca://cloud/setup/return?session=…. */
   onCloudSetupReturn: (callback: (event: OrcaCloudSetupReturn) => void) => () => void
   /** Plan & billing for the signed-in account (Orca Cloud billing service). */
   billingStatus: () => Promise<OrcaBillingStatusResult>

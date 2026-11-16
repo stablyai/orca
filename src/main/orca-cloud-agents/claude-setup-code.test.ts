@@ -1,4 +1,4 @@
-// P0 "Set up once": Claude's setup-token ends on Anthropic's "Authentication code — Paste this into
+// "Set up once": Claude's setup-token ends on Anthropic's "Authentication code — Paste this into
 // Claude Code" page. The code comes back through Orca (strip, Settings, chat UI) into the waiting CLI.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAgentSetups } from '../../shared/orca-cloud-agents/orca-cloud-agents-wire'

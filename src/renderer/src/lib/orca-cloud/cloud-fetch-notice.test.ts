@@ -48,7 +48,7 @@ function runner(...fetchStatuses: (EnvironmentDoctorCheck['status'] | null)[]) {
 
 const noWait = vi.fn(async () => {})
 
-describe('ENV-ORIGIN-TOAST: "Cannot reach remote" only after a confirming check', () => {
+describe('"Cannot reach remote" only after a confirming check', () => {
   afterEach(() => {
     resetCloudSetupNotices()
     noWait.mockClear()

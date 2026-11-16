@@ -1,4 +1,4 @@
-// In an Orca Cloud workspace the Run menu suggests the project's own scripts (JA-31): typecheck,
+// In an Orca Cloud workspace the Run menu suggests the project's own scripts: typecheck,
 // lint, test and friends from package.json, run with the package manager the project declares.
 // Suggestions run like saved quick commands but are not saved; nothing is offered when the file is
 // missing or unreadable.
@@ -82,7 +82,7 @@ function sameSuggestions(
  * Suggestions for one cloud workspace; [] until read, and for anything that isn't cloud.
  * package.json can change any time (a new script, a file created mid-session), so it is read
  * again by `refresh` (the Run menu calls it on open and on hover) and when the window regains
- * focus, not only when the tab bar mounts (LC2-P3).
+ * focus, not only when the tab bar mounts.
  */
 export function useCloudSuggestedRunCommands(
   worktreeId: string,

@@ -1,4 +1,4 @@
-// ARCHIVE-HOOK wire: POST/GET /v1/sandboxes/:id/archive-hook (cloud/apps/sandbox-control/src/archive-hook-route.ts).
+// Archive hook wire: POST/GET /v1/sandboxes/:id/archive-hook (cloud/apps/sandbox-control/src/archive-hook-route.ts).
 import { z } from 'zod'
 
 /** What the control plane last learned about a workspace's orca.yaml archive hook. */

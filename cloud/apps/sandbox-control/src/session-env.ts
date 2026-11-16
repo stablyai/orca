@@ -51,7 +51,7 @@ const PROVIDER_ENV_CACHE_MS = 60_000
 const providerEnvCache = settledCache<ProviderEnv>(PROVIDER_ENV_CACHE_MS)
 
 export function cachedProviderEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now: number): Promise<ProviderEnv> {
-  // The owner is part of the key: a transfer stops its previous owner's personal keys at once (SEC-5).
+  // The owner is part of the key: a transfer stops its previous owner's personal keys at once.
   const key = `${row.id}:${row.session_id ?? ''}:${row.user_id}`
   return providerEnvCache.get(key, now, () => resolvedProviderEnv(db, keyring, row))
 }
@@ -103,12 +103,12 @@ export async function sessionSecretEnv(
   }
   const { env: stored, scopes: storedScopes, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
   const swap = egressSwapOn(deps, row)
-  // EGRESS-SWAP-FAIL-CLOSED: a deployed env without the egress proxy can't swap keys at egress. Rather than
+  // A deployed env without the egress proxy can't swap keys at egress. Rather than
   // fall back to real keys in the VM, keys become placeholders that the firewall answers with a plain error,
   // and an Orca-account sign-in gets its placeholder answered the same way (the real token never leaves us).
   const withhold = !swap && egressSwapWanted(deps, row) && egressProxyMissing(deps.config)
   const derived = deriveProviderEnv(stored)
-  // D10: per agent, the owner's account (placeholder), the kill-switch fallback, or the keys.
+  // Per agent: the owner's account (placeholder), the kill-switch fallback, or the keys.
   const modes = await agentModesFor(deps.db, row, derived, {
     providerEnabled: deps.secrets.accountProviders ?? { claude: false, codex: false },
     accountsUsable: swap || withhold,

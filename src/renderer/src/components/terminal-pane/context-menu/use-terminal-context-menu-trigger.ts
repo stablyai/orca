@@ -108,7 +108,7 @@ export function useTerminalContextMenuTrigger({
 
   const onContextMenuCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
     const target = event.target
-    // SETUP-PASTE: a pane control's own field (the cloud strip's code field) gets the native
+    // A pane control's own field (the cloud strip's code field) gets the native
     // Cut/Copy/Paste menu, never the terminal's, whose Paste would go to the shell.
     if (pasteBelongsToPaneControl(target)) {
       return

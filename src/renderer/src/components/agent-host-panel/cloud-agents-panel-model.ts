@@ -20,7 +20,7 @@ export type CloudAgentPanelStatus =
   | { kind: 'expired' }
   /** No account path and no key: the agent signs in inside this workspace (§5c). */
   | { kind: 'signsInHere'; reason: 'paused' | 'notOffered' | 'chosen' }
-  /** D13: a shared workspace never uses personal accounts or keys, and no team key covers it. */
+  /** A shared workspace never uses personal accounts or keys, and no team key covers it. */
   | { kind: 'sharedUnavailable' }
 
 /** The two-way Source (Your account / the winning key); present only when both are possible. */
@@ -37,7 +37,7 @@ function chosenSource(view: AgentSourcesView, agent: OrcaCloudAccountAgent): Age
 }
 
 /**
- * D13: in a shared workspace only a team or repository key applies; personal accounts and keys
+ * In a shared workspace only a team or repository key applies; personal accounts and keys
  * never do. The Source shows what applies and can't be changed there.
  */
 function sharedRow(

@@ -47,7 +47,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('recheckCloudPushAccess covers the can’t-reach line too (GH-FETCH-REASON)', () => {
+describe('recheckCloudPushAccess covers the can’t-reach line too', () => {
   it('waits while GitHub has not confirmed the install', async () => {
     seed()
     repoAccess.mockResolvedValue({ access: 'missing' })
@@ -73,7 +73,7 @@ describe('recheckCloudPushAccess covers the can’t-reach line too (GH-FETCH-REA
   })
 })
 
-describe('LIVE-GIT-ACCESS: Check again applies the new access to the running workspace first', () => {
+describe('Check again applies the new access to the running workspace first', () => {
   it('asks for the live refresh, then re-runs the check', async () => {
     seed()
     repoAccess.mockResolvedValue({ access: 'granted' })

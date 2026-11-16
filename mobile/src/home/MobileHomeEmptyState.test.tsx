@@ -23,7 +23,7 @@ describe('MobileHomeEmptyState', () => {
   })
 
   // The no-desktop Home: the phone reaches Orca Cloud through a paired desktop (#42), so the empty
-  // state has to say where cloud workspaces will show up (W9 finding; copy signed off by design squad).
+  // state has to say where cloud workspaces will show up.
   it('says Orca Cloud workspaces show up once a desktop is paired', () => {
     const onPairDesktop = vi.fn()
     act(() => {

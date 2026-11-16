@@ -75,7 +75,7 @@ import { learnArchiveHook, resetArchiveHookMemo } from './archive-hook'
 
 export const LEASE_MS = 30 * 60_000
 /**
- * RESUME-STUCK: a `resuming` row this old has no live wake behind it. An inline wake lives as long
+ * A `resuming` row this old has no live wake behind it. An inline wake lives as long
  * as its request (the desktop's boot timeout is 180 s) plus ctx.waitUntil's 30 s past a disconnect;
  * same bar as the wake long-poll's WAKE_STALE_MS, so a healthy slow boot is never taken over.
  */
@@ -107,7 +107,7 @@ export type LifecycleDeps = {
     keyring: Keyring
     egressPlaceholders: boolean | ReadonlySet<string>
     egressPlaceholdersOff?: ReadonlySet<string>
-    /** Flags S1/S2 minus the kill switch: which agents may use an Orca-account credential (D11). */
+    /** The agent-account flags minus the kill switch: which agents may use an Orca-account credential. */
     accountProviders?: Record<'claude' | 'codex', boolean>
   }
   now: () => number
@@ -133,14 +133,14 @@ export type LifecycleDeps = {
     touch(environmentId: string): Promise<unknown>
   }
   /**
-   * ENV-BUILD-CHURN: a create booted from (or was kept off) this environment. Records the use and
+   * A create booted from (or was kept off) this environment. Records the use and
    * rebuilds it on the current golden when stale and due, or below the security floor; at most one build.
    */
   environmentUsed?: (environmentId: string) => Promise<unknown>
   /** Work that may finish after the response (Worker ctx.waitUntil); absent means fire-and-forget. */
   background?: (work: Promise<unknown>) => void
   /**
-   * ENV-STALE: the region's active golden runtime bundle and a signed download URL, for the boot step that
+   * The region's active golden runtime bundle and a signed download URL, for the boot step that
    * brings an older image's orcad current (runtime-bundles.ts). Absent = no refresh.
    */
   runtimeRefresh?: (region: string, now: number) => Promise<{ bundle: RuntimeBundle; url: string } | null>
@@ -171,11 +171,11 @@ export type LifecycleDeps = {
     egressAllowlistError?: PlatformHostSuffixesConfigError
     /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
     extraEgressHosts?: readonly string[]
-    /** PARITY-DOCKER: false (SANDBOX_DOCKER=off) makes the VM's `docker` refuse instead of installing or starting Docker. */
+    /** False (SANDBOX_DOCKER=off) makes the VM's `docker` refuse instead of installing or starting Docker. */
     dockerEnabled?: boolean
     /** Workspace sandbox egress (SANDBOX_EGRESS_PRESET); default DEFAULT_EGRESS_PRESET ("open"). */
     egressPreset?: EgressPreset
-    /** CODEX-FIREWALL-SWAP: swap the Codex account token at the sandbox firewall for its hot calls (no Worker hop). */
+    /** Swap the Codex account token at the sandbox firewall for its hot calls (no Worker hop). */
     codexFirewallSwap?: boolean
     /** EGRESS_SWAP_MODE: the default swap mode for sandboxes without their own (design §3). Unset: proxy. */
     egressSwapMode?: EgressSwapMode
@@ -223,10 +223,10 @@ export type Ready = {
    * ('update') in the VM (create with cloneInBackground); GET /clone reports it.
    */
   cloning?: 'clone' | 'update'
-  /** The VM was told member git setup is pending (CREATE-GIT-ASYNC): the caller must finish it. */
+  /** The VM was told member git setup is pending: the caller must finish it. */
   gitSetupPending?: boolean
   /**
-   * ENV-BUILD-CHURN (d): the repo's environment was not used because its build is below the security
+   * The repo's environment was not used because its build is below the security
    * floor; the workspace started from the current golden without the environment's setup.
    */
   environmentHeld?: { environmentId: string; reason: 'security_update' }
@@ -285,7 +285,7 @@ export const PHASE_DEADLINES_MS = {
 const PHASE_LIMITS: Partial<Record<string, { ms: number; fail: boolean }>> = PHASE_DEADLINES_MS
 
 /**
- * CREATE-BUILD-SNAPSHOT-404: a VM create from an environment build's snapshot can answer 404 just
+ * A VM create from an environment build's snapshot can answer 404 just
  * after the build (dev, 11-11 and 11-13: the same snapshot booted seconds before and after). Once,
  * after a short wait, for a build under this age; never for goldens, old builds or other errors.
  */
@@ -344,7 +344,7 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
 
 /**
  * The preset a policy write actually uses. Open egress needs EGRESS_PROXY_URL outside local/test: without it the
- * git installation token would sit in a Vercel transform rule under "*" (E3 review F1), so a deployed env missing
+ * git installation token would sit in a Vercel transform rule under "*", so a deployed env missing
  * the proxy URL falls back to limited, loudly, on every policy write.
  */
 export function effectiveEgressPreset(deps: Pick<LifecycleDeps, 'config'>, row: Pick<SandboxRow, 'id'>): EgressPreset {
@@ -409,14 +409,14 @@ export function firewallClasses(deps: Pick<LifecycleDeps, 'config'>, row: Pick<S
       out.add(name)
     }
   } else if (deps.config.codexFirewallSwap) {
-    // CODEX-FIREWALL-SWAP (#776): Codex's hot calls only, in proxy mode.
+    // (#776): Codex's hot calls only, in proxy mode.
     out.add('codex')
   }
   return out
 }
 
 /**
- * CODEX-FIREWALL-SWAP / EGRESS firewall mode: the values the firewall needs. Same eligibility as the egress
+ * EGRESS firewall mode: the values the firewall needs. Same eligibility as the egress
  * proxy's per-request checks (index.ts): the owner's own account, never on a shared workspace, only while
  * the provider is on and the token is usable; a key only while it is still meant for that host.
  */
@@ -456,14 +456,14 @@ export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): P
 }
 
 /**
- * Keys the firewall can swap: no response filtering (Cursor's exchange, W1) and no path scope (Copilot's
- * PAT on api.github.com, W2: a prefix can't be pinned at the firewall). Those stay on the egress proxy.
+ * Keys the firewall can swap: no response filtering (Cursor's exchange) and no path scope (Copilot's
+ * PAT on api.github.com: a prefix can't be pinned at the firewall). Those stay on the egress proxy.
  */
 export function firewallEligibleKey(entry: SecretEgressHost): boolean {
   return firewallEligibleSecret(entry.secret) && !entry.keepResponseFields && !entry.paths
 }
 
-/** What Codex's own refresh of its placeholder login gets back: the same placeholder (CODEX-PLACEHOLDER-REFRESH). */
+/** What Codex's own refresh of its placeholder login gets back: the same placeholder. */
 export function codexPlaceholderRefreshBody(row: Pick<SandboxRow, 'id'>): string {
   const placeholder = codexPlaceholder(row)
   return JSON.stringify({ access_token: placeholder, id_token: placeholder, refresh_token: '', token_type: 'Bearer', expires_in: 315_360_000 })
@@ -499,7 +499,7 @@ export function egressPolicy(
                 placeholders: memberPlaceholders.map((p) => gitBasicAuthorization(p)),
                 via: 'forward' as const,
                 forwardURL: proxyUrl,
-                // GH-ANON-403: with no App token, plain git sends no credential (a public repo's
+                // With no App token, plain git sends no credential (a public repo's
                 // clone, fetch, ls-remote). These member rules alone must not 403 it. With a token,
                 // the workspace git route above keeps github.com fail-closed as before.
                 ...(gitToken ? {} : { allowUnclaimed: true })
@@ -515,9 +515,9 @@ export function egressPolicy(
           : []),
         ...(appOnFirewall && gitToken
           ? [
-              // APPROVALS-REFUSED: the firewall swaps the App token only for reads (GET/HEAD); every other request
+              // The firewall swaps the App token only for reads (GET/HEAD); every other request
               // with the App placeholder, whatever its method or path, goes to the proxy, which reads it and refuses
-              // approvals (review G1 and its low: an unexpected method is inspected, not swapped).
+              // approvals (an unexpected method is inspected, not swapped).
               ...githubPlaceholderHeaders(row).map(
                 (placeholder): CredentialRoute => ({
                   host: 'api.github.com',
@@ -548,7 +548,7 @@ export function egressPolicy(
             ]),
         // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule, except a
         // host whose client sends its own short-lived token on later calls (Cursor).
-        // An agent's Orca-account placeholder (D10): forwarded, claimed only by that exact Bearer value.
+        // An agent's Orca-account placeholder: forwarded, claimed only by that exact Bearer value.
         ...egressAccountRoutes(row).flatMap(({ agent, host }): CredentialRoute[] => {
           const provider = accountProvider(agent)
           if (!provider) {
@@ -570,7 +570,7 @@ export function egressPolicy(
           if (agent === 'claude') {
             return [{ host, header: provider.header, placeholders, via: 'transform', value: swap.authorization }]
           }
-          // CODEX-FIREWALL-SWAP: exact paths only, swapped right here. Firewall mode swaps every Codex call this way
+          // Exact paths only, swapped right here. Firewall mode swaps every Codex call this way
           // and 403s the rest (no Worker, no relay); the #776 alias keeps the other calls on the proxy.
           const codexSwap: CredentialRoute = {
             host,
@@ -600,7 +600,7 @@ export function egressPolicy(
           })
         )
       ]
-    : // No proxy (EGRESS-SWAP-FAIL-CLOSED): keys were withheld and only placeholders reached the VM. The firewall
+    : // No proxy: keys were withheld and only placeholders reached the VM. The firewall
       // answers them itself with a plain error, so agents say what happened instead of a provider auth failure.
       [
         ...egressAccountRoutes(row).flatMap(({ agent, host }): CredentialRoute[] => {
@@ -623,7 +623,7 @@ export function egressPolicy(
         )
       ]
   const all = [...git, ...credentials]
-  // CODEX-PLACEHOLDER-REFRESH: Codex in the sandbox, answered a 401, refreshes against auth.openai.com with
+  // Codex in the sandbox, answered a 401, refreshes against auth.openai.com with
   // its placeholder login. That request goes to the egress proxy, which answers it with the placeholder
   // again and refreshes the real token centrally (index.ts), so the retry works instead of failing sign-in.
   const codexRefresh = { host: CODEX_AUTH_HOST, path: { exact: '/oauth/token', methods: ['POST'] } }
@@ -717,7 +717,7 @@ async function boot(
     billFrom?: number
     /** First boot only: prepares the checkout (environment build link, empty repos) before orcad. */
     prelude?: StartInputs['prelude']
-    /** A create whose caller installs member git identities after it answers (CREATE-GIT-ASYNC). */
+    /** A create whose caller installs member git identities after it answers. */
     deferMemberGit?: boolean
   }
 ): Promise<Ready> {
@@ -729,7 +729,7 @@ async function boot(
   const gitSetupPending = Boolean(options.deferMemberGit) && memberGitApplies(deps, row)
   // A resumed session keeps its last policy (an expired repo token); swap it in while orcad boots.
   // Nothing in the VM uses git or model keys before orcad answers and the desktop attaches.
-  // Member identities count too (GH-ANON-403): a resumed session must not keep a policy written
+  // Member identities count too: a resumed session must not keep a policy written
   // before a fix to its member rules.
   const needsPolicy =
     !options.policyApplied &&
@@ -792,7 +792,7 @@ async function boot(
     ...(options.billFrom !== undefined ? { usage_settled_at: options.billFrom } : {})
   })
   // Per-member git identities for `orca-git-as` (policy routes were refreshed above). A create that
-  // defers them (CREATE-GIT-ASYNC) installs them after it answers, once the owner device is recorded.
+  // defers them installs them after it answers, once the owner device is recorded.
   if (!gitSetupPending && memberGitApplies(deps, running)) {
     if ((await connectedMembers(deps.db, running)).length > 0) {
       // Recorded like a create's: a failure marks the VM (its git refuses commits and pushes) and the row
@@ -825,14 +825,14 @@ export async function refreshGitCredentials(
   return applied.gitExpiresAt !== null ? { expiresAt: applied.gitExpiresAt } : null
 }
 
-/** @deprecated EGRESS-COMPILE: use applySandboxPolicy (kept one release for callers still on it). */
+/** @deprecated Use applySandboxPolicy (kept one release for callers still on it). */
 export async function rewriteLivePolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<{ expiresAt: number } | null> {
   const applied = await applySandboxPolicy(deps, row, 'rewrite', { sessionId })
   return applied.gitExpiresAt !== null ? { expiresAt: applied.gitExpiresAt } : null
 }
 
 /**
- * EGRESS-COMPILE: the whole policy for this sandbox from current state. A pure read of credentials (it may
+ * The whole policy for this sandbox from current state. A pure read of credentials (it may
  * mint the GitHub App token, which is idempotent and cached, but never spends a refresh token).
  */
 export async function compileSandboxPolicy(
@@ -841,7 +841,7 @@ export async function compileSandboxPolicy(
   options: { tokenFree?: boolean } = {}
 ): Promise<{ policy: ReturnType<typeof egressPolicy>; gitExpiresAt: number | null }> {
   if (options.tokenFree) {
-    // A4: what a stopped sandbox's record keeps. The same routes, but nothing the firewall itself would swap:
+    // What a stopped sandbox's record keeps. The same routes, but nothing the firewall itself would swap:
     // every firewall value answered by the firewall (respond), no App token. Proxy routes hold no values anyway.
     const [members, firewall] = await Promise.all([memberPlaceholdersFor(deps, row), firewallInputsFor(deps, row)])
     const scrubbed: FirewallInputs | null = firewall
@@ -863,11 +863,11 @@ export async function compileSandboxPolicy(
 }
 
 /**
- * A4 primitive (probe 2: the last session policy survives a stop and is re-applied on resume): write the
+ * Primitive (the last session policy survives a stop and is re-applied on resume): write the
  * token-free compile to the stopped sandbox's persistent record. Returns the provider's outcome.
  */
 /**
- * A4: whether this sandbox's persistent record may hold firewall values: its last applied policy was compiled
+ * Whether this sandbox's persistent record may hold firewall values: its last applied policy was compiled
  * with a firewall class (the config stamp says), or it would be now. Proxy-only policies hold no values.
  */
 export function recordMayHoldValues(deps: Pick<LifecycleDeps, 'config'>, row: SandboxRow): boolean {
@@ -883,14 +883,14 @@ export function recordMayHoldValues(deps: Pick<LifecycleDeps, 'config'>, row: Sa
 }
 
 /**
- * A4, after a voluntary stop (or a timeout reconcile found): the record gets the token-free policy, so a
+ * After a voluntary stop (or a timeout reconcile found): the record gets the token-free policy, so a
  * sleeping workspace keeps no credential at rest in the provider. A failure marks the row for reconcile.
  */
 export async function scrubStoppedRecord(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
   if (!recordMayHoldValues(deps, row)) {
     return
   }
-  // Review R2: the row may have resumed since it was selected (or since its stop). Only a still-stopped row
+  // The row may have resumed since it was selected (or since its stop). Only a still-stopped row
   // with no session is scrubbed; a scrub that raced a resume is undone by a fresh apply right after.
   const stopped = (fresh: SandboxRow | null): boolean =>
     fresh !== null && (fresh.status === 'suspended' || fresh.status === 'archived') && !fresh.session_id
@@ -915,7 +915,7 @@ export async function scrubStoppedRecord(deps: LifecycleDeps, row: SandboxRow): 
 
 /**
  * Stopped rows whose record may still hold values: a failed scrub, or an apply since the last scrub.
- * 'failed' rows are left out on purpose (review R4): failAndRelease destroys their provider sandbox, and the
+ * 'failed' rows are left out on purpose: failAndRelease destroys their provider sandbox, and the
  * cron retries a destroy that didn't finish, so no record is left to scrub.
  */
 export async function rowsToScrub(db: D1Database, limit = 25): Promise<SandboxRow[]> {
@@ -935,7 +935,7 @@ export async function rowsToScrub(db: D1Database, limit = 25): Promise<SandboxRo
 const BOOT_POLICY_BACKOFF_MS = [250, 1000, 3000]
 
 /**
- * A wake's policy write, with backoff. The record it resumes from was scrubbed (A4), so until this lands the
+ * A wake's policy write, with backoff. The record it resumes from was scrubbed at stop, so until this lands the
  * firewall answers the placeholders itself (keys-withheld or signed-out errors the agent prints): fail closed,
  * never a hang. If it still fails the workspace opens anyway, marked stale for reconcile's next tick.
  */
@@ -958,7 +958,7 @@ async function writeBootPolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: 
   await deps.db.prepare('UPDATE sandboxes SET policy_stale_at = ? WHERE id = ?').bind(deps.now(), row.id).run().catch(() => undefined)
 }
 
-/** Stamps what a boot's policy was compiled from (A4/§7.2): the create and wake writes don't go through apply. */
+/** Stamps what a boot's policy was compiled from: the create and wake writes don't go through apply. */
 async function stampBootPolicy(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
   await deps.db
     .prepare('UPDATE sandboxes SET policy_config_hash = ?, policy_generation = MAX(COALESCE(policy_generation, 0), ?) WHERE id = ?')
@@ -1015,7 +1015,7 @@ export async function policyConfigHash(deps: Pick<LifecycleDeps, 'config' | 'sec
   })
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(inputs))
   const hash = Array.from(new Uint8Array(digest).slice(0, 12), (b) => b.toString(16).padStart(2, '0')).join('')
-  // Stored with the inputs that decide narrowing (review F3), so the next change can tell if it removes access.
+  // Stored with the inputs that decide narrowing, so the next change can tell if it removes access.
   return JSON.stringify({ h: hash, ...summary })
 }
 
@@ -1031,12 +1031,12 @@ function policyConfigSummary(deps: Pick<LifecycleDeps, 'config' | 'secrets'>, ro
 }
 
 /**
- * Review F3: a config change counts as narrowing (fail closed on a failed write) only when it takes access or
+ * A config change counts as narrowing (fail closed on a failed write) only when it takes access or
  * custody away: firewall → proxy, a firewall class removed, an account provider turned off, open → limited.
  * Anything else (an allowlist edit, a new class) only marks the row stale on failure. Unreadable history: narrowing.
  */
 export function configChangeNarrows(previous: string | null | undefined, next: string): boolean {
-  // A pre-F3 stamp (a bare hash, written only in proxy mode on dev) carries no inputs to compare: a retry.
+  // An older stamp (a bare hash, written only in proxy mode on dev) carries no inputs to compare: a retry.
   if (previous != null && !previous.startsWith('{')) {
     return false
   }
@@ -1066,7 +1066,7 @@ let lastGeneration = 0
 export type AppliedPolicy = { applied: boolean; gitExpiresAt: number | null; generation: number | null }
 
 /**
- * EGRESS-COMPILE: THE way to write a running session's policy. Compiles everything from current state, so no
+ * THE way to write a running session's policy. Compiles everything from current state, so no
  * writer can drop a class (git route, member identities, account tokens, keys). Ordered by policy_generation:
  * an older compile never lands over a newer one. Values are never logged; failures log the provider's code only.
  */
@@ -1077,7 +1077,7 @@ export function applySandboxPolicy(
   options: { sessionId?: string } = {}
 ): Promise<AppliedPolicy> {
   // No in-isolate chain: a chained promise from a cancelled request would never settle and hang every later
-  // write for this sandbox (WORKER-XREQ-PROMISE). Ordering is the D1 generation's job (and review F2's re-check).
+  // write for this sandbox. Ordering is the D1 generation's job.
   return applyOnce(deps, row, reason, options.sessionId ?? row.session_id)
 }
 
@@ -1100,7 +1100,7 @@ async function applyOnce(deps: LifecycleDeps, row: SandboxRow, reason: string, s
     try {
       const { policy, gitExpiresAt } = await compileSandboxPolicy(deps, row)
       await deps.provider.updateNetworkPolicy(sessionId, policy)
-      // Review F2: claims are ordered, the writes that land are not. If a newer writer claimed meanwhile, ours may
+      // Claims are ordered, the writes that land are not. If a newer writer claimed meanwhile, ours may
       // have landed over its policy (one compiled from fresher state, say after a share): write once more, from
       // the state as it is now, so the last write to land is never the stale one.
       const latest = await deps.db.prepare('SELECT policy_generation AS g FROM sandboxes WHERE id = ?').bind(row.id).first<{ g: number | null }>()
@@ -1147,7 +1147,7 @@ export type LiveGitAccess =
   | { applied: false; reason: 'not_running' | 'not_github' | 'not_installed' }
 
 /**
- * LIVE-GIT-ACCESS: the GitHub App was installed (or granted the repo) after this workspace booted. Mint the
+ * The GitHub App was installed (or granted the repo) after this workspace booted. Mint the
  * repo token, swap it into the live egress policy, and give the VM's git the placeholder header boot would
  * have set (orca-sandbox-start), so pulls and pushes work without a restart. Idempotent; safe to repeat.
  */
@@ -1186,9 +1186,9 @@ async function memberPlaceholdersFor(deps: LifecycleDeps, row: SandboxRow): Prom
 export const MEMBERS_COMMAND = '/opt/orca/bin/orca-sandbox-members'
 
 /**
- * ENV-STALE boot step: a sandbox whose orcad is behind its region's active golden (booted from an environment
+ * Boot step: a sandbox whose orcad is behind its region's active golden (booted from an environment
  * build snapshot, or resumed from an older image) installs the golden's runtime bundle before orcad starts.
- * The same command probes the VM's entry points (ENTRY-POINTS-BEFORE-START): scripts older than this
+ * The same command probes the VM's entry points: scripts older than this
  * Worker's are installed before the start script runs, so the common case adds no round trip.
  * Best effort and quiet: any failure keeps the old orcad and scripts, and every outcome is logged with its timing.
  */
@@ -1270,7 +1270,7 @@ async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId:
   const encode = (value: unknown) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
   const result = await deps.provider.runCommand(sessionId, {
     command: MEMBERS_COMMAND,
-    // GIT-COAUTHOR: a separate variable, which an image's older members script simply ignores.
+    // A separate variable, which an image's older members script simply ignores.
     env: { ORCA_MEMBERS_B64: encode(configs), ORCA_COAUTHORS_B64: encode(coauthors), ...(solo ? { ORCA_SOLO_MEMBER: solo } : {}) },
     sudo: true,
     timeoutMs: 30_000
@@ -1295,7 +1295,7 @@ async function markGitSetup(deps: LifecycleDeps, sessionId: string, outcome: 're
 }
 
 /**
- * Installs member identities and records the outcome (CREATE-GIT-ASYNC): after a create answered, and on
+ * Installs member identities and records the outcome: after a create answered, and on
  * every later boot that installs them. `install` false (the VM is not running) only marks it. A failure
  * marks the VM (`git-setup.failed`, its git refuses commits and pushes) and the row (gitSetup 'failed')
  * until a later install succeeds.
@@ -1353,7 +1353,7 @@ export async function createSandbox(
      * after ready instead of inside it. Older clients wait for the clone inside create.
      */
     cloneInBackground?: boolean
-    /** The caller installs member git identities after it answers (CREATE-GIT-ASYNC). */
+    /** The caller installs member git identities after it answers. */
     deferMemberGit?: boolean
   },
   options: { pool?: boolean; fallback?: boolean } = {}
@@ -1386,7 +1386,7 @@ export async function createSandbox(
           })
         )
       : null
-  // ENV-BUILD-CHURN (d): never boot a build below the security floor, even while its rebuild runs.
+  // Never boot a build below the security floor, even while its rebuild runs.
   // The workspace starts from the current golden and clones instead; the desktop says the
   // environment's setup hasn't run (environmentHeld). One rebuild starts behind the response.
   let environmentHeld: Ready['environmentHeld']
@@ -1477,7 +1477,7 @@ export async function createSandbox(
       throw error
     }
   })
-  // ENV-BUILD-CHURN (b): every environment boot records the use (org environments too) and may start
+  // Every environment boot records the use (org environments too) and may start
   // the lazy refresh; an environment held off by the floor starts its one rebuild here.
   const usedEnvironmentId = source?.environmentId ?? environmentHeld?.environmentId
   if (usedEnvironmentId && deps.environmentUsed) {
@@ -1517,7 +1517,7 @@ export async function createSandbox(
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
       return { ...ready, ...(cloning ? { cloning } : {}), ...(environmentHeld ? { environmentHeld } : {}) }
     } catch (error) {
-      // EP-5: deleted by its owner mid-create (a cancel): free it, never make another.
+      // Deleted by its owner mid-create (a cancel): free it, never make another.
       const cancelled = await deletedMeanwhile(deps, row)
       // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
       console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
@@ -1603,7 +1603,7 @@ export async function createSandbox(
 /**
  * last_error for a create that failed with `error`: the step that broke, never a message. An error of
  * no known kind is named by the phase it broke (`timer`): orcad's start, at or past its 120 s budget,
- * is `orcad_start_timeout` (CREATE-FAIL-LABELS), so D1 alone tells a hung start from the rest.
+ * is `orcad_start_timeout`, so D1 alone tells a hung start from the rest.
  */
 export function createFailureReason(error: unknown, timer?: Pick<ReturnType<typeof phaseTimer>, 'failed'>): string {
   if (error instanceof VmCommandError) {
@@ -1701,14 +1701,14 @@ export async function stopForSuspend(
       await recordSnapshots(deps.db, row.id, [stopped.snapshotId], deps.now())
     }
     await queueUsage(deps.db, row, deps.now())
-    // Internal CPU review (U22): never throws, never touches the meter.
+    // Never throws, never touches the meter.
     await recordSessionEnd(deps.db, row, deps.now(), stopped.usage, deps.now())
   } else {
     await queueUsage(deps.db, row, deps.now())
   }
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
   const suspended = await claim(deps, row, { status: 'suspended', ...NO_SESSION })
-  // A4: the stopped record keeps the session's last policy; leave it token-free.
+  // The stopped record keeps the session's last policy; leave it token-free.
   await scrubStoppedRecord(deps, suspended).catch(() => undefined)
   return suspended
 }
@@ -1720,7 +1720,7 @@ export async function markProviderStopped(deps: LifecycleDeps, row: SandboxRow):
   await recordSessionEnd(deps.db, row, endedAt, null, deps.now())
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
   const suspended = await claim(deps, row, { status: 'suspended', ...NO_SESSION })
-  // A4: a timeout kept the last policy on the record too.
+  // A timeout kept the last policy on the record too.
   await scrubStoppedRecord(deps, suspended).catch(() => undefined)
   return suspended
 }
@@ -1768,7 +1768,7 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
 }
 
 /**
- * RESUME-STUCK: a wake is already in flight (a second open, or one whose client quit mid-wake). Wait
+ * A wake is already in flight (a second open, or one whose client quit mid-wake). Wait
  * for it; once it is stale its Worker is gone, so adopt what the provider says: a running session
  * gets the full boot, otherwise the row goes back to `suspended` and this resume starts a fresh one.
  */
@@ -1828,7 +1828,7 @@ export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready>
   assertEgressAllowlistUsable(deps, row)
   await resetArchiveHookMemo(deps.db, row.id).catch(() => undefined)
   const timer = phaseTimer(deps.now)
-  // A4: the record was scrubbed at stop; give it the full policy first so the resumed session has no gap.
+  // The record was scrubbed at stop; give it the full policy first so the resumed session has no gap.
   // Best effort: the post-resume apply in boot is the backstop.
   if (recordMayHoldValues(deps, row) && deps.provider.updateRecordNetworkPolicy) {
     await timer
@@ -1898,7 +1898,7 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   if (settled !== destroying.usage_settled_at) {
     destroying = await claim(deps, destroying, { usage_settled_at: settled })
   }
-  // A9: sign each agent out on the VM first (bounded, best effort; never blocks the delete). A
+  // Sign each agent out on the VM first (bounded, best effort; never blocks the delete). A
   // suspended sandbox has no session and is never woken for it: its disk goes with the delete.
   // A retried destroy already tried once, and its box may be gone: don't wait on it again.
   if (destroying.session_id && row.status !== 'destroying') {
@@ -1941,7 +1941,7 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
 }
 
 /**
- * EP-5: a create whose row its owner deleted mid-way (a cancelled create; the create outlives its
+ * A create whose row its owner deleted mid-way (a cancelled create; the create outlives its
  * request). It frees what it made and stops: no pooled retry, no region fallback, no new row.
  */
 export const CREATE_CANCELLED = 'create_cancelled'

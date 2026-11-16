@@ -1,4 +1,4 @@
-// END-PASS CHAT-RENEW: every chat-side cloud check finds the chat's Orca Cloud environment the same way,
+// Every chat-side cloud check finds the chat's Orca Cloud environment the same way,
 // including a chat tab the desktop created itself (no `runtime:` execution host on the tab).
 import { describe, expect, it, vi } from 'vitest'
 

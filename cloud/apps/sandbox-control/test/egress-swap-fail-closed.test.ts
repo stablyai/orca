@@ -1,4 +1,4 @@
-// EGRESS-SWAP-FAIL-CLOSED: a deployed env (not local/test) without EGRESS_PROXY_URL can't swap keys at egress.
+// A deployed env (not local/test) without EGRESS_PROXY_URL can't swap keys at egress.
 // Model keys and Orca-account sign-ins are withheld (the VM gets placeholders, the firewall answers them with a
 // plain error), the session logs egress_swap_unavailable once (error level, counts only), and /v1/health fails the
 // post-deploy smoke with keySwap "off".
@@ -51,7 +51,7 @@ function startEnv(h: Awaited<ReturnType<typeof createHarness>>): Record<string, 
 let errors: string[] = []
 const withheldEvents = () => errors.filter((line) => line.includes('"event":"egress_swap_unavailable"'))
 
-describe('EGRESS-SWAP-FAIL-CLOSED', () => {
+describe('no egress proxy in a deployed env: keys fail closed', () => {
   it('a deployed env without the proxy withholds model keys: placeholder in the VM, the firewall answers it with a plain error', async () => {
     const { h, mia } = await setup({ SANDBOX_ENV: 'staging' })
     await h.call('PUT', '/v1/secrets/personal/ANTHROPIC_API_KEY', { body: { value: KEY }, bearer: mia })
@@ -64,7 +64,7 @@ describe('EGRESS-SWAP-FAIL-CLOSED', () => {
     expect(JSON.stringify(h.vercel.commands)).not.toContain(KEY)
     const box = [...h.vercel.boxes.values()][0]!
     expect(JSON.stringify(box.policy)).not.toContain(KEY)
-    // Limited (E3-PROD-GUARD), and the key's host answers its placeholder itself.
+    // Limited (the prod guard), and the key's host answers its placeholder itself.
     expect(box.policy.allow['*']).toBeUndefined()
     const rules = box.policy.allow['api.anthropic.com']!
     const answer = rules.find((rule) => 'response' in rule && 'match' in rule && rule.match)

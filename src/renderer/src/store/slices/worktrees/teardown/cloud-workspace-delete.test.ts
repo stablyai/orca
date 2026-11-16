@@ -59,7 +59,7 @@ describe('Orca Cloud workspace delete', () => {
     )
   })
 
-  it('keeps the row and destroys nothing when Orca Cloud cannot confirm the sandbox (W9 D-2)', async () => {
+  it('keeps the row and destroys nothing when Orca Cloud cannot confirm the sandbox', async () => {
     const { store, wt } = seedCloudWorkspace()
     const preflight = vi.fn().mockResolvedValue({
       ok: false,
@@ -89,14 +89,14 @@ describe('Orca Cloud workspace delete', () => {
     const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, true)
 
     expect(result).toEqual({ ok: true })
-    // Nothing goes to the asleep sandbox's server, not even the archive-hook check (W9: a 31 s
+    // Nothing goes to the asleep sandbox's server, not even the archive-hook check (a 31 s
     // delete was waiting out request timeouts against it).
     expect(calledMethods()).toEqual([])
     expect(mockApi.worktrees.forgetLocal).toHaveBeenCalled()
     expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-cloud' })
   })
 
-  it('ARCHIVE-HOOK: wakes an asleep sandbox for its repo’s archive hook; a failure keeps it until Delete anyway', async () => {
+  it('wakes an asleep sandbox for its repo’s archive hook; a failure keeps it until Delete anyway', async () => {
     const { store, wt } = seedCloudWorkspace()
     Object.assign(mockApi.ephemeralVm, {
       preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, asleep: true })
@@ -171,7 +171,7 @@ describe('Orca Cloud workspace delete', () => {
     expect(mockApi.worktrees.forgetLocal).toHaveBeenCalled()
   })
 
-  it('EP-8: a running sandbox this computer cannot reach asks for Force delete, never waits on it', async () => {
+  it('a running sandbox this computer cannot reach asks for Force delete, never waits on it', async () => {
     const { store, wt } = seedCloudWorkspace()
     Object.assign(mockApi.ephemeralVm, {
       preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, unreachable: 'rejected' })
@@ -186,7 +186,7 @@ describe('Orca Cloud workspace delete', () => {
     expect(store.getState().deleteStateByWorktreeId[wt.id]?.canForceDelete).toBe(true)
   })
 
-  it('EP-8: Force delete of an unreachable sandbox destroys it through Orca Cloud', async () => {
+  it('Force delete of an unreachable sandbox destroys it through Orca Cloud', async () => {
     const { store, wt } = seedCloudWorkspace()
     Object.assign(mockApi.ephemeralVm, {
       preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, unreachable: 'no_answer' })

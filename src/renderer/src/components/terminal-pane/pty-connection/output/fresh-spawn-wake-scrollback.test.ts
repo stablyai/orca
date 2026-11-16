@@ -25,7 +25,7 @@ function session(leafId: string): { session: ConnectPanePtySession; writes: stri
   return { session: typed, writes }
 }
 
-describe('fresh-spawn viewport blanking on a woken cloud pane (WAKE-SCROLLBACK)', () => {
+describe('fresh-spawn viewport blanking on a woken cloud pane', () => {
   it('a pane with pre-sleep output to put back is held, not blanked (no blank frame before the restore)', async () => {
     const terminal = new Terminal({ cols: 40, rows: 4, allowProposedApi: true })
     await new Promise<void>((resolve) => terminal.write('$ seq 1 3\r\n1\r\n2\r\n3\r\n$ ', resolve))

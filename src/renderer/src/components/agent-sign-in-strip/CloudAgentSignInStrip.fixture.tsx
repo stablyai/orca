@@ -44,11 +44,11 @@ function Pane({
   view?: AgentSignInGateView | null
   agent?: HostAgentSignInAgent
   width?: number
-  /** RA-11: the strip over a running agent instead of a held launch. */
+  /** The strip over a running agent instead of a held launch. */
   running?: CloudRunningStrip
-  /** RA-11: a Restart in flight, or one that failed. */
+  /** A Restart in flight, or one that failed. */
   restart?: CloudAgentRestartAttempt
-  /** PC-3b: a launch held because the agent isn't set up for Orca Cloud yet. */
+  /** A launch held because the agent isn't set up for Orca Cloud yet. */
   setUp?: { setup: OrcaCloudAgentSetup; ready?: boolean }
 }): React.JSX.Element {
   const model = setUp
@@ -115,7 +115,7 @@ function Pane({
 const fixture = (props: React.ComponentProps<typeof Pane>) =>
   defineFixture({ width: (props.width ?? 900) + 40, render: () => <Pane {...props} /> })
 
-/** S4-c, card 13 in its strip form: account-level recovery with Renew (to S0). */
+/** Account-level recovery in its strip form, with Renew. */
 export const needExpired = fixture({ reason: 'accountExpired' })
 export const needExpiredCodex = fixture({ reason: 'accountExpired', agent: 'codex' })
 export const killSwitch = fixture({ reason: 'paused', view: { step: 'need' } })
@@ -129,7 +129,7 @@ export const code = fixture({
   agent: 'codex',
   view: { step: 'device', url: 'https://auth.openai.com/codex/device', userCode: 'K7QX-M2PL' }
 })
-/** CANCEL-SIGNIN-MENU: the code step's ⋯ menu offers other ways only; the × beside it cancels. */
+/** The code step's ⋯ menu offers other ways only; the × beside it cancels. */
 export const codeMenu = defineFixture({
   width: 940,
   render: () => (
@@ -187,17 +187,17 @@ export const needExpiredNarrow = fixture({ reason: 'accountExpired', width: 520 
 /** Below 360 px: title and detail wrap beside Renew; nothing truncates. */
 export const needExpiredCompact = fixture({ reason: 'accountExpired', width: 320 })
 
-/** RA-11 state 1: Claude was running when its Orca-account sign-in expired. */
+/** State 1: Claude was running when its Orca-account sign-in expired. */
 export const runningExpired = fixture({ running: { phase: 'expired', agent: 'claude' } })
 export const runningExpiredCompact = fixture({
   running: { phase: 'expired', agent: 'claude' },
   width: 320
 })
-/** RA-11 state 2: renewed; this pane's agent still needs a restart (resumes its conversation). */
+/** State 2: renewed; this pane's agent still needs a restart (resumes its conversation). */
 export const runningRenewed = fixture({
   running: { phase: 'renewed', agent: 'claude', resumable: true }
 })
-/** RA-11 state 2 when the session can't be resumed. */
+/** State 2 when the session can't be resumed. */
 export const runningRenewedFresh = fixture({
   running: { phase: 'renewed', agent: 'claude', resumable: false }
 })
@@ -205,11 +205,11 @@ export const runningRenewedNarrow = fixture({
   running: { phase: 'renewed', agent: 'claude', resumable: true },
   width: 520
 })
-/** RA-11 after Restart: the strip stays, spinner, button disabled, until the agent reports. */
+/** After Restart: the strip stays, spinner, button disabled, until the agent reports. */
 export const runningRestarting = fixture({
   restart: { phase: 'restarting', agent: 'claude', resumable: true, ptyId: 'p', launchedAt: null }
 })
-/** RA-11: nothing relaunched in time. */
+/** Nothing relaunched in time. */
 export const runningRestartFailed = fixture({
   restart: {
     phase: 'failed',
@@ -236,7 +236,7 @@ export const runningRestartFailedNarrow = fixture({
   width: 320
 })
 
-/** PC-3b: the launch holds; Set up once runs the one-time Orca Cloud setup in the pane. */
+/** The launch holds; Set up once runs the one-time Orca Cloud setup in the pane. */
 export const notSetUp = fixture({ setUp: { setup: { phase: 'idle' } } })
 export const notSetUpCompact = fixture({ setUp: { setup: { phase: 'idle' } }, width: 320 })
 /** The quiet second choice on "Set up once": the agent signs in inside this workspace instead. */
@@ -293,7 +293,7 @@ export const notSetUpPasteRejectedNarrow = fixture({
 export const notSetUpFailed = fixture({ setUp: { setup: { phase: 'failed', error: 'denied' } } })
 /** Set up finished: Start {{agent}} releases the held launch. */
 export const notSetUpDone = fixture({ setUp: { setup: { phase: 'saved' }, ready: true } })
-/** SETUP-PASTE: Claude's sign-in page shows a code; [Paste code] [Finish setup] [Open again]. */
+/** Claude's sign-in page shows a code; [Paste code] [Finish setup] [Open again]. */
 export const notSetUpBrowserCode = fixture({
   setUp: { setup: { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true } },
   width: 800
@@ -314,17 +314,17 @@ export const notSetUpBrowserCodeGapNarrow = fixture({
   width: 420
 })
 
-/** V3-01: restored after a restart; the account covers Claude; the first prompt waits. */
+/** Restored after a restart; the account covers Claude; the first prompt waits. */
 export const awaitingStartCovered = defineFixture({
   width: 940,
   render: () => <AwaitingPane awaiting="covered" queuedPrompt />
 })
-/** V3-01: restored; Orca couldn't read the sign-in after restarting. */
+/** Restored after a restart, but Orca couldn't read the sign-in. */
 export const awaitingStartUnread = defineFixture({
   width: 940,
   render: () => <AwaitingPane awaiting="unread" queuedPrompt={false} />
 })
-/** V3-01: a restored expired hold, renewed: no auto-start, Start waits. */
+/** A restored expired hold, renewed: no auto-start, Start waits. */
 export const awaitingStartRenewed = defineFixture({
   width: 940,
   render: () => <AwaitingPane awaiting="renewed" queuedPrompt />
@@ -370,7 +370,7 @@ function AwaitingPane({
   )
 }
 
-/** RS-3: device code sign-in is off for this ChatGPT account (a fixable setting: amber, not red). */
+/** Device code sign-in is off for this ChatGPT account (a fixable setting: amber, not red). */
 export const notSetUpDeviceAuthOff = fixture({
   agent: 'codex',
   setUp: { setup: { phase: 'failed', error: 'device_auth_disabled' } }

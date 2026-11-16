@@ -1,4 +1,4 @@
-// S0 state 6: the setup running on this computer (browser, broker, device code, paste, saving).
+// The setup running on this computer (browser, broker, device code, paste, saving).
 import type React from 'react'
 import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -194,7 +194,7 @@ export function SetupRow({
             </>
           }
         >
-          {/* Line 2 (design-squad): [Paste code ………] [Finish setup], the field filling the column. */}
+          {/* Line 2: [Paste code ………] [Finish setup], the field filling the column. */}
           {setup.acceptsCode || setup.code === 'rejected' ? (
             <CloudStripPasteForm
               fill

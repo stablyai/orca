@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// AC-1 (agent-sign-in redesign §8): across every strip state at one pane width, the strip, its text
-// column, its actions slot and the terminal's top edge sit in exactly the same boxes.
+// Across every strip state at one pane width, the strip, its text column, its actions slot and the
+// terminal's top edge sit in exactly the same boxes (agent-sign-in redesign §8).
 
 const WIDE = [
   'needExpired',
@@ -50,7 +50,7 @@ for (const [name, ids] of [
   })
 }
 
-// RA-1 real-app defects: the layout follows the strip's live width, and the pane's own title-row
+// Defects seen in the real app: the layout follows the strip's live width, and the pane's own title-row
 // buttons stay clickable while the strip shows.
 test('narrowing the pane after mount re-lays the strip out; the title stays readable', async ({
   page
@@ -100,7 +100,7 @@ test('the pane’s split and close buttons stay hit-testable above the strip', a
   }
 })
 
-// RA-11 + #315 P2: the strip reserves its height; the terminal refits below it, so no row (and not
+// The strip reserves its height; the terminal refits below it, so no row (and not
 // the last one) ever sits under the strip, held launch or running agent alike.
 test('the terminal starts below the strip and its last row stays visible', async ({ page }) => {
   for (const id of [
@@ -126,7 +126,7 @@ test('the terminal starts below the strip and its last row stays visible', async
   }
 })
 
-test('RA-11: state 1 offers Renew only; state 2 offers Restart and a dismiss clear of the pane buttons', async ({
+test('state 1 offers Renew only; state 2 offers Restart and a dismiss clear of the pane buttons', async ({
   page
 }) => {
   await page.goto('/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:runningExpired')
@@ -147,7 +147,7 @@ test('RA-11: state 1 offers Renew only; state 2 offers Restart and a dismiss cle
   expect(dismiss.y).toBeGreaterThanOrEqual(close.y + close.height)
 })
 
-test('RA-11 Restart: "Restarting Claude…" is the spinner and words only; a failure offers Try again once', async ({
+test('Restart: "Restarting Claude…" is the spinner and words only; a failure offers Try again once', async ({
   page
 }) => {
   await page.goto('/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:runningRestarting')
@@ -169,7 +169,7 @@ test('RA-11 Restart: "Restarting Claude…" is the spinner and words only; a fai
   await expect(strip.getByRole('button', { name: 'Dismiss' })).toBeVisible()
 })
 
-test('PC-3b: not set up is neutral (no loading ring), and a narrow paste strip keeps one line', async ({
+test('not set up is neutral (no loading ring), and a narrow paste strip keeps one line', async ({
   page
 }) => {
   await page.goto('/fixtures.html?id=agent-sign-in-strip/CloudAgentSignInStrip:notSetUp')

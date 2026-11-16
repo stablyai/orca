@@ -1,4 +1,4 @@
-// B2 for Orca Cloud setup: the setup rows with the "Switch to <team>" Team row swapped in.
+// Orca Cloud setup's team switch: the setup rows with the "Switch to <team>" Team row swapped in.
 import { useMemo } from 'react'
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 import {
@@ -7,7 +7,7 @@ import {
   type CloudSetupSwitchTeam
 } from './CloudSetupSwitchTeam'
 
-/** B2 applied to the setup rows: the rows to show, and the switch when it holds Start. */
+/** The switch applied to the setup rows: the rows to show, and the switch when it holds Start. */
 export function useSwitchTeamSteps(
   baseSteps: CloudSetupStep[],
   enabled: boolean

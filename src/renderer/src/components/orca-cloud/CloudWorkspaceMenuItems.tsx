@@ -15,7 +15,7 @@ import { useCloudWorkspaceRecord } from './use-cloud-workspace-record'
 const noop = (): void => {}
 
 /**
- * The sidebar's rows from the shared cloud workspace action list (JA-14): Lifecycle (Restart,
+ * The sidebar's rows from the shared cloud workspace action list: Lifecycle (Restart,
  * Archive or Unarchive; Sleep and Delete stay where the sidebar already has them), the same
  * actions as Home's menu.
  */
@@ -29,7 +29,7 @@ export function CloudWorkspaceMenuItems({
   /** "Move to this computer", in the top group right after Restart (the sidebar passes it). */
   moveItem?: React.ReactNode
 }): React.JSX.Element | null {
-  // PAIRED-ARCHIVE: a paired row gets the same lifecycle rows (each action decides for itself).
+  // A paired row gets the same lifecycle rows (each action decides for itself).
   const view = useCloudWorkspaceView(worktreeId, { pairedRows: true })
   if (!view.isCloud) {
     return null

@@ -1,4 +1,4 @@
-// PC-3b: one Orca Cloud agent hold for every launch. Each agent-carrying terminal the desktop asks a
+// One Orca Cloud agent hold for every launch. Each agent-carrying terminal the desktop asks a
 // web host to create goes through createWebRuntimeSessionTerminalResult, which holds it first
 // (createWithCloudAgentHold). A new caller of the host's create RPCs would bypass that hold and
 // start a not-set-up (or expired) Claude/Codex straight into its own /login, as the create-with-prompt
@@ -34,7 +34,7 @@ function sources(dir: string): string[] {
   })
 }
 
-describe('host terminal creates (PC-3b: one hold for every launch)', () => {
+describe('host terminal creates (one hold for every launch)', () => {
   it('only the hold choke point (and gated or local paths) call the host create RPCs', () => {
     const callers = sources(RENDERER)
       .filter((path) => HOST_CREATE.test(readFileSync(path, 'utf8')))

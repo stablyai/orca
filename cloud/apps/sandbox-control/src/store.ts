@@ -61,12 +61,12 @@ export type SandboxRow = {
   user_slept_at?: number | null
   /** Background member-git setup after a create failed (0053); cleared by the next successful sync. */
   git_setup_failed_at?: number | null
-  /** EGRESS-COMPILE (0065): see migrations/0065_egress_policy_apply.sql. */
+  /** See migrations/0065_egress_policy_apply.sql. */
   policy_generation?: number | null
   policy_stale_at?: number | null
   egress_swap_mode?: string | null
   policy_config_hash?: string | null
-  /** A4 (0067): see migrations/0067_policy_scrub.sql. */
+  /** See migrations/0067_policy_scrub.sql. */
   policy_scrubbed_at?: number | null
   policy_scrub_pending?: number | null
   archived_at: number | null
@@ -272,7 +272,7 @@ export async function updateRegistry(db: D1Database, id: string, patch: Registry
 }
 
 /**
- * OWNER-TRANSFER: the new owner and the transferred mark in one statement, and only while the
+ * The new owner and the transferred mark in one statement, and only while the
  * workspace is stopped. A row that is running or mid-boot at this instant is left untouched
  * (null), so a hand-off can never land on a live VM or on a boot whose environment was resolved
  * for the previous owner.

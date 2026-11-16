@@ -1,4 +1,4 @@
-// AUDIT-AUTH-EVENTS (billing half): plan, seat, cancellation, overage and spend-cap changes
+// Billing's audit events: plan, seat, cancellation, overage and spend-cap changes
 // reach the team's audit log on the sandbox control plane, with who acted when a person did.
 import { describe, expect, it } from 'vitest'
 import { hasTeamAuditLog, pushBillingAudit, subscriptionAuditEvents } from '../src/audit-push'

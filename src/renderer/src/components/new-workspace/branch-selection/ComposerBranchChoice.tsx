@@ -14,7 +14,7 @@ type Props = {
   onBranchNameOverrideChange: (value: string | undefined) => void
   onOpenSelectedBranchWorkspace?: () => void
   disabled: boolean
-  /** Orca Cloud is the run target: the unit of work is a workspace (JA-25 glossary). */
+  /** Orca Cloud is the run target: the unit of work is a workspace. */
   cloud?: boolean
 }
 

@@ -1,4 +1,4 @@
-// A9: agents are signed out on a running sandbox before Orca deletes it, without ever blocking the delete.
+// Agents are signed out on a running sandbox before Orca deletes it, without ever blocking the delete.
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

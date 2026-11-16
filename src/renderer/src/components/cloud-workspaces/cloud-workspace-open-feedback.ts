@@ -1,4 +1,4 @@
-// EP-6-FLAKE: opening a cloud workspace can wait a long while (a wake, a just-created VM, a grant
+// Opening a cloud workspace can wait a long while (a wake, a just-created VM, a grant
 // that times out) with nothing on screen, then drop the person on Home. While an open runs, a
 // loading toast says so after a few seconds; a timeout says it is still starting (Try again); a
 // workspace the server no longer has fails at once (Couldn't find it). The picker shows its own

@@ -1,4 +1,4 @@
-// GRANT-ID-TRACKING: the grant a pairing recovery left this computer holding for a sandbox that no
+// The grant a pairing recovery left this computer holding for a sandbox that no
 // binding tracks (an owned workspace's re-grant, or a paired one whose binding couldn't be updated).
 // Kept on disk so the next recovery, even after a restart, revokes it instead of leaving a stray
 // device grant on Orca Cloud. Grant ids aren't secrets; nothing else is stored.

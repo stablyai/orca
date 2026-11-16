@@ -1,4 +1,4 @@
-// ENV-NOTICE-ACTIONS: what the "can't push" notice can offer, from what the control plane says about
+// What the "can't push" notice can offer, from what the control plane says about
 // the Orca GitHub App's access (repo-access) and what the person's own gh login says about installing
 // it. Install only shows where installing can work; a request already sent offers a copy for an owner;
 // a public repository someone else owns (octocat/Hello-World) gets a request to copy, no Install.
@@ -55,7 +55,7 @@ export async function fetchCloudPushAccess(
   if (access !== 'missing' && access !== 'public') {
     return cloudPushAccess(access, null)
   }
-  // The control plane knows from the person's own GitHub (REPO-CAN-INSTALL, #645). Only when it
+  // The control plane knows from the person's own GitHub. Only when it
   // can't tell (null: no connected GitHub, GitHub refused) or is older (absent) is gh asked.
   if (answer?.canInstall === true) {
     return 'install'

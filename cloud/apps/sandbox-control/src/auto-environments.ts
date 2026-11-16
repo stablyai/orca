@@ -1,4 +1,4 @@
-// Automatic environments: Conductor-style "the repo is already there". An environment build (golden +
+// Automatic environments: "the repo is already there". An environment build (golden +
 // the repo checked out, snapshotted) is opt-in for admins; without one every create of a repo cloned it
 // from scratch (stablyai/orca: ~55 s). So the first create of a repo that no environment of the account
 // lists makes a default environment for it (the repo, blobless, plus its lockfile's JavaScript
@@ -41,7 +41,7 @@ function autoConfig(environment: EnvironmentRow): BuildConfig {
     machineSize: environment.machine_size,
     // History and trees only: a smaller snapshot and a faster build; file contents load on demand.
     cloneFilter: 'blob:none',
-    // Dependencies from the lockfile, so creates start warm (PARITY-AUTO-ENV-DEPS); soft on failure.
+    // Dependencies from the lockfile, so creates start warm; soft on failure.
     autoInstall: true
   }
 }

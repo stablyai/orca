@@ -69,7 +69,7 @@ describe('pending row status colour', () => {
   })
 })
 
-// REFUSED-CREATE-ROW-STICKY: a refused create keeps its row (and prompt) with the reason, Retry and
+// A refused create keeps its row (and prompt) with the reason, Retry and
 // Dismiss; starting another create replaces it; a slot freeing up alone never clears it.
 const AT_LIMIT = () =>
   failed(

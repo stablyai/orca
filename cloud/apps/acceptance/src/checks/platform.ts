@@ -1,4 +1,4 @@
-// W1 environment builds, W4 multiplayer, W5 public API / MCP / routines, W8 device sessions.
+// Environment builds, multiplayer, public API / MCP / routines, device sessions.
 import { createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, createDecipheriv } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
@@ -15,12 +15,12 @@ import { sandboxToken, type Identity } from '../tokens'
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const tag = (ctx: Ctx) => ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-10)
 
-// ---------------- W1 environment builds ----------------
+// ---------------- environment builds ----------------
 type BuildState = { envId: string; first: any; second: any; error?: string }
 let builds: Promise<BuildState> | null = null
 
 /**
- * Polls GET only by default: builds must progress server-side with nobody streaming (the W1-1 bug).
+ * Polls GET only by default: builds must progress server-side with nobody streaming (a past bug: builds stalled under GET polling).
  * ORCA_ACCEPTANCE_BUILD_EVENTS=1 follows the live NDJSON events the way the desktop does.
  */
 async function waitBuild(who: Identity, envId: string, buildId: string, timeoutMs = 25 * 60_000) {
@@ -102,7 +102,7 @@ async function marker(ctx: Ctx, sessionId: string) {
   return (await ctx.exec(sessionId, 'cat /opt/w9-build-marker 2>/dev/null || echo none')).stdout.trim()
 }
 
-// ---------------- W4 / W8 crypto helpers ----------------
+// ---------------- multiplayer / device-session crypto helpers ----------------
 function x25519Pair() {
   const { publicKey, privateKey } = generateKeyPairSync('x25519')
   return { privateKey, publicRaw: Buffer.from(publicKey.export({ format: 'jwk' }).x!, 'base64url') }
@@ -151,7 +151,7 @@ function teamWorkspaces(ctx: Ctx) {
   return teamWs
 }
 
-// ---------------- W5 API helpers ----------------
+// ---------------- public API helpers ----------------
 let apiKey: Promise<string> | null = null
 function key(ctx: Ctx) {
   apiKey ??= (async () => {
@@ -298,7 +298,7 @@ export const platformChecks: Record<string, Check> = {
     }
   },
 
-  // ---------------- W4 ----------------
+  // ---------------- multiplayer ----------------
   'mp.registry': async (ctx) => {
     const ws = await teamWorkspaces(ctx)
     const list = await control.as(ctx.member, 'GET', '/v1/team/workspaces?scope=team')
@@ -424,7 +424,7 @@ export const platformChecks: Record<string, Check> = {
   },
 
   'life.read-asleep-access': async (ctx) => {
-    // Access control for reading a sleeping workspace, triggered by W9 itself on dev: the operator
+    // Access control for reading a sleeping workspace, triggered by this harness itself on dev: the operator
     // member-removed route (what auth calls) revokes a member at once; making the workspace private
     // prunes the other teammate. Checks the API answer and the wrapped keys left in D1.
     const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
@@ -523,7 +523,7 @@ export const platformChecks: Record<string, Check> = {
       }
     }
   },
-  // ---------------- W5 ----------------
+  // ---------------- public API, MCP, routines ----------------
   'api.rest': async (ctx) => {
     const created = await api(ctx, 'POST', '/v1/workspaces', { name: `w9-api-${tag(ctx)}`, repo: { url: config.testRepo } })
     const id = created.body?.workspace?.id ?? created.body?.id
@@ -553,7 +553,7 @@ export const platformChecks: Record<string, Check> = {
 
   'life.wake-on-message': async (ctx) => {
     // A message sent to a SLEEPING workspace through the public API wakes it and is delivered to the
-    // agent (Claude Code via the shared gateway key, kimi-k2): the Conductor 0.81/0.83 behaviour.
+    // agent (Claude Code via the shared gateway key, kimi-k2): the peer's 0.81/0.83 behaviour.
     const gw = secrets.aiGatewayKey()
     if (!gw) {
       return { status: 'skipped', detail: 'no AI Gateway key' }
@@ -617,7 +617,7 @@ export const platformChecks: Record<string, Check> = {
   },
 
   'api.cli': async (ctx) => {
-    // `orca worktree create --on cloud` (W5 #167), headless: the CLI calls the control plane with an
+    // `orca worktree create --on cloud` (#167), headless: the CLI calls the control plane with an
     // API key (no app involved). Needs out/cli/index.js built from this checkout.
     const repoRoot = new URL('../../../../../', import.meta.url).pathname
     const cli = `${repoRoot}out/cli/index.js`
@@ -804,7 +804,7 @@ export const platformChecks: Record<string, Check> = {
     }
   },
 
-  // ---------------- W8 ----------------
+  // ---------------- device sessions ----------------
   'cli.mobile': async (ctx) => {
     const { publicKey, privateKey } = generateKeyPairSync('ed25519')
     const pub = Buffer.from(publicKey.export({ format: 'jwk' }).x!, 'base64url').toString('base64')

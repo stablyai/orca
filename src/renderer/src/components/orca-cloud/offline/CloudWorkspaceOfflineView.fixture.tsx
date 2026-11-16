@@ -272,7 +272,7 @@ export const goingToSleepWithEarlierCopy = defineFixture({
     )
 })
 
-/** SLEEP-IN-PROGRESS: the sleep returned but its copy isn't read back yet. Never "nothing saved". */
+/** The sleep returned but its copy isn't read back yet. Never "nothing saved". */
 export const savingCopyAfterSleep = defineFixture({
   width: 900,
   render: () =>
@@ -292,7 +292,7 @@ export const savingCopyAfterSleep = defineFixture({
     )
 })
 
-/** SLEEP-IN-PROGRESS: no copy arrived in time. Says so; Wake is the one action. */
+/** No copy arrived in time. Says so; Wake is the one action. */
 export const copySaveFailed = defineFixture({
   width: 900,
   render: () =>

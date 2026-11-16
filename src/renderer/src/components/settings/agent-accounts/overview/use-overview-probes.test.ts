@@ -39,7 +39,7 @@ const HOSTS: OverviewHost[] = [
   host({ hostId: 'ssh:classic', kind: 'sshClassic', environmentId: null })
 ]
 
-describe('S3 probes', () => {
+describe('sign-ins by host probes', () => {
   it('asks only awake, connected hosts; never a stopped, suspended, unreachable or disconnected one', async () => {
     expect(overviewProbeTargets(HOSTS).map((entry) => entry.hostId)).toEqual([
       'local',

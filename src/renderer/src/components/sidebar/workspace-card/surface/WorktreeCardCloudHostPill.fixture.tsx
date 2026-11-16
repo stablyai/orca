@@ -1,4 +1,4 @@
-// CLOUD-ROW-DUP-TAG: an Orca Cloud row (owned or paired) shows its cloud mark and no "Orca Cloud"
+// An Orca Cloud row (owned or paired) shows its cloud mark and no "Orca Cloud"
 // host pill on line 2; an SSH row keeps its host pill. Line 2 keeps the branch and the state word.
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'

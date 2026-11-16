@@ -1,4 +1,4 @@
-// EP-3c: auth sends display names for a team's members (POST /v1/internal/member-names), so the
+// Auth sends display names for a team's members (POST /v1/internal/member-names), so the
 // audit log and its CSV export name people who have never used Orca Cloud in the team. The names
 // are labels: they never decide who may do or see anything.
 import { readFileSync, readdirSync } from 'node:fs'
@@ -26,9 +26,9 @@ describe('names from auth', () => {
     const created = await h.call('POST', '/v1/sandboxes', { bearer: admin, body: { workspaceId: 'ws-1', machineSize: 'standard' } })
     const id: string = created.body.sandbox.id
     h.advance(1000)
-    expect((await h.call('PATCH', `/v1/team/workspaces/${id}`, { bearer: admin, body: { title: 'endpass-own', ownerUserId: 'stagingmember' } })).status).toBe(200)
+    expect((await h.call('PATCH', `/v1/team/workspaces/${id}`, { bearer: admin, body: { title: 'shared-own', ownerUserId: 'stagingmember' } })).status).toBe(200)
     const row = async () => ((await h.call('GET', '/v1/audit-log?category=workspaces', { bearer: admin })).body.events as Array<{ action: string; detail: Record<string, unknown> }>).find((event) => event.action === 'workspace.owner_changed')!
-    // What END-PASS saw: the id and no name.
+    // What a final pass saw before: the id and no name.
     expect((await row()).detail).toEqual({ fromUserId: 'ada', toUserId: 'stagingmember' })
 
     expect((await names({ accountId: 'org:acme', members: [{ userId: 'stagingmember', name: 'Orca Staging Member' }] })).body).toEqual({ saved: 1 })

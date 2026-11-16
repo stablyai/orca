@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { composerAgentSelection } from './composer-agent-cli'
 
-describe('composerAgentSelection (PC-9)', () => {
+describe('composerAgentSelection', () => {
   it('Orca Cloud: the one Claude never reads "(CLI)"', () => {
     expect(composerAgentSelection({ cli: true, ready: true }, true)).toEqual({
       cli: false,

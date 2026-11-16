@@ -59,7 +59,7 @@ describe('agentKeyKinds', () => {
 })
 
 describe('orcaCloudAccountRow', () => {
-  it('walks the S0 states', () => {
+  it('walks the Cloud agent sign-ins states', () => {
     expect(orcaCloudAccountRow('claude', status({}), IDLE, null)).toEqual({
       kind: 'notSetUp',
       keyKind: null
@@ -183,7 +183,7 @@ describe('orcaCloudAgentCoverage', () => {
 })
 
 describe('signing in inside each workspace', () => {
-  it('wins over a stored account and a covering key, in the S0 row and the coverage', () => {
+  it('wins over a stored account and a covering key, in the sign-ins row and the coverage', () => {
     const chosen = status({ claude: ACTIVE, covered: true, inWorkspace: true })
     expect(orcaCloudAccountRow('claude', chosen, IDLE, 'team')).toEqual({
       kind: 'inWorkspace',

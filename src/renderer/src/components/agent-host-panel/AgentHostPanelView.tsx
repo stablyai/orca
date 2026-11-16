@@ -1,5 +1,5 @@
-// A16 "Agent accounts & secrets" (spec v4 §4): a right-side sheet, the same frame for every host kind.
-// Section 1 is the agents, then either the Cloud sections (W6) or keys + one environment line.
+// "Agent accounts & secrets" (spec v4 §4): a right-side sheet, the same frame for every host kind.
+// Section 1 is the agents, then either the Cloud sections or keys + one environment line.
 import React from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -33,14 +33,14 @@ export type AgentHostPanelViewProps = {
   dot?: CloudDotState | null
   /** Section 1's body (the agents section renders its own frame). */
   agents: React.ReactNode
-  /** Orca Cloud: sections 2–3 from Cloud secrets (W6). */
+  /** Orca Cloud: sections 2–3 from Cloud secrets. */
   cloudSections?: React.ReactNode
   /** Other kinds: section 2's rows. */
   keys?: React.ReactNode
   /** Section 3's body where it isn't one line (recipe VM warning). */
   environment?: React.ReactNode
   onFooterLink: (link: AgentHostFooterLink) => void
-  /** Deep link to one agent's row (S3 "Review", S4 Details): scrolled to and its action focused. */
+  /** Deep link to one agent's row (the overview's "Review", or Details): scrolled to and its action focused. */
   focusAgent?: 'claude' | 'codex'
 }
 

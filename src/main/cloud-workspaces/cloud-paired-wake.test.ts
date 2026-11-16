@@ -11,7 +11,7 @@ afterEach(() => {
   noteCloudPairingBindings({})
 })
 
-describe('wakePairedSandbox (PAIRED-WAKE)', () => {
+describe('wakePairedSandbox', () => {
   it('wakes the sandbox, then reconnects only the server bound to it', async () => {
     noteCloudPairingBindings({
       sbx_gh: { environmentId: 'env-gh' },

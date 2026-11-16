@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createHarness } from './harness'
 
-// TEAM-DELETE: auth asks how many cloud workspaces a team still has, then purges its cloud secrets.
+// Auth asks how many cloud workspaces a team still has, then purges its cloud secrets.
 const AUTH = 'a'.repeat(40)
 const OPERATOR = 'o'.repeat(40)
 

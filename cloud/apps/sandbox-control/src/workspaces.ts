@@ -174,7 +174,7 @@ export async function workspaceViews(
     activeGrantUsers(db, ids, caller.userId),
     readSnapshotTimes(db, ids),
     rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null),
-    // GIT-ACTOR: who pushes and PRs go out as, only on rows the caller may open.
+    // Who pushes and PRs go out as, only on rows the caller may open.
     acting ? githubActingFor(db, caller, rows, now, acting) : Promise.resolve(new Map<string, GithubActingView>())
   ])
   const referenced = (row: SandboxRow) =>
@@ -369,7 +369,7 @@ export async function patchWorkspace(
     if (!row.account_id.includes('org:')) {
       throw new WorkspaceError('invalid_request', 'personal_account')
     }
-    // OWNER-TRANSFER: never onto a workspace that is booting or stopping. Its environment may have
+    // Never onto a workspace that is booting or stopping. Its environment may have
     // been resolved for the previous owner, and what their boot started would run on under the new one.
     if (row.status !== 'running' && row.status !== 'suspended' && row.status !== 'archived') {
       throw new WorkspaceError('conflict', `sandbox_${row.status}`)

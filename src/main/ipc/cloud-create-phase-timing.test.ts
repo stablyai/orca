@@ -5,7 +5,7 @@ vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), removeHandler: vi.fn() 
 const { noteCloudCreatePhase, noteCloudCreateProvisionChunk, resetCloudCreatePhaseTimingForTest } =
   await import('./cloud-create-phase-timing')
 
-describe('cloud create phase timing (N-01)', () => {
+describe('cloud create phase timing', () => {
   afterEach(() => {
     resetCloudCreatePhaseTimingForTest()
     vi.restoreAllMocks()

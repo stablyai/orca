@@ -1,4 +1,4 @@
-// PUSH-RAW-PROMPT: a push, pull or fetch to a github.com repo that no credential covers never reaches git's own
+// A push, pull or fetch to a github.com repo that no credential covers never reaches git's own
 // "Username for 'https://github.com':" prompt. The shim turns prompts off for github.com remotes and replaces
 // git's auth failure with one plain line. Other hosts and other failures are untouched.
 import { spawnSync } from 'node:child_process'
@@ -94,7 +94,7 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
     expect(err.split('\n').filter((l) => l.startsWith('orca:')).length).toBe(1)
   })
 
-  it('PUSH-CAP: a push over the egress proxy\u2019s size cap says so in plain words, once, instead of a bare 413', () => {
+  it('a push over the egress proxy\u2019s size cap says so in plain words, once, instead of a bare 413', () => {
     const err = git(['push', 'origin', 'HEAD'], 'https://github.com/acme/app.git', { FAKE_413: '1' })
     const line =
       "orca: This push is over Orca Cloud's limit of about 100 MB per push. Push fewer commits at a time, for example git push origin HEAD~5:refs/heads/<branch>, then run git push again."
@@ -106,7 +106,7 @@ describe('the git shim never lets a github.com push prompt for credentials', () 
     expect(err).not.toContain("can't push to")
   })
 
-  it('PUSH-CAP: a 413 from a non-GitHub remote is left as git printed it', () => {
+  it('a 413 from a non-GitHub remote is left as git printed it', () => {
     const err = git(['push', 'origin', 'HEAD'], 'https://gitlab.com/acme/app.git', { FAKE_413: '1' })
     expect(err).toContain('HTTP 413')
     expect(err).not.toContain('orca:')

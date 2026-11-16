@@ -1,4 +1,4 @@
-// CHAT-BANNERS: while a cloud pane's agent launch waits on its strip, the chat view's composer can't
+// While a cloud pane's agent launch waits on its strip, the chat view's composer can't
 // send to it; it is disabled and points at the strip above it, which is the one message.
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { agentName } from '@/components/settings/agent-accounts/orca-cloud-accounts-copy'

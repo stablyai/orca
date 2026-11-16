@@ -1,4 +1,4 @@
-// A host-run browser page and its workspace's sleep (NEW-01, LC2-P1). Pages die with the VM; the
+// A host-run browser page and its workspace's sleep. Pages die with the VM; the
 // tab stays and gets a new host page at its URL once the sandbox is up for good, including after
 // a wake pressed while the suspend was still being committed.
 import { useEffect, useRef } from 'react'

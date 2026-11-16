@@ -16,7 +16,7 @@ describe('cloudSetupPageModel', () => {
     expect(sessionNeedsFrom(steps)).toEqual(['plan', 'github'])
   })
 
-  it('the agent is never a page step and never holds the start (PC-1)', () => {
+  it('the agent is never a page step and never holds the start', () => {
     const steps: CloudSetupStep[] = [
       { id: 'account', state: 'done' },
       { id: 'plan', state: 'done' },
@@ -63,7 +63,7 @@ describe('cloudSetupPageModel', () => {
     )
     expect(switching.steps.map((step) => step.id)).toEqual(['account', 'team', 'plan', 'github'])
     expect(switching.action).toBe('switch-team')
-    // No repository (D3): the only row stays the only step.
+    // No repository: the only row stays the only step.
     expect(
       cloudSetupPageModel([{ id: 'github', state: 'failed', blocksStart: true }]).steps
     ).toHaveLength(1)

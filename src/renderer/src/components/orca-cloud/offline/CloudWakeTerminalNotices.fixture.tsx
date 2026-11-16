@@ -1,7 +1,7 @@
-// Terminal panes around a sleep (JA-15): the pre-sleep scrollback greyed behind "Asleep since",
+// Terminal panes around a sleep: the pre-sleep scrollback greyed behind "Asleep since",
 // and after the wake, the one-line "processes stopped" note. The woke fixtures run the real hint
 // rule on the pre-sleep tail: a shell pane offers Rerun with its command. A Claude pane shows no
-// strip once the host relaunched Claude (WAKE-1), and Restart Claude only when, after the grace,
+// strip once the host relaunched Claude, and Restart Claude only when, after the grace,
 // the pane sits at a bare shell (never its input placeholder as a command).
 import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
@@ -113,7 +113,7 @@ const claudeAtInput = [
   '  ? for shortcuts'
 ]
 
-// RA-WAKE: the host relaunched Claude (it reported in after the wake); no strip over it.
+// The host relaunched Claude (it reported in after the wake); no strip over it.
 export const wokeClaudeRelaunched = defineFixture({
   width: 640,
   render: () => (

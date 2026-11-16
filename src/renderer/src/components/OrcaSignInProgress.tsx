@@ -60,7 +60,7 @@ export function OrcaSignInButton({
       </OpenExternalSplitButton>
     )
   }
-  // COPY-LINK-FIRST-CLICK: Copy link starts the same sign-in without opening the browser and
+  // Copy link starts the same sign-in without opening the browser and
   // copies its link (the button then reads "Reopen browser" over that pending sign-in).
   return (
     <OpenExternalSplitButton

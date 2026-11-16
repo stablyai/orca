@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: the Orca Cloud create wizard's "GitHub access" step. Checked as soon as the create
+// The Orca Cloud create wizard's "GitHub access" step. Checked as soon as the create
 // starts, in parallel with Start sandbox, so it costs nothing when the Orca GitHub App can already
 // push. When it can't, the step asks (Install GitHub App, the installation's settings, or a request
 // to copy for an owner) and polls until GitHub says yes; the create holds before Open workspace

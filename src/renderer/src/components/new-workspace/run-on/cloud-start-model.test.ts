@@ -15,7 +15,7 @@ import { setupActionFor } from './cloud-start-actions'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 
 describe('Orca Cloud availability', () => {
-  it('keeps Orca Cloud visible but disabled when it cannot be reached (X2)', () => {
+  it('keeps Orca Cloud visible but disabled when it cannot be reached', () => {
     expect(getOrcaCloudSegmentState('unreachable')).toBe('unreachable')
     expect(getOrcaCloudSegmentState('unavailable')).toBe('hidden')
     expect(getOrcaCloudSegmentState('needs-sign-in')).toBe('enabled')
@@ -37,7 +37,7 @@ describe('setup rows and the setup page', () => {
     expect(page(steps)).toBe('done')
   })
 
-  it('an agent with no account never opens the page (PC-1): the create starts at once', () => {
+  it('an agent with no account never opens the page: the create starts at once', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 }
@@ -94,7 +94,7 @@ describe('setup rows and the setup page', () => {
     ],
     ['member, payment failed', 'offered', { state: 'payment-issue', canManageBilling: false }]
   ] as const)(
-    'JA-21 progressive billing: %s is not a setup step; Create goes on and the sheet shows any blocker',
+    'progressive billing: %s is not a setup step; Create goes on and the sheet shows any blocker',
     (_name, availability, access) => {
       const steps = deriveCloudSetupSteps({ availability, access })
       expect(steps.find((s) => s.id === 'plan')?.state).toBe('done')
@@ -114,7 +114,7 @@ describe('setup rows and the setup page', () => {
     ).toBe('github-install')
   })
 
-  it('a team that can still get its trial claims it in the app (B1)', () => {
+  it('a team that can still get its trial claims it in the app', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: {
@@ -135,7 +135,7 @@ describe('setup rows and the setup page', () => {
     expect(page(steps)).toBe('start-trial')
   })
 
-  it('signed out: the trial row is included and GitHub is checked up front (A1)', () => {
+  it('signed out: the trial row is included and GitHub is checked up front', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'needs-sign-in',
       access: { state: 'signed-out' },
@@ -147,7 +147,7 @@ describe('setup rows and the setup page', () => {
     expect(page(steps)).toBe('sign-in')
   })
 
-  it('GitHub waiting on an owner: the page waits and starts on its own (D2)', () => {
+  it('GitHub waiting on an owner: the page waits and starts on its own', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'offered',
       access: { state: 'entitled', remainingSeconds: 3600 },
@@ -162,7 +162,7 @@ describe('setup rows and the setup page', () => {
     expect(page(steps)).toBe('github-waiting')
   })
 
-  it('no GitHub remote outranks account and plan rows (D3)', () => {
+  it('no GitHub remote outranks account and plan rows', () => {
     const steps = deriveCloudSetupSteps({
       availability: 'needs-sign-in',
       access: { state: 'signed-out' },
@@ -191,7 +191,7 @@ describe('setup rows and the setup page', () => {
     expect(page(billing)).toBe('checking')
   })
 
-  it('B2: a team switch is its own step and always opens the page', () => {
+  it('a team switch is its own step and always opens the page', () => {
     const steps: CloudSetupStep[] = [
       { id: 'account', state: 'done' },
       { id: 'team', state: 'needed' }
@@ -292,7 +292,7 @@ describe('withReachableGitHub', () => {
   })
 })
 
-describe('CAP-GATE-DESKTOP: a plan but no Orca Cloud capability', () => {
+describe('a plan but no Orca Cloud capability', () => {
   const accesses: [string, OrcaCloudRunTargetAccess][] = [
     ['entitled', { state: 'entitled', remainingSeconds: 3600 }],
     ['unknown billing', { state: 'unknown' }]

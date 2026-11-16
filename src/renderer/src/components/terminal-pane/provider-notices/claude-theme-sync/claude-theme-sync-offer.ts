@@ -69,7 +69,7 @@ function showClaudeThemeSyncOffer(): void {
 /**
  * The sync changes Claude Code on THIS computer. Hold the offer while the active workspace runs
  * elsewhere (Orca Cloud, a VM, SSH, an Orca server) or is still being created: a brand-new cloud
- * workspace is not in the cloud id list yet when its Claude terminal appears (RA-6).
+ * workspace is not in the cloud id list yet when its Claude terminal appears.
  */
 function isAwayFromThisComputer(state: AppState): boolean {
   if (state.activePendingCreationId) {
@@ -88,7 +88,7 @@ function isAwayFromThisComputer(state: AppState): boolean {
 
 /**
  * The sync changes Claude Code on this computer, which an Orca Cloud workspace's Claude doesn't
- * use: hold the offer while one is active and make it once a local workspace is (RA-6).
+ * use: hold the offer while one is active and make it once a local workspace is.
  */
 function offerOnLocalWorkspace(): () => void {
   if (!isAwayFromThisComputer(useAppStore.getState())) {

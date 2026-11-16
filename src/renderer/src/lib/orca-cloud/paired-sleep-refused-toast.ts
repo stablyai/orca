@@ -1,4 +1,4 @@
-// SHARED-MEMBER-SLEEP-HANG: only a workspace's owner or a team admin may put it to sleep; the control
+// Only a workspace's owner or a team admin may put it to sleep; the control
 // plane refuses anyone else. A member's Sleep on a teammate's shared workspace says so (a permission
 // precondition, so the warning tone), instead of hanging on "Saving copy…" or "still running".
 import { toast } from 'sonner'

@@ -11,7 +11,7 @@ import {
 } from '@/lib/pane-manager/terminal-scroll/pane-scroll'
 
 /**
- * WAKE-SCROLLBACK-SCROLL: puts a woken pane back on the line the person scrolled to. The person's
+ * Puts a woken pane back on the line the person scrolled to. The person's
  * place wins: restores captured before it (a remount's first fit, at the bottom) are dropped, the
  * scroll runs with intent enforcement paused (its synchronous "follow output" would snap back), and
  * the place is recorded as a pin for the fits still to come. Inside the replay's own rebuild (whose

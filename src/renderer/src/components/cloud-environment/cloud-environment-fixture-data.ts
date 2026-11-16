@@ -192,7 +192,7 @@ export function failedLog(build: EnvironmentBuildView): BuildLogBuffer {
   ])
 }
 
-/** DS-40 (b): the clone step failed; `reason` is repo contents (an agent's fix) or access. */
+/** The clone step failed; `reason` is repo contents (an agent's fix) or access. */
 export function cloneFailedLog(
   build: EnvironmentBuildView,
   reason: 'submodule' | 'access'

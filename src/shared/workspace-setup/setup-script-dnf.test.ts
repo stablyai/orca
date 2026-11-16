@@ -4,7 +4,7 @@ import { inspectConductorConfig } from './setup-script-import-conductor'
 
 const APT = 'sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y'
 
-describe('PARITY-DNF: Amazon Linux install lines in an imported setup', () => {
+describe('Amazon Linux install lines in an imported setup', () => {
   it('rewrites a plain dnf install where every package has a clear Ubuntu name', () => {
     const { setup, translated, unresolved } = translateDnfInstalls(
       'sudo dnf install -y gcc-c++ make python3-devel openssl-devel libffi-devel\npnpm install'
@@ -57,7 +57,7 @@ describe('PARITY-DNF: Amazon Linux install lines in an imported setup', () => {
   })
 })
 
-describe('PARITY-DNF in the Conductor importer', () => {
+describe('Amazon Linux install lines in the Conductor importer', () => {
   function reader(files: Record<string, string>) {
     return async (path: string): Promise<string | null> => files[path] ?? null
   }

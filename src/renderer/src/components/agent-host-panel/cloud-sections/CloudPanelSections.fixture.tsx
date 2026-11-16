@@ -144,7 +144,7 @@ export const asleep = defineFixture({
   render: () => <Frame load={ready(MEMBER, { asleep: true })} />
 })
 
-/** D13: a teammate in Ada's shared workspace. Their Personal values don't apply there. */
+/** A teammate in Ada's shared workspace. Their Personal values don't apply there. */
 export const shared = defineFixture({
   width: 520,
   render: () => <Frame load={ready(MEMBER, { sharing: SHARED_GUEST })} />

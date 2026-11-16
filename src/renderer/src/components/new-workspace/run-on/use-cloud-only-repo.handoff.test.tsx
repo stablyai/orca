@@ -25,7 +25,7 @@ function repo(fullName: string): OrcaCloudGitHubRepository {
   return { fullName, url: `https://github.com/${fullName}`, private: true }
 }
 
-describe('REPO-ACCESS-REFRESH in the composer: a repository picked by hand stays picked', () => {
+describe('in the composer: a repository picked by hand stays picked', () => {
   beforeEach(() => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true)
     Object.defineProperty(window, 'api', {

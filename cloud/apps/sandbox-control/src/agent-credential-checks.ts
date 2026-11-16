@@ -1,6 +1,6 @@
 // A provider 401 on an Orca-account request (the proxy swapped the real credential in) is a signal, not a
 // verdict: one transient auth error must not sign a person out of every workspace. The control plane makes
-// one cheap server-side auth check with the real credential (no tokens spent). RS-2: that check alone never
+// one cheap server-side auth check with the real credential (no tokens spent). That check alone never
 // revokes either (it has never been tried against a real OAuth sign-in): a failed check marks the sign-in
 // "needs check" (suspect), which stays usable at egress; a LATER real agent request that also gets a 401
 // revokes it, and a real request that succeeds (or a passing check) clears it. The desktop can ask for the same check before a
@@ -98,7 +98,7 @@ async function checkCredential(
     // the probe is unproven against real setup-tokens); only the person or a confirmed real 401 does.
     return 'suspect'
   }
-  // RS-2: the check's auth failure alone never revokes: the sign-in needs a real request to confirm it.
+  // The check's auth failure alone never revokes: the sign-in needs a real request to confirm it.
   await markAgentCredentialSuspect(db, userId, agent, now)
   await audit(db, {
     ...base,
@@ -108,7 +108,7 @@ async function checkCredential(
   return 'suspect'
 }
 
-/** EGRESS-REFRESH: a sign-in in use is checked this often (one free auth call each). */
+/** A sign-in in use is checked this often (one free auth call each). */
 export const SCHEDULED_CHECK_EVERY_MS = 6 * 60 * 60_000
 /** A sign-in in question is checked again this soon (a pass clears it). */
 export const SUSPECT_RECHECK_MS = 15 * 60_000
@@ -117,9 +117,9 @@ const SCHEDULED_BATCH = 10
 export type ScheduledCheckSummary = { due: number; kept: number; suspect: number; revoked: number; skipped: number }
 
 /**
- * EGRESS-REFRESH revocation checks, replacing the egress proxy's 401 hook: every sign-in a running workspace
+ * Revocation checks, replacing the egress proxy's 401 hook: every sign-in a running workspace
  * of its owner can be using is checked every SCHEDULED_CHECK_EVERY_MS (sooner while in question). The first
- * definite auth failure puts it in question (RS-2: it stays usable, the desktop shows Renew); it is rechecked
+ * definite auth failure puts it in question (it stays usable, the desktop shows Renew); it is rechecked
  * every SUSPECT_RECHECK_MS and a pass clears it. A scheduled check NEVER revokes: the probe is unproven against
  * real setup-tokens, so a revoke takes the person's action or a confirmed real-request 401 (proxy mode).
  */
@@ -178,7 +178,7 @@ export async function handleAccountUnauthorized(
   return checkCredential(ctx, { kind: 'egress_401', sandboxId: ctx.sandboxId, path: ctx.path })
 }
 
-/** RS-2: a real agent request with the real credential succeeded: a sign-in in question is fine after all. */
+/** A real agent request with the real credential succeeded: a sign-in in question is fine after all. */
 export async function handleAccountRequestSucceeded(ctx: {
   db: D1Database
   agent: AccountProvider['agent']

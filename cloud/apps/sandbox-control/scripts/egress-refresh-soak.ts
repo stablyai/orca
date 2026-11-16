@@ -1,4 +1,4 @@
-// EGRESS-REFRESH dev soak: a running workspace keeps working across GitHub App installation-token rotations.
+// Dev soak: a running workspace keeps working across GitHub App installation-token rotations.
 // One throwaway identity, one App-installed workspace. In the VM a loop runs `git ls-remote origin` and an
 // api.github.com call with the workspace placeholder every 30 s. The control plane must rotate the 1 h token
 // in the live policy with no failed call. Renews the lease like a desktop. Deletes everything at the end.

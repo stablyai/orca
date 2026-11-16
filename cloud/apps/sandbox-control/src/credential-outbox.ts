@@ -1,4 +1,4 @@
-// EGRESS-REFRESH outbox (credential_pushes): a credential change is recorded where it happens, pushed right
+// Outbox (credential_pushes): a credential change is recorded where it happens, pushed right
 // away when the caller can, and retried by the tick until every running sandbox that carries the credential
 // has the policy for it. A change landing mid-push leaves the row pending (compare-and-swap on changed_at),
 // so it is pushed again. The push itself is the lifecycle's whole-policy rewrite (injected).
@@ -159,7 +159,7 @@ export async function credentialPushTargets(db: D1Database, change: CredentialCh
   if (change.kind === 'github_user') {
     return runningSandboxesForMember(db, change.accountId, change.userId)
   }
-  // Account sign-ins apply only on the owner's own workspaces (never shared; D10/D13).
+  // Account sign-ins apply only on the owner's own workspaces (never shared).
   const { results } = await db
     .prepare(`SELECT id FROM sandboxes WHERE user_id = ? AND status = 'running' LIMIT 200`)
     .bind(change.userId)

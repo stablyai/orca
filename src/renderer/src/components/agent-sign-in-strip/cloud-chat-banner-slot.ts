@@ -1,4 +1,4 @@
-// CHAT-BANNERS (PR-A): the chat view of a terminal tab covers its pane (z-10, opaque), so a pane
+// The chat view of a terminal tab covers its pane (z-10, opaque), so a pane
 // banner portaled into the pane is painted under it. While a pane's chat view is open, its chat
 // column registers a slot here and the pane's cloud banners portal into that slot instead: one
 // banner, shown in whichever view is on.

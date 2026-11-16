@@ -1,4 +1,4 @@
-// Where sandboxes run (U17). New sandboxes default to pdx1; iad1 is the fallback. A snapshot (golden
+// Where sandboxes run. New sandboxes default to pdx1; iad1 is the fallback. A snapshot (golden
 // image, environment build, a sandbox's own) only boots in the region it was taken in, so:
 // - every region here keeps its own active golden image (golden-images.ts rotates each one);
 // - a sandbox, once created, stays in its region: resume and rebuilds never move it;
@@ -16,7 +16,7 @@ import { ProviderError } from './sandbox-provider'
 
 export const DEFAULT_REGION = 'pdx1'
 export const DEFAULT_FALLBACK_REGIONS: readonly string[] = ['iad1']
-/** Where GOLDEN_SNAPSHOT_ID (the seed image) lives: every image before U17 was built in iad1. */
+/** Where GOLDEN_SNAPSHOT_ID (the seed image) lives: every image before regions existed was built in iad1. */
 export const DEFAULT_SEED_REGION = 'iad1'
 const REGION = /^[a-z]{3}[0-9]$/
 

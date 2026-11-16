@@ -1,4 +1,4 @@
-// JA-07: home, Plan & billing, the composer and the account menu once showed four numbers for the
+// Home, Plan & billing, the composer and the account menu once showed four numbers for the
 // same hours. Every surface now goes through one rounding rule; these pin it.
 import { describe, expect, it } from 'vitest'
 import { getOrcaCloudHoursLeft } from '../new-workspace/orca-cloud-run-target-access'

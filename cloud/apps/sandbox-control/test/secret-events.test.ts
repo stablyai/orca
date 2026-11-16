@@ -1,4 +1,4 @@
-// SEC-4: every create, update and delete of a cloud secret leaves an activity record (who, when, scope,
+// Every create, update and delete of a cloud secret leaves an activity record (who, when, scope,
 // NAME; never the value or hint), team owners/admins read the team's, each user reads their own.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACTIVITY_WINDOW_MS, activityAccounts, listSecretEvents } from '../src/secret-events'

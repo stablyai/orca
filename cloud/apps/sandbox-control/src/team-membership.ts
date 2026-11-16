@@ -2,7 +2,7 @@
 // roster (auth's POST /v1/internal/org-membership). The control plane holds no member list of its
 // own that may decide access: the names it stores are labels, and auth's pushes are best effort.
 //
-// Used before a workspace is handed to a new owner (OWNER-TRANSFER). Fails closed: anything but a
+// Used before a workspace is handed to a new owner. Fails closed: anything but a
 // clear "yes" refuses, and nothing here falls back to stored data.
 //
 // The bearer is derived, never the shared token itself: HMAC-SHA256 keyed with the token auth and

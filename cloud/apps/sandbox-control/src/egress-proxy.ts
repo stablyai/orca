@@ -53,7 +53,7 @@ export type ProxiedRoute = {
   credential: (
     request: { method: string; path: string; body: string | null }
   ) => Promise<string | null | { deny: string; answer?: { status: number; contentType: string; body: string } }>
-  /** The credential decides on the request body too (GH-AS-MEMBER: GraphQL); only then is it read as text. */
+  /** The credential decides on the request body too (a member's gh on GraphQL); only then is it read as text. */
   readsBody?: (method: string, path: string) => boolean
   /** Extra headers set with the credential (e.g. an account id the client can't know). */
   extraHeaders?: () => Record<string, string>
@@ -66,12 +66,12 @@ export type ProxiedRoute = {
   /** Names the swapped credential in the proxy's log line (never its value). */
   label?: string
   /**
-   * Claims a request with no placeholder header at all (CODEX-PLACEHOLDER-REFRESH): the policy forwarded it
+   * Claims a request with no placeholder header at all: the policy forwarded it
    * by path alone. Only for routes whose credential answers itself (a deny with an answer), never a swap.
    */
   claimsUnmarked?: boolean
   /**
-   * CODEX-EGRESS-BLOCKED: what the client gets when the provider's own edge refused this proxy (a
+   * What the client gets when the provider's own edge refused this proxy (a
    * Cloudflare 403 HTML page for Workers' egress IPs) instead of answering the request. The raw page
    * is never passed on: the client shows this message rather than an HTML dump or a retry loop.
    */

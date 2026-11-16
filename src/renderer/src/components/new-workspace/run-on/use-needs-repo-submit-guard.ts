@@ -1,4 +1,4 @@
-// RR-c1 (Neil): submit-time validation for Orca Cloud on a plain-folder project. Nothing shows while
+// Submit-time validation for Orca Cloud on a plain-folder project. Nothing shows while
 // options are picked; Create (button or ⌘↵) stops before submitting and the error appears under
 // Project. It clears once a GitHub repository is picked or Run on leaves Orca Cloud.
 import { useCallback, useMemo, useState } from 'react'

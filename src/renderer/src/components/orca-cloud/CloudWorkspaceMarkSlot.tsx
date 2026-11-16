@@ -36,7 +36,7 @@ export function CloudWorkspaceMarkSlot({
   fallback: React.ReactNode
   onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
 }): React.JSX.Element | null {
-  // PAIRED-CHROME: a paired row's own checkout gets the live mark too (its status reads like an owned one's).
+  // A paired row's own checkout gets the live mark too (its status reads like an owned one's).
   const isCloud = useCloudWorkspace((s) => isCloudStatusRow(s, workspaceId))
   const onCloudHost = useIsOrcaCloudHost(hostId)
   const onCloudSandbox = useRunsOnOrcaCloudSandbox(workspaceId) || onCloudHost
@@ -48,7 +48,7 @@ export function CloudWorkspaceMarkSlot({
     }
   }, [awaitingId])
   if (awaitingId) {
-    // One glyph from the pending row on (NP-5): the cloud, never the server icon in between.
+    // One glyph from the pending row on: the cloud, never the server icon in between.
     return <HostGlyph kind="orca-cloud" size={12} />
   }
   if (!isCloud) {

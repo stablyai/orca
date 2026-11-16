@@ -93,7 +93,7 @@ describe('cloudAgentPanelRows', () => {
   })
 })
 
-describe('shared workspaces (D13)', () => {
+describe('shared workspaces', () => {
   const shared = (covered: boolean): AgentSourcesView => ({
     defaults: { claude: 'sign-in' },
     coveredByKey: { claude: covered, codex: false },

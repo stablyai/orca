@@ -1,5 +1,5 @@
 // The sign-in strip's primary button. One that opens a page in the browser ("Open again", "Copy
-// code and open", the setup's "Open again") gets the "Copy link" chevron (Neil's rule).
+// code and open", the setup's "Open again") gets the "Copy link" chevron.
 import type React from 'react'
 import { Button } from '@/components/ui/button'
 import { OpenExternalSplitButton } from '@/components/open-external/OpenExternalSplitButton'

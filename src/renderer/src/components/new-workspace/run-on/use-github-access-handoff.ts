@@ -1,4 +1,4 @@
-// REPO-ACCESS-REFRESH: after "Add a GitHub repository…" the person grants access on GitHub and
+// After "Add a GitHub repository…" the person grants access on GitHub and
 // comes back. The list reads GitHub again when this window regains focus, and on a backing-off
 // timer while it has focus, until a repository shows up that wasn't listed before. That one is
 // picked. After a while with nothing new the wait stops and says so, with a way to check again.

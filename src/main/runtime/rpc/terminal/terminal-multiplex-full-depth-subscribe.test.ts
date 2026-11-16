@@ -32,7 +32,7 @@ async function subscribeDepth(extra: Record<string, unknown> = {}): Promise<numb
   return depth
 }
 
-// N-02: full depth only when the desktop has no local copy of the pane; reconnects stay small.
+// Full depth only when the desktop has no local copy of the pane; reconnects stay small.
 describe('desktop subscribe history depth', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })

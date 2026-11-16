@@ -33,7 +33,7 @@ export function VmBuildStepRow({
   // A live percent already says how far along the step is.
   const measuring = step.state === 'running' && step.percent === null
   const hint = measuring ? timing : null
-  // Past the measured p95; with no measurement yet, a sandbox start only after 30 s (JA-11).
+  // Past the measured p95; with no measurement yet, a sandbox start only after 30 s.
   const slowAfterMs =
     timing?.p95Ms ?? (cloud && step.id === 'provision' ? SLOW_WITHOUT_MEASURE_MS : null)
   const slow =

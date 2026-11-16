@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { sessionDetailCopy } from './cloud-setup-session-copy'
 
 describe('sessionDetailCopy', () => {
-  // np4-e2e: the plan row read the session's raw "subscription".
+  // Regression: the plan row read the session's raw "subscription".
   it('never shows a setup session code on the row', () => {
     expect(
       sessionDetailCopy({ id: 'plan', state: 'done', detail: 'subscription' }, translate)

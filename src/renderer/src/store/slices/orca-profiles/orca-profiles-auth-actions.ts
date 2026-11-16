@@ -17,7 +17,7 @@ export type OrcaProfilesAuthActions = {
     orgId?: string
     name?: string
   }) => Promise<CreateCloudLinkedOrcaProfileResult | null>
-  /** COPY-LINK-FIRST-CLICK: `openBrowser: false` starts sign-in without opening the browser. */
+  /** `openBrowser: false` starts sign-in without opening the browser. */
   connectCurrentOrcaProfile: (args?: {
     openBrowser?: boolean
   }) => Promise<ConnectCurrentOrcaProfileResult | null>

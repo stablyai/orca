@@ -122,7 +122,7 @@ export function useHostPanelBody(
     environmentId: host.environmentId,
     generation
   })
-  // Classic SSH has no Orca server: status and code sign-in run over SSH exec (Q8).
+  // Classic SSH has no Orca server: status and code sign-in run over SSH exec.
   const ssh = useSshClassicAgents(host, generation)
   const report = host.kind === 'sshClassic' ? ssh : runtimeReport
   const keys = useHostKeys(host.hostId)

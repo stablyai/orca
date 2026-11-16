@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CHAT-BANNERS: while a cloud launch is held, the chat view gives its composer no target and the
+// While a cloud launch is held, the chat view gives its composer no target and the
 // hint that points at the strip above it (NativeChatResolvedView). The composer then is disabled and
 // shows the hint, not a second message.
 import { cleanup, render } from '@testing-library/react'

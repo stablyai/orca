@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { hostedProgressLine } from './hosted-sandbox-recipe'
 
 describe('hostedProgressLine', () => {
-  it('names a held environment by id (ENV-BUILD-CHURN), and nothing else gets through', () => {
+  it('names a held environment by id, and nothing else gets through', () => {
     expect(hostedProgressLine({ phase: 'environment-held', message: 'env_0123abcd' })).toBe(
       '[orca-cloud] environment-held env_0123abcd\n'
     )

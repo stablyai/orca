@@ -1,4 +1,4 @@
-// Hovering a persistent cloud toast must not move it (Neil: the GitHub App push notice sank on
+// Hovering a persistent cloud toast must not move it (the GitHub App push notice sank on
 // hover and popped back on leave). settings: one card alone, and one under a newer plain toast.
 import { useEffect } from 'react'
 import { toast } from 'sonner'

@@ -30,7 +30,7 @@ function setup(initial: OrcaCloudGitHubRepository[] | null) {
   return { hook, onReread, onNewRepository }
 }
 
-describe('REPO-ACCESS-REFRESH: back from GitHub, the new repository shows up and is picked', () => {
+describe('back from GitHub, the new repository shows up and is picked', () => {
   let focused = true
   beforeEach(() => {
     vi.useFakeTimers()

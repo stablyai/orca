@@ -1,5 +1,5 @@
 // Headless helpers over Metro's CDP for the Orca mobile dev client on a simulator (no GUI).
-// Adapted from W8/gap5's /tmp/w8/cdp-*.mjs. Port: W9M_METRO_PORT (default 8131).
+// Adapted from earlier ad hoc CDP scripts. Port: W9M_METRO_PORT (default 8131).
 //   node cdp.mjs identity-install <file>  stores {seedB64, enrollment} as the app's Orca Cloud identity
 //   node cdp.mjs identity-clear           removes the stored identity (the app makes a fresh, unenrolled key)
 //   node cdp.mjs texts <needle>           rendered text strings containing <needle> (read-only)

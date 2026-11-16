@@ -450,7 +450,7 @@ describe('the older GET /v1/audit', () => {
 })
 
 describe('what is recorded', () => {
-  it('sharing is gone: a PATCH to team is refused and records nothing (EP-3)', async () => {
+  it('sharing is gone: a PATCH to team is refused and records nothing', async () => {
     const h = await createHarness()
     h.billing.features = { auditLog: true }
     const owner = await h.token('olga', 'acme', 'sandbox', { org_role: 'member', name: 'Olga Owner' })

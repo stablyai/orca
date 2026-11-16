@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// SETUP-PASTE (P0): the cloud setup strip is portaled into the pane container, above the terminal.
+// The cloud setup strip is portaled into the pane container, above the terminal.
 // A paste into its "Paste code" field — Cmd+V, the app menu's Paste, a native paste event, or a
 // right-click — must stay in the field and never reach the shell.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

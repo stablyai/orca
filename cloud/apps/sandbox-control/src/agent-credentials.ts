@@ -1,10 +1,10 @@
-// Account credentials for agents (agent-sources contract D11): one per person per agent, Personal only.
+// Account credentials for agents: one per person per agent, Personal only.
 //   GET    /v1/agent-credentials                  -> {claude, codex: {state, label?, expiresAt?}, providerEnabled, providerState}
-//   PUT    /v1/agent-credentials/claude {token, label?, expiresAt?}   (flag S1; desktop main runs `claude setup-token`)
+//   PUT    /v1/agent-credentials/claude {token, label?, expiresAt?}   (AGENT_ACCOUNTS_CLAUDE; desktop main runs `claude setup-token`)
 //   POST   /v1/agent-credentials/claude/verify -> {claude, verifiedAt, checked}   (pre-launch check, agent-credential-checks.ts)
 //   DELETE /v1/agent-credentials/:agent
 // Values are never returned or logged. They leave the Worker only when the egress proxy swaps them into a
-// request from the person's own, unshared workspace (D10, D13). The Codex broker (flag S2) stores its tokens
+// request from the person's own, unshared workspace. The Codex broker (AGENT_ACCOUNTS_CODEX) stores its tokens
 // through putAgentCredential too (codex-broker.ts).
 import { z } from 'zod'
 import type { CredentialAgent } from './agent-credential-names'
@@ -13,7 +13,7 @@ import type { Env } from './env'
 import type { Keyring, SecretBinding } from './secrets-crypto'
 
 /**
- * 'suspect' (RS-2): an auth check failed but no real request has confirmed it yet. Still usable at egress;
+ * 'suspect': an auth check failed but no real request has confirmed it yet. Still usable at egress;
  * shown to the desktop as expired + needsCheck (an older desktop reads a new state as 'none').
  */
 export type CredentialState = 'none' | 'active' | 'expiring' | 'expired' | 'revoked' | 'suspect'
@@ -31,7 +31,7 @@ type CredentialRow = {
   label: string | null
   expires_at: number | null
   state: 'active' | 'revoked'
-  /** RS-2: when an auth check said this sign-in is dead; null when not in question. */
+  /** When an auth check said this sign-in is dead; null when not in question. */
   suspect_at?: number | null
   updated_at: number
 }
@@ -50,7 +50,7 @@ export class AgentCredentialError extends Error {
 export const credentialBinding = (userId: string, agent: CredentialAgent): SecretBinding => ({ scope: 'account', ownerId: userId, name: agent })
 
 /**
- * Why a provider is or isn't usable, so clients word it right: `off` = flag S1/S2 not on (never offered here),
+ * Why a provider is or isn't usable, so clients word it right: `off` = AGENT_ACCOUNTS_CLAUDE/_CODEX not on (never offered here),
  * `disabled` = the operator kill switch on a launched provider (temporary).
  */
 export type ProviderState = 'on' | 'off' | 'disabled'
@@ -63,7 +63,7 @@ export function providerStates(env: Pick<Env, 'AGENT_ACCOUNTS_CLAUDE' | 'AGENT_A
   }
 }
 
-/** Flags S1/S2 turn a provider on; the *_DISABLED switch turns it off again (kill switch, operator-only). */
+/** AGENT_ACCOUNTS_CLAUDE/_CODEX turn a provider on; the *_DISABLED switch turns it off again (kill switch, operator-only). */
 export function providerEnabled(env: Pick<Env, 'AGENT_ACCOUNTS_CLAUDE' | 'AGENT_ACCOUNTS_CLAUDE_DISABLED' | 'AGENT_ACCOUNTS_CODEX' | 'AGENT_ACCOUNTS_CODEX_DISABLED'>): Record<CredentialAgent, boolean> {
   const states = providerStates(env)
   return { claude: states.claude === 'on', codex: states.codex === 'on' }
@@ -126,7 +126,7 @@ export async function readUsableAgentCredential(db: D1Database, keyring: Keyring
   return (await readUsableAgentCredentialState(db, keyring, userId, agent, now)).value
 }
 
-/** The real value for egress, and whether the sign-in is in question (RS-2: a real request confirms it). */
+/** The real value for egress, and whether the sign-in is in question (a real request confirms it). */
 export async function readUsableAgentCredentialState(
   db: D1Database,
   keyring: Keyring,
@@ -148,7 +148,7 @@ export async function readUsableAgentCredentialState(
   }
 }
 
-/** RS-2: an auth check failed. Not revoked: a real request must confirm it first. True when newly marked. */
+/** An auth check failed. Not revoked: a real request must confirm it first. True when newly marked. */
 export async function markAgentCredentialSuspect(db: D1Database, userId: string, agent: CredentialAgent, now: number): Promise<boolean> {
   const result = await db
     .prepare(`UPDATE agent_credentials SET suspect_at = ?, updated_at = ? WHERE user_id = ? AND agent = ? AND state = 'active' AND suspect_at IS NULL`)
@@ -157,7 +157,7 @@ export async function markAgentCredentialSuspect(db: D1Database, userId: string,
   return result.meta.changes === 1
 }
 
-/** RS-2: a real request (or an auth check) succeeded: the sign-in is fine. True when it was in question. */
+/** A real request (or an auth check) succeeded: the sign-in is fine. True when it was in question. */
 export async function clearAgentCredentialSuspect(db: D1Database, userId: string, agent: CredentialAgent, now: number): Promise<boolean> {
   const result = await db
     .prepare(`UPDATE agent_credentials SET suspect_at = NULL, updated_at = ? WHERE user_id = ? AND agent = ? AND suspect_at IS NOT NULL`)
@@ -166,7 +166,7 @@ export async function clearAgentCredentialSuspect(db: D1Database, userId: string
   return result.meta.changes === 1
 }
 
-/** RS-2: when this sign-in was put in question, or null. */
+/** When this sign-in was put in question, or null. */
 export async function agentCredentialSuspectAt(db: D1Database, userId: string, agent: CredentialAgent): Promise<number | null> {
   const row = await db
     .prepare(`SELECT suspect_at FROM agent_credentials WHERE user_id = ? AND agent = ? AND state = 'active'`)
@@ -190,17 +190,17 @@ export async function agentCredentialsView(db: D1Database, env: Env, userId: str
   const view = (agent: CredentialAgent) => {
     const row = results.find((r) => r.agent === agent) ?? null
     const state = credentialState(row, now)
-    // RS-2: "needs check" reads as expired (the Renew strip) on every desktop, old ones included; newer
+    // "needs check" reads as expired (the Renew strip) on every desktop, old ones included; newer
     // desktops may read needsCheck. An unknown state would read as 'none' ("isn't set up") on old ones.
     const wire = state === 'suspect' ? { state: 'expired' as const, needsCheck: true } : { state }
-    // RS-5: credentials saved before the fix carry an email or the Orca name; Claude's always reads true.
+    // Credentials saved before the fix carry an email or the Orca name; Claude's always reads true.
     const label = agent === 'claude' && row ? CLAUDE_CREDENTIAL_LABEL : row?.label
     return { ...wire, ...(label ? { label } : {}), ...(row?.expires_at ? { expiresAt: row.expires_at } : {}) }
   }
   return { claude: view('claude'), codex: view('codex'), providerEnabled: providerEnabled(env), providerState: providerStates(env) }
 }
 
-/** RS-5: what a stored Claude credential is called (the approved account itself can't be known). */
+/** What a stored Claude credential is called (the approved account itself can't be known). */
 export const CLAUDE_CREDENTIAL_LABEL = 'Claude subscription'
 
 // A Claude setup-token: `sk-ant-oat01-` then URL-safe characters. Shape-checked, never logged.
@@ -221,7 +221,7 @@ export async function putClaudeCredential(db: D1Database, keyring: Keyring, env:
   if (!CLAUDE_TOKEN.test(token)) {
     throw new AgentCredentialError(400, 'invalid_request', 'invalid_token')
   }
-  // Personal only: a person's account is never stored for a team (D13 keeps it out of shared workspaces too).
+  // Personal only: a person's account is never stored for a team (and it is kept out of shared workspaces too).
   await putAgentCredential(
     db,
     keyring,
@@ -230,7 +230,7 @@ export async function putClaudeCredential(db: D1Database, keyring: Keyring, env:
       accountId: caller.accountId,
       agent: 'claude',
       value: token,
-      // RS-5 (design-squad): a true label only. Neither this computer's Claude Code email nor the Orca
+      // A true label only. Neither this computer's Claude Code email nor the Orca
       // name says which account approved the setup-token (it prints no email, and its inference-only
       // scope can't read the profile), so a Claude credential is always "Claude subscription".
       label: CLAUDE_CREDENTIAL_LABEL,

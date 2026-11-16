@@ -43,7 +43,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         stream.ptyId,
         // Overflow recovery stays at the recovery budget on every client: a full desktop-depth
         // snapshot on a link that just overflowed can overflow it again (resync storm). Full depth
-        // is only for the initial attach and the reopen (N-02).
+        // is only for the initial attach and the reopen.
         carriesHistory ? TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS : 0
       )
       if (!isMultiplexStreamAttached(state, stream) || stream.outputPaused) {

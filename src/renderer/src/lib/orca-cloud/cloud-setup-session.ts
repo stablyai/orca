@@ -1,4 +1,4 @@
-// Orca Cloud setup session (NP-4 N1), renderer side: starts the one-tab browser setup, polls the
+// Orca Cloud setup session, renderer side: starts the one-tab browser setup, polls the
 // session while it is open, and keeps the latest snapshot for the composer's setup panel
 // (w2-lifecycle's seam reads it synchronously) and the setup tracker (np4-shell).
 import { useAppStore } from '@/store'
@@ -9,7 +9,7 @@ import type {
   CloudSetupStartResult
 } from '../../../../shared/orca-cloud-setup'
 
-/** Poll every 2 s for the first 3 minutes, then every 10 s (spec A6). */
+/** Poll every 2 s for the first 3 minutes, then every 10 s. */
 export const SETUP_FAST_POLL_MS = 2_000
 export const SETUP_FAST_WINDOW_MS = 3 * 60_000
 export const SETUP_SLOW_POLL_MS = 10_000
@@ -97,7 +97,7 @@ function schedule(sessionId: string, entry: Entry): void {
 
 /**
  * Setup chose or created a team in the browser: make it this profile's active team, so billing,
- * sandboxes and the composer's checks all read that team (O1: cloud work belongs to a team).
+ * sandboxes and the composer's checks all read that team (cloud work belongs to a team).
  */
 async function followSetupTeam(entry: Entry, session: CloudSetupSession): Promise<void> {
   const orgId = session.team?.orgId
@@ -212,7 +212,7 @@ export async function startCloudSetupSession(request: {
     : { sessionId: result.sessionId }
 }
 
-/** The setup session still open in this window, for the plans dialog to join (T2 Compare plans). */
+/** The setup session still open in this window, for the plans dialog (Compare plans) to join. */
 export function activeCloudSetupSessionId(): string | null {
   for (const [sessionId, entry] of entries) {
     if (!entry.gone && !entry.snapshot?.finished) {

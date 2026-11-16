@@ -1,4 +1,4 @@
-// PARITY-DOCKER: the VM's `docker` (image/vm/docker) installs Ubuntu's pinned Docker on first use,
+// The VM's `docker` (image/vm/docker) installs Ubuntu's pinned Docker on first use,
 // starts dockerd on the first command that needs it, says once what differs from a laptop, then is
 // plain docker; the control plane's switch (SANDBOX_DOCKER=off -> ~/.orca-sandbox/docker.off) makes
 // it refuse instead.
@@ -83,7 +83,7 @@ const aptCalls = (): string[] =>
 const installed = () => writeFileSync(join(dir, 'docker'), FAKE_DOCKER, { mode: 0o755 })
 
 // Real processes and sleeps: loaded CI hosts need headroom over vitest's 5 s default.
-describe('the docker shim (PARITY-DOCKER)', { timeout: 20_000 }, () => {
+describe('the docker shim', { timeout: 20_000 }, () => {
   it('first use installs the pinned packages, writes the daemon config, starts dockerd once, then runs plain docker', () => {
     const first = docker(['run', '--rm', 'hello-world'])
     expect(first.status).toBe(0)

@@ -138,7 +138,7 @@ describe('sandbox hours copy', () => {
   })
 })
 
-describe('trial copy (spec T1, glossary "Trial")', () => {
+describe('trial copy (glossary "Trial")', () => {
   it('counts the one-time trial hours without "this month"', () => {
     expect(trialHoursUsedLine(sampleTrial, t)).toBe('0.6 of 2 sandbox hours used')
     expect(trialHoursLeftHint(sampleTrial, t)).toBe('Trial · 1.4 sandbox hours left')

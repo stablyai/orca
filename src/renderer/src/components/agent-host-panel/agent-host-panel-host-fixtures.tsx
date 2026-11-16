@@ -1,4 +1,4 @@
-// AgentHostPanel fixtures for hosts that keep their own login (spec §4 P-1…P-5). Re-exported from
+// AgentHostPanel fixtures for hosts that keep their own login (spec §4). Re-exported from
 // AgentHostPanel.fixture.tsx so the ids read agent-host-panel/AgentHostPanel:<name>.
 import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'

@@ -90,7 +90,7 @@ function groupedByHost() {
   })
 }
 
-describe('Orca Cloud is one host (RA-2)', () => {
+describe('Orca Cloud is one host', () => {
   it('collapses two sandboxes into one "Orca Cloud" section with an aggregate state', () => {
     const rows = groupedByHost()
     const hostHeaders = rows.filter((row) => row.type === 'host-header')

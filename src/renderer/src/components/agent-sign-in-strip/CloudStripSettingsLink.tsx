@@ -2,8 +2,8 @@ import React from 'react'
 import { cn } from '@/lib/class-names'
 
 /**
- * CHAT-RENEW-INPLACE: the strip's quiet "Renew in Settings" link, at the end of the actions row, or on
- * its own line under the buttons in the narrow stack (design-squad).
+ * The strip's quiet "Renew in Settings" link, at the end of the actions row, or on
+ * its own line under the buttons in the narrow stack.
  */
 export function CloudStripSettingsLink({
   label,

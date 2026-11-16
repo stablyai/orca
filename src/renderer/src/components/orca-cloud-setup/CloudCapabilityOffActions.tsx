@@ -5,7 +5,7 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useTranslate } from '@/i18n/use-translate'
 
 /**
- * CAP-GATE-DESKTOP: the team has a plan, but Orca Cloud isn't turned on for it. "Try again"
+ * The team has a plan, but Orca Cloud isn't turned on for it. "Try again"
  * re-checks (the page moves on by itself once it is on); "Contact us" opens the catalog's contact
  * target and is hidden when there is none.
  */

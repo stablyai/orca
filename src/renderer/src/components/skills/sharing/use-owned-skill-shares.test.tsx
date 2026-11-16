@@ -34,7 +34,7 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('useOwnedSkillShares (EP-7)', () => {
+describe('useOwnedSkillShares', () => {
   it('lists a link published after the page opened, without reopening it', async () => {
     const { result } = renderHook(() => useOwnedSkillShares())
     await waitFor(() => expect(result.current.loading).toBe(false))

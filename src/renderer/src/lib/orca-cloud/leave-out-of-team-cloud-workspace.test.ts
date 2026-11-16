@@ -92,7 +92,7 @@ describe('leaving an out-of-team cloud workspace', () => {
   })
 })
 
-describe('a paired cloud workspace of the team switched away (TEAM-SWITCH-STALE-PANE)', () => {
+describe('a paired cloud workspace of the team switched away', () => {
   it('leaves it: the paired host went from the team (~) to hidden (-)', () => {
     expect(activeCloudWorkspaceLeftTeam('~runtime:eval', '-runtime:eval', 'runtime:eval')).toBe(
       true

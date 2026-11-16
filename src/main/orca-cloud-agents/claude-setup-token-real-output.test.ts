@@ -1,4 +1,4 @@
-// RS-1: `claude setup-token` output and pasted codes as Claude Code really produces them. Every fixture
+// `claude setup-token` output and pasted codes as Claude Code really produces them. Every fixture
 // below is built from Claude Code 2.1.323's own bundled source (read from the installed CLI binary, never
 // run): the success block is
 //   ✓ Long-lived authentication token created successfully!      (Ink <Text color="success">)

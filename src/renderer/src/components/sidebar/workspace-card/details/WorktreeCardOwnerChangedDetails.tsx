@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: one line in the sidebar hover card of a cloud workspace that has had more than
+// One line in the sidebar hover card of a cloud workspace that has had more than
 // one owner, saying why personal secrets and sign-ins are not used there.
 import React from 'react'
 import { UserRoundCog } from 'lucide-react'

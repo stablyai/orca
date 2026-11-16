@@ -1,10 +1,10 @@
-# SEC-3: moving the secrets-store KEK behind a KMS (design, not implemented)
+# Moving the secrets-store KEK behind a KMS (design, not implemented)
 
-Status: phase 1 Worker code is implemented behind `SECRETS_KEK_SOURCE=kms` (off by default; `src/secrets-kms.ts`, tested against a fake KMS only, never against Google). No KMS resources exist: provisioning and turn-on are in the launch runbook, for Neil. Phase 2 is design only.
+Status: phase 1 Worker code is implemented behind `SECRETS_KEK_SOURCE=kms` (off by default; `src/secrets-kms.ts`, tested against a fake KMS only, never against Google). No KMS resources exist: provisioning and turn-on are in the launch runbook. Phase 2 is design only.
 Differences from the plan below: the wrapped KEK is bound to its KEK id with KMS additional authenticated data; there is no cache window or stale-on-error (keys stay in memory for the isolate's life, so revocation needs a redeploy); a failed unwrap is retried at most every 10 seconds; with the flag on, `SECRETS_KEK` is never read (no fallback), and create/wake answer 503 `secrets_unavailable`.
 Prices, latencies and vendor feature claims are from memory of public docs and are **unmeasured**; check each before committing.
 
-## Where we are after the SEC-3 PR
+## Where we are after the key-rotation PR
 
 - Per-row data keys (DEK, AES-256-GCM) wrapped by one key-encryption key (KEK). The KEK is a Cloudflare Worker secret (`SECRETS_KEK`), with a copy in GCP Secret Manager (launch runbook 1.6a).
 - Three tables hold wrapped DEKs: `secrets`, `agent_credentials`, `github_user_tokens`.
@@ -116,7 +116,7 @@ No step below has been run. Steps 1 and 2 are infra changes for a human to appro
 3. Ship the Worker change: prefer `SECRETS_KEK_WRAPPED` plus KMS, fall back to `SECRETS_KEK`. The KEK id stays the same, so no row changes.
 4. Verify in dev: `GET /v1/internal/secrets/kek` shows no unknown ids, and `POST /v1/internal/secrets/rewrap {"dryRun":true}` run to completion reports `failed: 0`.
 5. Delete the `SECRETS_KEK` Worker secret. The plaintext KEK is now only in Worker memory and in escrow.
-6. Rotate once: generate a new KEK, wrap it, make it active, list the old one as retired, run the sweep, drop the retired entry. This retires the key that once sat in Cloudflare config as plaintext. The SEC-3 sweep is what makes this step cheap.
+6. Rotate once: generate a new KEK, wrap it, make it active, list the old one as retired, run the sweep, drop the retired entry. This retires the key that once sat in Cloudflare config as plaintext. The rewrap sweep is what makes this step cheap.
 7. Repeat 1 to 6 for prod, when launch gating allows it.
 
 Rollback at any step before 5: remove `SECRETS_KEK_WRAPPED`; the Worker falls back to `SECRETS_KEK`.
@@ -125,9 +125,9 @@ Estimated work: about 2 days of Worker code and tests (GCP token exchange, KMS c
 
 ## Why this was not implemented now
 
-It needs a KMS key, a service account and IAM bindings. Those are infra changes, which the brief ruled out. A prototype against a fake KMS would only test our own mock. The code seam is small and already in place (`keyringFor` is async and cached), so nothing in the SEC-3 PR has to be redone.
+It needs a KMS key, a service account and IAM bindings. Those are infra changes, which the brief ruled out. A prototype against a fake KMS would only test our own mock. The code seam is small and already in place (`keyringFor` is async and cached), so nothing in the key-rotation PR has to be redone.
 
 ## Before phase 1
 
-- Turn `SECRETS_SEAL_FORMAT=v2` on (dev once every preview branch contains the SEC-3 PR; prod from day one) and run the sweep once so every row is v2.
+- Turn `SECRETS_SEAL_FORMAT=v2` on (dev once every preview branch contains the key-rotation PR; prod from day one) and run the sweep once so every row is v2.
 - Confirm who can read the Secret Manager copy of the KEK and record it in the runbook.

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-// END-PASS CHAT-RENEW: whenever a running chat's strip is in its expired phase, the composer says
+// Whenever a running chat's strip is in its expired phase, the composer says
 // "Renew Claude sign-in above to send" (the empty field's placeholder and Send's hint) and Send is
-// disabled, typed draft or not. The decision is the REAL chain: cloudRunningStrip plus D13, through
+// disabled, typed draft or not. The decision is the REAL chain: cloudRunningStrip plus the shared-workspace check, through
 // the chat's install slot (where NativeChatStructuredSession reads its Send block) into the
 // composer's send state.
 import { renderHook, waitFor } from '@testing-library/react'
@@ -27,7 +27,9 @@ vi.mock('@/store', () => {
     unifiedTabsByWorktree: {
       'wt-1': [{ id: TAB_ID, contentType: 'agent-session', executionHostId: 'runtime:env-paired' }]
     },
-    agentStatusByPaneKey: new Map(Object.entries(world.status ? { [STATUS_KEY]: world.status } : {}))
+    agentStatusByPaneKey: new Map(
+      Object.entries(world.status ? { [STATUS_KEY]: world.status } : {})
+    )
   })
   const useAppStore = (selector: (s: ReturnType<typeof read>) => unknown): unknown =>
     selector(read())
@@ -135,10 +137,10 @@ beforeEach(() => {
   })
 })
 
-describe('a running idle chat whose strip is expired holds Send with its hint (END-PASS CHAT-RENEW)', () => {
+describe('a running idle chat whose strip is expired holds Send with its hint', () => {
   for (const [label, claude] of [
     ['revoked', { state: 'revoked' }],
-    ['in question (RS-2: expired + needsCheck)', { state: 'expired' }]
+    ['in question (expired + needsCheck)', { state: 'expired' }]
   ] as const) {
     it(`${label}: placeholder and Send hint read Renew, and Send is disabled with or without a draft`, async () => {
       const { result, rerender } = renderHook(() => ({

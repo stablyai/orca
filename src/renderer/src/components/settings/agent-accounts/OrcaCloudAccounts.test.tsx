@@ -7,7 +7,7 @@ import type { OrcaCloudAgentsStatus } from '../../../../../shared/orca-cloud-age
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { OrcaCloudAccountsView, type OrcaCloudAccountsActions } from './OrcaCloudAccounts'
 
-// The policy line is a Radix tooltip (JA-23), which needs the provider the app mounts at its root.
+// The policy line is a Radix tooltip, which needs the provider the app mounts at its root.
 const render = (ui: React.ReactElement) => baseRender(ui, { wrapper: TooltipProvider })
 
 const STATUS: OrcaCloudAgentsStatus = {
@@ -58,7 +58,7 @@ describe('OrcaCloudAccountsView', () => {
 
   it('keeps the policy visible, the storage note in a tooltip, and starts setup per agent', () => {
     const handlers = view({ claude: NOT_SET_UP, codex: { kind: 'notSetUp', keyKind: 'team' } })
-    // JA-23: the mandatory A1 sentence stays visible in the description, verbatim.
+    // The mandatory policy sentence stays visible in the description, verbatim.
     expect(
       screen.getByText(
         /Your Claude and ChatGPT accounts are used only in your own workspaces\. Teammates never use them\./
@@ -128,7 +128,7 @@ describe('OrcaCloudAccountsView', () => {
     )
   })
 
-  it('offers Paste a token instead on the not-set-up Claude row only (RA-5)', () => {
+  it('offers Paste a token instead on the not-set-up Claude row only', () => {
     const handlers = view({ claude: NOT_SET_UP, codex: NOT_SET_UP })
     const paste = screen.getAllByRole('button', { name: 'Paste a token instead' })
     expect(paste).toHaveLength(1)
@@ -136,7 +136,7 @@ describe('OrcaCloudAccountsView', () => {
     expect(handlers.usePaste).toHaveBeenCalledOnce()
   })
 
-  it('an expired row offers Renew and a ⋯ with Remove, which confirms first (RA-5)', async () => {
+  it('an expired row offers Renew and a ⋯ with Remove, which confirms first', async () => {
     const handlers = view({
       claude: { kind: 'expired', keyKind: null, covered: false },
       codex: NOT_SET_UP

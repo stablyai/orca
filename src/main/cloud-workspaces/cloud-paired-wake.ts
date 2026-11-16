@@ -1,4 +1,4 @@
-// PAIRED-WAKE: wakes a workspace this desktop paired with (no local VM record to resume) through the
+// Wakes a workspace this desktop paired with (no local VM record to resume) through the
 // control plane, then drops its paired server's dead connection so it reconnects at once.
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { cloudPairedSandboxesByEnvironment } from './cloud-paired-environment-ids'

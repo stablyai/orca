@@ -52,7 +52,7 @@ export function buildOrcaCloudSettingsSections(
       searchEntries: getOrcaCloudBillingSearchEntries(),
       group
     },
-    // Neil: Orca Cloud's Claude and ChatGPT sign-ins are an Orca Cloud setting, not one of this
+    // Orca Cloud's Claude and ChatGPT sign-ins are an Orca Cloud setting, not one of this
     // computer's Agent accounts; that page keeps a one-line link here. Right after the account,
     // since setting up an agent once is the first thing a new cloud user does.
     {
@@ -163,10 +163,10 @@ export const ACCOUNT_BILLING_PLAN_ANCHOR = 'orca-account-plan-billing'
 export const ACCOUNT_TEAM_ADMIN_ANCHOR = 'orca-account-team-admin'
 
 /**
- * JA-16: in Orca Cloud builds the Orca account leads the one Orca Cloud group instead of sitting in
+ * In Orca Cloud builds the Orca account leads the one Orca Cloud group instead of sitting in
  * Set up. Agent accounts stays in AI capabilities for this computer and hosts; Orca Cloud's own
  * sign-ins are the group's Cloud agent sign-ins page (resolveCloudAgentSignInsTarget).
- * Neil: the account and Plan & billing are one page, "Account + Billing" (account on top). Billing's
+ * The account and Plan & billing are one page, "Account + Billing" (account on top). Billing's
  * search entries move onto it and land on its Plan & billing part. Searching for members, single
  * sign-on or the audit log lands on its "Team & admin" row, which opens the web console.
  */
@@ -211,7 +211,7 @@ export function gatherOrcaCloudSettingsGroup(
 
 /**
  * Signed in with billing turned on, as an owner or admin of the active team: the combined page has
- * a billing half. Members don't get it: the console refuses them Plan & billing (n64 P3 #4).
+ * a billing half. Members don't get it: the console refuses them Plan & billing.
  */
 export function hasOrcaBillingAccount(state: {
   orcaProfileAuthStatus: OrcaProfileAuthStatus | null
@@ -225,7 +225,7 @@ export function hasOrcaBillingAccount(state: {
 }
 
 /**
- * Neil: the combined page is "Account & billing", and just "Account" when there's no billing to
+ * The combined page is "Account & billing", and just "Account" when there's no billing to
  * show (signed out, or an account without billing). Only the Orca Cloud group's account is renamed.
  */
 export function labelAccountBilling(

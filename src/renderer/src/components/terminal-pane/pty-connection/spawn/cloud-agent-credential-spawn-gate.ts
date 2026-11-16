@@ -40,7 +40,7 @@ export function installCloudAgentCredentialGate(session: ConnectPanePtySession):
       cloudAgentSignsInInsideWorkspace(request.agent)
         ? ungated(override, options)
         : start(override, options)
-    // FAIL-CLOSED (#568): the catalog flag can lag a fresh pairing, so without it main is asked
+    // Fail closed: the catalog flag can lag a fresh pairing, so without it main is asked
     // before the agent may start; until it answers, nothing is spawned.
     const cloud = isOrcaCloudEnvironment(request.environmentId)
       ? Promise.resolve(true)

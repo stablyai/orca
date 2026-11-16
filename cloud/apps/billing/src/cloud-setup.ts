@@ -1,4 +1,4 @@
-// Cloud setup sessions (NP-4 N1): one browser tab that chains sign-in -> team -> plan/trial ->
+// Cloud setup sessions: one browser tab that chains sign-in -> team -> plan/trial ->
 // (Checkout only when needed) -> GitHub App install, skipping steps that are already done.
 //
 // Who talks to it:
@@ -169,7 +169,7 @@ export async function createSetupSession(
   if (needs.has('github') && !repo) {
     needs.delete('github')
   }
-  // O1: setup never puts a plan or a trial on a personal account, so a user: caller always gets a
+  // Setup never puts a plan or a trial on a personal account, so a user: caller always gets a
   // team step; an org caller keeps its active team unless it asked to choose.
   const orgAccount = caller.accountId.startsWith('org:') ? caller.accountId : null
   const keepTeam = orgAccount !== null && body.useActiveTeam && !needs.has('team')
@@ -199,7 +199,7 @@ export async function createSetupSession(
     .run()
   if (keepTeam && orgAccount && needs.has('plan')) {
     // The desktop's active team is the session's team: like a team setup picks, it gets its
-    // one-time trial now if it never had a plan or a trial, so the chain skips T3 and Checkout.
+    // one-time trial now if it never had a plan or a trial, so the chain skips the plan page and Checkout.
     await grantTrialIfEligible(
       env,
       trial,
@@ -406,7 +406,7 @@ export const TeamPlansSchema = z
   .object({ userId: UserSchema, orgIds: z.array(z.string().regex(ORCA_ID)).max(50) })
   .strict()
 
-/** A3: which of the user's teams already have a plan or a usable trial (that team is preselected). */
+/** Which of the user's teams already have a plan or a usable trial (that team is preselected). */
 export async function setupTeamPlans(
   env: Env,
   trial: TrialPort,
@@ -433,7 +433,7 @@ export const BindTeamSchema = z
     orgId: z.string().regex(ORCA_ID),
     name: z.string().trim().min(1).max(120),
     created: z.boolean().default(false),
-    // Trial abuse keys (N11), forwarded from the page's request and the user's identity.
+    // Trial abuse keys, forwarded from the page's request and the user's identity.
     email: z.string().email().max(320).optional(),
     emailVerified: z.boolean().optional(),
     githubUserId: z.number().int().positive().optional(),
@@ -444,7 +444,7 @@ export const BindTeamSchema = z
 
 /**
  * Binds the session to a team (chosen, created, or renamed). A team that has no plan gets the
- * trial now if it can; otherwise the plan step stays and the pages offer T3 + Checkout.
+ * trial now if it can; otherwise the plan step stays and the pages offer the plan page and Checkout.
  */
 export async function bindSetupTeam(
   env: Env,
@@ -482,7 +482,7 @@ export async function bindSetupTeam(
 
 /**
  * The team's plan step: a live plan or trial needs nothing; a team that never had either gets its
- * one-time trial now (N11 limits apply); one whose trial is used up goes to T3 and Checkout.
+ * one-time trial now (the trial's limits apply); one whose trial is used up goes to the plan page and Checkout.
  */
 async function grantTrialIfEligible(
   env: Env,
@@ -555,7 +555,7 @@ export const SetupCheckoutSchema = z
   })
   .strict()
 
-/** T3 -> Stripe: Checkout for the session's team, returning to the setup pages (never a user:). */
+/** Plan page -> Stripe: Checkout for the session's team, returning to the setup pages (never a user:). */
 export async function createSetupCheckout(
   env: Env,
   stripe: StripeClient,
@@ -595,7 +595,7 @@ export async function createSetupCheckout(
 export const GithubInstallSchema = z
   .object({
     userId: UserSchema,
-    // Set only after auth verified a live GitHub sign-in token for this user (N5).
+    // Set only after auth verified a live GitHub sign-in token for this user.
     githubUserId: z.number().int().positive().optional(),
     githubLogin: z.string().regex(/^[A-Za-z0-9-]{1,39}$/).optional()
   })

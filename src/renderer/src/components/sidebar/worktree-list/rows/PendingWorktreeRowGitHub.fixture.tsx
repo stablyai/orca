@@ -1,4 +1,4 @@
-// GH-CREATE-NO-ROW: a GitHub-only Orca Cloud create has a sidebar row while it builds, atop the list
+// A GitHub-only Orca Cloud create has a sidebar row while it builds, atop the list
 // (it has no project here yet), with the cloud glyph from the start; the paired workspace's rows
 // replace it on hand-off.
 import { getDefaultSettings } from '../../../../../../shared/constants'
@@ -42,7 +42,7 @@ const rows = {
     errorCode: 'cloudPlanRequired',
     provisioningLog: '[orca-cloud] provisioning\nOrca Cloud: included_hours_exhausted'
   }),
-  // A real failure stays red; the refusal above is amber (REFUSED-CREATE-ROW-STICKY).
+  // A real failure stays red; the refusal above is amber.
   cloneFailed: creation('cloneFailed', {
     status: 'error',
     error: 'fetch failed',

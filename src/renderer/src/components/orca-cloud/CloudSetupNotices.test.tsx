@@ -88,7 +88,7 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
     vi.useRealTimers()
   })
 
-  it("can't reach GitHub: says which repository and offers Check again, never a bare line (ENV-ORIGIN-TOAST)", async () => {
+  it("can't reach GitHub: says which repository and offers Check again, never a bare line", async () => {
     setCloudSetupNotices({
       environmentId: 'env-1',
       path: '/w',
@@ -115,7 +115,7 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
     )
     expect(shown.lines[0].description).toBe('Pulls and pushes won’t work until it can.')
     expect(shown.lines[0].action).toMatchObject({ label: 'Check again' })
-    // The live access refresh goes first (LIVE-GIT-ACCESS), then the check.
+    // The live access refresh goes first, then the check.
     await act(async () => shown.lines[0].action.onClick())
     expect(recheck).toHaveBeenCalledWith('env-1', expect.any(Function))
   })
@@ -148,7 +148,7 @@ describe('CloudSetupNoticesDock (DS-o, DS-q)', () => {
   })
 })
 
-describe('the can’t-reach line says why (GH-FETCH-REASON)', () => {
+describe('the can’t-reach line says why', () => {
   const fetchNotice = (code?: string): CloudSetupNotice => ({
     id: 'git.fetch',
     kind: 'fetch',
@@ -214,7 +214,7 @@ describe('the can’t-reach line says why (GH-FETCH-REASON)', () => {
   })
 })
 
-describe('LIVE-GIT-ACCESS: never an endless Check again', () => {
+describe('never an endless Check again', () => {
   it('the App reaches the repo, Check again refreshed it live and the push still fails: Restart', async () => {
     pushAccess.mockResolvedValue('granted')
     setCloudSetupNotices({
@@ -271,7 +271,7 @@ function line(notice: CloudSetupNotice, access: CloudPushAccess = 'install', rep
   )
 }
 
-describe('cloudSetupNoticeLine (ENV-NOTICE-ACTIONS)', () => {
+describe('cloudSetupNoticeLine', () => {
   it('low disk: plain words and what to expect, with no button (the disk can’t be grown here)', () => {
     const shown = line({
       id: 'disk.free',

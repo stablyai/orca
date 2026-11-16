@@ -1,4 +1,4 @@
-// Drops this device's pairing with a cloud workspace whose sandbox no longer exists (LC-1). Opening
+// Drops this device's pairing with a cloud workspace whose sandbox no longer exists. Opening
 // a workspace this desktop does not own pairs it as a "<name> (cloud)" server, and that server's
 // projects mirror into the sidebar. Once the sandbox was deleted (from Home, another desktop, the
 // control plane), the server, its struck-out host row and its projects stayed forever.
@@ -12,7 +12,7 @@
 export type CloudPairingBinding = {
   environmentId: string
   grantId: string | null
-  /** The team the sandbox belongs to; absent on bindings saved before LC-1. */
+  /** The team the sandbox belongs to; absent on bindings saved by older versions. */
   accountId?: string | null
 }
 

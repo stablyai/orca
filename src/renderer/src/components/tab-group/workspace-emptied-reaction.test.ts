@@ -1,4 +1,4 @@
-// SLEEP-HOME-REGRESSION: emptying the workspace on screen leaves it for Home, except a cloud workspace
+// Emptying the workspace on screen leaves it for Home, except a cloud workspace
 // held asleep on screen: its asleep view covers the workspace even with no tab (a chat asleep).
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 

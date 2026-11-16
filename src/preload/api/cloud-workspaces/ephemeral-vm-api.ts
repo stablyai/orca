@@ -92,7 +92,7 @@ export type EphemeralVmApi = {
     | ({ ok: false; stderr: string; stdout: string } & EphemeralVmFailure)
   >
   cancelProvision: (args: { provisionId: string }) => Promise<{ cancelled: boolean }>
-  /** N-01: the renderer's create phases after the provision, logged by main with the create's timing. */
+  /** The renderer's create phases after the provision, logged by main with the create's timing. */
   notePhase?: (args: { provisionId: string; phase: CloudCreateRendererPhase }) => void
   onProvisionEvent: (
     callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void

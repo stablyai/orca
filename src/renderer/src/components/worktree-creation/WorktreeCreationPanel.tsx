@@ -38,7 +38,7 @@ export default function WorktreeCreationPanel({
   )
   const cloudCreate = entry?.request.ephemeralVmRecipe?.provider === 'orca-cloud'
   React.useEffect(() => {
-    // The open cover takes over from this panel when the create finishes (JA-12).
+    // The open cover takes over from this panel when the create finishes.
     if (cloudCreate) {
       void preloadCloudOpenCover()
     }

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CHAT-BANNERS B2: RA-11's running strip on a structured chat. Expired shows Renew; renewed confirms
+// The running-agent strip on a structured chat. Expired shows Renew; renewed confirms
 // with no Restart (the chat's next message uses the renewed sign-in) and its × dismisses; a held
 // launch's strip wins over it.
 import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
@@ -31,9 +31,11 @@ vi.mock('@/store', () => {
     unifiedTabsByWorktree: {
       'wt-1': [{ id: TAB_ID, executionHostId: 'runtime:env-cloud', contentType: 'agent-session' }]
     },
-    agentStatusByPaneKey: new Map(Object.entries({
-      [STATUS_KEY]: { agentType: 'claude', state: 'working', paneKey: STATUS_KEY }
-    })),
+    agentStatusByPaneKey: new Map(
+      Object.entries({
+        [STATUS_KEY]: { agentType: 'claude', state: 'working', paneKey: STATUS_KEY }
+      })
+    ),
     openSettingsTarget: () => undefined,
     openSettingsPage: () => {
       stub.openedSettings += 1
@@ -116,13 +118,13 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-describe('the running strip on a structured chat (B2)', () => {
+describe('the running strip on a structured chat', () => {
   it('expired: "sign-in expired" with Renew, read through the chat status key', () => {
     stub.strip = { phase: 'expired', agent: 'claude' }
     mount()
     expect(screen.getAllByText(/Claude sign-in expired/).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /Renew/ }))
-    // CHAT-RENEW-INPLACE: Renew runs the renewal right here, never Settings.
+    // Renew runs the renewal right here, never Settings.
     expect(stub.renewsRun).toEqual([['claude']])
     expect(stub.openedSettings).toBe(0)
     expect(stub.calls.at(-1)).toEqual({ paneKey: STATUS_KEY, turnEndedFallback: true })

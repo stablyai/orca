@@ -31,7 +31,7 @@ describe('parseCloudSetupError', () => {
   })
 })
 
-describe('X1 actions and tone', () => {
+describe('setup error actions and tone', () => {
   it('gives each kind its one action', () => {
     expect(cloudSetupErrorAction('timed_out')).toBe('reopen-browser')
     expect(cloudSetupErrorAction('bank_step')).toBe('reopen-browser')

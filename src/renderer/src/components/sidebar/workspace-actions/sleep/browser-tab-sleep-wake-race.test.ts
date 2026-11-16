@@ -77,7 +77,7 @@ beforeEach(() => {
   resetReopenAfterSleepForTest()
 })
 
-describe('wake pressed while the suspend is still being committed (LC2-P1)', () => {
+describe('wake pressed while the suspend is still being committed', () => {
   it('keeps both tabs: they wait through the race and reopen once the sandbox is up', () => {
     sleepWorktreeBrowserTabs(WT, 1)
     expect(isAwaitingReopenAfterSleep('page-a')).toBe(true)

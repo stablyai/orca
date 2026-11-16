@@ -73,7 +73,7 @@ beforeEach(() => {
   }
 })
 
-describe('sleep keeps browser tabs in place (NEW-01)', () => {
+describe('sleep keeps browser tabs in place', () => {
   it('keeps every tab, in order, with the same active tab; drops only their pages', () => {
     const before = state().browserTabsByWorktree
     sleepWorktreeBrowserTabs('wt', 42)

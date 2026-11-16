@@ -1,4 +1,4 @@
-// One sandbox size (U18): Standard = 8 vCPU / 16 GB, the most a Vercel Pro sandbox allows (16/32 needs
+// One sandbox size: Standard = 8 vCPU / 16 GB, the most a Vercel Pro sandbox allows (16/32 needs
 // Enterprise). `large` was that same box; old desktops and saved API configs may still send it, so
 // every request schema accepts it and stores `standard` (migration 0040 rewrote existing rows).
 import { z } from 'zod'

@@ -119,7 +119,7 @@ export function withDevAccountBypass(env: Env, client: EntitlementClient): Entit
 }
 
 /**
- * Dev-only: dev accounts under this prefix go through the real billing gate (W9 tests no-plan, grace
+ * Dev-only: dev accounts under this prefix go through the real billing gate (the eval harness tests no-plan, grace
  * and at-cap with dev tokens). Honored only when SANDBOX_ENV is exactly 'dev', and only for a specific
  * sub-prefix (`dev:<word>-` or `dev:<word>:`), never all dev accounts.
  */

@@ -1,4 +1,4 @@
-// The code sign-in for a classic SSH host, under that agent's row (spec §4 annotation 5, Q8):
+// The code sign-in for a classic SSH host, under that agent's row (spec §4 annotation 5):
 // Claude pastes the code from claude.ai, Codex enters a device code on auth.openai.com. The login
 // runs on the host over SSH; this only shows the link and takes the code once.
 import React, { useState } from 'react'

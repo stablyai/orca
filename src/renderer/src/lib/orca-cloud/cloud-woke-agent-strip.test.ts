@@ -11,7 +11,7 @@ const asleepAt = 1_000_000
 const atPrompt = (): boolean => true
 const showingAgent = (): boolean => false
 
-describe('the woke-up strip on an agent pane (RA-WAKE)', () => {
+describe('the woke-up strip on an agent pane', () => {
   it('no strip once the host relaunched the agent (it reported in after the sleep)', () => {
     for (const sinceLiveMs of [0, 7_000, AGENT_RELAUNCH_GRACE_MS + 1]) {
       expect(

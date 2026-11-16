@@ -52,7 +52,7 @@ describe('CloudGitSetupStrip', () => {
     expect(element?.querySelector('button')?.textContent).toBe('Restart')
   })
 
-  it('PAIRED-GIT-SETUP: a paired row gets the same strip and Restart', () => {
+  it('a paired row gets the same strip and Restart', () => {
     seed(true, { paired: true })
     const element = strip()
     expect(element?.getAttribute('data-cloud-git-setup-strip')).toBe('failed')

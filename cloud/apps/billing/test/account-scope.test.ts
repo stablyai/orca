@@ -1,4 +1,4 @@
-// EP-9: every billing read is scoped by the verified token's org claim alone. Two teams of one
+// Every billing read is scoped by the verified token's org claim alone. Two teams of one
 // owner, even sharing a Stripe customer, never see each other's plan, hours or usage.
 import { describe, expect, it } from 'vitest'
 import { createHarness } from './harness'
@@ -24,7 +24,7 @@ function seed(h: Awaited<ReturnType<typeof createHarness>>, account: string, sub
     .run(`u_${sub}`, account, start, start + 1000, usedHours * HOUR, start, NOW)
 }
 
-describe('EP-9: billing reads follow the token, never the customer or another team', () => {
+describe('billing reads follow the token, never the customer or another team', () => {
   it('two teams of one owner on one Stripe customer each read only their own plan and hours', async () => {
     const h = await createHarness()
     seed(h, 'org:eval', 'sub_eval', 3, 43)

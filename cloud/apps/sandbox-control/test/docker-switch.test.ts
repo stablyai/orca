@@ -1,4 +1,4 @@
-// PARITY-DOCKER: every workspace boot tells the VM whether Docker is on (ORCA_DOCKER), default on;
+// Every workspace boot tells the VM whether Docker is on (ORCA_DOCKER), default on;
 // SANDBOX_DOCKER=off turns it off everywhere at the next start or wake.
 import { describe, expect, it } from 'vitest'
 import { START_COMMAND } from '../src/sandbox-vm-commands'

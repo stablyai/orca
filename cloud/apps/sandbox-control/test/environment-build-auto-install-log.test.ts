@@ -4,7 +4,7 @@ import { autoInstallFromLog } from '../src/environment-builds'
 const stored = (...lines: string[]): string =>
   lines.map((data) => JSON.stringify({ data: `${data}\n`, stream: 'stdout' })).join('\n')
 
-describe('autoInstallFromLog (AUTO-ENV-DEPS-LABEL)', () => {
+describe('autoInstallFromLog', () => {
   it('reads the manager and whether it installed', () => {
     expect(
       autoInstallFromLog(stored('Installing dependencies automatically: corepack yarn install --immutable', 'Installed dependencies in 9s.'))

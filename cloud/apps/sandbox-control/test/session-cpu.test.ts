@@ -1,4 +1,4 @@
-// U22: internal-only per-session CPU, fair-use report, and its operator gate.
+// Internal-only per-session CPU, fair-use report, and its operator gate.
 import { describe, expect, it } from 'vitest'
 import { FAIR_USE_THRESHOLD, fairUseReport, recordSessionEnd, sweepSessionCpu } from '../src/session-cpu'
 import type { SandboxRow } from '../src/store'

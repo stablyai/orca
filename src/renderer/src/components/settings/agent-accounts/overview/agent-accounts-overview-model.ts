@@ -1,5 +1,5 @@
-// S3 (agent-accounts spec v4 §7): one row per host, Claude and Codex as columns. Each row summarises
-// that host's A16 panel. Orca Cloud is one row for every cloud workspace; cloud sandboxes never get
+// "Sign-ins by host" (agent-accounts spec v4 §7): one row per host, Claude and Codex as columns. Each row summarises
+// that host's agent accounts panel. Orca Cloud is one row for every cloud workspace; cloud sandboxes never get
 // their own rows. Verdicts, emails and hints only: never tokens, CLI output or key values.
 import {
   HOST_AGENT_SIGN_IN_AGENTS,
@@ -72,7 +72,7 @@ export type OverviewAction =
 
 export type OverviewRow = {
   id: string
-  /** Null for the Orca Cloud row, which opens S0 rather than one sandbox's panel. */
+  /** Null for the Orca Cloud row, which opens Cloud agent sign-ins rather than one sandbox's panel. */
   hostId: ExecutionHostId | null
   label: string
   kind: AgentHostKind

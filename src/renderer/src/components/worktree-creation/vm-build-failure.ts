@@ -153,7 +153,7 @@ export function isBillingFailure(failure: VmBuildFailure | null): boolean {
   )
 }
 
-/** JA-21: the billing refusals the creating sheet shows as a blocker card, by kind. */
+/** The billing refusals the creating sheet shows as a blocker card, by kind. */
 export function billingBlockKind(
   failure: VmBuildFailure | null
 ): 'plan' | 'hoursUsed' | 'spendCap' | 'payment' | null {

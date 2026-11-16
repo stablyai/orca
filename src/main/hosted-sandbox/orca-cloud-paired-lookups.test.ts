@@ -1,5 +1,5 @@
-// PAIRED-HELD-STRIPS: a paired-from-birth Orca Cloud workspace (no local runtime record, only its
-// pairing binding) resolves in every main-side lookup keyed by its runtime environment: the D13
+// A paired-from-birth Orca Cloud workspace (no local runtime record, only its
+// pairing binding) resolves in every main-side lookup keyed by its runtime environment: the
 // workspace Sources read, setting a workspace source, and the cloud secrets calls.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,7 +20,9 @@ vi.mock('electron', () => ({
     removeHandler: (channel: string) => handlers.delete(channel)
   }
 }))
-vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({ listEphemeralVmRuntimes: () => [] }))
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
+  listEphemeralVmRuntimes: () => []
+}))
 vi.mock('./hosted-sandbox-config', () => ({
   getHostedSandboxConfig: () => ({ controlPlaneUrl: 'https://cp.test' })
 }))
@@ -72,7 +74,7 @@ beforeEach(() => {
 })
 
 describe('a paired workspace resolves in every environment-keyed lookup', () => {
-  it('the D13 workspace Sources read reaches its sandbox', async () => {
+  it('the workspace Sources read reaches its sandbox', async () => {
     await call('orcaCloudAgents:workspaceSources', { runtimeEnvironmentId: 'env-paired' })
     expect(calls.list).toEqual(['sources:sbx_paired'])
   })

@@ -1,8 +1,8 @@
-// Which sidebar rows are Orca Cloud workspaces, including PAIRED ones (CLOUD-PRIMARY-DELETE).
+// Which sidebar rows are Orca Cloud workspaces, including PAIRED ones.
 // `useIsCloudWorkspace` knows only the workspaces this desktop created. A workspace opened from Home
 // on another desktop (or after a re-sign-in) is paired: a "<name> (cloud)" server whose rows live on
 // `runtime:<environmentId>`. Two sources, either is enough:
-// - the runtime catalog: main marks a paired server `orcaCloudPaired` (PAIRED-AWARE), so
+// - the runtime catalog: main marks a paired server `orcaCloudPaired`, so
 //   `isOrcaCloudRuntimeEnvironment` knows it synchronously, with no priming (a row created from a
 //   GitHub-only repo is paired from birth and must lose its "primary" badge at once);
 // - the cloud identity store, which also maps the row to its sandbox id (for Delete and Sleep).

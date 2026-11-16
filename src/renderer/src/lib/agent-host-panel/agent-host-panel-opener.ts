@@ -1,5 +1,5 @@
-// The deep link into the "Agent accounts & secrets" panel (spec §4). The panel shell registers itself
-// here; prompts that point into it (S4-b's Details) show the link only once it's there.
+// The deep link into the "Agent accounts & secrets" panel. The panel shell registers itself
+// here; prompts that point into it (e.g. a Details link) show the link only once it's there.
 import { useSyncExternalStore } from 'react'
 
 export type AgentHostPanelFocus = 'claude' | 'codex' | 'keys' | { secret: string }

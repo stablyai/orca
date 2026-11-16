@@ -57,7 +57,7 @@ function NativeChatBridgeView({
     terminalTabId,
     preferredPaneKey
   )
-  // CHAT-BANNERS: the pane's cloud banners show above the chat while it covers the pane.
+  // The pane's cloud banners show above the chat while it covers the pane.
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {preferredPaneKey ? <CloudChatBannerSlot paneKey={preferredPaneKey} /> : null}

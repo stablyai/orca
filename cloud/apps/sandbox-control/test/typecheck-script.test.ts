@@ -1,4 +1,4 @@
-// SANDBOX-CONTROL-TYPECHECK: the package typecheck fails on this package's own diagnostics (and config errors),
+// The package typecheck fails on this package's own diagnostics (and config errors),
 // and only counts those in imported desktop files.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error -- plain .mjs script; no type declarations

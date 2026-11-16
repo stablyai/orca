@@ -15,9 +15,9 @@ function tabStillOpen(tabId: string): boolean {
 }
 
 /**
- * CHAT-BANNERS (PR-B): a structured chat's cloud strip, at the top of its column under the header,
+ * A structured chat's cloud strip, at the top of its column under the header,
  * the same strips a terminal pane shows: "Set up once" or Renew while its launch is held, and
- * RA-11's "sign-in expired · Renew" while its agent runs (B2).
+ * the running strip's "sign-in expired · Renew" while its agent runs.
  */
 export function CloudStructuredChatBanners({
   tabId,
@@ -28,7 +28,7 @@ export function CloudStructuredChatBanners({
   tabId: string
   /** The launch-hold key (from the session id). */
   paneKey: string
-  /** The agent-status key (tab and session): the running strip (B2) reads the agent through it. */
+  /** The agent-status key (tab and session): the running strip reads the agent through it. */
   statusKey: string
   /** The chat's agent, for an idle chat with no status yet. */
   agent?: string
@@ -37,7 +37,7 @@ export function CloudStructuredChatBanners({
   const running = useCloudChatRunningStrip({ tabId, statusKey, holdKey: paneKey, agent })
   const shown = strip ?? running
   const slot = useRef<HTMLDivElement>(null)
-  // END-PASS CHAT-RENEW: Escape anywhere in this chat (focus is usually in the composer, which spends
+  // Escape anywhere in this chat (focus is usually in the composer, which spends
   // Escape on interrupting a turn) stops a sign-in or renewal that is mid-flow and goes back to step 1,
   // as the strip's × does. The composer leaves an Escape another layer already took.
   const midFlow =

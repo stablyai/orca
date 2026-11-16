@@ -116,7 +116,7 @@ afterEach(() => {
   container.remove()
 })
 
-describe('progressive billing in Run on (JA-21, Neil)', () => {
+describe('progressive billing in Run on', () => {
   it.each(blocked)(
     '%s: Orca Cloud stays pickable with no billing words, and Enter picks it',
     (_name, access) => {

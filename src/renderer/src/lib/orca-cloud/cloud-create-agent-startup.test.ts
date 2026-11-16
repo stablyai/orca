@@ -51,7 +51,7 @@ function request(
   } as WorktreeCreationRequest
 }
 
-describe('Orca Cloud create: no host draft startup while the agent is held (PC-3b)', () => {
+describe('Orca Cloud create: no host draft startup while the agent is held', () => {
   beforeEach(() => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
   })

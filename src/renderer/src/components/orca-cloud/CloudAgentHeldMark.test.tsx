@@ -55,7 +55,7 @@ afterEach(() => {
   cleanup()
 })
 
-describe('sidebar mark for a held cloud agent (N-03)', () => {
+describe('sidebar mark for a held cloud agent', () => {
   it('marks the workspace whose pane holds Claude, with the tooltip text as its label', async () => {
     await act(async () => {
       void holdCloudAgentLaunch({
@@ -86,7 +86,7 @@ describe('sidebar mark for a held cloud agent (N-03)', () => {
     expect(queryByRole('img')).toBeNull()
   })
 
-  it('HELD-STALE-COVERED: the mark follows the hold: key while not set up, muted once set up, key on a revoke', async () => {
+  it('the mark follows the hold: key while not set up, muted once set up, key on a revoke', async () => {
     await act(async () => {
       void holdCloudAgentLaunch({
         decided: true,

@@ -10,7 +10,7 @@ export function orcaCloudIdentityKey(status: OrcaProfileAuthStatus | null | unde
     return ''
   }
   const orgId = status.cloud.activeOrgId ?? ''
-  // The role too (GH-LIST-MISSING): an owner → member → owner switch must read team answers again.
+  // The role too: an owner → member → owner switch must read team answers again.
   const role = status.organizations?.find((org) => org.orgId === orgId)?.role ?? ''
   return `${status.activeProfileId}\0${status.cloud.userId}\0${orgId}\0${role}`
 }

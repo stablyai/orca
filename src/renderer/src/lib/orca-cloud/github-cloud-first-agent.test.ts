@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-// PAIRED-HELD-STRIPS (#568): the first agent of a GitHub-only Orca Cloud create (after the build
-// sheet's hand-off, GH-CREATE-SHEET) starts once per create, even with no prompt (its launch is what
+// The first agent of a GitHub-only Orca Cloud create (after the build
+// sheet's hand-off) starts once per create, even with no prompt (its launch is what
 // shows "isn't set up · Set up once" when it can't run yet); a repo still cloning is waited for, a
-// host not confirmed Orca Cloud gets no agent (FAIL-CLOSED), and a wait that runs out says so.
+// host not confirmed Orca Cloud gets no agent, and a wait that runs out says so.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 
@@ -79,7 +79,7 @@ describe('launchFirstCloudAgent', () => {
     expect(mocks.launches).toEqual([{ agent: 'claude', prompt: undefined, worktreeId: 'wt-1' }])
   })
 
-  it('CLOUD-ONLY-NAME-AS-PROMPT: Blank terminal starts nothing, not the default agent', async () => {
+  it('Blank terminal starts nothing, not the default agent', async () => {
     await startCloudWorkspaceFromGitHub(request(null))
     expect(mocks.launches).toEqual([])
   })
@@ -110,7 +110,7 @@ describe('launchFirstCloudAgent', () => {
     info.mockRestore()
   })
 
-  it('FAIL-CLOSED: a host never confirmed as Orca Cloud gets no agent, and says so', async () => {
+  it('a host never confirmed as Orca Cloud gets no agent, and says so', async () => {
     vi.useFakeTimers()
     mocks.opened = { ok: true, worktreeId: 'wt-1', hostId: 'runtime:env-1' }
     mocks.cloud = false

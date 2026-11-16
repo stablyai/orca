@@ -80,7 +80,7 @@ describe('orca secret request', () => {
     ])
   })
 
-  it('with --wait, polls until provided and prints the D4 reload hint exactly', async () => {
+  it('with --wait, polls until provided and prints the reload hint exactly', async () => {
     const h = harness({
       request: { requestId: 'sr_abcdefgh', status: 'pending' },
       statuses: ['pending', 'pending', 'provided']

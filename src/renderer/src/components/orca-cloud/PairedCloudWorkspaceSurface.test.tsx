@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// SLEEP-IN-PROGRESS (2/2): a PAIRED cloud workspace gets the waking overlay, the asleep sealed copy
+// A PAIRED cloud workspace gets the waking overlay, the asleep sealed copy
 // with Wake to continue, and the saving / failed states after a Sleep pressed here.
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
@@ -124,7 +124,7 @@ describe('the paired cloud workspace surface', () => {
     const { container } = render(<OrcaCloudWorkspaceSurface worktreeId={ID} />)
     await flush()
     expect(container.querySelector('[data-cloud-cover="waking"]')).not.toBeNull()
-    // PAIRED-WAKE-TYPE-THROUGH: while it wakes the pane underneath stays typeable, like owned.
+    // While it wakes the pane underneath stays typeable, like owned.
     expect(container.querySelector('[data-cloud-cover="waking"]')?.className).toContain(
       'pointer-events-none'
     )

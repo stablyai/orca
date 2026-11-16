@@ -1,4 +1,4 @@
-// B2: signed in on the personal account while a team the user is on already has a plan. Offer
+// Signed in on the personal account while a team the user is on already has a plan. Offer
 // "Switch to <team>" (the account menu's switcher, no browser trip) instead of a purchase.
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
@@ -26,7 +26,7 @@ export function plannedTeamsFrom(
   })
 }
 
-/** The teams to ask about, or null when B2 doesn't apply (signed out, or already on a team). */
+/** The teams to ask about, or null when it doesn't apply (signed out, or already on a team). */
 export function teamPlanLookupIds(status: OrcaProfileAuthStatus | null): string[] | null {
   if (status?.state !== 'connected' || !status.cloud || status.cloud.activeOrgId) {
     return null
@@ -62,7 +62,7 @@ function readTeamPlans(key: string, orgIds: string[]): Promise<OrcaBillingTeamPl
 }
 
 /**
- * Teams the user could switch to so this workspace can start. Empty while loading, when B2 doesn't
+ * Teams the user could switch to so this workspace can start. Empty while loading, when it doesn't
  * apply, or when billing can't say (the panel then falls back to its usual team/plan rows).
  */
 export function useSwitchToPlannedTeam(enabled: boolean): PlannedTeam[] {

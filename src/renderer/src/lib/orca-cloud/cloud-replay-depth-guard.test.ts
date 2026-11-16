@@ -39,7 +39,7 @@ async function shallowReplay(terminal: Terminal, replay: string): Promise<boolea
   return keepDeeperHistoryAfterReplay('leaf', terminal, PTY, (data) => write(terminal, data))
 }
 
-describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
+describe('a shallower replay never shrinks a cloud pane', () => {
   it('a full snapshot followed by a 1000-row replay keeps all 5000 rows', async () => {
     const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
     await write(terminal, `${lines(1, 5000).join('\r\n')}\r\n$ `)
@@ -69,7 +69,7 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     expect(after.filter((row) => row === '05000 line')).toHaveLength(1)
   })
 
-  // V3-02: asleep, woken, then the app restarted. Everything above the divider lived only in this
+  // asleep, woken, then the app restarted. Everything above the divider lived only in this
   // pane; the host's (new) terminal has just what came after the wake.
   it('keeps the output from before a sleep when the host replay after a restart has none of it', async () => {
     const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
@@ -123,7 +123,7 @@ describe('a shallower replay never shrinks a cloud pane (N-02)', () => {
     expect(after.indexOf(first)).toBeLessThan(after.indexOf(second))
   })
 
-  // V3-02 follow-up (n33 baseline): the host restored the pre-sleep history into the woken
+  // The host restored the pre-sleep history into the woken
   // terminal, so its replay already holds 1–2000; only the divider was lost.
   it('the host restored the pre-sleep history: the divider goes back in place, nothing doubled', async () => {
     const terminal = new Terminal({ cols: 80, rows: 10, scrollback: 6000, allowProposedApi: true })
