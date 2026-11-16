@@ -16,8 +16,7 @@ export function PerforceCopyUpMenuItem({
 }) {
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
-  const settings = useAppStore((s) => s.settings)
-  const target = getPerforceCopyUpTarget({ repos, settings }, worktree)
+  const target = getPerforceCopyUpTarget(repos, worktree)
   if (!target) {
     return null
   }

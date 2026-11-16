@@ -1,6 +1,7 @@
-import { findRepoForHost } from '@/store/repos/repo-host-identity'
+import { findRepoForHost, repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -34,14 +35,12 @@ function copyTargetForRepo(
     : null
 }
 
-type CopyTargetState = {
-  repos: readonly Repo[]
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
-}
-
 /** The delete-confirmation target when `worktree` is a Perforce copy of a folder project, else null. */
 export function getPerforceCopyDeleteTarget(
-  state: CopyTargetState,
+  state: {
+    repos: readonly Repo[]
+    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  },
   worktree: Pick<Worktree, 'id' | 'repoId' | 'path' | 'hostId'>
 ): PerforceCopyDeleteTarget | null {
   const repo = findRepoForHost(state.repos, worktree.repoId, {
@@ -55,10 +54,15 @@ export type PerforceCopyUpTarget = PerforceCopyDeleteTarget & { stream: string; 
 
 /** The copy-up target when `worktree` is a Perforce copy on a stream of its own, else null. */
 export function getPerforceCopyUpTarget(
-  state: CopyTargetState,
+  repos: readonly Repo[],
   worktree: Pick<Worktree, 'id' | 'repoId' | 'path' | 'hostId' | 'perforceStream'>
 ): PerforceCopyUpTarget | null {
-  const copy = getPerforceCopyDeleteTarget(state, worktree)
+  // Why the copy's host: a same-id project on another host would aim the copy-up at the wrong machine.
+  const hostId = worktree.hostId ?? LOCAL_EXECUTION_HOST_ID
+  const copy = copyTargetForRepo(
+    repos.find((repo) => repoMatchesHostIdentity(repo, worktree.repoId, hostId)),
+    worktree
+  )
   const stream = worktree.perforceStream
   const parent = copy && stream ? copyOwnStreamParent(stream, copy.copyName) : null
   return copy && stream && parent ? { ...copy, stream, parent } : null
