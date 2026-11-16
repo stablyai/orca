@@ -74,7 +74,12 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileStat>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
-  writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
+  /** `false` creates the file, `true` appends, and a byte offset writes in place into the existing file. */
+  writeFileBase64Chunk(
+    filePath: string,
+    contentBase64: string,
+    position: boolean | number
+  ): Promise<void>
   pathsExist?(filePaths: string[]): Promise<PathExistenceResult[]>
   stat(filePath: string): Promise<FileStat>
   lstat?(filePath: string): Promise<FileStat>

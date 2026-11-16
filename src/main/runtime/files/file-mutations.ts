@@ -94,7 +94,7 @@ export class RuntimeFileMutations {
     worktreeSelector: string,
     relativePath: string,
     contentBase64: string,
-    append: boolean,
+    position: boolean | number,
     expectedSshConnectionGeneration?: number,
     expectedSshTargetId?: string,
     expectedExecutionHostId?: string
@@ -109,7 +109,7 @@ export class RuntimeFileMutations {
     await requireRuntimeFileProvider(target, this.host).writeFileBase64Chunk(
       target.path,
       contentBase64,
-      append
+      position
     )
     return { ok: true }
   }
