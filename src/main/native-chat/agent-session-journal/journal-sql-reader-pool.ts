@@ -1,3 +1,4 @@
+import type { LegacyProofCursor } from './journal-legacy-source-proof'
 import type { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
 import { ReaderSlot } from './journal-sql-reader-slot'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
@@ -26,6 +27,8 @@ export class JournalSqlReaderPool {
   private closed = false
   private closing?: Promise<void>
   private conversionSlot?: ReaderSlot
+  private sourceLease?: AbortController
+  private sourceRelease?: PromiseWithResolvers<void>
   private forkSlot?: ReaderSlot
   private forkRelease?: PromiseWithResolvers<void>
 
@@ -114,10 +117,61 @@ export class JournalSqlReaderPool {
   }
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
+    await this.releaseSourceLease()
     if (!this.conversionSlot || this.conversionSlot.failed) {
       this.conversionSlot = this.slot()
     }
     return this.conversionSlot.prepareConversion(sessionId)
+  }
+
+  async legacyProof(cursor: LegacyProofCursor) {
+    await this.releaseSourceLease()
+    if (!this.conversionSlot || this.conversionSlot.failed) {
+      this.conversionSlot = this.slot()
+    }
+    const response = await this.conversionSlot.request({ kind: 'legacy-proof', cursor })
+    if (response.type !== 'legacy-proof') {
+      throw new Error('legacy proof reader returned no page')
+    }
+    return response.page
+  }
+
+  async recycleSourceReaders(): Promise<AbortController | null> {
+    if (
+      this.closed ||
+      this.sourceLease ||
+      this.forkSlot ||
+      this.slots.some((slot) => slot.pendingCount !== 0)
+    ) {
+      return null
+    }
+    const lease = new AbortController()
+    this.sourceLease = lease
+    this.sourceRelease = Promise.withResolvers<void>()
+    const retired = this.slots.splice(0)
+    this.conversionSlot = undefined
+    try {
+      await Promise.all([...this.retiring, ...retired.map((slot) => slot.close())])
+      return lease
+    } catch (error) {
+      this.releaseSourceReaders(lease)
+      throw error
+    }
+  }
+
+  releaseSourceReaders(lease: AbortController): void {
+    if (this.sourceLease === lease) {
+      this.sourceLease = undefined
+      this.sourceRelease?.resolve()
+      this.sourceRelease = undefined
+    }
+  }
+
+  private async releaseSourceLease(): Promise<void> {
+    if (this.sourceLease) {
+      this.sourceLease.abort()
+      await this.sourceRelease?.promise
+    }
   }
 
   async importState(sessionId: string) {
@@ -174,9 +228,11 @@ export class JournalSqlReaderPool {
   }
 
   close(): Promise<void> {
+    this.sourceLease?.abort()
     this.closed = true
     this.forkRelease?.resolve()
     return (this.closing ??= Promise.all([
+      this.sourceRelease?.promise,
       ...this.retiring,
       ...this.slots.map((slot) => slot.close())
     ]).then(() => {}))

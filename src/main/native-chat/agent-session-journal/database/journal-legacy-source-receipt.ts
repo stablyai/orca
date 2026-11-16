@@ -1,4 +1,5 @@
 import { statSync, type BigIntStats } from 'node:fs'
+import { stat } from 'node:fs/promises'
 
 export const JOURNAL_LEGACY_SOURCE_RECEIPT = 'journal.legacy-source-copy.v1'
 const VERSION = { version: 1, profileCopyInventoryVersion: 1 } as const
@@ -23,13 +24,13 @@ export type JournalLegacySourceReceipt = {
   | { disposition: 'no-source-at-initialization' | 'uncertifiable' }
 )
 
-function journalLegacyFileIdentity(filename: string): JournalLegacyFileIdentity {
+export function journalLegacyFileIdentity(filename: string): JournalLegacyFileIdentity {
   return journalLegacyFileIdentityFromStat(
     statSync(filename, { bigint: true, throwIfNoEntry: false })
   )
 }
 
-function journalLegacyFileIdentityFromStat(
+export function journalLegacyFileIdentityFromStat(
   file: BigIntStats | undefined
 ): JournalLegacyFileIdentity {
   if (!file?.isFile() || file.ino === 0n || file.nlink !== 1n) {
@@ -57,6 +58,31 @@ export function captureJournalLegacySourceReceipt(filename: string): JournalLega
     )
   } catch {
     return { ...VERSION, disposition: 'uncertifiable' }
+  }
+}
+
+export async function readJournalLegacySourceReceipt(
+  filename: string
+): Promise<JournalLegacySourceReceipt> {
+  try {
+    const [main, wal] = await Promise.all([
+      statIfPresent(filename),
+      statIfPresent(`${filename}-wal`)
+    ])
+    return sourceReceipt(main ? journalLegacyFileIdentityFromStat(main) : undefined, wal)
+  } catch {
+    return { ...VERSION, disposition: 'uncertifiable' }
+  }
+}
+
+async function statIfPresent(filename: string): Promise<BigIntStats | undefined> {
+  try {
+    return await stat(filename, { bigint: true })
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return undefined
+    }
+    throw error
   }
 }
 
