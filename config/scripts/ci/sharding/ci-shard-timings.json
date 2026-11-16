@@ -4829,7 +4829,6 @@
     ],
     "overheadMs": 0,
     "timings": {
-      "tests/e2e/active-view-restart-restore.spec.ts": 22600,
       "tests/e2e/activity-agent-pane-isolation.spec.ts": 102400,
       "tests/e2e/add-project-default-checkout.spec.ts": 41600,
       "tests/e2e/agent-dashboard-status-burst.spec.ts": 16900,
@@ -5074,7 +5073,6 @@
       "tests/e2e/worktree-card-downward-drag.spec.ts": 60000,
       "tests/e2e/worktree-delete-shortcut.spec.ts": 20600,
       "tests/e2e/worktree-lifecycle.spec.ts": 44000,
-      "tests/e2e/worktree-lineage-agent-expansion.spec.ts": 21800,
       "tests/e2e/worktree-lineage.spec.ts": 96700,
       "tests/e2e/worktree-recent-sort.spec.ts": 28400,
       "tests/e2e/worktree-scroll-to-current.spec.ts": 62400,
