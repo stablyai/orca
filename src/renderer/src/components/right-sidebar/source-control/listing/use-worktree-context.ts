@@ -17,7 +17,7 @@ import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/githu
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   selectReviewCacheData,

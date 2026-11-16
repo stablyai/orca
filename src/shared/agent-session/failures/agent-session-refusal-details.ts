@@ -9,7 +9,7 @@ import {
 import {
   readCodexInstallationProblem,
   type CodexInstallationProblem
-} from '../../codex-cli-installation'
+} from '../../agent-launch/startup/codex-cli-installation'
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem

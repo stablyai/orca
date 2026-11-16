@@ -11,6 +11,7 @@ export const CODEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     rewind: true,
     fork: 'checkpoint',
     compact: true,
+    mcpServers: true,
     // A goal change at rest starts the agent first.
     threadGoal: true,
     contextUsage: true,

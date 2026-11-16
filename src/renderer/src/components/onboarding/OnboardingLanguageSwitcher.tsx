@@ -17,7 +17,7 @@ import {
   type SupportedUiLocale,
   getRendererLanguageDetection,
   shouldShowLanguageSwitcher
-} from '../../../../shared/ui-locale'
+} from '../../../../shared/i18n/ui-locale'
 
 export function OnboardingLanguageSwitcher({
   open,

@@ -7,26 +7,29 @@ import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
-import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
+import {
+  buildWslExecArgs,
+  buildWslLoginShellCommand
+} from '../../shared/shell/wsl/wsl-login-shell-command'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
-import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/shell/command-resolution/fnm-default-alias-dirs'
 import {
   getVersionManagerBinPaths,
   resolveCliCommand,
   withCliRuntimeOnPath
-} from '../../shared/node-cli-command-resolution'
-import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import { stdioForWindowsInteractiveChild } from './windows-console-input'
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
-} from '../../shared/account-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+} from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup
@@ -49,7 +52,7 @@ import {
   removeAgentAccount,
   selectAgentAccount
 } from './account-selection'
-import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
+import type { AntigravityAccountState } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState

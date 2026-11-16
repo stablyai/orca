@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { checkIgnoredPaths } from '../../source-control/ignores/check-ignored-paths'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { loadHooks } from '../../../workspace-hooks/hooks'
-import type { Repo } from '../../../../shared/repo-types'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 
 const CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS = 30_000
 export const MAX_CONFIGURED_SHARED_DIRECTORIES_CACHE_ENTRIES = 512

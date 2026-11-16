@@ -67,7 +67,7 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) => ({
 
 import { SshConnection } from './ssh-connection'
 import { initSshHostKeyStoreFile, loadTrustedHostKeys } from '../host-keys/ssh-host-key-store'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 const target = (overrides?: Partial<SshTarget>): SshTarget => ({
   id: 'target-1',

@@ -10,7 +10,7 @@ import type {
   WslDriveUncConversionBlocker,
   WslDriveUncConversionRequest,
   WslDriveUncConversionResult
-} from '../../../shared/wsl-drive-unc-conversion-types'
+} from '../../../shared/wsl-move/wsl-drive-unc-conversion-types'
 import type { WslMoveRefusal } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveTerminalScope } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
@@ -29,7 +29,7 @@ import {
   withNestedWslDriveUncProjects,
   wslDriveUncDuplicatesSplitBy
 } from './wsl-drive-unc-project-scope'
-import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 import { rewriteWslDriveUncState, wslDriveUncRewriteRoots } from './wsl-drive-unc-state-rewrite'
 import type { WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 

@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { isAgentStatusFresh } from '../../../../src/shared/agent-status/contracts/agent-status-freshness'
 import { agentVerdictDisplayMark } from '../../../../src/shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { resolveDecayedAgentRowState } from '../../../../src/shared/agent-status/presentation/agent-row-decay-state'

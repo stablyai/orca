@@ -1,5 +1,5 @@
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/workspace/activity/worktree-activity-state'
 import type { useAppStore } from '@/store/index'
@@ -7,7 +7,7 @@ import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-in
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../../../shared/workspace-creator-visibility'
+} from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
 import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
 

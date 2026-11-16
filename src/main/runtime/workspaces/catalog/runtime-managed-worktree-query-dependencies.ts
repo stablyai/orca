@@ -1,6 +1,6 @@
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 

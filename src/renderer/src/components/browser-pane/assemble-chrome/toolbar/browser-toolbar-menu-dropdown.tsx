@@ -25,13 +25,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store/index'
 import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import type { BrowserViewportPresetId } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../../../../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../../../../../shared/browser-page-zoom'
-import { BROWSER_VIEWPORT_PRESETS } from '../../../../../../shared/browser-viewport-presets'
+} from '../../../../../../shared/browser/site-settings/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../../../../shared/browser/site-settings/browser-page-zoom'
+import { BROWSER_VIEWPORT_PRESETS } from '../../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 import { browserViewportPresetLabel } from '../viewport/browser-viewport-preset-label'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'

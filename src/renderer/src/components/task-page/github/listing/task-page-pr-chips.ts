@@ -21,8 +21,8 @@ const PR_PRESET_BY_WHO: Record<GitHubPRWhoChip, TaskViewPresetId> = {
 /** Patch the query's qualifiers, keeping every other filter and free text. */
 export function patchGitHubTaskQuery(query: string, change: PRFilterChange): string {
   let next = query
-  if ('author' in change) {
-    next = withQualifier(next, 'author', change.author ?? null)
+  if ('authors' in change) {
+    next = withQualifier(next, 'authors', change.authors ?? [])
   }
   if ('assignee' in change) {
     next = withQualifier(next, 'assignee', change.assignee ?? null)
@@ -72,29 +72,36 @@ export function deriveGitHubPRStateChip(query: ParsedTaskQuery): GitHubPRStateCh
   return query.state === null ? 'all' : query.state
 }
 
+function isMe(login: string | null): boolean {
+  return login?.toLowerCase() === '@me'
+}
+
+export function isOnlyMeAuthor(query: ParsedTaskQuery): boolean {
+  return query.authors.length === 1 && isMe(query.authors[0])
+}
+
 /** Who means author or reviewer, independent of assignee, labels and text; other people light no chip. */
 export function deriveGitHubPRWhoChip(query: ParsedTaskQuery): GitHubPRWhoChip | null {
-  const isMe = (login: string | null): boolean => login?.toLowerCase() === '@me'
   if (query.reviewedBy !== null) {
     return null
   }
-  if (query.author === null) {
+  if (query.authors.length === 0) {
     if (query.reviewRequested === null) {
       return 'everyone'
     }
     return isMe(query.reviewRequested) ? 'reviewing' : null
   }
-  return query.reviewRequested === null && isMe(query.author) ? 'mine' : null
+  return query.reviewRequested === null && isOnlyMeAuthor(query) ? 'mine' : null
 }
 
 export function gitHubPRWhoChange(who: GitHubPRWhoChip): PRFilterChange {
   if (who === 'mine') {
-    return { author: '@me', reviewer: null }
+    return { authors: ['@me'], reviewer: null }
   }
   if (who === 'reviewing') {
-    return { author: null, reviewer: { kind: 'requested', login: '@me' } }
+    return { authors: [], reviewer: { kind: 'requested', login: '@me' } }
   }
-  return { author: null, reviewer: null }
+  return { authors: [], reviewer: null }
 }
 
 export function gitHubPRWhoPreset(who: GitHubPRWhoChip): TaskViewPresetId {

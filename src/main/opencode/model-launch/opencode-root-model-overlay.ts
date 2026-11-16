@@ -1,4 +1,4 @@
-import { getCommandTokenPathBasename } from '../../../shared/command-token-scanner'
+import { getCommandTokenPathBasename } from '../../../shared/shell/command-resolution/command-token-scanner'
 import {
   quoteStartupArg,
   tokenizeStartupCommand,

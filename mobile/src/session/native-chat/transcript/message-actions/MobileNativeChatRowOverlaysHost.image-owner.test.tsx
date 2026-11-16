@@ -27,7 +27,9 @@ vi.mock('./MobileNativeChatRewindDialog', () => ({ MobileNativeChatRewindDialog:
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
-vi.mock('./MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
+vi.mock('../../../../browser/link-open/MobileLinkActionSheet', () => ({
+  MobileLinkActionSheet: 'LinkActionSheet'
+}))
 vi.mock('../../visual/MobileImageViewerActions', () => ({
   MobileImageViewerActions: 'ImageViewerActions'
 }))
@@ -51,6 +53,7 @@ it('keeps an image across reconnect but closes it on workspace or client replace
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: 'tab-a', sessionId: 's1' }}
       imageSource={imageSource}
+      linkOpenMode="ask"
     >
       <Row />
     </MobileNativeChatRowOverlaysHost>

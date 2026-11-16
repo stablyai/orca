@@ -47,7 +47,9 @@ export function createClaudeSessionJournalTranslator(
         onBackgroundTaskJournalFailure: createClaudeJournalFailureHandler(failure),
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey),
-        acceptStartupFailure
+        acceptStartupFailure,
+        steerAwaitingEcho: () =>
+          currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
       })
     : null
 }

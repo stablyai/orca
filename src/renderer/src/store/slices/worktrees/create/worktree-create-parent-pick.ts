@@ -6,8 +6,8 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById
@@ -28,7 +28,7 @@ import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-work
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CreatedWorktreeResult } from './worktree-create-payload'
 
 export type CreateAttemptOutcome = {

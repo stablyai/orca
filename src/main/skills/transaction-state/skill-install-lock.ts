@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, readdir, rename, rmdir, stat, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { SKILL_INSTALL_BUSY_FAILURE } from '../../../shared/skill-install-failure'
+import { SKILL_INSTALL_BUSY_FAILURE } from '../../../shared/skills/installation/skill-install-failure'
 import { SkillInstallOperationError } from '../install/skill-install-operation-error'
 import {
   readSkillInstallLockOwner,

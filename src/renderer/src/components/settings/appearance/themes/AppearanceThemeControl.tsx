@@ -6,7 +6,7 @@ import {
   editorThemeSlotUpdate,
   MATCH_TERMINAL_APP_THEME,
   pluginAppThemeSlotUpdate
-} from '../../../../../../shared/plugin-theme-settings'
+} from '../../../../../../shared/plugins/appearance/plugin-theme-settings'
 import { Button } from '../../../ui/button'
 import {
   SettingsSearchableSelect,

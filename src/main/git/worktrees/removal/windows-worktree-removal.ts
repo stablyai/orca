@@ -1,4 +1,4 @@
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import { join, resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { lstat, readdir } from '../../../filesystem/asar-transparent-fs'

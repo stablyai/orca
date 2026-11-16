@@ -1,6 +1,6 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../../../shared/concurrency/map-with-concurrency'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { WORKER_SETTLED_STATES } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'

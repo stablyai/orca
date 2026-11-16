@@ -12,12 +12,12 @@ import {
   type AgentPluginManifestV1,
   type SkillBundleEntry,
   type SkillBundleManifestV1
-} from '../../../shared/skill-bundle-manifest'
+} from '../../../shared/skills/packages/skill-bundle-manifest'
 import {
   computeSkillPackageDigest,
   validateSkillPackageName
-} from '../../../shared/skill-package-manifest'
-import { summarizeSkillMarkdown } from '../../../shared/skill-metadata'
+} from '../../../shared/skills/packages/skill-package-manifest'
+import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
 import { renameSkillPathWithWindowsRetry } from '../filesystem/skill-windows-rename-retry'
 import { extractSkillBundleArchive } from './skill-bundle-extraction'
 import {

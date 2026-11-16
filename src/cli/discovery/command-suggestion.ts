@@ -1,6 +1,7 @@
 import { specPaths, type CommandSpec } from './command-spec'
-import { levenshtein } from '../../shared/edit-distance'
+import { levenshtein } from '../../shared/text/edit-distance'
 import { isTerminalHandle } from '../../shared/terminal-handle-prefix'
+import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 
 const SUGGESTION_THRESHOLD = 3
 const MAX_SUGGESTIONS = 3
@@ -110,8 +111,9 @@ export function unknownCommandData(specs: CommandSpec[], commandPath: string[]):
     ...terminalFlagSuggestion(specs, commandPath),
     ...suggestCommands(specs, commandPath)
   ].slice(0, MAX_SUGGESTIONS)
+  const command = resolveInvokedCliCommand()
   const nextSteps = suggestions.length
-    ? [`Did you mean: ${suggestions.map((path) => `orca ${path}`).join(', ')}`]
+    ? [`Did you mean: ${suggestions.map((path) => `${command} ${path}`).join(', ')}`]
     : []
   return { suggestions, nextSteps }
 }

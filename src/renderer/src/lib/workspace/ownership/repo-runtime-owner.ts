@@ -5,9 +5,9 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type RepoOwnerRow = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 

@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import {
   COMPUTER_WAIT_DEFAULT_TIMEOUT_MS,
   COMPUTER_WAIT_MAX_TIMEOUT_MS
@@ -11,7 +11,10 @@ const COMPUTER_OBSERVE_FLAGS = [
   ...COMPUTER_FLAGS,
   ...COMPUTER_WINDOW_TARGET_FLAGS,
   'restore-window',
-  'no-screenshot'
+  'no-screenshot',
+  'screenshot-format',
+  'screenshot-scale',
+  'screenshot-max-edge'
 ]
 const COMPUTER_ACTION_FLAGS = [...COMPUTER_OBSERVE_FLAGS, 'full-tree']
 
@@ -56,7 +59,7 @@ export const COMPUTER_COMMAND_SPECS: CommandSpec[] = [
     path: ['computer', 'get-app-state'],
     summary: 'Capture a compact accessibility snapshot of an app',
     usage:
-      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--element-index <n>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--json]',
+      'orca computer get-app-state --app <name|bundle|pid:N> [--window-id <id> | --window-index <n>] [--worktree <selector> | --session <id>] [--element-index <n>] [--query <text>] [--max-elements <n>] [--restore-window] [--no-screenshot] [--screenshot-format <png|jpeg>] [--screenshot-scale <n>] [--screenshot-max-edge <px>] [--json]',
     allowedFlags: [...COMPUTER_OBSERVE_FLAGS, 'element-index', 'query', 'max-elements']
   },
   {

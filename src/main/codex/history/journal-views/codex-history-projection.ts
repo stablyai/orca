@@ -1,6 +1,6 @@
 import { historicalTurnLifecycle } from '../../structured/journal/codex-structured-journal-translation-restore'
 import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { interruptedAgentJournalToolCall } from '../../../../shared/agent-journal-tool-call-lifecycle'
+import { interruptedAgentJournalToolCall } from '../../../../shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import { codexJournalItem } from '../../structured/items/codex-structured-item-translation'
 import type { CodexHelperName } from '../../structured/items/codex-collab-agent-item-translation'
 import type {

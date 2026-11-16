@@ -381,6 +381,48 @@ it('reads imported attention, live execution ownership and aliased legacy opener
   expect(cleared.indicators.firstInputSubmissionKey).toBeNull()
 })
 
+it('waits on the user for a Codex async question after its turn ends, until the next message', () => {
+  const item = (
+    itemId: string,
+    body: Extract<JournalRow, { kind: 'item' }>['body']
+  ): JournalRow => ({
+    ...base,
+    kind: 'item',
+    itemId,
+    revision: 1,
+    body
+  })
+  const asked = [
+    item('ask', message('Pick a color')),
+    item('turn', { kind: 'turn', turnId: 'turn', state: 'completed', userItemId: 'ask' }),
+    item('question', {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'request_user_input_async',
+          callId: 'call',
+          input: { questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }
+        }
+      ]
+    }),
+    item('after', {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Waiting for your answer.' }]
+    })
+  ]
+  const waiting = readJournalSqlStatusState(fixture(asked).context())
+  expect(waiting.summary).toMatchObject({ status: 'idle', awaitsAnswer: true })
+  expect(waiting.pendingPromptIds).toEqual([])
+  const answered = readJournalSqlStatusState(
+    fixture([...asked, item('answer', message('Blue'))]).context()
+  )
+  expect(answered.summary.status).toBe('idle')
+  expect(answered.summary.awaitsAnswer).toBeUndefined()
+})
+
 it('keeps every outstanding input across finite pages and retains end evidence after its source item is removed', () => {
   const rows: JournalRow[] = []
   for (let i = 0; i < 130; i++) {

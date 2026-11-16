@@ -1,4 +1,4 @@
-import type { PrioritySemaphore } from '../../../../shared/priority-semaphore'
+import type { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
 
 /** A modern request can take over queued eager work, but joins work already admitted. */
 export class AtRestCommandDemand {

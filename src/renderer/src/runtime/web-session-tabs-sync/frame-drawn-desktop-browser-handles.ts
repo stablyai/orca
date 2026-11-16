@@ -1,6 +1,6 @@
 import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { browserInitializationReceiptStale } from './browser-initialization-presentation'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { markWebSessionBrowserPlacementAdopted } from '../browser/placement/web-session-browser-placement'
 import { findBrowserWorkspaceForRemotePage } from './mirrored-browser-tabs'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'

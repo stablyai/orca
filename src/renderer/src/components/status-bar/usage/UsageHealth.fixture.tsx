@@ -6,10 +6,13 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/cursor-usage-buckets'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { AccountSwitchList } from '../accounts/AccountSwitchList'
 import { AccountSwitchRowItem } from '../accounts/AccountSwitchRowItem'
 import { AccountUsageGauge, AccountUsageNotChecked } from '../accounts/AccountUsageGauge'
@@ -20,7 +23,7 @@ import { UsageRosterPanel } from './UsageRosterPanel'
 import { ProviderPanel } from './provider-usage-panel'
 import { UsageDisplayToggle } from './usage-meter'
 import { useAppStore } from '../../../store'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 
 const NOW = Date.now()
 const MIN = 60_000
@@ -34,7 +37,8 @@ const PRESETS = {
   low: { s5: 86, wk: 72, fable: 41 },
   full: { s5: 40, wk: 100, fable: 100 },
   fable: { s5: 12, wk: 33, fable: 100 },
-  fableOnly: { s5: null, wk: null, fable: 100 }
+  fableOnly: { s5: null, wk: null, fable: 100 },
+  fableOnlyLow: { s5: null, wk: null, fable: 40 }
 } satisfies Record<string, Preset>
 
 function win(usedPercent: number, windowMinutes: number, resetsInMs: number): RateLimitWindow {
@@ -67,7 +71,7 @@ function claudeFor(preset: Preset): ProviderRateLimits {
   }
 }
 
-function roster(preset: Preset): ProviderRateLimits[] {
+function roster(preset: Preset, claudeExtra?: Partial<ProviderRateLimits>): ProviderRateLimits[] {
   return [
     {
       ...base('cursor'),
@@ -81,7 +85,7 @@ function roster(preset: Preset): ProviderRateLimits[] {
       session: win(18, 300, 2 * HOUR),
       weekly: win(92, 10_080, 6 * DAY + 11 * HOUR)
     },
-    claudeFor(preset),
+    { ...claudeFor(preset), ...claudeExtra },
     { ...base('antigravity'), status: 'unavailable' },
     { ...base('opencode-go'), session: win(0, 300, 4 * HOUR + 58 * MIN) }
   ]
@@ -173,9 +177,10 @@ function rosterFixture(
   preset: Preset,
   display: UsagePercentageDisplay,
   mode: StatusBarUsageMode = 'verbose',
-  width = 480
+  width = 480,
+  claudeExtra?: Partial<ProviderRateLimits>
 ) {
-  const providers = roster(preset)
+  const providers = roster(preset, claudeExtra)
   return defineFixture({
     width,
     store: { usagePercentageDisplay: display, statusBarUsageMode: mode },
@@ -257,6 +262,7 @@ export const rosterFullUsed = rosterFixture(PRESETS.full, 'used')
 export const rosterFullLeft = rosterFixture(PRESETS.full, 'remaining')
 export const rosterFableUsed = rosterFixture(PRESETS.fable, 'used')
 export const rosterFableLeft = rosterFixture(PRESETS.fable, 'remaining')
+export const rosterHealthyCompact = rosterFixture(PRESETS.healthy, 'used', 'compact')
 export const rosterLowCompact = rosterFixture(PRESETS.low, 'used', 'compact')
 export const rosterNarrow300 = rosterFixture(PRESETS.low, 'used', 'compact', 324)
 
@@ -285,6 +291,7 @@ function focusToggle(frame: HTMLElement): void {
 }
 
 export const rosterFableOnly = rosterFixture(PRESETS.fableOnly, 'used', 'compact')
+export const rosterFableOnlyDetailed = rosterFixture(PRESETS.fableOnly, 'used', 'verbose')
 export const rosterFableOnlyNarrow300 = rosterFixture(PRESETS.fableOnly, 'used', 'compact', 324)
 export const rosterFableNarrow300 = rosterFixture(PRESETS.fable, 'used', 'compact', 324)
 export const rosterFullNarrow300 = rosterFixture(PRESETS.full, 'used', 'compact', 324)
@@ -377,4 +384,53 @@ export const statusBarFableOnly = defineFixture({
       )}
     </div>
   )
+})
+
+// Why: a failed refresh keeps the stored reading; the row must keep showing it.
+const REFRESH_FAILED: Partial<ProviderRateLimits> = {
+  status: 'error',
+  error: 'Network error'
+}
+export const rosterFableRefreshError = rosterFixture(
+  PRESETS.fable,
+  'used',
+  'verbose',
+  480,
+  REFRESH_FAILED
+)
+export const rosterFableOnlyRefreshError = rosterFixture(
+  PRESETS.fableOnly,
+  'used',
+  'compact',
+  480,
+  REFRESH_FAILED
+)
+
+export const rosterFableOnlyLow = rosterFixture(PRESETS.fableOnlyLow, 'used', 'compact')
+export const rosterFableOnlyLowDetailed = rosterFixture(PRESETS.fableOnlyLow, 'used', 'verbose')
+
+// Why: native title tooltips never paint in a screenshot, so print each Fable title under the roster.
+function revealFableTitles(frame: HTMLElement): void {
+  const doc = frame.ownerDocument
+  const titles = [
+    ...doc.querySelectorAll<HTMLElement>('[data-usage-scoped-only],[data-usage-scoped-urgent]')
+  ]
+    .map((element) => element.title)
+    .filter(Boolean)
+  doc.querySelector('[data-fixture-titles]')?.remove()
+  const note = doc.createElement('pre')
+  note.setAttribute('data-fixture-titles', '')
+  note.style.cssText =
+    'position:fixed;left:12px;bottom:12px;padding:6px 8px;border:1px dashed currentColor;font:12px ui-monospace,monospace;z-index:99999;background:var(--background);color:var(--foreground)'
+  note.textContent = `title: ${titles.join('\ntitle: ') || '(none)'}`
+  doc.body.appendChild(note)
+}
+
+export const rosterFableTitleUsed = defineFixture({
+  ...rosterFixture(PRESETS.fableOnly, 'used', 'compact'),
+  interact: revealFableTitles
+})
+export const rosterFableTitleLeft = defineFixture({
+  ...rosterFixture(PRESETS.fable, 'remaining', 'verbose'),
+  interact: revealFableTitles
 })

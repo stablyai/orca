@@ -1,5 +1,8 @@
 import { setTimeout as delay } from 'node:timers/promises'
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../abort-signal-reason'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../concurrency/abort-signal-reason'
 import { readGitCommandFailureStderr } from '../commands/git-command-failure-text'
 import { findGitSubcommandIndex } from '../commands/git-command-classification'
 import { isExecKilledError, stripCredentialsFromMessage } from '../remotes/git-remote-error'

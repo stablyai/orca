@@ -8,8 +8,8 @@ import {
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/files/access/file-owner-runtime-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import { parseWslUncPath, toWindowsWslPath } from '../../../../../shared/wsl-paths'
-import { msysDrivePathToWindows } from '../../../../../shared/cross-platform-path'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../../shared/file-access/wsl-paths'
+import { msysDrivePathToWindows } from '../../../../../shared/file-access/cross-platform-path'
 import { terminalFileSourceHost } from '../links/files/terminal-worktree-path-link'
 
 export type TerminalFileContext = RuntimeFileOperationArgs & {

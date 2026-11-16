@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { BrowserSessionProfileSource } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 /** Keep import badges on this desktop because its route jars are absent from server profile records. */
 const FILE_NAME = 'client-route-cookie-import-sources.json'

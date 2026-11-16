@@ -7,7 +7,7 @@ import {
   type OrcadManagedStopInstance,
   type OrcadManagedStopRequest,
   type OrcadManagedStopVerdict
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   compareOrcadProcessIdentity,
   recordedOrcadProcessIncarnation,

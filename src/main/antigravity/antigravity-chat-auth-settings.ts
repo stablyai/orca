@@ -2,7 +2,7 @@ import {
   resolveAntigravityChatAuthConfig,
   AntigravityChatAuthConfigSchema,
   type AntigravityChatAuthConfig
-} from '../../shared/antigravity-chat-auth-config'
+} from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { ANTIGRAVITY_LAUNCH_GATE, antigravityChatSignIn } from './antigravity-chat-account'

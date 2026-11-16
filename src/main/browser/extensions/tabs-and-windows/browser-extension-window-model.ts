@@ -1,6 +1,6 @@
 /// <reference types="chrome" />
 import { BrowserWindow } from 'electron'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import { isSameExtensionNavigation } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   isBackgroundLaunch,
