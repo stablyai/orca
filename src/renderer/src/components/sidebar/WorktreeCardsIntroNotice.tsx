@@ -32,7 +32,7 @@ function useWorktreeCardsIntroNotice(): WorktreeCardsIntroChoice | null {
       return
     }
     const store = useAppStore.getState()
-    // Why re-read: a repeated effect run still holds the stale flag and would report 'shown' twice.
+    // A repeated effect run may still hold the stale flag.
     if (store.worktreeCardsIntroNoticeSeen) {
       return
     }
@@ -160,7 +160,6 @@ export function WorktreeCardsIntroNotice(): React.JSX.Element | null {
     void updateSettings({ experimentalNewWorktreeCardStyle: true }).then(() => {
       setSaving(false)
       if (useAppStore.getState().settings?.experimentalNewWorktreeCardStyle === true) {
-        // Why after the save: counts only people whose cards actually switched.
         trackWorktreeCardsIntroAction('kept', 'new')
         trackWorktreeCardStyleChanged(true, 'intro_note')
         store().setWorktreeCardsIntroKeptHintOpen(true)
