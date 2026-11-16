@@ -61,7 +61,6 @@ import {
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
-import { renderCloudApiSettingsSections } from './settings-cloud-api-section-renderers'
 import { renderOrcaCloudSettingsSections } from './settings-orca-cloud-section-renderers'
 import {
   orcaCloudAgentAccountsLead,
@@ -187,7 +186,6 @@ export function renderSettingsPage(
                   {renderIntegrationsSettingsSection(context, t)}
                   {renderMobileSettingsSection(context, t)}
                   {renderOrcaCloudSettingsSections(context, t)}
-                  {renderCloudApiSettingsSections(context, t)}
                   {renderAutomationsSettingsSection(context, t)}
                   {renderArtifactsSettingsSection(context, t)}
                   {renderShareSkillsSettingsSection(context, t)}

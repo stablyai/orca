@@ -2,32 +2,24 @@ import { withCloudBuildDefaults } from '../cloud-build-defaults'
 // Plan & billing for the active Orca profile's signed-in account. Results are values, never
 // throws, so the renderer can show a precise state. A billing-service refusal never signs the
 // user out; only Orca Cloud auth rejecting the session does (via runWithFreshOrcaCloudSession).
-import { appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { app, shell } from 'electron'
+import { app } from 'electron'
 import type {
-  OrcaBillingLinkResult,
-  OrcaBillingOpenResult,
-  OrcaBillingOverageArgs,
-  OrcaBillingOverageResult,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult,
   OrcaBillingTrialClaimResult
 } from '../../shared/orca-billing'
 import type { OrcaPlanCatalogResult } from '../../shared/orca-billing-plans'
 import { loadPlanCatalog } from './plan-catalog-client'
-import { openResultForError } from './billing-open-result'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   BillingServiceError,
   claimTrial,
-  createPortalUrl,
   fetchEntitlement,
   fetchTeamPlans,
   mintBillingToken,
-  updateOverage,
   type BillingEndpoints
 } from './billing-client'
 import { getBillingEndpoints } from './billing-config'
@@ -202,79 +194,6 @@ export async function getOrcaBillingTeamPlans(
     const teams = await ready.run((token, endpoints) => fetchTeamPlans(endpoints, token, orgIds))
     return teams === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', teams }
   } catch (error) {
-    return { status: 'failed', error: message(error) }
-  }
-}
-
-type CreateHostedUrl = (token: string, endpoints: BillingEndpoints) => Promise<string>
-
-/** Mints a Stripe-hosted Checkout/Portal URL for the active account without opening it. */
-async function mintHosted(
-  userDataPath: string,
-  createUrl: CreateHostedUrl
-): Promise<OrcaBillingLinkResult> {
-  const ready = prepare(userDataPath)
-  if (!ready.ok) {
-    return { status: ready.status }
-  }
-  try {
-    const url = await ready.run(createUrl)
-    // createUrl already restricted this to Stripe's hosted Checkout/Portal hosts.
-    return url === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', url }
-  } catch (error) {
-    return openResultForError(error)
-  }
-}
-
-async function openHosted(
-  userDataPath: string,
-  createUrl: CreateHostedUrl
-): Promise<OrcaBillingOpenResult> {
-  const minted = await mintHosted(userDataPath, createUrl)
-  if (minted.status !== 'ok') {
-    return minted
-  }
-  try {
-    const devUrlFile = app.isPackaged
-      ? ''
-      : (process.env.ORCA_BILLING_DEV_OPEN_URL_FILE?.trim() ?? '')
-    // Dev automation only: hand the Stripe URL to a test driver instead of the user's browser.
-    await (devUrlFile
-      ? appendFile(devUrlFile, `${minted.url}\n`, { mode: 0o600 })
-      : shell.openExternal(minted.url))
-    return { status: 'opened' }
-  } catch (error) {
-    return openResultForError(error)
-  }
-}
-
-export function openOrcaBillingPortal(userDataPath: string): Promise<OrcaBillingOpenResult> {
-  return openHosted(userDataPath, (token, endpoints) => createPortalUrl(endpoints, token))
-}
-
-export async function setOrcaBillingOverage(
-  userDataPath: string,
-  args: OrcaBillingOverageArgs
-): Promise<OrcaBillingOverageResult> {
-  const ready = prepare(userDataPath)
-  if (!ready.ok) {
-    return { status: ready.status }
-  }
-  try {
-    const entitlement = await ready.run((token, endpoints) => updateOverage(endpoints, token, args))
-    return entitlement === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', entitlement }
-  } catch (error) {
-    if (error instanceof BillingServiceError) {
-      if (error.statusCode === 403) {
-        return { status: 'forbidden' }
-      }
-      if (error.errorCode === 'no_subscription') {
-        return { status: 'no-subscription' }
-      }
-      if (error.errorCode === 'spend_cap_too_high') {
-        return { status: 'cap-too-high' }
-      }
-    }
     return { status: 'failed', error: message(error) }
   }
 }

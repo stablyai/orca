@@ -11,7 +11,7 @@ import {
   useOrcaCloudEnvironmentsAvailability
 } from '../../cloud-environment/CloudEnvironmentSection'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../OrcaSignInProgress'
-import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
+import { CloudEmptyState } from './CloudEmptyState'
 import { CloudSecretsSection } from '../cloud-secrets/CloudSecretsSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudPredictiveWakeSetting } from './CloudPredictiveWakeSetting'
@@ -33,7 +33,7 @@ export function OrcaCloudSignedOutNotice(): React.JSX.Element {
   const reconnect = useAppStore((s) => s.orcaProfileAuthStatus?.state === 'reconnect-required')
   return (
     <SettingsGroup>
-      <CloudApiEmptyState
+      <CloudEmptyState
         icon={CircleUserRound}
         title={
           reconnect

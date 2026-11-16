@@ -270,7 +270,7 @@ export function CloudWakingOverlay({
               >
                 {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
               </Button>
-              {billingFix ? <CloudWakeBillingFixButton fix={billingFix} onRetry={onRetry} /> : null}
+              {billingFix ? <CloudWakeBillingFixButton fix={billingFix} /> : null}
             </div>
           </div>
         ) : (

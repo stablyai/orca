@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import {
-  assertStripeHostedUrl,
   claimTrial,
-  createPortalUrl,
   BillingOrgMismatchError,
   fetchEntitlement,
   resetBillingExplicitOrgForTests,
@@ -119,32 +117,6 @@ describe('billing client', () => {
       })
     )
     await expect(call).rejects.toBeInstanceOf(OrcaCloudRequestError)
-  })
-
-  it('only opens Stripe-hosted pages', async () => {
-    expect(assertStripeHostedUrl('https://billing.stripe.com/p/session/x')).toBe(
-      'https://billing.stripe.com/p/session/x'
-    )
-    for (const bad of [
-      'http://checkout.stripe.com/x',
-      'https://checkout.stripe.com.evil.test/x',
-      'https://evil.test/x',
-      'https://user@billing.stripe.com/x',
-      'javascript:alert(1)',
-      42
-    ]) {
-      expect(() => assertStripeHostedUrl(bad)).toThrow()
-    }
-    const portal = createPortalUrl(
-      endpoints,
-      'bt',
-      fakeFetch({
-        'https://billing.example.test/v1/billing/portal': Response.json({
-          url: 'https://evil.test/'
-        })
-      })
-    )
-    await expect(portal).rejects.toThrow('invalid_billing_url')
   })
 
   it('normalizes the entitlement and drops unknown or unsafe fields', async () => {

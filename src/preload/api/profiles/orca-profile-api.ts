@@ -37,9 +37,6 @@ import type {
   TransferOrcaProfileProjectResult
 } from '../../../shared/orca-profiles/orca-profiles'
 import type {
-  OrcaBillingOpenResult,
-  OrcaBillingOverageArgs,
-  OrcaBillingOverageResult,
   OrcaBillingTrialClaimResult,
   OrcaBillingReturn,
   OrcaBillingStatusResult,
@@ -101,12 +98,8 @@ export type OrcaProfileApi = {
   cloudSetupGet: (args: { sessionId: string }) => Promise<CloudSetupGetResult>
   /** "Copy setup link": a fresh one-time link to the same setup session. */
   cloudSetupLink: (args: { sessionId: string }) => Promise<CloudSetupLinkResult>
-  /** Opens the Stripe Customer Portal in the browser. */
-  billingOpenPortal: () => Promise<OrcaBillingOpenResult>
   /** Plan state for other teams the user is on ("Switch to <team>"); never switches teams. */
   billingTeamPlans: (args: { orgIds: string[] }) => Promise<OrcaBillingTeamPlansResult>
-  /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */
-  billingSetOverage: (args: OrcaBillingOverageArgs) => Promise<OrcaBillingOverageResult>
   /** Starts the team's one-time Orca Cloud trial (idempotent; no card). */
   billingClaimTrial: () => Promise<OrcaBillingTrialClaimResult>
 }
