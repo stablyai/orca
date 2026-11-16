@@ -1,6 +1,6 @@
-// The one Restart for an Orca Cloud pane's agent (RA-11): the sign-in strip's "Restart Claude" and the
+// The one Restart for an Orca Cloud pane's agent: the sign-in strip's "Restart Claude" and the
 // woke-up strip's both run it. It resumes the pane's own conversation when it has one and starts
-// fresh when the resume finds none (RA-11e); the strip over the pane shows Restarting, then the
+// fresh when the resume finds none; the strip over the pane shows Restarting, then the
 // outcome, so it never ends silently.
 import { useAppStore } from '@/store'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'

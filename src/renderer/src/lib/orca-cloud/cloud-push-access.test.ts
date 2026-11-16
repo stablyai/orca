@@ -5,7 +5,7 @@ const admin = { admin: true, ownerType: 'Organization' } as const
 const orgMember = { admin: false, ownerType: 'Organization' } as const
 const notOwner = { admin: false, ownerType: 'User' } as const
 
-describe('cloudPushAccess (ENV-NOTICE-ACTIONS)', () => {
+describe('cloudPushAccess', () => {
   it("someone else's public repository (octocat/Hello-World) can't be installed on", () => {
     expect(cloudPushAccess('public', notOwner)).toBe('cantInstall')
     expect(cloudPushAccess('public', orgMember)).toBe('cantInstall')
@@ -20,7 +20,7 @@ describe('cloudPushAccess (ENV-NOTICE-ACTIONS)', () => {
   })
 
   it('missing: the control plane minted an install page; only a personal repo’s non-owner is stuck', () => {
-    // An org member's install becomes a request for an owner (D2).
+    // An org member's install becomes a request for an owner.
     expect(cloudPushAccess('missing', orgMember)).toBe('install')
     expect(cloudPushAccess('missing', null)).toBe('install')
     expect(cloudPushAccess('missing', notOwner)).toBe('cantInstall')

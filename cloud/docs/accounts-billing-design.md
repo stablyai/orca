@@ -46,13 +46,12 @@ and registrations first).
 
 ## Seat fairness and abuse resistance (decision)
 
-How others bill seats: GitHub charges added seats immediately, prorated, and applies removals at the
-next billing cycle with no refund (docs: "Impact of changing your plan on billing"). Cursor charges
-adds prorated but treats remove-then-re-add as a brand-new seat, which customers report as
-double-charging. Slack's Fair Billing Policy credits inactive members automatically. Linear charges
-everyone not suspended at renewal and prorates later additions.
+How other products bill seats: some charge added seats immediately, prorated, and apply removals at
+the next billing cycle with no refund. Some charge adds prorated but treat remove-then-re-add as a
+brand-new seat, which customers report as double-charging. Some credit inactive members
+automatically. Others charge everyone not suspended at renewal and prorate later additions.
 
-**Decision: seats billed = the period's peak membership** (GitHub model plus churn protection):
+**Decision: seats billed = the period's peak membership** (adds charged now, removals at renewal, plus churn protection):
 - **Adds** above the seats already paid this period are invoiced and charged now (`always_invoice`).
 - **Removals** never credit mid-period. Seats drop to the member count only at renewal: within
   `seatTrueDownHours` (6 h, config) of the period end, billing lowers the quantity with

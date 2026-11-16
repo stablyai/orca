@@ -7,7 +7,7 @@ import {
   resolveDaemonSessionScrollbackRows
 } from './daemon-session-scrollback-window'
 
-// N-02: only the cloud VM raises the host's live window; local desktop daemons keep theirs.
+// Only the cloud VM raises the host's live window; local desktop daemons keep theirs.
 describe('daemon session scrollback window', () => {
   it('keeps the local desktop default when nothing overrides it', () => {
     expect(DAEMON_SESSION_SCROLLBACK_ROWS).toBe(1000)

@@ -1,7 +1,7 @@
 // Client-side cache of what an Orca Cloud workspace shows (chat transcripts, terminal output, git
-// state), so a sleeping VM is browsable instantly without waking it. Conductor keeps chats on its
-// servers; Orca keeps them on the VM (end-to-end encrypted), so the only copy outside the VM is
-// this one, on the user's own disk, sealed with the OS keychain. Without a keychain nothing is kept.
+// state), so a sleeping VM is browsable instantly without waking it. Orca keeps chats on the VM
+// (end-to-end encrypted), so the only copy outside the VM is this one, on the user's own disk,
+// sealed with the OS keychain. Without a keychain nothing is kept.
 // Bounded per workspace, in total, and in memory; one file per environment.
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

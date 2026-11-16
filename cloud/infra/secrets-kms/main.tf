@@ -1,4 +1,4 @@
-# SEC-3 phase 1: the Cloud KMS key that wraps the sandbox-control secret store's KEK, the service
+# Phase 1: the Cloud KMS key that wraps the sandbox-control secret store's KEK, the service
 # account the Worker uses to unwrap it, and the break-glass escrow of the KEK itself.
 # Own root and state (backend prefix terraform/secrets-kms) so applies of other roots can never plan
 # to destroy the key: a destroyed key version makes every stored secret unreadable.

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// GH-CREATE-CANCEL and GH-CREATE-NO-ROW for a GitHub-only Orca Cloud create: Cancel at any step
+// Cancel and the pending row hand-off for a GitHub-only Orca Cloud create: Cancel at any step
 // leaves no workspace (the sandbox is deleted, which drops the pairing too), and a create that
 // opens hands its pending row off to the paired server's rows, which stay hidden until then.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -80,7 +80,7 @@ const creationId = (): string =>
   Object.keys(useAppStore.getState().pendingWorktreeCreations)[0] ?? ''
 const cancel = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId())
 
-describe('Cancel leaves no workspace (GH-CREATE-CANCEL)', () => {
+describe('Cancel leaves no workspace', () => {
   it('cancelled after the sandbox started, before it opened: deleted, never opened', async () => {
     createFromGitHub.mockImplementationOnce(async () => {
       cancel()
@@ -119,7 +119,7 @@ const settle = async (): Promise<void> => {
   }
 }
 
-describe('EP-5: Cancel says "Sandbox deleted" only once the control plane confirmed it', () => {
+describe('Cancel says "Sandbox deleted" only once the control plane confirmed it', () => {
   // Earlier tests' cleanups can still finish late: every check is scoped to this test's creation.
   let id = ''
   // As in the app: the cancel lands while the create's steps are already tracked (a tick in).
@@ -179,7 +179,7 @@ describe('EP-5: Cancel says "Sandbox deleted" only once the control plane confir
   })
 })
 
-describe('pending row hand-off (GH-CREATE-NO-ROW)', () => {
+describe('pending row hand-off', () => {
   it('records the paired server while opening, and the hand-off drops the pending row', async () => {
     let pairingHostIdDuringOpen: string | undefined
     mocks.open.mockImplementationOnce(async (_workspace, options) => {

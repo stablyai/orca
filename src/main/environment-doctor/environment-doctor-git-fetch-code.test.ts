@@ -3,7 +3,7 @@ import { fetchFailureCode } from './environment-doctor-git'
 
 const failed = (stderr: string, timedOut = false) => ({ code: 128, stdout: '', stderr, timedOut })
 
-describe('fetchFailureCode (GH-FETCH-REASON)', () => {
+describe('fetchFailureCode', () => {
   it('names access refusals, including the egress firewall 403', () => {
     expect(
       fetchFailureCode(

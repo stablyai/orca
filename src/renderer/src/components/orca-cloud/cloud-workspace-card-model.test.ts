@@ -48,7 +48,7 @@ describe('calm cloud workspace card', () => {
     expect(mostUrgentAttention([null, null])).toBeNull()
     expect(mostUrgentAttention([secrets, agent])).toBe(agent)
     expect(mostUrgentAttention([secrets, null])).toBe(secrets)
-    // GIT-SETUP: below an agent that can't start, above missing secrets.
+    // Below an agent that can't start, above missing secrets.
     const git = { kind: 'gitSetupOff' as const }
     expect(mostUrgentAttention([secrets, git])).toBe(git)
     expect(mostUrgentAttention([git, agent])).toBe(agent)
@@ -72,7 +72,7 @@ describe('calm cloud workspace card', () => {
   })
 })
 
-describe('card attention for a running agent’s lapsed sign-in (n15)', () => {
+describe('card attention for a running agent’s lapsed sign-in', () => {
   type Pane = { tabId: string; signIn: 'needsSignIn' | 'expired' | null }
   const row = (panes: Pane[]): string | null => {
     const picked = pickWorkspaceAgentSignIn(panes, (pane) => pane.signIn)
@@ -116,7 +116,7 @@ describe('card attention for a running agent’s lapsed sign-in (n15)', () => {
   })
 })
 
-describe('a launch put back after a restart that waits for Start (V3-01)', () => {
+describe('a launch put back after a restart that waits for Start', () => {
   const notStarted = { kind: 'agentNotStarted' as const, agent: 'Claude', tabId: 't' }
 
   it('reads "hasn’t started" in neutral colours, never "isn’t set up" or a warning', () => {

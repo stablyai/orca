@@ -1,5 +1,5 @@
 // Remove… for a saved Orca-account credential: the confirm row (active and expired rows) and the
-// expired row's ⋯ menu that opens it (RA-5).
+// expired row's ⋯ menu that opens it.
 import type React from 'react'
 import { useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'

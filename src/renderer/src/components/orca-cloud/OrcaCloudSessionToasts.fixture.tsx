@@ -84,7 +84,7 @@ export const cleanupInProgress = toastFixture(() => showOrcaCloudCleanupStartedT
 export const cleanupDone = toastFixture(() => showOrcaCloudCleanupDoneToast('c-1'))
 export const cleanupFailed = toastFixture(() => showOrcaCloudCleanupFailedToast('c-1', noop))
 
-/** Archive from the sidebar or the team list: the same toast with Undo for 5 s (DS-01). */
+/** Archive from the sidebar or the team list: the same toast with Undo for 5 s. */
 export const archivedWithUndo = toastFixture(
   () =>
     void runArchiveWithUndo('fixture-archive', {

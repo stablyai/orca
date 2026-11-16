@@ -3,7 +3,7 @@ import type { NeedsSetupProjectHostOption } from '@/lib/workspace/creation/proje
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 // Run on rows are options inside one listbox: their inline actions ("Connect", "Set project
-// location", "Sign in", …) are not separate Tab stops (DS-22). Each row's accessible description
+// location", "Sign in", …) are not separate Tab stops. Each row's accessible description
 // says what Enter does instead, so a screen-reader user hears the action the mouse user sees.
 
 /** A host that can't run yet: Enter connects it, or sets the project location on it. */

@@ -156,8 +156,8 @@ export function egressAllowlistFor(platformHostSuffixes?: string): readonly stri
 export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = egressAllowlistFor()
 
 /**
- * Workspace sandbox egress presets. `open` (the default) reaches the whole internet, like Codespaces
- * or Devin; `limited` is the fail-closed allowlist above. Credential routes apply under both.
+ * Workspace sandbox egress presets. `open` (the default) reaches the whole internet, like other cloud
+ * dev environments; `limited` is the fail-closed allowlist above. Credential routes apply under both.
  */
 export type EgressPreset = 'open' | 'limited'
 export const DEFAULT_EGRESS_PRESET: EgressPreset = 'open'
@@ -178,13 +178,13 @@ export function isLocalEnvironment(environment: string | undefined): boolean {
 
 /**
  * A deployed env with no EGRESS_PROXY_URL: nothing can swap credentials at egress, so open egress falls back
- * to limited (E3-PROD-GUARD) and swappable keys are withheld from the VM (EGRESS-SWAP-FAIL-CLOSED).
+ * to limited (the production guard) and swappable keys are withheld from the VM.
  */
 export function egressProxyMissing(config: { egressProxyUrl?: string; environment?: string }): boolean {
   return !config.egressProxyUrl && !isLocalEnvironment(config.environment)
 }
 
-/** What an agent sees when its model key was withheld (design-squad wording). */
+/** What an agent sees when its model key was withheld. */
 export const KEYS_WITHHELD_MESSAGE =
   "Orca Cloud didn't send your model API key or sign-in because of a problem on Orca's side, not with your key. Contact Orca support."
 /** Provider-style error JSON: Anthropic clients read error.message, OpenAI-compatible ones too. */
@@ -197,13 +197,13 @@ export type CredentialRoute = {
   placeholders: readonly string[]
   /** Requests without a placeholder still pass (the host is shared with the client's own tokens). */
   allowUnclaimed?: boolean
-  /** Only these paths are claimed (CODEX-FIREWALL-SWAP); any other path with the placeholder gets the 403. */
+  /** Only these paths are claimed; any other path with the placeholder gets the 403. */
   paths?: readonly PathMatch[]
 } & (
   /** `extraHeaders` are set alongside the swapped header (e.g. an account id the client can't know). */
   | { via: 'transform'; value: string; extraHeaders?: Record<string, string> }
   | { via: 'forward'; forwardURL: string }
-  /** Answered by Vercel's firewall itself; nothing reaches the host (EGRESS-SWAP-FAIL-CLOSED). */
+  /** Answered by Vercel's firewall itself; nothing reaches the host. */
   | { via: 'respond'; statusCode: number; body: string }
 )
 
@@ -219,7 +219,7 @@ export type EgressPolicyInput = {
   denyUnclaimed?: boolean
   /**
    * Requests forwarded to our egress proxy by path alone (no placeholder header to match): Codex's own
-   * token refresh against auth.openai.com, which the proxy answers itself (CODEX-FIREWALL-SWAP). The host
+   * token refresh against auth.openai.com, which the proxy answers itself. The host
    * gets no 403 rule from these; everything else on it passes as before.
    */
   pathForwards?: readonly ({ host: string; path: PathMatch } & ({ forwardURL: string } | { response: { statusCode: number; body: string; contentType: string } }))[]

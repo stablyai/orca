@@ -1,5 +1,4 @@
-// What the Orca Cloud sign-in strip shows (redesign §6, §9 "Strip"): account recovery (S4-c, card
-// 13), or the per-workspace fallback while the Orca-account path is paused or never offered, driven
+// What the Orca Cloud sign-in strip shows (redesign §6, §9 "Strip"): account recovery, or the per-workspace fallback while the Orca-account path is paused or never offered, driven
 // by #40228's gate view. Pure: the strip renders whatever this returns.
 import type { Translate } from '@/i18n/use-translate'
 import type { AgentSignInGateView } from '@/lib/agent-sign-in/agent-sign-in-gate-store'
@@ -17,13 +16,13 @@ export type CloudStripPrimary =
   | { kind: 'submitCode' }
   | { kind: 'retry' }
   | { kind: 'useDeviceCode' }
-  /** RA-11: restart the running agent in its pane, resuming its conversation when it can. */
+  /** Restart the running agent in its pane, resuming its conversation when it can. */
   | { kind: 'restart' }
-  /** PC-3b: run the one-time Orca Cloud setup (S0) right from the pane. */
+  /** Run the one-time Orca Cloud setup right from the pane. */
   | { kind: 'setUpOnce' }
-  /** PC-3b: reopen the setup's browser page. */
+  /** Reopen the setup's browser page. */
   | { kind: 'reopenSetup' }
-  /** PC-3b: the setup finished; start the held agent. */
+  /** The setup finished; start the held agent. */
   | { kind: 'start' }
   /** The quiet alternative to "Set up once": the agent signs in inside each workspace, Orca stores nothing. */
   | { kind: 'signInInsideWorkspace' }
@@ -43,7 +42,7 @@ export type CloudStripModel = {
   paste: {
     submitting: boolean
     refusal: string | null
-    /** PC-3b: a setup-token is a secret: masked, with this label (default: the claude.ai code). */
+    /** A setup-token is a secret: masked, with this label (default: the claude.ai code). */
     secretLabel?: string
     /** The empty field's hint (the setup-code step has its own in `setupCode`). */
     placeholder?: string
@@ -67,13 +66,13 @@ export type CloudStripModel = {
   /** Already on a code: ⋯ offers the paste fallback and Cancel instead of "Use a code". */
   codeStep?: boolean
   /**
-   * CHAT-RENEW-INPLACE: a quiet text link at the end of the actions row ("Renew in Settings"); in
+   * A quiet text link at the end of the actions row ("Renew in Settings"); in
    * the narrow stack it gets its own line under the buttons.
    */
   settingsLink?: string
-  /** RA-11 state 2: a dismiss × with this label (the strip otherwise drops its × on Renew). */
+  /** State 2: a dismiss × with this label (the strip otherwise drops its × on Renew). */
   dismiss?: string
-  /** RA-11 "Restarting…": nothing to close; the strip leaves with the result. */
+  /** "Restarting…": nothing to close; the strip leaves with the result. */
   noClose?: boolean
   /** One sentence for the polite region. */
   announcement: string
@@ -185,7 +184,7 @@ export function cloudAgentStripModel(args: {
           'Only continue if you started this sign-in in Orca.'
         ),
         description: null,
-        // One primary, like S0 and the build-sheet row (Neil): copy the code, then open the page.
+        // One primary, like Settings and the build-sheet row: copy the code, then open the page.
         primary: {
           label: t('agentSignInStrip.copyAndOpen', 'Copy code and open'),
           action: { kind: 'copyAndOpen', url: view.url, code: view.userCode }
@@ -214,7 +213,7 @@ export function cloudAgentStripModel(args: {
         title: view.email
           ? t('agentSignInStrip.signedAs', 'Signed in as {{email}}', { email: view.email })
           : t('agentSignInStrip.signed', 'Signed in'),
-        // C6 (deferred to #40228): the gate still proceeds on its own for another account.
+        // Deferred to #40228: the gate still proceeds on its own for another account.
         detail: view.expectedEmail
           ? t('agentSignInStrip.otherAccount', 'This computer uses {{expected}}', {
               expected: view.expectedEmail
@@ -241,7 +240,7 @@ export function cloudAgentStripModel(args: {
             ? t('agentSignInStrip.offlineDetail', 'Sign-in continues when it’s back')
             : t('agentSignInStrip.nothingChanged', 'Nothing was changed'),
         description: null,
-        // C5 (deferred to #40228): a busy port still asks; the gate doesn't switch on its own.
+        // Deferred to #40228: a busy port still asks; the gate doesn't switch on its own.
         primary:
           view.kind === 'port_busy'
             ? {

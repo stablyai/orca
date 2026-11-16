@@ -14,7 +14,7 @@ const { noteCloudPairingBindings } =
   await import('../cloud-workspaces/cloud-paired-environment-ids')
 
 describe('orcaCloudSandboxIdFor', () => {
-  it('resolves composer-created cloud workspaces whose recipe has no provider (RA-11)', () => {
+  it('resolves composer-created cloud workspaces whose recipe has no provider', () => {
     runtimes.list = [
       {
         runtimeEnvironmentId: 'env-a',

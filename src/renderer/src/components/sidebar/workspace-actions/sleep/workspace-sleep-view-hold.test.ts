@@ -45,7 +45,7 @@ import {
 } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { isWorktreeSleepViewHeld, resetWorktreeSleepViewForTests } from '@/lib/worktree-sleep-view'
 
-describe('restoring an asleep Orca Cloud selection at startup (RA-13b)', () => {
+describe('restoring an asleep Orca Cloud selection at startup', () => {
   beforeEach(() => {
     store.listeners.clear()
     store.select('ws')
@@ -75,7 +75,7 @@ describe('restoring an asleep Orca Cloud selection at startup (RA-13b)', () => {
   })
 })
 
-describe('sleeping the cloud workspace on screen (SLEEP-HOME-REGRESSION)', () => {
+describe('sleeping the cloud workspace on screen', () => {
   beforeEach(() => {
     store.listeners.clear()
     store.select('ws')

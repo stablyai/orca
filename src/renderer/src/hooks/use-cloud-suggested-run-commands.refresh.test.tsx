@@ -51,7 +51,7 @@ const pkg = (scripts: Record<string, string>) => ({
   isBinary: false
 })
 
-describe('Run menu suggestions refresh (LC2-P3)', () => {
+describe('Run menu suggestions refresh', () => {
   let root: Root
   beforeEach(() => {
     mocks.read.mockReset()

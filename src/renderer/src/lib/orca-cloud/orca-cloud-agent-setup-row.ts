@@ -1,5 +1,6 @@
-// The "Set up Orca Cloud" panel's Agent row (cloud-start onboarding G, agent-accounts v4). It reads
-// the Orca account's credentials and sources, links to S0 when nothing is set up, and never blocks Start.
+// The "Set up Orca Cloud" panel's Agent row. It reads
+// the Orca account's credentials and sources, links to Cloud agent sign-ins when nothing is set up,
+// and never blocks Start.
 import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
 import {
   isOrcaCloudAccountAgent,
@@ -16,12 +17,12 @@ export type OrcaCloudAgentSetupRowModel =
   | { kind: 'covered'; agent: OrcaCloudAccountAgent; via: 'account' | 'inWorkspace' | AgentKeyKind }
   | { kind: 'notSetUp'; agent: OrcaCloudAccountAgent }
   | { kind: 'expired'; agent: OrcaCloudAccountAgent }
-  /** §5c, info only. */
+  /** The provider's Orca-account path is paused; info only. */
   | { kind: 'killSwitch'; agent: OrcaCloudAccountAgent }
   | { kind: 'signedOut'; agent: OrcaCloudAccountAgent }
   | { kind: 'error'; agent: OrcaCloudAccountAgent }
 
-/** A member can't fix billing, so nothing in this row helps yet (cloud-start C1). */
+/** A member can't fix billing, so nothing in this row helps yet. */
 function billingBlocksMember(access: OrcaCloudRunTargetAccess): boolean {
   switch (access.state) {
     case 'no-plan':

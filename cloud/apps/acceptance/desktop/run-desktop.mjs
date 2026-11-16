@@ -6,8 +6,8 @@
 //   node cloud/apps/acceptance/desktop/run-desktop.mjs <artifactsDir>
 //
 // Starts signed out on a fresh profile (dev auth) and signs in from the Orca Cloud sign-in card, so
-// the #127 fixes are covered: D-1/D-4 auth.signed-out-create, D-3 proj.cloud-name, D-2
-// life.delete-unconfirmed (+ life.delete-after-oob-destroy, life.destroy for a normal delete).
+// the #127 fixes are covered: auth.signed-out-create (nothing created signed out; sign-in card goes away),
+// proj.cloud-name, life.delete-unconfirmed (+ life.delete-after-oob-destroy, life.destroy for a normal delete).
 // Env: ORCA_CLOUD_SANDBOX_URL / ORCA_CLOUD_SANDBOX_DEV_KEY_FILE / ORCA_BILLING_API_URL override the
 // dev defaults; W9D_USER (default w9-desktop) is the dev account; W9D_WAKE_CYCLES (default 5);
 // W9D_SKIP_BUILD=1 skips the workspace-package/native/CLI prebuild.
@@ -1061,10 +1061,10 @@ async function main() {
     return
   }
 
-  // ---- D-1 / D-4: Orca Cloud create while signed out -> sign-in card, nothing created; sign in -> proceeds.
+  // ---- Orca Cloud create while signed out -> sign-in card, nothing created; sign in -> proceeds.
   let signedOutWs = null
   let signedOutSandboxId = null
-  await runStep('auth.signed-out-create', 'Signed out: Orca Cloud create shows the sign-in card and creates nothing; sign in from the card -> create proceeds as dev:<user> (D-1, D-4)', async (step) => {
+  await runStep('auth.signed-out-create', 'Signed out: Orca Cloud create shows the sign-in card and creates nothing; sign in from the card -> create proceeds as dev:<user>', async (step) => {
     const name = `${wsName}-so`
     const watched = [USER, 'desktop-dogfood', 'dev-user']
     const baseline = await sandboxIdsFor(watched)
@@ -1084,7 +1084,7 @@ async function main() {
     step.afterPick = { auth: await authState(), runOn: await runOnValue(d), dialogOpen: await d.isVisible().catch(() => false) }
     await shot(step, 'after-pick')
     let path_ = 'composer-create'
-    // D-1 for the picker itself: picking Orca Cloud signed out must not create anything.
+    // For the picker itself: picking Orca Cloud signed out must not create anything.
     const afterPickLists = await sandboxIdsFor(watched)
     step.createdByPick = Object.fromEntries(watched.map((u) => [u, afterPickLists[u].filter((id) => !baseline[u].includes(id))]))
     {
@@ -1135,7 +1135,7 @@ async function main() {
       const noSandbox = Object.values(step.createdByPick).every((ids) => ids.length === 0)
       step.d1 = { pass: noSandbox, createdByPick: step.createdByPick }
       step.status = 'partial'
-      step.detail = `signed out the composer cannot start an Orca Cloud build (Run on shows "${step.runOnBeforeCreate}"), so the build's sign-in card is unreachable; picker row "${runOn}" signs in instead; sandboxes created by the pick ${JSON.stringify(step.createdByPick)} (D-1 ${noSandbox ? 'pass' : 'FAIL'}); after pick ${JSON.stringify(step.afterPick)}`
+      step.detail = `signed out the composer cannot start an Orca Cloud build (Run on shows "${step.runOnBeforeCreate}"), so the build's sign-in card is unreachable; picker row "${runOn}" signs in instead; sandboxes created by the pick ${JSON.stringify(step.createdByPick)} (nothing created: ${noSandbox ? 'pass' : 'FAIL'}); after pick ${JSON.stringify(step.afterPick)}`
       await store(async () => {
         const st = window.__store.getState()
         await st.signOutCurrentOrcaProfile()
@@ -1220,7 +1220,7 @@ async function main() {
     step.d1 = { pass: d1NoSandbox, createdWhileSignedOut }
     step.d4 = { pass: Boolean(signedOutSandboxId) && !cardStill && cardGoneMs !== null, ownedBy: signedOutSandboxId ? `dev:${USER}` : null, cardGoneMs, cardStill }
     step.status = step.d1.pass && step.d4.pass && rowIsShown ? 'pass' : 'fail'
-    step.detail = `${path_}; card after ${step.timings.createToSignInCardMs}ms; sandboxes while signed out ${JSON.stringify(createdWhileSignedOut)} (D-1 ${step.d1.pass ? 'pass' : 'FAIL'}); sign in from card -> card gone ${cardGoneMs}ms, first terminal output ${ready.firstOutput}ms, sandbox ${signedOutSandboxId ?? 'NOT listed'} for dev:${USER} (D-4 ${step.d4.pass ? 'pass' : 'FAIL'}); row "${name}" shown: ${rowIsShown}; auth ${JSON.stringify(step.authAfter)}`
+    step.detail = `${path_}; card after ${step.timings.createToSignInCardMs}ms; sandboxes while signed out ${JSON.stringify(createdWhileSignedOut)} (nothing created: ${step.d1.pass ? 'pass' : 'FAIL'}); sign in from card -> card gone ${cardGoneMs}ms, first terminal output ${ready.firstOutput}ms, sandbox ${signedOutSandboxId ?? 'NOT listed'} for dev:${USER} (card gone, owned by the signed-in user: ${step.d4.pass ? 'pass' : 'FAIL'}); row "${name}" shown: ${rowIsShown}; auth ${JSON.stringify(step.authAfter)}`
     if (!d1NoSandbox) {
       bug('auth.signed-out-create', {
         title: 'Signed-out Orca Cloud create still creates a sandbox',
@@ -1302,8 +1302,8 @@ async function main() {
       })
     }
   })
-  // ---- D-3: the VM checkout (folder "project") registers under the real project's name.
-  await runStep('proj.cloud-name', 'After cloud creates: no project named "project"; the workspaces sit under orca-sandbox-push-test (D-3)', async (step) => {
+  // ---- The VM checkout (folder "project") registers under the real project's name.
+  await runStep('proj.cloud-name', 'After cloud creates: no project named "project"; the workspaces sit under orca-sandbox-push-test', async (step) => {
     const snap = await store(() => {
       const s = window.__store.getState()
       return {
@@ -1348,9 +1348,9 @@ async function main() {
     }
   })
 
-  /** D-2 proper: a not_found answer. Switching team re-scopes the token, so the control plane can't see a personal sandbox. */
+  /** Delete when the control plane answers not_found. Switching team re-scopes the token, so the control plane can't see a personal sandbox. */
   const notFoundDeleteStep = async () => {
-    await runStep('life.delete-unconfirmed', 'Delete when the control plane answers not_found (team switched away from the sandbox owner) -> "couldn\'t confirm" error, row kept (D-2)', async (step) => {
+    await runStep('life.delete-unconfirmed', 'Delete when the control plane answers not_found (team switched away from the sandbox owner) -> "couldn\'t confirm" error, row kept', async (step) => {
       const { name, sandboxId: id } = await createExtraWorkspace(step, `${wsName}-nf`)
       const before = await authState()
       step.authBefore = before
@@ -1430,7 +1430,7 @@ async function main() {
       // not_found. The sandbox really is gone, so the app is right to remove the row.
       const tombstone = step.apiRepeatDelete.http === 200 && step.apiRepeatDelete.status === 'destroyed'
       step.status = o.kind === 'removed' && !o.rowVisibleAfter ? 'pass' : 'fail'
-      step.detail = `API delete -> ${JSON.stringify(step.oobDelete)}; repeat API delete -> ${JSON.stringify(step.apiRepeatDelete)} (tombstone: ${tombstone}); UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} in ${o.ms}ms, row visible after: ${o.rowVisibleAfter}. ${tombstone ? 'Same-user out-of-band destroy cannot produce not_found, so this path does not exercise D-2; see life.delete-unconfirmed.' : ''}`
+      step.detail = `API delete -> ${JSON.stringify(step.oobDelete)}; repeat API delete -> ${JSON.stringify(step.apiRepeatDelete)} (tombstone: ${tombstone}); UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} in ${o.ms}ms, row visible after: ${o.rowVisibleAfter}. ${tombstone ? 'Same-user out-of-band destroy cannot produce not_found, so this path does not exercise the not_found delete; see life.delete-unconfirmed.' : ''}`
       if (step.status === 'fail') {
         bug('life.delete-after-oob-destroy', {
           title: 'Deleting a workspace whose sandbox was already destroyed does not remove the row',
@@ -1731,12 +1731,12 @@ async function agentSecrets(mode) {
 }
 
 /**
- * life.auto-resume (W2 #144): Claude (kimi-k2 via the AI Gateway) runs a 40 s loop; mid-turn the
+ * life.auto-resume (#144): Claude (kimi-k2 via the AI Gateway) runs a 40 s loop; mid-turn the
  * status panel's Restart restarts the sandbox; Orca must type `continue` once the relaunched TUI is
  * ready (~26-28 s after the click), the turn finishes (LOOPDONE), and no second continue follows.
  */
 async function autoResumeStep() {
-  await runStep('life.auto-resume', 'Restart mid-turn from the status panel: Orca sends `continue` once, the agent finishes the turn (W2 #144)', async (step) => {
+  await runStep('life.auto-resume', 'Restart mid-turn from the status panel: Orca sends `continue` once, the agent finishes the turn (#144)', async (step) => {
     step.secretsPut = await agentSecrets('put')
     try {
       const ws = await createExtraWorkspace(step, `${wsName}-ar`)

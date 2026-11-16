@@ -5,9 +5,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubAccessHandoffPhase } from './use-github-access-handoff'
 
 /**
- * REPO-ACCESS-REFRESH: under Project after "Add a GitHub repository…". While the list re-reads,
+ * Under Project after "Add a GitHub repository…". While the list re-reads,
  * it says what it waits for; when the wait runs out it says nothing new came and offers one more
- * look, so the line never just vanishes (design-squad).
+ * look, so the line never just vanishes.
  */
 export function GitHubHandoffLine({
   phase,

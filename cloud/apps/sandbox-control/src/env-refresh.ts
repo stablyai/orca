@@ -131,7 +131,7 @@ async function reasonFor(deps: LifecycleDeps, change: CredentialChange): Promise
 }
 
 /**
- * EGRESS-REFRESH push: a credential this sandbox carries changed (refreshed, expired, revoked, removed). An
+ * push: a credential this sandbox carries changed (refreshed, expired, revoked, removed). An
  * account sign-in also changes the session env (placeholders come and go), so that is refreshed first; the
  * policy is then rewritten whole. False when the sandbox is no longer running (nothing to push).
  */
@@ -146,7 +146,7 @@ export async function pushCredentialToSandbox(deps: LifecycleDeps, sandboxId: st
   const current = (await deps.db.prepare('SELECT * FROM sandboxes WHERE id = ?').bind(sandboxId).first<SandboxRow>()) ?? row
   const applied = await applySandboxPolicy(deps, current, await reasonFor(deps, change), { sessionId: current.session_id ?? row.session_id })
   if (change.kind !== 'account' && current.session_id) {
-    // GH-AS-MEMBER: a member who connected (or disconnected) GitHub mid-session gets (or loses) their identity in
+    // Member gh: a member who connected (or disconnected) GitHub mid-session gets (or loses) their identity in
     // the running VM now, not on its next boot.
     await syncMemberGit(deps, current, current.session_id)
   }

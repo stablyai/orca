@@ -44,7 +44,7 @@ export function CloudCardPrimaryAction({
         </Button>
       ) : null
     case 'wake':
-      // PAIRED-CHROME: a paired row has no Wake button yet (PAIRED-WAKE 2/2); opening it wakes it.
+      // A paired row has no Wake button yet; opening it wakes it.
       if (!actions.onWake) {
         return (
           <span className="mr-auto text-xs text-muted-foreground" data-cloud-card-wake-hint>
@@ -67,7 +67,7 @@ export function CloudCardPrimaryAction({
       ) : null
     case 'restart':
       return actions.onRestart ? (
-        // CLOUD-CARD-RESTARTING-CLICK: "Restarting…" is inert. A restart main runs (rollover, Restart
+        // "Restarting…" is inert. A restart main runs (rollover, Restart
         // now) leaves anyBusy false, and a click then started a second restart.
         <Button size="xs" {...busyProps(restarting, anyBusy || restarting, actions.onRestart)}>
           {restarting ? <Loader2 className="animate-spin" /> : <RotateCw />}

@@ -9,7 +9,7 @@ async function terminalWith(rows: string[]): Promise<Terminal> {
   return terminal
 }
 
-// REG-13: the line a person scrolled to during a wake is found again by its text, nearest its old row.
+// The line a person scrolled to during a wake is found again by its text, nearest its old row.
 describe('wake scroll anchor', () => {
   it('reads a row without trailing blanks, and null for an empty or unreadable one', async () => {
     const terminal = await terminalWith(['ok   ', '', 'next'])

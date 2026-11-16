@@ -8,10 +8,10 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 export type CloudWorkspaceIdentity = {
   number: number | null
   title: string | null
-  /** What this account may do with it (PAIRED-ARCHIVE: only its creator archives a sandbox). */
+  /** What this account may do with it (only its creator archives a sandbox). */
   access?: CloudWorkspace['access']
   /**
-   * OWNER-TRANSFER: who owns it, and when its owner was first changed (null: never). A workspace
+   * Who owns it, and when its owner was first changed (null: never). A workspace
    * made from one inherits the time, so one made later was never handed over itself.
    */
   ownerUserId?: string
@@ -132,7 +132,7 @@ export function useCloudWorkspaceIdentities(): State {
   return useSyncExternalStore(subscribe, () => state)
 }
 
-/** OWNER-TRANSFER: the cloud workspace behind a worktree has had more than one owner. */
+/** The cloud workspace behind a worktree has had more than one owner. */
 export function useCloudWorktreeOwnerChanged(
   worktree: { id: string; hostId?: string | null } | null | undefined
 ): boolean {
@@ -149,7 +149,7 @@ export function resetCloudWorkspaceIdentityForTests(): void {
 }
 
 /**
- * PAIRED-ARCHIVE: this account's access to the sandbox behind a paired server, or null while the
+ * This account's access to the sandbox behind a paired server, or null while the
  * team list hasn't named it (bindings or list not read yet).
  */
 export function usePairedCloudAccess(

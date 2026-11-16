@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-// END-PASS CHAT-RENEW: a chat that already ran (status entry, now idle after its turn) whose Claude
+// A chat that already ran (status entry, now idle after its turn) whose Claude
 // sign-in is revoked or put in question must show the expired strip and hold Send. Unlike
-// cloud-chat-running-strip.test.tsx, the decision here is the REAL one: cloudRunningStrip plus the D13
+// cloud-chat-running-strip.test.tsx, the decision here is the REAL one: cloudRunningStrip plus the shared-workspace
 // Sources read (useWorkspaceUsesAccount through window.api.orcaCloudAgents.workspaceSources).
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -37,7 +37,9 @@ vi.mock('@/store', () => {
         }
       ]
     },
-    agentStatusByPaneKey: new Map(Object.entries(world.status ? { [STATUS_KEY]: world.status } : {}))
+    agentStatusByPaneKey: new Map(
+      Object.entries(world.status ? { [STATUS_KEY]: world.status } : {})
+    )
   })
   const useAppStore = (selector: (s: ReturnType<typeof read>) => unknown): unknown =>
     selector(read())
@@ -115,11 +117,11 @@ beforeEach(() => {
   })
 })
 
-describe('a running chat, idle after its turn, whose sign-in goes bad (END-PASS CHAT-RENEW)', () => {
+describe('a running chat, idle after its turn, whose sign-in goes bad', () => {
   for (const [label, claude, host] of [
     ['revoked', { state: 'revoked' }, 'runtime:env-paired'],
-    ['in question (RS-2: expired + needsCheck)', { state: 'expired' }, 'runtime:env-paired'],
-    // END-PASS CHAT-RENEW: a chat tab the desktop created (held chat started from its strip) with no
+    ['in question (expired + needsCheck)', { state: 'expired' }, 'runtime:env-paired'],
+    // A chat tab the desktop created (held chat started from its strip) with no
     // runtime execution host: its workspace's runtime owner still makes it a cloud chat.
     ['revoked, on a desktop-made chat tab with no runtime host', { state: 'revoked' }, undefined],
     ['revoked, on a desktop-made chat tab marked local', { state: 'revoked' }, 'local']

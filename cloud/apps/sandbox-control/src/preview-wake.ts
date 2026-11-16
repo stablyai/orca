@@ -1,4 +1,4 @@
-// Preview-URL wake semantics. W3's share gateway (share-pages.ts) owns the "asleep — Wake workspace"
+// Preview-URL wake semantics. The share gateway (share-pages.ts) owns the "asleep — Wake workspace"
 // page and viewer auth; its `__orca/wake` handler calls this so every preview wake goes through the
 // same single-flight, entitlement-checked wake as open/message/SSH (workspace-lifecycle.ts).
 // Archived workspaces are never revived by a preview link (state 'archived' → the gateway's "gone").

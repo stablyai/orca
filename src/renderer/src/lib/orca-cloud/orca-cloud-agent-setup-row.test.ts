@@ -31,7 +31,7 @@ describe('orcaCloudAgentSetupRow', () => {
     expect(row('codex')).toEqual({ kind: 'covered', agent: 'codex', via: 'team' })
   })
 
-  it('links to S0 when nothing covers the agent', () => {
+  it('links to Cloud agent sign-ins when nothing covers the agent', () => {
     const none: OrcaCloudAgentsStatus = {
       ...READY,
       credentials: { ...READY.credentials, claude: { state: 'none' } }

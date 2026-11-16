@@ -55,7 +55,7 @@ export async function provisionWorkspaceToken(
 ): Promise<'installed' | 'disabled' | 'failed'> {
   try {
     await revokeWorkspaceTokens(deps.db, row.id, deps.now())
-    // OWNER-TRANSFER: no token for a transferred workspace. It would act as the new owner, and a
+    // No token for a transferred workspace. It would act as the new owner, and a
     // file the previous owner left could use it to create a private sibling with that owner's
     // personal credentials. Read from the database, so a boot racing the transfer sees the flag.
     const current = await getSandbox(deps.db, row.id)

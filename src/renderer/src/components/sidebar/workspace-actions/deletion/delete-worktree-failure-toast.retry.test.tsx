@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// REG-12: an Orca Cloud delete that failed before any sandbox delete was sent offers Try again.
+// An Orca Cloud delete that failed before any sandbox delete was sent offers Try again.
 import type React from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'

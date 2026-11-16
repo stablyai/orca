@@ -68,7 +68,7 @@ export type WorktreeCreationRequest = {
     provider?: 'orca-cloud'
   }
   /**
-   * Orca Cloud from a GitHub repository with no clone here (D4, GH-CREATE-SHEET): the sandbox clones
+   * Orca Cloud from a GitHub repository with no clone here: the sandbox clones
    * it and this computer pairs to it. Same build sheet; Retry and Back to draft use this.
    */
   githubSource?: GitHubCreateSource

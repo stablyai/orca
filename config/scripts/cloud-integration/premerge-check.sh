@@ -142,7 +142,7 @@ else
       done < <(printf "%s\n" "$all_tests" | xargs grep -lE "['\"][^'\"]*/(${names})(\\.tsx?)?['\"]" 2>/dev/null || true)
     fi
     # (c) Vitest's own module graph: every test that transitively imports a changed file (`vitest list --changed`).
-    # Name matching alone missed #462's REG-5: the multiplex tests import an aggregator (methods/terminal/terminal) that
+    # Name matching alone misses cases like the multiplex tests: they import an aggregator (methods/terminal/terminal) that
     # imports the changed modules, one folder up.
     node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
     node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null

@@ -28,7 +28,7 @@ const options: ProjectHostSetupOption[] = [
       isAvailable: true,
       attention: false,
       canSetLocation: true,
-      // A disconnected host shows Connect inside its option (DS-22 nested-interactive check).
+      // A disconnected host shows Connect inside its option (axe nested-interactive check).
       ...(name === 'gpu-box'
         ? { connectAction: { kind: 'ssh' as const, targetId: 'gpu-box' }, attention: true }
         : {})
@@ -94,7 +94,7 @@ function input(frame: HTMLElement): HTMLInputElement | null {
   return frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')
 }
 const open = (frame: HTMLElement): void => {
-  // Focus alone never opens the list (DS-22); a click does.
+  // Focus alone never opens the list; a click does.
   input(frame)?.focus()
   input(frame)?.click()
 }
@@ -258,7 +258,7 @@ export const needsSetupArmed = defineFixture({
   render: () => <Preview />,
   interact: pressKeys('ArrowDown', 'ArrowDown')
 })
-// DS-15: members see who can fix it, not Upgrade, and the row can't be picked.
+// Members see who can fix it, not Upgrade, and the row can't be picked.
 export const orcaCloudNoPlanMember = defineFixture({
   width: 420,
   render: () => (
@@ -286,7 +286,7 @@ export const rowActions = defineFixture({
   interact: pressKeys('ArrowDown', 'ArrowDown')
 })
 
-// JA-21 (Neil): progressive billing. In the composer Orca Cloud is pickable whatever billing says,
+// Progressive billing. In the composer Orca Cloud is pickable whatever billing says,
 // with no plan, hours or payment words; the creating sheet shows any blocker after Create.
 function composerWith(access: OrcaCloudRunTargetAccess, width = 420) {
   return defineFixture({

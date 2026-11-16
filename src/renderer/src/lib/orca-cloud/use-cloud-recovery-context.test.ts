@@ -39,14 +39,14 @@ afterEach(() => {
   resetWakeAfterSleepForTests()
 })
 
-describe('terminal recovery for an asleep Orca Cloud workspace (RA-12)', () => {
+describe('terminal recovery for an asleep Orca Cloud workspace', () => {
   it('is asleep when the control plane says so, so no "Reconnecting… Down for" toast', () => {
     act(() => seed('sleeping'))
     const { result } = renderHook(() => useCloudRecoveryContext('ws'))
     expect(result.current).toMatchObject({ asleep: true, waking: false, archived: false })
   })
 
-  it('is archived, not just asleep, when the control plane says archived (n64 P3)', () => {
+  it('is archived, not just asleep, when the control plane says archived', () => {
     act(() => seed('archived'))
     const { result } = renderHook(() => useCloudRecoveryContext('ws'))
     expect(result.current).toMatchObject({ asleep: true, waking: false, archived: true })
@@ -107,7 +107,7 @@ describe('terminal recovery for an asleep Orca Cloud workspace (RA-12)', () => {
   })
 })
 
-describe('a paired cloud workspace (ASLEEP-SR-RECONNECTING)', () => {
+describe('a paired cloud workspace', () => {
   it('is cloud and asleep, so the outage notice stays silent under the asleep view', () => {
     act(() =>
       seedCloudWorkspaceSnapshot({

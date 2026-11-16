@@ -25,7 +25,7 @@ export type OrcaCloudQueuedPromptViewProps = {
   editable: boolean
   /** The prompt is typed into the agent unsent rather than sent. */
   draft?: boolean
-  /** The agent isn't set up for Orca Cloud: its launch, and so this prompt, wait for that (PC-3b). */
+  /** The agent isn't set up for Orca Cloud: its launch, and so this prompt, wait for that. */
   held?: boolean
   onQueue: (text: string) => void
 }
@@ -184,7 +184,7 @@ export function OrcaCloudQueuedPromptView({
 
   return (
     <div
-      // GA-P3t: a held prompt waits on the agent's setup (warning); a queued one is info.
+      // A held prompt waits on the agent's setup (warning); a queued one is info.
       className={cn(
         'flex items-start gap-2 rounded-md border px-3 py-2',
         BANNER_TONE[held ? 'warning' : 'info'].surface,

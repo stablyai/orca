@@ -38,7 +38,7 @@ export function VmBuildSecretsRowView({
 }
 
 /**
- * S2 on the Orca Cloud build sheet: the Cloud environment's declared names that this person's
+ * On the Orca Cloud build sheet: the Cloud environment's declared names that this person's
  * workspace won't get, asked inline. Never blocks Open. Left unfilled, it becomes the workspace
  * panel's "secrets missing" notice.
  */

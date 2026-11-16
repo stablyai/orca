@@ -21,7 +21,7 @@ function isSleepTerminalError(error: string): boolean {
 /**
  * The terminal's error toast for an Orca Cloud workspace that is asleep or waking: never shown.
  * Waking, the waking pill owns the state; asleep, the pane's recovery slot shows one calm line with
- * Wake (CloudAsleepTerminalNotice, RA-12), so a red "file an issue" toast would only repeat it.
+ * Wake (CloudAsleepTerminalNotice), so a red "file an issue" toast would only repeat it.
  * Other errors, and other hosts, keep the regular toast.
  */
 export function useCloudTerminalErrorOverride(

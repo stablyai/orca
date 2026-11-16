@@ -6,7 +6,7 @@ import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
 import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 
-/** The four ways billing can refuse a create (JA-21 progressive billing). */
+/** The four ways billing can refuse a create. */
 export type BillingBlockKind = 'plan' | 'hoursUsed' | 'spendCap' | 'payment'
 
 type BillingBlockerPhase =
@@ -15,7 +15,7 @@ type BillingBlockerPhase =
    *  overage, the spend cap and payment. Re-check on return, or with Check again. */
   | { kind: 'browser'; checking: boolean; stillBlocked: boolean; via: 'plans' | 'console' }
 
-/** Why there is no plan, in billing's words: only a plan that existed has "ended" (EP-11). */
+/** Why there is no plan, in billing's words: only a plan that existed has "ended". */
 function planBlockBody(
   reason: string | null | undefined,
   t: Translate,
@@ -56,7 +56,7 @@ function planBlockBody(
 export function blockerCopy(
   kind: BillingBlockKind,
   t: Translate,
-  /** Billing's refusal reason: says whether a plan ended, a trial ran out, or there never was one (EP-11). */
+  /** Billing's refusal reason: says whether a plan ended, a trial ran out, or there never was one. */
   reason?: string | null,
   /** Owners/admins read "Your trial…"; members their team's (glossary). */
   canManageBilling?: boolean

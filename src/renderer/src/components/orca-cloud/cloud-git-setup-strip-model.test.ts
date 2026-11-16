@@ -5,7 +5,7 @@ import { cloudGitSetupStripModel, cloudGitSetupStripPhase } from './cloud-git-se
 const t = translate
 const base = { gitSetupFailed: true, dismissed: false, restarting: false, restarted: false }
 
-describe('GIT-SETUP strip', () => {
+describe('git setup strip', () => {
   it('is hidden unless git setup failed', () => {
     expect(cloudGitSetupStripPhase({ ...base, gitSetupFailed: false })).toBeNull()
     expect(cloudGitSetupStripPhase({ ...base, gitSetupFailed: false, restarted: true })).toBeNull()
@@ -25,7 +25,7 @@ describe('GIT-SETUP strip', () => {
     expect(cloudGitSetupStripPhase({ ...base, gitSetupFailed: false, restarting: true })).toBeNull()
   })
 
-  it('uses design-squad’s copy with one Restart action and a session dismiss', () => {
+  it('uses the approved copy with one Restart action and a session dismiss', () => {
     const failed = cloudGitSetupStripModel('failed', t)
     expect(failed.title).toBe('Commits and pushes are off in this workspace')
     expect(failed.description).toBe(

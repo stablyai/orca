@@ -33,7 +33,7 @@ const record: CloudSetupNoticesRecord = {
   ]
 }
 
-describe('Run setup now (ENV-BUILD-CHURN)', () => {
+describe('Run setup now', () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,

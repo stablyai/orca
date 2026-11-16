@@ -1,6 +1,6 @@
-// PICKER-OPEN-INTERMITTENT: right after pairing, a cloud workspace's server can answer the project and
+// Right after pairing, a cloud workspace's server can answer the project and
 // worktree reads before it lists the workspace's own row; the row lands a moment later (the catalog's
-// own refresh). Opening then found nothing to reveal and left the person where they were (n48, n55).
+// own refresh). Opening then found nothing to reveal and left the person where they were.
 // Wait a bounded moment for the row instead of giving up on the first look.
 import { useAppStore } from '@/store'
 

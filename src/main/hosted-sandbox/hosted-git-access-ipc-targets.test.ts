@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: the wizard names its sandbox before it has a workspace: by the create's server
+// The create wizard names its sandbox before it has a workspace: by the create's server
 // environment (owned runtime record) or a GitHub-only create's sandbox id.
 import { expect, it, vi } from 'vitest'
 

@@ -102,7 +102,7 @@ describe('PKCE loopback cancel and timeout', () => {
     return { flow, redirect: new URL(new URL(authorize).searchParams.get('redirect_uri')!) }
   }
 
-  it('asks auth for the branded sign-in page on a plain sign-in, not on setup (V3-04)', async () => {
+  it('asks auth for the branded sign-in page on a plain sign-in, not on setup', async () => {
     const abort = new AbortController()
     const { flow } = await start(abort.signal)
     expect(lastAuthorize.searchParams.get('signin_page')).toBe('1')
@@ -129,7 +129,7 @@ describe('PKCE loopback cancel and timeout', () => {
     expect(onAuthorizeUrl).not.toHaveBeenCalled()
   })
 
-  it('COPY-LINK-FIRST-CLICK: openBrowser false publishes the link with the listener up, opening nothing', async () => {
+  it('openBrowser false publishes the link with the listener up, opening nothing', async () => {
     delete process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE
     vi.mocked(shell.openExternal).mockClear()
     const abort = new AbortController()
@@ -166,7 +166,7 @@ describe('PKCE loopback cancel and timeout', () => {
   })
 })
 
-describe('COPY-LINK-FIRST-CLICK options', () => {
+describe('openBrowser connect options', () => {
   it('only an explicit openBrowser false (from the renderer) skips the browser', () => {
     expect(connectCurrentArgsFromUnknown({ openBrowser: false })).toEqual({ openBrowser: false })
     expect(connectCurrentArgsFromUnknown({ openBrowser: 'false' })).toEqual({})

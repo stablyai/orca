@@ -69,7 +69,7 @@ export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfi
 
 export async function connectCurrentOrcaProfile(
   userDataPath: string,
-  /** Cloud setup's sign-in, or (COPY-LINK-FIRST-CLICK) a plain one that may skip the browser. */
+  /** Cloud setup's sign-in, or a plain one that may skip the browser. */
   setup?: OrcaCloudSetupSignIn | { openBrowser?: boolean }
 ): Promise<ConnectCurrentOrcaProfileResult> {
   const active = ensureActiveOrcaProfile(userDataPath)

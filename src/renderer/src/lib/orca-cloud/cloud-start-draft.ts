@@ -1,4 +1,4 @@
-// The composer draft that "Start in Orca Cloud" keeps across the setup trip (spec N6): prompt,
+// The composer draft that "Start in Orca Cloud" keeps across the setup trip: prompt,
 // project, agent and the setup session, saved to disk so quitting Orca mid-setup loses nothing.
 // One draft per Orca profile, so a profile or team switch can't resume someone else's draft.
 // team-billing-ux sets `setupSessionId` when it opens a setup session.
@@ -13,7 +13,7 @@ export type CloudStartDraft = {
 }
 
 const KEY_PREFIX = 'orca.cloudStart.draft.v1'
-/** Auto-start only resumes a draft this recent (spec A8). */
+/** Auto-start only resumes a draft this recent. */
 export const CLOUD_START_DRAFT_MAX_AGE_MS = 30 * 60_000
 
 function storageKey(profileId: string | null): string {

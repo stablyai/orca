@@ -20,7 +20,7 @@ export type GitHubAppMinter = {
   /**
    * Repo token (contents + pull requests). `issues: true` also asks for issues:write (routine comments on
    * plain issues); an installation that has not accepted that permission yet gets the standard token.
-   * `minValidityMs` (EGRESS-REFRESH): a cached token with less than this left is re-minted (default REFRESH_MARGIN_MS).
+   * `minValidityMs`: a cached token with less than this left is re-minted (default REFRESH_MARGIN_MS).
    */
   tokenForRepo(repoUrl: string, accountId: string, options?: { issues?: boolean; minValidityMs?: number }): Promise<GitHubRepoToken | null>
   /** App-level installation lookup (operator binding). Null when absent. */
@@ -65,7 +65,7 @@ export type GitHubListedRepo = {
 export type InstallationBindingCheck = (installationId: number, accountId: string) => Promise<boolean>
 
 /**
- * A cached token with less than this left is re-minted. EGRESS-REFRESH: longer than reconcile's rotation
+ * A cached token with less than this left is re-minted. Longer than reconcile's rotation
  * window (GITHUB_TOKEN_ROTATE_AHEAD_MS), so a policy rotation always gets a token with most of its hour left
  * and the token sitting in a live policy never runs out between two reconcile ticks.
  */

@@ -19,7 +19,7 @@ const saved: HostedTerminalQuickCommand = {
 }
 
 // The Run menu's rows in a cloud workspace: a saved command, then package.json suggestions
-// (Copy only, "From package.json"). Suggestions are re-read when the menu opens (LC2-P3).
+// (Copy only, "From package.json"). Suggestions are re-read when the menu opens.
 export const cloudRunMenuRows = defineFixture({
   width: 420,
   render: () => (

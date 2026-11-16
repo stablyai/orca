@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CODEX_FIREWALL_PATHS, codexPathAllowed } from '../src/codex-paths'
 import { compileNetworkPolicy } from '../src/network-policy'
 
-describe('CODEX-FIREWALL-SWAP paths', () => {
+describe('paths', () => {
   it('every firewall path is one the proxy allows too, and none is a prefix', () => {
     for (const { exact, methods } of CODEX_FIREWALL_PATHS) {
       expect(exact.startsWith('/backend-api/')).toBe(true)

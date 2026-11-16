@@ -1,4 +1,4 @@
-// CHAT-BANNERS (PR-A): each cloud banner in a terminal tab's chat view, in the chat column under the
+// Each cloud banner in a terminal tab's chat view, in the chat column under the
 // pane's title row and above the transcript, through the real slot and portal. The composer shows the
 // disabled hint while a held launch blocks sending.
 import React from 'react'
@@ -93,7 +93,7 @@ function ChatColumn({
 }: {
   banner: Banner
   width: number
-  /** PR-B: a structured chat renders its strip in place (CloudStructuredChatBanners), no portal. */
+  /** A structured chat renders its strip in place (CloudStructuredChatBanners), no portal. */
   structured?: boolean
 }): React.JSX.Element {
   const paneKey = `fixture-chat-${banner.kind}-${width}`
@@ -227,11 +227,11 @@ export const restartFailed = fixture({
   }
 })
 export const startedFresh = fixture({ kind: 'fresh' })
-/** RA-WAKE in the chat: Restart Claude only (no Rerun). */
+/** The woke-up bar in the chat: Restart Claude only (no Rerun). */
 export const wokeRestart = fixture({ kind: 'woke' })
 export const wokeRestartNarrow = fixture({ kind: 'woke' }, NARROW)
 
-/** PR-B: a structured agent-session chat on Orca Cloud, held before its session is created. */
+/** A structured agent-session chat on Orca Cloud, held before its session is created. */
 export const structuredNotSetUp = fixture({ kind: 'setUp', setup: { phase: 'idle' } }, 760, true)
 export const structuredNotSetUpNarrow = fixture(
   { kind: 'setUp', setup: { phase: 'idle' } },

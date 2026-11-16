@@ -1,4 +1,4 @@
-// SLEEP-IN-PROGRESS: what a read-only pane shows while its sleeping workspace's copy is still being
+// What a read-only pane shows while its sleeping workspace's copy is still being
 // saved, and when it never arrived. Shown in place of the pane's "nothing was saved" lines, which
 // are only true once a copy exists.
 import React, { useEffect } from 'react'

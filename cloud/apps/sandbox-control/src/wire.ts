@@ -72,7 +72,7 @@ export function sandboxView(row: SandboxRow, archivedAware = false, gitSetupAwar
     createdAt: row.created_at,
     // Only when set: desktop builds from before environments parse this view strictly.
     ...(row.environment_build_id ? { environmentBuildId: row.environment_build_id } : {}),
-    // Member git identities could not be installed after a create (CREATE-GIT-ASYNC). Desktops parse this
+    // Member git identities could not be installed after a create. Desktops parse this
     // view strictly, so only clients that send feature `git-setup` get it.
     ...(gitSetupAware && row.git_setup_failed_at ? { gitSetup: 'failed' as const } : {})
   }
@@ -84,7 +84,7 @@ export function readyView(
   cloning?: 'clone' | 'update',
   /** The client knows `mode` (feature `repo-update`); older ones show an update as a clone. */
   updateAware = false,
-  /** ENV-BUILD-CHURN (d): the environment wasn't used (its build is below the security floor). */
+  /** The environment wasn't used (its build is below the security floor). */
   environmentHeld?: { environmentId: string; reason: 'security_update' }
 ) {
   return {

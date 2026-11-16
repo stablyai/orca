@@ -19,7 +19,7 @@ vi.mock('@/lib/orca-cloud/use-cloud-recovery-context', () => ({
 
 import { useIsCloudRepoHost } from './use-setup-script-asleep-cloud'
 
-describe('the setup-script card skips a project copy on an Orca Cloud sandbox (N-28)', () => {
+describe('the setup-script card skips a project copy on an Orca Cloud sandbox', () => {
   afterEach(() => {
     cleanup()
     store.runtimeEnvironments = []

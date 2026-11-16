@@ -135,7 +135,7 @@ describe('MCP protocol', () => {
       'cancel_session', 'rename_session', 'upload_attachment', 'send_message', 'get_message', 'list_sessions', 'read_session',
       'list_routines', 'run_routine'
     ])
-    // Conductor's 20 tools minus run_sql (transcripts are end-to-end encrypted on the VM), plus Orca's own.
+    // The usual 20-tool set minus run_sql (transcripts are end-to-end encrypted on the VM), plus Orca's own.
     expect(tools).toHaveLength(22)
     for (const t of tools) {
       expect(t.inputSchema.type).toBe('object')
@@ -425,7 +425,7 @@ describe('MCP authorization', () => {
 
     const page = await h.send(new Request(`${ORIGIN}/oauth/authorize?${h.authorizeParams(client.client_id, challenge)}`))
     expect(page.headers.get('x-frame-options')).toBe('DENY')
-    // Browsers only send a real Origin on the approval POST when the page's policy allows it (END-PASS: no-referrer broke every browser).
+    // Browsers only send a real Origin on the approval POST when the page's policy allows it (a no-referrer policy broke every browser).
     expect(page.headers.get('referrer-policy')).toBe('same-origin')
     expect(page.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
     expect(page.headers.get('content-security-policy')).toContain('form-action \'self\' http://127.0.0.1:33418')

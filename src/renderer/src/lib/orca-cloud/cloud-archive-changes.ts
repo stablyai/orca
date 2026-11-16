@@ -1,5 +1,5 @@
 // "Archived workspaces changed here": archive, unarchive or delete from this desktop. Home's archived
-// count (ARCHIVE-REACH) drops its cache on each, so archiving your only workspace shows "Show
+// count drops its cache on each, so archiving your only workspace shows "Show
 // archived (1)" at once instead of a cached 0 for up to its 5-minute TTL.
 
 let version = 0

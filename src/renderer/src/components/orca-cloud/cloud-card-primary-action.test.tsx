@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CLOUD-CARD-RESTARTING-CLICK: while a restart runs, the card's "Restarting…" button is inert (and
+// While a restart runs, the card's "Restarting…" button is inert (and
 // announced busy): a click never starts a second restart. Restart itself still works.
 
 import { cleanup, fireEvent, render } from '@testing-library/react'

@@ -29,7 +29,7 @@ afterEach(() => {
   resetCloudCreateIntentsForTest()
 })
 
-describe('Escape on the Orca Cloud setup page (RR-b)', () => {
+describe('Escape on the Orca Cloud setup page', () => {
   it('exits setup when the page is visible', () => {
     const onExit = vi.fn()
     renderHook(() => useEscapeExitsSetup(true, onExit))

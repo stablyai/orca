@@ -36,7 +36,7 @@ export const MAX_SECRETS_PER_OWNER = 100
 /** Upper bound on what one session start carries (it rides the VM command's env). */
 export const MAX_INJECTED_BYTES = 128 * 1024
 
-/** Keys agent CLIs read. For these an org-shared value beats a personal one (Conductor parity). */
+/** Keys agent CLIs read. For these an org-shared value beats a personal one. */
 export const AGENT_KEY_NAMES: ReadonlySet<string> = new Set([
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
@@ -137,7 +137,7 @@ export function checkValue(name: string, value: string): void {
 }
 
 /**
- * SEC-6b: the last 4 characters of values of 16+ characters, stored in plaintext beside the ciphertext.
+ * The last 4 characters of values of 16+ characters, stored in plaintext beside the ciphertext.
  * Kept deliberately: owners and admins use it to tell which key is saved (as GitHub, Stripe and AWS
  * consoles do), it reveals at most 4 characters of a value with at least 12 more, and it is useless for
  * calling a provider. Shorter values get no hint. Only people who can write a scope see its hints: team
@@ -191,8 +191,8 @@ function repoOwner(accountId: string, repo: string): string {
 
 /**
  * The owners whose secrets a sandbox session receives.
- * SEC-5: a workspace that ever changed hands (OWNER-TRANSFER) gets the team's and the repository's secrets
- * only, never its owner's personal ones, the same rule as personal accounts (D13).
+ * A workspace that ever changed hands gets the team's and the repository's secrets
+ * only, never its owner's personal ones, the same rule as personal accounts.
  */
 export function ownersForSandbox(row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url' | 'ownership_transferred_at'>) {
   const shared = isSharedWorkspace(row)
@@ -287,7 +287,7 @@ export async function putSecret(
   keyring: Keyring,
   input: { scope: SecretScope; ownerId: string; name: string; value: string; updatedBy: string },
   now: number,
-  /** Who to record in the activity log (SEC-4); every API write passes one. */
+  /** Who to record in the activity log; every API write passes one. */
   actor?: SecretActor
 ): Promise<SecretView> {
   checkName(input.name)
@@ -437,7 +437,7 @@ export const PRECEDENCE: Record<SecretKind, SecretScope[]> = {
 
 /**
  * What a session of this caller (in `repo`) would receive, by name and winning scope; no values.
- * `shared`: a workspace shared with teammates, which gets no personal secrets (SEC-5, ownersForSandbox).
+ * `shared`: a workspace shared with teammates, which gets no personal secrets (ownersForSandbox).
  */
 export async function effectiveSecrets(
   db: D1Database,
@@ -509,7 +509,7 @@ function kmsKeyring(env: Env, sealFormat: SealFormat, fetcher: typeof fetch | un
   const plaintextRetiredId = env.SECRETS_KEK_PLAINTEXT_RETIRED_ID
   const plaintextRetired = plaintextRetiredId ? `${plaintextRetiredId}\n${env.SECRETS_KEK ?? ''}` : ''
   const source = `kms\n${activeId}\n${env.SECRETS_KMS_KEY ?? ''}\n${env.SECRETS_KEK_WRAPPED ?? ''}\n${env.SECRETS_KEK_RETIRED_WRAPPED ?? ''}\n${plaintextRetired}\n${sealFormat}`
-  // WORKER-XREQ-PROMISE: only a keyring that has come out of KMS (or a settled failure) is shared. An
+  // Only a keyring that has come out of KMS (or a settled failure) is shared. An
   // in-flight load is this request's own: shared, a load whose request was cancelled mid-KMS would hang every
   // later request in the isolate forever (seen: secret routes through the egress proxy stuck until cancelled).
   if (kmsReady?.source === source) {
@@ -591,7 +591,7 @@ export function keyringFor(env: Env, fetcher?: typeof fetch): Promise<Keyring> |
 }
 
 /**
- * SEC-6a: admin-only writes (Shared, and a team's Repository secrets) need a token minted within the
+ * admin-only writes (Shared, and a team's Repository secrets) need a token minted within the
  * last minute. Auth's role-changed push already makes older tokens stale at once (index.ts,
  * tokenMintedBeforeMemberChange); this bounds a demoted admin to under a minute even if that push is
  * late or lost. The desktop re-mints and retries once on `stale_token` (hosted-sandbox-request.ts).
@@ -631,7 +631,7 @@ export async function handleSecretsRoute(
   onChange: (change: SecretChange) => void = () => {}
 ): Promise<Response> {
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
-  // Same shape as index.ts ORG-TOKEN-STALE, so the desktop re-mints and retries once.
+  // Same shape as index.ts's stale-org-token answer, so the desktop re-mints and retries once.
   const staleToken = () => json({ error: 'unauthorized', reason: 'stale_token' }, 401)
   const repoQuery = url.searchParams.get('repo')
   if (url.pathname === '/v1/secrets/effective') {

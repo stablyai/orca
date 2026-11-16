@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CREATE-GH-IDENTITY: the wizard's "Connect your GitHub so PRs show as you" line.
+// The wizard's "Connect your GitHub so PRs show as you" line.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

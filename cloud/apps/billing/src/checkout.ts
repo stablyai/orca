@@ -83,7 +83,7 @@ export async function createCheckout(
   if (!caller.canManage) {
     return { ok: false, status: 403, error: 'billing_admin_required' }
   }
-  // O1/N4: every Checkout lands on a team. A personal account's subscription could never move to
+  // Every Checkout lands on a team. A personal account's subscription could never move to
   // a team later (the account id is the billing key), so the desktop creates the team first.
   if (!caller.accountId.startsWith('org:')) {
     return { ok: false, status: 409, error: 'team_required' }

@@ -2,7 +2,7 @@
 // bytes this computer sends to the host. Feeds idle sleep for cloud VMs, so it must let an editor
 // window nobody touches sleep while typing keeps the VM awake.
 //
-// Measured on a real VM (W3 perf, OpenSSH 10 client, openvscode-server 1.109 over `ssh -L`, bytes
+// Measured on a real VM (OpenSSH 10 client, openvscode-server 1.109 over `ssh -L`, bytes
 // the forward carried toward the VM):
 // - idle `ssh -N` or an idle shell: one 52 B keepalive every 30 s, ~104 B/min.
 // - idle VS Code remote window: a 60 + 44 + 52 B burst every 5 s, 2.3-3.0 KB/min, at most 5

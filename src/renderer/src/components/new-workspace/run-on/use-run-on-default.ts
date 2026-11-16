@@ -1,4 +1,4 @@
-// The target a new composer opens on (D7, O5): This computer until Orca Cloud has started once,
+// The target a new composer opens on: This computer until Orca Cloud has started once,
 // then each project's last successful target. Applied once per project, never over a user's pick,
 // and never to a blocked Orca Cloud.
 import { useCallback, useEffect, useRef } from 'react'

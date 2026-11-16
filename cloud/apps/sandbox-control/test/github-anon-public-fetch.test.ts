@@ -1,4 +1,4 @@
-// GH-ANON-403: a workspace on a public repo that Orca's GitHub App isn't installed on gets no App
+// A workspace on a public repo that Orca's GitHub App isn't installed on gets no App
 // token, so its git sends no credential. When a member connected GitHub, their placeholder rules on
 // github.com must not end in the firewall's 403: that 403'd the doctor's `git ls-remote` ("This
 // workspace can't reach <repo> on GitHub right now") and every plain fetch and pull.
@@ -42,7 +42,7 @@ async function setup(appToken: boolean) {
   return { h, alice, id, box }
 }
 
-describe('GH-ANON-403: public repo, no App install, a member connected GitHub', () => {
+describe('public repo, no App install, a member connected GitHub', () => {
   it('create: github.com carries the member claim and lets anonymous git through', async () => {
     const t = await setup(false)
     const policy = t.box().policy

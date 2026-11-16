@@ -155,7 +155,7 @@ function identityOf(row: GitHubUserTokenRow, userId: string, tokens: TokenSet): 
 }
 
 /**
- * EGRESS-REFRESH pure read for policy compiles: the member's current token, or null when not connected or
+ * Pure read for policy compiles: the member's current token, or null when not connected or
  * expired. Never refreshes (credential-refresh.ts keeps it fresh ahead of expiry and pushes the change).
  */
 export async function readMemberGitIdentity(db: D1Database, keyring: Keyring, accountId: string, userId: string, now: number): Promise<MemberGitIdentity | null> {
@@ -200,7 +200,7 @@ export async function memberGitIdentity(
   return identityOf(row, userId, tokens)
 }
 
-// ---- leased refresh (EGRESS-REFRESH) --------------------------------------------------------------------
+// ---- leased refresh --------------------------------------------------------------------
 
 /** Longer than GitHub's token call plus the write: the holder always finishes inside its lease. */
 const USER_TOKEN_LEASE_MS = 60_000

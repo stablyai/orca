@@ -38,7 +38,7 @@ const slot = (worktreeId: string) => (
 const green = (container: HTMLElement): boolean =>
   container.querySelector('.bg-emerald-500') !== null
 
-describe('the row activity dot while an Orca Cloud workspace goes to sleep (RA-13b)', () => {
+describe('the row activity dot while an Orca Cloud workspace goes to sleep', () => {
   afterEach(() => {
     cleanup()
     resetWorktreeSleepViewForTests()

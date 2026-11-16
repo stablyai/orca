@@ -108,13 +108,13 @@ export function NewWorkspaceComposerProjectSection({
   orcaCloudAccess,
   cloudStart = null
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
-  // D4 rows: while Orca Cloud is picked, and for a folder, which can only start from GitHub.
+  // Cloud-only rows: while Orca Cloud is picked, and for a folder, which only starts from GitHub.
   const cloudOnly =
     selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID || cloudStart?.folderProject
       ? cloudStart?.cloudOnly
       : undefined
   const t = useTranslate()
-  // RR-c1: each stopped Create moves focus to Project (quietly), where the error is.
+  // Each stopped Create moves focus to Project (quietly), where the error is.
   const needsRepo = cloudStart?.needsGitHubRepo ?? null
   const addProjectLabel = t('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')
   const defaultAddProjectHostId = useMemo(
@@ -148,7 +148,7 @@ export function NewWorkspaceComposerProjectSection({
   return (
     <fieldset disabled={disabled} className="space-y-1">
       {/* One row, two equal columns: Project | Run on. Picking a target never changes the rows
-          below it, so the dialog keeps its height (composer-redo). */}
+          below it, so the dialog keeps its height. */}
       <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
         <div className="min-w-0 space-y-1">
           <div className="flex h-5 items-center justify-between gap-2">
@@ -165,7 +165,7 @@ export function NewWorkspaceComposerProjectSection({
                   defaultHostId={defaultAddProjectHostId}
                   onOpenEntryRequest={onAddProjectEntryRequest}
                   onOpenRemoteHostDialog={handleOpenRemoteHostDialog}
-                  // PROJ-MENU: the button beside "Project" gets the same "Orca Cloud" group as the
+                  // The button beside "Project" gets the same "Orca Cloud" group as the
                   // list's Add project row while Run on is Orca Cloud.
                   extraItems={cloudAddProjectExtraItems(cloudOnly?.moreAccess)}
                 >
@@ -216,7 +216,7 @@ export function NewWorkspaceComposerProjectSection({
               onValueSelected={focusNameInput}
               onAddProject={comboboxAddProjectMenu ? undefined : onAddProject}
               addProjectMenu={comboboxAddProjectMenu}
-              // D4: while Orca Cloud is picked, GitHub repositories with no clone here.
+              // While Orca Cloud is picked, GitHub repositories with no clone here.
               cloudRepos={cloudOnly?.repos ?? null}
               cloudRepoValue={cloudOnly?.picked?.fullName ?? null}
               onCloudRepoSelected={(fullName) => {

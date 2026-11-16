@@ -80,7 +80,7 @@ describe('wake', () => {
     const { body } = await h.call('POST', '/v1/sandboxes', { body: create })
     const id = body.sandbox.id
     await h.call("POST", `/v1/sandboxes/${id}/suspend`)
-    // Only the wake's own background work counts (the create outlives its request too, EP-5).
+    // Only the wake's own background work counts (the create outlives its request too).
     await Promise.all(background.splice(0))
     const answer = HostedWakeResponseSchema.parse((await h.call('POST', `/v1/sandboxes/${id}/wake`)).body)
     // The fake provider is synchronous enough that the wake may already be done; either is valid.
@@ -218,7 +218,7 @@ describe('archive', () => {
     expect((await h.call('GET', `/v1/sandboxes/${id}/status`)).body.status.archive).toBeNull()
   })
 
-  it('a desktop archive (Sleep, then archive) is what Home’s archived=only list and count read (ARCHIVE-REACH)', async () => {
+  it('a desktop archive (Sleep, then archive) is what Home’s archived=only list and count read', async () => {
     const { h, id } = await running()
     await h.call('POST', `/v1/sandboxes/${id}/suspend`)
     await h.call('POST', `/v1/sandboxes/${id}/archive`, { body: {} })

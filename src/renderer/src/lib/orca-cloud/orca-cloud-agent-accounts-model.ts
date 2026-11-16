@@ -1,4 +1,4 @@
-// What S0 (Settings › Orca Cloud › Cloud agent sign-ins) and the composer's Agent row show for each agent,
+// What Settings › Orca Cloud › Cloud agent sign-ins and the composer's Agent row show for each agent,
 // derived from GET /v1/agent-credentials + /v1/agent-sources and the setup running on this computer.
 import type { CloudEffectiveSecret } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import {
@@ -45,7 +45,7 @@ export function agentKeyKinds(
   return { claude: kindFor('claude'), codex: kindFor('codex') }
 }
 
-/** One S0 row (spec §5 states 2–9). `keyKind` is the key a row falls back to, when one covers it. */
+/** One Cloud agent sign-ins row. `keyKind` is the key a row falls back to, when one covers it. */
 export type OrcaCloudAccountRow =
   | { kind: 'notSetUp'; keyKind: AgentKeyKind | null }
   | {
@@ -65,7 +65,7 @@ export type OrcaCloudAccountRow =
       covered: boolean
     }
   | { kind: 'expired'; keyKind: AgentKeyKind | null; covered: boolean }
-  /** §5c: the provider's Orca-account path is paused (kill switch). Info only; the stored credential is kept. */
+  /** The provider's Orca-account path is paused (kill switch). Info only; the stored credential is kept. */
   | { kind: 'killSwitch' }
   /** This server never offered the provider (flag off): nothing to set up, nothing paused. */
   | { kind: 'unavailable' }
@@ -129,7 +129,7 @@ export type OrcaCloudAgentCoverage =
   | { kind: 'key'; keyKind: AgentKeyKind }
   | { kind: 'notSetUp' }
   | { kind: 'expired' }
-  /** §5c without a key: each new cloud workspace asks once. */
+  /** No Orca-account path and no key: each new cloud workspace asks once. */
   | { kind: 'killSwitch' }
   /** Flag off without a key: no Orca-account path here, so nothing to show. */
   | { kind: 'unavailable' }

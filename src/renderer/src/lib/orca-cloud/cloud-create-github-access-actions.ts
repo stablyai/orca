@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: what the GitHub access step's buttons do (cloud-create-github-access.ts holds
+// What the create wizard's GitHub access step's buttons do (cloud-create-github-access.ts holds
 // the state, the polls and the hold before Open).
 import { entries } from './cloud-create-github-access-registry'
 import { schedulePoll, settle, update } from './cloud-create-github-access'

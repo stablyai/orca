@@ -112,7 +112,7 @@ function CloudSecretsAskHeading({
 }
 
 /**
- * S2: the environment's declared names this person doesn't get a value for, asked inline. Never
+ * The environment's declared names this person doesn't get a value for, asked inline. Never
  * blocks Open; values go to Orca Cloud in one batch and the inputs unmount after the save.
  */
 export function CloudSecretsAskForm({

@@ -97,7 +97,7 @@ function FileExplorerFiles(): React.JSX.Element {
     rightSidebarOpen,
     worktreePath
   })
-  // An Orca Cloud workspace's files are that workspace's, so the header names it, not its repo (RA-13).
+  // An Orca Cloud workspace's files are that workspace's, so the header names it, not its repo.
   const cloudName = useIsCloudWorkspace(activeWorktreeId) ? activeWorktree?.displayName : null
   const repoName =
     cloudName || activeRepo?.displayName || (worktreePath ? basename(worktreePath) : '')

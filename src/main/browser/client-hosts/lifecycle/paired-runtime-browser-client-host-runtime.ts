@@ -271,7 +271,7 @@ function createNetworkRoutes(
         connection,
         lease: authority,
         executionHost,
-        // CLOUD-BROWSER-DIRECT: public sites from this desktop; only the sandbox's own loopback through it.
+        // Public sites from this desktop; only the sandbox's own loopback through it.
         ...(isOrcaCloudRuntimeConnection(app.getPath('userData'), environmentId, connection.endpoint)
           ? {
               loopbackOnly: {

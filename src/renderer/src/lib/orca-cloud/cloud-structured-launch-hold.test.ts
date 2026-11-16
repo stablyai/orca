@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CHAT-BANNERS (PR-B): a structured chat on an Orca Cloud host whose agent isn't set up (or whose
+// A structured chat on an Orca Cloud host whose agent isn't set up (or whose
 // sign-in expired) holds before `agentSession.create`: it never launches until the strip releases it,
 // and a cancelled hold creates nothing.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

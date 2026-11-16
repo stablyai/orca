@@ -7,7 +7,7 @@
 //   DELETE /v1/internal/github/bindings {installationId, accountId?}
 //   POST   /v1/internal/members/role-changed {accountId, userId, role}   re-cap their keys and MCP grants (auth calls this)
 //   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's keys, phones and workspace grants, disable their routines (auth calls this)
-//   GET    /v1/internal/fair-use?days=30                 per-account CPU utilisation + fair-use flag (U22; internal only, never billed)
+//   GET    /v1/internal/fair-use?days=30                 per-account CPU utilisation + fair-use flag (internal only, never billed)
 //   POST   /v1/internal/session-cpu/sweep               fetch CPU for recently stopped sessions now (the cron does this every 5 min)
 //   GET    /v1/internal/secrets/kek                     which KEK ids stored secrets reference; which retired ids can be dropped
 //   POST   /v1/internal/secrets/rewrap {limit?, cursor?, dryRun?}   move one batch of rows to the active KEK (secrets-rewrap.ts)

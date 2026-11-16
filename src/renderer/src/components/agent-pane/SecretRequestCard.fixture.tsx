@@ -59,9 +59,9 @@ export const open = frame({ value: 'npm_9f2cA81bX7' })
 export const openWithMore = frame({ more: 2 })
 export const repoHint = frame({ suggestedRepo: true })
 export const personalOnly = frame({ scopes: ['personal'] })
-/** SEC-5: a shared workspace, and the person can write the repository: Repository only. */
+/** A shared workspace, and the person can write the repository: Repository only. */
 export const sharedRepoOnly = frame({ sharedWorkspace: true, scopes: ['repo'], scope: 'repo' })
-/** SEC-5: a shared workspace, and nothing this person can write reaches it. */
+/** A shared workspace, and nothing this person can write reaches it. */
 export const sharedNoScope = frame({ sharedWorkspace: true, scopes: [], scope: 'personal' })
 export const unknownAgent = frame({ agent: null, canRestart: false })
 export const longReason = frame({

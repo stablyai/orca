@@ -1,4 +1,4 @@
-// CHAT-BANNERS (PR-B): a structured chat on an Orca Cloud host decides its launch the way a terminal
+// A structured chat on an Orca Cloud host decides its launch the way a terminal
 // pane's does (cloud-agent-credential-spawn-gate): an agent that isn't set up, or whose Orca-account
 // sign-in expired with no key, holds on the strip at the top of the chat; the session is never
 // created until the strip's Start (or Renew) releases it, so it can't start and fail at /login.
@@ -32,7 +32,7 @@ export function structuredCloudHoldKey(sessionId: string): string {
 const resumedSessions = new Set<string>()
 const joinedSessions = new Set<string>()
 
-/** Startup is putting this session's hold back (V3-01b); only a join of that hold is marked. */
+/** Startup is putting this session's hold back; only a join of that hold is marked. */
 export function markStructuredHoldResumed(sessionId: string): void {
   resumedSessions.add(sessionId)
 }
@@ -45,7 +45,7 @@ export function takeStructuredHoldJoined(sessionId: string): boolean {
 
 /**
  * Resolves 'proceed' at once for anything but Claude or Codex on an Orca Cloud host whose account
- * is ready (or covered by a key); otherwise holds until the strip releases it. V3-01b: a chat held
+ * is ready (or covered by a key); otherwise holds until the strip releases it. A chat held
  * before a restart joins the hold put back at startup, or holds again as restored (never starting
  * on a failed or covered read: it waits for the person's Start). In-session launches are unchanged.
  */
@@ -88,7 +88,7 @@ export async function holdStructuredCloudLaunch(intent: {
 }
 
 /**
- * V3-01b: while a structured chat waits on its Orca Cloud hold, the host's "not signed in" verdict
+ * While a structured chat waits on its Orca Cloud hold, the host's "not signed in" verdict
  * is the hold's to explain (the strip and the composer hint), never the generic sign-in notice.
  * Any other verdict, and any chat not held, keeps the host's verdict as it is.
  */
@@ -102,7 +102,7 @@ export function useCloudHeldChatUnavailable<T extends { reason: string }>(
 }
 
 /**
- * CHAT-CANCEL-ERROR / CHAT-RESTORE-RECONFIRM: a structured chat waiting on its Orca Cloud hold has
+ * A structured chat waiting on its Orca Cloud hold has
  * created nothing yet, so it has no start to report as failed or unconfirmed. Its strip says what
  * to do; launch and session error cards only appear once the agent has actually started.
  */

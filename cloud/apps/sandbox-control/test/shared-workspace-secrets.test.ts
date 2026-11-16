@@ -1,4 +1,4 @@
-// SEC-5: only a workspace that ever changed hands (OWNER-TRANSFER) runs without its owner's personal secrets.
+// Only a workspace that ever changed hands runs without its owner's personal secrets.
 // Workspaces are never shared, so the stored `visibility` column no longer matters.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { START_COMMAND } from '../src/sandbox-vm-commands'
@@ -69,7 +69,7 @@ async function seeded(overrides: Record<string, string> = {}, deps: Parameters<t
 
 const TEAM_AND_REPO = { ANTHROPIC_API_KEY: TEAM_KEY, BAR: 'repo-bar-value', FOO: 'team-foo-value' }
 
-describe('personal secrets (SEC-5)', () => {
+describe('personal secrets', () => {
   it('a transferred workspace gets no personal owner, for good; visibility is ignored', () => {
     const row = { account_id: 'org:acme', user_id: 'mia', repo_url: 'https://github.com/acme/app', ownership_transferred_at: null }
     expect(ownersForSandbox(row).personal).toBe('user:mia')

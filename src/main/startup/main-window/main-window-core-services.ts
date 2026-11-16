@@ -86,7 +86,7 @@ async function installMainWindowCoreServices(
   }
   registerAgentApiKeyHandlers(app.getPath('userData'))
   registerCloudWorkspacesHandlers({ removedServerStore: store })
-  // EP-8: a cloud workspace server that refuses this computer's pairing gets one fresh grant.
+  // A cloud workspace server that refuses this computer's pairing gets one fresh grant.
   installCloudPairingRecovery(getCloudWorkspacesService)
   registerCloudApiHandlers()
   registerCloudSecretsHandlers(app.getPath('userData'))

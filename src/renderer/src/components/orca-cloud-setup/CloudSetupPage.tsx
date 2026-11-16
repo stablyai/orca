@@ -1,4 +1,4 @@
-// "Set up Orca Cloud" as a page (composer-redo). Start in the composer closes the dialog and opens
+// "Set up Orca Cloud" as a page. Start in the composer closes the dialog and opens
 // this when the account isn't ready. One step at a time: the current step is the page; finished
 // steps are ticks in the stepper. Browser hops only for sign-in, Stripe and GitHub. When every
 // step is done, the saved prompt starts by itself.
@@ -27,7 +27,7 @@ export type CloudSetupPageProps = {
   projectName: string | null
   prompt: string
   agentLabel: string | null
-  /** The agent the prompt starts with: its glyph sits before its name in the header line (NS-04). */
+  /** The agent the prompt starts with: its glyph sits before its name in the header line. */
   agent?: TerminalAgent | null
   /** Back from the first step: Create workspace again, with the prompt, project and agent kept. */
   onBackToComposer: () => void
@@ -35,7 +35,7 @@ export type CloudSetupPageProps = {
   onExit: () => void
   /** "All set": shown for a moment before the workspace starts. */
   starting: boolean
-  /** Setup finished while the page was hidden: "All set" waits for an explicit Start (RR-b). */
+  /** Setup finished while the page was hidden: "All set" waits for an explicit Start. */
   heldForStart?: boolean
   onStart?: () => void
 }
@@ -135,7 +135,7 @@ function SetupStepper({
 function BrowserWaiting({ flow }: { flow: CloudSetupFlow }): React.JSX.Element {
   const t = useTranslate()
   return (
-    // N-10: the status line, then its actions, flush-left. The bordered action leads so its edge
+    // The status line, then its actions, flush-left. The bordered action leads so its edge
     // lines up with the copy above (a ghost button's padding would indent it).
     <div className="flex flex-col items-start gap-3" role="status">
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -361,7 +361,7 @@ export function CloudSetupPage({
           {agentLabel ? (
             <>
               {' · '}
-              {/* NS-04 (e): the agent's glyph, muted like the line (never the coloured mark). */}
+              {/* The agent's glyph, muted like the line (never the coloured mark). */}
               {agent ? (
                 <span aria-hidden="true" className="me-1 inline-flex align-[-2px]">
                   <AgentIcon agent={agent} size={14} className="[&_path]:fill-current" />
@@ -417,7 +417,7 @@ export function CloudSetupPage({
           />
         ) : null}
 
-        {/* Actions sit flush-left under the copy they act on (N-10). */}
+        {/* Actions sit flush-left under the copy they act on. */}
         <div className="mt-6 flex">
           {viewed ? (
             <Button type="button" onClick={() => setViewing(null)}>

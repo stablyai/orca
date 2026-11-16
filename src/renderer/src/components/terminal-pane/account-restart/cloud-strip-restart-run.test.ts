@@ -1,4 +1,4 @@
-// RA-11 Restart end to end through the real store: the strip's click queues a Claude restart on a
+// Restart end to end through the real store: the strip's click queues a Claude restart on a
 // pane whose signed-out Claude reports 'blocked' (which the account-restart path reads as mid-turn),
 // the mounted pane's runner relaunches it in place, and the strip learns the outcome.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -47,7 +47,7 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const PTY = 'env-1@@pty-1'
 const PANE_KEY = makePaneKey(TAB, LEAF)
 /** The terminal a resume ensure placed in the pane's leaf. */
-/** RA-11d defaults as a fresh launch would project them now (configured args + permission choice). */
+/** Defaults as a fresh launch would project them now (configured args + permission choice). */
 function projectedDefaults(): string {
   return resolveTuiAgentLaunchRawArgs(
     'claude',
@@ -105,7 +105,7 @@ function runPane(build: (agent: string) => { command: string } | null) {
   return handleRestartPane
 }
 
-describe('RA-11 Restart through the account-restart runner', () => {
+describe('Restart through the account-restart runner', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     resetCloudRunningSignoutForTest()
@@ -175,7 +175,7 @@ describe('RA-11 Restart through the account-restart runner', () => {
 
 // Orca Cloud panes are paired web-host panes: the host already runs a terminal there, so a reconnect
 // alone reattaches to the old agent. The restart stops exactly that host terminal first.
-describe('RA-11 Restart on a paired (remote) pane', () => {
+describe('Restart on a paired (remote) pane', () => {
   const REMOTE = 'remote:env-1@@term_a'
   const OTHER_TAB = 'tab-2'
   const OTHER_LEAF = '22222222-2222-4222-8222-222222222222'
@@ -331,17 +331,17 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     })
     await vi.waitFor(() => expect(handleRestartPane).toHaveBeenCalledTimes(1))
     expect(order).toEqual(['stop', 'resume', 'reconnect'])
-    // RA-11e: after the reconnect, the resume is watched once for "no conversation" (then fresh).
+    // After the reconnect, the resume is watched once for "no conversation" (then fresh).
     await vi.waitFor(() => expect(freshIfResumeFoundNothing).toHaveBeenCalledTimes(1))
     expect(freshIfResumeFoundNothing).toHaveBeenCalledWith(
       expect.objectContaining({
         replacedPtyId: REMOTE,
-        // RA-11d: the fallback gets the pane's recorded args too.
+        // The fallback gets the pane's recorded args too.
         freshCommand: `fresh claude ${LEAF} --model opus --effort high`
       })
     )
     expect(resumeRemotePane).toHaveBeenCalledWith({
-      // RA-11d: the pane's own launch rides along to the host.
+      // The pane's own launch rides along to the host.
       launchConfig: { agentArgs: '--model opus --effort high', agentEnv: {} },
       ptyId: REMOTE,
       worktreeId: 'wt-1',
@@ -431,7 +431,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     expect(cloudAgentRestartStartedFresh(PANE_KEY, 0)).toBe(false)
   })
 
-  it('RA-11d: a host-launched pane with nothing recorded falls back to the default CLI args', async () => {
+  it('a host-launched pane with nothing recorded falls back to the default CLI args', async () => {
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/home/dev'),
@@ -473,7 +473,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
       })
     )
     expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, projectedDefaults())
-    // RST-FLAGS: the substituted defaults keep the launch profile's permission flag.
+    // The substituted defaults keep the launch profile's permission flag.
     expect(projectedDefaults()).toContain('--model opus --effort high')
   })
 
@@ -515,7 +515,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     return { resumeRemotePane, freshIfResumeFoundNothing, buildFreshCommand }
   }
 
-  it('RA-11d: a recorded launch config with empty args takes the default CLI args, keeping its env', async () => {
+  it('a recorded launch config with empty args takes the default CLI args, keeping its env', async () => {
     const { resumeRemotePane, freshIfResumeFoundNothing, buildFreshCommand } = runWithRecorded({
       agentArgs: '',
       agentEnv: { ORCA_X: '1' }
@@ -529,7 +529,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     expect(buildFreshCommand).toHaveBeenCalledWith('claude', LEAF, projectedDefaults())
   })
 
-  it('RA-11d: recorded launch args win over the defaults', async () => {
+  it('recorded launch args win over the defaults', async () => {
     const { resumeRemotePane, freshIfResumeFoundNothing, buildFreshCommand } = runWithRecorded({
       agentArgs: '--model sonnet',
       agentEnv: {}
@@ -574,7 +574,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     warn.mockRestore()
   })
 
-  // RA-11 resume race: the pane's own transport reattached when the stop ended its stream, woke the
+  // Resume race: the pane's own transport reattached when the stop ended its stream, woke the
   // leaf with its original launch, and the resume was adopted away.
   function runResume(over: {
     waitForResumedTerminal?: () => Promise<void>
@@ -717,7 +717,7 @@ describe('RA-11 Restart on a paired (remote) pane', () => {
     expect(cloudAgentRestartAttempt(PANE_KEY, 0)?.phase).toBe('failed')
   })
 
-  // RA-11c: an account switch on a paired pane reattached to the old agent and never relaunched.
+  // An account switch on a paired pane reattached to the old agent and never relaunched.
   it('an account-switch restart on a paired pane stops that host terminal, then reconnects', async () => {
     useAppStore.setState({
       agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [PANE_KEY]: { ...entry(TAB, LEAF), state: 'done' } }))

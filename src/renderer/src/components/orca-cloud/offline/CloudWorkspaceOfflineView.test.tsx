@@ -100,7 +100,7 @@ describe('the asleep view kept on screen after Sleep', () => {
     expect(props.onWake).toHaveBeenCalledTimes(1)
   })
 
-  it('SLEEP-IN-PROGRESS: never shows "nothing was saved" lines while the copy is still being saved', () => {
+  it('never shows "nothing was saved" lines while the copy is still being saved', () => {
     // The sleep call returned (no goingToSleep) but the copy has not been read back yet.
     const { container, rerender, props } = view({
       snapshot: { ...snapshot, capturedAt: null, chats: [], terminals: [], git: null },
@@ -120,7 +120,7 @@ describe('the asleep view kept on screen after Sleep', () => {
     expect(container.textContent).toContain('Read-only copy saved when it went to sleep.')
   })
 
-  it('SLEEP-IN-PROGRESS: says so when the copy never arrived; the header Wake is the only Wake', () => {
+  it('says so when the copy never arrived; the header Wake is the only Wake', () => {
     const { container, getAllByRole, props } = view({
       snapshot: { ...snapshot, capturedAt: null, chats: [] },
       viewOnly: true,

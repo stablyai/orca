@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: makes someone else the owner of a cloud workspace. The control plane puts the
+// Makes someone else the owner of a cloud workspace. The control plane puts the
 // workspace to sleep first, so the confirmation stays open while it runs and shows a refusal in
 // place; on success the person is told whether the previous owner will hear about it.
 import { useCallback, useState } from 'react'
@@ -84,7 +84,7 @@ export function useCloudWorkspaceOwnerChange({
       )
       if (previousOwner?.userId === selfId) {
         // You gave away your own: your notice (with the advice to rotate) is waiting, and this
-        // is the one device that shows it (TRANSFER-TOAST-OTHER-DEVICE).
+        // is the one device that shows it.
         markOwnerChangeMadeHere(localStorageOrNull(), next.id)
         refreshPreviousOwnerNoticesNow()
       }

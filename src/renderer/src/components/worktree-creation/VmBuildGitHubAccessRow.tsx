@@ -70,7 +70,7 @@ function askLine(access: CloudCreateGitHubAccess, t: Translate): string {
 }
 
 /**
- * The wizard's "GitHub access" step (CREATE-GH-STEP), drawn like the steps around it: a check mark
+ * The wizard's "GitHub access" step, drawn like the steps around it: a check mark
  * when the Orca GitHub App can push, otherwise what grants it, and Skip for now.
  */
 export function VmBuildGitHubAccessRowView({
@@ -80,7 +80,7 @@ export function VmBuildGitHubAccessRowView({
 }: {
   access: CloudCreateGitHubAccess
   actions: VmBuildGitHubAccessActions
-  /** CREATE-GH-IDENTITY: "Connect your GitHub so PRs show as you", once access is settled. */
+  /** "Connect your GitHub so PRs show as you", once access is settled. */
   identityLine?: React.ReactNode
 }): React.JSX.Element | null {
   const t = useTranslate()

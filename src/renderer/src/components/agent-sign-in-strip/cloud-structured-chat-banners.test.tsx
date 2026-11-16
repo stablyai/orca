@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CHAT-BANNERS (PR-B): a structured chat shows its held launch's strip at the top of its column (the
+// A structured chat shows its held launch's strip at the top of its column (the
 // terminal pane's strip, same copy and actions), and a chat closed while held gives up its launch.
 import { act } from 'react'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -121,7 +121,7 @@ describe('the structured chat strip', () => {
     expect(view.container.querySelector('[data-cloud-chat-banners]')?.textContent).toBe('')
   })
 
-  it('CHAT-CANCEL-ERROR: a held chat has no × and Escape keeps it held on its strip', () => {
+  it('a held chat has no × and Escape keeps it held on its strip', () => {
     stub.hold = { agent: 'claude', reason: 'notSetUp', prompt: null }
     const view = mount()
     const slot = view.container.querySelector<HTMLElement>('[data-cloud-chat-banners]')!
@@ -131,7 +131,7 @@ describe('the structured chat strip', () => {
     expect(within(slot).getByRole('button', { name: 'Set up once' })).toBeTruthy()
   })
 
-  it('CHAT-CANCEL-ERROR: an expired held chat keeps its hold on Escape too', () => {
+  it('an expired held chat keeps its hold on Escape too', () => {
     stub.hold = { agent: 'claude', reason: 'accountExpired', prompt: null }
     const view = mount()
     const strip = view.container.querySelector<HTMLElement>('[data-cloud-sign-in-strip]')!
@@ -139,7 +139,7 @@ describe('the structured chat strip', () => {
     expect(stub.released).toEqual([])
   })
 
-  it('CHAT-CANCEL-ERROR: during a setup, Cancel stops only the sign-in; the chat stays held', () => {
+  it('during a setup, Cancel stops only the sign-in; the chat stays held', () => {
     stub.hold = { agent: 'claude', reason: 'notSetUp', prompt: null }
     stub.setup = { phase: 'browser', startedAt: 0, canReopen: true, acceptsCode: true }
     const view = mount()

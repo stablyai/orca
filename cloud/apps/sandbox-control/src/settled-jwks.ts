@@ -1,4 +1,4 @@
-// WORKER-XREQ-PROMISE: jose's createRemoteJWKSet shares one in-flight JWKS fetch across every caller. In a
+// jose's createRemoteJWKSet shares one in-flight JWKS fetch across every caller. In a
 // Worker that fetch belongs to the request that started it; if that request is cancelled mid-fetch, the
 // shared promise never settles and every request verifying a token behind it hangs (seen as creates stuck
 // before any log, about ten minutes after a deploy: jose's cache age). This keeps the fetched key set as a

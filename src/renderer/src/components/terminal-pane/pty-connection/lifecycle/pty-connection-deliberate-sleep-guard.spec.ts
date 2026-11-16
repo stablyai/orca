@@ -98,7 +98,7 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
       expect(transport.connect).not.toHaveBeenCalled()
     })
 
-    // RA-13b: an Orca Cloud workspace that was asleep and selected when Orca quit comes back
+    // An Orca Cloud workspace that was asleep and selected when Orca quit comes back
     // selected; its restored panes must not reattach (that would wake the sandbox) until Wake.
     it('restored asleep cloud panes never attach after a restart', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')

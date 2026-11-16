@@ -39,7 +39,7 @@ const githubUser = {
   githubUser: async () => ({ connected: false as const }),
   connectGitHubUser: async () => ({ authorizeUrl: 'https://github.com/login/oauth/authorize' }),
   disconnectGitHubUser: async () => ({ connected: false as const }),
-  // The GitHub-only create's progress (GH-CREATE-SHEET): an older control plane has no boot plan.
+  // The GitHub-only create's progress: an older control plane has no boot plan.
   bootPlan: async (): Promise<'clone' | 'update'> => {
     throw new Error('not_found')
   },
@@ -51,7 +51,7 @@ const unusedCreate = async (): Promise<never> => {
   throw new Error('not called')
 }
 
-it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anything else', async () => {
+it('starts a sandbox that clones a GitHub-only repository, and refuses anything else', async () => {
   const create = vi.fn(async (body: { workspaceId: string; repo?: { url: string } }) => ({
     sandbox: {
       id: 'sbx_1',
@@ -94,7 +94,7 @@ it('starts a sandbox that clones a GitHub-only repository (D4), and refuses anyt
   expect(create).toHaveBeenCalledTimes(1)
 })
 
-it('a GitHub-only create keeps the typed name as the workspace title (NAME-DROPPED)', async () => {
+it('a GitHub-only create keeps the typed name as the workspace title', async () => {
   const create = vi.fn(async (body: { workspaceId: string; title?: string }) => ({
     sandbox: {
       id: 'sbx_2',
@@ -131,7 +131,7 @@ it('a GitHub-only create keeps the typed name as the workspace title (NAME-DROPP
 })
 const SESSION = 'cs_abcdefghijklmnopqrstuv'
 
-it('CREATE-GH-STEP: a public repo that can’t push asks with ids too; settings pages pass, others drop', async () => {
+it('a public repo that can’t push asks with ids too; settings pages pass, others drop', async () => {
   const githubRepoAccess = vi.fn(async (query: { repo: string; repoId?: number }) =>
     query.repo.endsWith('/site')
       ? {

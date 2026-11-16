@@ -1,4 +1,4 @@
-// EP-9: getOrcaBillingStatus mints the billing token for the team this device's profile shows,
+// getOrcaBillingStatus mints the billing token for the team this device's profile shows,
 // from the same profile whose session it uses, and fails closed (billing_org_mismatch) otherwise.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -35,7 +35,7 @@ vi.mock('./billing-client', async (importOriginal) => ({
 import { BillingOrgMismatchError } from './billing-client'
 import { getOrcaBillingStatus } from './billing-service'
 
-describe('EP-9: the billing token is for the team this device shows', () => {
+describe('the billing token is for the team this device shows', () => {
   beforeEach(() => {
     mint.mockReset()
     fetchEntitlement.mockReset()

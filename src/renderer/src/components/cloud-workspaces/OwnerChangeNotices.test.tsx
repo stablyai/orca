@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// OWNER-TRANSFER: the previous owner's notice stays until they close it (which tells the control
+// The previous owner's notice stays until they close it (which tells the control
 // plane); the new owner's shows once per hand-off.
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -64,7 +64,7 @@ afterEach(() => {
 
 const line = (id: string) => stack.shown.get(id)?.view.lines[0]
 
-describe('OwnerChangeNotices (OWNER-TRANSFER)', () => {
+describe('OwnerChangeNotices', () => {
   it('tells a previous owner who gave their workspace away, naming people from the roster', async () => {
     render(<OwnerChangeNotices />)
     await waitFor(() =>
@@ -134,7 +134,7 @@ describe('OwnerChangeNotices (OWNER-TRANSFER)', () => {
     }
   })
 
-  it('TRANSFER-TOAST-OTHER-DEVICE: "You made X the owner" does not echo on a device that did not make the change', async () => {
+  it('"You made X the owner" does not echo on a device that did not make the change', async () => {
     notices = [{ ...NOTICE, id: 'otn_self', actor: { userId: SELF_ID, name: null } }]
     render(<OwnerChangeNotices />)
     await Promise.resolve()

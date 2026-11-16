@@ -1,4 +1,4 @@
-// CODEX-RELAY: chatgpt.com refuses Cloudflare Workers' egress, so the sandbox-control egress proxy
+// chatgpt.com refuses Cloudflare Workers' egress, so the sandbox-control egress proxy
 // sends its chatgpt.com requests here (Cloud Run, which ChatGPT answers). The Worker already chose the
 // credential and pinned the path; this relay pins the path again, forwards to chatgpt.com only, and
 // streams the answer back as it arrives (Codex reads Server-Sent Events).

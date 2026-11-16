@@ -1,4 +1,4 @@
-// APPROVALS-REFUSED: no approval of a pull request ever leaves a workspace. An approval sent with the App's
+// No approval of a pull request ever leaves a workspace. An approval sent with the App's
 // installation token very likely counts toward a branch's required reviews, so anything in the VM could open a PR
 // as the owner, approve it as the App, and merge past "requires 1 approval". Approvals have to be a person's, on
 // GitHub. Refused on every api.github.com route the egress proxy swaps (the owner's and the App's), and in firewall
@@ -22,7 +22,7 @@ export function approvalRefusal(path: string): { deny: string; answer: { status:
   }
 }
 
-/** Review G2's refusal: GitHub-shaped, says what to do. */
+/** The refusal for an unnormalized write path: GitHub-shaped, says what to do. */
 export const UNNORMALIZED_WRITE_REFUSAL = {
   deny: 'path_not_allowed',
   answer: { status: 403, contentType: 'application/json', body: JSON.stringify({ message: 'Orca Cloud refused this request: its path has escapes or empty or dot segments. Send the plain path.' }) }
@@ -44,7 +44,7 @@ const pathOf = (path: string) => (path.split('?')[0] ?? '').toLowerCase()
 const writes = (method: string) => !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())
 
 /**
- * Review G2: a write whose path GitHub would normalize differently than these checks read it (percent-escapes, empty
+ * A write whose path GitHub would normalize differently than these checks read it (percent-escapes, empty
  * or dot segments, `;` matrix parameters) is refused outright, so `/repos/o/r/pulls/7/%72eviews` or `/x/%2e%2e/repos/...` can't slip past.
  */
 export function unnormalizedWrite(method: string, path: string): boolean {
@@ -114,7 +114,7 @@ function restApproves(body: string | null): boolean {
 }
 
 const REVIEW_MUTATIONS = new Set(['addPullRequestReview', 'submitPullRequestReview'])
-/** Approval-shaped mutations refused whatever their input (review G4). */
+/** Approval-shaped mutations refused whatever their input. */
 const ALWAYS_REFUSED_MUTATIONS = new Set([
   'dismissPullRequestReview',
   'createBranchProtectionRule',
@@ -135,7 +135,7 @@ export function graphqlApproves(body: string | null): boolean {
   try {
     parsed = JSON.parse(body)
   } catch {
-    // Review G3: unreadable (a Content-Encoding'd body never parses as JSON): refused.
+    // Unreadable (a Content-Encoding'd body never parses as JSON): refused.
     return true
   }
   // Batched requests: any of them.

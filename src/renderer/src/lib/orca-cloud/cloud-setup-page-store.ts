@@ -14,7 +14,7 @@ export type CloudSetupPageRequest = {
   agent: string | null
   /** What main reported when Start was pressed; the page upgrades it once sign-in lands. */
   availability: OrcaCloudAvailability
-  /** D4: a GitHub repository with no clone here; the start goes through the composer visibly. */
+  /** A GitHub repository with no clone here; the start goes through the composer visibly. */
   cloudOnlyRepo: string | null
   /** The composer as it was: Back and the auto-start reopen it with everything kept. */
   composer: ComposerModalData

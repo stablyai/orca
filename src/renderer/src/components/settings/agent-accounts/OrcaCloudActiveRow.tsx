@@ -1,4 +1,4 @@
-// S0 states 2 and 7: the saved account (Source, Remove…) and the one-time Source question.
+// The saved account (Source, Remove…) and the one-time Source question.
 import type React from 'react'
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -77,7 +77,7 @@ export function ActiveRow({
               key: keyPhrase(row.keyKind ?? 'team', t)
             })
       }
-      // Status is the title; the row adds only the expiry (JA-23). Where it's kept is in the heading's tooltip.
+      // Status is the title; the row adds only the expiry. Where it's kept is in the heading's tooltip.
       detail={
         renews ? (
           <span className={cn(row.expiring && 'text-status-warning-text')}>{renews}</span>

@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: the wizard's GitHub access step in each of its states, on a GitHub-only Orca Cloud
+// The wizard's GitHub access step in each of its states, on a GitHub-only Orca Cloud
 // create (the same sheet an owned create uses).
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'

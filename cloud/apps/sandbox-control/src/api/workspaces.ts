@@ -157,7 +157,7 @@ export async function createWorkspace(
     hidden?: boolean
     /** Caller-chosen sandbox workspace key (routine runs use one derived from the run, so a crash mid-boot is findable). */
     workspaceId?: string
-    /** OWNER-TRANSFER: made from inside a transferred workspace, so it starts transferred (shared mode). */
+    /** Made from inside a transferred workspace, so it starts transferred (shared mode). */
     ownershipTransferredAt?: number | null
   }
 ): Promise<WorkspaceRow> {
@@ -209,7 +209,7 @@ export async function wakeWorkspace(life: LifecycleDeps, row: WorkspaceRow): Pro
 }
 
 /**
- * Archive = stop and keep the snapshot for a TTL, out of default lists (W2's archiveSandbox:
+ * Archive = stop and keep the snapshot for a TTL, out of default lists (archiveSandbox:
  * repo metadata captured in the VM, provider snapshot expiry shortened, cron deletes after the TTL).
  */
 export async function archiveWorkspace(life: LifecycleDeps, row: WorkspaceRow): Promise<WorkspaceRow> {

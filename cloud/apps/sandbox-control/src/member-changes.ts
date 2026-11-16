@@ -38,7 +38,7 @@ export async function recordMemberChange(
 export const AUTH_IAT_BACKDATE_MS = 30_000
 
 /**
- * ORG-TOKEN-STALE routes (create, secrets, GitHub): same rule, allowing for auth's 30 s iat backdate, so a
+ * Routes (create, secrets, GitHub): same rule, allowing for auth's 30 s iat backdate, so a
  * token the desktop re-mints just after the change counts as fresh and its one retry succeeds.
  */
 export async function tokenMintedBeforeMemberChange(db: D1Database, caller: SandboxCaller): Promise<boolean> {

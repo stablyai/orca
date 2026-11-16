@@ -1,4 +1,4 @@
-// PC-3b on the create path: an Orca Cloud create whose agent isn't set up (or whose account read is
+// On the create path: an Orca Cloud create whose agent isn't set up (or whose account read is
 // still loading) must not hand the host a draft startup. The host would start the agent with the
 // queued prompt straight into its /login. Withheld, the create opens the workspace and the launch is
 // planned in the pane, where the cloud credential gate holds it behind the "Set up once" strip; on

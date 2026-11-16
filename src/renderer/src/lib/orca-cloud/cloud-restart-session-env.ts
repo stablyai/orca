@@ -1,4 +1,4 @@
-// RA-11: an account restart types its launch command into the pane's existing shell, whose env was
+// An account restart types its launch command into the pane's existing shell, whose env was
 // captured before the account was stored or renewed. On an Orca Cloud VM the image's `orca-env`
 // prints the current session env (placeholders, never real values), so the relaunched agent picks
 // up the renewed account. Other hosts: unchanged.

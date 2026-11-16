@@ -36,7 +36,7 @@ async function start(reply: (seen: Seen) => Response) {
   return { seen, logs, call }
 }
 
-describe('ChatGPT relay (CODEX-RELAY)', () => {
+describe('ChatGPT relay', () => {
   it('forwards an allowed Codex call to chatgpt.com with its credential, minus Cloud Run auth and hop headers', async () => {
     const t = await start(() => new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' } }))
     const res = await t.call(

@@ -454,7 +454,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       const environmentBuildId = body.environment ? await resolveEnvironmentBuild(ctx.db, caller.accountId, body.environment) : undefined
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, now)
       const { origin, originRef } = originFor(caller)
-      // OWNER-TRANSFER, belt and braces (a transferred workspace gets no in-VM token at all): a
+      // Belt and braces (a transferred workspace gets no in-VM token at all): a
       // workspace made from inside a transferred one is transferred too, never a private one that
       // would carry its owner's personal credentials.
       const parent = caller.via === 'workspace' && caller.sandboxId ? await getWorkspace(ctx.db, caller.accountId, caller.sandboxId) : null
@@ -512,7 +512,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
           // The public API's wake brings an archived workspace back.
           return mutate('wake', () => wakeWorkspace(life(), row))
         }
-        // Every wake source shares W2's single-flight wake: idempotent, `?wait=30s` long-polls.
+        // Every wake source shares the single-flight wake: idempotent, `?wait=30s` long-polls.
         requireScope(caller, 'workspaces:write')
         authorize(caller, row, 'open')
         const started = performance.now()

@@ -27,7 +27,7 @@ const actions = {
   onMoveToComputer: noop,
   onDelete: noop
 }
-// A paired row (created on another desktop): everything but Move to this computer (PAIRED-ARCHIVE).
+// A paired row (created on another desktop): everything but Move to this computer.
 const pairedActions = {
   onWake: noop,
   onRestart: noop,
@@ -123,7 +123,7 @@ function card({
   seedCloudSyncView(syncView(id, emptyContext))
   return defineFixture({
     width: 320,
-    // A paired card is registered as paired (PAIRED-STATUS), as the app does for its row.
+    // A paired card is registered as paired, as the app does for its row.
     setup: () =>
       seedCloudWorkspaceSnapshot(paired ? { paired: { [id]: 'env-paired' }, idsLoaded: true } : {}),
     render: () => (
@@ -159,7 +159,7 @@ export const runningSignInExpired = card({
   id: 'card-expired',
   attention: { kind: 'agentExpired', agent: 'Claude', tabId: 'tab-1' }
 })
-/** V3-01: a launch put back after a restart that waits for Start: neutral, below the warnings. */
+/** A launch put back after a restart that waits for Start: neutral, below the warnings. */
 export const runningNotStarted = card({
   id: 'card-not-started',
   attention: { kind: 'agentNotStarted', agent: 'Claude', tabId: 'tab-1' }
@@ -197,9 +197,9 @@ export const menuOpen = defineFixture({
 
 /** A paired row running: no "On this computer" (sync is this desktop's own only), Sleep and ⋯. */
 export const pairedRunningCard = card({ id: 'card-paired-running', paired: true })
-/** PAIRED-CHROME: a paired row asleep: Wake, as on an owned row. */
+/** A paired row asleep: Wake, as on an owned row. */
 export const pairedAsleepCard = card({ id: 'card-paired-asleep', state: 'sleeping', paired: true })
-/** PAIRED-ARCHIVE: the ⋯ menu on a paired row: Details, Restart, Archive and Delete; no Move. */
+/** The ⋯ menu on a paired row: Details, Restart, Archive and Delete; no Move. */
 export const pairedMenuOpen = defineFixture({
   width: 320,
   render: () => (
@@ -225,7 +225,7 @@ export const pairedMenuOpen = defineFixture({
   }
 })
 
-/** PAIRED-ARCHIVE: a paired row archived: the same snapshot line and Unarchive as an owned one. */
+/** A paired row archived: the same snapshot line and Unarchive as an owned one. */
 export const pairedArchivedCard = card({
   id: 'card-paired-archived',
   state: 'archived',

@@ -80,10 +80,10 @@ export function useComposerQuickAgent(
   const chipAgentIds =
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
-  // Orca Cloud adds nothing to the dialog (Neil): an agent it can't run falls back silently; the
+  // Orca Cloud adds nothing to the dialog: an agent it can't run falls back silently; the
   // picker shows what will start.
   const agentNotice: string | undefined = undefined
-  // JA-22: inside the open menu only, which image agents a cloud workspace can run as-is.
+  // Inside the open menu only, which image agents a cloud workspace can run as-is.
   const statusLabels = useOrcaCloudAgentPickerStatusLabels(orcaCloud)
   return { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice, statusLabels }
 }

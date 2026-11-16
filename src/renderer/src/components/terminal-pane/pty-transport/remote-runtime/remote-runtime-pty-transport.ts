@@ -329,7 +329,7 @@ export function createRemoteRuntimePtyTransport(
   let sameHandleEndReuseAttachedAt: number | null = null
   let attachGeneration = 0
   let subscriptionGeneration = 0
-  // N-02: this pane mount holds no copy of the host's history until its first subscribe lands, so
+  // This pane mount holds no copy of the host's history until its first subscribe lands, so
   // only that subscribe asks for full depth; reconnects already hold the history and fill the gap
   // from the 1000-row cut.
   let fullHistoryReceived = false

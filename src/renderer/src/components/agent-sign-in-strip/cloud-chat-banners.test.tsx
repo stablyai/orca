@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CHAT-BANNERS (PR-A): a terminal tab's chat view covers its pane, so the pane's cloud banners move
+// A terminal tab's chat view covers its pane, so the pane's cloud banners move
 // into the chat column's slot while it is open: one copy, in whichever view is on. Mounts the real
 // held-launch strip (Set up once, its paste states, Renew) and the woke-up agent bar in both places.
 import { act } from 'react'
@@ -206,7 +206,7 @@ describe('the held-launch strip in the chat view', () => {
     ).toBeTruthy()
   })
 
-  it('HELD-STALE-COVERED: set up here: "is set up · Start", not "Set up once"', () => {
+  it('set up here: "is set up · Start", not "Set up once"', () => {
     stub.hold = { agent: 'claude', reason: 'awaitingStart', awaiting: 'setUp', prompt: null }
     const slot = inChat()
     expect(within(slot).getByText('Claude is set up for Orca Cloud')).toBeTruthy()

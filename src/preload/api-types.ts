@@ -212,7 +212,7 @@ export type PreloadApi = {
   cloudSecrets?: CloudSecretsApi
   /** Desktop only: commands agents in cloud workspaces ask to run on this computer. */
   localCommands?: LocalCommandsApi
-  /** Orca Cloud agent accounts (S0): desktop only, states and codes only. */
+  /** Orca Cloud agent accounts: desktop only, states and codes only. */
   orcaCloudAgents?: OrcaCloudAgentsApi
   sshAgentSignIn?: SshAgentSignInApi
   /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */

@@ -27,21 +27,21 @@ export type Env = {
   GOLDEN_SNAPSHOT_OVERRIDE?: string
   /** 'off': no automatic environments (auto-environments.ts); creates without one keep cloning. */
   AUTO_ENVIRONMENTS?: string
-  /** ENV-BUILD-CHURN: hours between non-security refreshes of one environment (default 24). */
+  /** Hours between non-security refreshes of one environment (default 24). */
   ENV_REFRESH_MIN_INTERVAL_HOURS?: string
-  /** ENV-BUILD-CHURN: refresh builds in flight across all accounts (default 3). */
+  /** Refresh builds in flight across all accounts (default 3). */
   ENV_REFRESH_MAX_IN_FLIGHT?: string
-  /** ENV-BUILD-CHURN: refresh builds started per cron tick (default 2). */
+  /** Refresh builds started per cron tick (default 2). */
   ENV_REFRESH_MAX_STARTS?: string
-  /** ENV-BUILD-CHURN: eager refresh only for environments used within these days (default 7). */
+  /** Eager refresh only for environments used within these days (default 7). */
   ENV_REFRESH_RECENT_DAYS?: string
   /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
   MEMBER_GIT_IDENTITY?: string
-  /** GH-AS-MEMBER: `on` lets gh in workspaces act as the owner (off by default). */
+  /** `on` lets gh in workspaces act as the owner (off by default). */
   GH_AS_MEMBER?: string
   /**
    * Who sees a member's daily activity heatmap on their profile. `opt_in` (default): only members
-   * who turned on "Pokes and activity". `team`: every teammate (Conductor's default). Config only,
+   * who turned on "Pokes and activity". `team`: every teammate. Config only,
    * so flipping it needs no migration.
    */
   /** `release:latest` | `release:v1.2.3`: build golden images from Orca's released orca-server tarball. */
@@ -83,7 +83,7 @@ export type Env = {
   SANDBOX_DEV_BILLING_ENFORCE_PREFIX?: string
 
   /**
-   * ENV-STALE: each golden build's orcad + in-VM CLI as a commit-pinned bundle (runtime-bundles.ts); booting
+   * Each golden build's orcad + in-VM CLI as a commit-pinned bundle (runtime-bundles.ts); booting
    * sandboxes whose orcad is behind the active golden install it. Absent = images stay frozen as before.
    */
   RUNTIME_BUNDLES?: R2Bucket
@@ -91,10 +91,10 @@ export type Env = {
   RUNTIME_REFRESH?: string
   /** Public URL of this Worker's /v1/egress/proxy; Vercel forwardURL rules point here. */
   EGRESS_PROXY_URL?: string
-  /** CODEX-RELAY (src/chatgpt-relay.ts): the Cloud Run relay chatgpt.com egress goes through. Unset: direct. */
+  /** The Cloud Run relay that chatgpt.com egress goes through (src/chatgpt-relay.ts). Unset: direct. */
   CHATGPT_RELAY_URL?: string
   /**
-   * CODEX-FIREWALL-SWAP: `firewall` swaps the Codex account token at the sandbox firewall for Codex's hot calls
+   * `firewall` swaps the Codex account token at the sandbox firewall for Codex's hot calls
    * (chatgpt.com answers sandbox egress); unset or `proxy`: every call through the egress proxy (and relay).
    */
   CODEX_EGRESS_SWAP?: string
@@ -158,13 +158,13 @@ export type Env = {
   SECRETS_EGRESS_PLACEHOLDERS?: string
   /** Per-team kill switch (comma account ids): those accounts get plain env injection. */
   SECRETS_EGRESS_PLACEHOLDERS_OFF?: string
-  /** Flag S1 (`on`): Claude via the person's Orca account (setup-token store + egress swap, contract D10/D11). */
+  /** `on`: Claude via the person's Orca account (setup-token store + egress swap). */
   AGENT_ACCOUNTS_CLAUDE?: string
-  /** `1`: kill switch for S1 (agents fall back to keys, or sign in inside the sandbox). */
+  /** `1`: kill switch for AGENT_ACCOUNTS_CLAUDE (agents fall back to keys, or sign in inside the sandbox). */
   AGENT_ACCOUNTS_CLAUDE_DISABLED?: string
-  /** Flag S2 (`on`): Codex via the account broker. */
+  /** `on`: Codex via the account broker. */
   AGENT_ACCOUNTS_CODEX?: string
-  /** `1`: kill switch for S2. */
+  /** `1`: kill switch for AGENT_ACCOUNTS_CODEX. */
   AGENT_ACCOUNTS_CODEX_DISABLED?: string
 
   /** App slug for the install URL (github.com/apps/<slug>). */
@@ -224,7 +224,7 @@ export type Env = {
   PUBLIC_API_URL?: string
   /** Comma list of extra egress hosts every VM may reach (dev: this Worker's workers.dev host). */
   EGRESS_EXTRA_HOSTS?: string
-  /** PARITY-DOCKER: 'off' turns Docker off in every workspace (the `docker` shim refuses). Default on. */
+  /** 'off' turns Docker off in every workspace (the `docker` shim refuses). Default on. */
   SANDBOX_DOCKER?: string
   /** Comma list of Orca platform egress hosts every VM may reach (default `*.onorca.dev`). */
   ORCA_PLATFORM_HOST_SUFFIXES?: string

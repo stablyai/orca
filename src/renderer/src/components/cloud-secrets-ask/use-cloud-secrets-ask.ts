@@ -1,4 +1,4 @@
-// Loads what S2 and the panel's section 3 need for one repo: the org environment that lists it and the
+// Loads what the build sheet ask and the panel's section 3 need for one repo: the org environment that lists it and the
 // caller's effective Cloud secrets. Two reads, no new endpoint; nothing here wakes a sandbox.
 import { cloudWorkspaceSecretsMode } from '@/lib/orca-cloud/cloud-workspace-secrets-mode'
 import { useCallback, useEffect, useState } from 'react'
@@ -21,7 +21,7 @@ const NOT_CONFIGURED: CloudSecretsErrorCode = 'not_configured'
 
 type CloudSecretsAskLoad =
   | { status: 'loading' }
-  /** No Cloud, no environment for this repo, or nothing declared: S2 stays hidden. */
+  /** No Cloud, no environment for this repo, or nothing declared: the ask stays hidden. */
   | { status: 'none' }
   | { status: 'failed'; error: CloudSecretsErrorCode }
   | {
@@ -33,7 +33,7 @@ type CloudSecretsAskLoad =
 
 export function useCloudSecretsAskLoad(
   repoKey: string | null,
-  /** The workspace's runtime environment; its sharing decides whether Personal values count (SEC-5). */
+  /** The workspace's runtime environment; its sharing decides whether Personal values count. */
   runtimeEnvironmentId: string | null = null
 ): {
   load: CloudSecretsAskLoad

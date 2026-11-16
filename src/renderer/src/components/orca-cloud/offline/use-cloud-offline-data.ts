@@ -7,7 +7,7 @@ import type {
 } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
 
 const ASLEEP_POLL_MS = 15_000
-/** While its read-only copy is being saved: read it back promptly (SLEEP-IN-PROGRESS). */
+/** While its read-only copy is being saved: read it back promptly. */
 const SAVING_POLL_MS = 2_500
 
 function readBoth(api: CloudWorkspaceOfflineApi, workspaceId: string) {

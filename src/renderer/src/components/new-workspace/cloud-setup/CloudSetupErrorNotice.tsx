@@ -1,4 +1,4 @@
-// X1: why the one-trip setup stopped, inside the setup panel. Neutral when nothing failed (the
+// Why the one-trip setup stopped, inside the setup panel. Neutral when nothing failed (the
 // browser was closed, Checkout canceled, the bank wants a step); an error only when creating the
 // team failed. Finished steps stay done, the prompt stays in the composer, and no codes are shown.
 import React from 'react'

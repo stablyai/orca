@@ -1,4 +1,4 @@
-// Landing's first-run Orca Cloud card (spec E2): the one place a new user learns the trial exists.
+// Landing's first-run Orca Cloud card: the one place a new user learns the trial exists.
 // Shown while the build offers Orca Cloud, this profile has never started a cloud workspace, and the
 // card hasn't been dismissed. Once the team's trial is used up it hides. Hours from billing; no price.
 import React, { useState } from 'react'

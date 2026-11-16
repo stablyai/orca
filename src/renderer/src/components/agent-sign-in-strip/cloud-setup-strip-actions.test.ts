@@ -30,7 +30,7 @@ function actions(setupRunning: boolean) {
   })
 }
 
-describe('cloudSetupStripActions (PC-3b, RR-a)', () => {
+describe('cloudSetupStripActions', () => {
   beforeEach(() => {
     store.stop.mockReset()
     hold.release.mockReset()
@@ -49,7 +49,7 @@ describe('cloudSetupStripActions (PC-3b, RR-a)', () => {
     expect(hold.release).toHaveBeenCalledExactlyOnceWith('tab:1', 'cancel')
   })
 
-  it('Start re-checks the account before it releases the held launch (HELD-STALE-COVERED)', () => {
+  it('Start re-checks the account before it releases the held launch', () => {
     actions(false).primary({ kind: 'start' })
     expect(hold.start).toHaveBeenCalledExactlyOnceWith('tab:1')
     expect(hold.release).not.toHaveBeenCalled()

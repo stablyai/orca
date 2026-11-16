@@ -97,7 +97,7 @@ async function setup(overrides: Record<string, string> = {}) {
   return { h, as, lastEnv, proxied, upstream, reply, check }
 }
 
-describe('Orca-account credentials (D11)', () => {
+describe('Orca-account credentials', () => {
   it('stores a Claude setup-token Personal-only and never returns or logs it; flag off = no route', async () => {
     const off = await setup({ AGENT_ACCOUNTS_CLAUDE: '' })
     const mia0 = await off.as('mia')
@@ -108,7 +108,7 @@ describe('Orca-account credentials (D11)', () => {
     expect((await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: 'sk-ant-api03-not-a-setup-token' } })).body.reason).toBe('invalid_token')
     const put = await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN, label: 'mia@example.com' } })
     expect(put.status).toBe(200)
-    // RS-5: never the email a client sends (it may be another account's): always "Claude subscription".
+    // Never the email a client sends (it may be another account's): always "Claude subscription".
     expect(put.body.claude).toMatchObject({ state: 'active', label: 'Claude subscription' })
     expect(put.body.providerEnabled).toEqual({ claude: true, codex: false })
     // Codex's flag was never turned on: `off`, which clients word differently from the kill switch.
@@ -120,7 +120,7 @@ describe('Orca-account credentials (D11)', () => {
   })
 })
 
-describe('egress-time Source (D10) and shared workspaces (D13)', () => {
+describe('egress-time Source and shared workspaces', () => {
   it('a set-up account is the implicit Source with no key: placeholder in the VM, real token only at egress', async () => {
     const { h, as, lastEnv, proxied, upstream } = await setup()
     const mia = await as('mia')
@@ -201,7 +201,7 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     const otherSession: string = other.body.sandbox.session.id
     reply.status = 401
     expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(401)
-    // RS-2: the auth check (dead token) only puts it in question; a later real request's 401 revokes it.
+    // The auth check (dead token) only puts it in question; a later real request's 401 revokes it.
     await vi.waitFor(async () =>
       expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude).toMatchObject({ state: 'expired', needsCheck: true })
     )
@@ -234,7 +234,7 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
   })
 })
 
-describe('D13: shared mode is a transferred workspace, nothing else', () => {
+describe('shared mode is a transferred workspace, nothing else', () => {
   it('ignores visibility; only a transfer mark counts', () => {
     expect(isSharedWorkspace({ ownership_transferred_at: null })).toBe(false)
     expect(isSharedWorkspace({ visibility: 'team', ownership_transferred_at: null } as never)).toBe(false)

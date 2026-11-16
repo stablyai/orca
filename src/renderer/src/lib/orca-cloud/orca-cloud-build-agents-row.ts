@@ -1,4 +1,4 @@
-// The cloud build sheet's Agents row (agent-accounts spec §5b S1, redesign §5 R1–R12): how each
+// The cloud build sheet's Agents row: how each
 // agent will authenticate in this workspace, known at mount from the Orca account, never from the
 // sandbox. Pure: the component decides the row's height once and renders whatever this returns.
 import {
@@ -25,7 +25,7 @@ export type BuildAgentsRunningSetup = Exclude<
 export type BuildAgentsRowModel =
   | { kind: 'hidden' }
   | { kind: 'loading' }
-  /** R1/R1c/Q2: every covered agent and where its credential comes from. */
+  /** Every covered agent and where its credential comes from. */
   | {
       kind: 'ready'
       covered: readonly { agent: OrcaCloudAccountAgent; via: BuildAgentVia }[]
@@ -34,9 +34,9 @@ export type BuildAgentsRowModel =
       /** An account credential within its renewal window: a quiet Renew. */
       expiring: OrcaCloudAccountAgent | null
     }
-  /** R2: nothing covers any agent yet; Set up runs S0 inline, once ever. */
+  /** Nothing covers any agent yet; Set up runs the Cloud agent sign-ins setup inline, once ever. */
   | { kind: 'offer'; agents: readonly OrcaCloudAccountAgent[] }
-  /** R4–R6: the one-time setup is running on this computer. `step` is 1-based. */
+  /** The one-time setup is running on this computer. `step` is 1-based. */
   | {
       kind: 'setup'
       agent: OrcaCloudAccountAgent
@@ -44,16 +44,16 @@ export type BuildAgentsRowModel =
       step: number
       of: number
     }
-  /** R9: the setup stopped; the workspace still opens. */
+  /** The setup stopped; the workspace still opens. */
   | { kind: 'failed'; agent: OrcaCloudAccountAgent; error: OrcaCloudAgentSetupFailure }
-  /** R10 / R1b: the account credential expired or was revoked and no key covers the agent. */
+  /** The account credential expired or was revoked and no key covers the agent. */
   | { kind: 'expired'; agent: OrcaCloudAccountAgent }
   /**
-   * R12 (§5c): no Orca-account path for the agent and no key covers it, so it signs in inside this
+   * No Orca-account path for the agent and no key covers it, so it signs in inside this
    * workspace. `paused` = the kill switch; `notOffered` = this server never offered it (flag off).
    */
   | { kind: 'killSwitch'; agent: OrcaCloudAccountAgent; reason: 'paused' | 'notOffered' }
-  /** S1-c (A5/A6): a key only in this computer's vault; it never reaches the sandbox unasked. */
+  /** A key only in this computer's vault; it never reaches the sandbox unasked. */
   | { kind: 'desktopKey'; key: CloudOfferableDesktopKey }
   /** Couldn't read the Orca account; the workspace still opens. */
   | { kind: 'error' }
@@ -74,9 +74,9 @@ function covered(coverage: OrcaCloudAgentCoverage): BuildAgentVia | null {
 }
 
 export function buildAgentsRow(args: {
-  /** `queue` is R2's Set up, in order; it drives "1 of 2". */
+  /** `queue` is the Set up order; it drives "1 of 2". */
   accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'setups' | 'keyKinds' | 'queue'>
-  /** This computer's keys no Cloud secret covers (A6); empty until read. */
+  /** This computer's keys no Cloud secret covers; empty until read. */
   desktopKeys: readonly CloudOfferableDesktopKey[]
 }): BuildAgentsRowModel {
   const { load, setups, keyKinds } = args.accounts
@@ -156,14 +156,14 @@ export function buildAgentsRow(args: {
   }
 }
 
-/** The row's height class, decided once at mount (redesign §5): a line only when ready then. */
+/** The row's height class, decided once at mount: a line only when ready then. */
 export type BuildAgentsRowDensity = 'line' | 'twoLine'
 
 export function buildAgentsRowDensity(model: BuildAgentsRowModel): BuildAgentsRowDensity {
   return model.kind === 'ready' ? 'line' : 'twoLine'
 }
 
-/** The agents R2's Set up runs, in order: each one that nothing covers yet. */
+/** The agents Set up runs, in order: each one that nothing covers yet. */
 export function buildAgentsToSetUp(model: BuildAgentsRowModel): readonly OrcaCloudAccountAgent[] {
   switch (model.kind) {
     case 'offer':

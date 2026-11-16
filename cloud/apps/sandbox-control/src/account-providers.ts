@@ -1,7 +1,7 @@
-// "Via your Orca account" (agent-sources contract D10/D13): an agent signs in once, account-wide, and every one
+// "Via your Orca account": an agent signs in once, account-wide, and every one
 // of the person's own cloud workspaces uses that account through an egress placeholder. The sandbox never holds
 // the real credential. The proxy picks per request, so renewals, Source changes and the kill switch apply to
-// the next request. One provider per agent: Claude here (A1 spike: `CLAUDE_CODE_OAUTH_TOKEN=<placeholder>`
+// the next request. One provider per agent: Claude here (from the spike: `CLAUDE_CODE_OAUTH_TOKEN=<placeholder>`
 // is accepted and sent as `Authorization: Bearer`), Codex in codex-credentials.ts.
 import type { CredentialAgent } from './agent-credential-names'
 import { readUsableAgentCredential } from './agent-credentials'
@@ -33,7 +33,7 @@ export type AccountProvider = {
     userId: string
     now: number
     waitUntil: (work: Promise<unknown>) => void
-    /** After a refresh stored a new token: push it where it is held (CODEX-FIREWALL-SWAP: running policies). */
+    /** After a refresh stored a new token: push it where it is held (running policies, when the firewall swaps it). */
     onChanged?: (userId: string) => Promise<void> | void
   }): Promise<void>
   /** The real value for this person, or null (none, expired, revoked). */
@@ -49,7 +49,7 @@ export type AccountProvider = {
    * normal sign-in message instead of a proxy error.
    */
   signedOut?: { status: number; contentType: string; body: string }
-  /** The provider's edge refused the egress proxy itself (CODEX-EGRESS-BLOCKED): what the agent shows. */
+  /** The provider's edge refused the egress proxy itself: what the agent shows. */
   upstreamBlocked?: { status: number; contentType: string; body: string }
 }
 
@@ -93,7 +93,7 @@ export { isSharedWorkspace } from './shared-workspace'
 
 export const claudeAccount: AccountProvider = {
   agent: 'claude',
-  // Messages plus the OAuth-side endpoints Claude Code calls with the same token (A1 spike).
+  // Messages plus the OAuth-side endpoints Claude Code calls with the same token (found in the spike).
   hosts: ['api.anthropic.com'],
   placeholder: (row) => `orca-ph-claude-account-${row.id}`,
   sessionEnv: (row) => ({ CLAUDE_CODE_OAUTH_TOKEN: `orca-ph-claude-account-${row.id}` }),

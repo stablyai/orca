@@ -1,5 +1,5 @@
 // Numeric GitHub ids for a repository and its owner, read with the user's own GitHub CLI login.
-// GitHub's install page needs both to open with only this repository selected (cloud-start N3); a
+// GitHub's install page needs both to open with only this repository selected; a
 // private repository's id isn't readable anonymously, and the control plane never sees a user token.
 // Best effort: no gh, not signed in, or slow means the plain install page instead.
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'

@@ -210,7 +210,7 @@ async function setup(options: { publicRepos?: string[] } = {}) {
 const ACME = { id: 50, login: 'acme', type: 'Organization' as const }
 const stateOf = (url: string) => new URL(url).searchParams.get('state')!
 
-describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
+describe('GitHub repo access', () => {
   it('answers missing with an install URL, public, then granted once an admin installs and binds', async () => {
     const { h, github, notices, trialNotices, browser } = await setup({ publicRepos: ['https://github.com/acme/site'] })
     const site = await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent('https://github.com/acme/site')}`)
@@ -218,7 +218,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
       access: 'public',
       owner: 'acme',
       repo: 'https://github.com/acme/site',
-      // Clones anonymously, but can't push until the App is on acme (CREATE-GH-STEP).
+      // Clones anonymously, but can't push until the App is on acme.
       push: 'not_installed',
       installUrl: expect.stringMatching(/^https:\/\/github\.com\/apps\/orca-cloud-test\/installations\/new\?state=/),
       // The App isn't on acme yet and alice hasn't connected GitHub: unknown.
@@ -354,7 +354,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect((await h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(REPO)}`)).body.access).toBe('missing')
   })
 
-  it('lists repositories across the account’s bound installations, paginated (N12)', async () => {
+  it('lists repositories across the account’s bound installations, paginated', async () => {
     const { h, github, browser } = await setup()
     const many = Array.from({ length: 130 }, (_, n) => `acme/repo-${n}`)
     github.installations.push({ id: 900, account: ACME, repos: ['acme/web', ...many] })
@@ -400,7 +400,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     expect((await h.call('GET', path.replace(SESSION, 'bad'), { bearer: CONTROL_PLANE_TOKEN })).status).toBe(400)
   })
 
-  it('N5: binds with the GitHub identity from the Orca sign-in, skipping GitHub’s Authorize page', async () => {
+  it('binds with the GitHub identity from the Orca sign-in, skipping GitHub’s Authorize page', async () => {
     const { h, github, browser } = await setup()
     const base = `/v1/internal/github/install-url?accountId=org:acme-team&userId=u1&repo=${encodeURIComponent(REPO)}&session=${SESSION}`
     github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
@@ -428,10 +428,10 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
     const replay = await browser(`https://sandbox.test/v1/github/setup?installation_id=900&setup_action=install&state=${encodeURIComponent(stateOf(adminUrl))}`)
     expect(replay.text).toContain('already used')
   })
-  it('install redirect with an OAuth code (request-auth-on-install) binds via OAuth and stores the identity, even with an N5 identity', async () => {
+  it('install redirect with an OAuth code (request-auth-on-install) binds via OAuth and stores the identity, even with a sign-in GitHub identity', async () => {
     const { h, github, browser } = await setup()
     const base = `/v1/internal/github/install-url?accountId=org:acme-team&userId=u1&repo=${encodeURIComponent(REPO)}&session=${SESSION}`
-    // The state carries the N5 GitHub identity (`g`), which alone would take the IdP fast path.
+    // The state carries the sign-in GitHub identity (`g`), which alone would take the IdP fast path.
     const url = (await h.call('GET', `${base}&githubUserId=3&githubLogin=admin-gh`, { bearer: CONTROL_PLANE_TOKEN })).body.url
     github.installations.push({ id: 900, account: ACME, repos: ['acme/web'] })
     // GitHub's install redirect with OAuth-during-install enabled: code + installation_id + setup_action + our state.
@@ -453,7 +453,7 @@ describe('GitHub repo access (cloud-start N2/N3, D2)', () => {
   })
 })
 
-describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
+describe('repo-access canInstall', () => {
   type Ctx = Awaited<ReturnType<typeof setup>>
   const access = (h: Ctx['h'], repo = REPO, as?: string) => h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(repo)}`, as ? { as } : {})
   const membershipCalls = (ctx: Ctx) => ctx.github.calls.filter((c) => c.startsWith('GET /user/memberships/orgs/'))
@@ -613,7 +613,7 @@ describe('repo-access canInstall (REPO-CAN-INSTALL)', () => {
   })
 })
 
-describe('repo-access push reason and installation cache (CREATE-GH-STEP)', () => {
+describe('repo-access push reason and installation cache', () => {
   type Ctx = Awaited<ReturnType<typeof setup>>
   const access = (h: Ctx['h'], repo = REPO, as?: string) => h.call('GET', `/v1/github/repo-access?repo=${encodeURIComponent(repo)}`, as ? { as } : {})
   const installLookups = (ctx: Ctx) => ctx.github.calls.filter((c) => c.endsWith('/installation'))

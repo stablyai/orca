@@ -79,14 +79,14 @@ export type CloudWorkspacesApi = {
     document: CloudWorkspacePrefsDocument,
     revision: number
   ) => Promise<CloudWorkspacesResult<CloudWorkspacePrefs>>
-  /** OWNER-TRANSFER: the workspace goes to sleep first, so this can take a while. */
+  /** The workspace goes to sleep first, so this can take a while. */
   changeOwner: (id: string, ownerUserId: string) => Promise<CloudWorkspacesResult<OwnerChange>>
   /** Notices for you as a previous owner, in the team you are signed in to. */
   ownerNotices: () => Promise<CloudWorkspacesResult<OwnerChangeNotice[]>>
   dismissOwnerNotice: (id: string) => Promise<CloudWorkspacesResult<void>>
   onOpenLink: (callback: (link: string) => void) => () => void
   /**
-   * EP-8: a cloud workspace's server refused this computer and Orca Cloud won't grant it again (the
+   * A cloud workspace's server refused this computer and Orca Cloud won't grant it again (the
    * account can no longer open it).
    */
   onAccessLost: (

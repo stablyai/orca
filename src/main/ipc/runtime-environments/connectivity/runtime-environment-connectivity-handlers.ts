@@ -83,7 +83,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       (environment) => !isGatedOffWslHost(environment)
     )
     await readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
-    // Paired Orca Cloud workspaces' servers are Orca Cloud for every renderer check (PAIRED-AWARE).
+    // Paired Orca Cloud workspaces' servers are Orca Cloud for every renderer check.
     return environments.map((environment) =>
       withCloudPairingMark(publicRuntimeEnvironmentWithHostKey(environment))
     )

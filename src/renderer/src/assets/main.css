@@ -157,7 +157,7 @@
   --color-jira-priority-low: var(--jira-priority-low);
   --color-status-warning-background: var(--status-warning-background);
   --color-status-warning-border: var(--status-warning-border);
-  /* GA-P3t: strips, banners and notices by severity (fill, 1px border, icon, body text). */
+  /* Strips, banners and notices by severity (fill, 1px border, icon, body text). */
   --color-banner-warning-fill: var(--banner-warning-fill);
   --color-banner-warning-border: var(--banner-warning-border);
   --color-banner-warning-icon: var(--banner-warning-icon);
@@ -496,7 +496,7 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
-  /* GA-P3t (Neil): banners must stand out on white panes. Border >=3:1 on the surface; icon >=3:1
+  /* Banners must stand out on white panes. Border >=3:1 on the surface; icon >=3:1
      and text >=4.5:1 on the fill (measured on #fff and #fafafa). */
   --banner-warning-fill: color-mix(in srgb, #f59e0b 14%, var(--background));
   --banner-warning-border: #b45309;
@@ -545,7 +545,7 @@
   --jira-priority-low: var(--callout-note);
   --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
   --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
-  /* GA-P3t: dark keeps its fills and icons; borders raised to >=3:1 on #0a0a0a (error, info failed). */
+  /* Dark keeps its fills and icons; borders raised to >=3:1 on #0a0a0a (error, info failed). */
   --banner-warning-fill: color-mix(in srgb, var(--status-warning) 10%, var(--card));
   --banner-warning-border: color-mix(in srgb, var(--status-warning) 45%, var(--card));
   --banner-warning-icon: var(--status-warning);

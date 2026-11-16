@@ -1,4 +1,4 @@
-// "Default run on" for a project (spec D7): Last used · This computer · Orca Cloud. Shown only in
+// "Default run on" for a project: Last used · This computer · Orca Cloud. Shown only in
 // builds that offer Orca Cloud. Stored per Orca profile on this device with the run-on memory.
 import React, { useState } from 'react'
 import { useAppStore } from '@/store'

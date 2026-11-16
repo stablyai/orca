@@ -1,5 +1,5 @@
 // "2 secrets missing · Add" in a cloud workspace's panel after the build sheet's Secrets row was skipped
-// or left unfilled (spec S2). Names only, per workspace, until filled or dismissed. Never a value.
+// or left unfilled. Names only, per workspace, until filled or dismissed. Never a value.
 import { useSyncExternalStore } from 'react'
 
 const STORAGE_KEY = 'orca.cloudSecretsMissing.v1'

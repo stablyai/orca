@@ -153,7 +153,7 @@ describe('GitHub App installation tokens', () => {
     expect(await minter.tokenForRepo(REPO, 'user:bob')).toBeNull()
     expect(github.calls.filter((c) => c.path.endsWith('/access_tokens'))).toHaveLength(1)
 
-    // Cached while more than REFRESH_MARGIN_MS (30 min) is left; re-minted after that (EGRESS-REFRESH).
+    // Cached while more than REFRESH_MARGIN_MS (30 min) is left; re-minted after that.
     now += 29 * MIN
     expect(await minter.tokenForRepo('https://github.com/alice-gh/private-repo', 'user:alice')).toEqual(token)
     now += 2 * MIN
@@ -303,7 +303,7 @@ describe('GitHub App installation tokens', () => {
     // Alice, bound, gets her token.
     const mine = await h.call('POST', '/v1/sandboxes', { as: 'alice', body: { workspaceId: 'ws-mine', machineSize: 'standard', repo: { url: REPO } } })
     const aliceBox = h.vercel.boxes.get(`orca-test-${mine.body.sandbox.id}`)!
-    // Forwarded to our egress proxy (sec review F1): the installation token never enters Vercel's policy.
+    // Forwarded to our egress proxy (security review): the installation token never enters Vercel's policy.
     expect(aliceBox.policy.allow['github.com']![0]).toEqual({
       match: { headers: [{ key: { exact: 'authorization' }, value: { exact: expect.stringMatching(/^Basic /) } }] },
       forwardURL: 'https://sandbox.test/v1/egress/proxy'

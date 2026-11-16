@@ -23,7 +23,7 @@ beforeEach(() => {
   resetCloudAccessLostToastsForTests()
 })
 
-describe('cloud access lost (EP-8)', () => {
+describe('cloud access lost', () => {
   it('says so once per server, with one fix: remove it from this computer', () => {
     const remove = vi.fn(async () => undefined)
     const lost = { environmentId: 'env-1', sandboxId: 'sbx_1' }

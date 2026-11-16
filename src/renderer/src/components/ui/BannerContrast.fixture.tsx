@@ -1,4 +1,4 @@
-// GA-P3t (Neil): every strip, banner and notice variant on the surfaces it sits on, so the contrast
+// Every strip, banner and notice variant on the surfaces it sits on, so the contrast
 // rule is checked in one place. Light default (#fff, the app background), light on #fafafa (sidebar
 // and lighter surfaces), and dark via --theme both.
 import React from 'react'
@@ -50,7 +50,7 @@ function stripModel(row: StripRow): CloudStripModel {
   }
 }
 
-// The real states' copy and actions (sign-in strip, RA-11 restart, PC-3b setup).
+// The real states' copy and actions (sign-in strip, running-agent restart, agent setup).
 const STRIPS: StripRow[] = [
   {
     status: 'warning',

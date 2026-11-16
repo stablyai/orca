@@ -46,13 +46,13 @@ export async function openOrcaGitHubAppInstall(repoUrl: string): Promise<boolean
 
 /**
  * Once the App's installation covers the repository (the install webhook bound it), runs the
- * sandbox's check again and drops the push line, and the can't-reach line (GH-FETCH-REASON), that
+ * sandbox's check again and drops the push line, and the can't-reach line, that
  * pass now. Returns 'granted' when nothing is left failing, 'waiting' while GitHub hasn't confirmed
  * yet, 'refused' when the installation landed but the sandbox still can't push or reach origin
  * (a workspace started before the install needs a restart to use it).
  */
 /**
- * LIVE-GIT-ACCESS: asks the control plane to put the GitHub App's repo token into this running workspace
+ * Asks the control plane to put the GitHub App's repo token into this running workspace
  * (live egress policy + the VM's git header), so an install made after it started works without a
  * restart. True when it is live now; false when there's nothing to apply yet or it couldn't be asked.
  */

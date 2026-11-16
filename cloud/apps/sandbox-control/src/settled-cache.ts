@@ -1,4 +1,4 @@
-// WORKER-XREQ-PROMISE: an isolate serves many requests, and a promise one request starts is bound to that
+// An isolate serves many requests, and a promise one request starts is bound to that
 // request's I/O. If it is cancelled (its client went away) while the promise waits on D1, KMS or fetch, the
 // promise never settles, and every later request awaiting the same promise hangs until the runtime cancels
 // it too. Module-level caches must therefore hold settled VALUES only, never in-flight promises: a request

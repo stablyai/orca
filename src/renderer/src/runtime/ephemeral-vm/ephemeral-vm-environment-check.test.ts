@@ -51,7 +51,8 @@ import {
   resetCloudSetupNotices
 } from '@/lib/orca-cloud/cloud-setup-notices-store'
 
-// What Neil saw: agents not set up, push refused, setup not run. None of it should stop the create.
+// A real create's warnings: agents not set up, push refused, setup not run. None of it should stop
+// the create.
 const cloudWarnings = {
   worktreePath: '/w',
   ok: false,
@@ -117,7 +118,7 @@ describe('gateVmCreateOnEnvironmentCheck', () => {
     expect(record?.notices.map((notice) => notice.kind)).toEqual(['push', 'setup'])
   })
 
-  it('a failed reach of origin waits for a confirming check before any line shows (ENV-ORIGIN-TOAST)', async () => {
+  it('a failed reach of origin waits for a confirming check before any line shows', async () => {
     callRuntimeRpc.mockResolvedValue({
       ...cloudWarnings,
       checks: [

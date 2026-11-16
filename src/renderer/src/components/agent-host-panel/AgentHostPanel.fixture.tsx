@@ -191,7 +191,7 @@ const SHARED_NO_KEY: CloudAgentsPanelLoad = {
   ]
 }
 
-/** D13: a member in a shared workspace; the team key applies and the Source can't change. */
+/** A member in a shared workspace; the team key applies and the Source can't change. */
 export const cloudMember = defineFixture({
   width: 1000,
   render: () => (

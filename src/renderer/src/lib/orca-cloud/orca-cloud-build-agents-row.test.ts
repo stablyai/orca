@@ -45,7 +45,7 @@ function withClaude(
 const row = (a: OrcaCloudAgentAccountsState) => buildAgentsRow({ accounts: a, desktopKeys: [] })
 
 describe('buildAgentsRow', () => {
-  it('offers the one-time setup when nothing covers any agent (R2), two lines at mount', () => {
+  it('offers the one-time setup when nothing covers any agent, two lines at mount', () => {
     const model = row(accounts(NONE))
     expect(model).toEqual({ kind: 'offer', agents: ['claude', 'codex'] })
     expect(buildAgentsRowDensity(model)).toBe('twoLine')
@@ -129,7 +129,7 @@ describe('buildAgentsRow', () => {
     expect(row(failed)).toEqual({ kind: 'failed', agent: 'claude', error: 'denied' })
   })
 
-  it('offers saving a key only on this computer before the setup (S1-c)', () => {
+  it('offers saving a key only on this computer before the setup', () => {
     const key = { id: 'k1', agent: 'claude', envName: 'ANTHROPIC_API_KEY', hint: 'x4Qa' } as const
     expect(buildAgentsRow({ accounts: accounts(NONE), desktopKeys: [key] })).toEqual({
       kind: 'desktopKey',

@@ -45,7 +45,7 @@ function seed(): void {
   })
 }
 
-describe('RA-11 Restart when its pane goes away', () => {
+describe('Restart when its pane goes away', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     toastError.mockClear()

@@ -75,8 +75,8 @@ function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
 }
 
 /**
- * Whether the Run on menu's Orca Cloud row shows "N sandbox hours left". Off for now (Neil, JA-25
- * follow-up): the row reads "Orca Cloud" / "Sandbox"; hours live on Account + Billing and the plan
+ * Whether the Run on menu's Orca Cloud row shows "N sandbox hours left". Off for now:
+ * the row reads "Orca Cloud" / "Sandbox"; hours live on Account + Billing and the plan
  * blocker. Flip to true to bring them back, along with the loading placeholder that holds their place.
  */
 export const RUN_ON_SHOWS_HOURS_LEFT = false
@@ -86,7 +86,7 @@ function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string | null 
   const t = useTranslate()
   const locale = useIntlLocale()
   if (access.state === 'no-plan' && access.trialOfferSeconds) {
-    // B1: the team's trial, not started yet.
+    // The team's trial, not started yet.
     const offered = getOrcaCloudHoursLeft(access.trialOfferSeconds)
     return t(
       'components.newWorkspace.cloudHours.trialOffered',
@@ -105,7 +105,7 @@ function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string | null 
   }
   const count = getOrcaCloudHoursLeft(access.remainingSeconds)
   if (access.trial) {
-    // T1: trial hours are a one-time allowance, so the line says whose hours these are.
+    // Trial hours are a one-time allowance, so the line says whose hours these are.
     return t(
       'components.newWorkspace.cloudHours.trialChip',
       'Trial · {{hours}} sandbox hours left',
@@ -324,7 +324,7 @@ export function RunTargetOrcaCloudRow({
   setupAfterStart?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  // JA-21 (Neil): the composer says nothing about plan, hours or payment; Create checks and the
+  // The composer says nothing about plan, hours or payment; Create checks and the
   // creating sheet shows any blocker. Outside the composer the row still names the fix.
   const shown: OrcaCloudRunTargetAccess =
     setupAfterStart &&

@@ -38,7 +38,7 @@ export type GoldenImageDeps = {
     /** Refresh this long before the active image expires (default 24 h). */
     refreshBeforeMs?: number
     fetch?: typeof fetch
-    /** ENV-STALE: where git-source builds publish their orcad bundle (runtime-bundles.ts). */
+    /** Where git-source builds publish their orcad bundle (runtime-bundles.ts). */
     runtimeBundle?: { baseUrl: string; secret: string }
     /** The workspace base allowlist (ORCA_PLATFORM_HOST_SUFFIXES included), so the smoke boots like a workspace. */
     egressAllowlist?: readonly string[]
@@ -60,7 +60,7 @@ type GoldenRow = {
   created_at: number
   updated_at: number
   activated_at: number | null
-  /** ENV-BUILD-CHURN: the manifest's securityLevel when this image was built (environment-security.ts). */
+  /** The manifest's securityLevel when this image was built (environment-security.ts). */
   security_level?: number
 }
 
@@ -324,7 +324,7 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
   if (!row.session_id || !row.command_id) {
     return 'building'
   }
-  // The provider reports a detached command's exit code only to a wait=true read (W1/W9): a plain
+  // The provider reports a detached command's exit code only to a wait=true read: a plain
   // GET kept finished builds "running" until the deadline. Bounded, so a running build reads null.
   let { exitCode } = await deps.provider.getCommand(row.session_id, row.command_id, { wait: true, waitMs: EXIT_PROBE_MS })
   if (exitCode === null && row.source.startsWith('git:')) {
@@ -400,7 +400,7 @@ export async function ensureEntryPoints(deps: { provider: Pick<SandboxProviderAp
 }
 
 /**
- * ENTRY-POINTS-BEFORE-START: a boot from an environment build made on an older golden would run that
+ * A boot from an environment build made on an older golden would run that
  * golden's orca-sandbox-start (no agent prefetch, no OpenCode first run) until the environment is
  * rebuilt, hours later. True when the image's scripts are older than this Worker's: no marker for this
  * set and a lower stamp (an equal stamp is the same scripts: the stamp only moves when they change).
@@ -410,7 +410,7 @@ export function entryPointsBehind(image: { stamp: number; marker: boolean } | nu
 }
 
 /**
- * GH-AS-MEMBER: images from before the gh wrapper keep the real gh at tools/bin/gh, ahead of bin/ on every agent
+ * Member gh: images from before the gh wrapper keep the real gh at tools/bin/gh, ahead of bin/ on every agent
  * PATH, so the wrapper never ran. Moves it off PATH and links tools/bin/gh to the wrapper (the provision layout).
  * Idempotent. ORCA_HOME/SUDO overridable for tests.
  */

@@ -1,4 +1,4 @@
-// CHAT-RENEW-INPLACE (Option A, design-squad per-step copy): every "sign-in expired" strip — a held
+// Every "sign-in expired" strip — a held
 // launch, a running terminal, a structured chat — renews in place. Renew runs the same Orca Cloud
 // setup as "Set up once" right in the strip (re-running it replaces the account's expired sign-in),
 // instead of sending the person to Settings. One model and one set of actions for every surface, so
@@ -68,13 +68,13 @@ export function cloudRenewInPlaceModel(args: {
   const paste = flow.paste
     ? {
         ...flow.paste,
-        // Never the setup's "Finish setup" (design-squad).
+        // Never the setup's "Finish setup".
         ...(flow.paste.setupCode
           ? {
               setupCode: {
                 ...flow.paste.setupCode,
                 // While checking, the disabled button keeps its name; "Checking" is said once, in
-                // the detail (design-squad).
+                // the detail.
                 submitLabel: finishRenewing
               }
             }

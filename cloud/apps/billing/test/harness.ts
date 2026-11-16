@@ -49,7 +49,7 @@ export async function createHarness(overrides: Partial<Env> = {}) {
   let now = Date.now()
   // Live org member counts from auth; null = not configured (the default).
   let membership: (orgId: string) => Promise<number | null> = async () => null
-  // Auth's live org-member check (cloud start B2); null = auth unavailable (the default).
+  // Auth's live org-member check; null = auth unavailable (the default).
   let orgMember: OrgMemberCheck = async () => null
   let trial: TrialPort | undefined
   let outboundFetch: typeof fetch | undefined

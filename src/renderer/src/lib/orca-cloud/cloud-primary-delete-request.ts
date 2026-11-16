@@ -1,4 +1,4 @@
-// Which cloud row the cloud delete dialog is open for (CLOUD-PRIMARY-DELETE). Its own module so the
+// Which cloud row the cloud delete dialog is open for. Its own module so the
 // delete funnel can request the dialog without importing the dialog (and the Home flows it uses).
 import type { Worktree } from '../../../../shared/worktree/types'
 

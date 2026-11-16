@@ -43,7 +43,7 @@ afterEach(() => {
   resetWebRuntimeInitialTerminalBootstrapForTests()
 })
 
-it('holds the session-tabs seeder off while the create’s startup terminal is made (GA-P3t)', async () => {
+it('holds the session-tabs seeder off while the create’s startup terminal is made', async () => {
   const pending = Promise.withResolvers<{ status: 'created' }>()
   mocks.create.mockReturnValue(pending.promise)
   expect(ensureWebRuntimeWorktreeTerminalAfterWake('wt', { startup, agent: 'claude' })).toBe(true)

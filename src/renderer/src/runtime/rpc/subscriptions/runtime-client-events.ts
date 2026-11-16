@@ -101,7 +101,7 @@ function handleRuntimeClientEventResponse(
     void answerBrowserClientHostRequest(environmentId, message.requestId)
     return
   }
-  // Agent secret requests go to their own store; the pane cards read it (contract §3).
+  // Agent secret requests go to their own store; the pane cards read it.
   if (message.type === SECRETS_REQUESTED_EVENT) {
     if (isSecretRequestedEvent(message)) {
       applySecretRequested(environmentId, message)

@@ -54,7 +54,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    // RA-11d: a bare relaunch of a pane reuses the args its original launch used.
+    // A bare relaunch of a pane reuses the args its original launch used.
     const request = this.paneLaunchArgs.apply(requested)
     const now = Date.now()
     const operationTimestamp = parseAgentSessionOperationTimestamp(request.clientOperationId)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyProbeFailure, probeCloudServer } from './cloud-server-probe'
 
-describe('probeCloudServer (EP-8)', () => {
+describe('probeCloudServer', () => {
   it('tells a refused pairing apart from a server that does not answer', () => {
     expect(classifyProbeFailure('unauthorized', '')).toBe('rejected')
     expect(classifyProbeFailure('device_revoked', '')).toBe('rejected')

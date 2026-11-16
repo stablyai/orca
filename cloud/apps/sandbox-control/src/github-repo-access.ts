@@ -1,18 +1,18 @@
 // Can Orca Cloud clone this repository for this account, and if not, what fixes it? Checked when
-// Orca Cloud is picked (cloud-start onboarding D1/D2), never after a build fails.
+// Orca Cloud is picked (cloud-start onboarding), never after a build fails.
 //   GET /v1/github/repo-access?repo=<https github url>[&session=cs_…][&repoId=&ownerId=]
 //        -> {access:'public'|'granted'|'missing'|'requested', owner, installUrl?, canInstall?}
 //      canInstall (only when the App isn't installed for the owner: 'missing', or 'public' with no
 //      installation): true = the caller can install it on the owner (it is their own GitHub account, or
 //      they are an active admin of the owner org); false = another user's account, or a non-admin org
 //      membership; null = unknown (no connected GitHub user token, membership unreadable, GitHub down).
-//      push (CREATE-GH-STEP): can a workspace on this repo push? 'ok' = granted; 'not_installed' = the
+//      push: can a workspace on this repo push? 'ok' = granted; 'not_installed' = the
 //      App isn't on the owner; 'repo_not_selected' = it is, but this repository isn't one it selected
 //      (configureUrl: the installation's settings page); 'not_connected' = the App reaches the repo
 //      but through an installation this Orca account isn't bound to. installUrl is present for every
 //      push reason but 'ok' and 'repo_not_selected', public repositories included.
 //      GitHub's installation lookups are cached in D1 (github-installation-cache.ts).
-//   GET /v1/github/repositories[?cursor=]  -> {repositories, nextCursor}   (start from GitHub, D4/N12)
+//   GET /v1/github/repositories[?cursor=]  -> {repositories, nextCursor}   (start from GitHub)
 //   GET /v1/internal/github/install-url?accountId&userId&repo&session  (billing's setup chain,
 //        Bearer CONTROL_PLANE_TOKEN) -> {access, url}
 // `granted` means the same test the lifecycle applies before a create: the App's installation covers
@@ -37,7 +37,7 @@ import {
 
 export type RepoAccess = 'public' | 'granted' | 'missing' | 'requested'
 
-/** Whether a workspace on the repository can push, and if not, what's missing (CREATE-GH-STEP). */
+/** Whether a workspace on the repository can push, and if not, what's missing (the create wizard's GitHub access step). */
 export type PushAccess = 'ok' | 'not_installed' | 'repo_not_selected' | 'not_connected'
 
 export type RepoAccessDeps = {
@@ -316,7 +316,7 @@ function positiveInt(value: string | null): number | undefined {
   return Number.isSafeInteger(n) && n > 0 ? n : undefined
 }
 
-// ---- repositories the account's installations reach (N12) ----
+// ---- repositories the account's installations reach ----
 
 export type ListedRepository = GitHubListedRepo & { url: string; installationId: number; owner: string }
 

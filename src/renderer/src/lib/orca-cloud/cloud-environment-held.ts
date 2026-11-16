@@ -1,4 +1,4 @@
-// ENV-BUILD-CHURN (d): a workspace that started without its environment's setup (the environment's
+// A workspace that started without its environment's setup (the environment's
 // build was below the security floor while a rebuild runs). "Run setup now" runs that environment's
 // install script in a new "Setup" terminal of this workspace, as the build would have.
 import { toast } from 'sonner'

@@ -1,4 +1,4 @@
-// CODEX-RELAY: chatgpt.com refuses Cloudflare Workers' egress (a 403 "Unable to load site" page), so
+// chatgpt.com refuses Cloudflare Workers' egress (a 403 "Unable to load site" page), so
 // the egress proxy sends its chatgpt.com requests through the ChatGPT relay on Cloud Run
 // (cloud/apps/chatgpt-relay), which ChatGPT answers. The Worker still decides everything: which
 // credential, which paths. The relay pins the paths again and only ever talks to chatgpt.com.

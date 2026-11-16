@@ -1,5 +1,5 @@
-// The setup panel's Agent row (cloud-start G) from the Orca account's agent credentials and sources:
-// "from your Orca account" / "team key" when covered, "Set up once" (S0) otherwise. Never blocks Start.
+// The setup panel's Agent row from the Orca account's agent credentials and sources:
+// "from your Orca account" / "team key" when covered, "Set up once" otherwise. Never blocks Start.
 import type { Translate } from '@/i18n/use-translate'
 import type { OrcaCloudAgentSetupRowModel } from '@/lib/orca-cloud/orca-cloud-agent-setup-row'
 import { orcaCloudAgentCoveredLabel, orcaCloudAgentRowCopy } from '../OrcaCloudAgentSetupRow'

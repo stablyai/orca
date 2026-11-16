@@ -83,7 +83,7 @@ describe('writableScopes', () => {
     expect(writableScopes(admin, { repo: false, shared: false })).toEqual(['personal'])
   })
 
-  it('leaves Personal out for a shared workspace (SEC-5)', () => {
+  it('leaves Personal out for a shared workspace', () => {
     const repoWriter: CloudSecretsCaller = {
       ...MEMBER,
       canWrite: { personal: true, org: false, repo: true }

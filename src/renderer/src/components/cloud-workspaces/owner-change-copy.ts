@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: every sentence about a workspace changing owner, in one place. A workspace whose
+// Every sentence about a workspace changing owner, in one place. A workspace whose
 // owner ever changed runs like a shared workspace for good (nobody's personal secrets or sign-ins),
 // and whatever was on its disk went with it, so the previous owner is told to rotate.
 import { translate } from '@/i18n/i18n'

@@ -1,4 +1,4 @@
-// EGRESS-REFRESH: the central credential refresher. With credentials swapped at the sandbox firewall, nothing
+// The central credential refresher. With credentials swapped at the sandbox firewall, nothing
 // sees a provider's 401 any more, so every credential class that expires is renewed ahead of time here, and
 // every change (refresh, expiry, revoke, removal) is pushed into the policies of the running sandboxes that
 // carry it. In-VM CLIs never refresh anything themselves: they only ever hold placeholders.

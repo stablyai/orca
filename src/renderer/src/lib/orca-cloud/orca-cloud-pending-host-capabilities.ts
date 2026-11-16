@@ -4,7 +4,7 @@ import {
 } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 /**
- * CLOUD-HELD-SURFACE: what every Orca Cloud image we ship advertises for structured chats. The
+ * What every Orca Cloud image we ship advertises for structured chats. The
  * composer decides a create's chat-or-terminal route before the VM exists, so with chat preferred
  * an Orca Cloud create opens a chat (held on its strip until the agent can run). A VM that refuses
  * the chat after all (an older image) falls back to its held terminal.

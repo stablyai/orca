@@ -1,5 +1,5 @@
 // Settings › Workspaces: every cloud workspace on the team, for owners and admins to manage
-// (Neil, HOME-1: the listing comes back only here). Open, Sleep and Archive use the same flows as
+// (the listing comes back only here). Open, Sleep and Archive use the same flows as
 // the sidebar and "Open cloud workspace…"; an action the control plane would refuse is not shown.
 import { canManageActiveTeam } from '@/lib/orca-cloud/orca-cloud-team-role'
 import React, { useEffect, useMemo, useState } from 'react'

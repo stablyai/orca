@@ -33,7 +33,7 @@ function useLocalCloudWorkspaceNames(): ReadonlyMap<string, string> {
 
 /**
  * A workspace started without a title shows its repo in the team list ("Hello-World" for
- * "ra12-asleep", RA-13). Use the name this computer gave it; the repo stays on the second line.
+ * "my-feature"). Use the name this computer gave it; the repo stays on the second line.
  */
 export function withLocalTitles(
   workspaces: readonly CloudWorkspace[],

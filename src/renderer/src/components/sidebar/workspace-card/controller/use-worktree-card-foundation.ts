@@ -158,7 +158,7 @@ export function useWorktreeCardFoundation({
   const workspacePorts = useAppStore((s) => {
     const scan = s.workspacePortScan?.result
     // A sleeping VM's ports died with it: none while asleep or waking, nor after the wake until a
-    // newer scan finds them again (JA-13).
+    // newer scan finds them again.
     if (
       vmWorkspacePortsAreStale({
         runtime: s.ephemeralVmRuntimesByWorkspaceId?.[worktree.id],
@@ -213,7 +213,7 @@ export function useWorktreeCardFoundation({
     : null
   // Missing runtime probe data means unknown, not disconnected.
   const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
-  // CLOUD-ROW-DUP-TAG: an Orca Cloud row (owned or paired) shows its cloud mark, not a host pill too.
+  // An Orca Cloud row (owned or paired) shows its cloud mark, not a host pill too.
   const isCloudHostRow = useIsCloudHostRow(worktree)
   // Line 2 stays for a state word ("Asleep ·") now that a cloud row has no host pill to hold it.
   const hasHostStateWord = useHostStateWord(worktree.id) !== null

@@ -1,4 +1,4 @@
-// The "can't push" line (ENV-NOTICE-ACTIONS): Install only where installing can work, a request to
+// The "can't push" line: Install only where installing can work, a request to
 // copy for an owner once one was asked, Check again where the App already reaches the repository,
 // and, where only an owner can install, a request to copy for them with no Install button.
 import { Check, Copy, GitPullRequestArrow, Loader2, RefreshCw, RotateCw } from 'lucide-react'
@@ -16,7 +16,7 @@ export type CloudPushLineHandlers = {
   copied?: boolean
   recheck: () => void
   rechecking?: boolean
-  /** LIVE-GIT-ACCESS: the live refresh ran and it still can't push: Restart, not another Check again. */
+  /** The live refresh ran and it still can't push: Restart, not another Check again. */
   needsRestart?: boolean
   restart?: () => void
 }
@@ -54,7 +54,7 @@ export function cloudPushNoticeLine(
           'Orca Cloud can read {{repo}} but can’t push yet. Install the Orca GitHub App on {{owner}} to push.',
           { repo, owner }
         ),
-        // The App's install page, not a sign-in: no Copy link beside it (AUTH-ONLY-COPY-LINK).
+        // The App's install page, not a sign-in: no Copy link beside it.
         action: {
           label: h.installing
             ? t('orcaCloud.setupNotices.waitingForGitHub', 'Waiting for GitHub…')

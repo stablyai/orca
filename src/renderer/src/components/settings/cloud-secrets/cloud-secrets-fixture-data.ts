@@ -117,7 +117,7 @@ export const FIXTURE_NAMES: Record<string, string> = { u_dana: 'Dana Reyes', u_r
 
 const never = <T>(): Promise<T> => new Promise<T>(() => {})
 
-/** What the server answers for a shared workspace: personal values never win or count (SEC-5). */
+/** What the server answers for a shared workspace: personal values never win or count. */
 function withoutPersonal(
   secrets: CloudSecretsEffective['secrets']
 ): CloudSecretsEffective['secrets'] {

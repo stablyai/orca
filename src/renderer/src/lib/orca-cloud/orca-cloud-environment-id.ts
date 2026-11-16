@@ -12,8 +12,8 @@ export function isOrcaCloudEnvironmentId(environmentId: string): boolean {
 }
 
 /**
- * FAIL-CLOSED (#568) for agent launches: the catalog flag first, then main's own records, because a
- * fresh pairing's `orcaCloudPaired` can reach this store after its first worktree does.
+ * Whether this environment is Orca Cloud, for agent launches: the catalog flag first, then main's
+ * own records, because a fresh pairing's `orcaCloudPaired` can reach this store after its first worktree does.
  */
 export async function isOrcaCloudEnvironmentForLaunch(environmentId: string): Promise<boolean> {
   if (isOrcaCloudEnvironmentId(environmentId)) {
@@ -22,7 +22,7 @@ export async function isOrcaCloudEnvironmentForLaunch(environmentId: string): Pr
   const answer = await window.api.orcaCloudAgents
     ?.isCloudEnvironment?.({ runtimeEnvironmentId: environmentId })
     .catch((error: unknown) => {
-      // Kept open (team-lead): a failed confirm must not block every non-cloud server's agents,
+      // Kept open: a failed confirm must not block every non-cloud server's agents,
       // so it is logged where a report will find it.
       console.warn('[orca-cloud] cloud-host confirm failed; launching unheld', error)
       recordRendererCrashBreadcrumb('cloud-host confirm failed; launching unheld', {

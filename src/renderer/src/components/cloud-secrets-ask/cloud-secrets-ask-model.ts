@@ -1,5 +1,5 @@
 // What a Cloud workspace still needs from Cloud secrets: the environment's declared names that no scope
-// provides for this repo and caller (spec S2, panel section 3). Names only; no value ever reaches here.
+// provides for this repo and caller (the build sheet ask and panel section 3). Names only; no value ever reaches here.
 import { cloudSecretKind } from '../../../../shared/cloud-secrets/cloud-secret-rules'
 import { parseDotenvPaste } from '../../../../shared/cloud-secrets/dotenv-paste'
 import type {
@@ -58,7 +58,7 @@ export function missingSecretNames(
 
 /**
  * Scopes a person can save a missing value to, Personal first. Shared only where asked for.
- * `personal: false` for a workspace shared with teammates: it gets no Personal values (SEC-5).
+ * `personal: false` for a workspace shared with teammates: it gets no Personal values.
  */
 export function writableScopes(
   caller: Pick<CloudSecretsCaller, 'canWrite'>,
@@ -88,7 +88,7 @@ export type CloudSecretsAskData = {
   /** The environment has been built, so its install script ran without the missing team values. */
   built: boolean
   repoKey: string | null
-  /** The workspace is shared with teammates: no Personal values reach it, so none are offered (SEC-5). */
+  /** The workspace is shared with teammates: no Personal values reach it, so none are offered. */
   shared: boolean
 }
 

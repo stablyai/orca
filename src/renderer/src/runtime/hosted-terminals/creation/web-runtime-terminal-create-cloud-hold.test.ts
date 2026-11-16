@@ -1,4 +1,4 @@
-// Every host terminal create goes through the Orca Cloud agent hold first (PC-3b regression: a
+// Every host terminal create goes through the Orca Cloud agent hold first (regression: a
 // cloud create's first agent was launched by the after-wake seeding through this create and bypassed
 // the hold that only wrapped launchAgentInWebHostTab).
 import { describe, expect, it, vi } from 'vitest'

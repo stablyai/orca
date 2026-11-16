@@ -72,7 +72,7 @@ export function readBearer(value: string | null): string | null {
 }
 
 /**
- * ORG-TOKEN-STALE: the desktop says which team it is acting for (`x-orca-org: <org id>`, or `user` for a
+ * The desktop says which team it is acting for (`x-orca-org: <org id>`, or `user` for a
  * personal account). A token minted for another team (stale after a team or role switch) is refused
  * rather than acting on the wrong team. No header: no check (older desktops).
  */

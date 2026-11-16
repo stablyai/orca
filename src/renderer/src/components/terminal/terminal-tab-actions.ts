@@ -249,7 +249,7 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
   ) {
     // Re-read after closeUnifiedTab repairs/deactivates the surface; stale state must not clobber it.
     const current = useAppStore.getState()
-    // A held asleep cloud workspace stays selected with no tab (SLEEP-HOME-REGRESSION).
+    // A held asleep cloud workspace stays selected with no tab.
     if (
       current.activeWorktreeId === owningWorktreeId &&
       !isWorktreeSleepViewHeld(owningWorktreeId)

@@ -59,7 +59,7 @@ describe('automatic environments', () => {
     expect(environments()).toMatchObject([{ kind: 'auto', name: 'acme/web', active_build_id: null }])
     const command = [...h.vercel.buildCommands.values()].at(-1)!
     expect(command.env.ORCA_CLONE_FILTER).toBe('blob:none')
-    // PARITY-AUTO-ENV-DEPS: its lockfile's dependencies too, so creates start warm.
+    // Its lockfile's dependencies too, so creates start warm.
     expect(command.env.ORCA_AUTO_INSTALL).toBe('1')
     const { buildId } = await finishBuild()
 
@@ -108,7 +108,7 @@ describe('automatic environments', () => {
     expect(environments().filter((row) => row.kind === 'auto')).toHaveLength(2)
   })
 
-  it('the build says what its lockfile install did (AUTO-ENV-DEPS-LABEL)', async () => {
+  it('the build says what its lockfile install did', async () => {
     const { h, settle, finishBuild } = await setup()
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', repo: { url: REPO } }, headers: FEATURES })
     await settle()
@@ -119,7 +119,7 @@ describe('automatic environments', () => {
     expect(build.autoInstall).toEqual({ manager: 'pnpm', outcome: 'installed' })
   })
 
-  it('every build of an automatic environment installs from the lockfile: manual Rebuild and golden refresh too (AUTO-ENV-DEPS-NOT-RUNNING)', async () => {
+  it('every build of an automatic environment installs from the lockfile: manual Rebuild and golden refresh too', async () => {
     const { h, settle, finishBuild } = await setup()
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'w1', machineSize: 'standard', repo: { url: REPO } }, headers: FEATURES })
     await settle()
@@ -187,7 +187,7 @@ describe('automatic environments', () => {
     expect(command.env.ORCA_AUTO_INSTALL).toBeUndefined()
   })
 
-  it('boot-plan says clone before the environment exists and update after (PC-4)', async () => {
+  it('boot-plan says clone before the environment exists and update after', async () => {
     const { h, settle, finishBuild } = await setup()
     const plan = async () => (await h.call('GET', `/v1/sandboxes/boot-plan?repo=${encodeURIComponent(REPO)}`)).body
     expect(await plan()).toEqual({ repo: 'clone' })

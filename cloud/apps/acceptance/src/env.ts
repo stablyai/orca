@@ -50,7 +50,7 @@ export const secrets = {
     const tok = readSecretJson<{ token?: string; bearerToken?: string }>('tok.json')
     return tok?.token || tok?.bearerToken || null
   },
-  /** Shared AI Gateway key (W6; ~$5 free credit, no anthropic/* models). One tiny task per check. */
+  /** Shared AI Gateway key (~$5 free credit, no anthropic/* models). One tiny task per check. */
   aiGatewayKey: () => {
     const path = join(SECRETS_DIR, 'ai-gateway.key')
     return existsSync(path) ? readFileSync(path, 'utf8').trim() : null

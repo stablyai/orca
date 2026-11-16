@@ -1,11 +1,11 @@
-// PHASE-DEADLINES: a create sat 180 s at "Start sandbox" before its write-ahead insert, with no
+// A create sat 180 s at "Start sandbox" before its write-ahead insert, with no
 // provider call stalled. The pre-insert phases are bounded and a stuck one is named in the log.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LifecycleError, PHASE_DEADLINES_MS, phaseTimer } from '../src/lifecycle'
 
 const never = () => new Promise<never>(() => undefined)
 
-describe('PHASE-DEADLINES', () => {
+describe('create phase deadlines', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.spyOn(console, 'log').mockImplementation(() => undefined)

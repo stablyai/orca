@@ -1,7 +1,7 @@
-// Composer glue for Orca Cloud (composer-redo). Picking Orca Cloud changes nothing else in the
+// Composer glue for Orca Cloud. Picking Orca Cloud changes nothing else in the
 // dialog: Start either creates the workspace (everything is set up) or saves the draft, closes the
 // dialog and opens the full-page setup, which starts the prompt by itself when done. Also: where
-// each project last started (O5), the remembered default (D7) and GitHub-only repositories (D4).
+// each project last started, the remembered default and GitHub-only repositories.
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { clearCloudStartDraft, saveCloudStartDraft } from '@/lib/orca-cloud/cloud-start-draft'
@@ -76,7 +76,7 @@ export function useCloudStartComposer({
   /** The composer as it is now, for the setup page's Back and its auto-start. */
   composerSnapshot: () => ComposerModalData
   onCreate: () => void
-  /** Closes the composer (setup moves to its page; a cloud-only repository started, D4). */
+  /** Closes the composer (setup moves to its page; or a cloud-only repository started). */
   onClose?: () => void
   /** Fixtures pin the account's access. */
   accessOverride?: OrcaCloudRunTargetAccess
@@ -117,8 +117,8 @@ export function useCloudStartComposer({
     teamSwitch: switchTeam !== null
   })
   // An agent with no Orca Cloud account is still created with the workspace: its launch holds on
-  // the pane's "Set up once" strip and never reaches the agent's own /login (PC-3b, #385). In the
-  // workspace the strip asks; away, the sidebar row's mark does (N-03: no toast follows the user).
+  // the pane's "Set up once" strip and never reaches the agent's own /login. In the
+  // workspace the strip asks; away, the sidebar row's mark does (no toast follows the user).
   const onCreate = useCloudOnlyCreate({
     cloudOnly,
     createWorkspace,
@@ -146,7 +146,7 @@ export function useCloudStartComposer({
     selectOrcaCloudRef.current = onSelectOrcaCloud
   }, [onSelectOrcaCloud])
 
-  // Start with setup still open: the dialog closes and the page takes over, prompt kept (N6).
+  // Start with setup still open: the dialog closes and the page takes over, prompt kept.
   const openSetup = useCallback(
     (intentId: string) => {
       saveCloudStartDraft(profileId, {
@@ -173,7 +173,7 @@ export function useCloudStartComposer({
 
   // Reopened by the setup page: submit once the account and form are ready. Anything still open
   // (a race, a revoked grant) leaves the composer for the user, never a second trip on its own.
-  // One Create press is one server create (P0): the intent is consumed here or nowhere.
+  // One Create press is one server create: the intent is consumed here or nowhere.
   const stepsSettled = !steps.some((step) => step.state === 'loading' && step.id !== 'agent')
   useEffect(() => {
     if (!autoStartIntent || !cloudSelected || !createReady || !stepsSettled || setupNeeded) {
@@ -205,7 +205,7 @@ export function useCloudStartComposer({
       return
     }
     clearCloudStartDraft(profileId)
-    // PC-5: no "Using sandbox hours" toast on start; hours live in billing (Neil: noise).
+    // No "Using sandbox hours" toast on start; hours live in billing.
   }, [cloudSelected, profileId, repoId])
 
   // A signal above 0 when the dialog mounts opens the picker once (useOpenOnSignal).

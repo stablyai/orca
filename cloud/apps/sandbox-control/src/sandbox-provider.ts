@@ -107,8 +107,8 @@ export type SandboxProviderApi = {
   /** Sets the full exposed-port list on the sandbox (live on a running session); returns its routes. */
   updatePorts(name: string, ports: number[]): Promise<ProviderRoute[]>
   /**
-   * The persistent record's network policy (A4, probe 2: the last session policy otherwise survives a stop
-   * or timeout and is re-applied on resume). Allowed while stopped, unlike updateNetworkPolicy.
+   * The persistent record's network policy (otherwise the last session policy survives a stop
+   * or timeout and is re-applied on resume, as the egress probe found). Allowed while stopped, unlike updateNetworkPolicy.
    */
   updateRecordNetworkPolicy?(name: string, policy: NetworkPolicy): Promise<void>
   /** Dev audit only (provider-policy-audit): the raw record and session bodies. Never returned or logged. */

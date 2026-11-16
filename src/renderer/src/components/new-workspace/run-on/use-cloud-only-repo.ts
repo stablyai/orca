@@ -1,4 +1,4 @@
-// D4 in the composer: while Orca Cloud is picked, the Project picker also offers GitHub
+// In the composer, while Orca Cloud is picked, the Project picker also offers GitHub
 // repositories with no clone here. Picking one keeps Orca Cloud and starts it from GitHub.
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
@@ -27,14 +27,14 @@ export type CloudOnlyRepo = {
   /** That Retry is reading now. */
   retryingRepos: boolean
   picked: OrcaCloudGitHubRepository | null
-  /** The project is a plain folder: Orca Cloud needs a GitHub repository (D3/D4). */
+  /** The project is a plain folder: Orca Cloud needs a GitHub repository. */
   folderProject: boolean
   /**
    * Orca Cloud can only start this project from a picked GitHub repository: a folder, or a project
-   * cloned only on a remote server (RUNON-NO-NEW-SANDBOX). Create waits until one is picked.
+   * cloned only on a remote server. Create waits until one is picked.
    */
   needsGitHubPick: boolean
-  /** A GitHub project cloned only on a remote server (RUNON-NO-NEW-SANDBOX). */
+  /** A GitHub project cloned only on a remote server. */
   remoteServerProject: boolean
   /** The GitHub row is done for a repository listed from the team's installations. */
   githubStep: CloudSetupStep | null
@@ -72,7 +72,7 @@ export function useCloudOnlyRepo({
   const project = useAppStore((s) => s.repos.find((repo) => repo.id === repoId) ?? null)
   const remoteServer = isRemoteServerProject(project)
   const projectKey = remoteServerProjectGitHubKey(project)
-  // D4 rows show while Orca Cloud is picked, or for a folder, which can only start from GitHub.
+  // Cloud-only rows show while Orca Cloud is picked, or for a folder, which only starts from GitHub.
   const enabled = (cloudSelected || folderProject) && cloudOffered
   const [refreshSignal, setRefreshSignal] = useState(0)
   const { repos, showMore, unavailable, retrying, retry } = useOrcaCloudGitHubRepositories(
@@ -170,7 +170,7 @@ function remoteServerStep(): CloudSetupStep {
 
 /**
  * The composer's create while a cloud-only repository is picked: start it from GitHub, close the
- * composer, and say which hours it uses (O4). Otherwise the ordinary create.
+ * composer, and say which hours it uses. Otherwise the ordinary create.
  */
 export function useCloudOnlyCreate({
   cloudOnly,
@@ -202,8 +202,8 @@ export function useCloudOnlyCreate({
 
 /**
  * A plain folder can't start in Orca Cloud (a sandbox clones from GitHub), but picking Orca Cloud
- * still works: the panel's GitHub repository row says so and offers the way forward (D3 for
- * folders), and the Project picker lists GitHub repositories with no clone here (D4).
+ * still works: the panel's GitHub repository row says so and offers the way forward, and
+ * the Project picker lists GitHub repositories with no clone here.
  */
 function useFolderGitHubStep(repoId: string): {
   folderProject: boolean

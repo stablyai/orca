@@ -1,4 +1,4 @@
-// The Project picker's "GitHub" section (cloud-start D4, PROJ-MENU): repositories Orca
+// The Project picker's "GitHub" section: repositories Orca
 // Cloud can reach with no clone on this computer, plus a way to give it access to more. Shown only
 // while Orca Cloud is the Run on target.
 import React, { useEffect, useMemo, useRef } from 'react'
@@ -37,7 +37,7 @@ export function cloudRepoKey(fullName: string): string {
 }
 
 /**
- * Commits a cloud-only row (D4). 'kept-open' for Show more, 'handled' for the access link or a
+ * Commits a cloud-only row. 'kept-open' for Show more, 'handled' for the access link or a
  * listed repository, null for anything else (a project id, Add project). Project ids such as
  * `github:<owner>/<repo>` never match: rows live in their own `cloud-only-repo:` namespace.
  */
@@ -113,7 +113,7 @@ function cloudRowKeys(
   retry: CloudReposRetry | null = null
 ): string[] {
   if (!cloudRepos) {
-    // The arrow keys land on Retry like on any row (design-squad).
+    // The arrow keys land on Retry like on any row.
     return retry ? [CLOUD_REPO_RETRY_KEY] : []
   }
   return [
@@ -152,7 +152,7 @@ export function ProjectComboboxCloudSection({
   showMoreAccess: boolean
   /** GitHub has more pages than are listed. */
   showMoreRepos?: boolean
-  /** GH-LIST-MISSING: the read failed; the section says so with Retry instead of hiding. */
+  /** GitHub's list couldn't be read; the section says so with Retry instead of hiding. */
   retry?: CloudReposRetry | null
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -210,7 +210,7 @@ export function ProjectComboboxCloudSection({
       {repos.map((repo) => {
         const key = cloudRepoKey(repo.fullName)
         const current = value === key
-        // One line per row (PROJ-MENU): the name, a lock when private, and the cloud badge. The
+        // One line per row: the name, a lock when private, and the cloud badge. The
         // row's accessible name says all of it, so the badge is never the only signal.
         const accessibleName = repo.private
           ? t('components.newWorkspace.cloudOnly.rowPrivate', '{{repo}}, private, cloud only', {

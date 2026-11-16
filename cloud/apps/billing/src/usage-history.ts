@@ -6,7 +6,7 @@ import { z } from 'zod'
 import type { BillingCaller } from './auth'
 
 export const USAGE_HISTORY_DAYS = 30
-// The desktop names up to 5 live ones; 20 leaves room when the busiest were since deleted (V3-06).
+// The desktop names up to 5 live ones; 20 leaves room when the busiest were since deleted.
 export const USAGE_HISTORY_TOP = 20
 const DAY_MS = 24 * 3600 * 1000
 

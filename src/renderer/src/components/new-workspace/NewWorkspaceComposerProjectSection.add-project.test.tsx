@@ -90,7 +90,7 @@ vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: () => null
 }))
 
-describe('the Add project button beside Project (PROJ-MENU part 2, n29)', () => {
+describe('the Add project button beside Project', () => {
   it('offers "Add a GitHub repository…" in an Orca Cloud group while Run on is Orca Cloud', async () => {
     const user = userEvent.setup()
     const more = vi.fn()
@@ -111,7 +111,7 @@ describe('the Add project button beside Project (PROJ-MENU part 2, n29)', () => 
   })
 })
 
-describe('back from GitHub (REPO-ACCESS-REFRESH)', () => {
+describe('back from GitHub', () => {
   it('says "Waiting for GitHub access…" under Project while the list re-reads', () => {
     renderSection(ORCA_CLOUD_RECIPE_ID, vi.fn(), 'waiting')
     expect(screen.getByRole('status').textContent).toBe('Waiting for GitHub access…')
@@ -129,7 +129,7 @@ describe('back from GitHub (REPO-ACCESS-REFRESH)', () => {
   })
 })
 
-describe("GitHub's list couldn't be read (GH-LIST-MISSING)", () => {
+describe("GitHub's list couldn't be read", () => {
   it('the Project picker keeps a GitHub section that says so, with Retry', async () => {
     const user = userEvent.setup()
     const retry = vi.fn()

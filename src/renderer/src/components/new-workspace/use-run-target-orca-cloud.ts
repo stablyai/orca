@@ -99,7 +99,7 @@ export function useRunTargetOrcaCloud({
   )
   const pickFor = useCallback(
     (resolved: OrcaCloudRunTargetAccess, recipe: EphemeralVmRecipeOption | null): void => {
-      // JA-21 (Neil): in the composer Orca Cloud is always pickable; billing is checked after
+      // In the composer Orca Cloud is always pickable; billing is checked after
       // Create, on the creating sheet, so owners and members alike can start a draft.
       if (onSelectOrcaCloud) {
         close()

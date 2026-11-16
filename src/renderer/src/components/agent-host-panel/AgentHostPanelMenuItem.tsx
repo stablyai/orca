@@ -1,4 +1,4 @@
-// The host ⋯ menu's one entry into the panel (Q11). It replaces the "Agents on {{host}}" group;
+// The host ⋯ menu's one entry into the panel. It replaces the "Agents on {{host}}" group;
 // sign-out lives in the panel.
 import React from 'react'
 import { KeyRound } from 'lucide-react'

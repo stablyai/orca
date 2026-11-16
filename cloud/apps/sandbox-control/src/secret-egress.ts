@@ -72,7 +72,7 @@ export function applySecretPlaceholders(
 }
 
 /**
- * `account:<agent>:<owner>@<host>` entries: hosts where an agent's Orca-account placeholder is swapped (D10).
+ * `account:<agent>:<owner>@<host>` entries: hosts where an agent's Orca-account placeholder is swapped.
  * The owner (URI-encoded user id) is recorded so a workspace handed to someone else never starts using
  * the new owner's account behind the old session.
  */

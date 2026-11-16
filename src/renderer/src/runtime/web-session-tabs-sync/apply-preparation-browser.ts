@@ -85,7 +85,7 @@ export function prepareWebSessionTabsSnapshotBrowser(
         if (mirroredBrowserWorkspaceIds.has(tab.id)) {
           return true
         }
-        // Slept with its VM (NEW-01, LC2-P1): the host's pages died with it, so its snapshot no
+        // Slept with its VM: the host's pages died with it, so its snapshot no
         // longer lists them. The tab stays and reopens its page after the wake.
         if (isSleptBrowserTabAwaitingReopen(state, tab.id)) {
           return false

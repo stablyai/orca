@@ -30,7 +30,7 @@ import type { Keyring } from './secrets-crypto'
 import { SANDBOX_VCPUS } from './machine-size'
 
 export const BUILD_DEADLINE_MS = 45 * 60_000
-/** Golden-refresh builds: our image updates, metered internally, never charged to the team (ENV-BUILD-CHURN). */
+/** Golden-refresh builds: our image updates, metered internally, never charged to the team. */
 export const GOLDEN_REFRESH_USER = 'system:golden-refresh'
 const STARTING_STUCK_MS = 5 * 60_000
 /** Finalization interrupted (a Worker cut off mid-snapshot) is recovered by the next look after this. */
@@ -109,7 +109,7 @@ export type BuildResult = {
   repos?: { url: string; dir: string; branch: string; commit: string; lockfiles: Record<string, string> }[]
   diskUsedBytes?: number
   diskTotalBytes?: number
-  /** AUTO-ENV-DEPS-LABEL: what an automatic environment's lockfile install did (read from its log). */
+  /** What an automatic environment's lockfile install did (read from its log). */
   autoInstall?: AutoInstallOutcome
 }
 
@@ -245,7 +245,7 @@ function placeholder(buildId: string, index: number): string {
 }
 
 /**
- * What a build's install script receives (SEC-2). The build's snapshot is the team's saved environment,
+ * What a build's install script receives. The build's snapshot is the team's saved environment,
  * booted by every member's workspace, so the rules are tighter than a session's:
  * - nothing by default: only the team secrets an admin named on the environment (`envVarNames`), never
  *   personal or repository ones, and none at all for automatic environments;
@@ -334,7 +334,7 @@ export async function startBuild(
     envVarNames: parseNames(environment),
     machineSize: environment.machine_size
   }
-  // AUTO-ENV-DEPS-NOT-RUNNING: every build of an automatic environment clones blobless and installs
+  // Every build of an automatic environment clones blobless and installs
   // from the lockfile, whatever started it (create, golden refresh reusing an older build's config,
   // a manual Rebuild). Decided here, from the environment's kind, not from a stored config.
   const config: BuildConfig =
@@ -503,7 +503,7 @@ export async function advanceBuild(deps: BuildDeps, row: BuildRow, options: { wa
   let exitCode: number | null
   try {
     // Always a (bounded) wait: the provider reports an exit code only to waiting readers, so a plain
-    // poll would keep a finished build "running" until a log stream happened to ask (W9 stall).
+    // poll would keep a finished build "running" until a log stream happened to ask (a stall seen in testing).
     exitCode = (
       await deps.provider.getCommand(row.session_id, row.command_id, {
         wait: true,
@@ -530,7 +530,7 @@ const EXIT_STEPS: Record<number, { step: string; error: string }> = {
   10: { step: 'clone', error: 'clone_failed' },
   20: { step: 'install', error: 'install_failed' },
   30: { step: 'record', error: 'record_failed' },
-  // A team secret's value was still on disk after the install script: no snapshot is taken (SEC-2).
+  // A team secret's value was still on disk after the install script: no snapshot is taken.
   40: { step: 'record', error: 'secret_in_image' }
 }
 
@@ -885,7 +885,7 @@ export async function reportBuildUsage(deps: Pick<BuildDeps, 'db' | 'entitlement
     machineSize = 'standard'
   }
   if (row.created_by === GOLDEN_REFRESH_USER) {
-    // ENV-BUILD-CHURN (e): our image update, not the team's work. Metered for our own cost tracking.
+    // Our image update, not the team's work. Metered for our own cost tracking.
     log('environment_build_internal_usage', {
       buildId: row.id,
       accountId: row.account_id,

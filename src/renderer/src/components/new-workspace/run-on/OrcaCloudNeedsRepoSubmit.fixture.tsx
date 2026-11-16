@@ -1,4 +1,4 @@
-// RR-c1 (Neil): submit-time validation, end to end in the composer's Project row and footer:
+// Submit-time validation, end to end in the composer's Project row and footer:
 // silent while picking, an error under Project after Create, and gone once a GitHub repo is picked.
 import { useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
@@ -37,7 +37,7 @@ const orcaCloud: EphemeralVmRecipeOption = {
   create: 'orca-cloud create'
 }
 const NEEDS_REPO = { hasRepos: true }
-// UNREACHABLE-REPO-NO-ROUTE: Hello-World cloned only on a paired server, out of Orca Cloud's reach.
+// Hello-World cloned only on a paired server, out of Orca Cloud's reach.
 const UNREACHABLE = { hasRepos: true, unreachable: true }
 
 function Composer({ unreachable = false }: { unreachable?: boolean }): React.JSX.Element {

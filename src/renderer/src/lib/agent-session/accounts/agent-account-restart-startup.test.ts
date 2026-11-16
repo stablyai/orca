@@ -194,7 +194,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
   })
 })
 
-// RA-11: Restart on an Orca Cloud pane refreshes the shell's session env, and a Claude pane with no
+// Restart on an Orca Cloud pane refreshes the shell's session env, and a Claude pane with no
 // session to resume starts a new conversation instead of doing nothing.
 describe('buildPaneAccountRestartStartup on Orca Cloud', () => {
   const pane = { tabId: TAB_ID, leafId: LEAF_ID, worktreeId: WORKTREE_ID }
@@ -237,7 +237,7 @@ describe('buildPaneAccountRestartStartup on Orca Cloud', () => {
     expect(startup?.command).toMatch(/claude/)
   })
 
-  it('RA-11d: the fresh fallback keeps the pane’s recorded model and effort', () => {
+  it('the fresh fallback keeps the pane’s recorded model and effort', () => {
     const command = buildFreshAccountRestartCommand('claude', pane, '--model opus --effort high')
     expect(command.startsWith(REFRESH)).toBe(true)
     // Each arg survives (the launch quotes them per shell).

@@ -153,7 +153,7 @@ describe('org environments', () => {
     expect(refused.body.reason).toBe('hours_exhausted')
   })
 
-  it('finishes a build server-side with nobody streaming or polling it (regression: W9 poll-only stall)', async () => {
+  it('finishes a build server-side with nobody streaming or polling it (regression: poll-only stall)', async () => {
     const scheduled: { id: string; environmentId: string }[] = []
     const h = await createHarness({}, { scheduleBuild: async (build) => void scheduled.push(build) })
     h.vercel.buildResult = RESULT
@@ -295,7 +295,7 @@ describe('org environments', () => {
     const old = await build(0)
     const activeBuild = () => h.raw.prepare('SELECT b.id, b.base_snapshot_id AS base, b.created_by AS by FROM environments e JOIN environment_builds b ON b.id = e.active_build_id WHERE e.id = ?').get(envId) as { id: string; base: string; by: string }
     expect(activeBuild()).toMatchObject({ id: old.id, base: GOLDEN })
-    // These tests are about the swap itself: no minimum interval (ENV-BUILD-CHURN tests cover it).
+    // These tests are about the swap itself: no minimum interval (the golden refresh churn tests cover it).
     h.env.ENV_REFRESH_MIN_INTERVAL_HOURS = '0'
     const refresh = async () => refreshEnvironmentsOnGolden(h.env, (await lifecycleDeps(h.env, h.deps))!, h.deps)
     // Same golden: nothing to do.
@@ -357,7 +357,7 @@ describe('org environments', () => {
       await adminCall('GET', `/v1/environments/${id}/builds/${b.id}`)
     }
     h.raw.prepare(`INSERT INTO golden_images (id, source, status, snapshot_id, created_at, updated_at, activated_at) VALUES ('g2', 'test', 'active', 'snap_golden_2', ?, ?, ?)`).run(h.now(), h.now(), h.now())
-    // These tests are about the swap itself: no minimum interval (ENV-BUILD-CHURN tests cover it).
+    // These tests are about the swap itself: no minimum interval (the golden refresh churn tests cover it).
     h.env.ENV_REFRESH_MIN_INTERVAL_HOURS = '0'
     const refresh = async () => refreshEnvironmentsOnGolden(h.env, (await lifecycleDeps(h.env, h.deps))!, h.deps)
     expect(await refresh()).toMatchObject({ stale: 4, started: 2 })

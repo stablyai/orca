@@ -1,4 +1,4 @@
-// Repro for F1: POST resume on a sandbox that is already running (expected: fast, idempotent).
+// Repro: POST resume on a sandbox that is already running (expected: fast, idempotent).
 //   tsx src/probe-resume-running.ts
 import { control } from './clients'
 

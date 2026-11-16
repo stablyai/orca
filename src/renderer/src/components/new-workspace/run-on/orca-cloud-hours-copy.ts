@@ -1,4 +1,4 @@
-// Which sandbox hours a start spends (O4): the start toast and the build sheet chip. Hours only,
+// Which sandbox hours a start spends: the start toast and the build sheet chip. Hours only,
 // never dollars; during a trial they say so.
 import type { Translate } from '@/i18n/use-translate'
 import {

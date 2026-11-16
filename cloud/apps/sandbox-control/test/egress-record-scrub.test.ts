@@ -1,4 +1,4 @@
-// A4 (probe 2: the last session policy survives a stop or timeout on the record and is re-applied on resume):
+// Stopped-record scrub (the last session policy survives a stop or timeout on the record and is re-applied on resume):
 // a stopped sandbox's record is token-free; the full policy goes back on it right before a resume.
 import { describe, expect, it } from 'vitest'
 import { lifecycleDeps } from '../src/index'
@@ -26,7 +26,7 @@ async function setup(mode: 'firewall' | 'proxy' = 'firewall') {
   return { h, mia, id, box, row }
 }
 
-describe('A4: stopped records are token-free', () => {
+describe('stopped records are token-free', () => {
   it('a sleep scrubs the record (routes kept, no value); a wake puts the full policy back before resuming', async () => {
     const t = await setup()
     expect(JSON.stringify(t.box().policy)).toContain(KEY)
@@ -74,7 +74,7 @@ describe('A4: stopped records are token-free', () => {
   })
 })
 
-describe('A4: the post-resume write retries, and a lasting failure is visible, not a hang', () => {
+describe('the post-resume write retries, and a lasting failure is visible, not a hang', () => {
   it('retries with backoff; if it never lands, the wake still answers and the row is stale for reconcile', async () => {
     const { vi } = await import('vitest')
     const t = await setup()
@@ -114,7 +114,7 @@ describe('A4: the post-resume write retries, and a lasting failure is visible, n
   })
 })
 
-describe('A4 review R2: a scrub never strips a workspace that resumed meanwhile', () => {
+describe('a scrub never strips a workspace that resumed meanwhile', () => {
   it('a row that resumed before the scrub is skipped; one that resumed during it gets a fresh apply', async () => {
     const t = await setup()
     const life = (await lifecycleDeps(t.h.env, t.h.deps))!

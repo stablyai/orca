@@ -174,7 +174,7 @@ describe('useEphemeralVmRecipeOptions', () => {
     }
   })
 
-  // A1: signed out (or no plan yet) the composer must still be able to pick Orca Cloud and reach
+  // Signed out (or no plan yet) the composer must still be able to pick Orca Cloud and reach
   // "Set up and start"; main only lists the recipe once the account can use it.
   it('offers Orca Cloud while the account still needs setup, and keeps an initial pick', async () => {
     for (const orcaCloud of ['needs-sign-in', 'needs-capability'] as const) {
@@ -270,7 +270,7 @@ describe('useEphemeralVmRecipeOptions', () => {
     )
   })
 
-  // RUNON-NO-NEW-SANDBOX: a project cloned only on a remote server still offers Orca Cloud (it starts
+  // A project cloned only on a remote server still offers Orca Cloud (it starts
   // from GitHub). Main has no clone to read, so its "not found" never surfaces, and no orca.yaml
   // recipe from this computer is offered for it.
   it('offers only Orca Cloud for a project cloned on a remote server, with no local recipe error', async () => {
@@ -305,7 +305,7 @@ describe('useEphemeralVmRecipeOptions', () => {
     expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('')
   })
 
-  // RUNON-STICKY (Neil): picking Orca Cloud, then another project, reset Run on to this computer.
+  // Picking Orca Cloud, then another project, reset Run on to this computer.
   describe('a picked Orca Cloud across project changes', () => {
     const CLOUD = {
       id: ORCA_CLOUD_RECIPE_ID,

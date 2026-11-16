@@ -1,4 +1,4 @@
-// PARITY-DNF: an imported setup from Conductor (Amazon Linux, dnf). Says what changed for Orca's
+// An imported setup from Conductor (Amazon Linux, dnf). Says what changed for Orca's
 // Ubuntu sandboxes, and lists the lines that still use dnf so the person can check them.
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'

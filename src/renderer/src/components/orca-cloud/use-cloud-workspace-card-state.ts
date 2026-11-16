@@ -82,7 +82,7 @@ export function openCloudCardAttention(workspaceId: string, item: CloudCardAtten
       useAppStore.getState().setActiveTab(item.tabId)
       return
     case 'gitSetupOff':
-      // The workspace's GIT-SETUP strip carries the fix (Restart).
+      // The workspace's git setup strip carries the fix (Restart).
       activateAndRevealWorktree(workspaceId)
       return
     case 'secretsMissing':

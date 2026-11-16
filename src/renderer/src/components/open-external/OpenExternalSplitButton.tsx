@@ -1,5 +1,5 @@
 // A button that opens a page in the user's browser, with a chevron at its far right whose menu
-// copies the exact URL instead (Neil's rule for every open-in-browser button: people paste sign-in
+// copies the exact URL instead (every open-in-browser button has it: people paste sign-in
 // and billing links into an incognito window or another browser profile). The main action is the
 // caller's, unchanged; the chevron only ever copies.
 import React, { useEffect, useRef, useState } from 'react'

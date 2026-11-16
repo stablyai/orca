@@ -1,5 +1,5 @@
-// T4: the trial runs out while workspaces exist. Running sandboxes go to sleep; owners choose a plan,
-// members ask for one in the app (O6). Neutral: nothing failed and nothing is deleted.
+// The trial runs out while workspaces exist. Running sandboxes go to sleep; owners choose a plan,
+// members ask for one in the app. Neutral: nothing failed and nothing is deleted.
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -15,7 +15,7 @@ export function OrcaCloudTrialUsedUpNotice({
 }: {
   canManageBilling: boolean
   teamName?: string
-  /** The member's in-app request (np4-requests); without it the member line names who can act. */
+  /** The member's in-app request; without it the member line names who can act. */
   onAskForPlan?: () => void
   className?: string
 }): React.JSX.Element {

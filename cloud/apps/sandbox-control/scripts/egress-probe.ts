@@ -283,7 +283,7 @@ async function main(): Promise<void> {
         for (const box of [publicBox, appBox]) {
           const set = await operator('POST', `/v1/internal/sandboxes/${box.id}/egress-mode`, { mode })
           if (set.status !== 200) {
-            throw new Error(`set egress mode ${mode} on ${box.id}: ${set.status} ${set.body?.error ?? ''} (is EGRESS_SWAP_MODE (A2) on dev?)`)
+            throw new Error(`set egress mode ${mode} on ${box.id}: ${set.status} ${set.body?.error ?? ''} (is EGRESS_SWAP_MODE on dev?)`)
           }
         }
       }

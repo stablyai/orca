@@ -1,4 +1,4 @@
-// CLOUD-PRIMARY-DELETE: the cloud workspace's own row deletes its sandbox through the control plane.
+// The cloud workspace's own row deletes its sandbox through the control plane.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }))
@@ -73,7 +73,7 @@ describe('destroyCloudPrimary', () => {
     })
   })
 
-  it('INT-T1: Delete cancels an archive still in its Undo window and quiets one under way', async () => {
+  it('Delete cancels an archive still in its Undo window and quiets one under way', async () => {
     let deletingDuringDestroy = false
     stub(
       async () => {

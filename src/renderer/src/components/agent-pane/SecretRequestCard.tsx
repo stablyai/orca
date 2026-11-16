@@ -22,7 +22,7 @@ export type SecretRequestCardPhase =
   /** The save didn't reach Orca Cloud; nothing changed. */
   | 'failed'
   | 'saved'
-  /** Saved, but the agent wasn't told: the request expired first, or orcad didn't answer (D3). */
+  /** Saved, but the agent wasn't told: the request expired first, or orcad didn't answer. */
   | 'savedAfterExpiry'
   | 'expired'
 
@@ -32,14 +32,14 @@ export type SecretRequestCardModel = {
   name: string
   /** Untrusted agent text; rendered as plain text only. */
   reason: string | null
-  /** The agent suggested Repository. A hint only: it never preselects (D2). */
+  /** The agent suggested Repository. A hint only: it never preselects. */
   suggestedRepo: boolean
   /**
-   * Personal, plus Repository when the person can write it. Never Shared (D6). In a shared workspace
-   * Personal is left out (SEC-5), so this can be empty: then the card says who can add it instead.
+   * Personal, plus Repository when the person can write it. Never Shared. In a shared workspace
+   * Personal is left out, so this can be empty: then the card says who can add it instead.
    */
   scopes: readonly SecretRequestScope[]
-  /** The workspace is shared with teammates, so it gets no Personal secrets (SEC-5). */
+  /** The workspace is shared with teammates, so it gets no Personal secrets. */
   sharedWorkspace: boolean
   scope: SecretRequestScope
   value: string
@@ -72,7 +72,7 @@ export type SecretRequestCardActions = {
 }
 
 /**
- * S4-b: an agent in an Orca Cloud workspace asked for a secret. The value goes from this card to
+ * An agent in an Orca Cloud workspace asked for a secret. The value goes from this card to
  * Orca Cloud only (never through the agent); once saved it is a plain env var any command in the
  * workspace can read, the agent included. The agent is told it's ready. Non-modal: it never takes
  * focus from the terminal (F6 moves focus in and back out).

@@ -44,7 +44,7 @@ export const SecretsRequestParamsSchema = z
       .max(SECRET_REQUEST_REASON_MAX * 4)
       .transform(sanitizeSecretRequestReason)
       .pipe(z.string().min(1).max(SECRET_REQUEST_REASON_MAX)),
-    /** A hint only: the card always preselects Personal (D2). */
+    /** A hint only: the card always preselects Personal. */
     scope: SecretRequestScopeSchema.optional(),
     /** A hint, kept only when this orcad knows the worktree. The agent and its terminal come from the
      *  caller identity orcad verifies (launch evidence), never from params. */
@@ -122,7 +122,7 @@ export const SECRET_REQUEST_ERRORS = {
   unavailable: 'secret_requests_unavailable'
 } as const
 
-/** D4: printed by the CLI once a request is provided. */
+/** Printed by the CLI once a request is provided. */
 export function secretReloadHint(name: string): string {
   return `${name} is set for new shells in this workspace. To use it in this shell: eval "$(orca-env)" (fish: orca-env --fish | source).`
 }
