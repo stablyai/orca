@@ -67,6 +67,7 @@ export function createNodeFsMock(actual: typeof NodeFs): typeof NodeFs {
 }
 
 export function createNodeFsPromisesMock(actual: typeof NodeFsPromises): typeof NodeFsPromises {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: wrappers forward the original overloaded arguments and preserve their return values.
   return {
     ...actual,
     mkdir: (...args: Parameters<typeof actual.mkdir>) => {
@@ -118,6 +119,5 @@ export function createNodeFsPromisesMock(actual: typeof NodeFsPromises): typeof 
       }
       return actual.opendir(...args)
     }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: wrappers forward the original overloaded arguments and preserve their return values.
   } as typeof NodeFsPromises
 }
