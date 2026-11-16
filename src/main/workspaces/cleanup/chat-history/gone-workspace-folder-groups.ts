@@ -86,11 +86,12 @@ export async function sweepGoneWorkspaceFolderGroups<T>(
       now.listed.complete && !now.listed.claims.has(key) && now.parentIds.has(folder.ancestorId)
     )
   }
+  // The folder itself last: a catalog re-read can take a while, and the folder may come back meanwhile.
   const stillGone = async (key: string, folder: GoneFolder): Promise<boolean> =>
     !scope.signal?.aborted &&
     scope.isEnabled() &&
-    (await isStillGone(folder)) &&
-    (await isUnclaimed(key, folder))
+    (await isUnclaimed(key, folder)) &&
+    (await isStillGone(folder))
   for (const [key, { folder, chats: group }] of byFolder) {
     if (!(await stillGone(key, folder))) {
       continue
