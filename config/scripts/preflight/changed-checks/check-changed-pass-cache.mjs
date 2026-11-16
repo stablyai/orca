@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { splitUnitTestInputs } from './check-changed-selection.mjs'
+import { isDocsOnlyPath } from '../../workflow/source-routing/pr-code-change-scope.mjs'
 
 export const PASS_CACHE_PATH = '.cache/check-changed.json'
 export const UNIT_TESTS_TASK = 'unit tests'
@@ -17,7 +18,8 @@ const HASHED_CONFIG_FILES = [
   'config/vitest.config.ts',
   'config/scripts/preflight/changed-checks/check-changed.mjs',
   'config/scripts/preflight/changed-checks/check-changed-selection.mjs',
-  'config/scripts/preflight/changed-checks/check-changed-pass-cache.mjs'
+  'config/scripts/preflight/changed-checks/check-changed-pass-cache.mjs',
+  'config/scripts/preflight/changed-checks/check-changed-vitest-reporter.mjs'
 ]
 
 function git(root, args) {
@@ -78,17 +80,26 @@ export function hashChangedFiles(root, files) {
 export function readRunRecord(root, setup) {
   try {
     const record = JSON.parse(readFileSync(path.join(root, PASS_CACHE_PATH), 'utf8'))
+    const tasks = Object.values(record.tasks ?? {})
     return record.version === CACHE_VERSION &&
       record.setup === setup &&
-      record.files &&
-      typeof record.files === 'object' &&
-      record.tasks &&
-      typeof record.tasks === 'object'
+      Object.values(record.files ?? {}).every((hash) => typeof hash === 'string') &&
+      tasks.length === Object.keys(record.tasks).length &&
+      tasks.every(isTaskRecord)
       ? record
       : null
   } catch {
     return null
   }
+}
+
+function isTaskRecord(task) {
+  return (
+    typeof task?.ok === 'boolean' &&
+    (task.failedTests == null ||
+      (Array.isArray(task.failedTests) &&
+        task.failedTests.every((file) => typeof file === 'string')))
+  )
 }
 
 export function writeRunRecord(root, { setup, files, tasks }) {
@@ -125,11 +136,38 @@ export function planRepairRun(root, record, files, listDirectory) {
 
 function narrowUnitTests(root, edited, unitRecord, listDirectory) {
   const exists = (file) => existsSync(path.join(root, file))
-  // A deleted file has no import graph left to follow, so `related` can't find what used it.
   if (!Array.isArray(unitRecord?.failedTests) || !edited.every(exists)) {
     return null
   }
-  const { related, colocated } = splitUnitTestInputs(edited, listDirectory)
-  const failed = unitRecord.failedTests.filter(exists)
-  return { related, colocated: [...new Set([...colocated, ...failed])].sort() }
+  // `related` follows imports only: deleted files, setup, config, fixtures and snapshots need all.
+  const { related } = splitUnitTestInputs(edited, listDirectory)
+  if (edited.some((file) => !related.includes(file) && !isDocsOnlyPath(file))) {
+    return null
+  }
+  return { related, colocated: unitRecord.failedTests.filter(exists) }
+}
+
+/** Failed test files from the reporter's output; null unless every run pinned its failure to files. */
+export function failedTestsFromReports(root, reportFiles) {
+  const failed = new Set()
+  for (const reportFile of reportFiles) {
+    let report
+    try {
+      report = JSON.parse(readFileSync(reportFile, 'utf8'))
+    } catch {
+      // No report: the run crashed, timed out, or never started after an earlier step failed.
+      return null
+    }
+    if (
+      report.reason === 'interrupted' ||
+      report.unhandledErrors !== 0 ||
+      !Array.isArray(report.failed)
+    ) {
+      return null
+    }
+    for (const file of report.failed) {
+      failed.add(path.relative(root, file).split(path.sep).join('/'))
+    }
+  }
+  return failed.size > 0 ? [...failed].sort() : null
 }

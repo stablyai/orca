@@ -1,6 +1,6 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { availableParallelism, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url'
 import {
   collectChangedFiles,
   computeSetupHash,
+  failedTestsFromReports,
   hashChangedFiles,
   planRepairRun,
   readRunRecord,
@@ -15,6 +16,7 @@ import {
   writeRunRecord
 } from './check-changed-pass-cache.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
+import { TEST_REPORT_ENV } from './check-changed-vitest-reporter.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
 
@@ -138,9 +140,9 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, reportDir }
   const related = plan.unitTests.related.filter((file) => existsSync(path.join(root, file)))
   const colocated = plan.unitTests.colocated.filter((file) => existsSync(path.join(root, file)))
   if (related.length > 0 || colocated.length > 0) {
-    // The JSON report names the failed test files, which a repeat run reruns instead of all.
-    const vitest = (selection, testFiles = null) => {
-      const report = path.join(reportDir, `vitest-${testFiles ? 'colocated' : 'related'}.json`)
+    // The report names the failed test files, which a repeat run reruns instead of all.
+    const vitest = (selection) => {
+      const report = path.join(reportDir, `vitest-${selection[0]}.json`)
       return {
         ...step(node, [
           'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
@@ -150,11 +152,10 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, reportDir }
           '--passWithNoTests',
           `--maxWorkers=${maxWorkers ?? DEFAULT_VITEST_MAX_WORKERS}`,
           '--reporter=default',
-          '--reporter=json',
-          `--outputFile.json=${report}`
+          '--reporter=./config/scripts/preflight/changed-checks/check-changed-vitest-reporter.mjs'
         ]),
-        report,
-        testFiles
+        env: { [TEST_REPORT_ENV]: report },
+        report
       }
     }
     tasks.push({
@@ -173,7 +174,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, reportDir }
               )
             ]
           : []),
-        ...(colocated.length > 0 ? [vitest(['run', ...colocated], colocated)] : [])
+        ...(colocated.length > 0 ? [vitest(['run', ...colocated])] : [])
       ]
     })
   }
@@ -247,43 +248,19 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, reportDir }
   return tasks
 }
 
-// Test files a repeat run must rerun; null when the failure can't be pinned to files.
-function readFailedTests(root, { task, ok }) {
-  if (ok) {
-    return []
-  }
-  const failed = new Set()
-  for (const { report, testFiles } of task.steps.filter((step) => step.report)) {
-    let results
-    try {
-      results = JSON.parse(readFileSync(report, 'utf8'))
-    } catch {
-      // No report: the step crashed, timed out, or never ran after an earlier one failed.
-      if (!testFiles) {
-        return null
-      }
-      testFiles.forEach((file) => failed.add(file))
-      continue
-    }
-    const files = (results.testResults ?? [])
-      .filter((result) => result.status === 'failed')
-      .map((result) => path.relative(root, result.name).split(path.sep).join('/'))
-    // A failure outside any test file (an unhandled error) has nothing narrower to rerun.
-    if (results.success === false && files.length === 0) {
-      return null
-    }
-    files.forEach((file) => failed.add(file))
-  }
-  return failed.size > 0 ? [...failed].sort() : null
-}
-
 async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   const startedAt = performance.now()
   let output = ''
-  for (const { program, args } of task.steps) {
+  for (const step of task.steps) {
     try {
       const result = await runProcess(
-        { program, args, cwd: root, env, timeoutMs: stepTimeoutMs || null },
+        {
+          program: step.program,
+          args: step.args,
+          cwd: root,
+          env: { ...env, ...step.env },
+          timeoutMs: stepTimeoutMs || null
+        },
         'tail'
       )
       output += result.stdout + result.stderr
@@ -416,7 +393,14 @@ export async function main(root, argv) {
     records[result.task.name] = {
       ok: result.ok,
       ...(result.task.name === UNIT_TESTS_TASK
-        ? { failedTests: readFailedTests(root, result) }
+        ? {
+            failedTests: result.ok
+              ? []
+              : failedTestsFromReports(
+                  root,
+                  result.task.steps.filter((step) => step.report).map((step) => step.report)
+                )
+          }
         : {})
     }
   }

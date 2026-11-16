@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import {
   collectChangedFiles,
   computeSetupHash,
+  failedTestsFromReports,
   hashChangedFiles,
   planRepairRun,
   readRunRecord,
@@ -74,7 +75,8 @@ it('reruns failed checks and narrows tests to edited files plus last failures', 
   writeFileSync(join(root, 'src/a.ts'), 'export const a = 1\n')
   writeFileSync(join(root, 'src/b.ts'), 'export const b = 1\n')
   writeFileSync(join(root, 'src/a.test.ts'), 'it.todo("a")\n')
-  writeFileSync(join(root, 'notes.md'), '# notes\n')
+  mkdirSync(join(root, 'docs'))
+  writeFileSync(join(root, 'docs/notes.md'), '# notes\n')
   const record = {
     files: snapshot(),
     tasks: {
@@ -98,12 +100,34 @@ it('reruns failed checks and narrows tests to edited files plus last failures', 
 
   const passedTests = { ...record.tasks, 'unit tests': { ok: true, failedTests: [] } }
   const lastPassed = { files: snapshot(), tasks: passedTests }
-  writeFileSync(join(root, 'notes.md'), '# even more notes\n')
+  writeFileSync(join(root, 'docs/notes.md'), '# more notes\n')
   const onlyDocs = planRepairRun(root, lastPassed, snapshot(), () => [])
-  expect(onlyDocs.edited).toEqual(['notes.md'])
+  expect(onlyDocs.edited).toEqual(['docs/notes.md'])
   expect(onlyDocs.passed('unit tests')).toBe(true)
   expect(onlyDocs.passed('typecheck')).toBe(false)
 
+  // Edits `related` can't follow (snapshots, setup, deletions) bring back every test.
+  writeFileSync(join(root, 'src/a.test.ts.snap'), 'exports[`a`] = 1\n')
+  expect(planRepairRun(root, lastPassed, snapshot(), () => []).passed('unit tests')).toBe(false)
+  rmSync(join(root, 'src/a.test.ts.snap'))
   rmSync(join(root, 'src/b.ts'))
   expect(planRepairRun(root, lastPassed, snapshot(), () => []).unitTests).toBeNull()
+})
+
+it('pins failed tests to files only when nothing failed outside them', () => {
+  const report = (name, body) => {
+    writeFileSync(join(root, name), JSON.stringify(body))
+    return join(root, name)
+  }
+  const failing = report('failing.json', {
+    reason: 'failed',
+    unhandledErrors: 0,
+    failed: [join(root, 'src/a.test.ts')]
+  })
+  const passing = report('passing.json', { reason: 'passed', unhandledErrors: 0, failed: [] })
+  expect(failedTestsFromReports(root, [passing, failing])).toEqual(['src/a.test.ts'])
+
+  const leaked = report('leaked.json', { reason: 'failed', unhandledErrors: 1, failed: [] })
+  expect(failedTestsFromReports(root, [failing, leaked])).toBeNull()
+  expect(failedTestsFromReports(root, [failing, join(root, 'never-ran.json')])).toBeNull()
 })
