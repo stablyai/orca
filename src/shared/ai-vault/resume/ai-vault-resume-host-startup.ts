@@ -57,7 +57,9 @@ export function buildAiVaultRemoteResumeStartup(
     session.executionHostId === LOCAL_EXECUTION_HOST_ID ||
     !session.resumeCommand ||
     isAntigravityReferenceSession(session) ||
+    // These resume from a transcript path, which the scanner built for its own platform.
     session.agent === 'omp' ||
+    session.agent === 'pi' ||
     (session.agent === 'codex' && session.codexHome === null) ||
     commandOverride?.trim()
   ) {
