@@ -1,4 +1,4 @@
-import { cleanCloudServiceOrigin } from '../../shared/cloud-service-url'
+import { cleanCloudServiceOrigin } from '../../shared/network/cloud-service-url'
 
 export function resolveConnectorOrigin(env: NodeJS.ProcessEnv, packaged: boolean): string {
   return (

@@ -1,18 +1,19 @@
+import type { BrowserPageInventoryEntry } from '../../browser/runtime/browser-page-inventory'
 import type {
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../orchestration/mailbox/agent-sender-associations'
-import type { MobileProjectSectionCatalog } from '../../mobile-project-sections-contract'
+import type { MobileProjectSectionCatalog } from '../../sidebar-list/catalog/mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from '../../agent-status/contracts/agent-status-types'
 import type { RemoteServerUpdateSupport } from '../host-catalog/remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../control/remote-runtime-shared-control-types'
 import type { RuntimeHostConnectionState } from '../host-status/runtime-host-connection-state'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 import type {
   RuntimeBrowserUnavailableReason,
   RuntimeDegradation
 } from '../protocol/runtime-capability-degradation'
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../../workspace-layout/tab-groups/tab-types'
 import type { TerminalPaneLayoutNode } from '../../workspace-layout/terminal-tab-types'
 import type {
   RuntimeMobileSessionClientTab,
@@ -169,7 +170,7 @@ export type RuntimeSyncWindowGraph = {
   leaves: RuntimeSyncedLeaf[]
   /** Layout-owner windows report main-owned panes here; tabs/leaves then cover other workspaces. Window-to-main only. */
   mountedLeaves?: RuntimeMountedLeaf[]
-  mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
+  mobileSessionTabs?: RuntimeMobileSessionTabsPublication[]
   unchangedMobileSessionWorktrees?: string[]
   /** Shown tab-group grids let main size new terminals; window-to-main only, never copied into session tabs. */
   terminalGroupGridSizes?: Record<string, { cols: number; rows: number }>
@@ -259,7 +260,14 @@ export type RuntimeMobileSessionTabsSnapshot = {
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
   retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
+  /** Desktop publication only; outward session-tab results contain visible rows, not this inventory. */
+  browserPageInventory?: BrowserPageInventoryEntry[]
   tabs: RuntimeMobileSessionSnapshotTab[]
+}
+
+/** Window-to-main form: an unchanged inventory is omitted and named by the acknowledged renderer version holding it. */
+export type RuntimeMobileSessionTabsPublication = RuntimeMobileSessionTabsSnapshot & {
+  browserPageInventoryBaseVersion?: number
 }
 
 export type RuntimeMobileSessionRetiredTerminalSurface = {

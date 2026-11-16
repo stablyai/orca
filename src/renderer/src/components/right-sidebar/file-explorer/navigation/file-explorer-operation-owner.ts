@@ -13,7 +13,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { HostAuthority } from '../../../../../../shared/execution-host/host-authority'
 import { translate } from '@/i18n/i18n'
 import {
@@ -22,7 +22,7 @@ import {
 } from '@/lib/workspace/ownership/resolve-owner'
 import '@/lib/workspace/ownership/connection-context'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'

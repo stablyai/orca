@@ -16,7 +16,7 @@ import { requestSessionTabCloseFromRenderer } from './renderer-relays/session-ta
 import { requestTerminalPaneMoveFromRenderer } from './renderer-relays/terminal-pane-move-request-relay'
 import { revealTerminalPaneInWindow } from './renderer-relays/terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './renderer-relays/terminal-tab-close-request-relay'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { AgentListPublication } from '../../shared/agent-status/presentation/agent-list-status'
 import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 

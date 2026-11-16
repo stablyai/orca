@@ -2,7 +2,7 @@ import { cancelSettingsListReveal } from '../../section-layout/settings-list-scr
 import { useEffect, useId, type JSX, type ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { AgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
 import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-providers'
 import { LoadingSpinner } from '@/components/LoadingSpinner'

@@ -29,7 +29,7 @@ type GitLabProviderSelectionInput = Pick<
 >
 
 import { useCallback } from 'react'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
   buildGitLabWorkspaceSource as toGitLabLinkedWorkItem,

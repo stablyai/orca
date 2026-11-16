@@ -1,9 +1,9 @@
-import type { RecipeEnvironmentDescription } from '../../../shared/recipe-host-removal'
+import type { RecipeEnvironmentDescription } from '../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult,
@@ -12,7 +12,7 @@ import type {
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../shared/workspace-creator-visibility'
+} from '../../../shared/workspace-view/workspace-creator-visibility'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'

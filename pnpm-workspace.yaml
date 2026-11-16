@@ -8,23 +8,6 @@ packages:
   - src/packages/*
 
 minimumReleaseAge: 4320
-# Preserve the existing exception for the explicitly selected Bun 1.4.4 release.
-minimumReleaseAgeExclude:
-  # Security fix for compressed-request crashes (GHSA-27r3-jxmh-p828).
-  - 'body-parser@2.4.0'
-  - 'bun@1.4.4'
-  - '@oven/bun-darwin-aarch64@1.4.4'
-  - '@oven/bun-darwin-x64@1.4.4'
-  - '@oven/bun-freebsd-aarch64@1.4.4'
-  - '@oven/bun-freebsd-x64@1.4.4'
-  - '@oven/bun-linux-aarch64-android@1.4.4'
-  - '@oven/bun-linux-aarch64-musl@1.4.4'
-  - '@oven/bun-linux-aarch64@1.4.4'
-  - '@oven/bun-linux-x64-android@1.4.4'
-  - '@oven/bun-linux-x64-musl@1.4.4'
-  - '@oven/bun-linux-x64@1.4.4'
-  - '@oven/bun-windows-aarch64@1.4.4'
-  - '@oven/bun-windows-x64@1.4.4'
 shamefullyHoist: true
 
 # Enables pnpm's global virtual store outside CI; under config/ because the repo root only admits
@@ -114,12 +97,12 @@ packageExtensions:
       vfile: ^6.0.0
 
 overrides:
-  hono@>=4.12.4 <4.13.11: 4.13.11
   dompurify@<3.4.17: 3.4.17
   # Upstream markdown/math packages still require the vulnerable 0.16 line.
   katex@>=0.11.0 <0.18.2: 0.18.10
 
 patchedDependencies:
+  '@radix-ui/react-collapsible@1.1.20': config/patches/@radix-ui__react-collapsible@1.1.20.patch
   '@xterm/addon-image@0.10.0-beta.331': config/patches/@xterm__addon-image@0.10.0-beta.331.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.330': config/patches/@xterm__addon-ligatures@0.11.0-beta.330.patch
@@ -143,3 +126,6 @@ patchedDependencies:
   minimatch@9.0.9: config/patches/minimatch@9.0.9.patch
   minimatch@10.2.5: config/patches/minimatch@10.2.5.patch
   minimatch@10.2.6: config/patches/minimatch@10.2.6.patch
+permissions:
+  agent-browser:
+    skills: false

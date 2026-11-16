@@ -1,6 +1,6 @@
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { AUTOMATION_ORPHAN_ISSUES } from '../../../../../shared/automations/ownership/automation-list-scope'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { automationAuthorityCatalogKey } from '../hosts/automation-host-catalog-types'
 import type { AutomationCapturedOwner } from '../hosts/automation-captured-owner'
 import type { AutomationCreateDestination } from './automation-create-destination'

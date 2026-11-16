@@ -9,7 +9,9 @@ import {
 import '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import { _resetClosedPaneFencesForTests } from '../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const fixtures: Awaited<ReturnType<typeof createAcknowledgedTabRetirementFixture>>[] = []
 afterEach(async () => {

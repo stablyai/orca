@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -8,7 +8,7 @@ import {
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { acquiredAgentSessionAccount } from '../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structured-agent-definition'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
 import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'

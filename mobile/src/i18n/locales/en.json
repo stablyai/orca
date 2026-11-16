@@ -42,16 +42,18 @@
       "checkUpdates": "Check for updates"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Ask each time",
+      "askEachTimeDescription": "Choose Orca browser, phone browser, or copy the link each time.",
       "desktopBrowser": "Orca browser on desktop",
       "desktopBrowserDescription": "Open in the streamed browser from your paired desktop.",
       "phoneBrowser": "Phone browser",
       "phoneBrowserDescription": "Open in Safari, Chrome, or another browser on this phone.",
       "title": "Browser",
       "linksHeading": "LINKS",
-      "linksDescription": "Choose where HTTP(S) links tapped in terminal output open.",
+      "terminalAndChatLinksDescription": "Choose where web links tapped in terminal output and chat open.",
       "loadFailed": "Could not load browser preferences. Try again.",
       "saveFailed": "Could not save browser preferences. Try again.",
-      "openTerminalLinks": "Open terminal links"
+      "openLinks": "Open links"
     },
     "menuItems": {
       "appearance": "Appearance",
@@ -3140,7 +3142,10 @@
       "chooseInAgentPicker": "Choose in agent picker…",
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
-      "sessionOptions": "Session options"
+      "sessionOptions": "Session options",
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · next message",
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",
@@ -3166,6 +3171,7 @@
     "message": {
       "copyMessage": "Copy message",
       "forkFromResponse": "Fork from this response",
+      "scrollMessageToTop": "Scroll this message to top",
       "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "messageActionsSheet": {
@@ -3260,6 +3266,12 @@
     "interruptedContinue": {
       "failed": "Couldn't continue this chat. Try again, or send a message.",
       "explanation": "Continue, and the agent first checks whether its last step finished."
+    },
+    "restartNote": {
+      "continued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+      "refused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+      "unconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message.",
+      "notConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue."
     },
     "sendError": {
       "dismiss": "Dismiss"
@@ -3486,6 +3498,60 @@
       "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
       "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
       "pending": "Wait for the conversation to go back to the earlier message."
+    },
+    "urlRequest": {
+      "title": "Sign-in requested",
+      "open": "Open sign-in page",
+      "decline": "Decline",
+      "opened": "Opened the sign-in page in your browser.",
+      "openAgain": "Open again",
+      "finished": "Sign-in finished",
+      "finishedWith": "Sign-in finished · {{message}}"
+    },
+    "mcp": {
+      "source": {
+        "project": "Project",
+        "local": "Local",
+        "user": "User",
+        "plugin": "Plugin",
+        "session": "Session"
+      },
+      "status": {
+        "connected": "Connected",
+        "pending": "Connecting…",
+        "needsAuth": "Needs sign-in",
+        "failedReason": "Failed: {{error}}",
+        "failed": "Failed",
+        "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+        "finishOnPage": "Finish on the page that opened",
+        "waitingForSignIn": "Waiting for sign-in…",
+        "tools_one": "{{count}} tool",
+        "tools_other": "{{count}} tools",
+        "off": "Off"
+      },
+      "title": "MCP servers",
+      "notRunning": "MCP servers connect when you send your next message.",
+      "unsupported": "Update Orca on this chat's host to manage MCP servers here.",
+      "readFailed": "Couldn't load MCP servers.",
+      "retry": "Retry",
+      "empty": "No MCP servers are set up for this chat.",
+      "signIn": "Sign in",
+      "reconnect": "Reconnect",
+      "toggleLabel": "Use {{name}}",
+      "actionFailed": "Couldn't do that. Try again.",
+      "openAgain": "Open again",
+      "pastePlaceholder": "Paste address",
+      "pasteLabel": "Sign-in page address",
+      "finish": "Finish",
+      "signInUnfinished": "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done.",
+      "summary": {
+        "signingIn": "signing in to {{name}}",
+        "connected": "{{count}} connected",
+        "needsAuth_one": "{{count}} needs sign-in",
+        "needsAuth_other": "{{count}} need sign-in",
+        "failed": "{{count}} failed"
+      },
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
     }
   },
   "sourceControl": {

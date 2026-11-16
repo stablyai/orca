@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../../shared/workspace-unread-raise-capability'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../../shared/worktree/metadata/workspace-unread-raise-capability'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { AppState } from '../../../types'

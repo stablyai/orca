@@ -1,8 +1,8 @@
 import {
   getProjectIdentityKey,
   isGitHubBackedRepo
-} from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/host-setup/project-host-setup-projection'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 // Snapshot GitHub identities on dismissal; show the nudge again only when a new GitHub project appears.
 

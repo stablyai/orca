@@ -67,9 +67,15 @@ export async function withCliAgentLaunchRecovery<T>(
           'Inspect worktree list and terminal list on the execution host, then read the agent without sending input. Confirm the outcome before deliberately starting another agent.'
         ]
     // Replace transport restart-and-retry advice: the accepted launch may still be running.
+    const refusal =
+      error instanceof RuntimeRpcFailureError && error.code === 'invalid_argument'
+        ? error.message.trim()
+        : ''
+    const message =
+      'Orca could not confirm the launch outcome; the agent may already be running and the prompt may already be submitted.'
     throw new RuntimeClientError(
       'agent_session_operation_unknown',
-      'Orca could not confirm the launch outcome; the agent may already be running and the prompt may already be submitted.',
+      refusal ? `${message} ${refusal}` : message,
       {
         launchOutcome: 'unknown',
         retrySafe: Boolean(recovery.operationId),

@@ -1,7 +1,10 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { compareAppVersions, isValidAppVersion } from '../../../shared/app-version'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import { isSafePluginGitRef } from '../../../shared/plugins/installation/plugin-git-install-input'
 import { isAllowedPluginGitUrl } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {

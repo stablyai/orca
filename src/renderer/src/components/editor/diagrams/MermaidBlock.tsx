@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Maximize2 } from 'lucide-react'
 import type mermaidNamespace from 'mermaid'
-import { readableMermaidFlowchartSvg } from '../../../../../shared/mermaid-flowchart-contrast'
+import { readableMermaidFlowchartSvg } from '../../../../../shared/document-preview/mermaid-flowchart-contrast'
 import { getMermaidConfig } from './mermaid-config'
 import { sanitizeMermaidSvg } from './mermaid-sanitize'
 import { readMermaidThemeColors } from './mermaid-theme-colors'

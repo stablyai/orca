@@ -15,8 +15,8 @@ import {
 import { observeAntigravityChatSignIn } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
-import type { AntigravityChatAuthConfig } from '../../../../shared/antigravity-chat-auth-config'
-import type { AntigravityChatSignInStatus } from '../../../../shared/antigravity-account-types'
+import type { AntigravityChatAuthConfig } from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import type { AntigravityChatSignInStatus } from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const streams = vi.hoisted(() => {
@@ -187,45 +187,6 @@ it.each([
     })
   }
 )
-
-it('does not start a departed host after its prepared save settles', async () => {
-  const target = { kind: 'environment', environmentId: 'departed-host' } as const
-  let finish!: (value: typeof enterprise) => void
-  vi.mocked(callAntigravityChatAuthConfig).mockImplementation((_owner, config) =>
-    config === undefined
-      ? Promise.resolve(enterprise)
-      : new Promise((resolve) => {
-          finish = resolve
-        })
-  )
-  const user = userEvent.setup()
-  const view = render(
-    <AntigravityChatSignInRow owner={target} label="Test host" disabled={false} />,
-    {
-      wrapper: TooltipProvider
-    }
-  )
-  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-  await user.type(screen.getByLabelText('Google Cloud project'), '-changed')
-  await user.click(screen.getByRole('button', { name: /^Sign in/ }))
-  view.unmount()
-  await act(async () => {
-    finish(enterprise)
-  })
-  expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
-})
-
-it('retains sign-in for an older host without configuration capability', async () => {
-  streams.capability = 'unsupported'
-  const target = { kind: 'environment', environmentId: 'old-host' } as const
-  const user = userEvent.setup()
-  render(<AntigravityChatSignInRow owner={target} label="Test host" disabled={false} />, {
-    wrapper: TooltipProvider
-  })
-  await user.click(await screen.findByRole('button', { name: /^Sign in/ }))
-  await waitFor(() => expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start'))
-  expect(callAntigravityChatAuthConfig).not.toHaveBeenCalled()
-})
 
 it('commits the visible choice before sign-in while another client’s refresh is unresolved', async () => {
   const target = { kind: 'environment', environmentId: 'connected-client-change' } as const

@@ -1,9 +1,9 @@
 import { reopenClosedWorkspaceTab } from './reopen-closed-workspace-tab'
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { keybindingMatchesAction } from '../../../shared/keybindings'
-import type { KeybindingActionId } from '../../../shared/keybindings'
-import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
+import { keybindingMatchesAction } from '../../../shared/keybindings/matching'
+import type { KeybindingActionId } from '../../../shared/keybindings/types'
+import { matchesRecentTabSwitcherChord } from '../../../shared/keybindings/window-shortcut-policy'
 import { useAppStore } from '../store/index'
 import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
@@ -20,7 +20,7 @@ import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
 } from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
 import { isAgentTerminalPreviewTarget } from './dashboard/terminal-preview/agent-terminal-preview-target'

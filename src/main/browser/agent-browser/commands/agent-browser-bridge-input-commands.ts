@@ -2,7 +2,7 @@ import type {
   BrowserSelectResult,
   BrowserScrollResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { iterateBrowserTextInsertionChunks } from '../../../../shared/browser/automation/browser-text-insertion-chunks'
 import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import { AgentBrowserBridgeCoreCommands } from './agent-browser-bridge-core-commands'

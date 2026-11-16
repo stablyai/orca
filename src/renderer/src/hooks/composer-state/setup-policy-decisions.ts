@@ -1,8 +1,8 @@
-import { getDefaultRepoHookSettings } from '../../../../shared/constants'
+import { getDefaultRepoHookSettings } from '../../../../shared/orca-profiles/constants'
 import type {
   RepoHookSettings,
   SetupAgentStartupPolicy
-} from '../../../../shared/orca-yaml-hook-types'
+} from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 
 export function getRepoSetupAgentStartupPolicy(repo?: {
   hookSettings?: Pick<RepoHookSettings, 'setupAgentStartupPolicy'>

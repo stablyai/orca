@@ -9,7 +9,7 @@ import type {
 } from '../../../shared/jira/jira-saved-filters'
 import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,
@@ -34,7 +34,7 @@ import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/ses
 import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
-} from '../../../shared/project-move-pause'
+} from '../../../shared/project/move/project-move-pause'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -68,8 +68,8 @@ import type {
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
-} from '../../../shared/session-tab-close'
-import type { WorkspaceSleepNotice } from '../../../shared/workspace-sleep'
+} from '../../../shared/workspace-layout/client-views/session-tab-close'
+import type { WorkspaceSleepNotice } from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RemoteCliBrowserScopeQuery,
   RemoteCliBrowserScopeReply

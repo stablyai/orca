@@ -7,7 +7,7 @@ import {
 import { resolveStructuredAgentSessionOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS

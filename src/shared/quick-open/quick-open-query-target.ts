@@ -1,4 +1,4 @@
-import { isWindowsAbsolutePathLike } from '../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../file-access/cross-platform-path'
 import { isQuickOpenQueryTooLarge } from './quick-open-path-search'
 
 export type QuickOpenQueryTarget = { pathQuery: string; line?: number; column?: number }

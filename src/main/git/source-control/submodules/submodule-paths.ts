@@ -7,7 +7,7 @@ import {
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
 import { gitRuntimeOptionsKey } from '../git-runtime-options-cache-key'
-import { iterateNulDelimitedFields } from '../../../../shared/nul-delimited-fields'
+import { iterateNulDelimitedFields } from '../../../../shared/git/commands/nul-delimited-fields'
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512

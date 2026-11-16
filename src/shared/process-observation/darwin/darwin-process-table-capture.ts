@@ -4,9 +4,9 @@ import {
   isDarwinTerminalNamingInFlight,
   resetDarwinTerminalNamingForTests
 } from './darwin-terminal-naming-single-flight'
-import { errorMessage } from '../../error-message'
+import { errorMessage } from '../../errors/error-message'
 import { ProcessTableCaptureError, PS_ARGS } from '../tables/process-table-snapshot'
-import { withTimeout } from '../../promise-timeout-fallback'
+import { withTimeout } from '../../concurrency/promise-timeout-fallback'
 
 let deviceColumnUnsupported = false
 

@@ -30,7 +30,7 @@ import {
 import {
   ProjectSectionCatalogSchema,
   type ServedProjectSections
-} from '../../project-section-catalog-schema'
+} from '../catalog/project-section-catalog-schema'
 
 /** One installed feed, typed per domain; an entity this build cannot parse is left out. */
 export type SidebarFeedDomains = {

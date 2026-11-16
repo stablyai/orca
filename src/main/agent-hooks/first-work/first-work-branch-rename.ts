@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   humanizeBranchSlug,
@@ -14,7 +14,7 @@ import { computeBranchName, getConfiguredBranchPrefix } from '../../ipc/worktree
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { resolveLocalGitUsername } from '../../git/repositories/git-username'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { withCheckoutLock } from '../../git/worktrees/checkout/branch-switch'
 import {
   probeBranchUpstream,

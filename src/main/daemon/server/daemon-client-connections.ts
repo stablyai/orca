@@ -4,7 +4,10 @@ import { StringDecoder } from 'node:string_decoder'
 import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
 import type { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
-import { createNdjsonParser, encodeNdjson } from '../../../shared/main-process-ndjson-framer'
+import {
+  createNdjsonParser,
+  encodeNdjson
+} from '../../../shared/json-stream/main-process-ndjson-framer'
 import {
   BINARY_STREAM_FRAMING,
   type DaemonStreamFraming

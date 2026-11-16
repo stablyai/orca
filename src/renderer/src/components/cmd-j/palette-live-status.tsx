@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -18,7 +19,7 @@ import {
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
 import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
@@ -27,7 +28,7 @@ import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity,
   type TerminalTabAttentionBadge
-} from '@/components/tab-bar/terminal-tab-activity-status'
+} from '@/components/tab-bar/terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -177,7 +178,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   runtimePaneTitlesByTabId: {},
   ptyIdsByTabId: {},
   terminalLayoutsByTabId: {},

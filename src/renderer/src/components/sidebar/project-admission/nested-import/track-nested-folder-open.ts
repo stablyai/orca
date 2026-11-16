@@ -3,7 +3,7 @@ import {
   buildNestedRepoImportActionTelemetry,
   type NestedRepoTelemetryRuntimeKind
 } from '../../../../../../shared/telemetry/nested-repo-telemetry'
-import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
 
 export function trackNestedFolderOpen(args: {
   attemptId: string | null

@@ -3,7 +3,7 @@ import {
   type AcpStructuredChild
 } from '../session/children/acp-structured-child'
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
 
 type AcpStoppableSession = Pick<AcpStructuredSession, 'connection' | 'lane' | 'prompts' | 'turns'>

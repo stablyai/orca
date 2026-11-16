@@ -37,6 +37,58 @@ export async function readShellCsp() {
   return parseCspDirectives(source, 'listOf(', ').joinToString')
 }
 
+function readFrameDocument(source, pattern, indent) {
+  const match = pattern.exec(source)
+  if (!match) {
+    throw new Error('could not parse the chat visual frame document')
+  }
+  return match[1]
+    .split('\n')
+    .map((line) => line.replace(indent, ''))
+    .join('\n')
+}
+
+// Read the shipped chat visual frame (policy and fixed document); the iOS copy must match Kotlin's.
+export async function readChatVisualFrame() {
+  const shellDir = join(projectDir, 'mobile/modules/orca-mobile-web-shell')
+  const [kotlin, swift] = await Promise.all([
+    readFile(
+      join(
+        shellDir,
+        'android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellChatVisualFrame.kt'
+      ),
+      'utf8'
+    ),
+    readFile(join(shellDir, 'ios/MobileWebShellChatVisualFrame.swift'), 'utf8')
+  ])
+  const frame = {
+    csp: parseCspDirectives(
+      kotlin.slice(kotlin.indexOf('MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP = listOf(')),
+      'listOf(',
+      ').joinToString'
+    ),
+    document: readFrameDocument(
+      kotlin,
+      /MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_DOCUMENT = """\n([\s\S]*?)\n""".trimIndent\(\)/,
+      /^ {2}/
+    )
+  }
+  const swiftCsp = parseCspDirectives(
+    swift.slice(swift.indexOf('static let csp = [')),
+    '[',
+    '].joined'
+  )
+  const swiftDocument = readFrameDocument(
+    swift,
+    /static let document = Data\("""\n([\s\S]*?)\n {4}""".utf8\)/,
+    /^ {4}/
+  )
+  if (swiftCsp !== frame.csp || swiftDocument !== frame.document) {
+    throw new Error('the iOS and Android chat visual frames differ')
+  }
+  return frame
+}
+
 // Read literal document headers from Kotlin; CSP constant stays readShellCsp’s job. Throw if none found or browser defaults could masquerade as shell guarantees.
 export async function readShellDocumentHeaders() {
   const source = await readFile(
@@ -79,7 +131,7 @@ export async function readBridgeProtocolVersion() {
 export async function readBridgeWindowCaps() {
   const sources = await Promise.all(
     [
-      'src/shared/mobile-bridge-frame-bytes.ts',
+      'src/shared/mobile-bridge/mobile-bridge-frame-bytes.ts',
       'mobile/src/mobile-web-shell/host-streams/bridge-host-subscriptions.ts'
     ].map((path) => readFile(join(projectDir, path), 'utf8'))
   )

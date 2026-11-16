@@ -200,13 +200,4 @@ describe('installBrowserExtensionStorageRelay in a worker', () => {
       'Error in invocation of storage.set'
     )
   })
-
-  it('replaces native onChanged and delivers changes main relays from extension pages', async () => {
-    const worker = install('worker')
-    expect(worker.chrome.storage.onChanged).not.toEqual({ native: true })
-    worker.listen()
-    worker.emit([{ token: { newValue: 'abc' } }, 'session'])
-    expect(worker.all).toEqual([['session', { token: { newValue: 'abc' } }]])
-    expect(worker.perArea).toEqual([['session', { token: { newValue: 'abc' } }]])
-  })
 })

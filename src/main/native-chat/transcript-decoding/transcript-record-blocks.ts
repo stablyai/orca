@@ -4,7 +4,7 @@ import type {
   NativeChatToolResultBlock
 } from '../../../shared/native-chat/native-chat-types'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent,

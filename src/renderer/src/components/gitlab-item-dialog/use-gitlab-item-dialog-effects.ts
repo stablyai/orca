@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useEffect } from 'react'
-import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab/gitlab-types'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 

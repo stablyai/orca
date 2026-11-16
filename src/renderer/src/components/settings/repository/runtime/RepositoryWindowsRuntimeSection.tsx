@@ -1,6 +1,6 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Project, ProjectUpdateArgs } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { Project, ProjectUpdateArgs } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 
 import { type SettingsSearchEntry, matchesSettingsSearch } from '../../search/settings-search'
@@ -13,7 +13,7 @@ import { WslDriveProjectGitRow } from '../../../wsl-drive-project/WslDriveProjec
 import { WslDriveUncConversionRow } from '../../../wsl-drive-project/WslDriveUncConversionRow'
 import { useWslHostsAcceptNewWork } from '../../../sidebar/use-wsl-hosts-enabled'
 import { resolveProjectExecutionRuntime } from '../../../../../../shared/execution-host/project-execution-runtime'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 
 type RepositoryWindowsRuntimeSectionProps = {
   repo?: Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId' | 'kind'>

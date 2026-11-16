@@ -2,7 +2,7 @@ import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/life
 import { getPtyIpc } from '../pty-host-bindings'
 import { runPtyIpcSpawn } from './spawn-run'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { attachOnlyViewOf, attachViewAfterHiddenStart } from '../pane/attach-only-view'
 
 export function installPtySpawnIpcHandler(deps: PtySpawnIpcDeps): void {

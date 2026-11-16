@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { JiraProjectReference } from '../../../../../../shared/jira/jira-project-reference'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { resolveJiraSourceHostId } from '../../../../../../shared/jira/jira-source-host'
-import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'
 
 export function useTaskPageJiraProjectScope(
   repos: readonly Repo[],

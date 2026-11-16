@@ -12,8 +12,11 @@ import {
   removeManagedOrcadEnvironment
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import * as environments from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { Repo } from '../../../../shared/repo-types'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import {

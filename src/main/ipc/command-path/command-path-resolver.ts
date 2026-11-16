@@ -3,7 +3,7 @@ import { statSync, type Stats } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
-import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { directoryNameKey } from './command-path-directory'
 import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
 

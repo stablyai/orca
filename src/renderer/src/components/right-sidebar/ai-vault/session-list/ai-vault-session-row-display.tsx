@@ -10,7 +10,7 @@ import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 
 import { useRepoById } from '@/store/repos/use-repository-catalog'
-import { resolveRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
+import { resolveRepoBadgeColor } from '../../../../../../shared/repository/appearance/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import {
   isAiVaultSessionRecoverableEmpty,

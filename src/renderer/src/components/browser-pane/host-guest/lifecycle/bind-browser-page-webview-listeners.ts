@@ -7,7 +7,7 @@ import {
 import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser-display-title'
 import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { normalizeBrowserGuestSrc } from '../../../../../../shared/browser/extensions/browser-extension-url'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { parkBrowserPageViewport } from '../viewport/browser-page-viewport'
 import { subscribeBrowserSystemResume } from '../recovery/browser-system-resume'
@@ -141,6 +141,11 @@ export function bindBrowserPageWebviewListeners({
   retryGuestRecoveryRef.current = guestRecovery.retryRecovery
 
   webview.addEventListener('did-attach', handleDidAttach)
+  const attachedNavigationReady = (): void => {
+    delete webview.dataset.orcaAttachPending
+  }
+  webview.addEventListener('did-finish-load', attachedNavigationReady)
+  webview.addEventListener('did-fail-load', attachedNavigationReady)
   webview.addEventListener('dom-ready', handleDomReady)
   webview.addEventListener('render-process-gone', guestRecovery.recoverRenderer)
   webview.addEventListener('destroyed', handleGuestDestroyed)
@@ -216,9 +221,21 @@ export function bindBrowserPageWebviewListeners({
     const initialUrl =
       normalizeBrowserGuestSrc(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
-    issueBrowserGuestNavigation(webview, () => {
-      webview.src = initialUrl
-    })
+    webview.dataset.orcaAttachPending = 'true'
+    void window.api.browser
+      .preparePageAttach({
+        browserPageId: browserTabId,
+        partition: webview.getAttribute('partition') ?? '',
+        url: initialUrl
+      })
+      .then((marker) => {
+        if (webviewRef.current === webview && webview.isConnected) {
+          issueBrowserGuestNavigation(webview, () => {
+            webview.src = marker
+          })
+        }
+      })
+      .catch(() => guestRecovery.recoverRenderer())
   } else if (isPaintableRef.current) {
     if (isBrowserPageRendererRecoveryPending(browserTabId)) {
       guestRecovery.recoverRenderer()
@@ -228,6 +245,8 @@ export function bindBrowserPageWebviewListeners({
   }
 
   return () => {
+    webview.removeEventListener('did-finish-load', attachedNavigationReady)
+    webview.removeEventListener('did-fail-load', attachedNavigationReady)
     unsubscribeMetadata()
     webview.removeEventListener('did-attach', handleDidAttach)
     webview.removeEventListener('dom-ready', handleDomReady)

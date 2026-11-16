@@ -6,7 +6,7 @@ import { CONTEXTUAL_TOUR_IDS } from '../../../shared/feature-education/contextua
 import { FEATURE_INTERACTION_IDS } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { FeatureInteractionState } from '../../../shared/feature-education/interactions/feature-interactions'
 import { FEATURE_TIP_SEEN_IDS } from '../../../shared/feature-education/feature-tips'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { Store } from '../../persistence/loading-store/store'
 
 export const DEV_SHOW_FIRST_RUN_EDUCATION_ENV = 'ORCA_DEV_SHOW_FIRST_RUN_EDUCATION'

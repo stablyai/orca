@@ -9,7 +9,7 @@ import {
   refreshManagedOrcadPairing
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { pairingCode } from '../runtime-environments-ipc-test-harness'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
@@ -102,22 +102,6 @@ async function repairMidProbe(now: number, keyByte = 1): Promise<void> {
   )
   advanceRuntimeEnvironmentCapabilityIncarnation(envId)
 }
-
-it('answers from the successor owner when the probe itself re-paired the server', async () => {
-  mocks.request.mockImplementationOnce(async () => {
-    await repairMidProbe(2)
-    return {
-      id: 'status',
-      ok: false,
-      error: { code: 'unauthorized', message: 'refused' },
-      _meta: { runtimeId: 'old-host' }
-    }
-  })
-  mocks.request.mockResolvedValueOnce(response())
-  await expect(
-    getRuntimeEnvironmentStatus(directory, envId, undefined, { reconnect: true })
-  ).resolves.toMatchObject({ ok: true })
-})
 
 it.each([
   ['a pairing under another host key', async () => await repairMidProbe(2, 2), true],

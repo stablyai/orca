@@ -1,7 +1,7 @@
 import type {
   QueuedEditLease,
   QueuedEditLeaseLoss
-} from '../../../../../../src/shared/queued-message-edit-lease'
+} from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-lease'
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import {
@@ -23,8 +23,8 @@ import {
   queuedEditKeptImages,
   queuedEditTextForKeptImages,
   type QueuedMessageImageBlock
-} from '../../../../../../src/shared/queued-message-edit'
-import { appendReturnedDraftText } from '../../../../../../src/shared/returned-draft-text'
+} from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit'
+import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import {
   setMobileNativeChatDraftText,
   type MobileComposerWriter

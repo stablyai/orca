@@ -1,5 +1,5 @@
-import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { delayUnlessAborted } from '../../../../shared/concurrency/abort-aware-delay'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import * as Pools from './codex-at-rest-skills-probe-pools'
 import {
   isLegacyAgentSessionAccountHome,
@@ -26,7 +26,7 @@ import {
   isCodexSkillsListUnsupported
 } from './codex-skill-list'
 import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,

@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { posix as pathPosix } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   POSIX_SKILL_PATH_SEMANTICS,
   nativeSkillPathSemantics,

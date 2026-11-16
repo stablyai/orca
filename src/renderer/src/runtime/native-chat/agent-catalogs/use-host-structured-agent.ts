@@ -5,7 +5,7 @@ import { isAgentSessionHandleProvider } from '../../../../../shared/agent-sessio
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   readHostStructuredAgentsForRuntime,
@@ -47,13 +47,4 @@ export function useHostStructuredAgent(
     [agent, executionHostId, runtimeId]
   )
   return useAppViewExternalStore(subscribeHostStructuredAgents, read, read)
-}
-
-/** `reported` is the session's options answer: absent before it lands and from an older host. */
-export function useStructuredAgentAcceptsImages(
-  target: RuntimeClientTarget,
-  agent: string,
-  reported: boolean | undefined
-): boolean {
-  return structuredAgentAcceptsImages(useHostStructuredAgent(target, agent), agent, reported)
 }

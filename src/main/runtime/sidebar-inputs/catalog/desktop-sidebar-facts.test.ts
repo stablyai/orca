@@ -1,10 +1,10 @@
 // Runs on plain Node, as orcad does: the reader imports no Electron.
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { ManualRepoOrderEntry } from '../../../../shared/ui-chrome-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { ManualRepoOrderEntry } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { readDesktopSidebarFacts, type DesktopSidebarFactSources } from './desktop-sidebar-facts'
 
