@@ -181,9 +181,24 @@ export function quoteStartupArg(value: string, shell: AgentStartupShell): string
     return quotePowerShellLiteral(value)
   }
   if (shell === 'cmd') {
-    return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
+    return quoteCmdStartupArg(value)
   }
   return quotePortableUnixArg(value)
+}
+
+const CMD_METACHARACTERS = /([\^&|<>()%!"])/g
+
+/** Orca's settings syntax, which tokenizeStartupCommand reads back exactly; for cmd it folds every `^`. */
+export function quoteStartupSettingArg(value: string, shell: AgentStartupShell): string {
+  return shell === 'cmd'
+    ? `"${value.replace(CMD_METACHARACTERS, '^$1')}"`
+    : quoteStartupArg(value, shell)
+}
+
+// cmd keeps `^` literal inside quotes: argv-quote, then caret-escape the whole string including its quotes.
+function quoteCmdStartupArg(value: string): string {
+  const argvQuoted = `"${value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`
+  return /[\^&|<>()%!"]/.test(value) ? argvQuoted.replace(CMD_METACHARACTERS, '^$1') : argvQuoted
 }
 
 export function buildShellCommandFromArgv(

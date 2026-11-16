@@ -19,7 +19,7 @@ import {
 } from '../permissions/tui-agent-permission-choice'
 import type { AgentPermissionChoice } from '../permissions/tui-agent-permission-choice'
 import {
-  quoteStartupArg,
+  quoteStartupSettingArg,
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../startup/tui-agent-startup-shell'
@@ -101,12 +101,12 @@ export function projectAgentLaunchProfile(
     kept.length === parsed.tokens.length &&
     kept.every((token, index) => token === parsed.tokens[index])
       ? userArgs
-      : kept.map((token) => quoteStartupArg(token, shell)).join(' ')
+      : kept.map((token) => quoteStartupSettingArg(token, shell)).join(' ')
   if (input.target === 'structured') {
     return { args: raw, choices, launch }
   }
   const render = (token: string) =>
-    /^[A-Za-z0-9_./:=@-]+$/.test(token) ? token : quoteStartupArg(token, shell)
+    /^[A-Za-z0-9_./:=@-]+$/.test(token) ? token : quoteStartupSettingArg(token, shell)
   const permission =
     input.target === 'terminal' && choices.permissionMode
       ? agentPermissionArgsForLaunch(agent, choices.permissionMode, userArgs)
