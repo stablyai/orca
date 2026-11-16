@@ -10,14 +10,17 @@ import {
 } from './ai-vault-tab-title-requests'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import {
+  aiVaultTitleRequestInputs,
   aiVaultTitleRequestInputsChanged,
-  aiVaultTitleSyncInputsChanged
+  aiVaultTitleSyncInputsChanged,
+  type AiVaultTitleRequestInputs
 } from './ai-vault-tab-title-sync-inputs'
 
 import {
   aiVaultTitleRequestKey,
   changedOwningPaneTitleRequests,
   changedTitleRefreshHosts,
+  storedAiVaultTitles,
   titleRefreshInterval,
   supportsSessionTitleRefresh
 } from './ai-vault-tab-title-freshness'
@@ -27,7 +30,7 @@ function requestIdentity(request: AiVaultTitleRequest): string {
 }
 
 type RequestSnapshot = {
-  state: AppState
+  inputs: AiVaultTitleRequestInputs
   requests: AiVaultTitleRequest[]
   byKey: Map<string, AiVaultTitleRequest>
   byTabId: Map<string, AiVaultTitleRequest>
@@ -73,13 +76,13 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
   let snapshot: RequestSnapshot | null = null
 
   const currentRequests = (state = dependencies.getState()): RequestSnapshot => {
-    if (snapshot && !aiVaultTitleRequestInputsChanged(state, snapshot.state)) {
-      snapshot.state = state
+    if (snapshot && !aiVaultTitleRequestInputsChanged(state, snapshot.inputs)) {
+      snapshot.inputs = aiVaultTitleRequestInputs(state)
       return snapshot
     }
     const requests = collectAiVaultTitleRequests(state)
     snapshot = {
-      state,
+      inputs: aiVaultTitleRequestInputs(state),
       requests,
       byKey: new Map(requests.map((request) => [aiVaultTitleRequestKey(request), request])),
       byTabId: new Map(requests.map((request) => [request.tabId, request]))
@@ -170,10 +173,9 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       }
     }
     const now = Date.now()
+    const storedTitles = storedAiVaultTitles(state, requests)
     const requestsToScan = requests.filter((request) => {
-      const stored = state.tabsByWorktree[request.worktreeId]?.find(
-        (tab) => tab.id === request.tabId
-      )?.aiVaultTitle
+      const stored = storedTitles.get(request.tabId)
       const identityMatches =
         stored?.agent === request.agent && stored.sessionId === request.providerSession.id
       if (stored && !identityMatches) {
@@ -189,7 +191,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         (request.refresh &&
           (dirty.has(aiVaultTitleRequestKey(request)) ||
             now - last! >=
-              titleRefreshInterval(state, request) /
+              titleRefreshInterval(state, request, stored) /
                 (supportsSessionTitleRefresh(state, request) ? 2 : 1)))
       )
     })
@@ -221,20 +223,26 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       schedule()
     } else if (!stopped) {
       const currentState = dependencies.getState()
-      const delays = currentRequests(currentState)
-        .requests.filter((request) => request.refresh)
+      const { requests: currentRequestList } = currentRequests(currentState)
+      const currentStoredTitles = storedAiVaultTitles(currentState, currentRequestList)
+      const delays = currentRequestList
+        .filter((request) => request.refresh)
         .map((request) =>
           Math.max(
             0,
             (lastSettledAttemptAt.get(aiVaultTitleRequestKey(request)) ?? Date.now()) +
-              titleRefreshInterval(currentState, request) -
+              titleRefreshInterval(
+                currentState,
+                request,
+                currentStoredTitles.get(request.tabId)
+              ) -
               Date.now()
           )
         )
       if (delays.length > 0) {
         refreshTimer = setTimer(schedule, Math.min(...delays))
       } else {
-        // Nothing comes back on a timer, so don't hold an old store snapshot until the next change.
+        // Nothing comes back on a timer, so don't hold old store inputs until the next change.
         snapshot = null
       }
     }

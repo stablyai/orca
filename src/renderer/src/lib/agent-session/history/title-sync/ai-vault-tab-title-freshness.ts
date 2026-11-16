@@ -5,6 +5,7 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { isAiVaultTitleAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
 import { collectAgentPaneConversations } from '../../identity/pane-agent-conversations'
 
@@ -52,10 +53,27 @@ export function changedTitleRefreshHosts(state: AppState, previous: AppState): S
   return changed
 }
 
-export function titleRefreshInterval(state: AppState, request: AiVaultTitleRequest): number {
-  const stored = state.tabsByWorktree[request.worktreeId]?.find(
-    (tab) => tab.id === request.tabId
-  )?.aiVaultTitle
+type StoredTitle = TerminalTab['aiVaultTitle']
+
+/** Each request tab's saved title, reading only the request workspaces' tabs. */
+export function storedAiVaultTitles(
+  state: AppState,
+  requests: readonly AiVaultTitleRequest[]
+): Map<string, StoredTitle> {
+  const stored = new Map<string, StoredTitle>()
+  for (const worktreeId of new Set(requests.map((request) => request.worktreeId))) {
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+      stored.set(tab.id, tab.aiVaultTitle)
+    }
+  }
+  return stored
+}
+
+export function titleRefreshInterval(
+  state: AppState,
+  request: AiVaultTitleRequest,
+  stored: StoredTitle
+): number {
   const missing =
     stored?.agent !== request.agent ||
     stored.sessionId !== request.providerSession.id ||
