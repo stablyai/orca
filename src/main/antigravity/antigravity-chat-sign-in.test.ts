@@ -27,6 +27,7 @@ import type { RpcCallerIdentity } from '../runtime/rpc/callers/rpc-caller-identi
 import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts/antigravity-accounts'
 import type { AntigravityChatSignInStatus } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 
+import { closeAntigravitySignInOwner } from './antigravity-chat-account'
 import * as browserHelper from './antigravity-browser-helper'
 import { ANTIGRAVITY_SIGN_IN_PROMPT } from './antigravity-sign-in-url'
 import {
@@ -346,7 +347,7 @@ it.each([
   'fails, and drops only its own token, when a new server cannot use the saved %j sign-in',
   async (authConfig, dropped, kept) => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { flowId, folder, host, finishBrowser, openSession } = await signInAgainst(
+    const { flowId, folder, finishBrowser, openSession } = await signInAgainst(
       printed(GOOGLE_LINK),
       { savedSignInUnusable: true, authConfig }
     )
@@ -423,7 +424,9 @@ it.each(['cancel', 'unusable', 'missing'] as const)(
     } else {
       const ended = Promise.withResolvers<void>()
       const { close } = await follow(({ flow }) => {
-        if (flow?.flowId === flowId && flow.phase === 'failed') ended.resolve()
+        if (flow?.flowId === flowId && flow.phase === 'failed') {
+          ended.resolve()
+        }
       })
       finishBrowser()
       openSession()
@@ -437,3 +440,26 @@ it.each(['cancel', 'unusable', 'missing'] as const)(
     )
   }
 )
+
+it('refuses an accepted close until the sign-in process has actually exited', async () => {
+  let exited = false
+  const listeners: (() => void)[] = []
+  const owner = {
+    close: async () => true,
+    get exited() {
+      return exited
+    },
+    onExit: (listener: () => void) => {
+      listeners.push(listener)
+    }
+  }
+  try {
+    await expect(closeAntigravitySignInOwner('closure-test', owner)).rejects.toThrow(
+      'could not be stopped'
+    )
+  } finally {
+    exited = true
+    listeners.forEach((listener) => listener())
+  }
+  await expect(closeAntigravitySignInOwner('closure-test', owner)).resolves.toBeUndefined()
+})

@@ -184,49 +184,20 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   // Reuse chat launch resolution without downloading a runtime.
   const launch = await prepareAcpLaunch(resolve, closed)
   const home = launch.env.GEMINI_HOME
-  const target = await antigravitySignInHome(home, current.intent)
-  const { cwd, replacement } = target
-  const liveServers = new Set<AcpAgentConnection>()
-  // Wait for every server's proven exit and session ownership before deleting files.
-  const owned = { sessionId: '', done: false, disposed: false }
-  const disposeWhenGone = async (): Promise<void> => {
-    if (liveServers.size > 0 || !owned.done || owned.disposed) {
-      return
-    }
-    owned.disposed = true
-    await target.remove(owned.sessionId)
-  }
+  const target = await antigravitySignInHome(launch, current.intent, spec.signIn, closed)
+  const { replacement } = target
+  let sessionId = ''
   try {
-    const selected = replacement
-      ? await prepareAcpLaunch(
-          async () => ({ ...launch, env: { ...launch.env, GEMINI_HOME: target.home } }),
-          closed
-        )
-      : launch
-    const signInSpec = replacement
-      ? { ...spec, signIn: { ...spec.signIn, answered: () => {} } }
-      : spec
-    const serverLaunch = {
-      ...selected,
-      args: selected.spec.args({ fullAccess: false, pluginDir: null }),
-      cwd
-    }
     const servers = antigravitySignInServers({
       connectServer: () => acpPrivateTempConnect(deps, closed),
       home: target.home,
-      launch: serverLaunch,
+      launch: target.launch,
       signal,
       closed,
-      spawned: (server) => {
-        liveServers.add(server)
-        server.onExit(() => {
-          liveServers.delete(server)
-          void disposeWhenGone()
-        })
-      }
+      spawned: target.spawned
     })
     const method = resolveAntigravityChatAuthConfig(launch.antigravityChatAuth).method
-    const watch = { ...signInSpec.signIn, link: (link: string) => receiveLink(current, link) }
+    const watch = { ...target.watch, link: (link: string) => receiveLink(current, link) }
     await servers.run(watch, async (server) => {
       const initialized = await server.initialize()
       closed()
@@ -242,9 +213,9 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
     closed()
     publish(current, { phase: 'verifying' })
     const { started, live } = await servers.startOnSavedSignIn(
-      signInSpec,
+      { ...spec, signIn: target.watch },
       method,
-      (sessionId) => (owned.sessionId = sessionId)
+      (id) => (sessionId = id)
     )
     if (replacement) {
       const commit = await antigravitySignInCredentialCommit(target.home, home, method)
@@ -258,13 +229,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       publish(current, { phase: 'signedIn' })
     }
   } finally {
-    owned.done = true
-    for (const server of liveServers) {
-      if (server.exited) {
-        liveServers.delete(server)
-      }
-    }
-    await disposeWhenGone()
+    await target.remove(sessionId)
   }
 }
 

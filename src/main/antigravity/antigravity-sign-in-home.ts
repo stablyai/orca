@@ -3,41 +3,80 @@ import { chmod, lstat, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AntigravityChatSignInIntent } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
+import { prepareAcpLaunch } from '../acp/launch/acp-structured-launch-preparation'
+import type { AcpLaunchInvocation } from '../acp/launch/acp-structured-launch-resolution'
+import type { AcpAgentConnection, AcpSignInWatch } from '../acp/process/acp-agent-connection'
 import { acpRunFolder } from '../acp/launch/acp-private-temp'
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { AntigravitySignInSentence } from './antigravity-chat-account'
 import { removeAntigravitySignInSessionFiles } from './antigravity-sign-in-session-files'
 
-export async function antigravitySignInHome(home: string, intent: AntigravityChatSignInIntent) {
+export async function antigravitySignInHome(
+  launch: AcpLaunchInvocation,
+  intent: AntigravityChatSignInIntent,
+  watch: AcpSignInWatch,
+  closed: () => void
+) {
+  const home = launch.env.GEMINI_HOME
   // A failed or orphaned replacement must never write the working account's credentials.
   const stage = intent === 'changeAccount' ? await acpRunFolder(join(home, 'sign-in')) : null
   const cwd = stage
     ? join(stage.path, 'workspace')
     : await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
+  const selectedHome = stage ? join(stage.path, 'home') : home
+  let selected = launch
   try {
     if (stage) {
       await mkdir(cwd)
+      selected = await prepareAcpLaunch(
+        async () => ({ ...launch, env: { ...launch.env, GEMINI_HOME: selectedHome } }),
+        closed
+      )
     }
   } catch (error) {
     await stage?.remove()
     throw error
   }
+  const servers = new Set<AcpAgentConnection>()
+  let session: string | null = null
+  let removed = false
+  const dispose = async (): Promise<void> => {
+    if (session === null || removed || servers.size > 0) {
+      return
+    }
+    removed = true
+    if (stage) {
+      await stage.remove()
+      return
+    }
+    await Promise.all([
+      removeAntigravitySignInSessionFiles(home, session, cwd),
+      rm(cwd, { recursive: true, force: true })
+    ]).catch((error: unknown) => {
+      console.warn('[antigravity] sign-in session files not removed:', error)
+    })
+  }
   return {
-    home: stage ? join(stage.path, 'home') : home,
-    cwd,
+    home: selectedHome,
+    launch: { ...selected, args: selected.spec.args({ fullAccess: false, pluginDir: null }), cwd },
+    watch: stage ? { ...watch, answered: () => {} } : watch,
     replacement: stage !== null,
-    remove: (sessionId: string): Promise<void> =>
-      stage
-        ? stage.remove()
-        : Promise.all([
-            removeAntigravitySignInSessionFiles(home, sessionId, cwd),
-            rm(cwd, { recursive: true, force: true })
-          ]).then(
-            () => {},
-            (error: unknown) => {
-              console.warn('[antigravity] sign-in session files not removed:', error)
-            }
-          )
+    spawned: (server: AcpAgentConnection): void => {
+      servers.add(server)
+      server.onExit(() => {
+        servers.delete(server)
+        void dispose()
+      })
+    },
+    remove: async (sessionId: string): Promise<void> => {
+      session = sessionId
+      for (const server of servers) {
+        if (server.exited) {
+          servers.delete(server)
+        }
+      }
+      await dispose()
+    }
   }
 }
 
