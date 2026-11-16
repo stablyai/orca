@@ -8,7 +8,7 @@ const base = {
   workspaceLabel: 'ios-login-fix',
   shared: false,
   command: 'xcrun simctl list devices booted',
-  cwd: '/Users/neil',
+  cwd: '/Users/dev',
   timeoutSec: 120,
   reason: 'Find the booted simulator so I can install the build there.',
   agent: 'claude',
@@ -45,7 +45,7 @@ export const longSharedQueued = defineFixture({
           agent: null,
           reason: null,
           timeoutSec: 600,
-          cwd: '/Users/neil/projects/acme-ios',
+          cwd: '/Users/dev/projects/acme-ios',
           command:
             'xcodebuild -workspace Acme.xcworkspace -scheme Acme -destination "platform=iOS Simulator,name=iPhone 16" -derivedDataPath build test 2>&1 | tail -n 80\nxcrun simctl io booted screenshot /tmp/acme-login.png'
         }}

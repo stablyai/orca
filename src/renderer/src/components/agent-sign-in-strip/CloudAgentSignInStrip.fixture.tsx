@@ -158,7 +158,7 @@ export const codePaste = fixture({
 })
 export const wrongAccount = fixture({
   reason: 'paused',
-  view: { step: 'signed', email: 'nw@personal.dev', expectedEmail: 'nw@stably.ai' }
+  view: { step: 'signed', email: 'nw@personal.dev', expectedEmail: 'nw@example.com' }
 })
 export const error = fixture({
   reason: 'paused',
@@ -174,7 +174,7 @@ export const portBusy = fixture({
 })
 export const done = fixture({
   reason: 'paused',
-  view: { step: 'signed', email: 'nw@stably.ai' }
+  view: { step: 'signed', email: 'nw@example.com' }
 })
 export const needNarrow = fixture({ reason: 'paused', view: { step: 'need' }, width: 640 })
 export const needTiny = fixture({ reason: 'paused', view: { step: 'need' }, width: 520 })

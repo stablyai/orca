@@ -25,7 +25,7 @@ vi.mock('./cloud-device-identity', () => ({
     enrollment: {
       controlPlaneUrl: 'https://cloud.test',
       deviceSessionId: 'ds_1',
-      label: 'Neil’s iPhone',
+      label: 'Dana’s iPhone',
       enrolledAt: 1
     }
   })
@@ -56,7 +56,7 @@ describe('ensureCloudReaderKey', () => {
     expect(calls[0]).toMatchObject({
       method: 'PUT',
       url: 'https://cloud.test/v1/reader-keys',
-      body: { publicKeyB64: key.publicKeyB64, deviceLabel: 'Neil’s iPhone', deviceKind: 'mobile' }
+      body: { publicKeyB64: key.publicKeyB64, deviceLabel: 'Dana’s iPhone', deviceKind: 'mobile' }
     })
     await ensureCloudReaderKey(plane, { now })
     expect(calls).toHaveLength(1)

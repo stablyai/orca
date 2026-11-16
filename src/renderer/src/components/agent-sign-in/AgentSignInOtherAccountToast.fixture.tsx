@@ -9,9 +9,9 @@ function OtherAccountToast(): React.JSX.Element {
     // After the Toaster mounts, which listens only from then on.
     const timer = window.setTimeout(() => {
       warnHostAgentOtherAccount(
-        { key: 'fixture', environmentId: 'env-m4air', hostLabel: 'm4air', agent: 'claude' },
+        { key: 'fixture', environmentId: 'env-dev-mac', hostLabel: 'dev-mac', agent: 'claude' },
         'nw@personal.dev',
-        'nw@stably.ai'
+        'nw@example.com'
       )
     }, 50)
     return () => {

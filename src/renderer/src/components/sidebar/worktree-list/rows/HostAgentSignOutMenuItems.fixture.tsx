@@ -13,7 +13,7 @@ import { HostAgentSignOutDialog, HostAgentSignOutMenuItems } from './HostAgentSi
 export const signedIn = defineFixture({
   width: 320,
   setup: () =>
-    rememberHostAgentSignInReport('env-m4air', {
+    rememberHostAgentSignInReport('env-dev-mac', {
       checkedAt: 0,
       agents: [
         { agent: 'claude', state: 'signedIn', method: 'orcaAccount' },
@@ -23,10 +23,10 @@ export const signedIn = defineFixture({
   render: () => (
     <div className="h-[300px] p-2">
       <DropdownMenu open modal={false}>
-        <DropdownMenuTrigger>m4air</DropdownMenuTrigger>
+        <DropdownMenuTrigger>dev-mac</DropdownMenuTrigger>
         <DropdownMenuContent side="bottom" align="start" className="w-56">
           <DropdownMenuLabel className="truncate text-[11px] font-medium text-muted-foreground">
-            m4air
+            dev-mac
           </DropdownMenuLabel>
           <DropdownMenuItem>
             <Pencil className="size-3.5" />
@@ -37,8 +37,8 @@ export const signedIn = defineFixture({
             Check connection
           </DropdownMenuItem>
           <HostAgentSignOutMenuItems
-            environmentId="env-m4air"
-            hostLabel="m4air"
+            environmentId="env-dev-mac"
+            hostLabel="dev-mac"
             open={false}
             onSignOut={() => {}}
           />
@@ -53,8 +53,8 @@ export const confirm = defineFixture({
   render: () => (
     <div className="h-[260px]">
       <HostAgentSignOutDialog
-        environmentId="env-m4air"
-        hostLabel="m4air"
+        environmentId="env-dev-mac"
+        hostLabel="dev-mac"
         agent="claude"
         onClose={() => {}}
       />
