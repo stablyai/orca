@@ -3,7 +3,6 @@ import {
   selectLatestAgentStatusRow
 } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { agentHidesApprovalsFromHooks } from '../../../../shared/agent-status/approval/hook-silent-approval-agents'
-import { agentHasBlockedTextAnchors } from '../../agent-state-rules/agent-state-text-anchors'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
@@ -50,20 +49,19 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     return this.terminalAgentStatus.getStatus(handle)
   }
 
-  /** Mid-turn, an agent whose hooks hide approvals is sendable only when its screen rules would see the menu. */
+  /** An agent whose hooks hide approvals may be in one unless its own latest report ended the turn; no report proves nothing. */
   isTerminalAgentApprovalUnseen(handle: string): boolean {
     const paneKey = this.getPaneKeyForTerminalHandle(handle)
     const row = selectLatestAgentStatusRow({
       handles: [handle],
       paneKeys: paneKey ? [paneKey] : [],
-      hookRows: this.publicPaneStatusFn?.(paneKey ?? '') ?? []
+      hookRows: paneKey ? (this.publicPaneStatusFn?.(paneKey) ?? []) : []
     })
-    return (
-      row !== null &&
-      row.state !== 'done' &&
-      agentHidesApprovalsFromHooks(row.agentType) &&
-      !agentHasBlockedTextAnchors(row.agentType)
-    )
+    if (row) {
+      return row.state !== 'done' && agentHidesApprovalsFromHooks(row.agentType)
+    }
+    const pty = this.ptysById.get(this.getTerminalAgentStatusPtyId(handle))
+    return agentHidesApprovalsFromHooks(pty?.foregroundAgent ?? pty?.launchAgent)
   }
 
   protected getTerminalAgentStatusPtyId(handle: string): string {

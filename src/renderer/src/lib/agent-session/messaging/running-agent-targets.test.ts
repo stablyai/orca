@@ -4,7 +4,6 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   deriveRunningAgentSendTargets,
   type RunningAgentTargetState
@@ -34,20 +33,8 @@ function state(
   statusEntry: AgentStatusEntry,
   livePtyIds: string[] | undefined,
   tabTitle = 'kiro-cli',
-  root: TerminalPaneLayoutNode | null = null,
-  hostCapabilities: string[] = []
-): RunningAgentTargetState {
-  const ptyId = livePtyIds?.[0] ?? 'pty-1'
-  const hostStatus: RuntimeStatus = {
-    runtimeId: 'host-1',
-    rendererGraphEpoch: 0,
-    graphStatus: 'ready',
-    authoritativeWindowId: null,
-    liveTabCount: 1,
-    liveLeafCount: 1,
-    capabilities: hostCapabilities
-  }
-  const tab: TerminalTab = {
+  root: TerminalPaneLayoutNode | null = null
+): RunningAgentTargetState {  const tab: TerminalTab = {
     id: 'tab-1',
     ptyId: null,
     worktreeId: 'wt',
@@ -66,12 +53,11 @@ function state(
         root,
         activeLeafId: root ? SIBLING_LEAF_ID : LEAF_ID,
         expandedLeafId: null,
-        ptyIdsByLeafId: { [LEAF_ID]: ptyId }
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
       }
     },
     ptyIdsByTabId: livePtyIds === undefined ? {} : { 'tab-1': livePtyIds },
-    runtimePaneTitlesByTabId: {},
-    runtimeStatusByEnvironmentId: new Map([['host-1', { status: hostStatus, checkedAt: 0 }]])
+    runtimePaneTitlesByTabId: {}
   }
 }
 
@@ -133,20 +119,14 @@ describe('deriveRunningAgentSendTargets terminal liveness', () => {
     ).toEqual({ status: 'disabled', disabledReason: 'Agent needs permission' })
   })
 
-  it('disables a mid-turn Kiro pane only on a paired host that cannot vet its approval menu', () => {
-    const remotePty = 'remote:host-1@@term-1'
-    const working = entry({ state: 'working' })
-    expect(onlyTarget(state(working, [remotePty]))).toEqual({
+  it('disables a mid-turn Kiro pane, whose hooks report working through an approval menu', () => {
+    expect(onlyTarget(state(entry({ state: 'working' }), ['pty-1']))).toEqual({
       status: 'disabled',
       disabledReason: 'Agent may be waiting for approval'
     })
     expect(
-      onlyTarget(state(working, [remotePty], 'kiro-cli', null, ['terminal.send-approval-guard.v1']))
+      onlyTarget(state(entry({ state: 'working', agentType: 'claude' }), ['pty-1']))
     ).toEqual({ status: 'eligible', disabledReason: undefined })
-    expect(onlyTarget(state(entry({}), [remotePty]))).toEqual({
-      status: 'eligible',
-      disabledReason: undefined
-    })
   })
 
   it('disables a pane whose saved PTY is not live', () => {

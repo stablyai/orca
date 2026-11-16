@@ -103,24 +103,6 @@ export function blockedAnchorLiterals(): readonly string[] {
   return textAnchors().blockedLiterals
 }
 
-const agentsWithBlockedTextAnchors = compiledFromActiveAgentStateRules(
-  (files) =>
-    new Set<string>(
-      files
-        .filter((file) =>
-          file.anchors.some(
-            ({ when, answer }) => when.region === 'text' && answer.state === 'blocked'
-          )
-        )
-        .map((file) => file.id)
-    )
-)
-
-/** True when this agent's own rules file recognises a blocking menu on screen. */
-export function agentHasBlockedTextAnchors(agentType: string): boolean {
-  return agentsWithBlockedTextAnchors().has(agentType)
-}
-
 export function findBlockedAnchorSignals(window: string): BlockedTextSignal[] {
   return textAnchors().blocked.flatMap((find) => {
     const hit = find(window)

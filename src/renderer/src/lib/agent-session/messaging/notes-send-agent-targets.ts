@@ -19,6 +19,7 @@ import type { AgentType } from '../../../../../shared/agent-status/contracts/age
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentMessageTarget } from './agent-message-target'
+import { agentHidesApprovalsFromHooks } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 
 export type NotesSendAgentTargetState = RunningAgentTargetState &
   Pick<AppState, 'runtimePaneTitlesByTabId'>
@@ -139,18 +140,32 @@ function deriveTitleHintAgentTarget(
     // Launch metadata can precede actual TUI startup; require current matching title evidence for discovery.
     return null
   }
+  const agentType = tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title)
+  // Without the agent's own turn-end report, a title cannot rule out an approval menu its hooks hide.
   const disabledReason =
-    titleEvidence.status === 'permission' ? 'Agent needs permission' : undefined
+    titleEvidence.status === 'permission'
+      ? 'Agent needs permission'
+      : agentHidesApprovalsFromHooks(agentType)
+        ? 'Agent may be waiting for approval'
+        : undefined
 
   return {
     paneKey: makePaneKey(tab.id, leafId),
     tabId: tab.id,
     messageTarget: { kind: 'terminal', tabId: tab.id, leafId },
-    agentType: tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title),
+    agentType,
     tabTitle: tab.title,
     status: disabledReason ? 'disabled' : 'eligible',
     ...(disabledReason ? { disabledReason } : {})
   }
+}
+
+// Agent-state refusals come from the agent's own reports; a title cannot clear them.
+function refusesForAgentState(target: NotesSendAgentTarget): boolean {
+  return (
+    target.disabledReason === 'Agent needs permission' ||
+    target.disabledReason === 'Agent may be waiting for approval'
+  )
 }
 
 // Manual hints are weakest; never duplicate status/launch rows, including disabled ones.
@@ -171,7 +186,7 @@ function mergeLaunchAgentTitleTarget(
   const samePaneIndex = targets.findIndex((existing) => existing.paneKey === target.paneKey)
   if (samePaneIndex !== -1) {
     const existing = targets[samePaneIndex]
-    if (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission') {
+    if (existing.status === 'eligible' || refusesForAgentState(existing)) {
       return
     }
 
@@ -192,7 +207,7 @@ function mergeLaunchAgentTitleTarget(
     targets.some(
       (existing) =>
         existing.tabId === target.tabId &&
-        (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission')
+        (existing.status === 'eligible' || refusesForAgentState(existing))
     )
   ) {
     return

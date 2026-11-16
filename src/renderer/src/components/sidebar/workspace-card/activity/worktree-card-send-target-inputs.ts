@@ -11,7 +11,6 @@ export type SendTargetInputsState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
-  | 'runtimeStatusByEnvironmentId'
 >
 
 export type SendTargetControlInputsState = Pick<
@@ -31,8 +30,7 @@ export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
   unifiedTabsByWorktree: {},
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
-  runtimePaneTitlesByTabId: {},
-  runtimeStatusByEnvironmentId: new Map()
+  runtimePaneTitlesByTabId: {}
 })
 
 // Inactive cards ignore picker-mode and freshness-epoch changes.
@@ -55,8 +53,7 @@ export function selectSendTargetInputs(
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,
     ptyIdsByTabId: s.ptyIdsByTabId,
-    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
-    runtimeStatusByEnvironmentId: s.runtimeStatusByEnvironmentId
+    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
   }
 }
 

@@ -7,7 +7,6 @@ import cursor from './cursor.json'
 import dsh from './dsh.json'
 import gemini from './gemini.json'
 import hermes from './hermes.json'
-import kiro from './kiro.json'
 import omp from './omp.json'
 import opencode from './opencode.json'
 import opencode2 from './opencode2.json'
@@ -43,7 +42,6 @@ export const RAW_BUNDLED_AGENT_STATE_RULE_FILES: readonly unknown[] = [
   dsh,
   gemini,
   hermes,
-  kiro,
   omp,
   opencode,
   opencode2,

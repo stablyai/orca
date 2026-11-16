@@ -1,14 +1,29 @@
 import { useAppStore } from '@/store'
-import { ptyHostAdvertisesCapability } from '@/runtime/hosts/capabilities/pty-host-capability'
+import {
+  isRemoteRuntimePtyId,
+  parseRemoteRuntimePtyId
+} from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import '../../../shared/remote-runtime/protocol/protocol-version'
 import { AGENT_STATUS_TURN_END_RUNTIME_CAPABILITY } from '../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { HostTurnEndFacts } from '../../../shared/agent-status/contracts/agent-status-types'
 
-// Older paired hosts lack turn-end stamps.
+// Older paired hosts lack turn-end stamps; local/WSL relay uses this build, while unbound PTYs remain unknown.
 function ptyHostStampsTurnEnds(ptyId: string | null | undefined): boolean {
-  return ptyHostAdvertisesCapability(
-    useAppStore.getState().runtimeStatusByEnvironmentId,
-    ptyId,
-    AGENT_STATUS_TURN_END_RUNTIME_CAPABILITY
+  if (!ptyId) {
+    return false
+  }
+  if (!isRemoteRuntimePtyId(ptyId)) {
+    return true
+  }
+  const environmentId = parseRemoteRuntimePtyId(ptyId)?.environmentId
+  const entry = environmentId
+    ? useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+    : undefined
+  return (
+    lastVerifiedRuntimeStatus(entry)?.capabilities?.includes(
+      AGENT_STATUS_TURN_END_RUNTIME_CAPABILITY
+    ) === true
   )
 }
 

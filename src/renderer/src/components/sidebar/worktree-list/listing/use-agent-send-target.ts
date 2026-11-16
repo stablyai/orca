@@ -12,7 +12,6 @@ const EMPTY_UNIFIED_TABS_BY_WORKTREE: AppState['unifiedTabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
-const EMPTY_RUNTIME_STATUS_BY_ENVIRONMENT_ID: AppState['runtimeStatusByEnvironmentId'] = new Map()
 
 // Force the picker’s target workspace visible only while a running agent there can receive the message.
 export function useAgentSendTargetWorktreeId(): string | null {
@@ -39,11 +38,6 @@ export function useAgentSendTargetWorktreeId(): string | null {
   const agentTargetRuntimePaneTitlesByTabId = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
   )
-  const agentTargetRuntimeStatusByEnvironmentId = useAppStore((s) =>
-    agentSendPopoverTargetMode
-      ? s.runtimeStatusByEnvironmentId
-      : EMPTY_RUNTIME_STATUS_BY_ENVIRONMENT_ID
-  )
   return useMemo(
     () =>
       recomputeOn([agentTargetStatusEpoch], () => {
@@ -57,8 +51,7 @@ export function useAgentSendTargetWorktreeId(): string | null {
             unifiedTabsByWorktree: agentTargetUnifiedTabsByWorktree,
             terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
             ptyIdsByTabId: agentTargetPtyIdsByTabId,
-            runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId,
-            runtimeStatusByEnvironmentId: agentTargetRuntimeStatusByEnvironmentId
+            runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId
           },
           agentSendPopoverTargetMode.worktreeId
         )
@@ -75,8 +68,7 @@ export function useAgentSendTargetWorktreeId(): string | null {
       agentTargetUnifiedTabsByWorktree,
       agentTargetTerminalLayoutsByTabId,
       agentTargetPtyIdsByTabId,
-      agentTargetRuntimePaneTitlesByTabId,
-      agentTargetRuntimeStatusByEnvironmentId
+      agentTargetRuntimePaneTitlesByTabId
     ]
   )
 }
