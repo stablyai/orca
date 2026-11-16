@@ -4,6 +4,7 @@ import type {
   RendererStatusRecord
 } from '../../../../shared/agent-status/renderer-status-publication'
 import { rendererStatusOccupantKey } from '../../../../shared/agent-status/renderer-status-publication'
+import { structuralValuesEqual } from '../../../../shared/collections/structural-value-equality'
 
 /** One in-flight batch; mutations after capture stay queued under a later sequence. */
 export class RendererStatusSender {
@@ -55,6 +56,15 @@ export class RendererStatusSender {
   private stage(key: string): void {
     const current = this.capture(key)
     const previous = this.last.get(key)
+    // Tab rewrites report every key on the tab; main already holds rows that did not change.
+    if (
+      previous &&
+      current &&
+      rendererStatusOccupantKey(previous) === rendererStatusOccupantKey(current) &&
+      structuralValuesEqual(previous.row, current.row)
+    ) {
+      return
+    }
     if (
       previous &&
       (!current || rendererStatusOccupantKey(previous) !== rendererStatusOccupantKey(current))
