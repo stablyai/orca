@@ -26,6 +26,7 @@ import {
   type PluginHookRemoval
 } from '../agent-hooks/installation/opencode-pi-plugin-hook-files'
 import type { OrcaInstallIdentity } from './orca-install-identity'
+import { forgetClaudeAgentViewMarkers } from '../claude/agent-view/agent-view-uninstall'
 import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
 
 /** What the desktop app and `orca uninstall` each supply; the cleanup itself is shared. */
@@ -46,10 +47,6 @@ export type OrcaUninstallHost = {
 
 export const ORCA_UNINSTALL_MANUAL_COMMAND = 'orca uninstall'
 const PLUGIN_AGENTS: ReadonlySet<string> = new Set(['opencode', 'pi', 'omp', 'prime-agent'])
-
-function hookScriptsDir(homeDir: string): string {
-  return join(homeDir, '.orca', 'agent-hooks')
-}
 
 function errorText(error: unknown): string {
   return (error instanceof Error ? error.message : String(error)).split('\n')[0]
@@ -92,7 +89,7 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     detail: null
   }))
   const cli = await host.getCliStatus().catch(() => null)
-  const scripts = hookScriptsDir(host.homeDir)
+  const scripts = join(host.homeDir, '.orca', 'agent-hooks')
   return {
     installKind: host.identity.installKind,
     agents: [...registryAgents, ...pluginAgents],
@@ -177,6 +174,10 @@ async function runAgentHooks(
           status
         ])
   )
+  const claude = statuses.get('claude')
+  if (claude && registryOutcome(claude).state === 'removed') {
+    await forgetClaudeAgentViewMarkers().catch(() => {})
+  }
   return update((entry) => {
     const plugin = pluginRemovals.get(entry.agent)
     if (plugin) {
@@ -250,7 +251,7 @@ async function runHookScripts(
     return { ...entry, state: 'kept-shared', detail: `Still used by ${names}.` }
   }
   try {
-    const dir = hookScriptsDir(host.homeDir)
+    const dir = join(host.homeDir, '.orca', 'agent-hooks')
     await rm(dir, { recursive: true, force: true })
     const orcaDir = join(host.homeDir, '.orca')
     if ((await readdir(orcaDir).catch(() => ['?'])).length === 0) {
