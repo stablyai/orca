@@ -90,10 +90,11 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         await this.stopExplicitlyClosedTabPtys([...owed.keys()], '', owed)
         throw error
       }
+      const ptyIdsByTab = this.getPtyIdsByTabForExplicitClose(worktree.id)
       let closed = 0
       for (const parentTabId of parentTabIds) {
         for (const [ptyId, incarnationId] of this.captureOwedPtyStops(
-          this.getPtyIdsForExplicitTabClose(worktree.id, parentTabId)
+          ptyIdsByTab.get(parentTabId) ?? []
         )) {
           owed.set(ptyId, incarnationId)
         }

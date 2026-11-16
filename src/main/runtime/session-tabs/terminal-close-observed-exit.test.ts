@@ -33,7 +33,7 @@ describe('closing a terminal after observing its physical exit', () => {
     expect(result.beforeStreamResume.providerExitCount).toBe(0)
   })
 
-  it.each(['replacement', 'unverified', 'legacy-unstamped', 'throw-after-exit'] as const)(
+  it.each(['unverified', 'legacy-unstamped', 'throw-after-exit'] as const)(
     'does not reuse an exit for %s',
     async (control) => {
       const result = await runObservedExitControl(control)
@@ -41,4 +41,10 @@ describe('closing a terminal after observing its physical exit', () => {
       expect(result.fallbackKills).toBe(1)
     }
   )
+
+  it('leaves a successor that took the PTY id during the stop running', async () => {
+    const result = await runObservedExitControl('replacement')
+    expect(result.stopped).toBe(false)
+    expect(result.fallbackKills).toBe(0)
+  })
 })

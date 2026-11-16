@@ -15,6 +15,14 @@ export type OwedPtyIncarnations = ReadonlyMap<string, PtyIncarnationId | null | 
 
 export const NO_STOP: ExplicitCloseStop = { stopped: false }
 
+// Unknown to known is the same process registering its incarnation, as registration treats it.
+function isSuccessor(
+  expected: PtyIncarnationId | null | undefined,
+  current: PtyIncarnationId | null | undefined
+): boolean {
+  return expected != null && current != null && current !== expected
+}
+
 export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntimeWithFocusTerminal {
   /** Captured before asking the window, so a failed close never stops a successor reusing a PTY id. */
   protected captureOwedPtyStops(ptyIds: Iterable<string>): OwedPtyIncarnations {
@@ -33,7 +41,7 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
         ? owedIncarnations.get(ptyId)
         : this.ptysById.get(ptyId)?.incarnationId
       // A successor reusing this id is not what the close asked to stop.
-      if (this.ptysById.get(ptyId)?.incarnationId !== expectedIncarnationId) {
+      if (isSuccessor(expectedIncarnationId, this.ptysById.get(ptyId)?.incarnationId)) {
         continue
       }
       this.markPtyStopRequested(ptyId)
@@ -58,8 +66,7 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
           const providerAlreadyRetiredPty =
             verdict?.status === 'unverifiable' &&
             verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
-          const current = this.ptysById.get(ptyId)
-          const replaced = current !== undefined && current.incarnationId !== expectedIncarnationId
+          const replaced = isSuccessor(expectedIncarnationId, this.ptysById.get(ptyId)?.incarnationId)
           if (!providerAlreadyRetiredPty && !replaced) {
             this.ptyController.kill(ptyId)
             if (!verdict || verdict.status === 'live') {
