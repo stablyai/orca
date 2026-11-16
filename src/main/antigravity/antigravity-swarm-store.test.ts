@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { agentSessionRecordFixture } from '../native-chat/testing/agent-session-record-test-fixture'
@@ -234,5 +234,67 @@ describe('antigravity-swarm-store', () => {
     expect(
       await readAntigravitySwarmMemberTranscript(record, { conversationId: 'conv-unrelated' })
     ).toEqual({ status: 'none' })
+  })
+
+  it('invalidates etag once a terminal tool error settles and propagates non-missing read errors', async () => {
+    const root = await createTempDir()
+    const geminiHome = join(root, '.gemini')
+    const brainDir = join(geminiHome, 'antigravity-cli', 'brain')
+    await writeSwarmFiles({
+      brainDir,
+      swarmId: 'conv-coord-4',
+      workerId: 'conv-worker-4'
+    })
+    const workerTranscriptPath = join(
+      brainDir,
+      'conv-worker-4',
+      '.system_generated',
+      'logs',
+      'transcript.jsonl'
+    )
+    await writeFile(
+      workerTranscriptPath,
+      JSON.stringify({
+        step_index: 3,
+        source: 'MODEL',
+        type: 'PLANNER_RESPONSE',
+        status: 'ERROR',
+        error: '429 RESOURCE_EXHAUSTED'
+      })
+    )
+    const { mtimeMs } = await stat(workerTranscriptPath)
+    const record = antigravityRecord({
+      accountHomePath: geminiHome,
+      providerSessionId: 'conv-coord-4'
+    })
+
+    const unsettled = await readAntigravitySwarmSnapshot(record, { now: mtimeMs + 2_000 })
+    expect(unsettled.status).toBe('ok')
+    if (unsettled.status !== 'ok') {
+      throw new Error('Expected ok snapshot')
+    }
+    expect(unsettled.snapshot.members.find((m) => m.name === 'backend-dev')?.failure).toBeNull()
+
+    const settled = await readAntigravitySwarmSnapshot(record, {
+      ifNoneMatch: unsettled.snapshot.etag,
+      now: mtimeMs + 11_000
+    })
+    expect(settled.status).toBe('ok')
+    if (settled.status === 'ok') {
+      expect(settled.snapshot.members.find((m) => m.name === 'backend-dev')?.failure).toEqual({
+        kind: 'quota',
+        text: '429 RESOURCE_EXHAUSTED'
+      })
+    }
+
+    if (process.platform !== 'win32' && process.getuid?.() !== 0) {
+      const boardPath = join(brainDir, 'conv-coord-4', '.system_generated', 'swarm', 'board.jsonl')
+      await chmod(boardPath, 0o000)
+      try {
+        await expect(readAntigravitySwarmSnapshot(record)).rejects.toThrow()
+      } finally {
+        await chmod(boardPath, 0o644)
+      }
+    }
   })
 })

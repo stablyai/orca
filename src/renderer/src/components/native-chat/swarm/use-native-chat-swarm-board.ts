@@ -43,6 +43,7 @@ export function useNativeChatSwarmBoard(args: {
   const mayHaveSwarm = isAntigravity && (sessionCommands === undefined || sessionReportsSwarm)
 
   const [openFor, setOpenFor] = useState<string | null>(null)
+  const [unsupportedFor, setUnsupportedFor] = useState<string | null>(null)
   const [snapshotState, setSnapshotState] = useState<{
     sessionId: string
     snapshot: AntigravitySwarmSnapshot | null
@@ -60,6 +61,8 @@ export function useNativeChatSwarmBoard(args: {
   }>({ sessionId, conversationId: null, result: null })
   const [transcriptLoading, setTranscriptLoading] = useState(false)
 
+  const isUnsupported = unsupportedFor === sessionId
+  const mayHaveSwarmNow = mayHaveSwarm && !isUnsupported
   const snapshot = snapshotState.sessionId === sessionId ? snapshotState.snapshot : null
   const error = snapshotState.sessionId === sessionId ? snapshotState.error : null
   const selectedConversationId =
@@ -84,7 +87,7 @@ export function useNativeChatSwarmBoard(args: {
 
   const fetchSnapshot = useCallback(
     async (force = false) => {
-      if (!mayHaveSwarm) {
+      if (!mayHaveSwarmNow) {
         return
       }
       const seq = ++requestSeqRef.current
@@ -111,7 +114,13 @@ export function useNativeChatSwarmBoard(args: {
         } else if (result.status === 'ok') {
           etagRef.current = { sessionId, etag: result.snapshot.etag }
           setSnapshotState({ sessionId, snapshot: result.snapshot, error: null })
-        } else if (result.status === 'none' || result.status === 'unsupported') {
+        } else if (result.status === 'unsupported') {
+          if (etagRef.current?.sessionId === sessionId) {
+            etagRef.current = null
+          }
+          setUnsupportedFor(sessionId)
+          setSnapshotState({ sessionId, snapshot: null, error: null })
+        } else if (result.status === 'none') {
           if (etagRef.current?.sessionId === sessionId) {
             etagRef.current = null
           }
@@ -138,7 +147,7 @@ export function useNativeChatSwarmBoard(args: {
         }
       }
     },
-    [mayHaveSwarm, sessionId, target]
+    [mayHaveSwarmNow, sessionId, target]
   )
 
   const fetchTranscript = useCallback(
@@ -182,20 +191,32 @@ export function useNativeChatSwarmBoard(args: {
   )
 
   useEffect(() => {
-    if (!isVisible || !mayHaveSwarm) {
+    if (!isVisible || !mayHaveSwarmNow) {
       return
     }
-    void fetchSnapshot(false)
+    let cancelled = false
+    let timer: number | undefined
     const shouldPoll = isOpen || isWorking || hasSnapshot
-    if (!shouldPoll) {
-      return
-    }
     const intervalMs = isOpen || hasActiveWorker || isWorking ? ACTIVE_POLL_MS : IDLE_POLL_MS
-    const timer = window.setInterval(() => {
-      void fetchSnapshot(false)
-    }, intervalMs)
-    return () => window.clearInterval(timer)
-  }, [fetchSnapshot, hasActiveWorker, hasSnapshot, isOpen, isVisible, isWorking, mayHaveSwarm])
+
+    const run = async () => {
+      await fetchSnapshot(false)
+      if (cancelled || !shouldPoll) {
+        return
+      }
+      timer = window.setTimeout(() => {
+        void run()
+      }, intervalMs)
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+      if (timer !== undefined) {
+        window.clearTimeout(timer)
+      }
+    }
+  }, [fetchSnapshot, hasActiveWorker, hasSnapshot, isOpen, isVisible, isWorking, mayHaveSwarmNow])
 
   const selectedMemberStamp = useMemo(() => {
     if (!selectedConversationId || !snapshot) {
@@ -250,7 +271,7 @@ export function useNativeChatSwarmBoard(args: {
     }
   }, [fetchTranscript, selectedConversationId])
 
-  const canOpen = isAntigravity && (sessionReportsSwarm || snapshot !== null)
+  const canOpen = isAntigravity && !isUnsupported && (sessionReportsSwarm || snapshot !== null)
 
   return useMemo(
     () => ({

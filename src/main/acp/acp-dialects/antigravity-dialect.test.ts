@@ -72,6 +72,24 @@ describe('Antigravity swarm dialect hooks', () => {
       ANTIGRAVITY_ACP_DIALECT.toolSubagents?.(
         {
           sessionUpdate: 'tool_call_update',
+          toolCallId: 'call_add_fail',
+          status: 'failed',
+          rawInput: { action: 'add', name: 'backend-dev', role: 'worker' }
+        },
+        {
+          kind: 'tool-call',
+          callId: 'call_add_fail',
+          name: 'swarm',
+          input: { action: 'add', name: 'backend-dev', role: 'worker' },
+          state: 'failed'
+        }
+      )
+    ).toEqual([{ id: 'backend-dev', label: 'backend-dev', state: 'failed' }])
+
+    expect(
+      ANTIGRAVITY_ACP_DIALECT.toolSubagents?.(
+        {
+          sessionUpdate: 'tool_call_update',
           toolCallId: 'call_kill',
           status: 'completed',
           rawInput: { action: 'kill', name: 'backend-dev' }

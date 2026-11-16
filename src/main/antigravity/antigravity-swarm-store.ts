@@ -6,6 +6,7 @@ import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/life
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
+import { STEP_ERROR_SETTLE_MS } from '../../shared/agent-session/antigravity-swarm-snapshot'
 import {
   isRecord,
   type AntigravitySwarmTranscriptSummary
@@ -29,6 +30,10 @@ type AntigravitySwarmRecordContext = Pick<
   'provider' | 'providerHandleChain' | 'accountHome' | 'launchedAccount'
 >
 
+function isMissingFileError(error: unknown): boolean {
+  return isRecord(error) && (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+}
+
 export function resolveAntigravityBrainDir(
   record: Pick<AgentSessionRecord, 'accountHome' | 'launchedAccount'>,
   homeDir = homedir()
@@ -50,8 +55,11 @@ function resolveSwarmId(record: Pick<AgentSessionRecord, 'providerHandleChain'>)
 async function statSafe(filePath: string) {
   try {
     return await stat(filePath)
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null
+    }
+    throw error
   }
 }
 
@@ -84,8 +92,11 @@ async function readTailUtf8(
       text = firstNewline !== -1 ? text.slice(firstNewline + 1) : ''
     }
     return { text, truncated, mtimeMs: info.mtimeMs }
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null
+    }
+    throw error
   } finally {
     await handle?.close().catch(() => {})
   }
@@ -113,8 +124,38 @@ function extractMemberConversationIds(membersJson: string): string[] {
   }
 }
 
-function statToken(info: Awaited<ReturnType<typeof statSafe>>): string {
+type FileMeta = { size: number; mtimeMs: number } | null
+
+function statToken(info: FileMeta): string {
   return info ? `${info.size}:${Math.trunc(info.mtimeMs)}` : '0:0'
+}
+
+function transcriptToken(info: FileMeta, now: number): string {
+  if (!info) {
+    return '0:0:0'
+  }
+  const settled = now - info.mtimeMs >= STEP_ERROR_SETTLE_MS ? 1 : 0
+  return `${info.size}:${Math.trunc(info.mtimeMs)}:${settled}`
+}
+
+function computeSwarmEtag(args: {
+  membersSize: number
+  membersMtimeMs: number
+  boardMeta: FileMeta
+  planMeta: FileMeta
+  conversationIds: readonly string[]
+  transcriptMetas: readonly FileMeta[]
+  now: number
+}): string {
+  const signature = [
+    `m=${args.membersSize}:${Math.trunc(args.membersMtimeMs)}`,
+    `b=${statToken(args.boardMeta)}`,
+    `p=${statToken(args.planMeta)}`,
+    ...args.conversationIds.map(
+      (id, index) => `${id}=${transcriptToken(args.transcriptMetas[index] ?? null, args.now)}`
+    )
+  ].join('|')
+  return createHash('sha1').update(signature).digest('hex').slice(0, 20)
 }
 
 export async function readAntigravitySwarmSnapshot(
@@ -129,6 +170,7 @@ export async function readAntigravitySwarmSnapshot(
     return { status: 'none' }
   }
 
+  const now = options?.now ?? Date.now()
   const brainDir = resolveAntigravityBrainDir(record, options?.homeDir)
   const swarmDir = join(brainDir, swarmId, '.system_generated', 'swarm')
   const membersPath = join(swarmDir, 'members.json')
@@ -149,16 +191,18 @@ export async function readAntigravitySwarmSnapshot(
     )
   ])
 
-  const signature = [
-    `m=${membersData.text.length}:${Math.trunc(membersData.mtimeMs)}`,
-    `b=${statToken(boardStat)}`,
-    `p=${statToken(planStat)}`,
-    ...conversationIds.map((id, index) => `${id}=${statToken(transcriptStats[index] ?? null)}`)
-  ].join('|')
-  const etag = createHash('sha1').update(signature).digest('hex').slice(0, 20)
+  const expectedEtag = computeSwarmEtag({
+    membersSize: membersData.text.length,
+    membersMtimeMs: membersData.mtimeMs,
+    boardMeta: boardStat,
+    planMeta: planStat,
+    conversationIds,
+    transcriptMetas: transcriptStats,
+    now
+  })
 
-  if (options?.ifNoneMatch && options.ifNoneMatch === etag) {
-    return { status: 'unchanged', etag }
+  if (options?.ifNoneMatch && options.ifNoneMatch === expectedEtag) {
+    return { status: 'unchanged', etag: expectedEtag }
   }
 
   const [boardData, planData, ...transcriptDatas] = await Promise.all([
@@ -185,14 +229,26 @@ export async function readAntigravitySwarmSnapshot(
     }
   })
 
+  const actualEtag = computeSwarmEtag({
+    membersSize: membersData.text.length,
+    membersMtimeMs: membersData.mtimeMs,
+    boardMeta: boardData ? boardStat : null,
+    planMeta: planData ? planStat : null,
+    conversationIds,
+    transcriptMetas: transcriptDatas.map((data, index) =>
+      data ? (transcriptStats[index] ?? null) : null
+    ),
+    now
+  })
+
   const snapshot = buildAntigravitySwarmSnapshot({
     swarmId,
-    etag,
+    etag: actualEtag,
     membersJson: membersData.text,
     boardJsonl: boardData?.text ?? '',
     planJson: planData?.text ?? null,
     transcriptByConversationId,
-    now: options?.now
+    now
   })
 
   if (!snapshot) {

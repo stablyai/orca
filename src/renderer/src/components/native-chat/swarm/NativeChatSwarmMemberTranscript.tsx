@@ -72,6 +72,7 @@ function SwarmMemberTranscriptRow({
         <div className="mb-2">
           <button
             type="button"
+            aria-expanded={thinkingOpen}
             onClick={() => setThinkingOpen((prev) => !prev)}
             className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >

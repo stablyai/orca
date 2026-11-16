@@ -10,7 +10,7 @@ import { isRecord, type AntigravitySwarmTranscriptSummary } from './antigravity-
 type RawMember = Record<string, unknown>
 
 const MAIN_CHANNEL = 'main'
-const STEP_ERROR_SETTLE_MS = 10_000
+export const STEP_ERROR_SETTLE_MS = 10_000
 const QUOTA_ERROR_RE = /\b(quota|rate\s*limit|resource_exhausted|429|exhausted)\b/i
 
 function parseRawRoster(

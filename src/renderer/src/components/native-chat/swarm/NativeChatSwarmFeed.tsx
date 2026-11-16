@@ -74,6 +74,7 @@ export function NativeChatSwarmFeed({
 
         <button
           type="button"
+          aria-pressed={onlyMentions}
           onClick={onToggleMentions}
           className={cn(
             'rounded px-1.5 py-0.5 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

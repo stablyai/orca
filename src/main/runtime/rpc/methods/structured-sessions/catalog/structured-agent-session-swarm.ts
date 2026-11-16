@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import type {
   AgentSessionSwarmReadResult,
   AgentSessionSwarmTranscriptResult
@@ -20,6 +21,10 @@ function failureMessage(error: unknown): string | null {
   return typeof error === 'string' && error.trim() ? error.trim() : null
 }
 
+function isHostLocalSession(location: { executionHostId: string; wslDistro: string | null }) {
+  return location.executionHostId === LOCAL_EXECUTION_HOST_ID && !location.wslDistro
+}
+
 export const STRUCTURED_AGENT_SESSION_SWARM_METHODS = [
   defineMethod({
     name: 'agentSession.swarmRead',
@@ -30,6 +35,9 @@ export const STRUCTURED_AGENT_SESSION_SWARM_METHODS = [
       const saved = host.deps.store.getRecord(sessionId)
       if (!saved) {
         return { status: 'none' }
+      }
+      if (!isHostLocalSession(saved.location)) {
+        return { status: 'unsupported' }
       }
       const accountHome = await host.deps.launchAccountHome?.(saved).catch(() => null)
       const record = accountHome ? { ...saved, accountHome } : saved
@@ -52,6 +60,9 @@ export const STRUCTURED_AGENT_SESSION_SWARM_METHODS = [
       const saved = host.deps.store.getRecord(sessionId)
       if (!saved) {
         return { status: 'none' }
+      }
+      if (!isHostLocalSession(saved.location)) {
+        return { status: 'unsupported' }
       }
       const accountHome = await host.deps.launchAccountHome?.(saved).catch(() => null)
       const record = accountHome ? { ...saved, accountHome } : saved

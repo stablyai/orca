@@ -186,8 +186,9 @@ function antigravityToolSubagents(
   if (!name) {
     return []
   }
-  if (parsed?.action === 'add' && update.status !== 'failed' && tool.state !== 'failed') {
-    return [{ id: name, label: name, state: 'working' as const }]
+  if (parsed?.action === 'add') {
+    const failed = update.status === 'failed' || tool.state === 'failed'
+    return [{ id: name, label: name, state: failed ? ('failed' as const) : ('working' as const) }]
   }
   if (parsed?.action === 'kill' && (update.status === 'completed' || tool.state === 'completed')) {
     return [{ id: name, state: 'stopped' as const }]
