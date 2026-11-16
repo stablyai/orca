@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSlashCommands, mergeDiscoveredSlashCommands } from './native-chat-slash-commands'
+import { nativeChatCommandsForAgent } from './native-chat-skill-visibility'
 
 describe('mergeDiscoveredSlashCommands', () => {
   const discovered = (name: string, description: string | null = null) => ({
@@ -34,5 +35,31 @@ describe('mergeDiscoveredSlashCommands', () => {
   it('sanitizes author-controlled descriptions', () => {
     const merged = mergeDiscoveredSlashCommands([], [discovered('opsx:apply', 'a\u202eb')])
     expect(merged[0].description).toBe('ab')
+  })
+})
+
+describe('nativeChatCommandsForAgent', () => {
+  const commands = [
+    {
+      name: 'opsx:apply',
+      description: null,
+      scope: 'project' as const,
+      commandFilePath: '/repo/.claude/commands/opsx/apply.md'
+    }
+  ]
+
+  it('surfaces scanned commands for Claude-owned panes', () => {
+    expect(nativeChatCommandsForAgent('claude', 'ready', commands)).toEqual(commands)
+    expect(nativeChatCommandsForAgent('openclaude', 'ready', commands)).toEqual(commands)
+  })
+
+  it('withholds them from panes of other agents', () => {
+    expect(nativeChatCommandsForAgent('codex', 'ready', commands)).toEqual([])
+    expect(nativeChatCommandsForAgent('opencode', 'ready', commands)).toEqual([])
+  })
+
+  it('is empty before the scan is ready and when the host never scanned commands', () => {
+    expect(nativeChatCommandsForAgent('claude', 'loading', commands)).toEqual([])
+    expect(nativeChatCommandsForAgent('claude', 'ready', undefined)).toEqual([])
   })
 })

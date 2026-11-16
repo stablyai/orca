@@ -8,7 +8,10 @@ import type {
 } from '../../../../../../shared/skills/discovery/skills'
 import type { DiscoveredSlashCommand } from '../../../../../../shared/skills/discovery/custom-slash-commands'
 import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
-import { isNativeChatSkillForAgent } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
+import {
+  isNativeChatSkillForAgent,
+  nativeChatCommandsForAgent
+} from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { emitNativeChatSkillDiscovery } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import {
@@ -37,8 +40,6 @@ type StoredDiscoveryState = Omit<NativeChatSkillDiscovery, 'retry' | 'commands'>
   contextKey: string | null
   commands?: readonly DiscoveredSlashCommand[] | undefined
 }
-
-const NO_COMMANDS: readonly DiscoveredSlashCommand[] = []
 
 const IDLE_STATE: StoredDiscoveryState = {
   status: 'idle',
@@ -226,11 +227,11 @@ export function useNativeChatSkills(
       : []
   }, [agent, context, effectiveState, profile])
 
-  // `.claude/commands` is Claude Code grammar; other TUIs would reject the inserted token.
-  const visibleCommands =
-    profile?.skillSourceOwner === 'claude' && effectiveState.status === 'ready'
-      ? (effectiveState.commands ?? NO_COMMANDS)
-      : NO_COMMANDS
+  const visibleCommands = nativeChatCommandsForAgent(
+    agent,
+    effectiveState.status,
+    effectiveState.commands
+  )
 
   const retry = useCallback(() => {
     forceNextDiscovery.current = true
