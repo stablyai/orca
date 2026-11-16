@@ -86,6 +86,12 @@ export type PRInfo = {
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
+  /** Absent when the read path carries no reviewers, which is unknown, not none. */
+  reviewRequests?: GitHubAssignableUser[]
+  teamReviewRequests?: GitHubPRTeamReviewRequest[]
+  /** Requests GitHub counts but does not name to this viewer (teams it cannot see) or past the first page. */
+  unnamedReviewRequestCount?: number
+  latestReviews?: GitHubPRReviewSummary[]
 }
 
 export type IssueInfo = {
@@ -126,6 +132,12 @@ export type GitHubPRReviewSummary = {
   login: string
   state?: string | null
   avatarUrl?: string | null
+}
+
+export type GitHubPRTeamReviewRequest = {
+  /** `org/team`, as GitHub names a team in review requests. */
+  slug: string
+  name: string | null
 }
 
 export type GitHubPRFileViewedState = 'DISMISSED' | 'VIEWED' | 'UNVIEWED'

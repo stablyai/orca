@@ -5,12 +5,32 @@ import {
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type {
   PRConflictSummary,
+  PRInfo,
   PRMergeableState,
   GitHubPRStack
 } from '../../../../shared/github/pull-requests/pull-request-types'
 import { mapPRState } from '../../api/github-read-response'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
+import {
+  latestReviewsFromUnknown,
+  teamReviewRequestsFromUnknown,
+  usersFromUnknown
+} from '../map/work-item-field-coercion'
+
+function mapReviewRequests(
+  nodes: unknown[],
+  totalCount: number | undefined
+): Pick<PRInfo, 'reviewRequests' | 'teamReviewRequests' | 'unnamedReviewRequestCount'> {
+  const reviewRequests = usersFromUnknown(nodes)
+  const teamReviewRequests = teamReviewRequestsFromUnknown(nodes)
+  const unnamed = (totalCount ?? nodes.length) - reviewRequests.length - teamReviewRequests.length
+  return {
+    reviewRequests,
+    teamReviewRequests,
+    ...(unnamed > 0 ? { unnamedReviewRequestCount: unnamed } : {})
+  }
+}
 
 // Main-only: the full rollup stays off the renderer broadcast, beside the outcome it was read for.
 const observedRollups = new WeakMap<PRRefreshOutcome, readonly unknown[]>()
@@ -61,6 +81,12 @@ export function assemblePRRefreshFoundOutcome(args: {
       updatedAt: data.updatedAt,
       mergeable,
       ...(data.reviewDecision !== undefined ? { reviewDecision: data.reviewDecision } : {}),
+      ...(data.reviewRequests !== undefined
+        ? mapReviewRequests(data.reviewRequests, data.reviewRequestCount)
+        : {}),
+      ...(data.latestReviews !== undefined
+        ? { latestReviews: latestReviewsFromUnknown(data.latestReviews) }
+        : {}),
       ...(data.autoMergeEnabled !== undefined ? { autoMergeEnabled: data.autoMergeEnabled } : {}),
       ...(data.autoMergeAllowed !== undefined ? { autoMergeAllowed: data.autoMergeAllowed } : {}),
       ...(stackMergeQueueRequired !== undefined || data.mergeQueueRequired !== undefined

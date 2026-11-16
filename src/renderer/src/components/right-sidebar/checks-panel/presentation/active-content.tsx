@@ -20,6 +20,7 @@ import {
 import { PRTriageStrip } from './triage-strip'
 import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary'
 import { ChecksList } from './checks-list'
+import { ChecksPanelReviewApprovals } from './review-approvals'
 import { PRCommentsList } from '../comments/comments-list'
 import { openAnnotationLocation } from '@/components/editor/check-details/actions/check-annotation-open'
 import { useTranslate } from '@/i18n/use-translate'
@@ -236,6 +237,7 @@ export function ChecksPanelActiveContent({
           />
         </>
       )}
+      {activeReview.provider === 'github' && pr ? <ChecksPanelReviewApprovals pr={pr} /> : null}
       {/* Conflicts can prevent checks running; do not claim no checks are configured before resolving them. */}
       {!(activeConflictReview && checks.length === 0 && !gitLabPipelineCheck && !checksLoading) && (
         <ChecksList

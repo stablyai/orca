@@ -547,6 +547,22 @@
                   "body": "This repository provider does not support creating a {{reviewLabel}} from Orca.",
                   "title": "{{reviewLabelCap}} not supported here"
                 }
+              },
+              "reviews": {
+                "approvedCount_one": "{{count}} approved",
+                "approvedCount_other": "{{count}} approved",
+                "changesRequestedCount_one": "{{count}} requested changes",
+                "changesRequestedCount_other": "{{count}} requested changes",
+                "commentedCount_one": "{{count}} commented",
+                "commentedCount_other": "{{count}} commented",
+                "onlyUnnamedRequestCount_one": "{{count}} requested reviewer GitHub does not name",
+                "onlyUnnamedRequestCount_other": "{{count}} requested reviewers GitHub does not name",
+                "requestedCount_one": "{{count}} requested",
+                "requestedCount_other": "{{count}} requested",
+                "reviewerCount_one": "{{count}} reviewer",
+                "reviewerCount_other": "{{count}} reviewers",
+                "unnamedRequestCount_one": "{{count}} more requested reviewer",
+                "unnamedRequestCount_other": "{{count}} more requested reviewers"
               }
             }
           },
