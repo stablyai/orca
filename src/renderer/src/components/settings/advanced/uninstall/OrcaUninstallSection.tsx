@@ -29,7 +29,7 @@ function describePlanParts(plan: OrcaUninstallPlan, t: Translate, intlLocale: st
     )
   }
   if (plan.backgroundService) {
-    parts.push(t('settings.uninstall.summary.service', 'a background service'))
+    parts.push(t('settings.uninstall.summary.service', 'the <cmd>orca serve</cmd> server'))
   }
   // Scripts are part of the hooks; name them only when no agent or host entry is left.
   if (plan.hookScripts && !hookTargets) {

@@ -1501,7 +1501,7 @@
     "uninstall": {
       "groupTitle": "Uninstall",
       "title": "Uninstall Orca",
-      "searchDescription": "Remove agent hooks, the orca command, the background service and hooks on SSH hosts.",
+      "searchDescription": "Remove agent hooks, the orca command, the orca serve server and hooks on SSH hosts.",
       "keywords": {
         "uninstall": "uninstall",
         "remove": "remove",
@@ -1531,7 +1531,7 @@
       "rows": {
         "hooksIn": "Hooks in {{targets}}",
         "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
-        "service": "Background service",
+        "service": "<cmd>orca serve</cmd> server",
         "hookScripts": "Hook scripts"
       },
       "retry": "Retry",
@@ -1554,7 +1554,7 @@
       "summary": {
         "hooksIn": "hooks in {{targets}}",
         "cliCommand": "the <cmd>{{name}}</cmd> CLI",
-        "service": "a background service",
+        "service": "the <cmd>orca serve</cmd> server",
         "hookScripts": "hook scripts",
         "nothing": "Nothing outside the app to remove.",
         "loading": "Checking what Orca installed…",

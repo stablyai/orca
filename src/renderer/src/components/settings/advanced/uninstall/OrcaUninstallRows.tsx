@@ -288,7 +288,13 @@ export function OrcaUninstallRows({ model }: { model: RowsModel }): React.JSX.El
         step="background-service"
         entry={plan.backgroundService}
         icon={<Server className="size-3.5" />}
-        label={t('settings.uninstall.rows.service', 'Background service')}
+        label={
+          <Trans
+            i18n={i18n}
+            defaults={t('settings.uninstall.rows.service', '<cmd>orca serve</cmd> server')}
+            components={{ cmd: <code className="font-mono text-xs" /> }}
+          />
+        }
         mono={false}
       />
     </>
