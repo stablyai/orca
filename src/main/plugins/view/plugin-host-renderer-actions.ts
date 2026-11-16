@@ -6,11 +6,13 @@ import {
 import type { PluginCommandAliasActionId } from '../../../shared/plugins/contributions/plugin-command-actions'
 import { PluginHostCallError } from '../workers/host-api/plugin-host-call-scope'
 
-/** What a worker's `editor.open` and `commands.run` ask of Orca's window. */
+/** What a worker's `editor.open`, `commands.run` and `raiseWindow` ask of Orca's window. */
 export type PluginHostRendererActions = {
   openFile(worktreeId: string, relativePath: string): Promise<void>
   runAction(action: PluginCommandAliasActionId): Promise<void>
   openFolderWorkspace(folderWorkspaceId: string): Promise<void>
+  /** Brings the window in front of other apps, restoring it when minimized. */
+  raiseWindow(): void
 }
 
 /** Sends one request to the main window's renderer; null when there is no window to ask. */
@@ -23,6 +25,13 @@ let request: PluginHostRendererRequest | null = null
 
 export function setPluginHostRendererRequest(next: PluginHostRendererRequest | null): void {
   request = next
+}
+
+// Set beside `request`, for the same reason: raising a window is Electron's.
+let raiseWindow: (() => void) | null = null
+
+export function setPluginHostWindowRaise(next: (() => void) | null): void {
+  raiseWindow = next
 }
 
 async function ask(body: PluginViewRequestBody): Promise<void> {
@@ -50,7 +59,8 @@ export function getPluginHostRendererActions(): PluginHostRendererActions | null
           ask({ kind: 'open-file', worktreeId, relativePath }),
         runAction: (action) => ask({ kind: 'run-action', action }),
         openFolderWorkspace: (folderWorkspaceId) =>
-          ask({ kind: 'open-folder-workspace', folderWorkspaceId })
+          ask({ kind: 'open-folder-workspace', folderWorkspaceId }),
+        raiseWindow: () => raiseWindow?.()
       }
     : null
 }

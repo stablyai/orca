@@ -8,8 +8,12 @@ import {
 } from '../panels/guest-isolation/plugin-frame-guest-diagnostics'
 import { createPluginViewDesktop } from './plugin-view-desktop'
 import { isPluginShotWindowShown } from './plugin-shot-policy'
-import { setPluginHostRendererRequest } from './plugin-host-renderer-actions'
+import {
+  setPluginHostRendererRequest,
+  setPluginHostWindowRaise
+} from './plugin-host-renderer-actions'
 import { requestPluginViewFromRenderer } from './plugin-view-renderer-relay'
+import { focusExistingMainWindow } from '../../window/activation/focus-existing-window'
 
 const HOST_ACTION_TIMEOUT_MS = 10_000
 
@@ -24,6 +28,7 @@ export function bindPluginDesktopViews(
   if (serveMode) {
     setPluginViewForRpc(null)
     setPluginHostRendererRequest(null)
+    setPluginHostWindowRaise(null)
     return
   }
   // The one main window, so a worker's editor.open and commands.run always reach the same one.
@@ -32,6 +37,18 @@ export function bindPluginDesktopViews(
     return window && !window.isDestroyed()
       ? requestPluginViewFromRenderer(window.webContents, body, HOST_ACTION_TIMEOUT_MS)
       : null
+  })
+  setPluginHostWindowRaise(() => {
+    const window = getMainWindow()
+    if (window && !window.isDestroyed()) {
+      focusExistingMainWindow({
+        app,
+        getWindow: () => window,
+        // Raise only the window that showed it; never construct a replacement.
+        canOpenWindow: () => false,
+        openWindow: () => window
+      })
+    }
   })
   setPluginViewForRpc(
     createPluginViewDesktop({
