@@ -1,5 +1,5 @@
-import type { SshTarget } from '../../../../../../shared/ssh-types'
-import { isSshConfigSourcedTarget } from '../../../../../../shared/ssh-target-source'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
+import { isSshConfigSourcedTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-target-source'
 
 export type SshTargetGroupId = 'ssh-config' | 'manual'
 

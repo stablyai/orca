@@ -3,7 +3,7 @@ import {
   runCoordinatorKey,
   runBoundToCoordinator
 } from '../../addressing/orchestration-caller-identity'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { isEquivalentPaneKey } from '../../db/pane-key-match'
 
 /** Capture only the actor whose exact binding was validated for this answer. */

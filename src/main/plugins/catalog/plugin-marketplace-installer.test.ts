@@ -9,9 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { readPluginLockfile, removeInstalledPlugin } from '../installation/plugin-install'
-import type { PluginImageCache } from '../plugin-image-cache'
+import type { PluginImageCache } from '../media/plugin-image-cache'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
+import { refreshInstalledPluginCatalog } from './plugin-marketplace-shared-refresh'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
+
+const revokeConsent = vi.fn(async (_pluginKey: string) => undefined)
 
 const git = vi.hoisted(
   (): {
@@ -151,7 +154,8 @@ async function setup(
       marketplace: service,
       userDataPath: root,
       hostVersion: pluginHostVersion('1.4.0'),
-      ...(imageCache ? { imageCache } : {})
+      ...(imageCache ? { imageCache } : {}),
+      revokeConsent
     }),
     sourceId: added.id
   }
@@ -171,6 +175,7 @@ beforeEach(() => {
   git.icon = false
   git.paths = null
   telemetry.track.mockReset()
+  revokeConsent.mockClear()
   git.checkout.mockReset()
   git.checkout.mockImplementation(
     async ({ destination, path }: { destination: string; path?: string }) => {
@@ -200,6 +205,41 @@ describe('PluginMarketplaceInstaller', () => {
     })
   })
 
+  it('persists the catalog author repository with a mirrored installed release', async () => {
+    git.v2 = true
+    git.pluginUrl = 'https://github.com/mirrors/notes.git'
+    const unpinned = await setup()
+    const first = await unpinned.installer.preview(unpinned.sourceId, 'community.notes')
+    git.release = {
+      version: '1.0.0',
+      commit: git.commit,
+      contentHash: first.contentHash,
+      execution: 'declarative',
+      minimumOrca: PLUGIN_SCHEMA_NEWEST_SINCE,
+      types: ['instructions'],
+      repository: 'https://github.com/community/notes'
+    }
+    const { root, installer, sourceId } = await setup()
+    const preview = await installer.preview(sourceId, 'community.notes')
+    expect(await installer.install(preview)).toMatchObject({ ok: true })
+    expect(
+      (await readPluginLockfile(join(root, 'plugins'))).plugins['community.notes']
+    ).toMatchObject({
+      authorRepository: 'https://github.com/community/notes',
+      source: { plugin: { url: 'https://github.com/mirrors/notes.git' } }
+    })
+    git.release.sourceUnavailable = true
+    const unavailable = await setup()
+    const unavailablePreview = await unavailable.installer.preview(
+      unavailable.sourceId,
+      'community.notes'
+    )
+    expect(await unavailable.installer.install(unavailablePreview)).toMatchObject({ ok: true })
+    expect(
+      (await readPluginLockfile(join(unavailable.root, 'plugins'))).plugins['community.notes']
+    ).not.toHaveProperty('authorRepository')
+  })
+
   it('keeps an install pinned to its catalog when a second catalog lists the same id', async () => {
     const { root, marketplace, installer, sourceId } = await setup()
     await installer.install(await installer.preview(sourceId, 'community.notes'))
@@ -224,6 +264,45 @@ describe('PluginMarketplaceInstaller', () => {
     })
   })
 
+  it('re-fetches the catalog of an installed plugin before its update preview, sharing one fetch', async () => {
+    const { marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+    git.marketplaceCommit = 'e'.repeat(40)
+
+    // The cached catalog still names the old commit until something refreshes it.
+    await expect(installer.previewInstalledUpdate('community.notes')).resolves.toMatchObject({
+      marketplaceCommit: 'f'.repeat(40)
+    })
+    const refresh = vi.spyOn(service, 'refreshSource')
+    const services = { installer, marketplace: service }
+    const preview = async () => {
+      await refreshInstalledPluginCatalog(services, 'community.notes')
+      return installer.previewInstalledUpdate('community.notes')
+    }
+    const [first, second] = await Promise.all([preview(), preview()])
+    expect(first.marketplaceCommit).toBe('e'.repeat(40))
+    expect(second.marketplaceCommit).toBe('e'.repeat(40))
+    expect(refresh).toHaveBeenCalledOnce()
+    await expect(installer.install(first, { requireInstalled: true })).resolves.toMatchObject({
+      ok: true
+    })
+  })
+
+  it('previews from the cached catalog when the refresh before an update preview fails', async () => {
+    const { marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+    git.marketplaceCommit = 'e'.repeat(40)
+    vi.spyOn(service, 'refreshSource').mockRejectedValueOnce(new Error('offline'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await refreshInstalledPluginCatalog({ installer, marketplace: service }, 'community.notes')
+    await expect(installer.previewInstalledUpdate('community.notes')).resolves.toMatchObject({
+      marketplaceCommit: 'f'.repeat(40)
+    })
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('lets a Remove that starts during an automatic update win', async () => {
     const { root, installer, sourceId } = await setup()
     await installer.install(await installer.preview(sourceId, 'community.notes'))
@@ -241,5 +320,60 @@ describe('PluginMarketplaceInstaller', () => {
     ])
     expect(result).toMatchObject({ ok: false, error: expect.stringContaining('removed') })
     expect((await readPluginLockfile(pluginsDir)).plugins).toEqual({})
+  })
+
+  it('flags an update whose catalog moved the plugin to a different repository', async () => {
+    const { marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+
+    git.pluginUrl = 'git@github.com:Community/Notes'
+    git.marketplaceCommit = 'e'.repeat(40)
+    await service.refreshSource(sourceId)
+    git.payload = 'respelled'
+    const respelledPreview = await installer.previewInstalledUpdate('community.notes')
+    expect(respelledPreview).not.toHaveProperty('repositoryMoved')
+    const respelled = await installer.install(respelledPreview)
+    expect(respelled).toMatchObject({ ok: true })
+    expect(respelled).not.toHaveProperty('repositoryMoved')
+    expect(revokeConsent).not.toHaveBeenCalled()
+
+    git.pluginUrl = 'https://github.com/someone-else/notes.git'
+    git.marketplaceCommit = 'd'.repeat(40)
+    await service.refreshSource(sourceId)
+    git.payload = 'moved'
+    const movedPreview = await installer.previewInstalledUpdate('community.notes')
+    expect(movedPreview).toMatchObject({ repositoryMoved: true })
+    // Install links and catalog cards preview through `preview`, which must flag the move too.
+    await expect(installer.preview(sourceId, 'community.notes')).resolves.toMatchObject({
+      repositoryMoved: true
+    })
+    await expect(installer.install(movedPreview)).resolves.toMatchObject({
+      ok: true,
+      repositoryMoved: true
+    })
+    expect(revokeConsent).toHaveBeenCalledExactlyOnceWith('community.notes')
+  })
+
+  it('drops the approval before a moved repository publishes, and installs nothing if it cannot', async () => {
+    const { root, marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+    git.pluginUrl = 'https://github.com/someone-else/notes.git'
+    git.marketplaceCommit = 'd'.repeat(40)
+    await service.refreshSource(sourceId)
+    git.commit = 'b'.repeat(40)
+    const moved = await installer.preview(sourceId, 'community.notes')
+    const pluginsDir = join(root, 'plugins')
+    revokeConsent.mockImplementationOnce(async () => {
+      // The previous release must still be the published one when approval is dropped.
+      expect((await readPluginLockfile(pluginsDir)).plugins['community.notes']).toMatchObject({
+        resolvedCommit: 'a'.repeat(40)
+      })
+      throw new Error('settings unavailable')
+    })
+
+    await expect(installer.install(moved)).rejects.toThrow('settings unavailable')
+    expect((await readPluginLockfile(pluginsDir)).plugins['community.notes']).toMatchObject({
+      resolvedCommit: 'a'.repeat(40)
+    })
   })
 })

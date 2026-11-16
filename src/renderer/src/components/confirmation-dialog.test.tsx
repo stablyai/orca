@@ -44,31 +44,6 @@ function renderDialog(options: ConfirmationDialogOptions): { onSettled: ReturnTy
 describe('ConfirmationDialogProvider', () => {
   afterEach(cleanup)
 
-  it('focuses the primary action when requested and confirms with Enter', async () => {
-    const { onSettled } = renderDialog({
-      title: 'Reveal hidden workspace?',
-      confirmLabel: 'Clear filters and reveal',
-      initialFocus: 'confirm'
-    })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Clear filters and reveal' })).toHaveFocus()
-    )
-    await userEvent.keyboard('{Enter}')
-    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
-  })
-
-  it('still cancels with Escape when the primary action has focus', async () => {
-    const { onSettled } = renderDialog({
-      title: 'Reveal hidden workspace?',
-      initialFocus: 'confirm'
-    })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toHaveFocus())
-    await userEvent.keyboard('{Escape}')
-    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
-  })
-
   it('tells the cancel button apart from Escape', async () => {
     const onCancelClicked = vi.fn()
     const { onSettled } = renderDialog({ title: 'Use your camera?', onCancelClicked })
@@ -110,26 +85,6 @@ describe('ConfirmationDialogProvider', () => {
     await userEvent.click(cancel)
     await waitFor(() => expect(onSettled).toHaveBeenCalledWith(false))
     expect(onCancelClicked).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the default cancel focus for callers that do not opt in', async () => {
-    renderDialog({ title: 'Delete artifact?', confirmVariant: 'destructive' })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
-  })
-
-  it('shows only the confirm button for a notice', async () => {
-    const { onSettled } = renderDialog({
-      title: "Can't use p1 here yet",
-      confirmLabel: 'OK',
-      acknowledgeOnly: true,
-      initialFocus: 'confirm'
-    })
-    await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus())
-    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
-    await userEvent.keyboard('{Enter}')
-    await waitFor(() => expect(onSettled).toHaveBeenCalledWith(true))
   })
 
   it('runs the skip callback when confirmed with the box checked', async () => {

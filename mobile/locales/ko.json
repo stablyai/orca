@@ -2,7 +2,7 @@
   "ios": {
     "NSCameraUsageDescription": "Orca가 QR 코드를 스캔할 수 있도록 카메라 사용을 허용하세요.",
     "NSLocalNetworkUsageDescription": "Orca는 LAN을 통해 데스크톱 앱에 연결합니다.",
-    "NSMicrophoneUsageDescription": "Orca가 음성 받아쓰기에 마이크를 사용할 수 있도록 허용하세요. 음성은 텍스트로 변환하기 위해 페어링된 데스크톱으로 전송됩니다.",
+    "NSMicrophoneUsageDescription": "음성 받아쓰기에 마이크를 사용하도록 Orca를 허용합니다. 받아쓰기는 이 휴대폰 또는 페어링된 컴퓨터에서 이루어집니다.",
     "NSPhotoLibraryAddUsageDescription": "세션의 이미지를 사진 앱에 저장할 수 있도록 Orca를 허용하세요.",
     "NSPhotoLibraryUsageDescription": "Orca가 사진 보관함의 사진을 페어링된 데스크톱의 터미널 세션에 첨부할 수 있도록 허용하세요."
   }

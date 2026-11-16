@@ -1,7 +1,9 @@
 // What a paired client reads and may write of this host's settings.
 
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { VoiceSettings } from '../../../../shared/speech/speech-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { SourceControlAiActionDefaults } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 export type RuntimeClientSettings = Pick<
@@ -14,6 +16,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
   | 'codexShareHistoryAcrossAccounts'
+  | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'
@@ -23,6 +26,7 @@ export type RuntimeClientSettings = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
+  | 'worktreeCardDetailsRow'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -36,12 +40,20 @@ export type RuntimeClientSettings = Pick<
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
   | 'nativeChatQueueFollowUps'
+  | 'nativeChatCiResultLines'
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
+  | 'prAutoRefresh'
   | 'diffShowWhitespace'
+  | 'newTabMenuLayout'
+  | 'floatingTerminalNewTabMenuLayout'
 > & {
+  /** Always set; older hosts omit it, so clients must not write it to them (settings.update is strict). */
+  workspaceCleanupPolicy: WorkspaceCleanupRules
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
   sourceControlAi: RuntimeClientSourceControlAi
+  /** Models directory and microphone stay host-private. */
+  voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
 }
 
 /** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
@@ -68,6 +80,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
+  | 'worktreeCardDetailsRow'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -78,4 +91,8 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'machineName'
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
+  | 'workspaceCleanupPolicy'
+  | 'prAutoRefresh'
+  | 'newTabMenuLayout'
+  | 'floatingTerminalNewTabMenuLayout'
 >

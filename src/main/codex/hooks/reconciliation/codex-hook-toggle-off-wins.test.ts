@@ -39,7 +39,7 @@ vi.mock('../../trust/hooks/codex-hook-trust-derivation', async (importOriginal) 
 import {
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS
-} from '../../../agent-hooks/managed-agent-hook-registry'
+} from '../../../agent-hooks/installation/managed-agent-hook-registry'
 import { _internals, startCodexHooks } from './codex-hook-reconcile'
 import { _internals as lookupInternals } from '../../trust/hooks/codex-hook-hash-lookup'
 import {

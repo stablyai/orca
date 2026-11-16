@@ -1,8 +1,14 @@
-import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
+  AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY
+} from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 // options reads at-rest records/catalogs or the live provider; modelCatalog reads stored/start-published facts without waiting on attach.
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../../../core'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
+import { isFloatingWorkspaceSelector } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
+import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   requireInstalledStructuredHost,
   requireStructuredAgentAudience
@@ -11,11 +17,11 @@ import {
   HandoffStatusParams,
   ModelCatalogParams,
   OptionsParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
-import { ContinuationContextParams } from '../../../../../../shared/rpc-contract/structured-agent-session-identifiers'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
+import { ContinuationContextParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-identifiers'
 import { agentSessionPinnedLaunchDirectory } from '../../../../agent-session/records/agent-session-record-launch-directory'
 import {
   clientRequestsCommands,
@@ -23,7 +29,7 @@ import {
 } from '../structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
-import { finishedListingIds } from '../../../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
+import { finishedListingIds } from '../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-listing-verified-ids'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
@@ -99,29 +105,53 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         }
         // A floating chat runs in the folder it was created in, not the floating setting's current one.
         const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+        const waits = !params.savedOnly && params.waitForListing === true
+        const deadline = Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+        // Only a floating folder touches the filesystem; a read that doesn't wait never waits on it.
+        const resolving =
+          launchDirectory || worktree === undefined
+            ? undefined
+            : ctx.runtime.resolveStructuredAgentCatalogWorkspacePath(worktree)
+        const later = !waits && isFloatingWorkspaceSelector(worktree)
         const request = {
           ...params,
           ...scope,
+          progress:
+            ctx.clientKind === undefined ||
+            ctx.clientCapabilities?.includes(AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY) ===
+              true,
+          ...(waits && resolving ? { deadline } : {}),
           ...(launchDirectory
             ? { workspacePath: launchDirectory }
-            : worktree === undefined
+            : !resolving
               ? {}
               : {
-                  workspace: {
-                    selector: worktree,
-                    identity: () =>
-                      ctx.runtime.structuredAgentSessionCatalogWorkspaceIdentity(worktree),
-                    resolve: () => ctx.runtime.resolveStructuredAgentCatalogWorkspace(worktree)
-                  }
+                  // Past the read's own budget, a stalled mount reads as a workspace this host
+                  // can't inspect: no default and no exact listing.
+                  workspacePath: later
+                    ? null
+                    : await withTimeout(resolving, Math.max(0, deadline - Date.now()), null)
                 })
         }
-        if (host) {
-          return host.readModelCatalog(request)
+        const follows = later && resolving && !params.savedOnly
+        if (follows) {
+          // The listing for the folder it resolves to starts once it does, inside this read's own
+          // budget and retirement; the answer says so, so the picker follows with a waiting read.
+          const operation = catalog.captureRead({ ...request, deadline })
+          void withTimeout(resolving, Math.max(0, deadline - Date.now()), null).then(
+            (workspacePath) => {
+              if (workspacePath && operation.current()) {
+                void catalog.demand({ ...request, workspacePath, deadline, operation })
+              }
+            }
+          )
         }
-        if (!params.savedOnly) {
+        // A floating read lists the folder it resolves to (above), never the unresolved one.
+        if (!waits && !host && !params.savedOnly && !follows) {
           void catalog.demand(request)
         }
-        return catalog.read(request)
+        const result = host ? await host.readModelCatalog(request) : await catalog.read(request)
+        return follows ? { ...result, listingInProgress: true } : result
       }
       const listing = await read()
       const own = record?.provider === params.agent ? record : null

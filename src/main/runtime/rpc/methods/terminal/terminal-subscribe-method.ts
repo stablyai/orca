@@ -1,5 +1,5 @@
 import { defineStreamingMethod } from '../../core'
-import { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal-stream-params'
+import { TerminalSubscribe } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 import { isTerminalReadPayloadIncomplete } from './terminal-stream-replay'
 import { runTerminalBinarySubscription } from './terminal-subscribe-binary'
 import {
@@ -101,6 +101,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           ptyId,
           clientId,
           viewerDeviceId,
+          pairedDeviceId,
           isMobile,
           supportsDesktopViewportClaims: params.capabilities?.desktopViewportClaims === 1,
           supportsWriteUnavailable: params.capabilities?.writeUnavailable === 1,

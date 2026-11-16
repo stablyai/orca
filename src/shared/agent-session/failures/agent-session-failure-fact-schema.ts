@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Keep newer kinds/audiences/refusal details readable like row state; the fact reader drops anything it cannot place. */
 export const AgentSessionFailureFactSchema = z.object({

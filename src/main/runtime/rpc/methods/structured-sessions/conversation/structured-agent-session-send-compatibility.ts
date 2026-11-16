@@ -1,7 +1,7 @@
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
-} from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { agentSessionSendSubmission } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { STRUCTURED_AGENT_SESSION_START_WAIT_MS } from '../../../../../native-chat/agent-session-wire/delivery/structured-agent-session-send-settlement'
@@ -30,7 +30,7 @@ export async function sendStructuredAgentSessionForClient(
   const capabilities = context.clientCapabilities ?? []
   if (
     !result.ok ||
-    // A queued answer only ever reaches a capable client, which renders it as-is.
+    // Queue receipts replay unchanged, including to older clients.
     agentSessionSendSubmission(result.value)?.dispatchState !== 'pending' ||
     context.clientKind === undefined ||
     capabilities.includes(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY)

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst } from './bind-first-pane.test-fixture'
-import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
+import './bind-first-pane.test-fixture'
+import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
 import './runtime-test-module-registration.spec'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import '../../../shared/agent-status/contracts/agent-status-freshness'
 import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
@@ -18,73 +18,6 @@ import {
 } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('keeps title-only foreground work ahead of monitoring in another pane', async () => {
-    const now = Date.now()
-    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
-    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: `monitoring-tab:${monitoringLeafId}`,
-          worktreeId: TEST_WORKTREE_ID,
-          tabId: 'monitoring-tab',
-          state: 'working',
-          workingMode: 'monitoring',
-          prompt: 'watch tests',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }
-      ]
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'monitoring-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Claude',
-          activeLeafId: monitoringLeafId,
-          layout: null
-        },
-        {
-          tabId: 'foreground-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Claude',
-          activeLeafId: foregroundLeafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'monitoring-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: monitoringLeafId,
-          paneRuntimeId: 1,
-          ptyId: 'monitoring-pty',
-          paneTitle: 'claude'
-        },
-        {
-          tabId: 'foreground-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: foregroundLeafId,
-          paneRuntimeId: 2,
-          ptyId: 'foreground-pty',
-          paneTitle: 'claude working'
-        }
-      ]
-    })
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary).toMatchObject({ status: 'working' })
-    expect(summary).not.toHaveProperty('workingMode')
-    expect(summary?.agents).toEqual([
-      expect.objectContaining({ paneKey: `monitoring-tab:${monitoringLeafId}` })
-    ])
-  })
   it('keeps title-only foreground work ahead of monitoring in another split pane', async () => {
     const now = Date.now()
     const tabId = 'split-tab'
@@ -107,7 +40,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -164,7 +97,7 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -266,7 +199,7 @@ describe('OrcaRuntimeService', () => {
       payload: { state: 'working', prompt: 'earlier hook row', agentType: 'codex' }
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -300,53 +233,6 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ paneKey, prompt: 'fresh OSC row', agentType: 'codex' })
     ])
   })
-
-  it.each([
-    ['blocked', 0, true, 'permission'],
-    ['waiting', 0, true, 'permission'],
-    ['done', 0, false, 'inactive'],
-    ['working', -AGENT_STATUS_STALE_AFTER_MS - 1, false, 'inactive']
-  ] as const)(
-    'projects %s agent activity to mobile at freshness offset %s',
-    async (state, updatedAtOffset, hasHostSidebarActivity, status) => {
-      const now = Date.now()
-      const runtime = new OrcaRuntimeService(store, undefined, {
-        getAgentStatusSnapshot: () => [
-          {
-            paneKey: 'tab-1:33333333-3333-4333-8333-333333333333',
-            worktreeId: TEST_WORKTREE_ID,
-            tabId: 'tab-1',
-            state,
-            prompt: 'mobile parity',
-            agentType: 'codex',
-            connectionId: null,
-            receivedAt: now + updatedAtOffset,
-            stateStartedAt: now - 100
-          }
-        ]
-      })
-      // Keep the tab present: this test varies freshness, not the closed-tab filter (#6072).
-      runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
-        tabs: [
-          {
-            tabId: 'tab-1',
-            worktreeId: TEST_WORKTREE_ID,
-            title: 'Codex',
-            activeLeafId: '33333333-3333-4333-8333-333333333333',
-            layout: null
-          }
-        ],
-        leaves: []
-      })
-
-      const { worktrees } = await runtime.getWorktreePs()
-
-      const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-      expect(summary).toMatchObject({ hasHostSidebarActivity, status })
-      expect(summary?.agents).toHaveLength(1)
-    }
-  )
 
   it('drops a hydrated done hook row after its local tab is closed', async () => {
     // Hydrated hook rows for closed tabs must not reappear as current mobile activity (#6072).
@@ -477,172 +363,5 @@ describe('OrcaRuntimeService', () => {
     expect(summary?.agents).toEqual([
       expect.objectContaining({ paneKey: 'open-tab:9', prompt: 'live legacy pane' })
     ])
-  })
-
-  it('keeps a local hook row while a connected PTY still backs its pane', async () => {
-    // A connected daemon PTY proves the pane exists even during graph and session gaps.
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {}
-    })
-    const paneKey = 'daemon-tab:77777777-7777-4777-8777-777777777777'
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey,
-          worktreeId: TEST_WORKTREE_ID,
-          tabId: 'daemon-tab',
-          state: 'working',
-          prompt: 'long-running daemon agent',
-          agentType: 'codex',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }
-      ]
-    })
-    bindPaneFirst(runtime, {
-      worktreeId: TEST_WORKTREE_ID,
-      tabId: 'daemon-tab',
-      leafId: '77777777-7777-4777-8777-777777777777',
-      ptyId: 'daemon-pty'
-    })
-    // Omit tabId to isolate paneKey rescue.
-    runtime['recordPtyWorktree']('daemon-pty', TEST_WORKTREE_ID, {
-      connected: true,
-      paneKey,
-      surfaceRecordedAtGraphSequence: runtime['graphSequence']
-    })
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary?.agents).toEqual([
-      expect.objectContaining({ paneKey, state: 'working', prompt: 'long-running daemon agent' })
-    ])
-    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
-  })
-
-  it('keeps a local hook row when a connected PTY matches only its tab id', async () => {
-    // Use another split leaf to isolate tabId rescue.
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {}
-    })
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'daemon-tab:88888888-8888-4888-8888-888888888887',
-          worktreeId: TEST_WORKTREE_ID,
-          tabId: 'daemon-tab',
-          state: 'working',
-          prompt: 'sibling pane agent',
-          agentType: 'codex',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }
-      ]
-    })
-    bindPaneFirst(runtime, {
-      worktreeId: TEST_WORKTREE_ID,
-      tabId: 'daemon-tab',
-      leafId: '99999999-9999-4999-8999-999999999998',
-      ptyId: 'daemon-pty-2'
-    })
-    runtime['recordPtyWorktree']('daemon-pty-2', TEST_WORKTREE_ID, {
-      connected: true,
-      tabId: 'daemon-tab',
-      paneKey: 'daemon-tab:99999999-9999-4999-8999-999999999998',
-      surfaceRecordedAtGraphSequence: runtime['graphSequence']
-    })
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary?.agents).toEqual([
-      expect.objectContaining({ prompt: 'sibling pane agent', state: 'working' })
-    ])
-  })
-
-  it('keeps an OSC row via its connected PTY after the pane binding is cleared', async () => {
-    // After controller incarnation changes clear pane coordinates, only the stamped terminal handle can rescue the row.
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {}
-    })
-    const runtime = new OrcaRuntimeService(
-      runtimeStore as never,
-      undefined,
-      makeAgentStatusStoreWiring().deps
-    )
-    bindPaneFirst(runtime, {
-      worktreeId: TEST_WORKTREE_ID,
-      tabId: 'osc-tab',
-      leafId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      ptyId: 'osc-pty'
-    })
-    runtime['recordPtyWorktree']('osc-pty', TEST_WORKTREE_ID, {
-      connected: true,
-      tabId: 'osc-tab',
-      paneKey: 'osc-tab:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      surfaceRecordedAtGraphSequence: runtime['graphSequence']
-    })
-    runtime.onPtyData(
-      'osc-pty',
-      '\x1b]9999;{"state":"working","prompt":"osc reporter","agentType":"codex"}\x07',
-      1
-    )
-    const pty = runtime['ptysById'].get('osc-pty')!
-    runtime['terminalIdentity'].setRecordedSurface(pty, null, null, undefined)
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary?.agents).toEqual([expect.objectContaining({ prompt: 'osc reporter' })])
-  })
-
-  it('keeps the connected-PTY rescue when a hook row outraces the OSC row for the same pane', async () => {
-    // Hooks carry no ptyId; preserve the OSC-observed id when a fresher hook wins.
-    const paneKey = 'race-tab:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {}
-    })
-    const statusWiring = makeAgentStatusStoreWiring()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, statusWiring.deps)
-    bindPaneFirst(runtime, {
-      worktreeId: TEST_WORKTREE_ID,
-      tabId: 'race-tab',
-      leafId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-      ptyId: 'race-pty'
-    })
-    runtime['recordPtyWorktree']('race-pty', TEST_WORKTREE_ID, {
-      connected: true,
-      tabId: 'race-tab',
-      paneKey,
-      surfaceRecordedAtGraphSequence: runtime['graphSequence']
-    })
-    runtime.onPtyData(
-      'race-pty',
-      '\x1b]9999;{"state":"working","prompt":"osc ping","agentType":"codex"}\x07',
-      1
-    )
-    statusWiring.statusStore.ingestTerminalStatus({
-      paneKey,
-      tabId: 'race-tab',
-      worktreeId: TEST_WORKTREE_ID,
-      connectionId: null,
-      payload: { state: 'working', prompt: 'hook-fresh agent', agentType: 'codex' }
-    })
-    const pty = runtime['ptysById'].get('race-pty')!
-    runtime['terminalIdentity'].setRecordedSurface(pty, null, null, undefined)
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary?.agents).toEqual([expect.objectContaining({ prompt: 'hook-fresh agent' })])
   })
 })

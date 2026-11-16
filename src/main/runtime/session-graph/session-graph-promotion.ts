@@ -3,7 +3,6 @@ import type { OrcaRuntimeWithHasTerminalsForWorktree as HasTerminalsForWorktreeM
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import type { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees as CollectMobileVisibleGraphChangedWorktreesMethods } from '../session-tabs/session-tabs-inventory'
 import type { OrcaRuntimeWithGetPtyRecordForPaneKey as GetPtyRecordForPaneKeyMethods } from '../orchestration/mailbox/routing/terminal-pane-mail-routing'
-import type { OrcaRuntimeWithResolveWaiter as ResolveWaiterMethods } from '../orca-runtime-resolve-waiter'
 import type { OrcaRuntimeWithMarkPtyLivenessUnverifiable as MarkPtyLivenessUnverifiableMethods } from '../terminal/layout/terminal-input-floor'
 import type { OrcaRuntimeWithRecordPtyWorktree as RecordPtyWorktreeMethods } from '../terminal/identity/pty-worktree-record'
 import type { RuntimeSessionTabsInventoryPublication as SessionTabsInventoryPublicationMethods } from '../session-tabs/session-tabs-inventory-publication'
@@ -12,9 +11,9 @@ import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSes
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from '../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithSyncMobileSessionTabs as SyncMobileSessionTabsMethods } from '../session-tabs/mobile-session-reconciliation'
 import { OrcaRuntimeWithNotifySshStateChanged } from '../workspaces/workspace-host-notifications'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { SessionTitleAuthority } from '../session-tabs/session-title-publisher'
@@ -31,6 +30,18 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['agentSenderGraphReply']>
 
   protected abstract mainDecidesLiveness(worktreeId: string): boolean
+
+  // Remounts briefly clear ptyId; retain the live handle paired clients still use (#23759).
+  protected isLeafRemountingLivePty(
+    ptyId: string,
+    incomingPtyIds: ReadonlySet<string | null>
+  ): boolean {
+    return (
+      !incomingPtyIds.has(ptyId) &&
+      this.controllerKnowsPtyIsLive(ptyId) &&
+      this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
+    )
+  }
 
   /** Main-owned panes do not prove liveness or override certified exits; terminal records decide (L80). */
   protected graphLeafConnected(ptyId: string | null, worktreeId: string): boolean {
@@ -90,10 +101,6 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
   protected abstract deliverPendingMessagesForPty(
     ...args: Parameters<ResolveExitWaitersMethods['deliverPendingMessagesForPty']>
   ): ReturnType<ResolveExitWaitersMethods['deliverPendingMessagesForPty']>
-
-  protected abstract getLeafKey(
-    ...args: Parameters<ResolveWaiterMethods['getLeafKey']>
-  ): ReturnType<ResolveWaiterMethods['getLeafKey']>
 
   abstract getPtyLivenessVerdict(
     ...args: Parameters<MarkPtyLivenessUnverifiableMethods['getPtyLivenessVerdict']>

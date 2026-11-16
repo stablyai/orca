@@ -1,13 +1,9 @@
-import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { ProviderTimelineJoin, ProviderTimelineTextChannel } from './provider-timeline-event'
-import {
-  providerKey,
-  type ProviderTimelineRowId,
-  type ProviderTimelineRows
-} from './provider-timeline-rows'
+import type { ProviderTimelineJoin } from './provider-timeline-event'
+import { providerKey, type ProviderTimelineRows } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
+import type { ProviderTimelineRequest } from './provider-timeline-writer-resolution'
 
 export type ProviderTimelineContext = {
   sessionId: string
@@ -18,28 +14,28 @@ export type ProviderTimelineContext = {
   ownThread?: () => string | null
 }
 
-export type ProviderTimelineStream = {
-  id: string
-  /** Named deltas and snapshots share the same row identity. */
-  key: string
-  row: ProviderTimelineRowId
-  /** New rows use this scope; existing rows retain theirs. */
-  scope: AgentJournalTurnScope
-  named: boolean
-  channel: ProviderTimelineTextChannel
-  producer: AgentJournalProducerLinkage | undefined
-  /** Last accepted content time on the monotonic clock. */
-  acceptedAt?: number
-  /** Once a write finds a settled turn, later text cannot land. */
-  stoppedIn: string | null
-}
-
 export function providerTimelineSettlementId(
   context: ProviderTimelineContext,
   serial: number,
   what: string
 ): string {
   return `provider-timeline:${context.sessionId}:${context.generation}:${serial}:${what}`
+}
+
+export function providerTimelineRequest(
+  context: ProviderTimelineContext,
+  key: string
+): ProviderTimelineRequest {
+  return { agent: context.agent, sessionId: context.sessionId, generation: context.generation, key }
+}
+
+export function providerTimelineScopeItemIds(
+  context: ProviderTimelineContext,
+  join: ProviderTimelineJoin | undefined
+): readonly string[] | undefined {
+  return join?.scopeItems?.map(
+    (key) => context.rows.item('item', providerKey(key), join.thread ?? null).itemId
+  )
 }
 
 /** Prefer the named turn, then open turn; independent subagent threads always join the open turn. */

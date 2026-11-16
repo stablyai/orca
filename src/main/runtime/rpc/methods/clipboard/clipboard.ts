@@ -1,14 +1,14 @@
 import { defineMethod, type RpcContext } from '../../core'
-import { saveClipboardImageBufferAsTempFile } from '../../../../window/clipboard-image-temp-file'
+import { saveClipboardImageBufferAsTempFile } from '../../../../window/clipboard/clipboard-image-temp-file'
 import { randomUUID } from 'node:crypto'
-import { recordMobileClipboardImagePath } from '../../mobile-clipboard-image-provenance'
+import { recordMobileClipboardImagePath } from '../../clipboard/mobile-clipboard-image-provenance'
 import {
   AbortImageUpload,
   AppendImageUploadChunk,
   CommitImageUpload,
   SaveImageAsTempFile,
   StartImageUpload
-} from '../../../../../shared/rpc-contract/clipboard-params'
+} from '../../../../../shared/rpc-contract/clipboard/clipboard-params'
 import { decodeClipboardImageUpload } from './clipboard-image-upload-decoding'
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
@@ -87,6 +87,19 @@ function assertMobileUploadOwner(
     throw new Error('Clipboard image upload was not found')
   }
   return clientId
+}
+
+export function claimClipboardImageUpload(uploadId: string, ctx: RpcContext): Buffer {
+  const upload = getUpload(uploadId)
+  assertMobileUploadOwner(upload, ctx)
+  try {
+    if (upload.receivedBase64Length !== upload.expectedBase64Length) {
+      throw new Error('Clipboard image upload is incomplete')
+    }
+    return decodeClipboardImageUpload(upload.chunks)
+  } finally {
+    deleteUpload(uploadId)
+  }
 }
 
 export const CLIPBOARD_METHODS = [

@@ -1,10 +1,7 @@
-import type { AgentSessionContextUsage } from '../../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { writeAgentJournalTurnRow } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
@@ -52,16 +49,16 @@ export function recordCodexContextUsage(input: {
   threadId: string
   params: unknown
   capturedAt: number
-}): StructuredAgentSessionSinkAdmission {
+}): void {
   const contextUsage = readCodexContextUsage(input.params, input.capturedAt)
   if (!contextUsage) {
-    return { accepted: true }
+    return
   }
   const turnId = readCodexTurnId(input.params) ?? input.activeTurns.current(input.threadId)
   const openTurnId = turnId && input.activeTurns.has(input.threadId, turnId) ? turnId : null
   const scope = openTurnId ? input.attributionFor(input.threadId, openTurnId).turnScope : null
   const identity = scope?.kind === 'turn' ? parseAgentJournalItemKey(scope.turnItemId) : null
-  return writeAgentJournalTurnRow(
+  writeAgentJournalTurnRow(
     input.sink,
     identity ? { identity } : { newest: true },
     { contextUsage },

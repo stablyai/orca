@@ -3,14 +3,14 @@ import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged,
   onRuntimeEnvironmentsRetired
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { SharedControlReconnectScheduler } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-reconnect'
 import {
   runtimeHostContactForEntry,
   lastRuntimeHostAnswer
 } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CrewSubscriptionAttemptArgs } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { CrewSubscription, UNKNOWN_CREW } from './orchestration-crew-subscription'
 

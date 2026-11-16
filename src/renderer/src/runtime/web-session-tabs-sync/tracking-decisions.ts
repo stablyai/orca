@@ -1,9 +1,10 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
-  type SessionTabsStreamEvent
+  type SessionTabsStreamEvent,
+  sessionTabsFreshnessKey
 } from './state'
 import {
   acceptSessionTabsRuntimeId,
@@ -12,16 +13,16 @@ import {
   noteSessionTabsPublicationEpoch,
   sameSessionTabsPublicationLineage
 } from './publisher-identity-fences'
+
 import {
-  sessionTabsFreshnessKey,
   rememberHostTerminalTabCount,
   trackWebSessionTabsWorktree,
   recordAcceptedWebSessionTabsEnvironment
 } from './tracking'
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
-import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
+import { queueAcceptedWebSessionTerminalSnapshot } from './terminal-handles/web-session-terminal-handle-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from './hydration/host-session-snapshot-authority'
 
 /** A frame's fate, paired with whether that fate is host evidence for the worktree. */
 export type WebSessionTabsSnapshotDecision = {

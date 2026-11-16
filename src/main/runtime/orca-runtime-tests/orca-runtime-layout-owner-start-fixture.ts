@@ -1,15 +1,15 @@
 // Windowless layout-owner fixture applies commands in memory and starts main-owned terminals immediately.
 import { vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
-import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
+import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
+import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { withDurableRuntimeStore, withRuntimePaneAdmission } from './runtime-durable-store-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { committingSpawn } from './bind-first-pane.test-fixture'
-import type { RuntimeNotifier } from '../runtime-notifier-contract'
-import type { PaneResumeOutcome } from '../../../shared/workspace-layout/workspace-layout-published'
+import type { RuntimeNotifier } from '../client/events/runtime-notifier-contract'
+import type { PaneResumeOutcome } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 export const REPO = {
   id: 'repo-1',

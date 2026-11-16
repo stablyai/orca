@@ -12,14 +12,14 @@ import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import {
   isTerminalLeafId,
   makePaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import {
   ptyHoldsRecordedSurface,
   type PtySurfaceTopology
@@ -31,7 +31,7 @@ import type {
 
 import { readTerminalTail } from '../output/tail/terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithMailboxTerminalIdentity {
   protected abstract bindPtyIncarnationHandle(
@@ -153,6 +153,18 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     return { pty }
   }
 
+  /** The PTY a runtime or window-pane handle names; a reloading graph is unknown, not gone, so it throws. */
+  getTerminalPtyIdForHandle(handle: string): string | null {
+    try {
+      return this.getTerminalPtyForHandle(handle).pty.ptyId
+    } catch (error) {
+      if (error instanceof Error && error.message === 'runtime_unavailable') {
+        throw error
+      }
+      return null
+    }
+  }
+
   /** A pane-issued handle outlives the graph (a reload) while its PTY keeps the incarnation it was issued for. */
   protected getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined {
     const pty = this.getPaneAliasPty(handle)
@@ -199,7 +211,7 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     if (!record) {
       const ptyId = context
         ? context.reversePtyIds(handle)[0]
-        : [...this.handleByPtyId.entries()].find(([, mappedHandle]) => mappedHandle === handle)?.[0]
+        : this.terminalIdentity.firstReversePtyId(handle)
       const pty = ptyId ? this.ptysById.get(ptyId) : null
       if (pty) {
         // Why: graph reload clears renderer handle records, but runtime-owned PTY handles remain the caller's control identity.

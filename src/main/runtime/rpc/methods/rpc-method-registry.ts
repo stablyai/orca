@@ -1,4 +1,5 @@
 import { STATUS_METHODS } from './host-management/status'
+import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
@@ -7,6 +8,9 @@ import { AI_VAULT_METHODS } from './history/ai-vault'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
+import { WORKSPACE_CLEANUP_RUNNER_METHODS } from './workspaces/workspace-cleanup-runner-methods'
+import { WORKTREE_ARCHIVE_METHODS } from './workspaces/worktree-archive-methods'
+import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { REFERENCE_METHODS } from './reference/reference'
 import { TERMINAL_METHODS } from './terminal/terminal'
 import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
@@ -41,6 +45,7 @@ import { JIRA_METHODS } from './integrations/jira/jira'
 import { SSH_METHODS } from './ssh/ssh'
 import { MANAGED_SERVER_METHODS } from './host-management/managed-server'
 import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
+import { ENVIRONMENT_DOCTOR_METHODS } from './host-management/environment-doctor'
 import { SPEECH_METHODS } from './speech/speech'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
@@ -50,6 +55,7 @@ import { PLUGIN_METHODS } from './plugins/plugins'
 import { PLUGIN_VIEW_METHODS } from './plugins/plugin-view'
 import { PLUGIN_DEV_EMIT_METHODS } from './plugins/plugin-dev-emit'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugins/plugin-dev-request'
+import { PLUGIN_INSTALL_METHODS } from './plugins/plugin-install-methods'
 import { SKILL_METHODS } from './skills/skills'
 import { CLIPBOARD_METHODS } from './clipboard/clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
@@ -76,12 +82,13 @@ import {
   LAYOUT_VIEW_REPORT_METHODS,
   WORKSPACE_LAYOUT_METHODS
 } from './workspace-layout/workspace-layout'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 // Keep registration order and the full RPC/security surface visible in one manifest.
 export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
+  ...DESKTOP_WINDOW_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,
   ...SESSION_TERMINAL_SCROLLBACK_METHODS,
@@ -91,6 +98,9 @@ export const ALL_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...WORKSPACE_CLEANUP_RUNNER_METHODS,
+  ...WORKTREE_ARCHIVE_METHODS,
+  ...AGENT_ACTIVITY_METHODS,
   ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
@@ -136,6 +146,7 @@ export const ALL_RPC_METHODS = [
   ...SSH_METHODS,
   ...MANAGED_SERVER_METHODS,
   ...RECIPE_VM_WAKE_METHODS,
+  ...ENVIRONMENT_DOCTOR_METHODS,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
   ...LINK_PREVIEW_METHODS,
@@ -143,6 +154,7 @@ export const ALL_RPC_METHODS = [
   ...PLUGIN_VIEW_METHODS,
   ...PLUGIN_DEV_EMIT_METHODS,
   ...PLUGIN_DEV_REQUEST_METHODS,
+  ...PLUGIN_INSTALL_METHODS,
   ...SKILL_METHODS,
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,

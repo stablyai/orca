@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 
 /** Keep configured shell profiles consistent between renderer IPC and runtime-controller spawns. */
 export function resolveConfiguredTerminalShellArgs(params: {

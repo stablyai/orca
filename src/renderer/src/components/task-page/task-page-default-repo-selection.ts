@@ -1,11 +1,14 @@
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import {
   getProjectIdentityKey,
   hasProjectRemoteIdentity,
   isProjectRemoteIdentityPending
-} from '../../../../shared/project-host-setup-projection'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/project/host-setup/project-host-setup-projection'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 export type TaskProjectPickerGroup = {
   projectKey: string

@@ -55,6 +55,8 @@ function createCodexTranslation(
   } = createCodexJournalTranslatorWriters(deps)
   const flushStreams = (threadId?: string): CodexJournalTranslationAdmission =>
     items.streams.flush(threadId)
+      ? CODEX_JOURNAL_ADMITTED
+      : { accepted: false, reason: 'backpressure' }
   let readActivity = createCodexProviderActivityReader()
   const resetActivity = (threadId: string): void => {
     if (threadId === (deps.primaryThreadId?.() ?? null)) {
@@ -189,11 +191,9 @@ function createCodexTranslation(
           return publishActivity(event, streamResult.admission)
         }
       }
-      if (event.type !== 'notification' || event.method !== CODEX_TOKEN_USAGE_METHOD) {
-        const streamAdmission = flushStreams('threadId' in event ? event.threadId : undefined)
-        if (!streamAdmission.accepted) {
-          return streamAdmission
-        }
+      const streamAdmission = flushStreams('threadId' in event ? event.threadId : undefined)
+      if (!streamAdmission.accepted) {
+        return streamAdmission
       }
       if (event.type === 'prompt') {
         const suppressionAdmission = genericFrames.flush()
@@ -210,9 +210,21 @@ function createCodexTranslation(
         return CODEX_JOURNAL_ADMITTED
       }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
-        return event.method === 'turn/started'
-          ? turnBoundaries.start(event)
-          : turnBoundaries.complete(event)
+        if (event.method === 'turn/started') {
+          return turnBoundaries.start(event)
+        }
+        const turnId = readCodexTurnId(event.params) ?? activeTurns.current(event.threadId)
+        const failure = genericFrames.appendCompletionFailure(event.params, event.threadId, (id) =>
+          commands.errorShown({ turnId: id })
+        )
+        if (!failure.accepted) {
+          return failure
+        }
+        const admission = turnBoundaries.complete(event)
+        if (admission.accepted && turnId) {
+          genericFrames.forgetTurnFailure(event.threadId, turnId)
+        }
+        return admission
       }
       const compaction = compactions.handle(event)
       if (compaction) {
@@ -227,7 +239,7 @@ function createCodexTranslation(
         event.method === CODEX_TOKEN_USAGE_METHOD &&
         event.threadId === (deps.primaryThreadId?.() ?? null)
       ) {
-        const contextAdmission = recordCodexContextUsage({
+        recordCodexContextUsage({
           sink: deps.sink,
           activeTurns,
           attributionFor,
@@ -235,9 +247,6 @@ function createCodexTranslation(
           params: event.params,
           capturedAt: deps.now?.() ?? Date.now()
         })
-        if (!contextAdmission.accepted) {
-          return contextAdmission
-        }
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
         const routed = routeThreadItem(event)

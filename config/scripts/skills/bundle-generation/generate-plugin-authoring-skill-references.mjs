@@ -208,12 +208,15 @@ function hookLines({ hooks, hookContribution, typeText }) {
 
 function renderHostApi(sources, { frame, worker }) {
   const { hostApi, hostDoc, capabilities } = sources
-  const names = hostApi.PLUGIN_HOST_METHOD_NAMES
+  const names = hostApi.PLUGIN_STABLE_HOST_METHOD_NAMES
   const methodsFor = (surface) => hostApi.pluginHostMethodsFor(surface).map(code).join(', ')
   const methods = names.map((name) => {
     const spec = hostApi.PLUGIN_HOST_API[name]
     const facts = [
       spec.capability ? `capability ${code(spec.capability)}` : 'no capability',
+      ...Object.entries(spec.paramCapabilities ?? {}).map(
+        ([param, kind]) => `${code(param)} also needs ${code(kind)}`
+      ),
       spec.surfaces.join(', '),
       `since ${hostVersion(sources, spec.since)}`,
       ...(spec.deprecatedSince === undefined
@@ -299,7 +302,7 @@ function renderEvents({ events, eventContribution, typeText }, { services, frame
   const { REFERENCE_TYPE_TEXT, zodTypeText } = typeText
   const workerEvents = eventContribution.PLUGIN_EVENT_NAMES.map(
     (name) =>
-      `- ${code(name)} (capability ${code(eventContribution.PLUGIN_EVENT_CAPABILITY[name])}; since ${eventContribution.PLUGIN_EVENT_SINCE[name]}): ${events.PLUGIN_EVENT_SUMMARIES[name]}\n  ${code(zodTypeText(events.PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT))}`
+      `- ${code(name)} (${eventContribution.PLUGIN_EVENT_CAPABILITY[name] ? `capability ${code(eventContribution.PLUGIN_EVENT_CAPABILITY[name])}` : 'no capability'}; since ${eventContribution.PLUGIN_EVENT_SINCE[name]}): ${events.PLUGIN_EVENT_SUMMARIES[name]}\n  ${code(zodTypeText(events.PLUGIN_EVENT_PAYLOAD_SCHEMAS[name], 'output', REFERENCE_TYPE_TEXT))}`
   )
   return document(
     'Events',

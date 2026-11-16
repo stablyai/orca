@@ -1,29 +1,35 @@
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 
 /** Keep newest whole items within budget, retaining at least the latest item. */
-export function createNewestItemWindow(maxBytes: number): {
-  push(item: JournalReplacementItem): void
-  items(): JournalReplacementItem[]
-} {
-  let entries: ({ item: JournalReplacementItem; bytes: number } | undefined)[] = []
-  let head = 0
-  let bytes = 0
+export function createNewestItemWindow(maxBytes: number) {
+  const entries = new Map<string, { item: JournalReplacementItem; bytes: number }>()
+  let bytes = 0,
+    reserved = 0,
+    sequence = 0
+  const trim = () => {
+    while (bytes + reserved > maxBytes && entries.size > 1) {
+      const [key, entry] = entries.entries().next().value!
+      bytes -= entry.bytes
+      entries.delete(key)
+    }
+  }
+  const store = (key: string, item: JournalReplacementItem, extraBytes = 0) => {
+    bytes -= entries.get(key)?.bytes ?? 0
+    entries.delete(key)
+    const itemBytes = Buffer.byteLength(JSON.stringify(item)) + extraBytes
+    entries.set(key, { item, bytes: itemBytes })
+    bytes += itemBytes
+    trim()
+  }
   return {
-    push(item) {
-      const itemBytes = Buffer.byteLength(JSON.stringify(item), 'utf8')
-      entries.push({ item, bytes: itemBytes })
-      bytes += itemBytes
-      while (bytes > maxBytes && head < entries.length - 1) {
-        bytes -= entries[head]?.bytes ?? 0
-        entries[head] = undefined
-        head += 1
-      }
-      // Batch evictions keep long-source processing linear.
-      if (head > 1024 && head * 2 > entries.length) {
-        entries = entries.slice(head)
-        head = 0
-      }
+    push: (item: JournalReplacementItem) => store(`#${sequence++}`, item),
+    upsert: (key: string, item: JournalReplacementItem, extraBytes = 0) =>
+      store(key, item, Buffer.byteLength(key) + extraBytes),
+    get: (key: string) => entries.get(key)?.item,
+    reserve: (value: number) => {
+      reserved = value
+      trim()
     },
-    items: () => entries.slice(head).flatMap((entry) => (entry ? [entry.item] : []))
+    items: () => [...entries.values()].map(({ item }) => item)
   }
 }

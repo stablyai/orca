@@ -9,7 +9,7 @@ import type {
   BranchCompareSnapshot,
   CommitCompareSnapshot,
   OpenConflictMetadata
-} from '../../../../../../shared/editor-tab-view-types'
+} from '../../../../../../shared/editor/views/editor-tab-view-types'
 
 export function getCompareVersion(
   compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>
@@ -140,7 +140,11 @@ export function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
+    if (
+      file.mode === 'conflict-review' ||
+      file.mode === 'check-details' ||
+      file.mode === 'git-graph'
+    ) {
       return [file]
     }
 

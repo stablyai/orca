@@ -152,3 +152,23 @@ export function boundLegacyImportBlock(
   }
   return block
 }
+
+export function boundLegacyImportBody(
+  body: AgentJournalItemBody,
+  limits: JournalPayloadLimits
+): AgentJournalItemBody {
+  if (body.kind === 'message') {
+    return { ...body, blocks: body.blocks.map((block) => boundLegacyImportBlock(block, limits)) }
+  }
+  if (body.kind === 'tool-call') {
+    return {
+      ...body,
+      input: boundToolInput(body.input, limits),
+      ...(body.output ? { output: boundPayload(body.output.head, limits) } : {})
+    }
+  }
+  if (body.kind === 'diff') {
+    return { ...body, patch: boundPayload(body.patch.head, limits) }
+  }
+  return body
+}

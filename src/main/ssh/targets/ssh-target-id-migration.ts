@@ -1,10 +1,10 @@
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
+import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 
 /** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Mutate in place and report changes for save scheduling. */
 

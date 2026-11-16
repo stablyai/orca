@@ -17,7 +17,7 @@ import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { WorktreeCardLinkedReviewActions } from '../review/WorktreeCardReviewActions'
 import type { WorktreeCardDetailsHoverProps } from '../metadata/worktree-card-meta-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeCardReviewDetailSection } from '../review/WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
@@ -25,6 +25,7 @@ import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailS
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
 import { CommentMarkdownAsync, preloadCommentMarkdown } from '../../comment-markdown-lazy'
+import { useActivityThreadHoverCardIntent } from '@/components/activity/activity-thread-hover-card-intent'
 
 const COMMENT_MARKDOWN_CLASS_NAME =
   'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'
@@ -65,10 +66,12 @@ export function WorktreeCardDetailsHover({
   onOpenAutomationRun,
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
+  const t = useTranslate()
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const detailsHoverControl = hoverControl ?? internalHoverControl
   const {
     hoverOpen,
+    contextMenuOpen,
     reviewMenuOpen,
     handleHoverOpenChange,
     handleIssueMenuOpenChange,
@@ -101,6 +104,12 @@ export function WorktreeCardDetailsHover({
     },
     [handleHoverOpenChange, workspaceTitleEditing]
   )
+  // Same rest-to-peek intent as agent activity rows so passing pointers don't flash the card.
+  const hoverIntent = useActivityThreadHoverCardIntent({
+    open: hoverOpen || workspaceTitleEditing,
+    onOpenChange: handleEffectiveHoverOpenChange,
+    openDelay
+  })
   const dismissAndRun = React.useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
       closeHover()
@@ -140,9 +149,9 @@ export function WorktreeCardDetailsHover({
 
   return (
     <HoverCard
-      open={hoverOpen || workspaceTitleEditing}
-      onOpenChange={handleEffectiveHoverOpenChange}
-      openDelay={openDelay}
+      open={workspaceTitleEditing || (!contextMenuOpen && hoverOpen)}
+      onOpenChange={hoverIntent.onOpenChange}
+      openDelay={0}
       closeDelay={closeDelay}
     >
       <span className="contents" onClick={(event) => event.stopPropagation()}>
@@ -150,7 +159,13 @@ export function WorktreeCardDetailsHover({
       </span>
       <HoverCardTrigger
         asChild
-        onPointerEnter={hasComment(comment) ? preloadCommentMarkdown : undefined}
+        {...hoverIntent.triggerHandlers}
+        onPointerEnter={(event) => {
+          hoverIntent.triggerHandlers.onPointerEnter(event)
+          if (hasComment(comment)) {
+            preloadCommentMarkdown()
+          }
+        }}
       >
         {children}
       </HoverCardTrigger>
@@ -239,14 +254,11 @@ export function WorktreeCardDetailsHover({
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
-                label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+                label={t('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
                 actions={
                   onEditComment ? (
                     <MetadataActionIcon
-                      label={translate(
-                        'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                        'Edit notes'
-                      )}
+                      label={t('auto.components.sidebar.WorktreeCardMeta.c7fa72ead0', 'Edit notes')}
                       onClick={onEditComment}
                     >
                       <Pencil className="size-3" />

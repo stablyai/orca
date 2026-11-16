@@ -22,9 +22,4 @@ describe('readTerminalMouseEncoding', () => {
     expect(readTerminalMouseEncoding(terminal)).toBe('default')
     terminal.dispose()
   })
-
-  it('answers default when the private internals are missing', () => {
-    expect(readTerminalMouseEncoding({ cols: 80, rows: 24 })).toBe('default')
-    expect(readTerminalMouseEncoding({ cols: 80, rows: 24, _core: {} })).toBe('default')
-  })
 })

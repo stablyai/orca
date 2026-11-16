@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { PickerModal } from '../components/PickerModal'
+import { PickerModal } from '../components/sheets/PickerModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { hostPickerOptions } from '../components/use-connected-host-picker'
-import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
-import { loadHostCatalog } from '../transport/host-store'
-import type { HostProfile } from '../transport/types'
+import { hostPickerOptions } from '../host-catalog/selection/use-connected-host-picker'
+import { selectConnectableHostProfiles } from '../host-catalog/host-catalog-selection'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import type { HostProfile } from '../host-catalog/host-profile'
 
 // Keep picker and loading drawer in the overlay’s window so the load can start as selection leaves.
 export function NewWorkspaceHostPicker({

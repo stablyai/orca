@@ -1,8 +1,11 @@
-import { existsSync } from 'node:fs'
+import { noteEnvironmentStoreWrite } from './runtime-environment-store-write-generation'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeSecureJsonFileWithinLimit } from '../../bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from '../../node-bounded-file-reader'
+import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
+import {
+  readEnvironmentRegistryFile,
+  invalidateEnvironmentStoreObservation
+} from './runtime-environment-store-observation'
 import { RuntimeEnvironmentReconciliationRecordSchema } from '../host-catalog/runtime-environment-reconciliation-record'
 import { readEnvironmentStoreRecords } from './runtime-environment-store-records'
 import {
@@ -15,11 +18,10 @@ import {
   type KnownRuntimeEnvironment,
   type PersistedRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-file'
 
 // Shipped builds strip unknown environment fields on routine writes; preserve newer state in this untouched sidecar.
 const SIDECAR_FILE = 'orca-environment-sidecar.json'
-const MAX_SIDECAR_FILE_BYTES = 1024 * 1024
+export const MAX_SIDECAR_FILE_BYTES = 1024 * 1024
 
 const SidecarBindingSchema = z.object({
   createdAt: z.number().finite(),
@@ -61,7 +63,7 @@ const SidecarEnvelopeSchema = z.object({
 })
 
 export type RuntimeEnvironmentSidecarEntry = z.infer<typeof SidecarEntrySchema>
-type RuntimeEnvironmentSidecar = z.infer<typeof SidecarSchema> & {
+export type RuntimeEnvironmentSidecar = z.infer<typeof SidecarSchema> & {
   /** Entries this build cannot read, kept verbatim; their environments must not be used. */
   unreadable: Record<string, unknown>
 }
@@ -92,15 +94,27 @@ export function runtimeEnvironmentSidecarBinding(environment: PersistedRuntimeEn
 
 export function readRuntimeEnvironmentSidecar(userDataPath: string): RuntimeEnvironmentSidecar {
   const path = getRuntimeEnvironmentSidecarPath(userDataPath)
-  if (!existsSync(path)) {
-    return { version: 1, entries: {}, unreadable: {} }
+  let text: string
+  try {
+    const read = readEnvironmentRegistryFile(path, MAX_SIDECAR_FILE_BYTES)
+    if (!read) {
+      return { version: 1, entries: {}, unreadable: {} }
+    }
+    text = read.buffer.toString('utf8')
+  } catch {
+    throw new RuntimeEnvironmentSidecarInvalidError(path)
   }
+  return parseRuntimeEnvironmentSidecarText(path, text)
+}
+
+/** Parses bytes already read from `path`; the error matches a failed read of that file. */
+export function parseRuntimeEnvironmentSidecarText(
+  path: string,
+  text: string
+): RuntimeEnvironmentSidecar {
   let raw: Record<string, unknown>
   try {
-    hardenExistingSecureFile(path)
-    raw = SidecarEnvelopeSchema.parse(
-      JSON.parse(readNodeFileSyncWithinLimit(path, MAX_SIDECAR_FILE_BYTES).buffer.toString('utf8'))
-    ).entries
+    raw = SidecarEnvelopeSchema.parse(JSON.parse(text)).entries
   } catch {
     throw new RuntimeEnvironmentSidecarInvalidError(path)
   }
@@ -243,6 +257,7 @@ export function writeRuntimeEnvironmentSidecarEntry(
         : {})
     })
   }
+  invalidateEnvironmentStoreObservation(getRuntimeEnvironmentSidecarPath(userDataPath))
   writeSecureJsonFileWithinLimit(
     getRuntimeEnvironmentSidecarPath(userDataPath),
     {
@@ -251,7 +266,7 @@ export function writeRuntimeEnvironmentSidecarEntry(
       entries: { ...SidecarSchema.parse({ version: 1, entries }).entries, ...current.unreadable }
     },
     MAX_SIDECAR_FILE_BYTES,
-    { durable: true }
+    { durable: true, onPublished: noteEnvironmentStoreWrite }
   )
 }
 

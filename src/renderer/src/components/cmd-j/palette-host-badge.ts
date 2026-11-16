@@ -1,5 +1,9 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
+import { translateHostDisplayLabel } from '../sidebar/execution-host-label'
 
 export type PaletteHostBadge = {
   hostId: ExecutionHostId
@@ -26,5 +30,5 @@ export function getPaletteHostBadge(
   if (!host) {
     return null
   }
-  return { hostId: host.id, label: host.label }
+  return { hostId: host.id, label: translateHostDisplayLabel(host) }
 }

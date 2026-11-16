@@ -2,8 +2,9 @@ import {
   hasSparseDirectoryParentSegment,
   isAbsoluteSparseDirectoryPath,
   normalizeSparseDirectoryLines
-} from '@/lib/sparse-paths'
+} from '@/lib/directory-input/sparse-paths'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type SparseDirectoryEntryInputResult = {
   entries: string[]
@@ -11,10 +12,13 @@ export type SparseDirectoryEntryInputResult = {
 }
 
 /** Parse typed/pasted repo-relative paths using saved-preset validation constraints. */
-export function parseSparseDirectoryEntryInput(raw: string): SparseDirectoryEntryInputResult {
+export function parseSparseDirectoryEntryInput(
+  raw: string,
+  t: Translate = translate
+): SparseDirectoryEntryInputResult {
   const invalid = {
     entries: [],
-    error: translate(
+    error: t(
       'auto.lib.sparse.preset.draft.5915a0a1f6',
       'Use repo-relative directories, not root, absolute paths, or parent segments.'
     )

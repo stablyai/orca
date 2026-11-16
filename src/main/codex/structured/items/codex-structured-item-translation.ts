@@ -8,12 +8,9 @@ import {
   toolExecutionMetadata,
   toolWebSearchResults
 } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
-import type {
-  AgentJournalBoundedPayload,
-  AgentJournalItemBody
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/native-chat/input/questions/codex-async-question-input'
 import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
@@ -77,12 +74,8 @@ export type CodexJournalItem = {
   handled: boolean
 }
 
-function codexCommandItem(
-  item: CodexThreadItem,
-  bounded?: AgentJournalBoundedPayload
-): CodexJournalItem {
-  const text = bounded ? null : codexCommandOutput(item)
-  const output = bounded ?? (text === null ? null : journalPayload(text))
+function commandItem(item: CodexThreadItem): CodexJournalItem {
+  const output = codexCommandOutput(item)
   const parsed = commandActionFacts(item)
   return {
     body: {
@@ -93,16 +86,13 @@ function codexCommandItem(
       input: { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
       state: codexItemRunState(item),
       ...toolExecutionMetadata(item),
-      ...(output === null ? {} : { output })
+      ...(output === null ? {} : { output: journalPayload(output) })
     },
     handled: true
   }
 }
 
-function fileChangeToolCall(
-  item: CodexThreadItem,
-  output?: string | AgentJournalBoundedPayload
-): CodexJournalItem {
+function fileChangeToolCall(item: CodexThreadItem, output?: string): CodexJournalItem {
   return {
     body: {
       kind: 'tool-call',
@@ -110,23 +100,10 @@ function fileChangeToolCall(
       callId: item.id,
       input: { changes: item.changes ?? null },
       state: codexItemRunState(item),
-      ...(output === undefined
-        ? {}
-        : { output: typeof output === 'string' ? journalPayload(output) : output })
+      ...(output === undefined ? {} : { output: journalPayload(output) })
     },
     handled: true
   }
-}
-
-/** Running output rows keep only a preview, so callers may pass it prebuilt; null for other items. */
-export function codexRunningOutputItem(
-  item: CodexThreadItem,
-  output: AgentJournalBoundedPayload
-): CodexJournalItem | null {
-  if (item.type === 'commandExecution') {
-    return codexCommandItem(item, output)
-  }
-  return item.type === 'fileChange' ? fileChangeToolCall(item, output) : null
 }
 
 function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
@@ -232,7 +209,7 @@ export function codexJournalItem(
     }
   }
   if (item.type === 'commandExecution') {
-    return codexCommandItem(item)
+    return commandItem(item)
   }
   if (item.type === 'fileChange') {
     return fileChangeItem(item)
@@ -292,7 +269,7 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     return { body: journalReasoningBody(text), handled: true }
   }
   if (item.type === 'commandExecution') {
-    return codexCommandItem({ ...item, aggregatedOutput: text })
+    return commandItem({ ...item, aggregatedOutput: text })
   }
   if (item.type === 'fileChange') {
     return fileChangeToolCall(item, text)

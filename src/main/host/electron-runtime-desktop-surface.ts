@@ -1,11 +1,11 @@
-import { isResourceWindowVisible } from '../window/resource-view-admission'
+import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
-import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,

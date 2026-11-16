@@ -9,7 +9,8 @@ import '../db/dispatch-row-writer'
 import '../db/attempt-outcome-projection'
 import { ensureMutationReceiptCapacity } from '../db/mutation-receipts/mutation-receipt-capacity'
 
-import { buildCrewSnapshot, CrewReadModel } from './crew-read-model'
+import { buildCrewSnapshot } from './crew-party-snapshot'
+import { CrewReadModel } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
 import { fixture } from './crew-read-model.test-fixture'
 

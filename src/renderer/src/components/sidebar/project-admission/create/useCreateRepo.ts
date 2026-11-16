@@ -2,26 +2,26 @@ import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { RepoCreateFailure } from '../../../../../../shared/repo-create-failure-copy'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { RepoCreateFailure } from '../../../../../../shared/repository/creation/repo-create-failure-copy'
 import { repoCreateErrorText } from './repo-create-error-copy'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   resolveAddRepoRuntimeTarget,
   worktreeRefreshOptions
 } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   readWslHostWindowsDriveRefusal,
   type WslHostWindowsDriveRefusal
-} from '../../../../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 
 export function useCreateRepo(
   fetchWorktrees: (

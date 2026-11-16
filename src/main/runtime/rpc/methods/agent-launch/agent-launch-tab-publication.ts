@@ -15,9 +15,9 @@ import type {
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
-} from '../../../../../shared/runtime-navigation'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { workspaceKindForWorktreeId } from '../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { trackRunningAgentLaunchPane } from '../../../../agent-launch/agent-launch-pane-attachment'
 import type { AgentLaunchPaneVerdict } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import {
@@ -25,9 +25,9 @@ import {
   readAgentLaunchModeSettings
 } from '../../../../agent-launch/agent-launch-mode'
 import type { RpcContext } from '../../core'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchOperationCallerKey } from './agent-launch-replay'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 /** Paired launches move only the caller's view; both early publication and spawn must obey this. */
 export function agentLaunchMovesHostWindow(

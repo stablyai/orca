@@ -1,13 +1,13 @@
 import { closeRemoteRuntimeSocket } from '../remote-runtime-socket-close'
-import { throwIfSignalAborted, abortSignalReason } from '../../abort-signal-reason'
+import { throwIfSignalAborted, abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import {
-  createRemoteRuntimeClientHandshake,
   formatRemoteRuntimeCloseMessage,
   ignoreSettledRemoteRuntimeSocketError
 } from '../remote-runtime-client-handshake'
+import { createRemoteRuntimeClientHandshake } from '../remote-runtime-client-framing'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   remoteRuntimeConnectFailureMessage,

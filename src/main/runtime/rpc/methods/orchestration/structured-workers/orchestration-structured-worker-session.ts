@@ -7,7 +7,7 @@ import {
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { readAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureDetailText,
@@ -241,8 +241,7 @@ export async function sendStructuredWorkerPreamble(args: {
     case 'refused':
       throw new Error(`The dispatch preamble was refused: ${outcome.refusal.message}`)
     case 'queued':
-      // Never for a `now` send; a held draft proves nothing about the worker taking it.
-      return preambleDispatchState(undefined)
+      return 'pending'
     case 'sent':
       return preambleDispatchState(outcome.submission)
   }

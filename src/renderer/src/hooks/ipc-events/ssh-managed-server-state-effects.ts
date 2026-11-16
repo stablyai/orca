@@ -1,26 +1,26 @@
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject
-} from '../../../../shared/ssh-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { Repo } from '../../../../shared/repo-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   type ExecutionHostId,
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { toastSshHostMoveRefused } from './ssh-managed-server-refusal-toast'
 import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'
-import { rekeyWorktreeVisitHost } from '@/lib/worktree-visit-recency'
+import { rekeyWorktreeVisitHost } from '@/lib/workspace/activation/worktree-visit-recency'
 import { preserveConvertedSshBrowserPages } from '../../store/repos/converted-ssh-browser-pages'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ManagedServerStatus = SshConnectionState['managedServer']
 
@@ -71,7 +71,7 @@ function remountBridgedTabsOnce(targetId: string, next: ManagedServerStatus): vo
   }
   bridgedTargetsRemounted.add(targetId)
   // Load panes lazily because module import itself subscribes to the bridge.
-  void import('../../components/terminal-pane/legacy-relay-bridge-panes').then(
+  void import('../../components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes').then(
     ({ legacyRelayBridgedTabIds }) => {
       const store = useAppStore.getState()
       for (const tabId of legacyRelayBridgedTabIds(targetId)) {

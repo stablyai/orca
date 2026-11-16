@@ -1,15 +1,19 @@
-import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
+import { runEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { getWorktreeIdFromVisitKey, getWorktreeVisitKey } from '@/lib/worktree-visit-recency'
-import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
-import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
-import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getWorktreeIdFromVisitKey,
+  getWorktreeVisitKey
+} from '@/lib/workspace/activation/worktree-visit-recency'
+import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
+import { repoMatchesHostIdentity, worktreeBelongsToHost } from './repo-host-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
+import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
+// oxfmt-ignore
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { destroyRecipeVmBeforeProjectRemoval } from './recipe-vm-project-removal'
 import { stopRuntimeProjectTerminalsBeforeRemoval } from './runtime-project-terminal-stop'
 import type { RepoSlice } from './repo-state'
@@ -32,10 +36,6 @@ import {
 import { toastProjectRemovalFailure } from './repo-removal-failure-toast'
 import { replayPendingRuntimeRepoRemovalsIfReady } from './pending-runtime-repo-removal-replay'
 import { isRuntimeEnvironmentRegistered } from './runtime-environment-registration'
-
-export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {
-  return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
-}
 
 type HostScopedWorktreeRef = { id: string; hostId?: string }
 
@@ -183,7 +183,8 @@ export function createRepoRemovalActions(
           repoMatchesHostIdentity(repo, projectId, ownerHostId)
         )?.path
         get().evictGitHubRepoCaches(projectId, repoPath, ownerHostId)
-        const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
+        const { clearRepoSlugCacheEntry } =
+          await import('../../lib/workspace/catalog/repo-slug-index')
         clearRepoSlugCacheEntry(projectId)
 
         const worktreeIds = [

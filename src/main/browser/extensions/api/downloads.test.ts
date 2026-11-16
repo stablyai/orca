@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('electron', () => ({ webContents: { fromId: () => undefined } }))
 vi.mock('./downloads-save-as', () => ({ chooseDownloadSavePath: mocks.chooseSavePath }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getTabIdForWebContentsId: () => 'tab-1',
     requestDownloadFilename: mocks.requestDownloadFilename,

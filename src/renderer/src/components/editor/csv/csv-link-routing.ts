@@ -1,5 +1,5 @@
-import { getConnectionIdForFile } from '@/lib/connection-context'
-import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
+import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { resolveMarkdownPreviewHttpOpenOptions } from '../markdown/link-routing/markdown-preview-links'
 
 export function openCsvHttpLink(

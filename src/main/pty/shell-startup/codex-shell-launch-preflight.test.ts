@@ -17,9 +17,9 @@ import {
   CODEX_COMMAND_IDENTITY_ENV_KEYS,
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight
-} from '../../../shared/codex-shell-function'
-import { resolveFishBinary } from '../../../shared/fish-binary-requirement'
-import { getPowerShellAgentWrappers } from '../../../shared/powershell-agent-wrappers'
+} from '../../../shared/shell/launch/agents/codex-shell-function'
+import { resolveFishBinary } from '../../../shared/shell/testing/fish-binary-requirement'
+import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
 
 const roots: string[] = []
 const zshAvailable = existsSync('/bin/zsh')
@@ -227,6 +227,29 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
         )
 
         expect(output).toBe('alive')
+      }
+    )
+  }
+
+  for (const shell of ['/bin/bash', '/bin/zsh']) {
+    it.skipIf(!existsSync(shell))(
+      `keeps the user’s own codex function in ${shell} when the cwd has a codex entry`,
+      () => {
+        const root = mkdtempSync(join(tmpdir(), 'orca-codex-user-fn-'))
+        roots.push(root)
+        mkdirSync(join(root, 'codex'))
+
+        const output = execFileSync(
+          shell,
+          [
+            shell.endsWith('/zsh') ? '-f' : '--noprofile',
+            '-c',
+            `codex() { printf 'user function'; }\n${getPosixCodexShellLaunchPreflight()}\ncodex`
+          ],
+          { encoding: 'utf-8', cwd: root, env: { ...process.env, PATH: '/usr/bin:/bin' } }
+        )
+
+        expect(output).toBe('user function')
       }
     )
   }

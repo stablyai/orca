@@ -1,6 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { removeManagedCommands, type HookDefinition } from '../../../agent-hooks/installer-utils'
-import { readHooksJsonWithRaw } from '../../../agent-hooks/hooks-json-read'
+import {
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync
+} from '../../../filesystem/file-content-observation'
+
+import { removeManagedCommands } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
   writeLoadableHookTrustConfig,
   type CodexEventLabel,

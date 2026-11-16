@@ -1,5 +1,5 @@
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
@@ -10,12 +10,13 @@ import {
   startupAcquisitionRefusal
 } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
+import { providerOutcomeLost } from '../../provider-process/provider-process-exit-status'
 import {
   claudeSessionHasTurnWork,
   settledClaudeTurnEndLeaf
 } from './claude-structured-resume-point'
-import { claudeHeldSends } from '../claude-command-lifecycle'
-import { ClaudePluginInputError } from '../claude-plugin-ui'
+import { claudeHeldSends } from './turns/claude-command-lifecycle'
+import { ClaudePluginInputError } from '../sdk-transport/claude-plugin-ui'
 import type { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { claudeExitEnding } from './claude-structured-start-ending'
 import {
@@ -57,7 +58,9 @@ export function observeClaudeSessionExit(
   if (!session || session.connection !== attempt.connection) {
     return
   }
+  session.historyCatchUp?.abort()
   const observedAt = lifecycle.deps.now?.() ?? Date.now()
+  session.delivery.dispose()
   session.events?.observeExit?.(claudeHeldSends(session), observedAt)
   lifecycle.endings.record(sessionId, session.acquisitionGeneration, claudeExitEnding(error))
   lifecycle.sessions.delete(sessionId)
@@ -159,15 +162,17 @@ export function settleClaudeUnexpectedExit(
       failure:
         exit.error instanceof ClaudePluginInputError
           ? exit.error.failure
-          : startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
-            ? providerStartupFailureFact(exit.error)
-            : startupFailure
-              ? providerStartupFailureFact(startupFailure)
-              : providerExitObserved(exit.error)
-                ? agentSessionFailureFact('providerExited', {
-                    detail: providerDiagnosticOf(exit.error)
-                  })
-                : agentSessionFailureFact('hostFault'),
+          : providerOutcomeLost(exit.error)
+            ? agentSessionFailureFact('hostFault')
+            : startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
+              ? providerStartupFailureFact(exit.error)
+              : startupFailure
+                ? providerStartupFailureFact(startupFailure)
+                : providerExitObserved(exit.error)
+                  ? agentSessionFailureFact('providerExited', {
+                      detail: providerDiagnosticOf(exit.error)
+                    })
+                  : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
       report.deathEvidenceKind === 'kill-delivered'
@@ -253,4 +258,20 @@ export function finishClaudeCloseAfterExit(input: {
         error
       })
     )
+}
+
+export function liveClaudeSession(
+  lifecycle: ClaudeExitLifecycle,
+  sessionId: string
+): ClaudeSession {
+  const session = lifecycle.sessions.get(sessionId)
+  if (!session) {
+    // A child that just exited is named by its own diagnostic, not by its absence.
+    throw (
+      lifecycle.exits.get(sessionId)?.error ??
+      lifecycle.settledExitErrors.get(sessionId) ??
+      new Error(`no live claude stream-json session for ${sessionId}`)
+    )
+  }
+  return session
 }

@@ -1,12 +1,13 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
-import { rpcCallerOperationKey } from '../../rpc-caller-identity'
+import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
-} from '../../../../../shared/rpc-contract/antigravity-accounts-params'
+} from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
+import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import {
   cancelAntigravityChatSignIn,
@@ -18,6 +19,11 @@ import {
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { structuredAgentHostLaunchSources } from '../../../agent-session/launch/structured-agent-launch-support'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
+
+import {
+  readAntigravityChatAuthConfig,
+  applyAntigravityChatAuthConfig
+} from '../../../../antigravity/antigravity-chat-auth-settings'
 
 const chatSignInHost = (runtime: OrcaRuntimeService) => ({
   launchSources: (signal: AbortSignal) =>
@@ -38,27 +44,27 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityList',
     permission: 'workspace',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => getAntigravityAccountService(target).listAccounts()
+    handler: async (target) => (await getAntigravityAccountService(target)).listAccounts()
   }),
   defineMethod({
     name: 'accounts.antigravityAddCurrent',
     permission: 'accounts-admin',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => getAntigravityAccountService(target).addCurrentAccount()
+    handler: async (target) => (await getAntigravityAccountService(target)).addCurrentAccount()
   }),
   defineMethod({
     name: 'accounts.antigravitySelect',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
     handler: async ({ target, accountId }) =>
-      getAntigravityAccountService(target).selectAccount(accountId)
+      (await getAntigravityAccountService(target)).selectAccount(accountId)
   }),
   defineMethod({
     name: 'accounts.antigravityRemove',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
     handler: async ({ target, accountId }) =>
-      getAntigravityAccountService(target).removeAccount(accountId)
+      (await getAntigravityAccountService(target)).removeAccount(accountId)
   }),
   defineMethod({
     name: 'accounts.antigravityChatSignInStart',
@@ -97,5 +103,22 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: AntigravityChatSignInCompleteParams,
     handler: async ({ flowId, callbackUrl }, ctx) =>
       completeAntigravityChatSignIn(signInOwner(ctx), flowId, callbackUrl)
+  }),
+  defineMethod({
+    name: 'accounts.antigravityChatAuthGet',
+    permission: 'accounts-admin',
+    params: null,
+    handler: (_, ctx) => readAntigravityChatAuthConfig(ctx.runtime.requireStore())
+  }),
+  defineMethod({
+    name: 'accounts.antigravityChatAuthApply',
+    permission: 'accounts-admin',
+    params: AntigravityChatAuthConfigSchema,
+    handler: (config, ctx) =>
+      applyAntigravityChatAuthConfig(
+        ctx.runtime.requireStore(),
+        config,
+        chatSignInHost(ctx.runtime).stopLiveChats
+      )
   })
 ] as const

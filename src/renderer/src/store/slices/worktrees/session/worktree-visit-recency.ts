@@ -1,19 +1,22 @@
-import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { runAsAutomaticDeselection } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { AppState } from '../../../types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getWorktreeIdFromVisitKey,
   getWorktreeVisitKey,
   getWorktreeVisitTimestamp
-} from '@/lib/worktree-visit-recency'
+} from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function createMarkWorktreeVisited(
   set: WorktreeSliceSet,
@@ -116,7 +119,30 @@ export function createPruneLastVisitedTimestamps(
           changed = true
         }
       }
+      // Default-tab admission is a write-once guard: drop it only when no list still shows the id,
+      // since a just-created worktree or a restored placeholder can be missing from the scan.
+      const listedIds = new Set<string>()
+      for (const list of Object.values(selectWorktreesByRepo(s))) {
+        list.forEach((worktree) => listedIds.add(worktree.id))
+      }
+      for (const result of Object.values(selectDetectedWorktreesByRepo(s))) {
+        result.worktrees.forEach((worktree) => listedIds.add(worktree.id))
+      }
+      let defaultsChanged = false
+      const nextDefaults: Record<string, true> = {}
+      for (const [key, applied] of Object.entries(s.defaultTerminalTabsAppliedByWorktreeId ?? {})) {
+        const scope = parseWorkspaceKey(key)
+        const id = scope?.type === 'worktree' ? scope.worktreeId : key
+        const repoIds =
+          scope?.type === 'folder' ? undefined : validIdsByRepo.get(getRepoIdFromWorktreeId(id))
+        if (repoIds && !repoIds.has(id) && !listedIds.has(id)) {
+          defaultsChanged = true
+        } else {
+          nextDefaults[key] = applied
+        }
+      }
       const patch: {
+        defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
         lastVisitedAtByWorktreeId?: Record<string, number>
         activeWorktreeId?: null
         activeWorkspaceKey?: null
@@ -124,6 +150,9 @@ export function createPruneLastVisitedTimestamps(
       } = {}
       if (changed) {
         patch.lastVisitedAtByWorktreeId = next
+      }
+      if (defaultsChanged) {
+        patch.defaultTerminalTabsAppliedByWorktreeId = nextDefaults
       }
       // Web localStorage lacks main’s stale-pointer GC; clear active worktrees only after their repo proves them gone or phantom workspaces survive.
       const activeId = s.activeWorktreeId

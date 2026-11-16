@@ -1,5 +1,5 @@
 import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
-import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
+import { RuntimeLineageError } from './runtime-lineage-error'
 
 /** A cross-store parent must name another store; refuses when this store's own identity is unknown. */
 export async function assertParentInAnotherStore(

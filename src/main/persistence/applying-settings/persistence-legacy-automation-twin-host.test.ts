@@ -1,12 +1,11 @@
-import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { closeTestStores, createStore, testState, writeDataFile } from '../persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Automation } from '../../../shared/automations-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

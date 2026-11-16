@@ -1,13 +1,18 @@
+import type { JournalForkInstall } from '../../agent-session-journal/journal-fork-stages'
 // Admission already passed; journal before adapter effects so a crash leaves recoverable unknown work.
 // Calling the adapter first could lose a turn it accepted.
 
+import {
+  forgetNativeChatPrompt,
+  rememberNativeChatPrompt
+} from '../../../telemetry/native-chat-prompt-submissions'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   refuse,
   type AgentSessionWireRefusal,
@@ -16,6 +21,7 @@ import {
 import type { AgentSessionRefusalReason } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
@@ -35,11 +41,13 @@ import './structured-agent-session-turns-prompt'
 import './structured-agent-session-turns-cancel'
 
 export type AgentSessionTurnContext = {
+  forkInstall?: JournalForkInstall
   sessionId: string
   journal: AgentSessionJournal
   fence: number
   /** Read fresh: child exit may change current work mid-operation. */
-  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
+  readWork?: JournalWorkReader
   adapter: StructuredAgentSessionAdapter
   /** Registry declarations; agents.capabilities(agent) is this session’s answer. */
   agents: StructuredAgentRegistry
@@ -87,6 +95,33 @@ export function agentSessionAttachmentExpiredRefusal(error: AgentSessionAttachme
   }
 }
 
+/** Both journal admission writes preserve refusal and receipt replay semantics before provider effects. */
+export function agentSessionAdmissionWriteRefusal(
+  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'logger'>,
+  error: unknown
+): { ok: false; refusal: AgentSessionWireRefusal } {
+  if (error instanceof CommandReceiptExistsError) {
+    throw error
+  }
+  ctx.logger.warn('recording a message failed', {
+    scope: 'send-journal-write',
+    sessionId: ctx.sessionId,
+    error
+  })
+  if (isAgentSessionAttachmentExpiredError(error)) {
+    return agentSessionAttachmentExpiredRefusal(error)
+  }
+  // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
+  if (
+    isAgentSessionRefusalError(error) ||
+    classifyJournalOpenFailure(error) === 'journalCorrupt' ||
+    isJournalWrittenByNewerOrca(error)
+  ) {
+    return { ok: false, refusal: journalOpenRefusal(error) }
+  }
+  return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
+}
+
 /** Accept once per ID; existing submissions replay without redelivery because unknown cannot prove non-delivery.
  * Delivery runs separately; a fresh send after terminal rejection needs a fresh ID. */
 export async function performSend(
@@ -101,9 +136,11 @@ export async function performSend(
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>
-  }
+  },
+  userClient?: 'desktop' | 'mobile',
+  telemetryOwnerKey?: string
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
-  const existing = ctx.journal.submission(input.clientMessageId)
+  const existing = await ctx.journal.reads.submission(input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
     return invalid(
       'messageIdReused',
@@ -121,47 +158,45 @@ export async function performSend(
     return { ok: false, refusal: captured.refusal }
   }
   try {
-    await ctx.journal.appendSubmission(
-      { ...input, options: captured.options, fence: ctx.fence, handoverRecorded: true },
-      undefined,
-      ctx.operationReceipt
-    )
+    if (!input.body.command) {
+      rememberNativeChatPrompt(
+        ctx.journal,
+        input.clientMessageId,
+        ctx.agent,
+        userClient,
+        telemetryOwnerKey
+      )
+    }
+    const submission = {
+      ...input,
+      options: captured.options,
+      fence: ctx.fence,
+      handoverRecorded: true as const
+    }
+    await (ctx.forkInstall
+      ? ctx.journal.write({ kind: 'submission', input: submission }, () => ({
+          receipt: ctx.operationReceipt,
+          forkInstall: ctx.forkInstall
+        }))
+      : ctx.journal.appendSubmission(submission, undefined, ctx.operationReceipt))
   } catch (error) {
-    if (error instanceof CommandReceiptExistsError) {
-      throw error
-    }
-    ctx.logger.warn('recording a message failed', {
-      scope: 'send-journal-write',
-      sessionId: ctx.sessionId,
-      error
-    })
-    if (isAgentSessionAttachmentExpiredError(error)) {
-      return agentSessionAttachmentExpiredRefusal(error)
-    }
-    // Preserve typed refusals, corrupt-database errors and newer-version guards; never retry writes past them.
-    if (
-      isAgentSessionRefusalError(error) ||
-      classifyJournalOpenFailure(error) === 'journalCorrupt' ||
-      isJournalWrittenByNewerOrca(error)
-    ) {
-      return { ok: false, refusal: journalOpenRefusal(error) }
-    }
-    return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
+    forgetNativeChatPrompt(ctx.journal, input.clientMessageId)
+    return agentSessionAdmissionWriteRefusal(ctx, error)
   }
   return {
     ok: true,
     value: {
       clientMessageId: input.clientMessageId,
-      submission: { ...requireSubmission(ctx, input.clientMessageId) }
+      submission: await requireSubmission(ctx, input.clientMessageId)
     }
   }
 }
 
-function requireSubmission(
+async function requireSubmission(
   ctx: AgentSessionTurnContext,
   clientMessageId: string
-): AgentJournalSubmission {
-  const submission = ctx.journal.submission(clientMessageId)
+): Promise<AgentJournalSubmission> {
+  const submission = await ctx.journal.reads.submission(clientMessageId)
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
@@ -173,8 +208,7 @@ export type AgentSessionReplayContext = Pick<
   AgentSessionTurnContext,
   'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
 > & {
-  journal: Pick<
-    AgentSessionJournal,
-    'cursor' | 'submission' | 'inputOrder' | 'epoch' | 'threadGoal'
-  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
+  journal: Pick<AgentSessionJournal, 'cursor' | 'reads'> & {
+    queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
+  }
 }

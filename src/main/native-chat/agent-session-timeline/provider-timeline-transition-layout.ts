@@ -1,7 +1,6 @@
 import {
   providerTimelineSettlementId,
-  type ProviderTimelineContext,
-  type ProviderTimelineStream
+  type ProviderTimelineContext
 } from './provider-timeline-context'
 import type {
   ProviderTimelineDecidedEvent,
@@ -12,7 +11,7 @@ import { turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
 import type { ProviderTimelineTextStreams } from './provider-timeline-text-streams'
 
-/** Pace admission; actual settlement mutations resolve from the journal. */
+/** Pace admission; the writer chooses actual settlement mutations. */
 const SETTLEMENT_RESERVED_BYTES = 64 * 1024
 
 /** Flush preceding text; separate anonymous messages by producer and release streams at their own boundaries. */
@@ -28,14 +27,7 @@ export function planProviderTimelineBarrier(
   const { streams, state } = input
   // Full snapshots supersede deltas for the same row; do not flush stale text.
   const replaced = decision.closes ? streams.get(decision.closes) : undefined
-  const agentId = 'producer' in event ? event.producer?.agentId : undefined
-  const anonymous = (stream: ProviderTimelineStream) =>
-    !stream.named && stream.producer?.agentId === agentId
-  streams.planFlush(
-    plan,
-    replaced,
-    event.type === 'context.usage' || decision.suppressedFrame ? anonymous : undefined
-  )
+  streams.planFlush(plan, replaced)
   if (replaced) {
     streams.planRelease(plan, (stream) => stream === replaced)
   }
@@ -63,7 +55,8 @@ export function planProviderTimelineBarrier(
     return
   }
   if (event.type !== 'input.accepted') {
-    streams.planRelease(plan, anonymous)
+    const agentId = 'producer' in event ? event.producer?.agentId : undefined
+    streams.planRelease(plan, (stream) => !stream.named && stream.producer?.agentId === agentId)
   }
 }
 
@@ -79,17 +72,18 @@ export function planProviderTimelineWrites(
       settlementId: providerTimelineSettlementId(context, serial(), settle.what),
       reservedBytes: SETTLEMENT_RESERVED_BYTES,
       recovered: settle.recovered,
-      resolve: settle.resolve
+      resolution: settle.resolution
     })
   }
   for (const write of decision.writes ?? []) {
     plan.item(
       {
         reservedBytes: write.reservedBytes,
-        resolve: write.resolve,
+        resolution: write.resolution,
         options: write.options
       },
-      write.lifecycle
+      write.lifecycle,
+      write.onResolved
     )
   }
 }

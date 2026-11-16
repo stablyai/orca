@@ -1,10 +1,11 @@
-import '../../../unused-default-rpc-methods.test-fixture'
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import { HOST_TEST_NOW } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { CodexAppServerRequestError } from '../../../../../codex/app-server/codex-app-server-request-error'
 import { codexStartFailure } from '../../../../../codex/app-server/codex-startup-outcome'
@@ -18,8 +19,8 @@ import {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession
 } from './orchestration-structured-worker-session'
-import { deliverWorkerDispatchPreamble } from '../worker/deliver-worker-dispatch-preamble'
-import { tearDownFailedWorkerStart } from '../worker/failed-worker-start-teardown'
+import { deliverWorkerDispatchPreamble } from '../worker/start/readiness/deliver-worker-dispatch-preamble'
+import { tearDownFailedWorkerStart } from '../worker/start/readiness/failed-worker-start-teardown'
 import { structuredWorkerIdentities } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { rpcContext, runtimeStub } from '../../agent-launch/agent-launch.test-fixture'
 
@@ -119,7 +120,8 @@ async function createWorker() {
       coordinatorHandle: 'term_coordinator',
       devMode: false,
       requestId: 'request-retry',
-      readinessTimeoutMs: 2000
+      // Why: real-time budget; five refused opens can outlast 2s on a loaded host and turn refusal into a timeout.
+      readinessTimeoutMs: 20_000
     })
   return { runtime, created, workerRuntime, deliverPreamble }
 }
@@ -128,13 +130,13 @@ it('starts only for its agent-sourced preamble and observes it after a transient
   const { created, deliverPreamble } = await createWorker()
   const sessionId = created.identity.sessionId
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  expect((await rig.host.journalSnapshot(sessionId)).submissions).toEqual([])
+  expect((await readTestHostJournal(rig.host, sessionId)).submissions).toEqual([])
   vi.spyOn(rig.host.deps.adapter, 'open').mockRejectedValueOnce(overloaded())
   const result = await deliverPreamble()
   expect(result.structuredTurnStart).toEqual({ verdict: 'observed' })
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
   expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
-  const snapshot = await rig.host.journalSnapshot(sessionId)
+  const snapshot = await readTestHostJournal(rig.host, sessionId)
   expect(snapshot.submissions).toMatchObject([
     {
       dispatchState: 'accepted',
@@ -155,15 +157,16 @@ it('starts only for its agent-sourced preamble and observes it after a transient
   expect(snapshot.items.filter((item) => item.body.kind === 'status')).toEqual([])
 })
 
-it('reports a preamble as undelivered after startup exhaustion and retires the failed worker', async () => {
+it('retains a refused first task and worker identity while stopping the failed provider', async () => {
   const { runtime, created, workerRuntime, deliverPreamble } = await createWorker()
   const sessionId = created.identity.sessionId
   expect(rig.store.listVisibleSessionIds()).toContain(sessionId)
   vi.spyOn(rig.host.deps.adapter, 'open').mockRejectedValue(overloaded())
-  await expect(deliverPreamble()).rejects.toMatchObject({ code: 'dispatch_preamble_undelivered' })
+  const error = await deliverPreamble().catch((error: unknown) => error)
+  expect(error).toMatchObject({ code: 'dispatch_preamble_undelivered' })
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(5)
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()
-  const snapshot = await rig.host.journalSnapshot(sessionId)
+  const snapshot = await readTestHostJournal(rig.host, sessionId)
   expect(snapshot.submissions).toHaveLength(1)
   expect(snapshot.submissions).toMatchObject([
     { dispatchState: 'rejected', source: { kind: 'agent' } }
@@ -171,15 +174,15 @@ it('reports a preamble as undelivered after startup exhaustion and retires the f
   await tearDownFailedWorkerStart({
     runtime,
     structuredSession: created,
-    dispatchId: 'dispatch-retry'
+    dispatchId: 'dispatch-retry',
+    error
   })
-  expect(structuredWorkerIdentities.getBySessionId(sessionId)).toBeNull()
+  expect(structuredWorkerIdentities.getBySessionId(sessionId)).toEqual(created.identity)
   expect(rig.host.hasSession(sessionId)).toBe(false)
-  expect(rig.store.listVisibleSessionIds()).not.toContain(sessionId)
-  expect(workerRuntime.forgetStructuredSessionMail).toHaveBeenCalledWith(sessionId)
-  expect(workerRuntime.retireStructuredAgentSessionTabFromSnapshot).toHaveBeenCalledWith(
-    sessionId,
-    `agent-session:${sessionId}`,
-    'workspace-1'
-  )
+  expect(rig.store.listVisibleSessionIds()).toContain(sessionId)
+  expect(workerRuntime.forgetStructuredSessionMail).not.toHaveBeenCalled()
+  expect(workerRuntime.retireStructuredAgentSessionTabFromSnapshot).not.toHaveBeenCalled()
+  expect((await readTestHostJournal(rig.host, sessionId)).submissions).toMatchObject([
+    { dispatchState: 'rejected', source: { kind: 'agent' } }
+  ])
 })

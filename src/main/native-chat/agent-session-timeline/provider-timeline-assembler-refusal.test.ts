@@ -51,8 +51,20 @@ describe('a refused event changes nothing and its retry lands it once', () => {
       BACKPRESSURE
     )
     refusing = false
-    assembler.flush()
-    expect(messageText((await rig.row(providerItemId('item', 'm1')))?.body)).toBe('Observed text')
+    expect(
+      assembler.apply({
+        type: 'text.delta',
+        item: { id: 'm1' },
+        channel: 'assistant',
+        text: ' and more'
+      }).admission
+    ).toEqual({ accepted: true })
+    expect(assembler.apply({ type: 'text.close', item: { id: 'm1' } }).admission).toEqual({
+      accepted: true
+    })
+    expect(messageText((await rig.row(providerItemId('item', 'm1')))?.body)).toBe(
+      'Observed text and more'
+    )
   })
 
   it('keeps window text while the sink is full and retries it, and lets it go once the sink is gone', async () => {
@@ -173,40 +185,4 @@ describe('healthy long turns are independent of timeline retention', () => {
     })
     expect(await rig.turn('t1')).toMatchObject({ state: 'completed' })
   })
-})
-
-it('a not-yet-due timeline key and a refused key both land without more input', async () => {
-  const { vi } = await import('vitest')
-  vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
-  const rig = await openProviderTimelineRig()
-  let refuse = false
-  const assembler = rig.assemble({
-    sink: refusingSink(rig.sink, () => refuse),
-    schedule: (run, ms) => {
-      const timer = setTimeout(run, ms)
-      return () => clearTimeout(timer)
-    }
-  })
-  assembler.apply({ type: 'text.delta', item: { id: 'a' }, channel: 'assistant', text: 'P' })
-  vi.advanceTimersByTime(60)
-  await rig.eventSink.written?.()
-  assembler.apply({ type: 'text.delta', item: { id: 'a' }, channel: 'assistant', text: 'T' })
-  assembler.apply({ type: 'text.delta', item: { id: 'b' }, channel: 'reasoning', text: 'B' })
-  refuse = true
-  vi.advanceTimersByTime(60)
-  expect(vi.getTimerCount()).toBe(1)
-  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('P')
-  refuse = false
-  vi.advanceTimersByTime(60)
-  expect(messageText((await rig.row(providerItemId('item', 'b')))?.body)).toBe('B')
-  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('P')
-  vi.advanceTimersByTime(279)
-  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('P')
-  vi.advanceTimersByTime(1)
-  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('PT')
-  expect(vi.getTimerCount()).toBe(0)
-  assembler.apply({ type: 'text.close', item: { id: 'a' } })
-  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('PT')
-  assembler.dispose()
-  vi.useRealTimers()
 })

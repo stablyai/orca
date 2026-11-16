@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   _resetClosedPaneFencesForTests,
   fencedIfLayoutOwner,
   partitionsFence
-} from '../../persistence/terminal-topology/closed-pane-binding-fence'
+} from '../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 import { Store } from '../../persistence/loading-store/store'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -18,16 +18,16 @@ vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePt
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
-vi.mock('../../opencode/hook-service', () =>
+vi.mock('../../opencode/status-hooks/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../../agent-hooks/server', () =>
+vi.mock('../../agent-hooks/server/agent-hook-server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
-vi.mock('../../pi/titlebar-extension-service', () =>
+vi.mock('../../pi/managed-extensions/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
 vi.mock('../../pty/shell-startup/pwsh', () =>
@@ -42,13 +42,13 @@ vi.mock('../../telemetry/client', () =>
 vi.mock('../../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../../cli/launchers/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../../agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
@@ -57,7 +57,9 @@ vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
 vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const TAB = 'tab-1'
 const KEPT = '11111111-1111-4111-8111-111111111111'

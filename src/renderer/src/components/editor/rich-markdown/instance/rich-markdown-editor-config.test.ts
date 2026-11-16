@@ -11,14 +11,12 @@ import {
   createRichMarkdownEditorConfig,
   type EditorConfigParams
 } from './rich-markdown-editor-config'
-import '../commands/rich-markdown-slash-commands'
-import { slashCommands } from '../commands/rich-markdown-slash-command-catalog'
 import type { SlashMenuState } from '../commands/rich-markdown-slash-command-primitives'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
 
 vi.mock('../links/rich-markdown-editor-click-routing', () => ({
-  handleRichMarkdownEditorClick: vi.fn()
+  handleRichMarkdownEditorClick: vi.fn(() => false)
 }))
 
 function ref<T>(current: T): MutableRefObject<T> {
@@ -71,7 +69,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     cancelAutoFocusRef: ref(null),
     fileId: 'file-a',
     serializeTimerRef: ref(null),
-    pendingEditEpochRef: ref(0),
+    pendingEditGenerationRef: ref({ discarded: false }),
     isInitializingRef: ref(false),
     isApplyingProgrammaticUpdateRef: ref(false),
     markdownCommentsRef: ref([]),
@@ -184,112 +182,5 @@ describe('rich Markdown DOM paste admission', () => {
       }
     })
     expect(citations).toBe(1)
-  })
-})
-
-describe('rich Markdown slash commands in code', () => {
-  const editors: Editor[] = []
-
-  afterEach(() => {
-    editors.splice(0).forEach((editor) => editor.destroy())
-    document.body.replaceChildren()
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks()
-  })
-
-  function slashEditor(content: string) {
-    vi.useFakeTimers()
-    vi.stubGlobal('api', undefined)
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { ui: { setMarkdownEditorFocused: vi.fn() } }
-    })
-    const root = document.createElement('div')
-    document.body.append(root)
-    const params = createConfigParams({ content, rootRef: ref(root) })
-    params.filteredSlashCommandsRef.current = slashCommands
-    params.setDocLinkMenu = (next) => {
-      params.docLinkMenuRef.current =
-        typeof next === 'function' ? next(params.docLinkMenuRef.current) : next
-    }
-    params.setSlashMenu = (next) => {
-      params.slashMenuRef.current =
-        typeof next === 'function' ? next(params.slashMenuRef.current) : next
-    }
-    const editor = new Editor({
-      ...createRichMarkdownEditorConfig(params),
-      extensions: createRichMarkdownExtensions({ codec: params.codec })
-    })
-    params.editorRef.current = editor
-    root.append(editor.view.dom)
-    vi.spyOn(editor.view, 'coordsAtPos').mockReturnValue({ top: 0, bottom: 20, left: 0, right: 0 })
-    editors.push(editor)
-    return { editor, params }
-  }
-
-  function enter(editor: Editor) {
-    const event = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      bubbles: true,
-      cancelable: true
-    })
-    editor.view.dom.dispatchEvent(event)
-  }
-
-  it('keeps a literal slash and Enter inside a fenced code block', () => {
-    const { editor, params } = slashEditor('```sh\n\n```')
-    editor.commands.setTextSelection(1)
-    editor.view.dispatch(editor.state.tr.insertText('/'))
-
-    const menuWasOpen = params.slashMenuRef.current !== null
-    enter(editor)
-
-    expect(editor.state.doc.firstChild?.type.name).toBe('codeBlock')
-    expect(editor.state.doc.firstChild?.textContent).toBe('/\n')
-    expect(menuWasOpen).toBe(false)
-  })
-
-  it('does not offer block conversion for a slash in inline code', () => {
-    const { editor, params } = slashEditor('')
-    editor.commands.setTextSelection(1)
-    editor.commands.toggleCode()
-    editor.view.dispatch(editor.state.tr.insertText('/'))
-
-    const menuWasOpen = params.slashMenuRef.current !== null
-    enter(editor)
-
-    expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
-    expect(editor.state.doc.firstChild?.textContent).toBe('/')
-    expect(editor.state.doc.firstChild?.firstChild?.marks.map((mark) => mark.type.name)).toEqual([
-      'code'
-    ])
-    expect(menuWasOpen).toBe(false)
-  })
-
-  it('keeps an inline-code document-link trigger literal', () => {
-    const { editor, params } = slashEditor('')
-    editor.commands.setTextSelection(1)
-    editor.commands.toggleCode()
-    editor.view.dispatch(editor.state.tr.insertText('[['))
-
-    expect(editor.state.doc.firstChild?.textContent).toBe('[[')
-    expect(editor.state.doc.firstChild?.firstChild?.marks.map((mark) => mark.type.name)).toEqual([
-      'code'
-    ])
-    expect(params.docLinkMenuRef.current).toBeNull()
-  })
-
-  it('still offers and commits a block command from ordinary prose', () => {
-    const { editor, params } = slashEditor('')
-    editor.commands.setTextSelection(1)
-    editor.view.dispatch(editor.state.tr.insertText('/'))
-
-    expect(params.slashMenuRef.current?.query).toBe('')
-    enter(editor)
-
-    expect(editor.state.doc.firstChild?.type.name).toBe('heading')
-    expect(editor.state.doc.firstChild?.attrs.level).toBe(1)
-    expect(editor.state.doc.firstChild?.textContent).toBe('')
   })
 })

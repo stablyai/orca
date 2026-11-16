@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'
 import { makeDisposable } from './pty-ipc-test-constants'
@@ -257,6 +257,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_recovered'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      reflowHeadlessTerminalToPtyGrid: vi.fn(),
       ...runtimeOverrides
     }
     registerPtyHandlers(mainWindow as never, runtime as never)

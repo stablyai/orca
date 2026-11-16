@@ -4,19 +4,19 @@ import {
   SkillDiscoveryTargetSchema,
   type SkillDiscoveryResult,
   type SkillDiscoveryTarget
-} from '../../shared/skills'
+} from '../../shared/skills/discovery/skills'
 import {
   BundledSkillAutoUpdateRequestSchema,
   LocalBundledSkillExecuteRequestSchema,
   LocalBundledSkillPlanRequestSchema,
   type BundledSkillInstallResult,
   type BundledSkillPlan
-} from '../../shared/bundled-skill-plan'
+} from '../../shared/skills/bundled/bundled-skill-plan'
 import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
-} from '../skills/skill-discovery-target'
-import { unavailableWhileWslDistroStopped } from '../skills/skill-discovery-stopped-wsl-roots'
+} from '../skills/discovery/skill-discovery-target'
+import { unavailableWhileWslDistroStopped } from '../skills/discovery/skill-discovery-stopped-wsl-roots'
 import { runAsWslUserAct, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'

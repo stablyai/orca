@@ -1,20 +1,23 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
-import { findAutomationRepo } from '../../../src/shared/automation-repo-target'
-import { getAutomationSetupDefaultDecision } from '../../../src/shared/automation-setup-decision'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
+import { findAutomationRepo } from '../../../src/shared/automations/ownership/automation-repo-target'
+import { getAutomationSetupDefaultDecision } from '../../../src/shared/automations/launch/automation-setup-decision'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import {
   newWorkspaceSetupHooksRead,
   newWorkspaceUiStateRead
-} from '../components/new-workspace-operations'
-import type { OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
-import { newTabRepoListRead } from '../session/mobile-session-read-operations'
+} from '../new-workspace/creation/runtime/new-workspace-operations'
+import type { OrcaHookTrustPrompt } from '../components/hook-trust/OrcaHookTrustDrawer'
+import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
   readRepoHooksSetupCommand,
   wasSetupHookPreviouslyApproved
-} from '../tasks/setup-hook-trust'
-import type { RpcClient } from '../transport/rpc-client'
+} from '../new-workspace/creation/setup-hook-trust'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AutomationDraft } from './automation-draft'
 import { AutomationDraftValidationError } from './automation-error'
 import {

@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithEmitDaemonPtyTransientFact } from './terminal-transient-facts'
 import { getDecorativeTitleGateKey } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
-import { shouldEmitTitleFactForFrame } from '../../decorative-title-fact-emission'
+import { shouldEmitTitleFactForFrame } from './decorative-title-fact-emission'
 import type { RuntimePtyTitleTrackerEntry } from '../records/runtime-terminal-state-records'
 import {
   type TerminalTitleFactMeta,
@@ -195,10 +195,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       chunkTouchedSessionTabs: false,
       pendingFacts: [],
       afterFacts: [],
-      // Headless serve has no side-effect consumer, so skip Command Code scraping; otherwise arm from launch command or banner.
-      commandCodeDetector: this.terminalSideEffectConsumerAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null,
+      commandCodeDetector: this.createTerminalSideEffectCommandCodeDetector(ptyId),
       programActivity: null,
       // The persisted title is already normalized, so it stands for both forms.
       lastTitle: initialTitle !== null ? { raw: initialTitle, normalized: initialTitle } : null

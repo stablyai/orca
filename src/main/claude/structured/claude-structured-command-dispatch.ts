@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { agentSessionCompactCommandText } from '../../../shared/agent-session/agent-session-conversation-command'
+import { agentSessionCompactCommandText } from '../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type {
   AgentSessionCommandAdmission,
   StructuredAgentSessionCommandRun

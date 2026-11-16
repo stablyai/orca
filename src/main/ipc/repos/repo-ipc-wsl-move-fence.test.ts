@@ -5,14 +5,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'
 import { registerFolderWorkspaceHandlers } from './folder-workspace-handlers'
 import { runtimeRepoSelectorText } from '../../runtime/workspaces/catalog/runtime-repo-selector'
@@ -79,6 +79,7 @@ describe('folderWorkspaces:update under a WSL move', () => {
       cutover('move-1', 'source-fenced', {}, { folderWorkspaceIds: [workspace.id] })
     )
     registerFolderWorkspaceHandlers(new BrowserWindow(), store, {
+      createFolderWorkspace: vi.fn(),
       deleteFolderWorkspace: vi.fn(async () => ({ deleted: true }))
     })
 

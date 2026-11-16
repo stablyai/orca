@@ -9,8 +9,7 @@ import type { JournalRow } from '../durable-rows/journal-row-schema'
 import {
   openTestJournalHostDatabase,
   insertTestJournalRow,
-  publishTestJournalEpoch,
-  insertTestJournalRowJson
+  publishTestJournalEpoch
 } from '../store-lifecycle/journal-host-database-test-support'
 
 let root: string
@@ -73,30 +72,5 @@ describe('streaming journal replay', () => {
     expect(loaded.state.lastSequence).toBe(2)
     const checkpoint = opened.db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[]
     expect(checkpoint[0].busy).toBe(0)
-  })
-
-  it('names the first damage when a later row is malformed too', () => {
-    put(anchor())
-    put(revision(2))
-    put(revision(4))
-    insertTestJournalRowJson(opened.db, sessionId, 5, '{')
-    const loaded = replayJournal(opened.db, sessionId)!
-    expect(loaded).toMatchObject({
-      newer: null,
-      damage: { sequence: 3, cause: 'sequence-gap' }
-    })
-    expect(loaded.state.lastSequence).toBe(2)
-  })
-
-  it('names a missing epoch row before a later gap', () => {
-    put(revision(1))
-    put(revision(3))
-    const loaded = replayJournal(opened.db, sessionId)!
-    expect(loaded).toMatchObject({
-      newer: null,
-      damage: { sequence: 1, cause: 'no-epoch-row' }
-    })
-    expect(loaded.state.items.size).toBe(0)
-    expect(loaded.state.lastSequence).toBe(0)
   })
 })

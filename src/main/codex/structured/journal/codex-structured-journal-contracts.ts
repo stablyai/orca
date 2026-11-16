@@ -1,5 +1,5 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type {
   CodexDispatchEchoes,
   CodexDispatchRequestOrigin
@@ -52,8 +52,6 @@ export type CodexJournalTranslatorDeps = {
   coalesceMs?: number
   maxRetainedBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
-  isCurrent?: AgentSessionDeltaCoalescerDeps['isCurrent']
-  onScheduledFailure?: AgentSessionDeltaCoalescerDeps['onScheduledFailure']
 }
 
 export type CodexJournalTranslator = {

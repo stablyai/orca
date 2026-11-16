@@ -16,8 +16,8 @@ import {
   serializeOrcadActivationRecord,
   withActivatedVersion
 } from '../../managed-server/activation/orcad-activation-record'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import {
   createWslOrcadConnectStateReader,
   parseWslOrcadConnectState,

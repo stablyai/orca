@@ -1,28 +1,31 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { isWslUncPath } from '../../../shared/wsl-paths'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   areTaskSourceContextsEqual,
   normalizeStoredTaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import {
   areWorkspaceLinkedItemsEqual,
   normalizeWorkspaceLinkedItem
 } from '../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   pruneUnreferencedWorktreeIdentityMeta,
   removeWorktreeMetadataForHost
-} from '../loading-store/worktree-identity-metadata'
+} from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
+import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/metadata/meta-persisted-defaults'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
-import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/local-only-worktree-meta-rehoming'
+import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/worktree-metadata/local-only-worktree-meta-rehoming'
 
 // Reclaim externally deleted local checkouts after idle grace; local stat cannot judge remote/WSL paths.
 export const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
@@ -57,7 +60,8 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     } else if (projectIds.has(ownerId)) {
       continue
     }
-    if (meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) {
+    // An archived workspace's checkout is missing on purpose; its row is the workspace.
+    if ((meta?.hostId && meta.hostId !== LOCAL_EXECUTION_HOST_ID) || meta?.archivedCheckout) {
       continue
     }
     if (!isAbsolute(worktreePath) || isWslUncPath(worktreePath)) {

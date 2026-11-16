@@ -30,8 +30,8 @@ import {
 import { runOracleScenario, type OracleRun } from './helpers/workspace-layout-oracle-session'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { unexpectedFindings } from './workspace-layout-oracle-known-on-main'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type Scenario = {
   id: string

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { useAllWorktrees, useRepoMap } from '@/store/selectors'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   resolveChecksPanelTerminalPtyId,

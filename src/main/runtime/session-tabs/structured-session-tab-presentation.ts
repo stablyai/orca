@@ -1,8 +1,8 @@
 import type {
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionAgentTab,
   RuntimeSessionTabCloseReason
-} from '../../../shared/runtime-types'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionAgentTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { closeRenderedStructuredSessionTab } from '../agent-session/structured-session-renderer-close'
 import {
   captureInstalledStructuredSessionSurface,
@@ -14,7 +14,7 @@ import { structuredAgentSessionTabCloseCause } from '../agent-session/structured
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { savedSessionId } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
-import type { QueuedChatTabChange } from '../agent-session-tab-layout-queue'
+import type { QueuedChatTabChange } from '../agent-session/agent-session-tab-layout-queue'
 
 type Surface = { worktreeId: string; tabId: string }
 
