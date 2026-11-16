@@ -38,7 +38,7 @@ async function setup(options: { refuseTrial?: boolean; env?: Partial<Env> } = {}
   const trials = fakeTrials({ refuse: options.refuseTrial })
   h.setTrial(trials.port)
   const sync = { authorization: `Bearer ${SYNC}` }
-  const personal = { authorization: `Bearer ${await h.desktopToken({ sub: 'u1', email: 'neil@acme.dev' })}` }
+  const personal = { authorization: `Bearer ${await h.desktopToken({ sub: 'u1', email: 'dana@acme.dev' })}` }
   const create = async (body: Record<string, unknown> = { repo: REPO, needs: ['plan', 'github'], device: 'MacBook Pro' }, auth = personal) =>
     h.call('POST', '/v1/cloud-setup/sessions', { body, headers: auth })
   const poll = (id: string, auth = personal) => h.call('GET', `/v1/cloud-setup/sessions/${id}`, { headers: auth })
@@ -138,7 +138,7 @@ describe('cloud setup sessions', () => {
       seen.push(String(input))
       return Response.json({ access: 'missing', url: 'https://github.com/apps/orca-cloud/installations/new?state=s' })
     })
-    const install = await pages.post(session, 'github', { userId: 'u1', githubUserId: 7, githubLogin: 'neil-acme' })
+    const install = await pages.post(session, 'github', { userId: 'u1', githubUserId: 7, githubLogin: 'dana-acme' })
     expect(install.body).toEqual({ access: 'missing', url: 'https://github.com/apps/orca-cloud/installations/new?state=s' })
     const asked = new URL(seen[0]!)
     expect(asked.origin + asked.pathname).toBe('https://cp.test/v1/internal/github/install-url')
@@ -148,7 +148,7 @@ describe('cloud setup sessions', () => {
       repo: 'https://github.com/acme/web',
       session,
       githubUserId: '7',
-      githubLogin: 'neil-acme'
+      githubLogin: 'dana-acme'
     })
 
     const event = await h.controlPlane('/v1/internal/cloud-setup/github', {
@@ -284,12 +284,12 @@ describe('setup session with the real trial module', () => {
   it('grants the one-time trial to the team setup creates, once', async () => {
     const h = await createHarness({ MEMBERSHIP_SYNC_TOKEN: SYNC, CLOUD_SETUP_PAGES_URL: 'https://auth.test' })
     const sync = { authorization: `Bearer ${SYNC}` }
-    const auth = { authorization: `Bearer ${await h.desktopToken({ sub: 'u1', email: 'neil@acme.dev' })}` }
+    const auth = { authorization: `Bearer ${await h.desktopToken({ sub: 'u1', email: 'dana@acme.dev' })}` }
     const offers = await h.call('GET', '/v1/cloud-setup/offers')
     expect(offers.body.trial).toEqual({ includedSeconds: 7200 })
     const id = (await h.call('POST', '/v1/cloud-setup/sessions', { body: { needs: ['plan'] }, headers: auth })).body.id
     const bound = await h.call('POST', `/v1/internal/cloud-setup/sessions/${id}/team`, {
-      body: { userId: 'u1', orgId: 'o_new', name: 'acme', created: true, email: 'neil@acme.dev' },
+      body: { userId: 'u1', orgId: 'o_new', name: 'acme', created: true, email: 'dana@acme.dev' },
       headers: sync
     })
     expect(bound.body).toEqual({ ok: true, trial: 'granted' })
@@ -300,7 +300,7 @@ describe('setup session with the real trial module', () => {
     // Same user, second new team: the per-user abuse key refuses it.
     const second = (await h.call('POST', '/v1/cloud-setup/sessions', { body: { needs: ['plan'] }, headers: auth })).body.id
     const again = await h.call('POST', `/v1/internal/cloud-setup/sessions/${second}/team`, {
-      body: { userId: 'u1', orgId: 'o_other', name: 'acme-2', created: true, email: 'neil@acme.dev' },
+      body: { userId: 'u1', orgId: 'o_other', name: 'acme-2', created: true, email: 'dana@acme.dev' },
       headers: sync
     })
     expect(again.body).toEqual({ ok: true, trial: 'unavailable' })
