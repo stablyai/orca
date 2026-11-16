@@ -10,7 +10,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import { splitGitRemoteKey } from '../../shared/git/remotes/git-remote-identity'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { isFolderRepo } from '../../shared/repository/repo-kind'

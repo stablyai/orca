@@ -4,7 +4,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import { getManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import { splitRepoReorderByHost } from './repo-reorder-host-split'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from './repo-state'
 
 export function createRepoOrderingActions(

@@ -13,7 +13,10 @@ import {
 } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'

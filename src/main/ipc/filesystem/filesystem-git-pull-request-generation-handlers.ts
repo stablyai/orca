@@ -3,7 +3,7 @@ import {
   textGenerationFailureCodeFields
 } from '../../../shared/text-generation/text-generation-failure-copy'
 import { ipcMain } from 'electron'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { HostedReviewProvider } from '../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {

@@ -5,14 +5,14 @@
  * stay for a lossless downgrade; only the last-active worktree, a single value, moves. A second
  * run finds every copy present and changes nothing.
  */
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import type {
   ManualRepoOrderEntry,
   VisibleWorkspaceHostIds,
   WorkspaceHostOrder
-} from '../../../../shared/ui-chrome-types'
+} from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { WorkspaceCleanupDismissal } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { resolveVisibleWorkspaceHostIds } from '../../../../shared/workspace-view/workspace-host-visibility'

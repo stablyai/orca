@@ -1,7 +1,7 @@
 import { admitTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
-import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host/execution-host'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { ensurePtyDispatcher } from '../delivery/pty-dispatcher'
 import {

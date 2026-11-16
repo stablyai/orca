@@ -12,7 +12,7 @@ import type {
   Repo
 } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+import type { WorktreeVisibilityDefaults } from '../../../../../../shared/repository/repo-types'
 import {
   createWorktreeVisibilitySourceMatcher,
   effectiveDefaultBuiltInWorktreeSourceVisibility,

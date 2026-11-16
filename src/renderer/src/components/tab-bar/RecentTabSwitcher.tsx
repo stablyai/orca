@@ -4,7 +4,7 @@ import { FileText, GitGraph, GitCompare, Globe2, TerminalSquare } from 'lucide-r
 import { useAppStore } from '../../store/index'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import {
   activateFloatingWorkspaceCyclableTab,
   isFloatingWorkspacePanelFocused

@@ -6,7 +6,7 @@ import {
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   wslHostWindowsDriveRefusalForPickedPath,
   type WslHostWindowsDriveRefusal

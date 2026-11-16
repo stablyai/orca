@@ -20,7 +20,7 @@ import {
 } from '../../configuration/homes/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 export function createCodexSessionResumeLaunchPreparation(deps: {
   getRuntimeHome: () => CodexRuntimeHomeService | null

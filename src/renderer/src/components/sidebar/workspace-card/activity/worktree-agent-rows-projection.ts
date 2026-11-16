@@ -8,7 +8,7 @@ import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-ag
 import { applyAgentRowLineage } from '@/components/dashboard/rows/agent-row-lineage'
 import type { AppState } from '@/store/types'
 
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/agent-pane-execution-host'
 import { recordChangeReaches } from '@/store/keyed-record-change-reads'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'

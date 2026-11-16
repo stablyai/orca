@@ -1,6 +1,6 @@
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import '../../../../../shared/constants'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../../shared/browser/browser-session-partition'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { ownedEditorFileId } from '../../../../../shared/workspace-session/workspace-session-pane-ownership'

@@ -1,5 +1,8 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { TaskResumeState, TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type {
+  TaskResumeState,
+  TaskViewPresetId
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'

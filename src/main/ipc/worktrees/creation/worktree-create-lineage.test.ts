@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {

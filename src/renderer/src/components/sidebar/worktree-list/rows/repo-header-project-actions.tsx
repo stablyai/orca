@@ -32,7 +32,7 @@ import { getRepositoryIconSectionId } from '@/components/settings/repository/rep
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
+import type { WorktreeVisibilityDefaults } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import '../../../../../../shared/worktree/visibility/ownership'
 import {

@@ -1,10 +1,10 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 
 import {
   type AiVaultSearchSettings,
   resolveAiVaultSearchSettings
 } from '../../../shared/ai-vault/search/ai-vault-search-settings'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { localAiVaultScanRoots } from '../../ai-vault/discovery/ai-vault-scan-roots'
 import { installInProcessSessionSearchService } from '../../ai-vault-search/session-search-in-process-service'
 

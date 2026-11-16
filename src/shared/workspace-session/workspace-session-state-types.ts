@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
 import type {
