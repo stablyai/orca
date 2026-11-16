@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { getDefaultWorkspaceCleanupRules } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceCleanupReport } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { useAppStore } from '@/store'

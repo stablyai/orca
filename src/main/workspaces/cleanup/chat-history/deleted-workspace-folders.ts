@@ -1,11 +1,11 @@
 import { lstat, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildKnownOrcaWorkspaceLayouts } from '../../../../shared/worktree/visibility/ownership'
-import { isPathAbsentError } from '../../../ipc/filesystem/access/filesystem-path-containment'
+import { isPathAbsentError } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 import { listWorkspaceCleanupOwnedRepos } from '../workspace-cleanup-run-evidence'
 

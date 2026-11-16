@@ -7,7 +7,7 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { WORKSPACE_CLEANUP_RULE_GRACE_MS } from '../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import { listAiVaultSessions } from '../../../ai-vault/listing/cached-session-list'
 import { deleteHostAiVaultSessionsPermanently } from '../../../ai-vault/deletion/host-session-delete'

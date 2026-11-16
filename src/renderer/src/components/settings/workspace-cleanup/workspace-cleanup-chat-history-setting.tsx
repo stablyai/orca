@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host/execution-host'
 import { Button } from '../../ui/button'
 import {
   Dialog,
