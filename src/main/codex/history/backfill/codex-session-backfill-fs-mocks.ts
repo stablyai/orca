@@ -1,8 +1,10 @@
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 
+const scanDirectoryReads: string[] = []
+
 export const fsMockState = {
-  scanDirectoryReads: [] as string[],
+  scanDirectoryReads,
   failLink: false,
   failLinkTransiently: false,
   failLinkPermission: false,
@@ -116,5 +118,6 @@ export function createNodeFsPromisesMock(actual: typeof NodeFsPromises): typeof 
       }
       return actual.opendir(...args)
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: wrappers forward the original overloaded arguments and preserve their return values.
   } as typeof NodeFsPromises
 }

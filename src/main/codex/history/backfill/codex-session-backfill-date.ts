@@ -42,6 +42,7 @@ export async function* listCodexSessionBackfillFilesForDates(
         a.name < b.name ? 1 : a.name > b.name ? -1 : 0
       )
     } catch (error) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readdir rejects with system errors; only the optional errno code is read.
       if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
         await onDirectoryError(directoryPath, error)
       }

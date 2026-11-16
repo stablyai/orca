@@ -237,7 +237,7 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
-    const marker = parsed as {
+    const marker: {
       version?: unknown
       systemSessionsRoot?: unknown
       coverage?: unknown
@@ -251,7 +251,7 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       launchActive?: unknown
       baselineScannedFiles?: unknown
       summary?: { scannedFiles?: unknown }
-    }
+    } = parsed
     if (
       typeof marker.version !== 'number' ||
       !MARKER_BASELINE_VERSIONS.has(marker.version) ||
