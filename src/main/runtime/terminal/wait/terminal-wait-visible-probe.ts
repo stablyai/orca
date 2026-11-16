@@ -1,3 +1,6 @@
+import { createSetupDependentCommand } from '../../../../shared/agent-launch/startup/setup-attempt-recipe'
+import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-agent-prompt-render'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
@@ -104,8 +107,83 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       : buildPtyTerminalWaitResult(handle, 'tui-idle', pty)
   }
 
+  async prepareTerminalSetupForSpawn(args: {
+    workspaceId: string
+    command?: string
+    agent?: string | null
+    shell: AgentStartupShell
+    shellExecutable?: string
+    sessionId?: string
+    signal?: AbortSignal
+  }) {
+    if (this.setupTerminalCompletions.isWriter(args.sessionId)) {
+      return undefined
+    }
+    const agent =
+      args.agent ??
+      recognizeAgentLaunchCommand(args.command ?? '', { includeHeadlessOneShot: true })?.agent
+    if (!agent) {
+      return undefined
+    }
+    const gate = this.setupTerminalCompletions.gate(args.workspaceId)
+    const attempt = await (args.signal ? waitForPromiseWithSignal(gate, args.signal) : gate)
+    if (!attempt) {
+      return undefined
+    }
+    if (attempt.settled) {
+      const { exitCode } = await attempt.completion
+      if (exitCode !== 0) {
+        throw new Error(
+          `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
+        )
+      }
+      return undefined
+    }
+    if (!attempt.recipe || attempt.recipe.deadline <= Date.now()) {
+      throw new Error(
+        `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
+      )
+    }
+    const recipe = {
+      ...attempt.recipe,
+      shell:
+        args.shell === 'posix'
+          ? { family: 'posix' as const, executable: args.shellExecutable }
+          : { family: 'cmd' as const }
+    }
+    return {
+      ...(args.command ? createSetupDependentCommand(recipe, args.command, args.shell) : {}),
+      bind: (ptyId: string) =>
+        this.setupTerminalCompletions.bindDependent(args.workspaceId, ptyId, attempt.completion)
+    }
+  }
+
+  async waitForTerminalSetup(handle: string, agent: string, signal?: AbortSignal): Promise<void> {
+    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
+    if (ptyId) {
+      await this.waitForPtySetup(ptyId, agent, signal)
+    }
+  }
+
+  async waitForPtySetup(ptyId: string, agent = 'Agent', signal?: AbortSignal): Promise<void> {
+    const completion = this.setupTerminalCompletions.forDependent(ptyId)
+    if (!completion) {
+      return
+    }
+    const outcome = await (signal ? waitForPromiseWithSignal(completion, signal) : completion)
+    if (outcome.exitCode !== 0) {
+      throw new Error(
+        `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
+      )
+    }
+  }
+
   beginWorkspaceSetup(workspaceId: string): void {
     this.setupTerminalCompletions.beginWorkspace(workspaceId)
+  }
+
+  refuseWorkspaceSetup(workspaceId: string): void {
+    this.setupTerminalCompletions.refuseWorkspace(workspaceId)
   }
 
   preparedWorkspaceSetup(workspaceId: string, required: boolean): void {
@@ -135,7 +213,9 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     if (retained) {
       return await new Promise((resolve, reject) => {
         const onAbort = (): void => reject(signal?.reason ?? new Error('request_aborted'))
-        if (signal?.aborted) return onAbort()
+        if (signal?.aborted) {
+          return onAbort()
+        }
         signal?.addEventListener('abort', onAbort, { once: true })
         void retained.then(resolve).finally(() => signal?.removeEventListener('abort', onAbort))
       })

@@ -237,6 +237,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     entryPoint: 'worktree-removal' | 'folder-removal' | 'project-removal'
   ): void {
     if (teardownStops(entryPoint, 'launch')) {
+      this.setupTerminalCompletions.forgetWorkspace(worktreeId)
       forgetFailedAgentLaunches(worktreeId, null)
     }
     if (!teardownStops(entryPoint, 'host-browser')) {

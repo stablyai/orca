@@ -64,6 +64,12 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
   }
+  if (
+    request.method === 'terminal.inspectProcess' &&
+    (request.params as { waitForSetup?: unknown } | undefined)?.waitForSetup === true
+  ) {
+    return 'wait'
+  }
   if (request.method === 'terminal.wait') {
     return 'wait'
   }

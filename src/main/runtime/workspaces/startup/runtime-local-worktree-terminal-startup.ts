@@ -1,4 +1,11 @@
-import { waitForRequiredSetup } from './required-setup-completion'
+import type { SetupAttemptRecipe } from '../../../../shared/agent-launch/startup/setup-attempt-recipe'
+import {
+  provisionArgs,
+  callerProvidesInitialSurface,
+  setupPlatform,
+  ownerSurfacing
+} from './runtime-worktree-terminal-startup-request'
+import { deliverWorktreeInputAfterSetup } from './required-setup-completion'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
@@ -10,8 +17,10 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
-import { createSequencedSetupAgentCommands } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
+import {
+  createSequencedSetupAgentCommands,
+  DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS
+} from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
@@ -19,13 +28,11 @@ import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
-import type {
-  WorktreeProvisionTerminalOptions,
-  WorktreeTerminalProvisioningArgs
-} from './runtime-worktree-terminal-provisioning'
+import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
 export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
+  bindSetupRecipe?: (workspaceId: string, recipe: SetupAttemptRecipe) => void
   setupPrepared?: (workspaceId: string, required: boolean) => void
   setupFailed?: (workspaceId: string) => void
   waitForSetupTerminalCompletion: (
@@ -99,23 +106,25 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalTabId: string | null = null
   let startupTerminalPaneKey: string | null = null
   let startupTerminalPtyId: string | null = null
-  let sequencedStartup = startup
+  const sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
   let setupCompletionToken: string | undefined
   let startupTerminal: RuntimeTerminalCreate | undefined
-  if (startup && setup?.waitForAgentStartup === true) {
+  if (setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
-      startupCommand: startup.command,
+      startupCommand: startup?.command ?? '',
       platform,
       shell: setup.shell
     })
-    sequencedStartup = {
-      ...startup,
-      command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
-    }
+    ports.bindSetupRecipe?.(worktree.id, {
+      runnerScriptPath: setup.runnerScriptPath,
+      platform,
+      shell: setup.shell,
+      nonce: sequenced.completionToken,
+      deadline: Date.now() + DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS * 1000
+    })
     wrappedSetupCommand = sequenced.setupCommand
     setupCompletionToken = sequenced.completionToken
     setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
@@ -133,7 +142,6 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         ...(request.startupTitle ? { title: request.startupTitle } : {}),
-        ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
@@ -249,29 +257,20 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     }
   }
   if (setup?.waitForAgentStartup && startupTerminal && (args.draftPaste || args.startupFollowup)) {
-    const terminal = startupTerminal
-    void waitForRequiredSetup(
+    deliverWorktreeInputAfterSetup({
       ports,
-      {
-        startupPolicy: 'wait-for-setup',
-        state: didSpawnSetup ? 'running' : 'spawn_failed',
-        ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-      },
-      args.createdWithAgent ?? args.draftPaste?.agent ?? args.startupFollowup?.agent ?? 'Agent'
-    )
-      .then(() => {
-        if (args.draftPaste) ports.pasteDraft(terminal.handle, args.draftPaste)
-        if (args.startupFollowup)
-          ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
-      })
-      .catch((error: unknown) =>
-        console.warn(
-          '[worktree-create]',
-          error instanceof Error ? error.message : 'Setup did not finish successfully.'
-        )
-      )
+      terminal: startupTerminal,
+      setupTerminalHandle,
+      didSpawnSetup,
+      draftPaste: args.draftPaste,
+      startupFollowup: args.startupFollowup,
+      agent:
+        args.createdWithAgent ?? args.draftPaste?.agent ?? args.startupFollowup?.agent ?? 'Agent'
+    })
   }
-  if (requiredSetup && !didSpawnSetup) ports.setupFailed?.(worktree.id)
+  if (requiredSetup && !didSpawnSetup) {
+    ports.setupFailed?.(worktree.id)
+  }
   const returnedSetup = didSpawnSetup
     ? undefined
     : setup
@@ -291,56 +290,6 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     startupTerminalPaneKey,
     startupTerminalPtyId
   }
-}
-
-function provisionArgs(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
-  primaryTerminalHandle: string | null,
-  hasStartupTerminal: boolean,
-  wrappedSetupCommand?: string,
-  setupCompletionToken?: string
-): WorktreeTerminalProvisioningArgs {
-  return {
-    worktreeSelector: `id:${args.worktree.id}`,
-    worktreeId: args.worktree.id,
-    worktreePath: args.worktree.path,
-    ...(args.setup ? { setup: args.setup } : {}),
-    ...(args.defaultTabs ? { defaultTabs: args.defaultTabs } : {}),
-    primaryTerminalHandle,
-    hasStartupTerminal,
-    ...(args.request.setupOnly !== undefined ? { setupOnly: args.request.setupOnly } : {}),
-    callerProvidesSurface: callerProvidesInitialSurface(args),
-    startupNeedsTerminal: args.startup !== undefined,
-    setupCommandPlatform: setupPlatform(args.setup, 'posix'),
-    observeSetupCompletion: args.request.observeSetupCompletion,
-    ...(setupCompletionToken ? { setupCompletionToken } : {}),
-    ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
-  }
-}
-
-function callerProvidesInitialSurface(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
-): boolean {
-  // Background agent creates already leave their initial surface to the caller.
-  return (
-    args.promisedAgentChat === true ||
-    (args.createdWithAgent !== undefined &&
-      args.request.activate !== true &&
-      args.request.runHooks !== true)
-  )
-}
-
-function setupPlatform(
-  setup: CreateWorktreeResult['setup'],
-  fallback: 'windows' | 'posix'
-): 'windows' | 'posix' {
-  return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallback)
-}
-
-function ownerSurfacing(
-  shouldSurface: boolean
-): Pick<WorktreeProvisionTerminalOptions, 'surfaceOwner'> {
-  return shouldSurface ? {} : { surfaceOwner: false }
 }
 
 function appendFailure(

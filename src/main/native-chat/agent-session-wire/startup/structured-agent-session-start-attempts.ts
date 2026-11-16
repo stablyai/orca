@@ -75,7 +75,9 @@ export function registerStructuredAgentSessionStart(
           ) ?? Promise.resolve()
         )
       } catch (error) {
-        if (acquire.signal.aborted) throw error
+        if (acquire.signal.aborted) {
+          throw error
+        }
         return {
           ...failedStructuredAgentSessionStart(),
           failure: providerStartupFailureFact(launchPreparationFailure(error))
@@ -85,7 +87,9 @@ export function registerStructuredAgentSessionStart(
         context.deps.store.requireWritableRecord(sessionId)
         return structuredAgentSessionStartStillQueued(context.sessions.get(sessionId), startedFor)
       })
-      if (!queued) return { ...failedStructuredAgentSessionStart(), aborted: true }
+      if (!queued) {
+        return { ...failedStructuredAgentSessionStart(), aborted: true }
+      }
       let handle = attempts.begin(sessionId, attemptId)
       const registeredAt = handle.registeredAt
       let result: StructuredAgentSessionResumeOutcome = failedStructuredAgentSessionStart()

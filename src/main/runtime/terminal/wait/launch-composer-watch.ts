@@ -71,19 +71,22 @@ export function watchLaunchComposer(
   watches: Map<string, Promise<boolean>>,
   host: FreshComposerPtyHost,
   ptyId: string,
-  agent: TuiAgent | null
+  agent: TuiAgent | null,
+  setup?: Promise<{ exitCode: number | null }>
 ): void {
   // A new launch on a reused PTY id replaces its predecessor's watch.
   if (!agent || !SUBMIT_WAITS_FOR_LAUNCH_COMPOSER.has(agent)) {
     return
   }
   const stop = new AbortController()
-  const ready = waitForFreshComposerOnPty(
-    host,
-    ptyId,
-    agent,
-    resolveDraftPasteReadyTimeoutMs(agent),
-    { requireComposerMarker: false, stopOnDialog: true, stop }
+  const begin = () =>
+    waitForFreshComposerOnPty(host, ptyId, agent, resolveDraftPasteReadyTimeoutMs(agent), {
+      requireComposerMarker: false,
+      stopOnDialog: true,
+      stop
+    })
+  const ready = (
+    setup ? setup.then((outcome) => (outcome.exitCode === 0 ? begin() : null)) : begin()
   ).then(
     // A startup dialog stops the watch: it takes the next input, so sends reach it as before.
     (readyPtyId) => readyPtyId !== null || stop.signal.aborted,

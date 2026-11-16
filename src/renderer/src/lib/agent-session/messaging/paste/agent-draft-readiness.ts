@@ -1,3 +1,4 @@
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import type { DraftPasteReadySignal } from '../../../../../../shared/agent-launch/catalog/tui-agent-config-types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
@@ -8,12 +9,14 @@ import { createDraftPasteReadyScanner } from '../../../../../../shared/agent-lau
 const BRACKETED_PASTE_QUIET_MS = 1500
 
 /** Observe without taking xterm’s primary handler; retain recent bytes because readiness markers can span chunks and the pane may attach mid-flight. */
-export function waitForAgentDraftInputReady(
+export async function waitForAgentDraftInputReady(
   ptyId: string,
   timeoutMs: number,
   readySignal: DraftPasteReadySignal
 ): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
+  return new Promise<boolean>((resolve, reject) => {
+    let setupReady = false
+    let earlyData = ''
     let settled = false
     const scanner = createDraftPasteReadyScanner(readySignal)
     let quietTimer: number | null = null
@@ -21,7 +24,7 @@ export function waitForAgentDraftInputReady(
     let hardTimer: number | null = null
     let unsubscribe: (() => void) | null = null
 
-    const finish = (value: boolean): void => {
+    const finish = (value: boolean, error?: unknown): void => {
       if (settled) {
         return
       }
@@ -36,7 +39,11 @@ export function waitForAgentDraftInputReady(
         window.clearTimeout(graceTimer)
       }
       unsubscribe?.()
-      resolve(value)
+      if (error !== undefined) {
+        reject(error)
+      } else {
+        resolve(value)
+      }
     }
 
     const armQuietTimer = (): void => {
@@ -47,6 +54,13 @@ export function waitForAgentDraftInputReady(
     }
 
     const observeData = (data: string): void => {
+      if (settled) {
+        return
+      }
+      if (!setupReady) {
+        earlyData = (earlyData + data).slice(-64 * 1024)
+        return
+      }
       const { ready, armQuietTimer: shouldArm, readyAfterMs } = scanner.observe(data)
       if (ready) {
         finish(true)
@@ -79,9 +93,19 @@ export function waitForAgentDraftInputReady(
       replayPreHandlerPtyData(ptyId, observeData)
     }
 
-    if (!settled) {
-      // A pending grace means the box was seen: take it, as the box rule would have.
-      hardTimer = window.setTimeout(() => finish(graceTimer !== null), timeoutMs)
-    }
+    void inspectRuntimeTerminalProcess(ptyId, { waitForSetup: true })
+      .then(() => {
+        if (settled) {
+          return
+        }
+        setupReady = true
+        const data = earlyData
+        earlyData = ''
+        observeData(data)
+        if (!settled) {
+          hardTimer = window.setTimeout(() => finish(graceTimer !== null), timeoutMs)
+        }
+      })
+      .catch((error: unknown) => finish(false, error))
   })
 }

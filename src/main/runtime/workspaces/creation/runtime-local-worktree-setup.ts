@@ -125,10 +125,11 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
           args.identity
         )
       } catch (error) {
-        if (requiredSetup)
+        if (requiredSetup) {
           setupPreparationFailure = new Error(
             'Setup could not be prepared. Check the workspace hooks and try Setup again.'
           )
+        }
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
         if (isFolderRepo(repo)) {
           const failed = `Setup did not run: Orca could not write its setup file in ${worktreePath}.`

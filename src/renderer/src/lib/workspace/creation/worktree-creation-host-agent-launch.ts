@@ -14,7 +14,7 @@ import type {
   HostAgentLaunch
 } from '@/store/slices/worktrees/create/worktree-create-payload'
 
-/** Use host settings for terminal agents; chats have a separate host path. VM hosts lack user settings, and drafts stay desktop-planned because host startupDraft can substitute a disabled agent. */
+/** Explicit launch inputs and drafts use their own host handoff; VM hosts lack user settings. */
 export function hostPlannableAgentLaunch(
   request: WorktreeCreationRequest
 ): HostAgentLaunch | undefined {

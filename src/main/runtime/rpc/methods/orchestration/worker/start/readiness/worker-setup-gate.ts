@@ -67,3 +67,19 @@ export function persistWorkerSetupWaitOutcome(
     residualResources: residualWorkerEffects(args.effects)
   })
 }
+
+export function persistRequiredWorkerSetupWaitOutcome(
+  args: WorkerSetupStageArgs,
+  wait: { satisfied: boolean; status: string } | null,
+  agent: string | undefined
+): void {
+  if (!wait) {
+    return
+  }
+  persistWorkerSetupWaitOutcome({ ...args, wait })
+  if (!wait.satisfied) {
+    throw new Error(
+      `${agent ?? 'Agent'} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
+    )
+  }
+}

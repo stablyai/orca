@@ -52,6 +52,7 @@ export type PtySpawnOperationState = Pick<
     launchToken?: unknown
     resumeOrigin?: unknown
   }
+  releaseSetupDependency?: () => void
   replacedPaneOwner?: ReplacedPaneOwner | null
   paneSpawnOperation?: PaneSpawnOperation
   spawnTiming?: PtySpawnTiming

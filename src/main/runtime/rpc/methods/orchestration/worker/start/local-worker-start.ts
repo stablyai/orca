@@ -24,7 +24,8 @@ import type { WorkerStartInput } from './worker-start-input'
 import {
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage,
-  persistWorkerSetupWaitOutcome
+  persistWorkerSetupWaitOutcome,
+  persistRequiredWorkerSetupWaitOutcome
 } from './readiness/worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { assertExplicitWorkerUsable } from './placement/explicit-worker-terminal-validation'
@@ -212,15 +213,9 @@ export async function startLocalWorker(args: {
       setup: setupReceipt,
       effects
     })
-    if (setupWait) {
-      persistWorkerSetupWaitOutcome({ ...setupStage, wait: setupWait })
-      if (!setupWait.satisfied) {
-        throw new Error(
-          `${agent ?? 'Agent'} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
-        )
-      }
-    }
+    persistRequiredWorkerSetupWaitOutcome(setupStage, setupWait, agent)
 
+    await runtime.waitForTerminalSetup(terminalHandle, agent ?? 'Agent')
     failedStage = 'agent_readiness'
     // Agent readiness starts after required Setup has completed.
     const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)

@@ -139,7 +139,7 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.storeSubscribers.size).toBe(0)
     expect(testState.ptyObserver).not.toBeNull()
     expect(testState.replayPreHandlerPtyData).toHaveBeenCalledWith('pty-1', testState.ptyObserver)
-    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
@@ -174,6 +174,35 @@ describe('pasteDraftWhenAgentReady', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
+  })
+
+  it('keeps the issue draft through slow Setup and readiness output arriving during confirmation', async () => {
+    const setup = Promise.withResolvers<{ foregroundProcess: string; hasChildProcesses: boolean }>()
+    testState.inspectRuntimeTerminalProcess.mockReturnValueOnce(setup.promise)
+    const paste = pasteDraftWhenAgentReady({ tabId: 'tab-1', content: ISSUE_URL, agent: 'codex' })
+    await vi.advanceTimersByTimeAsync(11 * 60 * 1000)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    testState.ptyObserver?.(DECSET_BRACKETED_PASTE + CODEX_COMPOSER_PROMPT_RENDER)
+    setup.resolve({ foregroundProcess: 'codex', hasChildProcesses: false })
+    await expect(paste).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith('pty-1', PASTED_ISSUE_URL)
+  })
+
+  it('refuses a draft after failed Setup even if Claude owns the PTY', async () => {
+    testState.inspectRuntimeTerminalProcess.mockRejectedValueOnce(new Error('Setup failed'))
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true
+    })
+    await expect(
+      pasteDraftWhenAgentReady({
+        tabId: 'tab-1',
+        content: ISSUE_URL,
+        agent: 'claude',
+        forcePaste: true
+      })
+    ).rejects.toThrow('Setup failed')
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 
   it('holds the PTY transaction across the paste and its submit Enter', async () => {

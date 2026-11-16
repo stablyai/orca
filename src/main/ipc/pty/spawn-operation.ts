@@ -62,6 +62,8 @@ function retirePreparation<State extends PtySpawnOperationState>(
   reattachId?: string
 ): void {
   const ctx = adapter.state
+  ctx.releaseSetupDependency?.()
+  ctx.releaseSetupDependency = undefined
   adapter.releasePreparation?.()
   restoreProvisionalPtySize(ctx, { reattachId })
   ctx.finishTerminalInstall()
@@ -88,6 +90,8 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   const finish = (outcome: PtySpawnOutcome) => {
     ctx.paneSpawnOperation?.acquisition?.settle(outcome)
     if (outcome.kind === 'registration-exited') {
+      ctx.releaseSetupDependency?.()
+      ctx.releaseSetupDependency = undefined
       adapter.releasePreparation?.()
       adapter.releaseHiddenMark?.()
     }
@@ -254,6 +258,8 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       ? acquire(paneKey, fresh)
       : fresh(ctx.paneSpawnOperation ?? { mustExist: false }))
   } catch (caught) {
+    ctx.releaseSetupDependency?.()
+    ctx.releaseSetupDependency = undefined
     const error = adapter.onError?.(caught) ?? caught
     adapter.releasePreparation?.()
     adapter.releaseHiddenMark?.()

@@ -132,7 +132,10 @@ export const TERMINAL_QUERY_METHODS = [
     name: 'terminal.inspectProcess',
     permission: 'workspace',
     params: TerminalInspectProcess,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, signal }) => {
+      if (params.waitForSetup) {
+        await runtime.waitForTerminalSetup(params.terminal, 'Agent', signal)
+      }
       const options = {
         ...(params.expectedIncarnationId
           ? { expectedIncarnationId: params.expectedIncarnationId }

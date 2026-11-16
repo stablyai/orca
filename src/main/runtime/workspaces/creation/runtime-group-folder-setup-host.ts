@@ -42,7 +42,9 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
           this.buildStartupForDraft(repo, draft, agent, source, inputs)
       }
     )
-    if (args.setupPreparationFailure) this.setupTerminalCompletions.refuseWorkspace(worktree.id)
+    if (args.setupPreparationFailure) {
+      this.setupTerminalCompletions.refuseWorkspace(worktree.id)
+    }
     return startRuntimeLocalWorktreeTerminals({
       request,
       repo,
@@ -71,57 +73,62 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
     const activation: { wslUserAct?: true } = groupFolderCreationIsUserAct(input)
       ? { wslUserAct: true }
       : {}
-    const scope = await this.resolveTerminalWorkspaceLaunchScope(
-      `id:${worktree.id}`,
-      undefined,
-      activation,
-      worktree,
-      workspace
-    )
-    const owner = projectGroupHookOwner(group)
-    return prepareGroupFolderCreation({
-      input,
-      group,
-      workspace,
-      settings: store.getSettings(),
-      ports: this.localWorktreeTerminalPorts(activation, () => {}, worktree),
-      startupBuilders: {
-        agent: (agent, prompt, launchPreferences, inputs) =>
-          buildWorktreeStartupForAgent({
-            repo: owner ?? {
-              path: workspace.folderPath,
-              connectionId: workspace.connectionId,
-              executionHostId: workspace.executionHostId
-            },
-            agent,
-            prompt,
-            launchPreferences,
-            ...inputs,
-            settings: store.getSettings(),
-            getLaunchRuntime: (requested) =>
-              resolveStartupAgentLaunchRuntime(store, scope, requested),
-            toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
-          }),
-        draft: (draft, requestedAgent, launchSource, inputs) =>
-          buildWorktreeStartupForDraft({
-            repo: owner ?? {
-              path: workspace.folderPath,
-              connectionId: workspace.connectionId,
-              executionHostId: workspace.executionHostId
-            },
-            draft,
-            requestedAgent,
-            originalAgent: inputs?.createdWithAgent ?? requestedAgent,
-            agentArgs: inputs?.startupAgentArgs,
-            sessionOptions:
-              inputs?.startupSessionOptions ??
-              this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
-            launchSource,
-            settings: store.getSettings(),
-            getLaunchRuntime: (agent) => resolveStartupAgentLaunchRuntime(store, scope, agent)
-          })
-      }
-    })
+    try {
+      const scope = await this.resolveTerminalWorkspaceLaunchScope(
+        `id:${worktree.id}`,
+        undefined,
+        activation,
+        worktree,
+        workspace
+      )
+      const owner = projectGroupHookOwner(group)
+      return await prepareGroupFolderCreation({
+        input,
+        group,
+        workspace,
+        settings: store.getSettings(),
+        ports: this.localWorktreeTerminalPorts(activation, () => {}, worktree),
+        startupBuilders: {
+          agent: (agent, prompt, launchPreferences, inputs) =>
+            buildWorktreeStartupForAgent({
+              repo: owner ?? {
+                path: workspace.folderPath,
+                connectionId: workspace.connectionId,
+                executionHostId: workspace.executionHostId
+              },
+              agent,
+              prompt,
+              launchPreferences,
+              ...inputs,
+              settings: store.getSettings(),
+              getLaunchRuntime: (requested) =>
+                resolveStartupAgentLaunchRuntime(store, scope, requested),
+              toSessionOptions: (preferences) => this.toAgentSessionOptions(preferences)
+            }),
+          draft: (draft, requestedAgent, launchSource, inputs) =>
+            buildWorktreeStartupForDraft({
+              repo: owner ?? {
+                path: workspace.folderPath,
+                connectionId: workspace.connectionId,
+                executionHostId: workspace.executionHostId
+              },
+              draft,
+              requestedAgent,
+              originalAgent: inputs?.createdWithAgent ?? requestedAgent,
+              agentArgs: inputs?.startupAgentArgs,
+              sessionOptions:
+                inputs?.startupSessionOptions ??
+                this.toAgentSessionOptions(inputs?.startupLaunchPreferences),
+              launchSource,
+              settings: store.getSettings(),
+              getLaunchRuntime: (agent) => resolveStartupAgentLaunchRuntime(store, scope, agent)
+            })
+        }
+      })
+    } catch (error) {
+      this.refuseWorkspaceSetup(worktree.id)
+      throw error
+    }
   }
   protected localWorktreeTerminalPorts(
     args: { navigation?: RuntimeNavigationTarget; wslUserAct?: true },
@@ -129,6 +136,7 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
     worktree?: Worktree
   ): RuntimeLocalWorktreeTerminalPorts {
     return {
+      bindSetupRecipe: (id, recipe) => this.setupTerminalCompletions.bindRecipe(id, recipe),
       canSpawn: Boolean(this.ptyController?.spawn),
       setupPrepared: (workspaceId, required) => this.preparedWorkspaceSetup(workspaceId, required),
       setupFailed: (workspaceId) => this.setupTerminalCompletions.refuseWorkspace(workspaceId),

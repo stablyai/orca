@@ -61,7 +61,6 @@ import { WorkerAutoReleaseActivity } from '../../orchestration/terminal-authorit
 import { nativeChatIdleStopMs } from '../../../../shared/native-chat/native-chat-idle-stop'
 import { prWatchWorkspaceSources } from '../../agent-session/pr-watch-workspace-sources'
 import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
-const DEFAULT_WORKTREE_PS_LIMIT = 200
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
@@ -74,7 +73,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   }
 
   async getWorktreePs(
-    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    limit = 200,
     sourceDefaultsSupported = true,
     includeAgentWait = false,
     worktreeId?: string
@@ -268,8 +267,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       ...catalogDeps,
       claudeCliFlags: claudeCliFlagSupport,
       usageLimitAutoContinue: this.usageLimitAutoContinueHostDeps(),
-      waitForWorkspaceSetup: (workspaceId, agent, signal) =>
-        this.waitForWorkspaceSetup(workspaceId, agent, signal),
+      waitForWorkspaceSetup: this.waitForWorkspaceSetup.bind(this),
       idleSweep: { idleMs: () => nativeChatIdleStopMs(this.requireStore().getSettings()) },
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false

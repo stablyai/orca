@@ -152,7 +152,19 @@ export function buildLocalWorktreeCreateArgs(
     ...(!request.startup &&
     (request.options?.creationAgentLaunch?.draft ?? request.options?.startupDraft)
       ? {
-          startupDraft: request.options?.creationAgentLaunch?.draft ?? request.options?.startupDraft
+          startupDraft:
+            request.options?.creationAgentLaunch?.draft ?? request.options?.startupDraft,
+          startupAgentArgs: request.options?.creationAgentLaunch?.inputs?.agentArgs,
+          startupSessionOptions: request.options?.creationAgentLaunch?.inputs?.sessionOptions,
+          ...(request.options?.creationAgentLaunch
+            ? {
+                startupLaunchPreferences: toAgentLaunchPreferences(
+                  request.options.creationAgentLaunch.inputs?.sessionOptions,
+                  request.options.creationAgentLaunch.agent
+                ),
+                startupLaunchSource: request.options.creationAgentLaunch.launchSource
+              }
+            : {})
         }
       : {}),
     ...(request.creationId ? { creationId: request.creationId } : {})

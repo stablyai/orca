@@ -91,59 +91,64 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     events: RuntimeWorkspaceCreateEvents
   ): Promise<CreateWorktreeResult> {
     const store = this.requireStore()
+    let namedWorkspaceId: string | undefined
     const onWorkspaceCreated = (worktreeId: string): void => {
+      namedWorkspaceId = worktreeId
       this.beginWorkspaceSetup(worktreeId)
       creation?.named(worktreeId)
       args.onWorkspaceCreated?.(worktreeId)
     }
-    assertWslMoveRepoWritable(store, repo)
-    const createSettings = store.getSettings()
-    const {
-      effectiveStartup,
-      effectiveStartupFollowup,
-      startupLaunchRuntime,
-      effectiveCreatedWithAgent,
-      effectiveDraftPaste
-    } = await resolveManagedWorktreeCreateStartup(args, createSettings.disabledTuiAgents, {
-      agent: (...inputs) => this.buildStartupForAgent(repo, ...inputs),
-      draft: (...inputs) => this.buildStartupForDraft(repo, ...inputs)
-    })
-    const activationCallbacks = createdWorkspaceActivationCallbacks(
-      this.notifyActivateWorktree.bind(this),
-      args.navigation
-    )
-    // Match IPC routing: executionHostId-only SSH repos must not create locally.
-    const createRoute = resolveWorktreeCreateRoute(repo)
-    if (isFolderRepo(repo)) {
-      // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
-      return createRuntimeFolderWorktree({
-        request: args,
-        repo,
-        startup: effectiveStartup,
-        startupFollowup: effectiveStartupFollowup,
+    try {
+      assertWslMoveRepoWritable(store, repo)
+      const createSettings = store.getSettings()
+      const {
+        effectiveStartup,
+        effectiveStartupFollowup,
         startupLaunchRuntime,
-        createdWithAgent: effectiveCreatedWithAgent,
-        promisedAgentChat: args.promisedAgentChat,
-        onWorkspaceCreated,
-        draftPaste: effectiveDraftPaste,
-        deps: {
-          store,
-          terminals: this.localWorktreeTerminalPorts(args, activationCallbacks.local),
-          invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
-          notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
-          emitCreated: (event) => this.emitWorktreeLifecycle(event),
-          activate: activationCallbacks.folder,
-          setup: {
-            runtimeTarget: () => this.getLocalGitExecutionOptionArgs(repo)[0],
-            shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup)
-          }
-        }
+        effectiveCreatedWithAgent,
+        effectiveDraftPaste
+      } = await resolveManagedWorktreeCreateStartup(args, createSettings.disabledTuiAgents, {
+        agent: (...inputs) => this.buildStartupForAgent(repo, ...inputs),
+        draft: (...inputs) => this.buildStartupForDraft(repo, ...inputs)
       })
-    }
-    const lineageInput =
-      args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
-    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch(
-      (error: unknown) => {
+      const activationCallbacks = createdWorkspaceActivationCallbacks(
+        this.notifyActivateWorktree.bind(this),
+        args.navigation
+      )
+      // Match IPC routing: executionHostId-only SSH repos must not create locally.
+      const createRoute = resolveWorktreeCreateRoute(repo)
+      if (isFolderRepo(repo)) {
+        // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
+        return await createRuntimeFolderWorktree({
+          request: args,
+          repo,
+          startup: effectiveStartup,
+          startupFollowup: effectiveStartupFollowup,
+          startupLaunchRuntime,
+          createdWithAgent: effectiveCreatedWithAgent,
+          promisedAgentChat: args.promisedAgentChat,
+          onWorkspaceCreated,
+          draftPaste: effectiveDraftPaste,
+          deps: {
+            store,
+            terminals: this.localWorktreeTerminalPorts(args, activationCallbacks.local),
+            invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
+            notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
+            emitCreated: (event) => this.emitWorktreeLifecycle(event),
+            activate: activationCallbacks.folder,
+            setup: {
+              runtimeTarget: () => this.getLocalGitExecutionOptionArgs(repo)[0],
+              shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup)
+            }
+          }
+        })
+      }
+      const lineageInput =
+        args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
+      const lineageResolution = await this.resolveLineageForWorktreeCreate(
+        lineageInput,
+        repo
+      ).catch((error: unknown) => {
         if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
           throw new RuntimeLineageError(
             error.code,
@@ -151,140 +156,146 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           )
         }
         throw error
+      })
+      if (createRoute.kind === 'runtime') {
+        throw new ExecutionHostNotDispatchableError(createRoute.hostId)
       }
-    )
-    if (createRoute.kind === 'runtime') {
-      throw new ExecutionHostNotDispatchableError(createRoute.hostId)
-    }
-    const timing = events.begin(repo.path)
-    if (createRoute.kind === 'ssh') {
-      // Tagged before the refusal so the failed-create event keeps naming its host.
-      timing.recordExecutionHost('ssh')
-      throw new SshHostNotServedError(createRoute.connectionId)
-    }
-    const localCreate = await createRuntimeLocalManagedWorktree({
-      request: args,
-      repo,
-      store: this.requireStore(),
-      createdWithAgent: effectiveCreatedWithAgent,
-      hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
-      resolveRemoteTrackingBase: (path, base, ...options) =>
-        this.resolveRemoteTrackingBase(path, base, ...options),
-      hasRemoteTrackingRef: (path, base, ...options) =>
-        this.hasRemoteTrackingRef(path, base, ...options),
-      refreshRemoteTrackingBase: (path, base, ...options) =>
-        this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
-      fetchRemote: (path, remote, ...options) =>
-        this.fetchRemoteWithCache(path, remote, ...options),
-      onWorktreeMetadataPersisted: (persistedWorktree) => {
-        onWorkspaceCreated(persistedWorktree.id)
-        return this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
-      },
-      rearm,
-      timing
-    })
-    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
-      localCreate
-    const { lineage, workspaceLineage } = metadataResult
+      const timing = events.begin(repo.path)
+      if (createRoute.kind === 'ssh') {
+        // Tagged before the refusal so the failed-create event keeps naming its host.
+        timing.recordExecutionHost('ssh')
+        throw new SshHostNotServedError(createRoute.connectionId)
+      }
+      const localCreate = await createRuntimeLocalManagedWorktree({
+        request: args,
+        repo,
+        store: this.requireStore(),
+        createdWithAgent: effectiveCreatedWithAgent,
+        hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
+        resolveRemoteTrackingBase: (path, base, ...options) =>
+          this.resolveRemoteTrackingBase(path, base, ...options),
+        hasRemoteTrackingRef: (path, base, ...options) =>
+          this.hasRemoteTrackingRef(path, base, ...options),
+        refreshRemoteTrackingBase: (path, base, ...options) =>
+          this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
+        fetchRemote: (path, remote, ...options) =>
+          this.fetchRemoteWithCache(path, remote, ...options),
+        onWorktreeMetadataPersisted: (persistedWorktree) => {
+          onWorkspaceCreated(persistedWorktree.id)
+          return this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
+        },
+        rearm,
+        timing
+      })
+      const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
+        localCreate
+      const { lineage, workspaceLineage } = metadataResult
 
-    const preparedSetup = await prepareRuntimeLocalWorktreeSetup({
-      request: args,
-      repo,
-      worktreePath,
-      settings: createSettings,
-      runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
-      shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup),
-      warning:
-        [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
-    })
-    if (preparedSetup.setupPreparationFailure)
-      this.setupTerminalCompletions.refuseWorkspace(worktree.id)
-    const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
-    let { warning } = preparedSetup
+      const preparedSetup = await prepareRuntimeLocalWorktreeSetup({
+        request: args,
+        repo,
+        worktreePath,
+        settings: createSettings,
+        runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
+        shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup),
+        warning:
+          [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
+      })
+      if (preparedSetup.setupPreparationFailure) {
+        this.setupTerminalCompletions.refuseWorkspace(worktree.id)
+      }
+      const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
+      let { warning } = preparedSetup
 
-    this.invalidateResolvedWorktreeCache()
-    this.invalidateWorktreeScanCacheForRepo(repo.id)
-    // Invalidate this repo's authorized-root cache so CLI creates work; global invalidation needlessly rescans every repo.
-    invalidateAuthorizedRootsCacheForRepo(store, repo)
+      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(repo.id)
+      // Invalidate this repo's authorized-root cache so CLI creates work; global invalidation needlessly rescans every repo.
+      invalidateAuthorizedRootsCacheForRepo(store, repo)
 
-    notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
-    const {
-      warning: terminalWarning,
-      returnedSetup,
-      didSpawnSetup,
-      didSpawnStartup,
-      setupTerminalHandle,
-      startupTerminalHandle,
-      startupTerminalTabId,
-      startupTerminalPaneKey,
-      startupTerminalPtyId
-    } = await startRuntimeLocalWorktreeTerminals({
-      request: args,
-      repo,
-      worktree,
-      setup,
-      requiredSetup: preparedSetup.requiredSetup,
-      defaultTabs,
-      startup: effectiveStartup,
-      startupFollowup: effectiveStartupFollowup,
-      startupLaunchRuntime: preparedSetup.setupPreparationFailure ?? startupLaunchRuntime,
-      createdWithAgent: effectiveCreatedWithAgent,
-      promisedAgentChat: args.promisedAgentChat,
-      draftPaste: effectiveDraftPaste,
-      warning,
-      ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
-    })
-    warning = terminalWarning
-    this.emitWorktreeLifecycle({
-      kind: 'created',
-      worktreeId: worktree.id,
-      path: worktree.path,
-      branch: worktree.branch,
-      ...createdWorktreeLifecycleIdentity(worktree)
-    })
+      notifyLineageRepos(this.notifyWorktreesChanged.bind(this), repo.id, lineage?.parentWorktreeId)
+      const {
+        warning: terminalWarning,
+        returnedSetup,
+        didSpawnSetup,
+        didSpawnStartup,
+        setupTerminalHandle,
+        startupTerminalHandle,
+        startupTerminalTabId,
+        startupTerminalPaneKey,
+        startupTerminalPtyId
+      } = await startRuntimeLocalWorktreeTerminals({
+        request: args,
+        repo,
+        worktree,
+        setup,
+        requiredSetup: preparedSetup.requiredSetup,
+        defaultTabs,
+        startup: effectiveStartup,
+        startupFollowup: effectiveStartupFollowup,
+        startupLaunchRuntime: preparedSetup.setupPreparationFailure ?? startupLaunchRuntime,
+        createdWithAgent: effectiveCreatedWithAgent,
+        promisedAgentChat: args.promisedAgentChat,
+        draftPaste: effectiveDraftPaste,
+        warning,
+        ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
+      })
+      warning = terminalWarning
+      this.emitWorktreeLifecycle({
+        kind: 'created',
+        worktreeId: worktree.id,
+        path: worktree.path,
+        branch: worktree.branch,
+        ...createdWorktreeLifecycleIdentity(worktree)
+      })
 
-    return {
-      worktree: {
-        ...worktree,
-        parentWorktreeId: lineage?.parentWorktreeId ?? null,
-        childWorktreeIds: [],
-        lineage,
-        workspaceLineage,
-        git: created
-      },
-      ...(lineageInput ? metadataResult : {}),
-      ...(returnedSetup ? { setup: returnedSetup } : {}),
-      ...(args.awaitTerminalProvisioning
-        ? {
-            setupReceipt: buildRuntimeSetupReceipt(
-              preparedSetup,
-              didSpawnSetup,
-              setupTerminalHandle
-            )
-          }
-        : {}),
-      ...(defaultTabs ? { defaultTabs } : {}),
-      ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
-      ...(warning ? { warning } : {}),
-      ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
-      ...(addResult.localBaseRefRefresh
-        ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
-        : {}),
-      ...(addResult.localBaseRefUpdateSuggestion
-        ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
-        : {}),
-      ...(didSpawnStartup && startupTerminalHandle
-        ? {
-            startupTerminal: {
-              spawned: true,
-              handle: startupTerminalHandle,
-              ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
-              ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
-              ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
-              surface: 'background' as const
+      return {
+        worktree: {
+          ...worktree,
+          parentWorktreeId: lineage?.parentWorktreeId ?? null,
+          childWorktreeIds: [],
+          lineage,
+          workspaceLineage,
+          git: created
+        },
+        ...(lineageInput ? metadataResult : {}),
+        ...(returnedSetup ? { setup: returnedSetup } : {}),
+        ...(args.awaitTerminalProvisioning
+          ? {
+              setupReceipt: buildRuntimeSetupReceipt(
+                preparedSetup,
+                didSpawnSetup,
+                setupTerminalHandle
+              )
             }
-          }
-        : {})
+          : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
+        ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
+        ...(warning ? { warning } : {}),
+        ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
+        ...(addResult.localBaseRefRefresh
+          ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
+          : {}),
+        ...(addResult.localBaseRefUpdateSuggestion
+          ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
+          : {}),
+        ...(didSpawnStartup && startupTerminalHandle
+          ? {
+              startupTerminal: {
+                spawned: true,
+                handle: startupTerminalHandle,
+                ...(startupTerminalTabId ? { tabId: startupTerminalTabId } : {}),
+                ...(startupTerminalPaneKey ? { paneKey: startupTerminalPaneKey } : {}),
+                ...(startupTerminalPtyId ? { ptyId: startupTerminalPtyId } : {}),
+                surface: 'background' as const
+              }
+            }
+          : {})
+      }
+    } catch (error) {
+      if (namedWorkspaceId) {
+        this.refuseWorkspaceSetup(namedWorkspaceId)
+      }
+      throw error
     }
   }
 

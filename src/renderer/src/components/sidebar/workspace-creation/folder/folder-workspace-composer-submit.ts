@@ -160,8 +160,7 @@ export async function submitFolderWorkspaceCreate({
       : planAgentSessionLaunch(useAppStore.getState(), launchRequest)
     : null
   const structuredLaunch = plan?.route === 'structured-native-chat'
-  const hostStartsTerminal =
-    setupSupported && Boolean(runtimeEnvironmentId) && Boolean(quickAgent) && !structuredLaunch
+  const hostStartsTerminal = setupSupported && Boolean(quickAgent) && !structuredLaunch
   if (quickAgent && !hostStartsTerminal && launchHost.kind === 'withheld') {
     throw new Error(launchHost.reason)
   }
@@ -282,7 +281,7 @@ export async function submitFolderWorkspaceCreate({
     }
     if (
       !launchFailed &&
-      !runtimeEnvironmentId &&
+      !hostStartsTerminal &&
       !structuredLaunch &&
       startupPlan &&
       (startupPlan.followupPrompt || startupPlan.draftPrompt) &&

@@ -1,3 +1,4 @@
+import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
 import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty/process-inspection'
@@ -24,6 +25,7 @@ import {
 } from '../pane/serializer-state'
 
 export function installPtyInspectIpcHandlers(deps: {
+  runtime?: Pick<OrcaRuntimeService, 'waitForPtySetup'>
   getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
 }): void {
   const ipcMain = getPtyIpc()
@@ -145,11 +147,15 @@ export function installPtyInspectIpcHandlers(deps: {
         expectedIncarnationId?: string
         scanChildProcesses?: boolean
         steadyState?: boolean
+        waitForSetup?: true
       }
     ) => {
       // Another host's PTY remains unverifiable here.
       if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
+      }
+      if (args.waitForSetup === true) {
+        await deps.runtime?.waitForPtySetup(args.id)
       }
       // Completion-sensitive inspection must wait for the provider that owns restored daemon sessions.
       await awaitSwapWindow(args.id)

@@ -242,8 +242,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             sampleVisibleForegroundAgent: true
           })
         }
-        if (resolvedPtyId) {
-          session.reconcilePtySizeAfterSpawn(resolvedPtyId, session.cols, session.rows)
+        if (resolvedPtyId && !session.shouldDeliverStartupViaTerminalPaste) {
+          session.armStartupDraftReadinessObservation()
         }
         if (!resolvedPtyId) {
           releaseDeferredCwdFence(session)
@@ -251,6 +251,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
           return null
         }
+        session.reconcilePtySizeAfterSpawn(resolvedPtyId, session.cols, session.rows)
         const gen = await preSignalPromise
         // Bound PTYs own their serializer even after rejected declaration; generation only settles pending declaration state.
         if (resolvedPtyId) {

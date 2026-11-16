@@ -1,3 +1,5 @@
+import { paneSize, resolvePtyFirstSize } from '../../../ipc/pty/pty-first-size'
+import type { TerminalCreateOptions } from './terminal-create-options'
 import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
@@ -27,6 +29,23 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
+  protected resolveTerminalCreateInitialSize(workspaceId: string, opts: TerminalCreateOptions) {
+    const session = this.getWorkspaceSessionForWorktree(workspaceId)
+    // The window's latest published active group is where its reveal places the tab.
+    const groupId =
+      opts.targetGroupId ??
+      this.mobileSessionTabsByWorktree.get(workspaceId)?.activeGroupId ??
+      session?.activeGroupIdByWorktree?.[workspaceId]
+    // Unshown workspaces have no measured group; a single group can use the common workspace geometry.
+    const singleGroup =
+      (session?.tabGroups?.[workspaceId]?.length ?? 0) <= 1
+        ? this.singleGroupWorkspaceGridSize
+        : undefined
+    const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
+    const initialSize = resolvePtyFirstSize({ pane: paneSize(session, opts), group, singleGroup })
+    return initialSize
+  }
+
   /** A create's scope: its `wslUserAct` lets the folder check start a stopped WSL distro (E9). */
   protected resolveTerminalCreateLaunchScope(
     selector: string,

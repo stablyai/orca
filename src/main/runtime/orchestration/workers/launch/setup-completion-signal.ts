@@ -67,6 +67,7 @@ export function createSetupCompletionScanner(
       const markerIndex = combined.lastIndexOf(expectedPrefix)
       if (markerIndex !== -1) {
         const suffix = combined.slice(markerIndex + expectedPrefix.length)
+        // oxlint-disable-next-line no-control-regex -- Setup reports an OSC terminated by BEL.
         const match = suffix.match(/^(-?\d+)(?:\r?\n|\x07)/)
         if (match) {
           completed = true

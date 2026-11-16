@@ -213,7 +213,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
   }
 
   protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
-    pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
+    void this.waitForTerminalSetup(handle, draft.agent)
+      .then(() => {
+        pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
+      })
+      .catch((error) => console.warn('[worktree-create] draft retained after Setup failed:', error))
   }
 
   /** Before first input only: await composer readiness without startup dialogs or Codex provisional headers. stopOnDialog returns early for the caller's idle report. */
@@ -227,6 +231,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       signal
     }: { requireComposerMarker?: boolean; stopOnDialog?: boolean; signal?: AbortSignal } = {}
   ): Promise<RuntimeTerminalWait> {
+    await this.waitForTerminalSetup(handle, agent, signal)
     return waitForTerminalComposer(
       {
         handle,
@@ -246,7 +251,14 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
 
   /** Hold submits to a fresh launch of `agent` until its composer is up (launch-composer-watch.ts). */
   watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void {
-    watchLaunchComposer(this.launchComposerReadyByPtyId, this.freshComposerPtyHost(), ptyId, agent)
+    const setup = this.setupTerminalCompletions.forDependent(ptyId)
+    watchLaunchComposer(
+      this.launchComposerReadyByPtyId,
+      this.freshComposerPtyHost(),
+      ptyId,
+      agent,
+      setup
+    )
   }
 
   private freshComposerPtyHost(): FreshComposerPtyHost {
@@ -258,11 +270,16 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     }
   }
 
-  deliverStartupFollowup(
+  async deliverStartupFollowup(
     handle: string,
     followup: WorktreeStartupFollowup,
     options?: StartupFollowupPromptOptions
   ): Promise<boolean> {
+    try {
+      await this.waitForTerminalSetup(handle, followup.agent, options?.signal)
+    } catch {
+      return false
+    }
     const host = this.getWorktreeStartupReadinessHost()
     return deliverStartupFollowupPrompt(this, host, handle, followup, options)
   }

@@ -29,7 +29,11 @@ export async function resolveManagedWorktreeCreateStartup(
   const requestedAgent = args.startupAgent ?? args.createdWithAgent
   const requestedAgentEnabled =
     requestedAgent !== undefined ? isTuiAgentEnabled(requestedAgent, disabledTuiAgents) : false
-  if ((args.startup || args.startupAgent) && requestedAgent && !requestedAgentEnabled) {
+  if (
+    (args.startup || args.startupAgent || args.startupDraft) &&
+    requestedAgent &&
+    !requestedAgentEnabled
+  ) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
   if (

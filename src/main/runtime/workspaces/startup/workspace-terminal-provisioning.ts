@@ -52,6 +52,8 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       return this.getLayoutOwnerTerminalProvisioningHost(createdWorktree)
     }
     return {
+      refuseSetup: (id) => this.setupTerminalCompletions.refuseWorkspace(id),
+      bindSetupRecipe: (id, recipe) => this.setupTerminalCompletions.bindRecipe(id, recipe),
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
         this.createTerminal(selector, options, createdWorktree),
@@ -88,6 +90,8 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       return reply.ok
     }
     return {
+      refuseSetup: (id) => this.setupTerminalCompletions.refuseWorkspace(id),
+      bindSetupRecipe: (id, recipe) => this.setupTerminalCompletions.bindRecipe(id, recipe),
       canSpawn: () => Boolean(this.ptyController?.spawn),
       createTerminal: (selector, options) =>
         this.createTerminal(selector, options, createdWorktree),

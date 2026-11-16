@@ -21,7 +21,10 @@ export async function createFolderWorkspace(
   store: Store,
   runtime: Pick<
     OrcaRuntimeService,
-    'startCreatedWorktreeTerminals' | 'beginWorkspaceSetup' | 'preparedWorkspaceSetup'
+    | 'startCreatedWorktreeTerminals'
+    | 'beginWorkspaceSetup'
+    | 'preparedWorkspaceSetup'
+    | 'refuseWorkspaceSetup'
   >
 ): Promise<CreateWorktreeResult> {
   const now = Date.now()
@@ -76,65 +79,70 @@ export async function createFolderWorkspace(
       : {})
   })
   runtime.beginWorkspaceSetup(worktreeId)
-  const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
-  // The window opens the Setup tab from `setup`, as for a new worktree.
-  const prepared = await prepareFolderWorktreeSetup({
-    // A desktop create is the user's act, as for a new worktree.
-    request: { ...args, wslUserAct: true },
-    repo,
-    worktree,
-    settings: store.getSettings(),
-    runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo),
-    shouldUseSetupRunner: true
-  })
-  const setup = isPreparedFolderSetup(prepared) ? prepared : undefined
-  runtime.preparedWorkspaceSetup(worktreeId, setup?.requiredSetup === true)
-  if (setup && (args.startup || args.startupDraft || setup.requiredSetup)) {
-    const started = await runtime.startCreatedWorktreeTerminals({
+  try {
+    const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
+    // The window opens the Setup tab from `setup`, as for a new worktree.
+    const prepared = await prepareFolderWorktreeSetup({
+      // A desktop create is the user's act, as for a new worktree.
+      request: { ...args, wslUserAct: true },
       repo,
       worktree,
-      setup: setup.setup,
-      defaultTabs: setup.defaultTabs,
-      setupPreparationFailure: setup.setupPreparationFailure,
-      request: {
-        ...args,
-        repoSelector: repo.id,
-        wslUserAct: true,
-        awaitTerminalProvisioning: true,
-        observeSetupCompletion: true,
-        promisedAgentChat: Boolean(args.createdWithAgent && !args.startup && !args.startupDraft)
-      }
+      settings: store.getSettings(),
+      runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo),
+      shouldUseSetupRunner: true
     })
+    const setup = isPreparedFolderSetup(prepared) ? prepared : undefined
+    runtime.preparedWorkspaceSetup(worktreeId, setup?.requiredSetup === true)
+    if (setup && (args.startup || args.startupDraft || setup.requiredSetup)) {
+      const started = await runtime.startCreatedWorktreeTerminals({
+        repo,
+        worktree,
+        setup: setup.setup,
+        defaultTabs: setup.defaultTabs,
+        setupPreparationFailure: setup.setupPreparationFailure,
+        request: {
+          ...args,
+          repoSelector: repo.id,
+          wslUserAct: true,
+          awaitTerminalProvisioning: true,
+          observeSetupCompletion: true,
+          promisedAgentChat: Boolean(args.createdWithAgent && !args.startup && !args.startupDraft)
+        }
+      })
+      return {
+        worktree,
+        setup: started.returnedSetup,
+        setupReceipt: buildRuntimeSetupReceipt(
+          setup,
+          started.didSpawnSetup,
+          started.setupTerminalHandle
+        ),
+        ...(setup.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
+        ...(started.didSpawnStartup
+          ? {
+              startupTerminal: {
+                spawned: true,
+                handle: started.startupTerminalHandle ?? undefined,
+                tabId: started.startupTerminalTabId ?? undefined,
+                paneKey: started.startupTerminalPaneKey,
+                ptyId: started.startupTerminalPtyId,
+                surface: 'background' as const
+              }
+            }
+          : {}),
+        ...((started.warning ?? prepared?.warning)
+          ? { warning: started.warning ?? prepared?.warning }
+          : {})
+      }
+    }
     return {
       worktree,
-      setup: started.returnedSetup,
-      setupReceipt: buildRuntimeSetupReceipt(
-        setup,
-        started.didSpawnSetup,
-        started.setupTerminalHandle
-      ),
-      ...(setup.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
-      ...(started.didSpawnStartup
-        ? {
-            startupTerminal: {
-              spawned: true,
-              handle: started.startupTerminalHandle ?? undefined,
-              tabId: started.startupTerminalTabId ?? undefined,
-              paneKey: started.startupTerminalPaneKey,
-              ptyId: started.startupTerminalPtyId,
-              surface: 'background' as const
-            }
-          }
-        : {}),
-      ...((started.warning ?? prepared?.warning)
-        ? { warning: started.warning ?? prepared?.warning }
-        : {})
+      ...(setup?.setup ? { setup: setup.setup } : {}),
+      ...(setup?.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
+      ...(prepared?.warning ? { warning: prepared.warning } : {})
     }
-  }
-  return {
-    worktree,
-    ...(setup?.setup ? { setup: setup.setup } : {}),
-    ...(setup?.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
-    ...(prepared?.warning ? { warning: prepared.warning } : {})
+  } catch (error) {
+    runtime.refuseWorkspaceSetup(worktreeId)
+    throw error
   }
 }

@@ -1,3 +1,5 @@
+import type { SessionOptionValue } from '../native-chat/input/native-chat-session-options'
+import type { AgentLaunchPreferences } from '../agent-session/agent-session-host-authority'
 import type { WorktreeCatalogVersion } from './catalog/catalog-version'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './removal/archive-hook-removal-gate'
@@ -150,6 +152,10 @@ export type CreateWorktreeArgs = {
   startup?: WorktreeStartupLaunch
   /** Unsent task context; the host owns delivery after required Setup. */
   startupDraft?: string
+  startupAgentArgs?: string | null
+  startupSessionOptions?: Readonly<Record<string, SessionOptionValue>>
+  startupLaunchPreferences?: AgentLaunchPreferences
+  startupLaunchSource?: string
   /** Correlate concurrent background creates with renderer progress; synchronous callers may omit it. */
   creationId?: string
 }

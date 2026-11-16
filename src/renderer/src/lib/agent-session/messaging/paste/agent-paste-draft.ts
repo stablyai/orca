@@ -206,12 +206,12 @@ function waitForAgentDraftInputReadyOnTab(args: {
   readySignal: Parameters<typeof waitForAgentDraftInputReady>[2]
   launchPty?: Promise<string | null>
 }): Promise<{ ptyId: string; ready: boolean } | null> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const readinessByPtyId = new Map<string, Promise<boolean>>()
     let settled = false
     let spawnTimer: number | null = null
     let unsubscribeStore: (() => void) | null = null
-    const finish = (result: { ptyId: string; ready: boolean } | null): void => {
+    const finish = (result: { ptyId: string; ready: boolean } | null, error?: unknown): void => {
       if (settled) {
         return
       }
@@ -220,7 +220,11 @@ function waitForAgentDraftInputReadyOnTab(args: {
         window.clearTimeout(spawnTimer)
       }
       unsubscribeStore?.()
-      resolve(result)
+      if (error !== undefined) {
+        reject(error)
+      } else {
+        resolve(result)
+      }
     }
     const watchPty = (ptyId: string): Promise<boolean> => {
       const existing = readinessByPtyId.get(ptyId)
@@ -233,6 +237,8 @@ function waitForAgentDraftInputReadyOnTab(args: {
         args.readySignal
       )
       readinessByPtyId.set(ptyId, readiness)
+      // Other panes can appear before the launch owner is selected; only that owner's failure is delivered.
+      void readiness.catch(() => {})
       return readiness
     }
     const deliverPty = (ptyId: string): void => {
@@ -243,7 +249,10 @@ function waitForAgentDraftInputReadyOnTab(args: {
         window.clearTimeout(spawnTimer)
       }
       unsubscribeStore?.()
-      void watchPty(ptyId).then((ready) => finish({ ptyId, ready }))
+      void watchPty(ptyId).then(
+        (ready) => finish({ ptyId, ready }),
+        (error: unknown) => finish(null, error)
+      )
     }
     const bindFromState = (state: ReturnType<typeof useAppStore.getState>): void => {
       const ptyIds = state.ptyIdsByTabId[args.tabId] ?? []

@@ -127,7 +127,7 @@ export function nativeWindowsPathToPosixShellPath(value: string): string {
   return value.replace(/\\/g, '/')
 }
 
-function nativeWindowsPathToWslShellPath(value: string): string {
+export function nativeWindowsPathToWslShellPath(value: string): string {
   const driveMatch = value.match(/^([A-Za-z]):[\\/](.*)$/)
   if (driveMatch) {
     return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2].replace(/\\/g, '/')}`
@@ -135,7 +135,7 @@ function nativeWindowsPathToWslShellPath(value: string): string {
   return value.replace(/\\/g, '/')
 }
 
-function isWslExecutable(value: string | undefined): boolean {
+export function isWslExecutable(value: string | undefined): boolean {
   const basename = value?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
   return basename === 'wsl.exe' || basename === 'wsl'
 }

@@ -426,7 +426,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       ...request,
       repoSelector: args.repo.id,
       awaitTerminalProvisioning: true,
-      observeSetupCompletion: true,
+      observeSetupCompletion: setup?.waitForAgentStartup === true,
       promisedAgentChat: Boolean(
         request.createdWithAgent && !request.startup && !request.startupDraft
       ),
@@ -1682,209 +1682,214 @@ async function performLocalWorktreeCreate(
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
   runtime.beginWorkspaceSetup(worktreeId)
-  onWorkspaceCreated?.(worktreeId)
-  const {
-    lineage: worktreeLineage,
-    workspaceLineage,
-    crossStoreLineage
-  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now, noteLineage)
-  // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
-  if (listingComplete) {
-    registerWorktreeRootsForRepo(
-      store,
-      repo,
-      [repo.path, ...gitWorktrees.map((worktree) => worktree.path)],
-      localWorktreeGitOptions
-    )
-  } else {
-    // Incomplete recovery authorizes only the created root until a complete listing repopulates the cache.
-    registerCreatedWorktreeRoot(store, repo, created.path)
-  }
-
-  // Materialize configured shared paths before setup scripts need them.
-  const symlinkPaths = repo.symlinkPaths ?? []
-  if (symlinkPaths.length > 0) {
-    await timing.time('create_symlinks', async () => {
-      await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
-    })
-  }
-
-  // Repo shared directories supplement user settings so teammates inherit project configuration (#10451).
-  const [sharedDirectories, includePaths] = await Promise.all([
-    timing.time('resolve_shared_directories', () =>
-      resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
-    ),
-    timing.time('resolve_worktreeinclude', () =>
-      resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
-    )
-  ])
-  if (sharedDirectories.length > 0) {
-    await timing.time('create_shared_directories', async () => {
-      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
-    })
-  }
-
-  // Repo .worktreeinclude promises private copies; skip paths already linked by user settings.
-  let includeCopyWarning: string | undefined
-  if (includePaths.length > 0) {
-    await timing.time('copy_worktreeinclude', async () => {
-      const skippedIncludePaths = await createWorktreeCopiedPaths(
-        repo.path,
-        created.path,
-        includePaths
+  try {
+    onWorkspaceCreated?.(worktreeId)
+    const {
+      lineage: worktreeLineage,
+      workspaceLineage,
+      crossStoreLineage
+    } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now, noteLineage)
+    // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
+    if (listingComplete) {
+      registerWorktreeRootsForRepo(
+        store,
+        repo,
+        [repo.path, ...gitWorktrees.map((worktree) => worktree.path)],
+        localWorktreeGitOptions
       )
-      includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
-      if (includeCopyWarning) {
-        console.warn(`[worktree-include] ${includeCopyWarning}`)
-      }
-    })
-  }
+    } else {
+      // Incomplete recovery authorizes only the created root until a complete listing repopulates the cache.
+      registerCreatedWorktreeRoot(store, repo, created.path)
+    }
 
-  // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
-  let setup: CreateWorktreeResult['setup']
-  let defaultTabs: CreateWorktreeResult['defaultTabs']
-  let setupTrustMismatch: SetupTrustMismatch | undefined
-  let setupPreparationFailure: Error | undefined
-  await timing.time('prepare_setup', async () => {
-    const createdYamlHooks = loadHooks(worktreePath)
-    const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
-    setupTrustMismatch = checkCreatedWorktreeSetupTrust(
-      repo,
-      createdYamlHooks,
-      args.setupDecision,
-      args
-    )
-    // Only the approved content may run; the client re-prompts with the branch's.
-    const setupDecision = setupTrustMismatch ? 'skip' : args.setupDecision
-    try {
-      const launch = getDefaultTabsLaunch(createdYamlHooks, repo, setupDecision)
-      // Approving the branch's commands opens the command tabs later.
-      defaultTabs = setupTrustMismatch ? defaultTabsWithoutCommands(launch) : launch
-    } catch (error) {
-      // Unapproved target-branch tab commands may create tabs but must not execute.
-      console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
-      defaultTabs = createdYamlHooks?.defaultTabs
-        ? { tabs: createdYamlHooks.defaultTabs, runCommands: false }
-        : undefined
+    // Materialize configured shared paths before setup scripts need them.
+    const symlinkPaths = repo.symlinkPaths ?? []
+    if (symlinkPaths.length > 0) {
+      await timing.time('create_symlinks', async () => {
+        await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+      })
     }
-    const setupScript = createdEffectiveHooks?.scripts.setup
-    let shouldLaunchSetup = false
-    if (setupScript) {
-      try {
-        shouldLaunchSetup = shouldRunSetupForCreate(repo, setupDecision)
-      } catch (error) {
-        // Target branch can add unseen hooks; skip unapproved setup without failing the existing workspace.
-        console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
-      }
+
+    // Repo shared directories supplement user settings so teammates inherit project configuration (#10451).
+    const [sharedDirectories, includePaths] = await Promise.all([
+      timing.time('resolve_shared_directories', () =>
+        resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
+      ),
+      timing.time('resolve_worktreeinclude', () =>
+        resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
+      )
+    ])
+    if (sharedDirectories.length > 0) {
+      await timing.time('create_shared_directories', async () => {
+        await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+      })
     }
-    if (setupScript && shouldLaunchSetup) {
-      try {
-        // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
-        setup = await createSetupRunnerScript(
-          repo,
-          worktreePath,
-          setupScript,
-          localWorktreeGitOptionArgs[0],
-          resolveSetupRunnerShell(settings),
-          createdYamlHooks?.setupAgentStartupPolicy
+
+    // Repo .worktreeinclude promises private copies; skip paths already linked by user settings.
+    let includeCopyWarning: string | undefined
+    if (includePaths.length > 0) {
+      await timing.time('copy_worktreeinclude', async () => {
+        const skippedIncludePaths = await createWorktreeCopiedPaths(
+          repo.path,
+          created.path,
+          includePaths
         )
+        includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
+        if (includeCopyWarning) {
+          console.warn(`[worktree-include] ${includeCopyWarning}`)
+        }
+      })
+    }
+
+    // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
+    let setup: CreateWorktreeResult['setup']
+    let defaultTabs: CreateWorktreeResult['defaultTabs']
+    let setupTrustMismatch: SetupTrustMismatch | undefined
+    let setupPreparationFailure: Error | undefined
+    await timing.time('prepare_setup', async () => {
+      const createdYamlHooks = loadHooks(worktreePath)
+      const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+      setupTrustMismatch = checkCreatedWorktreeSetupTrust(
+        repo,
+        createdYamlHooks,
+        args.setupDecision,
+        args
+      )
+      // Only the approved content may run; the client re-prompts with the branch's.
+      const setupDecision = setupTrustMismatch ? 'skip' : args.setupDecision
+      try {
+        const launch = getDefaultTabsLaunch(createdYamlHooks, repo, setupDecision)
+        // Approving the branch's commands opens the command tabs later.
+        defaultTabs = setupTrustMismatch ? defaultTabsWithoutCommands(launch) : launch
       } catch (error) {
-        console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
-        if (
-          shouldWaitForSetupBeforeAgentStartup(
-            repo.hookSettings?.setupAgentStartupPolicy,
-            createdYamlHooks?.setupAgentStartupPolicy
-          )
-        ) {
-          setupPreparationFailure = new Error(
-            'Setup could not be prepared. Check the workspace hooks and try again.'
-          )
+        // Unapproved target-branch tab commands may create tabs but must not execute.
+        console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
+        defaultTabs = createdYamlHooks?.defaultTabs
+          ? { tabs: createdYamlHooks.defaultTabs, runCommands: false }
+          : undefined
+      }
+      const setupScript = createdEffectiveHooks?.scripts.setup
+      let shouldLaunchSetup = false
+      if (setupScript) {
+        try {
+          shouldLaunchSetup = shouldRunSetupForCreate(repo, setupDecision)
+        } catch (error) {
+          // Target branch can add unseen hooks; skip unapproved setup without failing the existing workspace.
+          console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
         }
       }
-    }
-  })
-
-  runtime.preparedWorkspaceSetup(
-    worktreeId,
-    Boolean(setup?.waitForAgentStartup || setupPreparationFailure)
-  )
-  // Startup resolves the new id before lifecycle notifications invalidate runtime caches.
-  runtime?.invalidateWorktreeCatalog?.(repo.id)
-  const stagedStartup = await timing.time('spawn_startup_terminal', () =>
-    spawnLocalStartupAndSetupTerminals({
-      runtime,
-      worktree,
-      repo,
-      request: args,
-      setup,
-      defaultTabs,
-      setupPreparationFailure,
-      automationCreate: Boolean(args.automationProvenance)
+      if (setupScript && shouldLaunchSetup) {
+        try {
+          // Main generates setup scripts without executing them; generation failure leaves the created workspace usable.
+          setup = await createSetupRunnerScript(
+            repo,
+            worktreePath,
+            setupScript,
+            localWorktreeGitOptionArgs[0],
+            resolveSetupRunnerShell(settings),
+            createdYamlHooks?.setupAgentStartupPolicy
+          )
+        } catch (error) {
+          console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
+          if (
+            shouldWaitForSetupBeforeAgentStartup(
+              repo.hookSettings?.setupAgentStartupPolicy,
+              createdYamlHooks?.setupAgentStartupPolicy
+            )
+          ) {
+            setupPreparationFailure = new Error(
+              'Setup could not be prepared. Check the workspace hooks and try again.'
+            )
+          }
+        }
+      }
     })
-  )
 
-  // Automation terminals are host-provisioned, so return none for renderer launch.
-  const provisionedByHost = Boolean(args.automationProvenance)
-  if (
-    provisionedByHost &&
-    !stagedStartup.startupTerminal &&
-    !stagedStartup.didSpawnSetup &&
-    (setup || defaultTabs?.tabs.length)
-  ) {
-    void runtime.provisionManagedWorktreeTerminals(
-      {
-        worktreeSelector: `id:${worktree.id}`,
-        worktreeId: worktree.id,
-        worktreePath: worktree.path,
-        ...(setup ? { setup } : {}),
-        ...(defaultTabs ? { defaultTabs } : {}),
-        hasStartupTerminal: false,
-        setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
-        surfaceOwner: false
-      },
-      worktree
+    runtime.preparedWorkspaceSetup(
+      worktreeId,
+      Boolean(setup?.waitForAgentStartup || setupPreparationFailure)
     )
-  }
+    // Startup resolves the new id before lifecycle notifications invalidate runtime caches.
+    runtime?.invalidateWorktreeCatalog?.(repo.id)
+    const stagedStartup = await timing.time('spawn_startup_terminal', () =>
+      spawnLocalStartupAndSetupTerminals({
+        runtime,
+        worktree,
+        repo,
+        request: args,
+        setup,
+        defaultTabs,
+        setupPreparationFailure,
+        automationCreate: Boolean(args.automationProvenance)
+      })
+    )
 
-  notifyLineageRepos(
-    (repoId) => notifyWorktreesChanged(mainWindow, repoId),
-    repo.id,
-    worktreeLineage?.parentWorktreeId
-  )
-  const createWarning = [includeCopyWarning, addResult.upstreamWarning, stagedStartup.warning]
-    .filter((warning): warning is string => Boolean(warning))
-    .reduce<string | undefined>(appendWorktreeCreateWarning, undefined)
-  return {
-    worktree: {
-      ...worktree,
-      workspaceLineage,
-      ...(worktreeLineage
-        ? { lineage: worktreeLineage, parentWorktreeId: worktreeLineage.parentWorktreeId }
-        : {})
-    },
-    ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
-    ...(workspaceLineage ? { workspaceLineage } : {}),
-    ...(crossStoreLineage ? { crossStoreLineage } : {}),
-    ...(provisionedByHost
-      ? {}
-      : {
-          ...(stagedStartup.activationSetup
-            ? { setup: stagedStartup.activationSetup }
-            : setup && !stagedStartup.didSpawnSetup
-              ? { setup }
-              : {}),
-          ...(!stagedStartup.didProvision && defaultTabs ? { defaultTabs } : {})
-        }),
-    ...(addResult.localBaseRefRefresh
-      ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
-      : {}),
-    ...(addResult.localBaseRefUpdateSuggestion
-      ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
-      : {}),
-    ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
-    ...(baseFallback ? { baseFallback } : {}),
-    ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
-    ...(createWarning ? { warning: createWarning } : {}),
-    timing: timing.finish()
+    // Automation terminals are host-provisioned, so return none for renderer launch.
+    const provisionedByHost = Boolean(args.automationProvenance)
+    if (
+      provisionedByHost &&
+      !stagedStartup.startupTerminal &&
+      !stagedStartup.didSpawnSetup &&
+      (setup || defaultTabs?.tabs.length)
+    ) {
+      void runtime.provisionManagedWorktreeTerminals(
+        {
+          worktreeSelector: `id:${worktree.id}`,
+          worktreeId: worktree.id,
+          worktreePath: worktree.path,
+          ...(setup ? { setup } : {}),
+          ...(defaultTabs ? { defaultTabs } : {}),
+          hasStartupTerminal: false,
+          setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
+          surfaceOwner: false
+        },
+        worktree
+      )
+    }
+
+    notifyLineageRepos(
+      (repoId) => notifyWorktreesChanged(mainWindow, repoId),
+      repo.id,
+      worktreeLineage?.parentWorktreeId
+    )
+    const createWarning = [includeCopyWarning, addResult.upstreamWarning, stagedStartup.warning]
+      .filter((warning): warning is string => Boolean(warning))
+      .reduce<string | undefined>(appendWorktreeCreateWarning, undefined)
+    return {
+      worktree: {
+        ...worktree,
+        workspaceLineage,
+        ...(worktreeLineage
+          ? { lineage: worktreeLineage, parentWorktreeId: worktreeLineage.parentWorktreeId }
+          : {})
+      },
+      ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
+      ...(workspaceLineage ? { workspaceLineage } : {}),
+      ...(crossStoreLineage ? { crossStoreLineage } : {}),
+      ...(provisionedByHost
+        ? {}
+        : {
+            ...(stagedStartup.activationSetup
+              ? { setup: stagedStartup.activationSetup }
+              : setup && !stagedStartup.didSpawnSetup
+                ? { setup }
+                : {}),
+            ...(!stagedStartup.didProvision && defaultTabs ? { defaultTabs } : {})
+          }),
+      ...(addResult.localBaseRefRefresh
+        ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
+        : {}),
+      ...(addResult.localBaseRefUpdateSuggestion
+        ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
+        : {}),
+      ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
+      ...(baseFallback ? { baseFallback } : {}),
+      ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
+      ...(createWarning ? { warning: createWarning } : {}),
+      timing: timing.finish()
+    }
+  } catch (error) {
+    runtime.refuseWorkspaceSetup(worktreeId)
+    throw error
   }
 }

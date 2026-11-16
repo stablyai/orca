@@ -195,16 +195,26 @@ describe('submitFolderWorkspaceCreate on an Orca server', () => {
   })
 })
 
-it.each([
-  { agent: 'codex', delivery: 'draft' },
-  { agent: 'claude', delivery: null },
-  { agent: 'autohand', delivery: 'auto-submit' }
-] as const)(
-  'preserves the actual paired $agent delivery through schemas and the host starter ($delivery)',
-  async ({ agent, delivery }) => {
+it.each(
+  (
+    [
+      { agent: 'codex', delivery: 'draft' },
+      { agent: 'claude', delivery: null },
+      { agent: 'autohand', delivery: 'auto-submit' }
+    ] as const
+  ).flatMap((scenario) => [
+    { ...scenario, runtimeEnvironmentId: 'paired' },
+    { ...scenario, runtimeEnvironmentId: null }
+  ])
+)(
+  'preserves $agent delivery through schemas and the host starter ($delivery, $runtimeEnvironmentId)',
+  async ({ agent, delivery, runtimeEnvironmentId }) => {
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'setup-tab' })
     mocks.seedDraft.mockClear()
-    const projectGroup = { ...makeProjectGroup(), executionHostId: 'runtime:paired' as const }
+    const projectGroup = {
+      ...makeProjectGroup(),
+      ...(runtimeEnvironmentId ? { executionHostId: 'runtime:paired' as const } : {})
+    }
     useAppStore.setState({
       runtimeStatusByEnvironmentId: new Map([
         [
@@ -295,7 +305,7 @@ it.each([
       projectGroup,
       setupSupported: true,
       setupApproval: { setupDecision: 'skip' },
-      runtimeEnvironmentId: 'paired',
+      runtimeEnvironmentId,
       name: 'Linked task',
       lastAutoName: '',
       linkedWorkItem:

@@ -1,3 +1,4 @@
+import { dispatchSetupGatedPty } from './spawn-required-setup'
 import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import { ptyIncarnationById } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
@@ -126,8 +127,7 @@ export async function executePtySpawn(
             if (refusal) {
               throw new SavedResumeFreshRefusal(refusal)
             }
-            validateDispatch()
-            providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+            providerResult = await dispatchSetupGatedPty(ctx, validateDispatch)
             ctx.rejectedRegistrationCandidate = providerResult
             // Lower-owner success proves physical commit even when registration observes an early exit.
             facts.reportPtySpawnCommitted?.()
@@ -163,8 +163,7 @@ export async function executePtySpawn(
         facts.suppressRefusedLaunch?.()
         delete args.agentSessionEnsure
         delete ctx.spawnOptions.agentSessionEnsure
-        validateDispatch()
-        providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+        providerResult = await dispatchSetupGatedPty(ctx, validateDispatch)
         facts.reportPtySpawnCommitted?.()
         ctx.stablePaneOwner = null
       }
@@ -187,10 +186,12 @@ export async function executePtySpawn(
       if (!facts.attachOnlyView) {
         await chooseFresh()
       }
-      validateDispatch()
+      if (facts.attachOnlyView) {
+        validateDispatch()
+      }
       ctx.result = facts.attachOnlyView
         ? await attachViewWithoutOwner(ctx.provider, ctx.spawnOptions)
-        : await ctx.provider.spawn(ctx.spawnOptions)
+        : await dispatchSetupGatedPty(ctx, validateDispatch)
       facts.reportPtySpawnCommitted?.()
       ctx.stablePaneOwner = null
       ctx.rejectedRegistrationCandidate = ctx.result

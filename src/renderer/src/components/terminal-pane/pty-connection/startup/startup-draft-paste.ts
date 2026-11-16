@@ -23,6 +23,8 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
           'render-quiet-after-bracketed-paste'
       )
     : null
+  let setupWaitInFlight = false
+  let earlyReadinessData = ''
   let startupDraftReadinessArmed = false
   let startupDraftPasteSettled = !session.ownsStartupDraftPaste
   let startupDraftPasteInFlight = false
@@ -144,13 +146,33 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     }, STARTUP_DRAFT_PASTE_QUIET_MS)
   }
   session.armStartupDraftReadinessObservation = (): void => {
-    if (!startupDraftReadyScanner || startupDraftReadinessArmed) {
+    if (!startupDraftReadyScanner || startupDraftReadinessArmed || setupWaitInFlight) {
       return
     }
-    startupDraftReadinessArmed = true
-    armStartupDraftHardTimer()
+    const ptyId = getStartupDraftPtyId()
+    if (!ptyId) {
+      return
+    }
+    setupWaitInFlight = true
+    void inspectRuntimeTerminalProcess(ptyId, { waitForSetup: true })
+      .then(() => {
+        if (getStartupDraftPtyId() !== ptyId || startupDraftPasteSettled) {
+          return
+        }
+        startupDraftReadinessArmed = true
+        armStartupDraftHardTimer()
+        const data = earlyReadinessData
+        earlyReadinessData = ''
+        session.observeStartupDraftPasteReadiness(data)
+      })
+      .catch(() => {
+        startupDraftPasteSettled = true
+      })
   }
   session.observeStartupDraftPasteReadiness = (data: string): void => {
+    if (setupWaitInFlight && !startupDraftReadinessArmed && !startupDraftPasteSettled) {
+      earlyReadinessData = (earlyReadinessData + data).slice(-64 * 1024)
+    }
     if (!startupDraftReadyScanner || !startupDraftReadinessArmed || startupDraftPasteSettled) {
       return
     }

@@ -1,3 +1,8 @@
+import {
+  preparePosixSetupMarkers,
+  PREPARE_WINDOWS_SETUP_MARKERS,
+  setupMarkerPath
+} from './setup-marker-cleanup'
 import { setupCompletionPrefix } from './setup-completion-token'
 import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argument-quoting'
 import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
@@ -5,6 +10,8 @@ import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/cod
 import { getPosixClaudeShellFunction } from '../../shell/launch/agents/claude-shell-function'
 import {
   nativeWindowsPathToPosixShellPath,
+  nativeWindowsPathToWslShellPath,
+  isWslExecutable,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
@@ -45,6 +52,7 @@ export function createSequencedSetupAgentCommands(args: {
   shell?: SetupRunnerShell
   nonce?: string
   waitTimeoutSeconds?: number
+  startupShell?: 'posix' | 'cmd' | 'powershell'
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
   const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform, args.shell)
@@ -52,10 +60,12 @@ export function createSequencedSetupAgentCommands(args: {
   // which still launch through resolution.command. PowerShell cannot parse the POSIX escaping.
   const posixGateForWindowsRunner = resolution.shell === 'windows' && args.shell?.family === 'posix'
   const markerBasePath = posixGateForWindowsRunner
-    ? nativeWindowsPathToPosixShellPath(resolution.runnerScriptPathForShell)
+    ? (isWslExecutable(args.shell?.executable)
+        ? nativeWindowsPathToWslShellPath
+        : nativeWindowsPathToPosixShellPath)(resolution.runnerScriptPathForShell)
     : resolution.runnerScriptPathForShell
   // Use distinct markers for overlapping launches of one setup runner.
-  const markerPath = `${markerBasePath}.${nonce}.done`
+  const markerPath = setupMarkerPath(markerBasePath, nonce)
   const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
@@ -66,7 +76,12 @@ export function createSequencedSetupAgentCommands(args: {
         markerPath,
         nonce
       ),
-      startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
+      startupCommand: buildWindowsStartupCommand(
+        markerPath,
+        nonce,
+        waitTimeoutSeconds,
+        args.startupShell
+      ),
       startupEnv: {
         [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
       }
@@ -104,6 +119,7 @@ function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: 
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
 
   return [
+    preparePosixSetupMarkers(markerPath),
     `rm -f ${marker} ${tmp} 2>/dev/null`,
     setupCommand,
     'status=$?',
@@ -121,22 +137,30 @@ function buildPosixStartupScript(
   waitTimeoutSeconds: number
 ): string {
   const marker = quotePosixShellUnlessPlainNoAt(markerPath)
-  const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const startupSuccessCommand = buildPosixStartupSuccessCommand(startupCommand)
   // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
   const script = [
+    'waitdir="";',
+    'for waitroot in "${TMPDIR:-/tmp}" /tmp; do',
+    'waitdir=$(mktemp -d "$waitroot/orca-setup-wait.XXXXXXXX") || continue;',
+    'if mkfifo "$waitdir/timer" && { exec 3<>"$waitdir/timer"; }; then',
+    'rm -f "$waitdir/timer"; rmdir "$waitdir"; break;',
+    'fi;',
+    'rm -f "$waitdir/timer"; rmdir "$waitdir"; waitdir="";',
+    'done;',
+    // One persistent timer only if this host cannot create FIFOs; read -t still wakes without forking.
+    `if [ -z "$waitdir" ]; then exec 3< <(exec sleep ${timeout}); timerpid=$!; trap 'kill "$timerpid" 2>/dev/null; wait "$timerpid" 2>/dev/null' EXIT; fi;`,
     `deadline=$((SECONDS + ${timeout}));`,
     'echo "Waiting for setup to finish before starting agent..." >&2;',
     'while :; do',
     `if [ -f ${marker} ]; then`,
     `IFS=: read -r seen status < ${marker} || true;`,
     `if [ "$seen" = ${nonceValue} ]; then`,
-    `rm -f ${marker} ${tmp} 2>/dev/null;`,
     // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
     // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
-    `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    `if [ "$status" = "0" ]; then exec 3>&-; if [ -n "\${timerpid:-}" ]; then kill "$timerpid" 2>/dev/null; wait "$timerpid" 2>/dev/null; trap - EXIT; fi; echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     `echo "Setup failed (exit \${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
     'exit "${status:-1}";',
     'fi;',
@@ -145,7 +169,7 @@ function buildPosixStartupScript(
     'echo "Timed out waiting for setup before starting agent." >&2;',
     'exit 124;',
     'fi;',
-    'sleep 1;',
+    'IFS= read -r -t 1 -u 3 unused || true;',
     'done'
   ].join(' ')
 
@@ -205,6 +229,7 @@ function buildWindowsSetupCommand(
     `$runner = ${quotePowerShellLiteral(runnerScriptPath)}`,
     `$marker = ${quotePowerShellLiteral(markerPath)}`,
     '$tmp = $marker + ".tmp"',
+    PREPARE_WINDOWS_SETUP_MARKERS,
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
     'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
@@ -228,7 +253,8 @@ function buildWindowsSetupCommand(
 function buildWindowsStartupCommand(
   markerPath: string,
   nonce: string,
-  waitTimeoutSeconds: number
+  waitTimeoutSeconds: number,
+  startupShell: 'posix' | 'cmd' | 'powershell' = 'powershell'
 ): string {
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   // Use PowerShell for safe bounded marker polling; native Windows runners still launch through cmd.
@@ -247,7 +273,6 @@ function buildWindowsStartupCommand(
     '  [Console]::Error.WriteLine("Missing setup marker path.")',
     '  exit 1',
     '}',
-    '$tmp = $marker + ".tmp"',
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
     '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
@@ -256,7 +281,6 @@ function buildWindowsStartupCommand(
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
     '    if ($content -match "^([0-9A-Za-z_-]+):([0-9]+)$" -and $Matches[1] -eq $nonce) {',
     '      $setupStatus = [int]$Matches[2]',
-    '      Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '      if ($setupStatus -ne 0) {',
     '        [Console]::Error.WriteLine("Setup failed (exit $setupStatus); skipping agent startup. See the Setup terminal for details.")',
     '        exit $setupStatus',
@@ -267,7 +291,15 @@ function buildWindowsStartupCommand(
     '        exit 1',
     '      }',
     `      [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_COMPLETE_MESSAGE)})`,
-    '      Invoke-Expression $startup',
+    ...(startupShell === 'cmd'
+      ? [
+          '      $info = [System.Diagnostics.ProcessStartInfo]::new()',
+          '      $info.FileName = $env:ComSpec',
+          `      $info.Arguments = '/d /s /c "' + $startup + '"'`,
+          '      $info.UseShellExecute = $false',
+          '      $child = [System.Diagnostics.Process]::Start($info); $child.WaitForExit(); exit $child.ExitCode'
+        ]
+      : ['      Invoke-Expression $startup']),
     '      if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }',
     '      if (-not $?) { exit 1 }',
     '      exit 0',

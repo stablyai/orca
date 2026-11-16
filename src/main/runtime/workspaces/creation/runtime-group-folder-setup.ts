@@ -93,11 +93,16 @@ export async function prepareGroupFolderCreation(args: {
     }
   }
   args.ports.setupPrepared?.(folderWorkspaceKey(workspace.id), prepared?.requiredSetup === true)
-  if (prepared?.setupPreparationFailure) args.ports.setupFailed?.(folderWorkspaceKey(workspace.id))
+  if (prepared?.setupPreparationFailure) {
+    args.ports.setupFailed?.(folderWorkspaceKey(workspace.id))
+  }
   if (
     input.rendererOwnsSetup &&
     input.agentLaunchMode !== 'structured' &&
-    !prepared?.requiredSetup
+    !prepared?.requiredSetup &&
+    !input.startupCommand &&
+    !input.startupAgent &&
+    !input.startupDraft
   ) {
     result.setup = prepared?.setup
     return result
@@ -116,7 +121,8 @@ export async function prepareGroupFolderCreation(args: {
       : {}),
     startupLaunchSource: input.launchSource,
     awaitTerminalProvisioning: true,
-    observeSetupCompletion: true,
+    observeSetupCompletion:
+      prepared?.requiredSetup === true || input.agentLaunchMode === 'structured',
     setupOnly: input.agentLaunchMode === 'structured'
   }
   const built = await resolveManagedWorktreeCreateStartup(
