@@ -10,7 +10,7 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/sessi
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
-import { assertBrowserPageInventoryFrames } from '../session-tabs/mobile-session-inventory-base'
+import { assertBrowserPageInventoryFrames } from '../session-tabs/inventory/mobile-session-inventory-base'
 
 type Graph = RuntimeSyncWindowGraph
 

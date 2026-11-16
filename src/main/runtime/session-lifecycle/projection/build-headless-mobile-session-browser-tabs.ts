@@ -1,7 +1,7 @@
 import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
-import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
+import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-retirement/terminal-surface-retirements'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTerminalTab
@@ -12,7 +12,7 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
+import { holdAgentSessionInventory } from '../../session-tabs/inventory/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   captureTerminalCloseRequest,

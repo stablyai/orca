@@ -32,13 +32,13 @@ import {
   settleFailedAgentSessionAcquisition,
   settleFailedAgentSessionPostAcquisitionAttachment,
   type AgentSessionFailedAcquisitionSettlement
-} from '../agent-session-acquisition-failure-settlement'
+} from '../ownership/agent-session-acquisition-failure-settlement'
 import {
   initializeAgentSessionTabs,
   effectiveAgentSessionTabs,
   setAgentSessionTabVisibility,
   showAgentSessionTabs
-} from '../agent-session-tab-table'
+} from './agent-session-tab-table'
 import { commitAgentSessionFounding } from './agent-session-founding-admission'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 
