@@ -228,7 +228,7 @@ describe('startCodexSessionBackfillInBackground', () => {
         writeManagedSession(join('2026', '05', '26', 'rollout-baseline.jsonl'), 'baseline\n')
         await startCodexSessionBackfillInBackground()
         if (trigger === 'recovery') {
-          markLaunchPending(['2026', '10', '25'])
+          markLaunchPending(['2026', '10', timeZone === 'Asia/Seoul' ? '25' : '28'])
           await startCodexSessionBackfillInBackground({ retainPendingScanDates: true })
         }
         writeManagedSession(join('2026', '10', '26', 'rollout-26.jsonl'), 'day 26\n')
