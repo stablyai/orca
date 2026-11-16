@@ -84,9 +84,9 @@ function RetainedHistoryChoice({
   t: Translate
 }): React.JSX.Element {
   const checkboxId = useId()
-  // One fixed-height slot for every state so the dialog never moves while measuring.
+  // Tall enough for every state's text (the two-line failure included) so the dialog never moves.
   const slot =
-    'flex min-h-14 items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm'
+    'flex min-h-15 items-start gap-2 rounded-md border border-border/70 px-3 py-2 text-sm'
   if (history.status === 'failed') {
     return (
       <div className={`${slot} items-center justify-between`}>
