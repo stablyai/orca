@@ -151,6 +151,8 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   expect(await state.reads.submissionBody(id)).toStrictEqual(body)
   expect((await state.reads.submission(id))?.payloadFingerprint).toBe(immutable?.payloadFingerprint)
   expect(await state.reads.receiptFor(id)).not.toEqual(receipt)
+  // The acceptance wakes delivery; its agent start moves live authority, so history waits for it to park.
+  await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
   await published()
 })
 
