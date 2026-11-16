@@ -17,6 +17,7 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
 
 import { sendNativeChatMessage } from './native-chat-runtime-send'
 import { resetNativeChatPtySendQueuesForTests } from './native-chat-pty-send-queue'
+import { nativeChatExpectedLine, nativeChatLineShowsMessage } from './native-chat-paste-landed'
 
 const CTRL_U = '\x15'
 
@@ -71,5 +72,19 @@ describe('sendNativeChatMessage input line ownership', () => {
 
     await vi.advanceTimersByTimeAsync(100)
     expect(writes).toEqual(['Reply with PONG', '\r'])
+  })
+})
+
+describe('nativeChatLineShowsMessage', () => {
+  it('accepts a long token the agent wrapped across rows', () => {
+    const text = 'see https://github.com/org/repo/blob/0123456789abcdef/src/file.ts#L120'
+    const line = 'see https://github.com/org/repo/blob/012345678\n9abcdef/src/file.ts#L120'
+    expect(nativeChatLineShowsMessage(line, nativeChatExpectedLine(text))).toBe(true)
+  })
+
+  it('does not take an image chip as proof of the caption', () => {
+    const expected = nativeChatExpectedLine('Reply with PONG')
+    expect(nativeChatLineShowsMessage('[Image #1]', expected)).toBe(false)
+    expect(nativeChatLineShowsMessage('[Image #1] Reply with PONG', expected)).toBe(true)
   })
 })

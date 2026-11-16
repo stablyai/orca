@@ -17,18 +17,28 @@ export function readNativeChatInputLine(
 }
 
 // Placeholders agents draw for pasted text and images instead of the content.
-const PASTE_CHIPS =
-  /\[(?:Pasted text #\d+(?: \+\d+ lines)?|Image #\d+|Pasted Content \d+ chars)\](?: #\d+)?/g
+const IMAGE_CHIP = /\[Image #\d+\]/g
+const TEXT_PASTE_CHIP =
+  /\[(?:Pasted text #\d+(?: \+\d+ lines)?|Pasted Content \d+ chars)\](?: #\d+)?/g
 
-const collapse = (text: string): string => text.replace(/\s+/g, ' ').trim()
+// Rows wrap long tokens with a line break, so compare without any whitespace.
+const squash = (text: string): string => text.replace(/\s+/g, '')
 
-/** Whether the line shows the whole message: its exact text, or only the chips an agent draws for
- *  a paste, so a fragment of a paste still arriving never counts. */
-export function nativeChatLineShowsMessage(line: string, text: string): boolean {
-  const rest = collapse(line.replace(PASTE_CHIPS, ' '))
-  return (
-    rest === collapse(sanitizeBracketedPasteText(text)) || (rest === '' && rest !== collapse(line))
-  )
+/** Whether the line shows the whole message, given `expected` from nativeChatExpectedLine: its
+ *  text, or a text-paste chip; image chips alone prove only an image-only send. */
+export function nativeChatLineShowsMessage(line: string, expected: string): boolean {
+  const withoutImages = line.replace(IMAGE_CHIP, '')
+  const rest = squash(withoutImages.replace(TEXT_PASTE_CHIP, ''))
+  if (rest !== squash(withoutImages)) {
+    return rest === ''
+  }
+  // Claude draws a leading `!` as its bash-mode marker rather than as text.
+  return rest === expected || (expected.startsWith('!') && rest === expected.slice(1))
+}
+
+/** The message as the line can show it, computed once per send. */
+export function nativeChatExpectedLine(text: string): string {
+  return squash(sanitizeBracketedPasteText(text))
 }
 
 /** Enter during a paste the agent is still reading joins it as a newline. The line was empty before
@@ -46,6 +56,7 @@ export function afterNativeChatPasteLands(args: {
     submit()
     return
   }
+  const expected = nativeChatExpectedLine(text)
   // Wall clock, not poll count: a hidden window runs timers about once a second.
   const deadline = Date.now() + NATIVE_CHAT_PASTE_LANDED_MAX_WAIT_MS
   let previous: string | null = null
@@ -53,7 +64,7 @@ export function afterNativeChatPasteLands(args: {
     const line = readNativeChatInputLine(readInputLine)
     if (
       line === null ||
-      (line === previous && nativeChatLineShowsMessage(line, text)) ||
+      (line === previous && nativeChatLineShowsMessage(line, expected)) ||
       Date.now() >= deadline
     ) {
       submit()
