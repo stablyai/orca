@@ -63,7 +63,7 @@ export function WorkspaceCleanupSettingsPane({
     updateSettings
   )
   const rules = hostRules.state === 'ready' ? hostRules.rules : null
-  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview } =
+  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview, refreshReport } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
   const [pendingRule, setPendingRule] = useState<WorkspaceCleanupRuleKey | null>(null)
@@ -328,6 +328,7 @@ export function WorkspaceCleanupSettingsPane({
         hostScope={hostScope}
         settings={settings}
         updateSettings={updateSettings}
+        onChanged={refreshReport}
       />
       {showProtection ? (
         <SettingsGroup

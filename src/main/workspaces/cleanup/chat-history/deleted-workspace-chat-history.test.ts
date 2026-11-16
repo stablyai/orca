@@ -64,10 +64,22 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
           badgeColor: '',
           addedAt: 0,
           worktreeBasePath: join(root, 'unmounted')
+        },
+        {
+          // Sibling worktrees: the base is the folder holding the user's other projects.
+          id: 'sibling',
+          path: join(root, 'repos', 'sibling'),
+          displayName: 'sibling',
+          badgeColor: '',
+          addedAt: 0,
+          worktreeBasePath: '..'
         }
       ],
-      // Archived: the row stays while its folder is gone.
-      getAllWorktreeMeta: () => ({ [`app::${join(appWorkspaces, 'archived')}`]: {} })
+      // Archived: the row stays while its folder is gone, including one nested in a gone folder.
+      getAllWorktreeMeta: () => ({
+        [`app::${join(appWorkspaces, 'archived')}`]: {},
+        [`app::${join(appWorkspaces, 'team', 'feature')}`]: {}
+      })
     } as unknown as RuntimeStore
     const deleted: ChatHistoryTarget[] = []
 
@@ -83,11 +95,13 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('outside.jsonl', join(root, 'elsewhere', 'gone')),
         session('codex.jsonl', gone, { agent: 'codex' }),
         session('server.jsonl', gone, { executionHostId: 'runtime:env-1' }),
-        session('unmounted.jsonl', join(root, 'unmounted', 'feature'))
+        session('unmounted.jsonl', join(root, 'unmounted', 'feature')),
+        session('nested-archived.jsonl', join(appWorkspaces, 'team', 'feature')),
+        session('not-a-workspace.jsonl', join(root, 'repos', 'old-tool'))
       ],
       deleteSessions: async (targets) => {
         deleted.push(...targets)
-        return { deleted: targets.length, failed: 0, freedBytes: 42 }
+        return { deleted: targets.length, failed: 0, freedBytes: 21 * targets.length }
       }
     })
 

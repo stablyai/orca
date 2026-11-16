@@ -137,7 +137,7 @@ export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
         ),
         description: translate(
           'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspaceDescription',
-          "Agent chats from deleted workspaces are removed within the hour to free disk space. They can't be recovered."
+          "Agent chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         ),
         keywords: [
           ...translateSearchKeyword('components.settings.workspaceCleanup.search.chat', 'chat'),

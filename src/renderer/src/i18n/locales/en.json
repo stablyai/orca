@@ -22709,7 +22709,7 @@
           "confirmTitle": "Delete chat history from deleted workspaces?",
           "confirmDescription": "Orca will delete agent chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
           "deleteWithWorkspace": "Delete chat history with the workspace",
-          "deleteWithWorkspaceDescription": "Agent chats from deleted workspaces are removed within the hour to free disk space. They can't be recovered."
+          "deleteWithWorkspaceDescription": "Agent chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         }
       },
       "repository": {

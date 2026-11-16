@@ -40,6 +40,8 @@ import { deleteChatHistoryOfDeletedWorkspaces } from './chat-history/deleted-wor
 // Let the window restore its terminals and session drafts before the first evidence read.
 const STARTUP_DELAY_MS = 2 * 60 * 1000
 const HOURLY_MS = 60 * 60 * 1000
+// Listing every transcript costs a stat and a cache read per file, so hourly runs sweep chats less often.
+const CHAT_HISTORY_SWEEP_INTERVAL_MS = 6 * HOURLY_MS
 // One settings write per toggle; coalesce a burst of them into one run.
 const SETTINGS_DEBOUNCE_MS = 10 * 1000
 
@@ -66,6 +68,7 @@ export class WorkspaceCleanupRunner {
   private nextRunAt: number | null = null
   private enabledRules = new Set<string>()
   private chatHistoryOn = false
+  private lastChatHistorySweepAt = 0
   private unsubscribe: (() => void) | null = null
   private readonly abort = new AbortController()
 
@@ -293,7 +296,13 @@ export class WorkspaceCleanupRunner {
         rows.push({ ...ref, reason, ...outcome })
       }
       // After removals, so this run's deleted workspaces are gone from disk when the sweep looks.
-      if (this.readChatHistoryOn() && !this.abort.signal.aborted) {
+      if (
+        this.readChatHistoryOn() &&
+        !this.abort.signal.aborted &&
+        (trigger !== 'hourly' ||
+          startedAt - this.lastChatHistorySweepAt >= CHAT_HISTORY_SWEEP_INTERVAL_MS)
+      ) {
+        this.lastChatHistorySweepAt = startedAt
         chatHistory = await deleteChatHistoryOfDeletedWorkspaces(this.deps.store, this.abort.signal)
       }
     } catch (cause) {

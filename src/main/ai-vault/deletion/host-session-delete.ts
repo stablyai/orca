@@ -1,4 +1,5 @@
-import { lstat, rm } from 'node:fs/promises'
+import { lstat, readdir, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { getAiVaultWslHomeDirs } from '../discovery/ai-vault-scan-roots'
 import { invalidateAiVaultSessionListCache } from '../listing/cached-session-list'
 import { deleteAiVaultSessionFile, type AiVaultSessionPathRemover } from './session-delete'
@@ -75,6 +76,20 @@ export async function deleteHostAiVaultSession(
   return result
 }
 
+/** Bytes a removal frees; symlinks count as themselves, never their targets. */
+async function measurePathBytes(path: string): Promise<number> {
+  const stats = await lstat(path).catch(() => null)
+  if (!stats?.isDirectory()) {
+    return stats?.size ?? 0
+  }
+  const entries = await readdir(path).catch(() => [])
+  let total = 0
+  for (const entry of entries) {
+    total += await measurePathBytes(join(path, entry))
+  }
+  return total
+}
+
 /** Cleanup deletes for good: the Trash would keep the space it is meant to free. Caches clear once. */
 export async function deleteHostAiVaultSessionsPermanently(
   targets: readonly { agent: AiVaultAgent; filePath: string }[]
@@ -83,18 +98,19 @@ export async function deleteHostAiVaultSessionsPermanently(
   const deletedPaths: string[] = []
   let failed = 0
   let freedBytes = 0
+  // Measured per validated removal, so companion folders count and a refused removal doesn't.
+  const removeAndMeasure: AiVaultSessionPathRemover = async (removal) => {
+    const sizeBytes = await measurePathBytes(removal.path)
+    await removeAiVaultSessionPathPermanently(removal)
+    freedBytes += sizeBytes
+  }
   for (const target of targets) {
-    const sizeBytes = await lstat(target.filePath).then(
-      (stats) => stats.size,
-      () => 0
-    )
     const result = await deleteAiVaultSessionFile(
       { ...target, executionHostId: LOCAL_EXECUTION_HOST_ID, wslHomeDirs },
-      removeAiVaultSessionPathPermanently
+      removeAndMeasure
     )
     if (result.outcome === 'deleted') {
       deletedPaths.push(target.filePath)
-      freedBytes += sizeBytes
     } else {
       failed += 1
     }

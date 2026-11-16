@@ -25,11 +25,14 @@ import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-sett
 export function WorkspaceCleanupChatHistorySetting({
   hostScope,
   settings,
-  updateSettings
+  updateSettings,
+  onChanged
 }: {
   hostScope: SettingsHostScope
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  /** The switch decides whether the host schedules runs, so the page reads its report again. */
+  onChanged: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const query = useAppStateValue((state) => state.settingsSearchQuery)
@@ -53,6 +56,9 @@ export function WorkspaceCleanupChatHistorySetting({
     )
   })
   const [confirming, setConfirming] = useState(false)
+  const save = (next: boolean): void => {
+    void update(next).then(onChanged)
+  }
   const enabled = setting.state === 'ready' && setting.enabled
   if (!matchesSettingsSearch(query, [search])) {
     return null
@@ -84,7 +90,7 @@ export function WorkspaceCleanupChatHistorySetting({
           checked={enabled}
           disabled={setting.state !== 'ready'}
           // Turning it on deletes history from workspaces deleted before now, so it asks first.
-          onChange={() => (enabled ? void update(false) : setConfirming(true))}
+          onChange={() => (enabled ? save(false) : setConfirming(true))}
           ariaLabel={search.title}
         />
       </SearchableSetting>
@@ -112,7 +118,7 @@ export function WorkspaceCleanupChatHistorySetting({
               variant="destructive"
               onClick={() => {
                 setConfirming(false)
-                void update(true)
+                save(true)
               }}
             >
               {t('components.settings.workspaceCleanup.enable.turnOn', 'Turn on')}
