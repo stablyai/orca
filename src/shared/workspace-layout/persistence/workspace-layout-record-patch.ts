@@ -203,7 +203,7 @@ function changedKeys(before: Json, after: Json): string[] {
 }
 
 /** Deep equality where key order and undefined-valued keys do not count, as stableJson. */
-function sameJson(left: unknown, right: unknown): boolean {
+export function sameJson(left: unknown, right: unknown): boolean {
   if (left === right) {
     return true
   }

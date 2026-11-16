@@ -18,6 +18,7 @@ import type { WorkspaceLayoutModel } from '../../shared/workspace-layout/workspa
 import { patchStoredSession } from '../../shared/workspace-layout/persistence/workspace-layout-record-patch'
 import { saveWorkspaceLayout } from '../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { ShutdownReconnectFacts } from '../runtime/terminal/recovery/shutdown-reconnect-facts'
+import { scopeWindowPatch } from './window-patch-workspace-scope'
 
 const FIELD_OWNERS: Readonly<Record<string, string>> = SESSION_FIELD_OWNERS
 
@@ -77,10 +78,9 @@ function storedWithWindowView(
 
 function withMainLayoutFields<T extends WorkspaceSessionPatch>(
   save: T,
-  joined: WorkspaceSessionState,
+  mains: Readonly<Record<string, unknown>>,
   fields: readonly string[]
 ): T {
-  const mains: Readonly<Record<string, unknown>> = joined
   const result: Record<string, unknown> = { ...save }
   for (const field of fields) {
     result[field] = mains[field]
@@ -136,6 +136,26 @@ function withReconnectFacts<T extends WorkspaceSessionPatch>(
   return next
 }
 
+/** Join only the workspaces the patch changes when no record links them to the rest. */
+function patchedLayoutFields(
+  partition: ExecutionHostId,
+  stored: WorkspaceSessionState,
+  patch: WorkspaceSessionPatch,
+  fields: readonly string[]
+): Readonly<Record<string, unknown>> {
+  const window = { ...stored, ...patch }
+  const scope = scopeWindowPatch(stored, window, Object.keys(patch))
+  if (!scope) {
+    return storedWithWindowView(partition, stored, window)
+  }
+  const joined: Readonly<Record<string, unknown>> = storedWithWindowView(
+    partition,
+    scope.stored,
+    scope.window
+  )
+  return Object.fromEntries(fields.map((field) => [field, scope.merge(field, joined[field])]))
+}
+
 /** Merge carried layout fields; scalar-only patches skip layout normalization. */
 export function windowViewPatchForMain(
   stored: WorkspaceSessionState,
@@ -148,9 +168,10 @@ export function windowViewPatchForMain(
     return patch
   }
   const fields = Object.keys(patch).filter(isLayoutField)
-  const joined =
-    fields.length === 0 ? null : storedWithWindowView(partition, stored, { ...stored, ...patch })
-  const result = joined ? withMainLayoutFields(patch, joined, fields) : patch
+  const result =
+    fields.length === 0
+      ? patch
+      : withMainLayoutFields(patch, patchedLayoutFields(partition, stored, patch, fields), fields)
   // Replace only reconnect fields actually present in the patch.
   const carried = RECONNECT_FACT_FIELDS.filter((field) => Object.hasOwn(patch, field))
   return reconnectFacts && carried.length > 0
