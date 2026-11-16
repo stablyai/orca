@@ -139,4 +139,15 @@ describe('linked HEAD-only watcher bursts', () => {
 
     await vi.waitFor(() => expect(channels(watch)).toContain('worktrees:changed'))
   })
+
+  it('re-lists when the moved HEAD has no commit to publish', async () => {
+    const { commonDir, linkedPath } = createRepoWithLinkedWorktree()
+    const watch = createWatch(commonDir)
+    await refreshWorktreeHeadIdentities(watch, watch.headIdentityRefresh, false)
+    git(linkedPath, 'switch', '-q', '--orphan', 'scratch')
+
+    await flushLinkedHeadWrite(watch, commonDir)
+
+    await vi.waitFor(() => expect(channels(watch)).toContain('worktrees:changed'))
+  })
 })
