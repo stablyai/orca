@@ -19,11 +19,12 @@ export type NativeChatSendOptions = {
   readInputLine?: () => string | null | undefined
 }
 
+/** Clear a cancelled send's own body; the pre-send clear is sized for the old line, not the body. */
 export function clearUnsubmittedAgentInput(ptyId: string, options?: NativeChatSendOptions): void {
   if (options?.clearInput === '' || options?.clearInput === null) {
     return
   }
-  sendRuntimePtyInput(ptyId, options?.clearInput ?? AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
+  sendRuntimePtyInput(ptyId, AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
 }
 
 /** Clear before body. Agent TUIs take a clear that arrives with the body as pasted text and drop
@@ -64,7 +65,10 @@ export function clearThenWrite(
       writeBody()
       return
     }
-    clearAlone(AGENT_TUI_CLEAR_INPUT_MAX, writeBody)
+    clearAlone(AGENT_TUI_CLEAR_INPUT_MAX, () =>
+      // Never paste onto text the clear could not remove; it would be submitted with the message.
+      readNativeChatInputLine(options?.readInputLine) ? refuse() : writeBody()
+    )
   })
 }
 

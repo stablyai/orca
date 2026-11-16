@@ -5,6 +5,7 @@ import {
 import { agentImagePasteWrites } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { agentImagePastePath } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste-path'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import { BRACKETED_PASTE_START } from '../../../../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../../../../shared/native-chat/input/questions/native-chat-answer-stepping'
 import {
@@ -41,6 +42,7 @@ export function sendNativeChatMessageWithImageAttachments(
       imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
       trimmedText.length > 0
     ).map((data) => ({ data, delayBeforeMs: 0 }))
+    const mentions = typedImageMentions(writes)
     if (trimmedText) {
       writes.push({
         data: buildNativeChatPasteBytes(text),
@@ -50,7 +52,7 @@ export function sendNativeChatMessageWithImageAttachments(
     writes.push({
       data: NATIVE_CHAT_SUBMIT,
       delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
-      afterPasteOf: text
+      afterPasteOf: mentions + text
     })
     return sendNativeChatObservedWrites(ptyId, writes, options)
   }
@@ -75,24 +77,25 @@ export function sendNativeChatMessageWithImageAttachments(
           }
           markWriteStarted()
           const lineWasEmpty = readNativeChatInputLine(options?.readInputLine) === ''
+          const imageWrites = agentImagePasteWrites(
+            agent,
+            imagePaths.map((path) =>
+              buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
+            ),
+            trimmedText.length > 0
+          )
           const submitAfterPasteLands = (): void =>
             afterNativeChatPasteLands({
               readInputLine: options?.readInputLine,
               lineWasEmpty,
-              text,
+              text: typedImageMentions(imageWrites.map((data) => ({ data }))) + text,
               delay,
               submit: () => {
                 sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
                 markSubmitted()
               }
             })
-          for (const payload of agentImagePasteWrites(
-            agent,
-            imagePaths.map((path) =>
-              buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
-            ),
-            trimmedText.length > 0
-          )) {
+          for (const payload of imageWrites) {
             sendRuntimePtyInput(ptyId, payload, 'driving')
           }
           if (trimmedText.length > 0) {
@@ -111,4 +114,12 @@ export function sendNativeChatMessageWithImageAttachments(
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)
     }
   )
+}
+
+/** Agents without image paste get typed `@path` mentions, which the input line shows as text. */
+function typedImageMentions(writes: readonly { data: string }[]): string {
+  return writes
+    .map((write) => write.data)
+    .filter((data) => !data.startsWith(BRACKETED_PASTE_START))
+    .join('')
 }

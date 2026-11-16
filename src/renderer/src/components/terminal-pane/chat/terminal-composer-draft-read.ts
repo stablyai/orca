@@ -28,7 +28,9 @@ export function readTerminalComposerDraft(terminal: Terminal): string | null {
   const revision = revisionOf(terminal)
   const buffer = terminal.buffer.active
   // Buffer length catches terminal.clear(), which parses no output.
-  const key = `${buffer.type}:${buffer.length}:${buffer.baseY}:${buffer.cursorY}`
+  // The cursor row's text covers output parsed before onWriteParsed fires for its frame.
+  const cursorRow = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? ''
+  const key = `${buffer.type}:${buffer.length}:${buffer.baseY}:${buffer.cursorY}:${buffer.cursorX}:${cursorRow}`
   const cached = cache.get(terminal)
   if (cached && cached.revision === revision && cached.key === key) {
     return cached.value ?? null
