@@ -401,7 +401,7 @@ it('upgrades schema one atomically without trusting old forms or changing source
   })
 })
 
-it('records the original as last absorbed without copying its later profile metadata', async () => {
+it('binds the initial profile copy to its source without refreshing an authoritative winner', async () => {
   const root = directory()
   const filename = journalDatabasePath(root)
   const source = new Database(filename)
@@ -426,8 +426,7 @@ it('records the original as last absorbed without copying its later profile meta
   old.close()
   expect(captureJournalLegacySourceReceipt(filename)).not.toEqual(original)
   await initializeJournalDomainDatabase(root)
-  // The receipt names the original as last absorbed; old-build profile metadata stays there.
-  expect(JSON.parse(String(receipt()))).toEqual(captureJournalLegacySourceReceipt(filename))
+  expect(JSON.parse(String(receipt()))).toEqual(original)
   expect(
     destination
       .prepare("SELECT value FROM agent_session_store_meta WHERE key='old-build-append'")

@@ -12,7 +12,6 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { compareAgentJournalItems } from '../../../shared/agent-session/journal/agent-session-journal-position'
 import { restoreJournal } from './replay/journal-open'
-import { journalLegacyChatRevision } from './database/journal-legacy-source'
 import { failLoadOnUnloadableJournal } from './replay/journal-open-failure'
 import { restoredJournalPersonAcceptance } from './replay/journal-historical-inputs'
 import { readJournalLegacyCards } from './queued-messages/journal-queue-import'
@@ -96,8 +95,6 @@ export type JournalDomainImportHeader = {
   workspaceId: string
   epoch: string
   head: JournalDomainImportHead
-  /** The original chat's revision this conversion read; absent for chats founded here. */
-  sourceRevision?: string | null
 }
 
 export type JournalDomainImport = JournalDomainImportHeader & {
@@ -120,8 +117,6 @@ export function prepareJournalDomainImport(
   if (db.isTransaction) {
     throw new Error('journal domain import reads its frozen source outside a transaction')
   }
-  // Read before the restore: a later original write then leaves the recorded revision behind.
-  const sourceRevision = journalLegacyChatRevision(db, sessionId)
   const loaded = restoreJournal(db, sessionId)
   if (!loaded || (!loaded.newer && !loaded.damage && loaded.state.lastSequence === 0)) {
     return null
@@ -144,7 +139,6 @@ export function prepareJournalDomainImport(
         .workspace_id
     ),
     epoch: state.epoch,
-    sourceRevision,
     head: {
       lastSequence: state.lastSequence,
       highestFence: state.highestFence,
