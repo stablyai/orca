@@ -125,7 +125,14 @@ prompt
         { encoding: 'utf8', timeout: 20_000 }
       )
       expect(result.status).toBe(0)
-      expect(result.stdout).toContain(`/sub%20%C3%A9%2541%23\x07${promptMark}USER> `)
+      const encodedHome = home.replaceAll('\\', '/').split('/').map(encodeURIComponent).join('/')
+      const output = result.stdout.replaceAll(
+        `file://localhost/${encodedHome}`,
+        'file://localhost/HOME'
+      )
+      expect(output).toContain(
+        `\x1b]7;file://localhost/HOME/sub%20%C3%A9%2541%23\x07${promptMark}USER> `
+      )
     }
   )
 })
