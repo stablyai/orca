@@ -56,7 +56,7 @@ function readingSlot<T extends StampedReading>(
       planType: null,
       extraUsage: null,
       rateLimitResetCredits: null
-    } as T
+    }
   }
 }
 
