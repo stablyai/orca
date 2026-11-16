@@ -6,7 +6,6 @@ import type {
   AgentSenderAssociation,
   AgentSenderPublication
 } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
 import {
   structuredAgentSessionPaneKey,
@@ -115,7 +114,7 @@ function rebuiltIndex(state: AppState): Map<string, LocatedAgentSender | null> {
   return index
 }
 
-const HOSTS: ExecutionHostId[] = ['local', 'runtime:a', 'runtime:b']
+const HOSTS = ['local', 'runtime:a', 'runtime:b'] as const
 const FINGERPRINT: Record<string, string> = {
   local: 'fp-l',
   'runtime:a': 'fp-a',
