@@ -161,7 +161,11 @@ export function useMonacoGitBlame(params: {
 
     // Main answers from its commit-keyed cache unless HEAD moved, so reloading is one rev-parse.
     const loads = { generation: 0 }
-    const load = (): void => {
+    // `headMoved`: a HEAD change, after which the old baseline is no longer trustworthy.
+    const load = (headMoved = false): void => {
+      // Invalidate any pending reply first, including when no target resolves below.
+      loads.generation += 1
+      const generation = loads.generation
       const state = useAppStore.getState()
       const file = openFileById(state.openFiles, fileId)
       const target = file ? resolveGitBlameTarget(state, file) : null
@@ -172,11 +176,10 @@ export function useMonacoGitBlame(params: {
         update()
         return
       }
-      loads.generation += 1
-      const generation = loads.generation
       const known = loadedRef.current
       const sameFile =
-        known?.target.git.worktreePath === target.git.worktreePath &&
+        known?.target.git.worktreeId === target.git.worktreeId &&
+        known.target.git.worktreePath === target.git.worktreePath &&
         known.target.relativePath === target.relativePath
       // Main answers `unchanged` when HEAD hasn't moved, so a focus reload resends nothing.
       const knownHeadOid = sameFile ? known.blame.headOid : undefined
@@ -190,8 +193,8 @@ export function useMonacoGitBlame(params: {
           sameFile &&
           previous &&
           (result.kind === 'unchanged' ||
-            // A transient failure (reconnect, timeout) must not wipe blame that's still valid.
-            result.kind === 'unavailable' ||
+            // A failed focus reload keeps blame; after HEAD moved the old baseline is stale.
+            (result.kind === 'unavailable' && !headMoved) ||
             (result.kind === 'ready' && result.headOid === previous.blame.headOid))
         if (keep) {
           loadedRef.current = { ...previous, target }
@@ -233,7 +236,7 @@ export function useMonacoGitBlame(params: {
         headKey &&
         state.gitStatusHeadByWorktree[headKey] !== previous.gitStatusHeadByWorktree[headKey]
       ) {
-        load()
+        load(true)
       }
     })
     update()

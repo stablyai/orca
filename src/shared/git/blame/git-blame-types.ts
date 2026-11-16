@@ -14,6 +14,7 @@ export type GitBlameCommit = {
 export type GitBlameResult =
   | {
       kind: 'ready'
+      /** HEAD's oid, marked when the repo is shallow; echoed back as `knownHeadOid`. */
       headOid: string
       commits: GitBlameCommit[]
       ranges: number[]

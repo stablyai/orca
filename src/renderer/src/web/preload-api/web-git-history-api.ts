@@ -26,11 +26,16 @@ export function createGitHistoryApi(): Pick<PreloadApi['git'], 'history' | 'refs
     },
     blame: async ({ worktreePath, filePath, knownHeadOid }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.blame', {
-        worktree: toRuntimeWorktreeSelector(worktree.id),
-        filePath,
-        knownHeadOid
-      })
+      return callRuntimeResult(
+        'git.blame',
+        {
+          worktree: toRuntimeWorktreeSelector(worktree.id),
+          filePath,
+          knownHeadOid
+        },
+        // Large files with long history take seconds to blame, past the 30s default.
+        120_000
+      )
     }
   }
 }

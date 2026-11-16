@@ -34,18 +34,23 @@ export async function getBlame(
   if (!head) {
     return UNAVAILABLE
   }
-  if (head.oid === knownHeadOid) {
+  // Unshallowing keeps HEAD but changes blame, so shallowness is part of the baseline identity.
+  const baseline = head.shallow ? `${head.oid}+shallow` : head.oid
+  if (baseline === knownHeadOid) {
     return { kind: 'unchanged' }
   }
   const fileName = basename(filePath)
   const repoPath = `${head.prefix}${fileName}`
-  const key = `${head.commonDir}\0${head.oid}\0${repoPath}`
+  const key = `${head.commonDir}\0${baseline}\0${repoPath}`
   const cached = blameCache.get(key)
   if (cached) {
     return cached
   }
   return blameReadDedupe.run(key, async () => {
     const result = await readBlame(fileDir, fileName, repoPath, head.oid, options)
+    if (result.kind === 'ready') {
+      result.headOid = baseline
+    }
     if (result.kind !== 'unavailable') {
       blameCache.set(key, result)
     }
@@ -56,19 +61,35 @@ export async function getBlame(
 async function resolveHead(
   fileDir: string,
   options: GitRuntimeOptions
-): Promise<{ oid: string; commonDir: string; prefix: string } | null> {
+): Promise<{ oid: string; commonDir: string; prefix: string; shallow: boolean } | null> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['rev-parse', '--git-common-dir', '--show-prefix', '--verify', '--quiet', 'HEAD^{commit}'],
+      [
+        'rev-parse',
+        '--git-common-dir',
+        '--show-prefix',
+        '--is-shallow-repository',
+        '--verify',
+        '--quiet',
+        'HEAD^{commit}'
+      ],
       gitReadOptionsForWorktree(fileDir, options)
     )
     // The prefix line is empty at the repo root, so split without trimming inner lines.
-    const [commonDir, prefix, oid] = stdout.replace(/\r/g, '').replace(/\n$/, '').split('\n')
+    const [commonDir, prefix, shallow, oid] = stdout
+      .replace(/\r/g, '')
+      .replace(/\n$/, '')
+      .split('\n')
     if (!commonDir || prefix === undefined || !oid) {
       return null
     }
     const isAbsolute = /^([a-zA-Z]:)?[\\/]/.test(commonDir)
-    return { oid, prefix, commonDir: isAbsolute ? commonDir : `${fileDir}/${commonDir}` }
+    return {
+      oid,
+      prefix,
+      commonDir: isAbsolute ? commonDir : `${fileDir}/${commonDir}`,
+      shallow: shallow === 'true'
+    }
   } catch {
     // No commits yet, or not inside a repository.
     return null
@@ -91,7 +112,8 @@ async function runBlame(
 ): Promise<{ stdout: string } | 'too-large' | null> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['blame', '--root', '--incremental', oid, '--', fileName],
+      // Source-line coordinates: a textconv driver would renumber lines away from headText.
+      ['blame', '--root', '--incremental', '--no-textconv', oid, '--', fileName],
       {
         ...gitReadOptionsForWorktree(fileDir, options),
         ...(withoutGlobalConfig ? { env: withoutGlobalGitConfig() } : {})
