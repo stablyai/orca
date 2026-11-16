@@ -75,11 +75,27 @@ export function agentLaunchSetupState(
 }
 
 /** "Claude Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
+// Why: a closed picker reads no listings, so its trigger names models (and their levels) from the
+// last listing an open picker showed for that agent on that host.
+const shownCatalogs = new Map<string, AgentPickerEntry['catalog']>()
+const shownCatalogKey = (entry: AgentPickerEntry) =>
+  `${entry.agent}\u0000${entry.rows[0]?.executionHostId ?? 'local'}`
+
+export function rememberAgentPickerCatalogs(entries: readonly AgentPickerEntry[]): void {
+  for (const entry of entries) {
+    if (entry.catalog.origin !== 'unknown') {
+      shownCatalogs.set(shownCatalogKey(entry), entry.catalog)
+    }
+  }
+}
+
 export function agentLaunchSetupSummary(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft
 ): string[] {
-  const state = agentLaunchSetupState(entry, draft)
+  const shown =
+    entry.catalog.origin === 'unknown' ? shownCatalogs.get(shownCatalogKey(entry)) : undefined
+  const state = agentLaunchSetupState(shown ? { ...entry, catalog: shown } : entry, draft)
   const model =
     state.modelInArguments || !state.currentModel
       ? undefined

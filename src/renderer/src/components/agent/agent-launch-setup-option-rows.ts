@@ -58,20 +58,27 @@ function argumentsOwnedRow(
   }
 }
 
-/** Clearing Effort keeps the selected model, so its default is that model's inherited effort. */
-function textEffortDefaultLabel(
+/** Clearing Effort keeps the selected model, so its default is that model's inherited effort.
+ *  Why short: it sits in the effort row beside every level; the inherited level is its tooltip. */
+function textEffortDefaultChoice(
   kind: {
     choices: readonly { value: string; label: string }[]
     defaultValue: string
   },
   t: Translate = translate
-): string {
+): { value: string; label: string; description?: string } {
   const effort = kind.choices.find((choice) => choice.value === kind.defaultValue)?.label
-  return effort
-    ? t('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
-        value0: effort
-      })
-    : t('settings.sourceControl.actionModel.effortDefault', 'Default')
+  return {
+    value: TEXT_ACTION_DEFAULT_MODEL,
+    label: t('settings.sourceControl.actionModel.effortDefault', 'Default'),
+    ...(effort
+      ? {
+          description: t('agentPicker.sameAsTextDefault', 'Same as default · {{value0}}', {
+            value0: effort
+          })
+        }
+      : {})
+  }
 }
 
 export function agentLaunchSetupOptionRows(
@@ -145,12 +152,7 @@ export function agentLaunchSetupOptionRows(
                           ]
                         : []),
                       ...(entry.textGeneration.defaultLabel !== undefined
-                        ? [
-                            {
-                              value: TEXT_ACTION_DEFAULT_MODEL,
-                              label: textEffortDefaultLabel(option.kind, t)
-                            }
-                          ]
+                        ? [textEffortDefaultChoice(option.kind, t)]
                         : []),
                       ...option.kind.choices
                     ]

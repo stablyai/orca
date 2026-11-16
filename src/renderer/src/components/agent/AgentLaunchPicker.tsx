@@ -31,7 +31,7 @@ import { AgentLaunchPickerDropdown } from './AgentLaunchPickerDropdown'
 import { AgentLaunchDefaultsFields } from './AgentLaunchDefaultsFields'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
-import { agentLaunchSetupSummary } from './agent-launch-setup-state'
+import { agentLaunchSetupSummary, rememberAgentPickerCatalogs } from './agent-launch-setup-state'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
   agentPickerDraft,
@@ -166,6 +166,7 @@ export const AgentLaunchPicker = memo(
         onCatalogOpen?.(catalogAgent)
       }
     }, [catalogAgent, onCatalogOpen])
+    useEffect(() => rememberAgentPickerCatalogs(entries), [entries])
     const entry = entries.find((entry) => entry.agent === agent)
     const draft = entry
       ? ((value?.agent === entry.agent ? value : undefined) ??
