@@ -14,7 +14,7 @@ import type {
   WorkspacePort,
   WorkspacePortHostScanResult
 } from '../../../../../shared/workspace/ports/workspace-ports'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { LocalPortSection } from './local-port-section'

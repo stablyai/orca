@@ -1,5 +1,5 @@
 import { readOpenCodeNativeChatTranscriptTail } from './transcript-history/opencode/transcript-opencode'
-import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatMessage,
@@ -7,7 +7,7 @@ import type {
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
 import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
@@ -38,7 +38,7 @@ export type NativeChatLineDecoder = (line: string, fallbackId: string) => Native
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'claude') {
-    return decodeClaudeTranscriptLine
+    return decodeClaudeChatTranscriptLine
   }
   if (transcriptAgent === 'codex') {
     return decodeCodexTranscriptLine

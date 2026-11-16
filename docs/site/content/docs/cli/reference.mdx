@@ -161,7 +161,7 @@ orca workspace cleanup run --json
 orca workspace cleanup report --json
 ```
 
-`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
+`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. With **Delete chat history with the workspace** on, `run` also deletes Claude Code chats from workspaces that no longer exist. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
 
 ## Ports
 
@@ -473,6 +473,13 @@ Agent status hooks:
 orca agent hooks status --json
 orca agent hooks on --json
 orca agent hooks off --json
+```
+
+Before deleting the app, remove what Orca added outside its own folders (agent hooks, the `orca` command, the background service and `~/.orca/agent-hooks`). Projects, worktrees, chat history and settings stay:
+
+```bash
+orca uninstall
+orca uninstall --yes --json
 ```
 
 ## Agent habits

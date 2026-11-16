@@ -20,7 +20,9 @@ import {
   threeTabSurfaceRuntime
 } from './session-tabs-layout-moves.test-fixture'
 
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const row = (leafId: string) => `${SURFACE_TAB_ID}::${leafId}`
 

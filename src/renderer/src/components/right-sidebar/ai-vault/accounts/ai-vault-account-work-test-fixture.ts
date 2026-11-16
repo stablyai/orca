@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import * as paths from '../../../../../../shared/cross-platform-path'
+import * as paths from '../../../../../../shared/file-access/cross-platform-path'
 import * as equality from '../../../../../../shared/collections/structural-value-equality'
 import * as labels from '@/lib/provider-accounts/codex-account-display-label'
 import * as native from './ai-vault-native-account-index'

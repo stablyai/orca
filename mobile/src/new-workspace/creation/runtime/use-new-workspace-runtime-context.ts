@@ -1,6 +1,6 @@
 import { optionalSettingsRead } from '../../../settings/mobile-settings-read-operations'
 import { useCallback, useEffect, useState } from 'react'
-import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { RpcAcceptedResult } from '../../../transport/rpc/rpc-accepted-result'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'

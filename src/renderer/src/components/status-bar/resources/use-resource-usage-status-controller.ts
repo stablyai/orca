@@ -31,7 +31,7 @@ import {
   getRuntimeHostResourceNotices,
   toRuntimeHostResourceSamples
 } from '../host-connections/runtime-host-resources'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'

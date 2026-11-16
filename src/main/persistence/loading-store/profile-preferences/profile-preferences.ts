@@ -1,17 +1,17 @@
 import { normalizeFeatureTipIds } from '../../../../shared/feature-education/feature-tips'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { retireAtRestCommandSettings } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { OnboardingChecklistState } from '../../../../shared/onboarding/onboarding-state-types'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import {
   chatUiLaunchTipVariant,
   parseChatUiLaunchTipAudience,
   type ChatUiLaunchTipVariant
-} from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+} from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations

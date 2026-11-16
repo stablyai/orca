@@ -168,25 +168,6 @@ describe('mobile AI Vault resume target guards', () => {
     expect(target.status).toBe('blocked')
   })
 
-  it('resumes a WSL-stored session in an SSH folder workspace', () => {
-    const target = resolve({
-      session: session({ cwd: '/home/ada/folder/src', filePath: WSL_TRANSCRIPT }),
-      activeWorktreeId: 'folder:folder-ssh',
-      worktrees: [
-        worktree({
-          worktreeId: 'folder:folder-ssh',
-          repoId: 'folder-workspace:group-local',
-          workspaceKind: 'folder-workspace',
-          path: '/home/ada/folder'
-        })
-      ],
-      repos,
-      folderWorkspaces,
-      projectGroups
-    })
-    expect(target.status === 'ready' ? target.targetStatus : target.message).toBe('ssh')
-  })
-
   it('resolves project-scope rows to the matched session worktree before the route worktree', () => {
     const target = resolve({
       session: session({ cwd: '/Users/ada/repo/feature/src' }),

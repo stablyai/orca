@@ -1,9 +1,7 @@
 import { acpListedModels, acpSelectChoices } from './acp-select-choices'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
-import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { SessionConfigOption, SessionModelState } from '../generated/acp-protocol.generated'
 

@@ -1,4 +1,4 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import type { TerminalIdentityReadContext } from '../../../terminal/query/terminal-identity-read-context'
 import { ptyRecordForPaneKey } from '../../../terminal/query/pty-pane-record'
 import type { RuntimeTerminalAgentPresenceOptions } from '../../../terminal/query/runtime-terminal-agent-presence'
@@ -20,7 +20,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 import {
   structuredMailboxCustody,

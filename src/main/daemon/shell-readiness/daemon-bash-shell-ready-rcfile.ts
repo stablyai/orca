@@ -1,5 +1,6 @@
+import { BASH_CWD_REPORT_BLOCK } from '../../pty/shell-startup/shell-cwd-report'
 import { getPosixOmpShellWrapper } from '../../pty/shell-startup/omp-shell-wrapper'
-import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
+import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/shell/launch/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 import { getPosixCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'
@@ -51,11 +52,13 @@ ${getPosixOmpShellWrapper()}
 # Preserve the managed CODEX_HOME after user profiles.
 [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
 ${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}
+${BASH_CWD_REPORT_BLOCK}
 # OSC 133 C/D clears stale agent status when a CLI exits without a stop hook.
 __orca_initializing_wrapper=1
 __orca_osc133_precmd() {
   local exit_code=$?
   __orca_in_prompt_command=1
+  __orca_osc133_cwd_report
   if [[ -n "\${__orca_in_command:-}" ]]; then
     printf "\\033]133;D;%s\\007" "$exit_code"
     unset __orca_in_command

@@ -1,5 +1,5 @@
 import { wslDistroStoppedMessage } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
-import type { ReviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
+import type { ReviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 import {
   guardWslUncPathAccess,
   WslDistroStoppedError,

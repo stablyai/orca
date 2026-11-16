@@ -26,6 +26,7 @@ import {
 } from '../operations/structured-agent-session-command-turn'
 import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { structuredMailProviderBody } from '../../../runtime/orchestration/mailbox/structured-mail/structured-mail-provider-body'
 import {
   markStructuredAgentSessionInputUnadmitted,
   beginStructuredAgentSessionHandover,
@@ -65,6 +66,8 @@ export async function beginSubmissionHandover(
     )
     return null
   }
+  // The journal keeps what people see; the agent is sent only what it may act on.
+  const sent = structuredMailProviderBody(body)
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = await readContextStructuredAgentSessionTurnScope(ctx)
   let carried: StoppedHistoryDelivery | null = null
@@ -106,7 +109,7 @@ export async function beginSubmissionHandover(
       turnScope: AGENT_JOURNAL_THREAD_SCOPE,
       body
     })
-    return carried ? withStoppedHistory(body, carried.messages) : body
+    return carried ? withStoppedHistory(sent, carried.messages) : sent
   }
   // Preserve handover time so turn-open cannot re-anchor elapsed work.
   const requestedAt = await structuredAgentSessionHandoverOrigin(ctx.journal, submission)
@@ -130,7 +133,7 @@ export async function beginSubmissionHandover(
                   ? await dispatchSafely(
                       ctx,
                       clientMessageId,
-                      carried ? withStoppedHistory(body, carried.messages) : body,
+                      carried ? withStoppedHistory(sent, carried.messages) : sent,
                       requestedAt,
                       submission.options,
                       queued,

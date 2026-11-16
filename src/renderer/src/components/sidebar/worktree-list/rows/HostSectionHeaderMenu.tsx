@@ -29,7 +29,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { formatSshUserFacingError } from '@/components/settings/ssh/targets/ssh-user-facing-error'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { runtimePairingRepairRoute } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'

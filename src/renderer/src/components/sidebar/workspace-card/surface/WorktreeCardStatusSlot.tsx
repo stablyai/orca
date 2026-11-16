@@ -187,9 +187,9 @@ export function WorktreeCardStatusSlot({
     newCardStyle && isUnread
       ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
       : reviewLabel
-  // Working/permission own the lane; retain unread in accessible copy and restore its dot afterward.
-  const showNewCardUnreadAlert =
-    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
+  // The lane holds the card's only unread dot (agent rows and the folded pill draw none), so it
+  // stays on over working/permission glyphs; the corner ring keeps it legible against them.
+  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
   const reviewStaleRef = isReviewStale ? observeOffscreenAnimation : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,

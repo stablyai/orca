@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
-import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome/ui-chrome-types'
 import '../../../../shared/plugins/manifest/plugin-manifest'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/frames/plugin-tab-key'
 

@@ -4,7 +4,7 @@ import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
 import { getGitHubIssueUrlRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import { issueCacheSuffix } from '@/store/github/cache/cache-identity'

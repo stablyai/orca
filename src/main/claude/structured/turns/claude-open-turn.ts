@@ -1,4 +1,4 @@
-import type { AgentSessionContextUsage } from '../../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -50,7 +50,7 @@ export type ClaudeOpenTurnDeps = {
   /** The superseded turn's spawn calls get no announcement now. */
   turnSuperseded: () => void
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
-  endOpenWork: (completedAt: number, settles?: boolean) => void
+  endOpenWork: (sessionId: string | null, completedAt: number, settles?: boolean) => void
   onOpen?: () => void
 }
 
@@ -150,7 +150,7 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
-      this.deps.endOpenWork(observedAt)
+      this.deps.endOpenWork(this.current.sessionId, observedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: observedAt,
@@ -169,7 +169,7 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
-      this.deps.endOpenWork(turn.startedAt)
+      this.deps.endOpenWork(this.current.sessionId, turn.startedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: turn.startedAt,
@@ -230,7 +230,7 @@ export class ClaudeOpenTurn {
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
     // End suppressed work even when no turn is open, at the real settle time.
-    this.deps.endOpenWork(settled.completedAt, true)
+    this.deps.endOpenWork(this.current?.sessionId ?? null, settled.completedAt, true)
     if (this.current) {
       this.publish(
         this.current,

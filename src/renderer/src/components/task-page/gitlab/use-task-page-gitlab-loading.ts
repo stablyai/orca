@@ -8,9 +8,9 @@ import {
 } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
-import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
+import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab/gitlab-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
 

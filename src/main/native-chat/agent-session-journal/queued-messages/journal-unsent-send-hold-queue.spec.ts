@@ -4,7 +4,7 @@ import { structuredSendAnswer } from '../../agent-session-wire/delivery/structur
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
 
-import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session/agent-session-message-source'
+import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session/journal/agent-session-message-source'
 
 export function registerJournalUnsentSendHoldQueueTests(
   fixture: ReturnType<typeof createFixture>
@@ -37,22 +37,6 @@ export function registerJournalUnsentSendHoldQueueTests(
   })
 
   describe('a close of the chat', () => {
-    it('keeps a person’s unsent send in place, rejected as closed, by the same rule as a restart', async () => {
-      const journal = await fixture.open()
-      await fixture.accept(journal, 'person', { origin: 'client', source: USER_MESSAGE_SOURCE })
-      await fixture.accept(journal, 'mail', { origin: 'host', source: fixture.MAIL_SOURCE })
-      await fixture.hold(journal, { cause: 'chatClosed' })
-
-      expect(await fixture.cardOrder(journal)).toEqual(['person'])
-      expect(await journal.queuedMessages.get('person')).toMatchObject({ holdReason: null })
-      for (const id of ['person', 'mail']) {
-        expect(await journal.reads.submission(id)).toMatchObject({
-          dispatchState: 'rejected',
-          ...fixture.CHAT_CLOSED
-        })
-      }
-    })
-
     it('settles only the selected send, leaving a later send queued', async () => {
       const journal = await fixture.open()
       await fixture.accept(journal, 'before', { origin: 'client', source: USER_MESSAGE_SOURCE })

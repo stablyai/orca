@@ -1,5 +1,5 @@
 import { posix } from 'node:path'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import '../../shared/worktree/id'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { computeWorktreePath } from './worktree-logic'

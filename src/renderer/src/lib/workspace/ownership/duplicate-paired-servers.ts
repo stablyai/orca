@@ -2,7 +2,7 @@
  * Saved servers that are one machine paired twice. Each publishes the same workspaces, so a write to
  * any of them is ambiguous until the user removes one entry.
  */
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { translate } from '@/i18n/i18n'

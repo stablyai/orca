@@ -1,10 +1,10 @@
 import { FOLDER_WORKSPACE_REMOVAL_DOMAINS, type ProfileSaveDomains } from '../profile-save-domains'
 import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces/folder-workspaces'
 import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/work-items/task-source-context'
@@ -16,7 +16,7 @@ import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState

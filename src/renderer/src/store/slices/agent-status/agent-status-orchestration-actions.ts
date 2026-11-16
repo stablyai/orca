@@ -3,7 +3,7 @@ import {
   recordOrchestrationProducer,
   orchestrationProducer
 } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext

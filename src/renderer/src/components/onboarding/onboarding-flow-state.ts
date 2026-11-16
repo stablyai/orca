@@ -6,7 +6,7 @@ import {
   ONBOARDING_FLOW_VERSION
 } from '../../../../shared/onboarding/onboarding-defaults'
 import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS, type AgentSurface } from './use-onboarding-flow-types'

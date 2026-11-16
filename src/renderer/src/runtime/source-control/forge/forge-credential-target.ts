@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseHostAuthorityKey } from '../../../../../shared/execution-host/host-authority'
 import { reviewRepositoryMatchesWorkspace } from '@/lib/source-control/review/review-owner'
 import { translate } from '@/i18n/i18n'

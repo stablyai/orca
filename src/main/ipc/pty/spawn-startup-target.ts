@@ -24,7 +24,7 @@ import {
   holdPassiveRestoreOfStoppedWslDistro,
   wslHoldReadAnchor as wslHoldReadAnchorNow
 } from '../../daemon/providers/wsl/daemon-wsl-passive-restore-hold'
-import { msysDrivePathToWindows } from '../../../shared/cross-platform-path'
+import { msysDrivePathToWindows } from '../../../shared/file-access/cross-platform-path'
 import { wslUncDirectoryExistsAsync } from '../../wsl/filesystem/unc-path-access'
 import { getCodexSelectionTargetForPty } from './host-env/codex-home'
 import { probeLocalStartupCwdDirectory } from './host-env/startup-cwd-directory-exists'

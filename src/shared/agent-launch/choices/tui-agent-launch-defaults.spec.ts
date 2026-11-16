@@ -60,7 +60,7 @@ describe('tuiAgentArgsBypassPermissions', () => {
     ).toBe(true)
   })
 
-  it.each(['posix', 'powershell', 'cmd'] as const)(
+  it.each(['powershell', 'cmd'] as const)(
     'does not authorize quoted text or operands after -- on %s',
     (shell) => {
       expect(

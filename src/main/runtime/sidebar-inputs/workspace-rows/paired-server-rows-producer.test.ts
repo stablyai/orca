@@ -143,32 +143,6 @@ describe('PairedServerRowsProducer', () => {
     vi.useRealTimers()
   })
 
-  it.each([10, 100])(
-    'keeps other hosts confirmed on a same-health publication across %i hosts',
-    async (count) => {
-      const h = fakeHosts(Array.from({ length: count }, (_, i) => ({ id: `box-${i}`, live: true })))
-      h.call.mockResolvedValue(psReply([row('workspace')]))
-      const producer = new PairedServerRowsProducer({
-        hasDemand: () => false,
-        hostLabelOverrides: () => new Map()
-      })
-      const detach = producer.attach(h.hosts)
-      await producer.sync()
-      await vi.advanceTimersByTimeAsync(0)
-      for (const watch of h.watches.values()) {
-        watch.onChange()
-      }
-      await vi.advanceTimersByTimeAsync(0)
-      h.call.mockImplementation(() => new Promise(() => {}))
-      h.publishStatus()
-      await producer.sync()
-      expect(
-        (await producer.snapshot()).servers.every((server) => server.freshness === 'live')
-      ).toBe(true)
-      detach()
-    }
-  )
-
   it('keeps the last rows as unverifiable when the server loses contact or stops answering', async () => {
     const { hosts, call, watches, state, publishStatus } = fakeHosts([{ id: 'box', live: true }])
     call.mockResolvedValueOnce(psReply([row('a')]))

@@ -21,7 +21,7 @@ import {
 } from './helpers/browser-split-guest-probes'
 import { startBrowserSplitPageServer } from './helpers/browser-split-page-server'
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
+// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/workspace/identity/floating-workspace-id.ts.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const FLOATING_PANEL = '[data-floating-terminal-panel]'
 const isMac = process.platform === 'darwin'

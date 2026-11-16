@@ -5,7 +5,7 @@ import {
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../../shared/file-access/absolute-dir-override'
 import {
   openTranscriptReadStream,
   wslGatedStat

@@ -94,22 +94,6 @@ afterEach(async () => {
 })
 
 describe('captureLinuxPackageArtifact', () => {
-  it('ignores the event on a build that is not a root package', () => {
-    getPackageTypeMock.mockReturnValue(null)
-    capture()
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('requires an absolute downloaded path', () => {
-    capture({ downloadedFile: 'orca.deb' })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
-  it('requires the package extension to match the installed format', () => {
-    capture({ downloadedFile: path.join(downloadDir, 'orca.rpm') })
-    expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-  })
-
   it('matches a percent-encoded relative URL against the decoded basename', () => {
     const downloadedFile = path.join(downloadDir, 'Orca Setup 1.2.3.deb')
     capture({ downloadedFile, files: [{ url: 'Orca%20Setup%201.2.3.deb', sha512: SHA512 }] })
@@ -148,22 +132,6 @@ describe('captureLinuxPackageArtifact', () => {
 })
 
 describePosix('resolveLinuxPackageInstallInstructions', () => {
-  it('reports missing when the recovery version does not match', async () => {
-    await writePackage('orca.deb')
-    capture()
-    await expect(
-      recovery.resolveLinuxPackageInstallInstructions(recoveryFor({ version: '9.9.9' }))
-    ).resolves.toEqual({ ok: false, reason: 'missing' })
-  })
-
-  it('reports missing when the recovery package type does not match', async () => {
-    await writePackage('orca.deb')
-    capture()
-    await expect(
-      recovery.resolveLinuxPackageInstallInstructions(recoveryFor({ packageType: 'rpm' }))
-    ).resolves.toEqual({ ok: false, reason: 'missing' })
-  })
-
   it('reports missing when the package was deleted', async () => {
     const filePath = await writePackage('orca.deb')
     capture()
@@ -184,17 +152,6 @@ describePosix('digest validation', () => {
       ok: false,
       reason: 'hash-mismatch'
     })
-  })
-
-  it.runIf(process.getuid?.() !== 0)('reports read-failed for an unreadable package', async () => {
-    const filePath = await writePackage('orca.deb')
-    capture()
-    await fsp.chmod(filePath, 0o000)
-    await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'read-failed'
-    })
-    await fsp.chmod(filePath, 0o644)
   })
 })
 

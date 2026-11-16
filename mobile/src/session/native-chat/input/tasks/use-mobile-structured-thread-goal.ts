@@ -2,23 +2,23 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   agentOwnedThreadGoalCommand,
   agentSessionThreadGoalReport
-} from '../../../../../../src/shared/agent-session/agent-session-thread-goal-report'
-import { getNativeChatAgentProfile } from '../../../../../../src/shared/native-chat/native-chat-agent-profiles'
+} from '../../../../../../src/shared/agent-session/thread-goals/agent-session-thread-goal-report'
+import { getNativeChatAgentProfile } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../../../src/shared/agent-session/agent-session-thread-goal-wire'
+} from '../../../../../../src/shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { agentSessionWriteNoticeParts } from '../../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import type { AgentJournalThreadGoal } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionComposerOptions } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { mobileAgentSessionWriteNoticeText } from '../../agent-session/agent-session-write-notice-copy'
 import type { MobileStructuredAgentSessionArgs } from '../../agent-session/mobile-structured-agent-session-contract'
 import { mobileStructuredHostClockOffsetMs } from '../../agent-session/mobile-structured-host-clock-offset'
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
-import { AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY } from '../../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY } from '../../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { useRouteRelaysCapability } from '../../../../worktree/execution-hosts/workspace-server-context'
 
 export type MobileStructuredThreadGoal = {

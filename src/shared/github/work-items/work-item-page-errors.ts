@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../classified-error'
+import type { ClassifiedError } from '../../errors/classified-error'
 import { GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN } from './work-items-query-bounds'
 
 export function getWorkItemPageErrorTypes(errors: unknown): ClassifiedError['type'][] {

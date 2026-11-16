@@ -1,12 +1,12 @@
-import type { AgentSessionForkNaming } from './agent-session-fork-name'
-import type { AgentSessionUnavailable } from './agent-session-availability'
-import type { AgentSessionFrameFields } from './agent-session-frame-fields'
-import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
+import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
+import type { AgentSessionUnavailable } from './failures/agent-session-availability'
+import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
+import type { AgentSessionUsageLimitContinue } from './lifecycle/stopping/agent-session-usage-limit-continue-wire'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
+} from './background-tasks/agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
@@ -29,6 +29,7 @@ import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outc
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
+import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
 export type AgentSessionTurnActivity = {
@@ -214,9 +215,6 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
-  /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
-  permissionMode?: string
-  runtimePermission?: { fence: number; mode: string | null } | null
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string
@@ -237,6 +235,9 @@ export type AgentSessionStatusSummary = {
   /** The agent asked a question its turn does not wait on (Codex's async question), and the person
    *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
   awaitsAnswer?: true
+  /** The newest async question row the person skipped: clients hide it and every earlier question.
+   *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
+  asyncQuestionsSkippedThrough?: string
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
@@ -264,7 +265,7 @@ export type AgentSessionStatusSummary = {
   updatedAt: number
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
-}
+} & AgentSessionStatusPermissionFields
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = {
@@ -371,8 +372,7 @@ export type AgentSessionOptionChoice = {
   description?: string
 }
 
-import type { AgentSessionModelOption } from './agent-session-model-option'
-export type { AgentSessionModelOption }
+import type { AgentSessionModelOption } from './options/model-catalog/agent-session-model-option'
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
 

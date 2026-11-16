@@ -21,7 +21,10 @@ import { hostsBrowserPagesFor } from '@/runtime/browser/client-hosting/browser-c
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
-import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { navigationTargetsClients } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { useAppStore } from '../../store/index'

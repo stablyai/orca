@@ -1,9 +1,9 @@
-import type { RecipeEnvironmentDescription } from '../../../shared/recipe-host-removal'
+import type { RecipeEnvironmentDescription } from '../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult,
