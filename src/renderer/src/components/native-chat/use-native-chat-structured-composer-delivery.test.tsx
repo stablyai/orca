@@ -36,11 +36,9 @@ describe('queued and immediate composer delivery', () => {
         'immediate'
       )
       await send('Keep for later', [ATTACHMENT])
-      expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith(
-        'Keep for later',
-        [ATTACHMENT],
-        {}
-      )
+      expect(structuredTransport.send).toHaveBeenCalledExactlyOnceWith('Keep for later', [
+        ATTACHMENT
+      ])
       expect(setDraft).toHaveBeenCalledWith('')
       expect(readNativeChatComposerDraft('tab-1:pane').images).toEqual([])
       expect(structuredTransport.onError).toHaveBeenCalledExactlyOnceWith(null, undefined)
