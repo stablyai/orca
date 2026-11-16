@@ -1,15 +1,18 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
-import { availableParallelism } from 'node:os'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { availableParallelism, tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
   collectChangedFiles,
-  computePassHash,
-  readPassHash,
-  writePassHash
+  computeSetupHash,
+  hashChangedFiles,
+  planRepairRun,
+  readRunRecord,
+  UNIT_TESTS_TASK,
+  writeRunRecord
 } from './check-changed-pass-cache.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
@@ -27,7 +30,7 @@ const ANTI_SLOP_ROOTS = ['src/', 'config/', 'tests/', 'mobile/']
 
 function parseArgs(argv) {
   const options = {
-    force: false,
+    full: false,
     base: null,
     maxWorkers: null,
     stepTimeoutMs: DEFAULT_STEP_TIMEOUT_MINUTES * 60_000
@@ -35,8 +38,8 @@ function parseArgs(argv) {
   for (const argument of argv) {
     if (argument === '--') {
       continue
-    } else if (argument === '--force') {
-      options.force = true
+    } else if (argument === '--full' || argument === '--force') {
+      options.full = true
     } else if (argument.startsWith('--base=')) {
       options.base = argument.slice('--base='.length)
     } else if (/^--max-?workers=\d+$/i.test(argument)) {
@@ -45,7 +48,7 @@ function parseArgs(argv) {
       options.stepTimeoutMs = Number(argument.split('=')[1]) * 60_000
     } else {
       throw new Error(
-        `Unknown option ${argument}. Use --force, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
+        `Unknown option ${argument}. Use --full, --base=<ref>, --maxWorkers=<n>, --timeout=<minutes>.`
       )
     }
   }
@@ -111,7 +114,7 @@ function buildWorkspacePackages(root, env) {
   }
 }
 
-function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
+function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, reportDir }) {
   const node = process.execPath
   const oxlint = resolveOxcCliInvocation('oxlint', 'oxlint', root)
   const oxfmt = resolveOxcCliInvocation('oxfmt', 'oxfmt', root)
@@ -135,17 +138,27 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   const related = plan.unitTests.related.filter((file) => existsSync(path.join(root, file)))
   const colocated = plan.unitTests.colocated.filter((file) => existsSync(path.join(root, file)))
   if (related.length > 0 || colocated.length > 0) {
-    const vitest = (selection) =>
-      step(node, [
-        'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
-        ...selection,
-        '--config',
-        'config/vitest.config.ts',
-        '--passWithNoTests',
-        `--maxWorkers=${maxWorkers ?? DEFAULT_VITEST_MAX_WORKERS}`
-      ])
+    // The JSON report names the failed test files, which a repeat run reruns instead of all.
+    const vitest = (selection, testFiles = null) => {
+      const report = path.join(reportDir, `vitest-${testFiles ? 'colocated' : 'related'}.json`)
+      return {
+        ...step(node, [
+          'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
+          ...selection,
+          '--config',
+          'config/vitest.config.ts',
+          '--passWithNoTests',
+          `--maxWorkers=${maxWorkers ?? DEFAULT_VITEST_MAX_WORKERS}`,
+          '--reporter=default',
+          '--reporter=json',
+          `--outputFile.json=${report}`
+        ]),
+        report,
+        testFiles
+      }
+    }
     tasks.push({
-      name: 'unit tests',
+      name: UNIT_TESTS_TASK,
       steps: [
         step(node, [
           'config/scripts/native-build/node-addons/ensure-native-runtime.mjs',
@@ -160,7 +173,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
               )
             ]
           : []),
-        ...(colocated.length > 0 ? [vitest(['run', ...colocated])] : [])
+        ...(colocated.length > 0 ? [vitest(['run', ...colocated], colocated)] : [])
       ]
     })
   }
@@ -234,6 +247,36 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
   return tasks
 }
 
+// Test files a repeat run must rerun; null when the failure can't be pinned to files.
+function readFailedTests(root, { task, ok }) {
+  if (ok) {
+    return []
+  }
+  const failed = new Set()
+  for (const { report, testFiles } of task.steps.filter((step) => step.report)) {
+    let results
+    try {
+      results = JSON.parse(readFileSync(report, 'utf8'))
+    } catch {
+      // No report: the step crashed, timed out, or never ran after an earlier one failed.
+      if (!testFiles) {
+        return null
+      }
+      testFiles.forEach((file) => failed.add(file))
+      continue
+    }
+    const files = (results.testResults ?? [])
+      .filter((result) => result.status === 'failed')
+      .map((result) => path.relative(root, result.name).split(path.sep).join('/'))
+    // A failure outside any test file (an unhandled error) has nothing narrower to rerun.
+    if (results.success === false && files.length === 0) {
+      return null
+    }
+    files.forEach((file) => failed.add(file))
+  }
+  return failed.size > 0 ? [...failed].sort() : null
+}
+
 async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   const startedAt = performance.now()
   let output = ''
@@ -284,21 +327,25 @@ export async function main(root, argv) {
     console.log(`check:changed: no changes against ${ref}.`)
     return 0
   }
-  const hash = computePassHash(root, mergeBase)
-  if (!options.force && readPassHash(root) === hash) {
+  const listDirectory = (directory) => {
+    try {
+      return readdirSync(path.join(root, directory))
+    } catch {
+      return []
+    }
+  }
+  const setup = computeSetupHash(root, mergeBase)
+  const fileHashes = hashChangedFiles(root, files)
+  const record = options.full ? null : readRunRecord(root, setup)
+  const repair = planRepairRun(root, record, fileHashes, listDirectory)
+  if (repair?.edited.length === 0 && Object.values(record.tasks).every((task) => task.ok)) {
     console.log('Nothing changed since last passing run.')
     return 0
   }
 
   const plan = planChangedChecks(files, {
     scriptsDir: path.join(root, 'config', 'scripts'),
-    listDirectory: (directory) => {
-      try {
-        return readdirSync(path.join(root, directory))
-      } catch {
-        return []
-      }
-    }
+    listDirectory
   })
   const env = {
     ...process.env,
@@ -320,15 +367,25 @@ export async function main(root, argv) {
   const { resolvePinnedBunExecutable } =
     await import('../../tool-invocation/pinned-bun-executable.mjs')
   const bun = () => resolvePinnedBunExecutable(root, runProcessSync) ?? 'bun'
-  const tasks = buildTasks(root, plan, {
-    files,
-    mergeBase,
-    maxWorkers: options.maxWorkers,
-    bun
-  })
+  const reportDir = mkdtempSync(path.join(tmpdir(), 'check-changed-'))
+  const plannedTests = plan.unitTests.related.length + plan.unitTests.colocated.length > 0
+  const planned = buildTasks(
+    root,
+    plannedTests && repair?.unitTests ? { ...plan, unitTests: repair.unitTests } : plan,
+    { files, mergeBase, maxWorkers: options.maxWorkers, bun, reportDir }
+  )
+  const tasks = planned.filter((task) => !repair?.passed(task.name))
+  const records = Object.fromEntries(
+    planned.filter((task) => !tasks.includes(task)).map(({ name }) => [name, record.tasks[name]])
+  )
   console.log(
     `check:changed: ${files.length} changed file(s) since ${ref} (${mergeBase.slice(0, 10)}); running ${tasks.length} check(s).`
   )
+  if (repair) {
+    console.log(
+      `Repeat run: ${repair.edited.length} file(s) edited since the last run, ${planned.length - tasks.length} passed check(s) skipped${plannedTests && repair.unitTests ? ', unit tests limited to edited and failed files' : ''}. Pass --full to run everything.`
+    )
+  }
 
   // Typecheck and tests lead the queue: they take longest, so the short checks fill in around them.
   const concurrency = Math.max(3, Math.floor(availableParallelism() / 3))
@@ -355,6 +412,16 @@ export async function main(root, argv) {
     }
     return result
   }).finally(() => clearInterval(heartbeat))
+  for (const result of results) {
+    records[result.task.name] = {
+      ok: result.ok,
+      ...(result.task.name === UNIT_TESTS_TASK
+        ? { failedTests: readFailedTests(root, result) }
+        : {})
+    }
+  }
+  rmSync(reportDir, { recursive: true, force: true })
+  writeRunRecord(root, { setup, files: fileHashes, tasks: records })
   const failed = results.filter((result) => !result.ok)
   if (failed.length > 0) {
     console.error(
@@ -362,7 +429,6 @@ export async function main(root, argv) {
     )
     return 1
   }
-  writePassHash(root, hash)
   console.log(`✓ ${results.length} check(s) passed in ${seconds(startedAt)}.`)
   return 0
 }

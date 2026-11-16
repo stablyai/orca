@@ -1,10 +1,12 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { splitUnitTestInputs } from './check-changed-selection.mjs'
 
 export const PASS_CACHE_PATH = '.cache/check-changed.json'
-const CACHE_VERSION = 1
+export const UNIT_TESTS_TASK = 'unit tests'
+const CACHE_VERSION = 2
 
 // Inputs outside the diff that still decide what the checks report.
 const HASHED_CONFIG_FILES = [
@@ -45,7 +47,8 @@ export function collectChangedFiles(root, mergeBase) {
   return [...new Set([...tracked, ...untracked])].sort()
 }
 
-export function computePassHash(root, mergeBase) {
+/** Everything besides the diff that a recorded run depends on; any change forces a full run. */
+export function computeSetupHash(root, mergeBase) {
   const hash = createHash('sha256')
   const field = (label, value) => {
     hash.update(`${label}\0${value.length}\0`)
@@ -54,12 +57,6 @@ export function computePassHash(root, mergeBase) {
   field('version', String(CACHE_VERSION))
   field('runtime', `${process.platform} ${process.arch} ${process.version}`)
   field('base', mergeBase)
-  // Base plus each changed path's working-tree bytes pins the tree like the diff does, but stays
-  // stable when an edit is staged or committed, so committing a passing change keeps its pass.
-  for (const file of collectChangedFiles(root, mergeBase)) {
-    field('changed', file)
-    field('content', readIfFile(path.join(root, file)) ?? '\0deleted')
-  }
   for (const file of HASHED_CONFIG_FILES) {
     field('config', file)
     field('content', readIfFile(path.join(root, file)) ?? '')
@@ -67,20 +64,72 @@ export function computePassHash(root, mergeBase) {
   return hash.digest('hex')
 }
 
-export function readPassHash(root) {
+// Working-tree bytes, not git state, so staging or committing a checked edit keeps its record.
+export function hashChangedFiles(root, files) {
+  return Object.fromEntries(
+    files.map((file) => {
+      const content = readIfFile(path.join(root, file))
+      return [file, content ? createHash('sha256').update(content).digest('hex') : 'deleted']
+    })
+  )
+}
+
+/** The last run in this worktree, or null when it was against another setup or is unreadable. */
+export function readRunRecord(root, setup) {
   try {
-    const { version, hash } = JSON.parse(readFileSync(path.join(root, PASS_CACHE_PATH), 'utf8'))
-    return version === CACHE_VERSION && typeof hash === 'string' ? hash : null
+    const record = JSON.parse(readFileSync(path.join(root, PASS_CACHE_PATH), 'utf8'))
+    return record.version === CACHE_VERSION &&
+      record.setup === setup &&
+      record.files &&
+      typeof record.files === 'object' &&
+      record.tasks &&
+      typeof record.tasks === 'object'
+      ? record
+      : null
   } catch {
     return null
   }
 }
 
-export function writePassHash(root, hash) {
+export function writeRunRecord(root, { setup, files, tasks }) {
   const file = path.join(root, PASS_CACHE_PATH)
   mkdirSync(path.dirname(file), { recursive: true })
   writeFileSync(
     file,
-    `${JSON.stringify({ version: CACHE_VERSION, hash, passedAt: new Date().toISOString() })}\n`
+    `${JSON.stringify({ version: CACHE_VERSION, setup, files, tasks, ranAt: new Date().toISOString() })}\n`
   )
+}
+
+/**
+ * What a repeat run against the same setup still has to do; null means run everything.
+ * Checks that passed are skipped until a file changes. Unit tests narrow to the files edited
+ * since the last run plus the test files that failed in it, since the rest already passed.
+ */
+export function planRepairRun(root, record, files, listDirectory) {
+  if (!record) {
+    return null
+  }
+  const edited = [...new Set([...Object.keys(record.files), ...Object.keys(files)])]
+    .filter((file) => record.files[file] !== files[file])
+    .sort()
+  const unitTests = narrowUnitTests(root, edited, record.tasks[UNIT_TESTS_TASK], listDirectory)
+  const nothingToTest = unitTests?.related.length === 0 && unitTests.colocated.length === 0
+  return {
+    edited,
+    passed: (name) =>
+      record.tasks[name]?.ok === true &&
+      (edited.length === 0 || (name === UNIT_TESTS_TASK && nothingToTest)),
+    unitTests: nothingToTest ? null : unitTests
+  }
+}
+
+function narrowUnitTests(root, edited, unitRecord, listDirectory) {
+  const exists = (file) => existsSync(path.join(root, file))
+  // A deleted file has no import graph left to follow, so `related` can't find what used it.
+  if (!Array.isArray(unitRecord?.failedTests) || !edited.every(exists)) {
+    return null
+  }
+  const { related, colocated } = splitUnitTestInputs(edited, listDirectory)
+  const failed = unitRecord.failedTests.filter(exists)
+  return { related, colocated: [...new Set([...colocated, ...failed])].sort() }
 }
