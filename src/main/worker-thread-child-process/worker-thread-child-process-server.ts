@@ -16,12 +16,17 @@ export type WorkerThreadChildPort = {
 }
 
 function toErrorPayload(error: unknown): WorkerThreadChildErrorPayload {
-  if (error instanceof Error) {
-    return 'code' in error && typeof error.code === 'string'
-      ? { message: error.message, code: error.code }
-      : { message: error.message }
+  if (!(error instanceof Error)) {
+    return { message: String(error) }
   }
-  return { message: String(error) }
+  const { code, errno, syscall, path } = error as NodeJS.ErrnoException
+  return {
+    message: error.message,
+    ...(typeof code === 'string' ? { code } : {}),
+    ...(typeof errno === 'number' ? { errno } : {}),
+    ...(typeof syscall === 'string' ? { syscall } : {}),
+    ...(typeof path === 'string' ? { path } : {})
+  }
 }
 
 export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): void {

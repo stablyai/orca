@@ -2,7 +2,10 @@ import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { spawnProcessOnWorkerThread } from '../../../worker-thread-child-process/worker-thread-child-process'
-import type { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import {
+  isWorkerChildStdinWriteError,
+  WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 
 type CaptureOptions = {
   cwd?: string | URL
@@ -93,7 +96,10 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
   child.stderr?.on('error', () => {})
   child.stdout?.on('data', (chunk: Buffer) => collect(stdout, chunk))
   child.stderr?.on('data', (chunk: Buffer) => collect(stderr, chunk))
-  child.once('error', (error: Error) => {
+  child.on('error', (error: Error) => {
+    if (child instanceof WorkerThreadChildProcess && isWorkerChildStdinWriteError(error)) {
+      return
+    }
     options.onError?.(error)
     finish(error)
   })

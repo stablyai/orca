@@ -1,12 +1,17 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
+import { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
+const WORKER_PID_WAIT_MS = 5_000
 
 export function killSpawnedCommandTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<void> {
   const pid = child.pid
+  if (!pid && process.platform === 'win32' && child instanceof WorkerThreadChildProcess) {
+    return killOnceWorkerReportsPid(child)
+  }
   if (!pid || process.platform !== 'win32') {
     child.kill()
     return Promise.resolve()
@@ -64,5 +69,25 @@ export function killSpawnedCommandTree(
       finish(true)
     }, WINDOWS_TREE_KILL_WAIT_MS)
     killer.unref()
+  })
+}
+
+/** The worker created the process but its PID is still in flight; a root-only kill would leave hooks and filters running. */
+function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void> {
+  if (child.closed) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const settle = (next: () => Promise<void> | void): void => {
+      clearTimeout(timer)
+      child.off('spawn', onSpawn)
+      child.off('close', onClose)
+      void Promise.resolve(next()).then(resolve)
+    }
+    const onSpawn = (): void => settle(() => killSpawnedCommandTree(child))
+    const onClose = (): void => settle(() => undefined)
+    const timer = setTimeout(() => settle(() => void child.kill()), WORKER_PID_WAIT_MS)
+    child.once('spawn', onSpawn)
+    child.once('close', onClose)
   })
 }

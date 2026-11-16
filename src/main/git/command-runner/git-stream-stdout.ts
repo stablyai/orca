@@ -28,6 +28,7 @@ import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environmen
 import { gitSpawn } from './git-spawn'
 import {
   canSpawnOnWorkerThread,
+  isAbandonedWorkerChildError,
   spawnProcessOnWorkerThread,
   type WorkerThreadChildProcess
 } from '../../worker-thread-child-process/worker-thread-child-process'
@@ -168,8 +169,8 @@ function streamInSpan(
           } else {
             child.once('close', reportTermination)
           }
-          child.once('error', () => {
-            if (!child.pid) {
+          child.once('error', (error) => {
+            if (!child.pid || isAbandonedWorkerChildError(error)) {
               reportTermination()
             }
           })

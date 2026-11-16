@@ -28,11 +28,20 @@ const SPAWN_FAILED_EXIT_CODE = -1
 type SendRequest = (request: WorkerThreadChildRequest) => boolean
 
 function toError(payload: WorkerThreadChildErrorPayload): Error {
-  const error: NodeJS.ErrnoException = new Error(payload.message)
-  if (payload.code) {
-    error.code = payload.code
-  }
-  return error
+  const { message, ...fields } = payload
+  return Object.assign(new Error(message), fields)
+}
+
+/** Error code for a child whose worker died: its pipes closed with the worker, but no close event will arrive. */
+export const WORKER_CHILD_ABANDONED_CODE = 'ERR_ORCA_WORKER_CHILD_ABANDONED'
+
+export function isAbandonedWorkerChildError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.code === WORKER_CHILD_ABANDONED_CODE
+}
+
+/** The worker forwards stdin pipe failures as child errors; a capture leaves those to the exit status, as main's stdin end does. */
+export function isWorkerChildStdinWriteError(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | null)?.syscall === 'write'
 }
 
 // Never emits: the worker reports stdin failures as child 'error' events.
@@ -225,7 +234,11 @@ export class WorkerThreadChildProcessHost {
     this.children.clear()
     this.host.destroy()
     for (const child of abandoned) {
-      child.receive({ type: 'error', id: child.id, error: { message } })
+      child.receive({
+        type: 'error',
+        id: child.id,
+        error: { message, code: WORKER_CHILD_ABANDONED_CODE }
+      })
     }
   }
 }

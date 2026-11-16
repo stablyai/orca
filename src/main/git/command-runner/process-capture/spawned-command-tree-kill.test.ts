@@ -17,6 +17,7 @@ vi.mock('../../../pty/process-retirement/own-chromium-tree-kill-guard', () => ({
   admitSelfInitiatedTreeKill: admitMock
 }))
 
+import { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 
 const originalPlatform = process.platform
@@ -83,6 +84,23 @@ describe('Git command tree termination', () => {
     killer.emit('close', 0)
     await pending
     expect(child.kill).not.toHaveBeenCalled()
+  })
+  it('kills the whole tree of a worker child cancelled before its PID arrived', async () => {
+    const child = new WorkerThreadChildProcess(1, () => true)
+    const rootKill = vi.spyOn(child, 'kill')
+    const killer = childWithPid(5678)
+    spawnMock.mockReturnValue(killer)
+    const pending = killSpawnedCommandTree(child)
+
+    child.receive({ type: 'spawn', id: 1, pid: 4321 })
+    await Promise.resolve()
+    expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '4321', '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    killer.emit('close', 0)
+    await pending
+    expect(rootKill).not.toHaveBeenCalled()
   })
   it.skipIf(originalPlatform !== 'win32').each([0, 128])(
     'does not taskkill an actual native Windows child after exit %i',

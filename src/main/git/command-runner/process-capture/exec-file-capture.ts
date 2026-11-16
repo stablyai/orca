@@ -13,6 +13,8 @@ import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-co
 import { spawnedExecFile, workerExecFile } from './worker-exec-file'
 import {
   canSpawnOnWorkerThread,
+  isAbandonedWorkerChildError,
+  isWorkerChildStdinWriteError,
   type WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
@@ -265,9 +267,16 @@ export function execFileCapture(
         return
       }
 
-      child.once('error', (error) => {
+      child.on('error', (error) => {
+        if (useWorker && isWorkerChildStdinWriteError(error)) {
+          return
+        }
         // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
-        if (!useWorker && !child?.pid) {
+        // Plain captures still release admission then: the worker's pipes closed with it, and nothing else would.
+        if (
+          (!useWorker && !child?.pid) ||
+          (!ownedPosixGroup && isAbandonedWorkerChildError(error))
+        ) {
           reportChildTerminated()
         }
         if (!terminating) {
