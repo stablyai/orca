@@ -50,6 +50,8 @@ export function OrcaHookTrustDrawer({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const copy = prompt ? hookTrustCopy(t, prompt) : null
+  // Repo-wide trust is ignored for a repo id on several hosts, so only per-version approval is offered.
+  const repoWideTrust = allowAlwaysTrust && prompt?.versionOnly !== true
   return (
     <BottomDrawer visible={visible && prompt != null} onClose={onClose} zIndex={zIndex}>
       {prompt && copy ? (
@@ -64,7 +66,7 @@ export function OrcaHookTrustDrawer({
             <Text style={styles.trustScriptText}>{prompt.scriptContent}</Text>
           </View>
 
-          {allowAlwaysTrust && !prompt.versionOnly ? (
+          {repoWideTrust ? (
             <Text style={styles.trustScope}>
               {t(
                 'components.setupHookTrustDrawer.alwaysTrustScope',
@@ -75,7 +77,7 @@ export function OrcaHookTrustDrawer({
           ) : null}
 
           <View style={styles.trustActionGroup}>
-            {allowAlwaysTrust ? (
+            {repoWideTrust ? (
               <>
                 <Pressable
                   style={({ pressed }) => [
@@ -93,7 +95,7 @@ export function OrcaHookTrustDrawer({
                 <View style={styles.trustActionSeparator} />
               </>
             ) : null}
-            {allowRunOnce || prompt.versionOnly || !allowAlwaysTrust ? (
+            {allowRunOnce || !repoWideTrust ? (
               <>
                 <Pressable
                   style={({ pressed }) => [
@@ -104,8 +106,13 @@ export function OrcaHookTrustDrawer({
                   onPress={onRunOnce}
                 >
                   <Check size={16} color={colors.textPrimary} />
-                  <Text style={styles.trustActionText}>
-                    {prompt.versionOnly || !allowAlwaysTrust
+                  <Text
+                    style={[
+                      styles.trustActionText,
+                      !repoWideTrust && styles.trustPrimaryActionText
+                    ]}
+                  >
+                    {!repoWideTrust
                       ? t('components.setupHookTrustDrawer.runHooks', 'Run hooks')
                       : t('components.setupHookTrustDrawer.runOnce', 'Run once')}
                   </Text>
