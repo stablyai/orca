@@ -20,7 +20,8 @@ export function useGitLabLabelFilterOptions(repo: Repo | null): {
     'Could not load labels.'
   )
   const selector = repo ? gitLabTaskRepoSelector(repo) : null
-  const cacheKey = selector ? JSON.stringify(selector) : null
+  // Why: the lookup follows the repo's issue source, which the selector does not carry.
+  const cacheKey = repo ? JSON.stringify([selector, repo.issueSourcePreference ?? 'auto']) : null
   const state = useMetadataListRequest({
     cacheKey,
     store: labelStore,

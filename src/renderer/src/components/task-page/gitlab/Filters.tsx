@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { getGitLabMRInvolvementFilters } from '@/components/task-page/task-page-localized-options'
 import { TaskFilterMenu } from '@/components/task-page/TaskFilterMenu'
+import { normalizeGitLabLabelNames } from '../../../../../shared/gitlab/gitlab-label-names'
 import { parseTaskQuery } from '../../../../../shared/work-items/task-query'
 import { useGitLabLabelFilterOptions } from './use-gitlab-label-filter-options'
 
@@ -155,7 +156,8 @@ export function TaskPageGitLabFilters({
             labelsError={labelOptions.error}
             onChange={(change) => {
               if (change.labels) {
-                setGitlabLabels(change.labels)
+                // Why: the list requests keep only what this keeps, so the pill never shows more than is applied.
+                setGitlabLabels(normalizeGitLabLabelNames(change.labels))
               }
             }}
           />
