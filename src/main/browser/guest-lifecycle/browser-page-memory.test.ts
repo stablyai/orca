@@ -102,8 +102,8 @@ it('keeps the cold identity/history, gates every consumer on load and fences ret
   expect(action).not.toHaveBeenCalled()
   expect(second.guest.navigationHistory.restore).toHaveBeenCalledWith({
     entries: [
-      { url: 'https://example.test/a', title: 'A' },
-      { url: 'https://example.test/b', title: 'B' }
+      { url: 'https://example.test/a', title: 'A', pageState: 'fixture-opaque-state' },
+      { url: 'https://example.test/b', title: 'B', pageState: 'fixture-opaque-state' }
     ],
     index: 1
   })
