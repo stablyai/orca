@@ -11,6 +11,9 @@ import {
 } from './agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
+/** How often a held prompt is re-read when the agent sets no blind-retry delay. */
+const HELD_PROMPT_RECHECK_MS = 1000
+
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
@@ -32,16 +35,17 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     const gated = held.heldBudgetMs > 0 && prompt !== undefined
     // Why: the draft reader knows dsh's launchpad, which its first-run guide covers once ready.
     const readsLaunchDraft = agent === 'dsh'
-    let blind = options.composerReady === true && !readsLaunchDraft
-    if (retryDelayMs === undefined || (!blind && !gated)) {
+    let blind = options.composerReady === true && !readsLaunchDraft && retryDelayMs !== undefined
+    if (!blind && !gated) {
       return 0
     }
+    const recheckMs = retryDelayMs ?? HELD_PROMPT_RECHECK_MS
     const deadline = Date.now() + held.heldBudgetMs
     let resubmits = 0
     let gatedResubmits = 0
     try {
       do {
-        const waitMs = blind ? retryDelayMs : Math.min(retryDelayMs, deadline - Date.now())
+        const waitMs = blind ? recheckMs : Math.min(recheckMs, deadline - Date.now())
         if (await agentPromptSettledWithin(held, Math.max(0, waitMs), options.signal)) {
           return resubmits
         }
