@@ -2,7 +2,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { getWorkspaceSessionTabActivity } from '../../workspace-session/workspace-session-tab-activity'
 import {

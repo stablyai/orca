@@ -21,7 +21,7 @@ import {
   getConflictResolutions,
   type ConflictResolution
 } from '../../../../src/shared/source-control/listing/source-control-entry-actions'
-import type { SourceControlGroupOrder } from '../../../../src/shared/ui-chrome-types'
+import type { SourceControlGroupOrder } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { MobileGitStatusEntry } from '../git/git-status-reply-schema'
 

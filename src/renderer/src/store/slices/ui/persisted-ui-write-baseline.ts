@@ -1,5 +1,5 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { ActivityBarPosition } from '../../../../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { ActivityBarPosition } from '../../../../../shared/ui-chrome/ui-chrome-types'
 
 /** Capture hydrated baseline and persist only locally changed fields: shared desktop/web/mobile UI snapshots otherwise overwrite peers’ disjoint updates (STA-5781). */
 export type PersistedUIWriteBaseline = {

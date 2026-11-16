@@ -12,7 +12,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { isGitRepoKind } from '../../../shared/repository/repo-kind'
 import {
   canWatchLocalWindowsWslAliases,

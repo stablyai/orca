@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { normalizeNodeDistMirrorUrl } from '../../shared/node-runtime/node-dist-mirror'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network/network-proxy'
 

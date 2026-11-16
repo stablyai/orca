@@ -9,7 +9,7 @@ import type {
   AutomationRunsPage,
   AutomationRunTrigger
 } from '../../../shared/automations/history/automation-run'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   nextAutomationRunNumber,
   pruneAutomationRuns

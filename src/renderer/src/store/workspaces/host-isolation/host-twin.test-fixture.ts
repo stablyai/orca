@@ -15,7 +15,7 @@ import {
   markHugeRepoWarningDismissed
 } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import type { HugeRepoWarningProbe } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'

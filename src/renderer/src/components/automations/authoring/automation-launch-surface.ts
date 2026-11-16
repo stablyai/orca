@@ -9,7 +9,7 @@ import type {
   AutomationUpdateInput,
   AutomationCreateInput
 } from '../../../../../shared/automations/automation-definition'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,

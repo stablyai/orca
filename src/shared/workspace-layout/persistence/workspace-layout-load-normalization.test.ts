@@ -1,7 +1,7 @@
 // Exercise each legacy Loader normalization; fields outside its rule must survive unchanged.
 
 import { describe, expect, it } from 'vitest'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import '../invariants/workspace-layout-model-rules'

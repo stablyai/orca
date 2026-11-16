@@ -27,7 +27,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
 import {
   assertEnvironmentPairing,
