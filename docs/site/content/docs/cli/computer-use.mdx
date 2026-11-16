@@ -113,6 +113,20 @@ orca computer click --app com.apple.Safari --x 120 --y 340 --json
 orca computer drag --app <app> --from-element-index 3 --to-element-index 9 --json
 ```
 
+## Batching steps
+
+When the next few actions don't depend on what you'll read between them, `batch` runs them in one call on the same app and window and prints one line per step plus one read of the window afterwards, as changes since the state before the batch:
+
+```bash
+orca computer batch --app pid:4242 --window-id 7 --steps '[
+  {"command":"click","elementIndex":12},
+  {"command":"click","elementIndex":15},
+  {"command":"press-key","key":"Return"}
+]'
+```
+
+Each step names a command (`click`, `perform-secondary-action`, `scroll`, `drag`, `type-text`, `press-key`, `hotkey`, `paste-text`, `set-value`) and that command's flags in camelCase; `{"command":"wait","ms":500}` pauses. Targeting flags (`--app`, `--window-id`, `--session`, `--restore-window`) apply to every step. Every step is checked before the first one runs. The batch stops at the first error and, by default, at a result that suggests the step did nothing (`suspected noop`, `text mismatch`, a window change); `--stop-on unverified` also stops at any result that isn't verified, and `--stop-on error` only at errors. It exits 1 when it stops early. Pass `--steps-stdin` to keep values out of argv, and `--screenshot` for a screenshot of the final state.
+
 ## Sensitive input
 
 Pass secrets through stdin so they don't land in shell history:

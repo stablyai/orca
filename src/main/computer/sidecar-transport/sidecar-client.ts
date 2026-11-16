@@ -36,6 +36,11 @@ type ComputerSidecarMethod =
   | 'pasteText'
   | 'setValue'
 
+export type ComputerSidecarActionMethod = Exclude<
+  ComputerSidecarMethod,
+  'capabilities' | 'listApps' | 'launchApp' | 'listWindows' | 'getAppState'
+>
+
 type ComputerSidecarRequest = {
   id: number
   method: ComputerSidecarMethod
@@ -86,10 +91,7 @@ export async function callComputerSidecarSnapshot(
 }
 
 export async function callComputerSidecarAction(
-  method: Exclude<
-    ComputerSidecarMethod,
-    'capabilities' | 'listApps' | 'launchApp' | 'listWindows' | 'getAppState'
-  >,
+  method: ComputerSidecarActionMethod,
   params: unknown
 ): Promise<ComputerActionResult> {
   const validation = validateComputerSidecarPasteText(method, params)

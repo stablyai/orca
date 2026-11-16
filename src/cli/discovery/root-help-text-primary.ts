@@ -202,6 +202,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  computer hotkey           Press a shortcut combination such as CmdOrCtrl+A',
   '  computer paste-text       Paste text through the native clipboard path',
   '  computer set-value        Set the value of a settable app element',
+  '  computer batch            Run several actions on one window in one call',
   '',
   'Linear:',
   '  linear                    Read and write Linear issues for agents',

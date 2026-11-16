@@ -8,6 +8,8 @@ import {
   resetComputerSidecarForTest
 } from '../../../../computer/sidecar-transport/sidecar-client'
 import { defineMethod } from '../../core'
+import { runComputerBatch } from '../../../../computer/computer-batch'
+import { ComputerBatch } from '../../../../../shared/rpc-contract/computer/computer-batch-params'
 import {
   Click,
   ComputerObserveTarget,
@@ -164,6 +166,18 @@ export const COMPUTER_METHODS = [
     params: SetValue,
     handler: async (params) => {
       return await callComputerSidecarAction('setValue', params)
+    }
+  }),
+  defineMethod({
+    name: 'computer.batch',
+    permission: 'desktop-control',
+    params: ComputerBatch,
+    handler: async (params) => {
+      return await runComputerBatch(params, {
+        runAction: callComputerSidecarAction,
+        getAppState: callComputerSidecarSnapshot,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+      })
     }
   })
 ]
