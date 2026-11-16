@@ -230,6 +230,7 @@
       "why": "Git, Dateien und Terminals laufen dann nativ in Linux statt über die Windows-Dateifreigabe.",
       "accept": "Als Host ausführen",
       "projectNotFound": "Das hinzugefügte Projekt zum Verschieben wurde nicht gefunden. Verwende „Auf den {{distro}}-Host verschieben…“ beim Projekt in der Seitenleiste.",
+      "savedUnderAnotherPath": "Dieser Ordner ist hier bereits als Projekt {{path}} vorhanden, das noch nicht auf den Host {{distro}} verschoben werden kann. Entferne dieses Projekt und füge den Ordner dann erneut hinzu, um ihn zu verschieben.",
       "existingTitle": "Auf dem {{distro}}-Host hinzufügen (empfohlen)",
       "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
       "existingAccept": "Auf Host hinzufügen"

@@ -643,6 +643,7 @@
       "why": "Git, arquivos e terminais passam a rodar nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "accept": "Executar como host",
       "projectNotFound": "Não foi possível encontrar o projeto adicionado para mover. Use \"Mover para o host {{distro}}…\" no projeto na barra lateral.",
+      "savedUnderAnotherPath": "Esta pasta já é um projeto aqui como {{path}}, que ainda não pode ser movido para o host {{distro}}. Remova esse projeto e adicione a pasta novamente para movê-la.",
       "existingTitle": "Adicionar no host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} já roda como host, então Git, arquivos e terminais rodam nativamente no Linux em vez de pelo compartilhamento de arquivos do Windows.",
       "existingAccept": "Adicionar no host"

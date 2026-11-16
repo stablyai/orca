@@ -204,6 +204,7 @@
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "accept": "作為主機執行",
       "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。",
+      "savedUnderAnotherPath": "此資料夾已作為專案 {{path}} 存在，暫時無法移到 {{distro}} 主機。請移除該專案，然後重新新增此資料夾以移動它。",
       "existingTitle": "新增到 {{distro}} 主機（建議）",
       "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "existingAccept": "新增到主機"

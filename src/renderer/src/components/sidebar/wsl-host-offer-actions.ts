@@ -4,6 +4,8 @@ import type { WslHostAddResult } from '../../../../shared/remote-runtime/wsl-hos
 
 export type WslHostOffer = {
   path: string
+  /** The `\\wsl.localhost` spelling of a path on a distro-mapped drive, which the move takes. */
+  sharePath?: string
   distro: string
   source: AddRepoExistingWorkspaceSource
 }
@@ -15,7 +17,7 @@ export type WslHostOfferDeps = {
   addWslHost: (args: { distro: string; startIfStopped: boolean }) => Promise<WslHostAddResult>
   addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
   /** Moves the project just added onto the host, and only it: Stage 1 never moves the others. */
-  moveAddedProject: (offer: WslHostOffer) => void
+  moveAddedProject: (offer: WslHostOffer, added: unknown) => void
 }
 
 type WslHostAddRefusal = Extract<WslHostAddResult, { ok: false }>
@@ -114,8 +116,8 @@ export async function acceptWslHostOffer(
   if (refusal) {
     return refusal
   }
-  await deps.addLocalPath(offer.path, offer.source)
-  deps.moveAddedProject(offer)
+  const added = await deps.addLocalPath(offer.sharePath ?? offer.path, offer.source)
+  deps.moveAddedProject(offer, added)
   return null
 }
 
