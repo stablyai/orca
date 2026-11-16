@@ -158,13 +158,10 @@ function joinedTextRuns(children: unknown[]): Record<string, unknown>[] {
   for (const child of children) {
     const node = adfRecord(child)
     const previous = runs.at(-1)
-    const marks = typeof node.text === 'string' ? JSON.stringify(node.marks ?? []) : ''
-    if (marks && typeof previous?.text === 'string' && marks === previousMarks) {
-      runs[runs.length - 1] = {
-        type: 'text',
-        text: previous.text + node.text,
-        marks: previous.marks
-      }
+    const text = typeof node.text === 'string' ? node.text : undefined
+    const marks = text === undefined ? '' : JSON.stringify(node.marks ?? [])
+    if (text !== undefined && typeof previous?.text === 'string' && marks === previousMarks) {
+      runs[runs.length - 1] = { type: 'text', text: previous.text + text, marks: previous.marks }
     } else {
       runs.push(node)
     }
