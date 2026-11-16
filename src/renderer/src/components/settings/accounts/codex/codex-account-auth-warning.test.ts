@@ -41,11 +41,11 @@ describe('getCodexAccountAuthWarning', () => {
     limits.usageMetadata = {
       attemptedAccount: { accountId: null, runtime: 'wsl', wslDistro: 'Ubuntu' }
     }
-    const warn = (wslDistro: string | null) =>
+    const warn = (wslDistro: string | null, accountDistro = wslDistro) =>
       getCodexAccountAuthWarning({
         limits,
         target: { runtime: 'wsl', wslDistro },
-        runtime: { runtime: 'wsl', wslDistro },
+        runtime: { runtime: 'wsl', wslDistro: accountDistro },
         activeAccountId: null,
         accountId: null
       })
@@ -54,6 +54,8 @@ describe('getCodexAccountAuthWarning', () => {
     expect(warn('Ubuntu')).toBe('stale-sign-in')
     // A "WSL default" view shows the poll of whichever distro that default resolved to.
     expect(warn(null)).toBe('stale-sign-in')
+    expect(warn(null, 'Ubuntu')).toBe('stale-sign-in')
+    expect(warn(null, 'ubuntu-24.04')).toBeNull()
   })
 
   it('makes no claim about a failure that does not say which account it tried', () => {
