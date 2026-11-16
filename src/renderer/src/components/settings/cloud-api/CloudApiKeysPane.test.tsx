@@ -11,12 +11,15 @@ import type {
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CloudApiKeysPane } from './CloudApiKeysPane'
+import { setOrcaCloudEnabledForTests } from '@/hooks/useOrcaCloudEnabled'
 
 beforeEach(() => {
+  setOrcaCloudEnabledForTests(true)
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
 })
 
 afterEach(() => {
+  setOrcaCloudEnabledForTests(null)
   cleanup()
   vi.useRealTimers()
   vi.unstubAllGlobals()

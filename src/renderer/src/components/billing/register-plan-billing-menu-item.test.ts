@@ -33,10 +33,12 @@ const asRole = (role: string) => ({
   capabilities: { flags: { [BILLING_CAPABILITY]: true }, refreshedAt: 0 }
 })
 
-const visible = (role = 'Owner'): string[] =>
-  selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), asRole(role)).map(
-    (entry) => entry.id
-  )
+const visible = (role = 'Owner', orcaCloudEnabled = true): string[] =>
+  selectVisibleAccountMenuItems(
+    getRegisteredAccountMenuItems(),
+    asRole(role),
+    orcaCloudEnabled
+  ).map((entry) => entry.id)
 
 afterEach(() => {
   auth.status = null
@@ -50,13 +52,17 @@ describe('account menu billing items', () => {
   it('registers Team and Plan & billing behind the billing capability', () => {
     const dispose = registerPlanBillingMenuItem()
     expect(
-      selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), {
-        activeProfileId: 'p1',
-        configured: true,
-        state: 'connected',
-        persistence: 'encrypted',
-        capabilities: { flags: {}, refreshedAt: 0 }
-      }).map((item) => item.id)
+      selectVisibleAccountMenuItems(
+        getRegisteredAccountMenuItems(),
+        {
+          activeProfileId: 'p1',
+          configured: true,
+          state: 'connected',
+          persistence: 'encrypted',
+          capabilities: { flags: {}, refreshedAt: 0 }
+        },
+        true
+      ).map((item) => item.id)
     ).toEqual(['orca.team'])
     expect(visible()).toEqual(['orca.team', 'orca.plan-billing'])
     expect(visible('Admin')).toEqual(['orca.team', 'orca.plan-billing'])
@@ -68,6 +74,18 @@ describe('account menu billing items', () => {
     expect(openCloudConsole).not.toHaveBeenCalled()
     dispose()
     expect(getRegisteredAccountMenuItems()).toHaveLength(0)
+  })
+
+  it('hides every Orca Cloud item while the rollout flag is off', () => {
+    const dispose = registerPlanBillingMenuItem()
+    recordBillingStatus({
+      status: 'ok',
+      entitlement: { ...sampleTeam, plan: null, planLabel: null, status: 'none' }
+    })
+    expect(visible()).toContain('orca.upgrade')
+    expect(visible('Owner', false)).toEqual([])
+    expect(visible('Member', false)).toEqual([])
+    dispose()
   })
 
   it('adds an accent upgrade item only once billing says there is no plan', () => {

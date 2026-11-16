@@ -28,6 +28,7 @@ export function registerPlanBillingMenuItem(): () => void {
       label: () => translate('auto.components.billing.menuItem', 'Plan & billing'),
       icon: CreditCard,
       order: 11,
+      orcaCloud: true,
       requiredCapability: BILLING_CAPABILITY,
       hideFromTeamAdmin,
       onSelect: openPlansDialog
@@ -39,6 +40,7 @@ export function registerPlanBillingMenuItem(): () => void {
     label: () => translate('auto.components.billing.team.menuItem', 'Team'),
     icon: Users,
     order: 10,
+    orcaCloud: true,
     // Team management doesn't depend on billing or a flag: any signed-in account can open it.
     requiresSignIn: true,
     onSelect: () => void openCloudConsole('team')
@@ -60,6 +62,7 @@ export function registerPlanBillingMenuItem(): () => void {
         label: () => translate('auto.components.billing.upgrade.menuItem', 'Upgrade to Orca Cloud'),
         icon: Cloud,
         order: 9,
+        orcaCloud: true,
         tone: 'accent',
         requiredCapability: BILLING_CAPABILITY,
         requiresTeamAdmin: true,

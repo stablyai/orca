@@ -61,6 +61,9 @@ export type OrcaProfileAuthStatus = {
   credentialError?: string
   setupMessage?: string
   reconnectReason?: OrcaProfileReconnectReason
+  /** Set where the build or run decides whether Orca Cloud shows (dev, e2e, internal builds);
+   * absent, it follows the account's `cloud.available` capability. */
+  orcaCloudForced?: boolean
 }
 
 export type OrcaProfileSummary = {

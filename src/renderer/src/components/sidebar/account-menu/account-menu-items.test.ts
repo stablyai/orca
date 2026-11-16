@@ -22,7 +22,7 @@ function register(id: string, order?: number): () => void {
 }
 
 function visibleIds(): string[] {
-  return selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), null).map(
+  return selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), null, true).map(
     (entry) => entry.id
   )
 }
