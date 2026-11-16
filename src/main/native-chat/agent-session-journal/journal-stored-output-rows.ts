@@ -19,7 +19,8 @@ export function readJournalStoredItem<T extends AgentJournalRenderItem = AgentJo
   prefix: Prefix,
   json: unknown
 ): T {
-  return hydrateJournalStoredItem(db, prefix, JSON.parse(String(json)) as T)
+  const item: T = JSON.parse(String(json))
+  return hydrateJournalStoredItem(db, prefix, item)
 }
 
 /** Returns the same object when the item stores nothing, so callers can reuse its row text. */

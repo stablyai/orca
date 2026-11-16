@@ -37,9 +37,12 @@ function withPayload<T extends AgentJournalRenderItem>(
 }
 
 function storedMarker(payload: AgentJournalBoundedPayload | undefined): StoredMarker | null {
-  const stored = (payload as Partial<StoredPayload> | undefined)?.stored
-  return stored && typeof stored === 'object' && typeof stored.truncated === 'boolean'
-    ? stored
+  const stored: unknown = payload && 'stored' in payload ? payload.stored : undefined
+  return typeof stored === 'object' &&
+    stored !== null &&
+    'truncated' in stored &&
+    typeof stored.truncated === 'boolean'
+    ? { truncated: stored.truncated }
     : null
 }
 
@@ -61,9 +64,10 @@ export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
     return null
   }
   const textBytes = Buffer.byteLength(payload.head, 'utf8')
-  // A whole value whose recorded length disagrees could never be proven on read; keep it inline.
+  // Reads bound and check decoding by the recorded length, so a text that disagrees stays inline.
   if (
     textBytes < MIN_STORED_TEXT_BYTES ||
+    textBytes > payload.byteLength ||
     (!payload.truncated && textBytes !== payload.byteLength)
   ) {
     return null

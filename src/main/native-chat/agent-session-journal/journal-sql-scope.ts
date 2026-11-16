@@ -36,9 +36,7 @@ export class JournalSqlScope {
     }
     this.work.decodedBytes += Buffer.byteLength(json)
     const value: T = this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
-    return isJournalItemShape(value)
-      ? (hydrateJournalStoredItem(this.db, this.prefix, value) as T)
-      : value
+    return isJournalItemShape(value) ? hydrateJournalStoredItem(this.db, this.prefix, value) : value
   }
 
   /** A projection row's own payload; never an index value pointer. */
@@ -78,11 +76,16 @@ export class JournalSqlScope {
   }
 }
 
-function isJournalItemShape(value: unknown): value is AgentJournalRenderItem {
+function isJournalItemShape<T>(value: T): value is T & AgentJournalRenderItem {
   return (
     typeof value === 'object' &&
     value !== null &&
-    typeof (value as { itemId?: unknown }).itemId === 'string' &&
-    typeof (value as { body?: { kind?: unknown } }).body?.kind === 'string'
+    'itemId' in value &&
+    typeof value.itemId === 'string' &&
+    'body' in value &&
+    typeof value.body === 'object' &&
+    value.body !== null &&
+    'kind' in value.body &&
+    typeof value.body.kind === 'string'
   )
 }

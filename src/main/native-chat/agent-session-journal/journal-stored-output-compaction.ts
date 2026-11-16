@@ -5,7 +5,7 @@ import { journalStoredItemRow } from './journal-stored-output-rows'
 import { JOURNAL_DOMAIN_ITEM_COLUMNS } from './journal-domain-item-read-columns'
 import { hydrateJournalItemOutput, JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 
-/** `<rowid>` mid-pass, or `done:<ms>` once a pass reached the last row. */
+/** The last rowid examined; rows appended later are picked up, rows behind it are never rescanned. */
 export const JOURNAL_STORED_OUTPUT_CURSOR = 'journal.stored-output.cursor'
 
 // Each page is one writer transaction: bounded rows scanned, rows rewritten, bytes and time.
@@ -14,8 +14,6 @@ const PAGE_ROWS = 32
 const PAGE_BYTES = 512 * 1024
 const PAGE_MS = 5
 const MIN_ROW_BYTES = 512
-// A later pass picks up rows an older build rewrote inline, or rowids reused after deletes.
-const PASS_INTERVAL_MS = 24 * 60 * 60 * 1000
 const WIRE_BYTES = JOURNAL_DOMAIN_ITEM_COLUMNS.indexOf('wire_bytes')
 
 export type JournalStoredOutputCompaction = { kind: 'stored-output-compaction'; more: boolean }
@@ -54,8 +52,7 @@ function compactRow(db: Database.Database, rowid: number, writes: boolean): void
 /** Moves saved tool output and diff text written inline into compressed row blobs, oldest rows first. */
 export function compactJournalStoredOutputPage(
   db: Database.Database,
-  writes = JOURNAL_STORED_OUTPUT_WRITES,
-  now = Date.now()
+  writes = JOURNAL_STORED_OUTPUT_WRITES
 ): JournalStoredOutputCompaction {
   if (!writes) {
     return { kind: 'stored-output-compaction', more: false }
@@ -64,11 +61,7 @@ export function compactJournalStoredOutputPage(
   const saved = db
     .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
     .get(JOURNAL_STORED_OUTPUT_CURSOR)
-  const value = saved ? String(saved.value) : '0'
-  if (value.startsWith('done:') && now - Number(value.slice(5)) < PASS_INTERVAL_MS) {
-    return { kind: 'stored-output-compaction', more: false }
-  }
-  let cursor = value.startsWith('done:') ? 0 : Number(value)
+  let cursor = saved ? Number(saved.value) : 0
   // Lengths and NULL tests come from record headers, so skipped rows never load their text.
   const scanned = db
     .prepare(`SELECT rowid, kind, wire_version, output_blob IS NULL AS inline,
@@ -107,7 +100,7 @@ export function compactJournalStoredOutputPage(
   db.prepare(`INSERT INTO agent_session_store_meta(key,value) VALUES(?,?)
     ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
     JOURNAL_STORED_OUTPUT_CURSOR,
-    more ? String(cursor) : `done:${now}`
+    String(cursor)
   )
   return { kind: 'stored-output-compaction', more }
 }
