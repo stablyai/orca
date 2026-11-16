@@ -88,6 +88,7 @@ beforeEach(() => {
   const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: CHAT }))
   records = new Map([[CHAT, { ...base, location: { ...base.location, workspaceId: WORKTREE } }]])
   hostRef.current = {
+    publishBackgroundTasks: () => {},
     deps: {
       store: {
         getConversation: (id: string) => {

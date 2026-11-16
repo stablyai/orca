@@ -1,3 +1,4 @@
+// @orca-isolated-worker -- Crew source reads require an unmocked session-lineage registry.
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
 import { describe, expect, it, vi } from 'vitest'

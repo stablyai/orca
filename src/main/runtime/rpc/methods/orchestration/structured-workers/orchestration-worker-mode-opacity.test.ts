@@ -78,6 +78,7 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
     hostScope: { kind: 'local', hostId: 'local' }
   })
   hostRef.current = {
+    publishBackgroundTasks: () => {},
     hasSession: () => true,
     deps: {
       store: {
