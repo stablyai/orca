@@ -99,6 +99,27 @@ function newId(f: ReturnType<typeof fixture>): string {
   return f.runtimeAuth.prepareAccountFolder.mock.calls.at(-1)![0]
 }
 
+it('refuses reset-card queries and consumption when Claude OAuth polling is disabled', async () => {
+  const f = fixture()
+  f.settings().claudeOAuthUsageEnabled = false
+  const selected = { accountId: 'a', target: { runtime: 'host' as const, wslDistro: null } }
+  await expect(f.service.queryResetCredits(selected)).rejects.toThrow('Enable Claude usage polling')
+  await expect(
+    f.service.consumeResetCredit({
+      account: selected,
+      identity: {
+        email: 'a@example.test',
+        accountUuid: '4b31b3a5-867b-403a-8834-d8900820c18c',
+        organizationUuid: '7bb9b6c6-ce31-4e30-8dd6-df4b23b4c5e8'
+      },
+      grantId: 'monthly-reset',
+      expectedResetsLeft: 1,
+      expectedClears: ['five_hour'],
+      requestId: '97a2cb6b-6c8d-42ac-8fdc-c03597ad6d31'
+    })
+  ).rejects.toThrow('Enable Claude usage polling')
+})
+
 // Publish atomically so the poller cannot read an empty link.
 function handOverClaudeSignInLink(windowsPath: string, link: string): void {
   const helperPath = join(windowsPath, '.orca-sign-in-browser')

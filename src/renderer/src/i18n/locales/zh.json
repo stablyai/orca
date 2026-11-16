@@ -1,4 +1,17 @@
 {
+  "claude": {
+    "resetCredits": {
+      "updateHost": "请更新此主机上的 Orca，以使用 Claude 重置卡。",
+      "queryFailed": "无法查询重置卡。",
+      "notUsable": "当前不满足使用条件。",
+      "pending": "上次重置的结果仍待确认，暂时无法再次提交重置。",
+      "success": "已完成重置，并核实剩余次数。",
+      "unverified": "Claude 已返回重置成功，剩余次数尚未核实。",
+      "refused": "Claude 未重置额度：{{reason}}",
+      "confirmTitle": "重置 Claude 限额？",
+      "confirmDescription": "这将为当前账号消耗一次 Claude 限额重置权益，并立即重置符合条件的用量窗口。"
+    }
+  },
   "agentLaunch": {
     "connectSsh": "连接到此工作区的 SSH 主机，然后重试。",
     "sshUnavailable": "此 SSH 主机无法启动终端会话。请在工作区中打开终端，并在那里启动智能体。",

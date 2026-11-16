@@ -1,3 +1,12 @@
+import { join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import type {
+  ClaudeResetAccount,
+  ClaudeResetCreditRequest
+} from '../../shared/agent-accounts/claude/claude-reset-credit-types'
+import { ClaudeResetCreditClient } from './reset-credits/claude-reset-credit-client'
+import { ClaudeResetCreditLedger } from './reset-credits/claude-reset-credit-ledger'
+import { prepareClaudeResetAccount } from './reset-credits/claude-reset-credit-account'
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
@@ -18,6 +27,7 @@ import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 
 export class ClaudeAccountService {
+  private resetCreditClient: ClaudeResetCreditClient | null = null
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
@@ -26,7 +36,7 @@ export class ClaudeAccountService {
   private readonly registration: ClaudeAccountRegistration
 
   constructor(
-    store: ClaudeAccountStore,
+    private readonly store: ClaudeAccountStore,
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
       Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
@@ -116,6 +126,37 @@ export class ClaudeAccountService {
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId, target))
+  }
+
+  queryResetCredits(account: ClaudeResetAccount, requestId?: string) {
+    return this.serializeMutation(async () => {
+      this.requireUsagePolling()
+      const { auth, email } = await prepareClaudeResetAccount(account, this.listAccounts())
+      return this.resetClient().query(account, auth, email, requestId)
+    })
+  }
+
+  consumeResetCredit(request: ClaudeResetCreditRequest) {
+    return this.serializeMutation(async () => {
+      this.requireUsagePolling()
+      const { auth } = await prepareClaudeResetAccount(request.account, this.listAccounts())
+      return this.resetClient().consume(request, auth)
+    })
+  }
+
+  private requireUsagePolling(): void {
+    if (this.store.getSettings().claudeOAuthUsageEnabled === false) {
+      throw new Error('Enable Claude usage polling in Settings to query or use reset cards.')
+    }
+  }
+
+  private resetClient(): ClaudeResetCreditClient {
+    this.resetCreditClient ??= new ClaudeResetCreditClient(
+      new ClaudeResetCreditLedger(
+        join(getAppEnvironment().getPath('userData'), 'claude-reset-credit-operations')
+      )
+    )
+    return this.resetCreditClient
   }
 
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {

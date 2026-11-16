@@ -262,6 +262,8 @@ export class RuntimeAccountController {
     return { outcome: result.outcome, scope: result.scope, snapshot }
   }
 
+  claudeResetCredits = () => this.requireServices().claudeAccounts
+
   removeClaude(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     return this.requireServices().claudeAccounts.removeAccount(accountId)
   }
