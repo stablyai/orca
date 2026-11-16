@@ -7,6 +7,10 @@ await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
 await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { AgentHookServer } = await import('../../../agent-hooks/server/agent-hook-server')
+const { agentHookRuntimeDeps } =
+  await import('../../../agent-hooks/runtime/agent-hook-runtime-deps')
+const { AgentStatusObservedPaneIdentities } =
+  await import('../identity/agent-status-observed-pane-identity')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
@@ -215,3 +219,118 @@ it.each([100, 1000])(
     expect(durableMutation).not.toHaveBeenCalled()
   }
 )
+
+describe('a hookless resumed Codex across wakes and shell-confirmed command finishes', () => {
+  const SESSION = { key: 'session_id', id: 'woken-codex' }
+  const SLEPT: SleepingAgentSessionRecord = {
+    paneKey: PANE_KEY,
+    tabId: 'host-tab',
+    worktreeId: TEST_WORKTREE_ID,
+    agent: 'codex',
+    providerSession: SESSION,
+    prompt: '',
+    state: 'done',
+    capturedAt: 100,
+    updatedAt: 100,
+    origin: 'worktree-sleep',
+    restoreOnTabOpenOnly: true,
+    connectionId: null
+  }
+
+  it.each([
+    ['quit', ['0'], false],
+    ['suspended', ['148'], true],
+    ['suspended, then another command', ['148', '0'], true]
+  ] as const)('%s', async (_, finishes, keepsRecovery) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000)
+    const tick = () => vi.setSystemTime(Date.now() + 1_000)
+    const fixture = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        sleepingAgentSessionsByPaneKey: { [PANE_KEY]: SLEPT }
+      })
+    )
+    const server = new AgentHookServer()
+    const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
+      ...agentHookRuntimeDeps(server, new AgentStatusObservedPaneIdentities(), () => ({})),
+      retireAgentHookCompatibilityAuthority: (paneKey, options) =>
+        server.retireProcessAuthority(paneKey, options)
+    })
+    server.setTerminalPaneLifecycle({
+      ownsProcess: () => true,
+      isStopping: () => false,
+      isReversibleStop: () => false,
+      isPlaced: () => true,
+      readSavedRecord: (paneKey) => fixture.getSession().sleepingAgentSessionsByPaneKey?.[paneKey],
+      retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
+    })
+    const live = new Set<string>()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => false,
+      stopAndWait: async (ptyId) => {
+        live.delete(ptyId)
+        runtime.onPtyExit(ptyId, -1)
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () =>
+        [...live].map((id) => ({ id, cwd: TEST_WORKTREE_PATH, title: 'codex' }))
+    })
+    runtime.attachWindow(1)
+    // Orca's wake relaunches the saved conversation; Codex posts no hook until a new turn.
+    const wake = async (ptyId: string) => {
+      tick()
+      live.add(ptyId)
+      const binding = { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID, incarnationId: ptyId }
+      await runtime.syncWindowGraph(1, {
+        tabs: [{ ...binding, worktreeId: TEST_WORKTREE_ID, title: 'codex', layout: null }],
+        leaves: [{ ...binding, worktreeId: TEST_WORKTREE_ID, ptyId, paneRuntimeId: 1 }]
+      })
+      runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
+        ...binding,
+        agentLaunchAuthority: { launchToken: `${ptyId}-launch`, launchAgent: 'codex' }
+      })
+      server.recordLaunchResumeIdentity({
+        paneKey: PANE_KEY,
+        worktreeId: TEST_WORKTREE_ID,
+        agentType: 'codex',
+        providerSession: SESSION,
+        launchedAt: Date.now()
+      })
+    }
+    const saved = () => runtime.readSavedResumeSource(TEST_WORKTREE_ID, PANE_KEY)
+    const sleep = async () => {
+      tick()
+      await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
+      return saved()
+    }
+    const resumable = { agent: 'codex', providerSession: SESSION, origin: 'worktree-sleep' }
+    try {
+      // #42864: an idle resumed Codex keeps its conversation across two sleeps.
+      await wake('pty-1')
+      expect(await sleep()).toMatchObject(resumable)
+      await wake('pty-2')
+      expect(await sleep()).toMatchObject(resumable)
+
+      await wake('pty-3')
+      for (const status of finishes) {
+        tick()
+        runtime.onPtyData('pty-3', `\x1b]133;D;${status}\x07`, Date.now())
+      }
+      // A quit retires the saved conversation itself, before its exit evidence can expire.
+      expect(await saved()).toEqual(keepsRecovery ? expect.objectContaining(resumable) : undefined)
+      server.forgetAgentExit(PANE_KEY)
+      expect(await sleep()).toEqual(keepsRecovery ? expect.objectContaining(resumable) : undefined)
+
+      // Orca relaunching the same conversation owns the pane again through later sleeps.
+      await wake('pty-4')
+      expect(await sleep()).toMatchObject(resumable)
+      await wake('pty-5')
+      expect(await sleep()).toMatchObject(resumable)
+    } finally {
+      server.stop()
+      vi.useRealTimers()
+    }
+  })
+})
