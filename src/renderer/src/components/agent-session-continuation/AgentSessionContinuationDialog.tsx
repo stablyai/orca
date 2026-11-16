@@ -9,7 +9,7 @@ import {
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { Button } from '@/components/ui/button'

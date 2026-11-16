@@ -13,13 +13,13 @@ import { AI_VAULT_AGENTS } from '../../../../../../shared/ai-vault/contracts/ai-
 import {
   runNativeChatCliFork,
   useNativeChatCliForkPending
-} from '../../../tab-bar/native-chat-cli-fork-run'
+} from '../../../tab-bar/session-actions/native-chat-cli-fork-run'
 import {
   resolveTabSessionHistorySubject,
   resolveNativeChatCliForkIdentity,
   type NativeChatCliForkIdentity,
   type NativeChatTabSession
-} from '../../../tab-bar/tab-session-history-switch'
+} from '../../../tab-bar/session-actions/tab-session-history-switch'
 
 function createExecutionHostSelector(
   tabId: string,

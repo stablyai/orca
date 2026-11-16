@@ -259,6 +259,7 @@ export function BrowserPane({
       {showBrowserUse ? (
         <SettingsGroup>
           <BrowserUseSetup
+            hostId={selectedBrowserSessionHostId}
             onConfigureMoreBrowsers={scrollToSessionCookies}
             onOpenComputerUse={onOpenComputerUse}
           />
