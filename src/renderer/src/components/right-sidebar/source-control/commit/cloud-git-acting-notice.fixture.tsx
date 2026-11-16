@@ -33,3 +33,7 @@ export const windowExpired = fixture({
   githubActing: { actingAs: 'bot', reason: 'window_expired' },
   you: { connected: true }
 })
+export const transferred = fixture({
+  githubActing: { actingAs: 'bot', reason: 'transferred' },
+  you: { connected: false }
+})

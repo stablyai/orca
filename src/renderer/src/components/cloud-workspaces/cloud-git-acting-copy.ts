@@ -55,7 +55,14 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
       }
     case 'transferred':
       // A workspace that changed owners is the App's on GitHub for good: connecting wouldn't change it.
-      return { text: t('cloudGitActing.bot', 'Pushes and PRs go out as Orca bot'), connect: false, userId: null }
+      return {
+        text: t(
+          'cloudGitActing.transferred',
+          'Pushes and PRs go out as Orca bot (this workspace changed owners)'
+        ),
+        connect: false,
+        userId: null
+      }
     case 'sender_not_connected':
     case 'reconnect':
       return {
@@ -68,8 +75,5 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
 
 /** The caveat that holds whatever the line says: approvals are refused inside a workspace. */
 export function gitActingCaveat(t: Translate): string {
-  return t(
-    'cloudGitActing.caveat',
-    'Approve pull requests on GitHub. Workspaces can’t approve.'
-  )
+  return t('cloudGitActing.caveat', 'Approve pull requests on GitHub. Workspaces can’t approve.')
 }
