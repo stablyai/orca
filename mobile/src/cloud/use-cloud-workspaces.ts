@@ -28,7 +28,7 @@ const TRANSITIONAL: ReadonlySet<CloudWorkspace['status']> = new Set([
   'deleting'
 ])
 
-export const cloudWorkspacesQueryKey = (sessionId: string | null) =>
+const cloudWorkspacesQueryKey = (sessionId: string | null) =>
   ['orca-cloud', 'workspaces', sessionId] as const
 
 /** True while this screen is on top; Home stays mounted under every pushed screen. */

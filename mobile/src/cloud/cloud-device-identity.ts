@@ -29,7 +29,7 @@ const StoredSchema = z.object({
 
 export type CloudEnrollment = z.infer<typeof EnrollmentSchema>
 
-export type CloudDeviceIdentity = {
+type CloudDeviceIdentity = {
   publicKeyB64: string
   secretKey: Uint8Array
   enrollment: CloudEnrollment | null

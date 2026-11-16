@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch/dispatch'
-import { cloudApiError } from './cloud-api-client'
+import { cloudApiError } from './cloud-api-errors'
 import {
   cloudCredentialsPath,
   nodeCloudCredentialFs,

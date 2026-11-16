@@ -2,7 +2,7 @@ import type { QueuedCloudPrompt } from './cloud-prompt-queue'
 import type { CloudLaunchedAgent } from './cloud-workspace-host-operations'
 
 /** What one delivery pass over a workspace's waiting prompts ended in. */
-export type CloudDeliveryOutcome =
+type CloudDeliveryOutcome =
   | { kind: 'open' }
   | { kind: 'launched'; worktreeId: string; agent: CloudLaunchedAgent }
   /** A prompt didn't start. `open`: the user asked to open the workspace, so it opens anyway. */

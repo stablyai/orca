@@ -14,7 +14,7 @@ import { cloudAgentLabel } from './CloudAgentPicker'
 import { readSnapshotStyles as styles } from './cloud-read-snapshot-styles'
 import { cloudWorkspaceScreenStyles as screen } from './cloud-workspace-screen-styles'
 
-export function readSnapshotSessionStatus(
+function readSnapshotSessionStatus(
   session: Pick<ReadSnapshotSession, 'status' | 'turnOutcome'>,
   t: Translate
 ): string | null {

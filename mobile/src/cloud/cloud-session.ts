@@ -28,7 +28,7 @@ export async function loadCloudControlPlane(): Promise<CloudControlPlane | null>
 }
 
 /** What removing a paired host needs from the app's React context. */
-export type CloudHostRemoval = {
+type CloudHostRemoval = {
   forgetHostClient: (hostId: string) => void
   queryClient: QueryClient
 }

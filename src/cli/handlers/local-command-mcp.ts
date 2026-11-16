@@ -10,7 +10,6 @@ import {
   LOCAL_COMMAND_REASON_MAX,
   type LocalCommandStatusResult
 } from '../../shared/local-commands/local-command-contract'
-import { RuntimeClientError } from '../runtime/connection/types'
 import {
   explainLocalCommandError,
   formatLocalCommandOutcome,
@@ -100,7 +99,7 @@ function asMessage(value: unknown): JsonRpcMessage | null {
 }
 
 /** Tool arguments, checked here so a bad call gets a tool error the agent can read. */
-export function parseLocalCommandToolArguments(args: unknown): LocalCommandInput | string {
+function parseLocalCommandToolArguments(args: unknown): LocalCommandInput | string {
   const command = field(args, 'command')
   const cwd = field(args, 'cwd')
   const timeout = field(args, 'timeout_sec')
@@ -155,10 +154,7 @@ export function serveLocalCommandMcp(deps: LocalCommandMcpDeps): Promise<void> {
       reply(id, { content: [{ type: 'text', text: formatted.text }], isError: formatted.isError })
     } catch (error) {
       const explained = explainLocalCommandError(error)
-      const text =
-        explained instanceof RuntimeClientError || explained instanceof Error
-          ? explained.message
-          : String(explained)
+      const text = explained instanceof Error ? explained.message : String(explained)
       reply(id, { content: [{ type: 'text', text }], isError: true })
     }
   }
