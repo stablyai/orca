@@ -60,7 +60,7 @@ test.describe('Rich markdown link bubble stacking', () => {
       await expect(explorer).toBeVisible()
       await expect(link).toBeVisible()
 
-      await link.click()
+      await link.hover()
 
       const bubble = orcaPage.locator('.rich-markdown-link-bubble')
       await expect(bubble).toBeVisible()
@@ -117,7 +117,7 @@ test.describe('Rich markdown link bubble stacking', () => {
       await expect(bubble).toHaveCount(0)
 
       await orcaPage.getByRole('heading', { name: 'Rich markdown link overlay repro' }).click()
-      await link.click()
+      await link.hover()
       await expect(bubble).toBeVisible()
       const originalEditorZoom = await orcaPage.evaluate(() => {
         const store = window.__store
@@ -134,7 +134,7 @@ test.describe('Rich markdown link bubble stacking', () => {
       }, originalEditorZoom)
 
       await orcaPage.getByRole('heading', { name: 'Rich markdown link overlay repro' }).click()
-      await link.click()
+      await link.hover()
       await expect(bubble).toBeVisible()
       await orcaPage.evaluate(() => {
         const store = window.__store

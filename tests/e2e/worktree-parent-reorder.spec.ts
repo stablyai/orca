@@ -104,7 +104,29 @@ for (const newCardStyle of [false, true]) {
     await orcaPage.waitForTimeout(550)
     await parent.getByRole('button', { name: 'Show 53 child workspaces' }).click()
     await expect(parent.getByRole('button', { name: 'Hide 53 child workspaces' })).toBeVisible()
-    await expect(parent.locator('[role="option"]')).toHaveCount(53)
-    await expect(parent.locator('[role="option"]').first()).toContainText('Child 0')
+    const childRows = sidebar.locator('[role="option"][data-worktree-id]')
+    const mountedChildren = async (): Promise<string[]> =>
+      (
+        await childRows.evaluateAll((rows) =>
+          rows.map((row) => row.getAttribute('data-worktree-id'))
+        )
+      ).filter((id): id is string => id !== null && childIds.includes(id))
+    await expect(sidebar.locator(`[data-worktree-id=${JSON.stringify(childIds[0])}]`)).toBeVisible()
+    const seenChildren = new Set<string>()
+    for (let step = 0; step < childIds.length && seenChildren.size < childIds.length; step++) {
+      const mounted = await mountedChildren()
+      const indices = mounted.map((id) => childIds.indexOf(id))
+      expect(indices).toEqual([...indices].sort((a, b) => a - b))
+      mounted.forEach((id) => seenChildren.add(id))
+      if (seenChildren.size === childIds.length) {
+        break
+      }
+      const previousLast = mounted.at(-1)
+      await sidebar.evaluate((element) => {
+        element.scrollTop += element.clientHeight / 2
+      })
+      await expect.poll(async () => (await mountedChildren()).at(-1)).not.toBe(previousLast)
+    }
+    expect([...seenChildren]).toEqual(childIds)
   })
 }
