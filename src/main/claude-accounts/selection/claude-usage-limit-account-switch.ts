@@ -1,6 +1,6 @@
 import type { ClaudeAccountSwitchSettings } from '../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { ClaudeRateLimitAccountsState } from '../../../shared/agent-accounts/managed-account-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
   ProviderRateLimits,
   RateLimitState
