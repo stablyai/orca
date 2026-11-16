@@ -45,4 +45,8 @@ export type MarkdownPreviewSourceOpenFile = {
 export type MarkdownPreviewBlockRange = {
   startLine: number
   endLine: number
+  /** Notes wholly inside one of these belong to that nested target (a table row) instead. */
+  nestedRanges?: readonly MarkdownPreviewBlockRange[]
+  /** Only notes wholly inside the range, so an enclosing block's note stays on that block. */
+  containedNotesOnly?: boolean
 }

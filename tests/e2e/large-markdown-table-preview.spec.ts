@@ -116,7 +116,7 @@ for (const width of [1920, 1280]) {
     await orcaPage.getByRole('button', { name: 'Next match', exact: true }).click()
     await expectSettledInViewport(lastCell)
     const annotation = preview
-      .locator('[data-annotation-block-key]')
+      .locator('tr[data-annotation-block-key]')
       .filter({ has: orcaPage.getByRole('cell', { name: 'Item 11999', exact: true }) })
     await annotation.hover()
     await annotation.getByRole('button', { name: 'Add note', exact: true }).click()

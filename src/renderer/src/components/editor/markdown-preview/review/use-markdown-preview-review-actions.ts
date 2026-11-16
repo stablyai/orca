@@ -4,6 +4,7 @@ import type { MarkdownReviewNote } from '@/lib/editor/markdown/review-notes/mark
 import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import type { MarkdownPreviewBlockRange } from '../render-tree/markdown-preview-types'
 import { requestMarkdownPreviewEditorRevealFrame } from '../links/markdown-preview-editor-reveal'
+import { isMarkdownPreviewNoteOwnedByRange } from './markdown-preview-block-model'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
@@ -13,7 +14,7 @@ function isMarkdownAnnotationNavigationClick(target: EventTarget | null): boolea
     return false
   }
   return !target.closest(
-    'a,button,input,textarea,select,summary,[contenteditable="true"],.markdown-annotation-controls'
+    'a,button,input,textarea,select,summary,[contenteditable="true"],.markdown-annotation-controls,.markdown-annotation-row-notes'
   )
 }
 
@@ -218,13 +219,19 @@ export function useMarkdownPreviewReviewActions({
         return
       }
       const blocks = root.querySelectorAll<HTMLElement>('[data-source-line][data-source-end-line]')
+      // Why narrowest: a table row nests inside its table, and the row is the note's target.
       let target: HTMLElement | null = null
+      let targetSpan = Infinity
       for (const block of blocks) {
         const startLine = Number(block.dataset.sourceLine)
         const endLine = Number(block.dataset.sourceEndLine)
-        if (startLine <= comment.lineNumber && comment.lineNumber <= endLine) {
+        if (
+          startLine <= comment.lineNumber &&
+          comment.lineNumber <= endLine &&
+          endLine - startLine < targetSpan
+        ) {
           target = block
-          break
+          targetSpan = endLine - startLine
         }
       }
       target?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'center' })
@@ -234,9 +241,7 @@ export function useMarkdownPreviewReviewActions({
 
   const getMarkdownCommentsForRange = useCallback(
     (range: MarkdownPreviewBlockRange): DiffComment[] =>
-      markdownComments.filter(
-        (comment) => range.startLine <= comment.lineNumber && comment.lineNumber <= range.endLine
-      ),
+      markdownComments.filter((comment) => isMarkdownPreviewNoteOwnedByRange(comment, range)),
     [markdownComments]
   )
 
@@ -252,6 +257,8 @@ export function useMarkdownPreviewReviewActions({
       if (!comment) {
         return
       }
+      // Why: an enclosing table must not redirect a row click to its own notes.
+      event.stopPropagation()
       scrollRenderedMarkdownReviewNoteIntoView(comment)
     },
     [activeReviewCommentId, getMarkdownCommentsForRange, scrollRenderedMarkdownReviewNoteIntoView]

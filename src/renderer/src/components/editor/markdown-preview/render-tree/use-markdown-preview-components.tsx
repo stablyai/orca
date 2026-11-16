@@ -72,7 +72,8 @@ export function useMarkdownPreviewComponents({
   } = foundation
   const { scrollToAnchor } = viewport
   const { getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick } = reviewActions
-  const { renderAnnotationControls, wrapAnnotatedBlock } = annotationRenderers
+  const { renderAnnotationControls, renderAnnotatedTableRow, wrapAnnotatedBlock } =
+    annotationRenderers
   const expandMermaidDiagram = useMermaidDiagramExpand()
 
   return useMemo(() => {
@@ -245,6 +246,8 @@ export function useMarkdownPreviewComponents({
           node as MarkdownPreviewPositionNode,
           <table {...props}>{children}</table>
         ),
+      tr: ({ node, children, ...props }) =>
+        renderAnnotatedTableRow(node as MarkdownPreviewPositionNode, props, children),
       li: ({ node, children, ...props }) => {
         const positionNode = node as MarkdownPreviewPositionNode
         const range = hasMarkdownPreviewNestedBlock(positionNode)
@@ -340,6 +343,7 @@ export function useMarkdownPreviewComponents({
     openFile,
     openMarkdownPreview,
     renderAnnotationControls,
+    renderAnnotatedTableRow,
     scrollToAnchor,
     setMarkdownViewMode,
     sourceOwner,
