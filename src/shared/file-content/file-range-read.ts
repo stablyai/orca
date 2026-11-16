@@ -5,6 +5,9 @@
  * Reject oversized requests; never clamp, since a short response looks like EOF to position-based paging. */
 export const MAX_FILE_RANGE_READ_BYTES = 256 * 1024
 
+/** Capped range replies one relay connection holds at once; a third is rejected (see above). */
+export const MAX_CONCURRENT_FILE_RANGE_READS = 2
+
 /** Distinguish invalid range requests from unreadable-file failures. */
 export class FileRangeReadRequestError extends Error {
   constructor(message: string) {
