@@ -1,4 +1,5 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { resolveTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeTerminalWait } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
@@ -190,5 +191,7 @@ function noteTargetAgentType(
   const tab = state.tabsByWorktree[worktreeId]?.find(
     (candidate) => candidate.id === noteTarget.tabId
   )
-  return row?.agentType ?? tab?.launchAgent ?? null
+  return (
+    row?.agentType ?? tab?.launchAgent ?? (tab ? resolveTerminalTitleAgentType(tab.title) : null)
+  )
 }

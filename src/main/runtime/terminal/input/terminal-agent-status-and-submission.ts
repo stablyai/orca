@@ -11,6 +11,7 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 import { hasCompatibleAgentTitleIdentity } from '../../../../shared/agent-status/title/agent-title-owner'
 import type { PtyForegroundProcessRead } from '../lifecycle/pty-foreground-observation-state'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
+import { resolveTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
@@ -53,8 +54,11 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   async isTerminalAgentApprovalUnseen(handle: string): Promise<boolean> {
     const ptyId = this.getTerminalAgentStatusPtyId(handle)
     const foreground = await this.readPtyForegroundProcessFromController(ptyId)
+    // A wrapper such as node can hide the agent until discovery settles; its title still names it.
     const agent =
-      recognizeAgentProcess(foreground?.process)?.agent ?? this.getPaneTerminalAgent(ptyId)
+      recognizeAgentProcess(foreground?.process)?.agent ??
+      this.getPaneTerminalAgent(ptyId) ??
+      resolveTerminalTitleAgentType(this.getTerminalAgentStatusSnapshot(handle, ptyId).title ?? '')
     const paneKey = this.getPaneKeyForTerminalHandle(handle)
     const row = selectLatestAgentStatusRow({
       handles: new Set([handle, ...this.getExistingTerminalHandlesForPtyId(ptyId)]),
