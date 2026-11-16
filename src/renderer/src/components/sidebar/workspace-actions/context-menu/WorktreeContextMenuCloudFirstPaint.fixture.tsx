@@ -80,7 +80,24 @@ function firstPaint(asleep: boolean) {
         }
       },
       // Restored panels on the asleep one: what made the local "Sleep" show beside Wake.
-      browserTabsByWorktree: asleep ? { [worktree.id]: [{ id: 'browser-1' }] } : {}
+      browserTabsByWorktree: asleep
+        ? {
+            [worktree.id]: [
+              {
+                id: 'browser-1',
+                worktreeId: worktree.id,
+                url: 'http://localhost:3000',
+                title: 'App',
+                loading: false,
+                faviconUrl: null,
+                canGoBack: false,
+                canGoForward: false,
+                loadError: null,
+                createdAt: 1
+              }
+            ]
+          }
+        : {}
     },
     setup: () => {
       seedCloudWorkspaceSnapshot({
