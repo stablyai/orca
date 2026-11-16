@@ -7,7 +7,12 @@ import { externalAppPrompt } from './browser-external-app-prompt'
 function AskOnMount({ appName }: { appName: string }): null {
   const confirm = useConfirmationDialog()
   useEffect(() => {
-    const request = { appName, scheme: 'vscode', origin: 'https://github.com', rememberSite: false }
+    const request = {
+      appName,
+      scheme: 'vscode',
+      origin: 'https://github.com',
+      rememberSite: 'https://github.com'
+    }
     void externalAppPrompt.ask(confirm, request, new AbortController().signal)
   }, [appName, confirm])
   return null
