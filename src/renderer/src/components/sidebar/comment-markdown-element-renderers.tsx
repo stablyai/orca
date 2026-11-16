@@ -2,7 +2,7 @@ import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls
 import React from 'react'
 import { isTrustedCompactImageSrc } from './comment-markdown-sanitize'
 import type { Components } from 'react-markdown'
-import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat/native-chat-href-routing'
+import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat/file-access/native-chat-href-routing'
 import {
   CommentMarkdownDocumentCode,
   CommentMarkdownDocumentPre

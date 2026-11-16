@@ -1,4 +1,4 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { filterRecord, omitStoredFields, withoutKey } from '../persistence/stored-record-fields'
 import { canReplacePreviewContentType, partitionPinnedTabOrder } from '../tab-groups/tab-order'
 import { getNextTerminalOrdinal } from '../terminal-topology/terminal-tab-ordinal'

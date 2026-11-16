@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { getEditorFileOperationContext } from './editor-file-operation-owner'
 
-vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const worktreeId = 'repo::/remote/repo'
 

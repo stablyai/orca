@@ -63,11 +63,26 @@ export const getAdvancedSearchEntry = createLocalizedCatalog(
             'updater'
           )
         ]
+      },
+      uninstall: {
+        title: translate('settings.uninstall.title', 'Uninstall Orca'),
+        description: translate(
+          'settings.uninstall.searchDescription',
+          'Remove agent hooks, the orca command, the background service and hooks on SSH hosts.'
+        ),
+        keywords: [
+          ...translateSearchKeyword('settings.uninstall.keywords.uninstall', 'uninstall'),
+          ...translateSearchKeyword('settings.uninstall.keywords.remove', 'remove'),
+          ...translateSearchKeyword('settings.uninstall.keywords.delete', 'delete'),
+          ...translateSearchKeyword('settings.uninstall.keywords.cleanup', 'cleanup'),
+          ...translateSearchKeyword('settings.uninstall.keywords.hooks', 'hooks')
+        ]
       }
     }) satisfies Record<string, SettingsSearchEntry>
 )
 
 export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAdvancedNetworkSearchEntries(),
-  getAdvancedSearchEntry().http1Compatibility
+  getAdvancedSearchEntry().http1Compatibility,
+  getAdvancedSearchEntry().uninstall
 ])

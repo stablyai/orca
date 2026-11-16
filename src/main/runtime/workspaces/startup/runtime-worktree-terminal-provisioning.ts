@@ -3,7 +3,7 @@ import type { CreateWorktreeResult } from '../../../../shared/worktree/create-ty
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import { buildObservedSetupCommand } from '../../orchestration/workers/launch/setup-completion-signal'
 import { buildSetupRunnerCommand } from '../../../../shared/agent-launch/startup/setup-runner-command'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { DefaultTerminalTab } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 type TerminalResult = { handle: string }

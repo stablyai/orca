@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { EyeOff, PanelBottom, PanelTop } from 'lucide-react'
+import { EyeOff, PanelBottom, PanelTop, RotateCcw } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,9 +8,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store/index'
-import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome-types'
+import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { resetFloatingTerminalPanelLayout } from '../geometry/floating-terminal-panel-layout-reset'
 
 type FloatingTerminalIconContextMenuProps = {
   children: React.ReactNode
@@ -99,7 +100,7 @@ export function FloatingTerminalIconContextMenu({
             style={{ left: menuPoint.x, top: menuPoint.y }}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-52" sideOffset={0} align="start">
+        <DropdownMenuContent sideOffset={0} align="start">
           <DropdownMenuItem
             className="whitespace-nowrap"
             onSelect={() => {
@@ -108,6 +109,16 @@ export function FloatingTerminalIconContextMenu({
           >
             {moveAction.icon}
             {moveAction.label}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="whitespace-nowrap"
+            onSelect={resetFloatingTerminalPanelLayout}
+          >
+            <RotateCcw className="size-3.5" />
+            {t(
+              'auto.components.floating.terminal.FloatingTerminalIconContextMenu.a2fbd81c1b',
+              'Reset Floating Workspace Position and Size'
+            )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

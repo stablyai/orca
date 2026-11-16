@@ -43,7 +43,12 @@ vi.mock('../worker/start/placement/worker-placement-topology', async (importOrig
   ...(await importOriginal<Record<string, unknown>>()),
   createStructuredWorkerSessionForWorktree: async (args: { effects: unknown[] }) => {
     args.effects.push({ kind: 'terminal', role: 'agent', action: 'created' })
-    return { identity: { handle: STRUCTURED_HANDLE, sessionId: 'sess_worker' }, host: {} }
+    return {
+      identity: { handle: STRUCTURED_HANDLE, sessionId: 'sess_worker' },
+      host: {},
+      // The user's saved chat selection, seeded because the start asked for no model.
+      options: { model: 'claude-haiku-5-5', effort: 'high' }
+    }
   },
   createExistingWorktreeWorkerTerminal: async () => ({ handle: TERMINAL_HANDLE })
 }))
@@ -195,5 +200,21 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
       '=== SUB-DISPATCH ==='
     )
+  })
+
+  it('records the model and effort a chat worker was seeded with as its effective launch', async () => {
+    const paneKey = installStructuredCoordinator('structworker_coord', 'sess_coord')
+    const result = await startWorker({
+      settings: STRUCTURED_DEFAULT,
+      from: 'structworker_coord',
+      coordinatorPaneKey: paneKey
+    })
+
+    const seeded = { agent: 'claude', model: 'claude-haiku-5-5', effort: 'high' }
+    expect(result).toMatchObject({ state: 'ready', launch: { effective: seeded } })
+    expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options).launch).toEqual({
+      requested: { agent: 'claude', model: null, effort: null },
+      effective: seeded
+    })
   })
 })

@@ -13,7 +13,7 @@ import type {
   PublishedTerminal,
   PublishedWorkspaceLayout
 } from './workspace-layout-published'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 function layoutTab(tab: PublishedTab): LayoutTab {
   const fields = {

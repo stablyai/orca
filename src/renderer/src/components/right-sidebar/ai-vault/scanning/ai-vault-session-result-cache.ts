@@ -1,5 +1,5 @@
 import type { AiVaultListResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import {
   aiVaultCachedDepthServes,
   aiVaultSessionDepthCovers,

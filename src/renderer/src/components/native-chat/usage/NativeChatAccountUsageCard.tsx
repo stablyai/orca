@@ -11,7 +11,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type {
   AgentSessionAccountUsage,
   AgentSessionUsageAccount
-} from '../../../../../shared/agent-session/agent-session-account-usage'
+} from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
 import type { CodexRateLimitResetOutcome } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'

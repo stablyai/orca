@@ -19,7 +19,7 @@ import {
   type AgentSubagentSnapshot
 } from '../../../../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { mainAgentStatusEqual } from '../../../../../../shared/agent-status/lifecycle/main-agent-status'
-import { structuredChildWorkLegacySubagents } from '../../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacySubagents } from '../../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {

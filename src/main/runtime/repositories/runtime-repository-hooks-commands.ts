@@ -1,5 +1,8 @@
-import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared/execution-host'
-import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost
+} from '../../../shared/execution-host/execution-host'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
@@ -17,7 +20,7 @@ import {
   getSetupConfig,
   getSetupTrustContent
 } from '../../../shared/workspace-setup/hooks/orca-hook-setup-config'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'

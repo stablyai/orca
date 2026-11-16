@@ -1,7 +1,7 @@
 import '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import {
   MOCK_GIT_WORKTREES,
   computeWorktreePathMock,

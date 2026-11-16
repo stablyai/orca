@@ -466,3 +466,35 @@ it('retiming an old HEAD failure cannot delay the newer HEAD return under Off', 
     errorsBeforeRetime
   )
 })
+
+it('a row whose shown data is newer but for another HEAD takes the exact cached answer once, without spinning', async () => {
+  const { coordinator } = await load()
+  const row = makeCandidate({ currentHeadOid: 'head-a', isSelected: true })
+  coordinator.reportVisiblePRRefreshCandidates([row], 1, 1)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(readsOf('feature/test')).toBe(1)
+
+  // The renderer holds a newer read made while the worktree was on another HEAD.
+  await vi.advanceTimersByTimeAsync(20_000)
+  const outcomes = () =>
+    coordinatorMocks.sendToTrustedUIRendererMock.mock.calls.filter(([, event]) => event.outcome)
+      .length
+  const before = outcomes()
+  coordinatorMocks.sendToTrustedUIRendererMock.mockImplementation(() => {
+    // A synchronous spin never lets fake time pass: end it once so the test can report it.
+    if (outcomes() === before + 20) {
+      vi.setSystemTime(Date.now() + 10 * 60_000)
+    }
+  })
+  coordinator.reportVisiblePRRefreshCandidates(
+    [{ ...row, cachedFetchedAt: Date.now() - 1_000, cachedHeadOid: 'head-b', cachedHasPR: true }],
+    2,
+    1
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  expect(outcomes() - before).toBe(1)
+  expect(readsOf('feature/test')).toBe(1)
+  // The row reads again once the cached answer for its HEAD goes stale.
+  await vi.advanceTimersByTimeAsync(40_000)
+  expect(readsOf('feature/test')).toBe(2)
+})

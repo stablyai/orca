@@ -53,7 +53,7 @@ import {
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
 
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 export function hasPendingWorktreeCreatePreparations(): boolean {
   return hasPendingPreparations()

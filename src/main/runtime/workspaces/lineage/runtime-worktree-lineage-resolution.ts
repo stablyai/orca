@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type {
