@@ -255,7 +255,9 @@ describe('Orca Cloud surfaces', () => {
       />
     )
     expect(getByRole('alert').textContent).toContain('node ran out of memory')
-    expect(getByRole('alert').textContent).toContain('It was stopped')
+    expect(getByRole('alert').textContent).toContain(
+      'Orca stopped it to keep the workspace running'
+    )
     fireEvent.click(getByRole('button', { name: 'Dismiss' }))
     expect(onDismiss).toHaveBeenCalled()
   })

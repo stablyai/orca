@@ -24,6 +24,8 @@ import {
   registerQueuedCloudArchive
 } from '@/lib/orca-cloud/pending-cloud-archive'
 import { cloudSyncRemovalPreview } from '@/lib/orca-cloud/cloud-sync-store'
+import { archiveTtlDays } from '@/lib/orca-cloud/archive-ttl'
+import { DEFAULT_ARCHIVE_TTL_DAYS } from './archive-snapshot-copy'
 import { cloudWorkspaceTarget } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import {
   askArchiveAnywayAfterHookFailure,
@@ -175,7 +177,7 @@ export function runArchiveWithUndo(
           description: askHookWake
             ? `${archivedDetail(options.localCopy)} ${translate(
                 'orcaCloudWorkspace.archiveHook.wakeFirst',
-                'It wakes first to run its archive hook.'
+                'It wakes first to run the archive script in orca.yaml.'
               )}`
             : archivedDetail(options.localCopy),
           action: {
@@ -185,7 +187,7 @@ export function runArchiveWithUndo(
           ...(askHookWake
             ? {
                 cancel: {
-                  label: translate('orcaCloudWorkspace.archiveHook.skip', 'Skip hook'),
+                  label: translate('orcaCloudWorkspace.archiveHook.skip', 'Skip script'),
                   onClick: () => {
                     options.onSkipHookWake?.()
                     // Keep Undo for the rest of the window.
@@ -202,27 +204,35 @@ export function runArchiveWithUndo(
 }
 
 function archivedDetail(localCopy?: { hasLocalCopy: boolean; editedHere: number }): string {
+  // Same retention words as the Archive tooltip and dialog.
+  const count = archiveTtlDays() ?? DEFAULT_ARCHIVE_TTL_DAYS
   if (localCopy?.editedHere) {
     return translate(
       'orcaCloudWorkspace.archivedDetailLocalEdits',
-      'It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed files on this computer will be removed.',
+      'Kept for {{days}} days, then deleted. {{count}} changed files on this computer will be removed.',
       {
         count: localCopy.editedHere,
+        days: count,
         defaultValue_one:
-          'It goes to sleep and stays browsable: PRs, last changes and files. {{count}} changed file on this computer will be removed.'
+          'Kept for {{days}} days, then deleted. {{count}} changed file on this computer will be removed.'
       }
     )
   }
   if (localCopy?.hasLocalCopy) {
     return translate(
       'orcaCloudWorkspace.archivedDetailLocalCopy',
-      'It goes to sleep and stays browsable: PRs, last changes and files. The copy on this computer is removed too.'
+      'Kept for {{count}} days, then deleted. The copy on this computer will be removed.',
+      {
+        count,
+        defaultValue_one:
+          'Kept for {{count}} day, then deleted. The copy on this computer will be removed.'
+      }
     )
   }
-  return translate(
-    'orcaCloudWorkspace.archivedDetail',
-    'It goes to sleep and stays browsable: PRs, last changes and files.'
-  )
+  return translate('orcaCloudWorkspace.archivedDetail', 'Kept for {{count}} days, then deleted.', {
+    count,
+    defaultValue_one: 'Kept for {{count}} day, then deleted.'
+  })
 }
 
 /** Sidebar archive: the ordinary Sleep, then the control-plane archive, behind the Undo toast. */

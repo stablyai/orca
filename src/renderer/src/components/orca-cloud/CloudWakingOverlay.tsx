@@ -259,7 +259,7 @@ export function CloudWakingOverlay({
             <div className="flex justify-end gap-2">
               {terminalStalled || billing ? null : (
                 <Button size="sm" variant="ghost" onClick={onRestart}>
-                  {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
+                  {t('orcaCloudWorkspace.restartSandbox', 'Restart')}
                 </Button>
               )}
               <Button
@@ -342,7 +342,7 @@ export function CloudWakingOverlay({
             {stuck ? (
               <div className="flex gap-2">
                 <Button size="xs" variant="ghost" onClick={onRestart}>
-                  {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
+                  {t('orcaCloudWorkspace.restartSandbox', 'Restart')}
                 </Button>
                 <Button size="xs" onClick={onRetry}>
                   {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}

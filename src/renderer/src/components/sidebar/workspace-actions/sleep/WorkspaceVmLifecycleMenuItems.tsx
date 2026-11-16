@@ -204,7 +204,7 @@ function VmLifecycleMenuItem({
         {cloud
           ? t(
               'orcaCloudWorkspace.menu.sleepDescription',
-              "Close this workspace's panels and put its sandbox to sleep. Opening the workspace wakes it."
+              'Pauses the workspace until you open it again.'
             )
           : t(
               'workspace.vm.menu.suspendDescription',
