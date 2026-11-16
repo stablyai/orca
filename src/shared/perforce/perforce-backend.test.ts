@@ -46,7 +46,7 @@ describe.skipIf(process.platform === 'win32')('localPerforceBackend with a fake 
   })
 
   afterEach(async () => {
-    process.env = previous
+    process.env = { ...previous }
     await rm(dir, { recursive: true, force: true })
   })
 
