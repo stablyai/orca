@@ -40,16 +40,19 @@ export function RowSlot({
   detail
 }: {
   model: RowsModel
-  step: OrcaUninstallStep
+  /** Several steps when one row stands for all of them. */
+  step: OrcaUninstallStep | readonly OrcaUninstallStep[]
   meta: React.ReactNode
   detail?: string | null
 }): React.JSX.Element {
-  if (model.phase === 'idle' || !model.plan) {
+  const plan = model.plan
+  if (model.phase === 'idle' || !plan) {
     return <span className={META_CLASS}>{meta}</span>
   }
+  const steps = typeof step === 'string' ? [step] : step
   const kind = getOrcaUninstallSlotKind(
-    getOrcaUninstallStepStates(model.plan, step),
-    isStepBusy(model, step)
+    steps.flatMap((each) => getOrcaUninstallStepStates(plan, each)),
+    steps.some((each) => isStepBusy(model, each))
   )
   return (
     <span className="flex justify-self-end">

@@ -33,10 +33,12 @@ const VISIBLE_AGENT_LOGOS = 7
 function AgentRows({ model }: { model: RowsModel }): React.JSX.Element | null {
   const t = useTranslate()
   const agents = model.plan?.agents ?? []
+  const scripts = model.plan?.hookScripts ?? null
   const [expanded, toggle] = useAutoExpand(
-    agents.some((entry) => isOrcaUninstallProblem(entry.state))
+    agents.some((entry) => isOrcaUninstallProblem(entry.state)) ||
+      (scripts !== null && isOrcaUninstallProblem(scripts.state))
   )
-  if (agents.length === 0) {
+  if (agents.length === 0 && !scripts) {
     return null
   }
   const hidden = agents.length - VISIBLE_AGENT_LOGOS
@@ -48,10 +50,12 @@ function AgentRows({ model }: { model: RowsModel }): React.JSX.Element | null {
         label={
           <>
             <span>
-              {t('settings.uninstall.rows.agents', 'Hooks in {{count}} agents', {
-                count: agents.length,
-                defaultValue_one: 'Hooks in 1 agent'
-              })}
+              {agents.length > 0
+                ? t('settings.uninstall.rows.agents', 'Hooks in {{count}} agents', {
+                    count: agents.length,
+                    defaultValue_one: 'Hooks in 1 agent'
+                  })
+                : t('settings.uninstall.rows.hookScripts', 'Hook scripts')}
             </span>
             <span className="flex items-center gap-1">
               {agents.slice(0, VISIBLE_AGENT_LOGOS).map((entry) => (
@@ -65,13 +69,14 @@ function AgentRows({ model }: { model: RowsModel }): React.JSX.Element | null {
             </span>
           </>
         }
-        slot={<RowSlot model={model} step="agent-hooks" meta={null} />}
+        slot={<RowSlot model={model} step={HOOK_STEPS} meta={null} />}
       />
       {expanded ? (
         <div className="pl-6">
           {agents.map((entry) => (
             <AgentSubRow key={entry.agent} model={model} entry={entry} />
           ))}
+          {scripts ? <HookScriptsSubRow model={model} entry={scripts} /> : null}
         </div>
       ) : null}
     </>
@@ -111,6 +116,44 @@ function AgentSubRow({
               variant="outline"
               size="xs"
               onClick={() => model.retry({ step: 'agent-hooks', only: [entry.agent] })}
+            >
+              {t('settings.uninstall.retry', 'Retry')}
+            </Button>
+          ) : null
+        }
+      />
+    </div>
+  )
+}
+
+// The scripts are what the agents' hook entries run, so they belong to the same row.
+const HOOK_STEPS: readonly OrcaUninstallStep[] = ['agent-hooks', 'hook-scripts']
+
+function HookScriptsSubRow({
+  model,
+  entry
+}: {
+  model: RowsModel
+  entry: OrcaUninstallSimpleEntry
+}): React.JSX.Element {
+  const t = useTranslate()
+  const kind = getOrcaUninstallSlotKind([entry.state], isStepBusy(model, 'hook-scripts'))
+  return (
+    <div className={SUB_ROW_CLASS}>
+      <Folder className="size-3.5 text-muted-foreground" />
+      <span className="min-w-0 break-words">
+        {t('settings.uninstall.rows.hookScripts', 'Hook scripts')}
+      </span>
+      <span className={PATH_CLASS}>{entry.location}</span>
+      <SubRowSlot
+        kind={model.phase === 'idle' ? 'blank' : kind}
+        detail={entry.detail}
+        action={
+          model.phase === 'done' && entry.state === 'error' ? (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => model.retry({ step: 'hook-scripts' })}
             >
               {t('settings.uninstall.retry', 'Retry')}
             </Button>
@@ -201,14 +244,6 @@ export function OrcaUninstallRows({ model }: { model: RowsModel }): React.JSX.El
         icon={<Server className="size-3.5" />}
         label={t('settings.uninstall.rows.service', 'Background service')}
         mono={false}
-      />
-      <SimpleStepRow
-        model={model}
-        step="hook-scripts"
-        entry={plan.hookScripts}
-        icon={<Folder className="size-3.5" />}
-        label={t('settings.uninstall.rows.hookScripts', 'Hook scripts')}
-        mono
       />
       <OrcaUninstallHostRows model={model} />
     </>
