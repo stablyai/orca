@@ -19,6 +19,7 @@ import {
   EDGE_CONTROL_DEFAULTS,
   edgeAnyRegionRolloutPermille,
   edgeCountryExcluded,
+  edgeFrontDoorListsHost,
   edgeRegionRolloutPermille,
   edgeRolloutPermille,
   type EdgeControlFlags
@@ -84,8 +85,9 @@ export function edgeCohortBucketPermille(relayHostId: string): number {
   return (hash % 100) * 10 + (Math.floor(hash / 100) % 10)
 }
 
-// Mode off or down empties the cohort. Otherwise deny wins, then host allow, then region scope
-// and the region's country exclusion; within the region, account allow or the region's rollout.
+// Mode off or down empties the cohort. Otherwise deny wins, then host allow or a host listed by id
+// on a front door (director/edge.json frontDoor.hosts), then region scope and the region's country
+// exclusion; within the region, account allow or the region's rollout.
 // `country`: the ask's (null when unknown); undefined when the caller has no ask (the evacuation
 // sweep), which skips the exclusion. Region 'any' (the sweep, for a host with no recorded region)
 // has no scope or exclusion and uses the highest in-scope rollout.
@@ -100,6 +102,7 @@ export function inEdgeCohort(
   if (flags.mode !== 'on') return false
   if (config.denyHosts.has(relayHostId)) return false
   if (config.allowHosts.has(relayHostId)) return true
+  if (edgeFrontDoorListsHost(flags, config.frontDoorUrls, relayHostId)) { return true }
   let rollout: number
   if (region === 'any') {
     rollout = edgeAnyRegionRolloutPermille(config, flags)
@@ -127,6 +130,7 @@ export function mayBeOnEdge(config: EdgeRelayConfig, relayHostId: string, userId
   const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
   if (flags.leaveCeilingPermille === undefined) return true
   if (config.allowHosts.has(relayHostId) || config.denyHosts.has(relayHostId)) return true
+  if (edgeFrontDoorListsHost(flags, config.frontDoorUrls, relayHostId)) { return true }
   if (userId !== undefined && config.allowUsers?.has(userId)) return true
   const ceiling = Math.max(
     flags.leaveCeilingPermille,

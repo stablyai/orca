@@ -106,15 +106,20 @@ describe('edgeFrontDoorFor', () => {
     expect(edgeFrontDoorFor(f, new Set(['https://other.relay.example.test']), HOST, 'us-central1', 'CN')).toBeUndefined()
   })
 
-  it('a region country exclusion wins over both the country and the host list', () => {
+  it('a region country exclusion wins over the country list, but not over a host listed by id', () => {
     const f = flags({ url: DOOR, countries: ['CN'], hosts: [HOST] }, { regionExcludeCountries: { 'us-central1': ['CN'] } })
     expect(edgeFrontDoorFor(f, urls, OTHER, 'us-central1', 'CN')).toBeUndefined()
-    expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', 'CN')).toBeUndefined()
+    expect(edgeFrontDoorFor(f, urls, HOST, 'us-central1', 'CN')).toEqual({ url: DOOR, byCountry: true })
+    const idOnly = flags({ url: DOOR, hosts: [HOST] }, { regionExcludeCountries: { 'us-central1': ['CN'] } })
+    expect(edgeFrontDoorFor(idOnly, urls, HOST, 'us-central1', 'CN')).toEqual({ url: DOOR, byCountry: false })
+    // Still only for a URL on the boot list.
+    expect(edgeFrontDoorFor(idOnly, undefined, HOST, 'us-central1', 'CN')).toBeUndefined()
     // Another region's exclusion does not apply.
     expect(edgeFrontDoorFor(f, urls, OTHER, 'asia-east2', 'CN')).toEqual({ url: DOOR, byCountry: true })
-    // Excluding unknown countries keeps an unknown-country listed host off the front door too.
-    const unknown = flags({ url: DOOR, hosts: [HOST] }, { regionExcludeUnknownCountry: { 'us-central1': true } })
-    expect(edgeFrontDoorFor(unknown, urls, HOST, 'us-central1', null)).toBeUndefined()
+    // Excluding unknown countries keeps an unknown-country host off unless it is listed by id.
+    const unknown = flags({ url: DOOR, countries: ['CN'], hosts: [HOST] }, { regionExcludeUnknownCountry: { 'us-central1': true } })
+    expect(edgeFrontDoorFor(unknown, urls, HOST, 'us-central1', null)).toEqual({ url: DOOR, byCountry: false })
+    expect(edgeFrontDoorFor(unknown, urls, OTHER, 'us-central1', null)).toBeUndefined()
   })
 
   it('the location hint is apac through a front door, else unchanged', () => {
