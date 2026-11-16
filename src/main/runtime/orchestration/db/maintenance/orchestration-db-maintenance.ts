@@ -82,8 +82,14 @@ export class OrchestrationDbMaintenance {
   reclaimWhileRestarting(): void {
     this.stop()
     try {
+      const settledRuns = new Map<string, boolean>()
       for (let after: string | null = ''; after !== null;) {
-        after = pruneSettledChatOutputCopies(this.orchestrationDb, after, this.chatIsReadable).next
+        after = pruneSettledChatOutputCopies(
+          this.orchestrationDb,
+          after,
+          this.chatIsReadable,
+          settledRuns
+        ).next
       }
       this.recordPrune()
       // The copy VACUUM builds is the size of the live data; keep it on disk, not in memory.
@@ -123,9 +129,15 @@ export class OrchestrationDbMaintenance {
 
   private async pass(): Promise<void> {
     if (this.pruneIsDue()) {
+      const settledRuns = new Map<string, boolean>()
       for (let after: string | null = ''; after !== null;) {
         const page = await this.slice(() =>
-          pruneSettledChatOutputCopies(this.orchestrationDb, after!, this.chatIsReadable)
+          pruneSettledChatOutputCopies(
+            this.orchestrationDb,
+            after!,
+            this.chatIsReadable,
+            settledRuns
+          )
         )
         if (!page) {
           return
@@ -204,10 +216,12 @@ async function freeBytes(directory: string): Promise<number> {
   return disk.bavail * disk.bsize
 }
 
-// SQLite's search order for its temporary files (unixTempFileDir in os_unix.c); Windows uses the user temp folder.
+// SQLite's search order for its temporary files: unixTempFileDir in os_unix.c, and on Windows
+// GetTempPathW, which reads TMP before TEMP (Node's tmpdir() reads TEMP first).
 async function sqliteTempDirectory(): Promise<string> {
   if (process.platform === 'win32') {
-    return tmpdir()
+    const { TMP, TEMP, USERPROFILE } = process.env
+    return TMP || TEMP || USERPROFILE || tmpdir()
   }
   const { SQLITE_TMPDIR, TMPDIR } = process.env
   for (const directory of [SQLITE_TMPDIR, TMPDIR, '/var/tmp', '/usr/tmp', '/tmp']) {
