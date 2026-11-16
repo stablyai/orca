@@ -8,6 +8,7 @@ export function useNativeChatRailWake(): {
   sustain: () => void
 } {
   const railRef = useRef<HTMLDivElement | null>(null)
+  const awakeRail = useRef<HTMLDivElement | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sleepAt = useRef(0)
   const sustainUntil = useRef(0)
@@ -20,6 +21,7 @@ export function useNativeChatRailWake(): {
     if (rail && !('awake' in rail.dataset)) {
       rail.dataset.awake = ''
     }
+    awakeRail.current = rail
     if (timer.current !== null) {
       return
     }
@@ -30,8 +32,9 @@ export function useNativeChatRailWake(): {
         return
       }
       timer.current = null
-      if (rail) {
-        delete rail.dataset.awake
+      if (awakeRail.current) {
+        delete awakeRail.current.dataset.awake
+        awakeRail.current = null
       }
     }
     timer.current = setTimeout(settle, NATIVE_CHAT_RAIL_WAKE_MS)
@@ -53,6 +56,7 @@ export function useNativeChatRailWake(): {
         if (timer.current !== null) {
           clearTimeout(timer.current)
         }
+        awakeRail.current = null
       },
       []
     )
