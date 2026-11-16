@@ -16,20 +16,31 @@ function cleanupKeywords(): string[] {
 export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
   () =>
     ({
-      status: {
-        title: translate('components.settings.workspaceCleanup.cleanUpNow', 'Clean up now'),
+      review: {
+        title: translate('components.settings.workspaceCleanup.manual.review', 'Review workspaces'),
         description: translate(
-          'components.settings.workspaceCleanup.search.statusDescription',
-          'Run the cleanup rules now, or review workspaces yourself.'
+          'components.settings.workspaceCleanup.manual.description',
+          'See every workspace and choose which to delete.'
+        ),
+        keywords: [
+          ...cleanupKeywords(),
+          ...translateSearchKeyword('components.settings.workspaceCleanup.search.manual', 'manual')
+        ]
+      },
+      status: {
+        title: translate('components.settings.workspaceCleanup.automatic.runNow', 'Run rules now'),
+        description: translate(
+          'components.settings.workspaceCleanup.search.automaticDescription',
+          'Whether automatic cleanup is on, when it runs next, and running the rules now.'
         ),
         keywords: [
           ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.reviewWorkspaces',
-            'review workspaces'
-          ),
-          ...translateSearchKeyword(
             'components.settings.workspaceCleanup.search.automatic',
             'automatic'
+          ),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.cleanUp',
+            'clean up'
           )
         ]
       },

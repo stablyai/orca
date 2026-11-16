@@ -13,12 +13,15 @@ const compactThumbClassName = 'size-2.5 data-[state=checked]:translate-x-2.5'
 type SwitchProps = React.ComponentProps<typeof SwitchPrimitive.Root> & {
   size?: 'default' | 'compact'
   thumbClassName?: string
+  /** Drawn inside the thumb, such as a pending spinner. */
+  thumbContent?: React.ReactNode
 }
 
 function Switch({
   className,
   size = 'default',
   thumbClassName: thumbClasses,
+  thumbContent,
   ...props
 }: SwitchProps) {
   return (
@@ -35,7 +38,9 @@ function Switch({
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         className={cn(thumbClassName, size === 'compact' && compactThumbClassName, thumbClasses)}
-      />
+      >
+        {thumbContent}
+      </SwitchPrimitive.Thumb>
     </SwitchPrimitive.Root>
   )
 }

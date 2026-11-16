@@ -1,10 +1,14 @@
+import { Loader2 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type { WorkspaceCleanupReport } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { Button } from '../../ui/button'
+import { SettingsGroup, SettingsGroupHeader } from '../section-layout/SettingsGroup'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { matchesSettingsSearch } from '../search/settings-search'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
 
 // Intl says "this minute" for both directions under a minute, which reads oddly in a sentence.
@@ -74,13 +78,18 @@ function formatLastRun(
       )
 }
 
-/** Whether automatic cleanup is on, what it last did, and the two ways to act now. */
-export function WorkspaceCleanupSettingsStatus({
+/**
+ * The rules under a heading that says whether automatic cleanup is on, what it last did, and runs
+ * the rules now. A search that matches only the heading shows it without the rules.
+ */
+export function WorkspaceCleanupAutomaticSection({
   anyRuleOn,
   report,
   readAt,
   cleaningUp,
-  onCleanUpNow
+  onCleanUpNow,
+  showRules,
+  children
 }: {
   anyRuleOn: boolean
   report: WorkspaceCleanupReport | null
@@ -88,9 +97,13 @@ export function WorkspaceCleanupSettingsStatus({
   readAt: number
   cleaningUp: boolean
   onCleanUpNow: () => void
-}): React.JSX.Element {
+  /** Whether the search matches a rule. */
+  showRules: boolean
+  /** The rule rows. */
+  children: React.ReactNode
+}): React.JSX.Element | null {
   const t = useTranslate()
-  const openModal = useAppStore((state) => state.openModal)
+  const query = useAppStateValue((state) => state.settingsSearchQuery)
   const search = getWorkspaceCleanupSettingsSearchParts()
   const lastRun = report?.runs[0]
   const running = cleaningUp || report?.running === true
@@ -98,17 +111,19 @@ export function WorkspaceCleanupSettingsStatus({
   if (!anyRuleOn) {
     details.push(
       t(
-        'components.settings.workspaceCleanup.status.offDetail',
-        'Nothing is removed until you turn on a rule.'
+        'components.settings.workspaceCleanup.automatic.offDetail',
+        'Turn on a rule to remove workspaces on a schedule.'
       )
     )
+  } else if (running) {
+    details.push(
+      t('components.settings.workspaceCleanup.automatic.running', 'Removing what your rules match…')
+    )
   } else {
-    if (running) {
-      details.push(t('components.settings.workspaceCleanup.status.running', 'Cleaning up now…'))
-    } else if (lastRun) {
+    if (lastRun) {
       details.push(formatLastRun(lastRun, readAt, t))
     }
-    if (!running && report?.nextRunAt) {
+    if (report?.nextRunAt) {
       details.push(
         t('components.settings.workspaceCleanup.status.nextRun', 'Next run {{when}}.', {
           when: formatRunTime(Math.max(0, report.nextRunAt - readAt), t)
@@ -117,47 +132,56 @@ export function WorkspaceCleanupSettingsStatus({
     }
   }
 
+  const title = (
+    <span className="inline-flex items-center gap-2">
+      {t('components.settings.workspaceCleanup.automatic.title', 'Automatic cleanup')}
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 text-[11.5px] font-medium leading-5 text-muted-foreground">
+        <span
+          aria-hidden="true"
+          className={cn(
+            'size-1.5 rounded-full',
+            anyRuleOn ? 'bg-status-success' : 'bg-muted-foreground/60'
+          )}
+        />
+        {anyRuleOn
+          ? t('components.settings.workspaceCleanup.automatic.on', 'On')
+          : t('components.settings.workspaceCleanup.automatic.off', 'Off')}
+      </span>
+    </span>
+  )
+  const description =
+    details.length > 0 ? <span className="tabular-nums">{details.join(' ')}</span> : null
+  const action = anyRuleOn ? (
+    <Button variant="outline" size="sm" disabled={running} onClick={onCleanUpNow}>
+      {running ? (
+        <>
+          <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+          {t('components.settings.workspaceCleanup.automatic.runningButton', 'Running…')}
+        </>
+      ) : (
+        search.status.title
+      )}
+    </Button>
+  ) : null
+
+  if (!showRules) {
+    return matchesSettingsSearch(query, [search.status]) ? (
+      <SearchableSetting {...search.status}>
+        <SettingsGroupHeader title={title} description={description} action={action} />
+      </SearchableSetting>
+    ) : null
+  }
   return (
-    <SearchableSetting {...search.status} className="flex items-start justify-between gap-6 px-1">
-      <div className="min-w-0 space-y-1">
-        <p className="text-sm font-semibold">
-          {anyRuleOn
-            ? t('components.settings.workspaceCleanup.status.on', 'Automatic cleanup is on.')
-            : t('components.settings.workspaceCleanup.status.off', 'Automatic cleanup is off.')}
+    <SettingsGroup title={title} description={description} action={action}>
+      {children}
+      {query.trim() === '' ? (
+        <p data-settings-row="" className="py-3 text-xs text-muted-foreground">
+          {t(
+            'components.settings.workspaceCleanup.rules.branchNote',
+            'Merged branches are deleted with their workspace. Unmerged branches are kept.'
+          )}
         </p>
-        {details.map((line) => (
-          <p key={line} className="text-xs tabular-nums text-muted-foreground">
-            {line}
-          </p>
-        ))}
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => openModal('workspace-cleanup')}
-            className="text-xs text-muted-foreground underline decoration-muted-foreground/50 underline-offset-4 hover:text-foreground"
-          >
-            {t('components.settings.workspaceCleanup.status.review', 'Review workspaces')}
-          </button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!anyRuleOn || running}
-            onClick={onCleanUpNow}
-          >
-            {search.status.title}
-          </Button>
-        </div>
-        {anyRuleOn ? null : (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'components.settings.workspaceCleanup.status.turnOnHint',
-              'Turn on a rule to use this.'
-            )}
-          </p>
-        )}
-      </div>
-    </SearchableSetting>
+      ) : null}
+    </SettingsGroup>
   )
 }
