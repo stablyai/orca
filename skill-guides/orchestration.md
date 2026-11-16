@@ -28,6 +28,9 @@ argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 sca
 
 ## Prepare command input
 
+`ORCA` stands for the executable you used to run `skills get`; type it in its
+place and use it for every command.
+
 For all multiline content, use a file write/edit tool to create a UTF-8 file,
 then pass the command's documented file option. This includes creating files,
 worker specs, orchestration send/reply bodies, git commit messages, and PR/comment
@@ -49,13 +52,21 @@ gh pr create --body-file "<body-file>"
 File paths belong to the CLI's execution host. For a remote command that only
 accepts stdin, use its documented file copy/redirect mechanism, never a heredoc.
 Keep each input file unchanged until the operation and any recovery are resolved.
-Keep the mutation UUID separate from the answered-to `msg_…` id; recover an unknown
-result with its existing `--retry-request` UUID and the same payload.
+Keep the mutation UUID separate from the answered-to `msg_…` id. If an orchestration
+result is unknown, check its receipt before retrying:
+
+```text
+ORCA orchestration request-show --request <mutation-UUID> --json
+```
+
+Use the same caller and receipt host; retain any `--on <server>` shown by the CLI's
+recovery query. Retry only if the receipt positively confirms the operation had no
+effect; use the same `--retry-request` UUID and unchanged input file from the same
+terminal. An absent, expired, or inconclusive receipt is not proof that nothing was
+saved. Without positive confirmation of no effect, do not resend; inspect the
+affected state and escalate.
 
 ## Recipe
-
-`ORCA` stands for the executable you used to run `skills get`; type it in its
-place and use it for every command.
 
 ```text
 ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
