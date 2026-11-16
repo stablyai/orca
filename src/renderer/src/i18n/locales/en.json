@@ -7288,7 +7288,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} disconnected",
           "runtimeHostProject": "Project on Orca server",
           "runtimeHostProjectNamed": "Project on {{hostName}}",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "notificationsMuted": "Notifications muted"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -7384,7 +7385,9 @@
           "copyPathOption": "Path",
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
-          "projectGroupSubmenu": "Project Group"
+          "projectGroupSubmenu": "Project Group",
+          "muteNotifications": "Mute Notifications",
+          "unmuteNotifications": "Unmute Notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -24503,7 +24506,9 @@
       "chooseTransition": "Choose a status change:",
       "cancel": "Cancel",
       "noTransition": "No status change to {{column}} is available for {{key}}.",
-      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters."
+      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters.",
+      "reorderColumn": "Reorder {{column}}",
+      "reorderColumnHint": "Issues in this lane: {{count}}. Use the Left and Right arrow keys to move it."
     },
     "favourites": {
       "loadFailed": "Could not load Jira favourites.",

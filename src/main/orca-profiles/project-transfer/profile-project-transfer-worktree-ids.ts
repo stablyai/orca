@@ -36,6 +36,7 @@ export function collectTransferWorktreeIds(state: PersistedState, repoId: string
   }
   Object.keys(state.ui?.explorerDisplayRootByWorktree ?? {}).forEach(add)
   Object.keys(state.ui?.showDotfilesByWorktree ?? {}).forEach(add)
+  Object.keys(state.ui?.notificationsMutedByWorktree ?? {}).forEach(add)
   return ids
 }
 

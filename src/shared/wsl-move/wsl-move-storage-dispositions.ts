@@ -78,6 +78,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
       'src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx',
       'src/renderer/src/components/sidebar/SidebarToolbar.tsx',
+      'src/renderer/src/components/task-page/jira/boards/task-page-jira-board-column-order.ts',
       'src/renderer/src/components/terminal-pane/render-health/diagnostics/terminal-freeze-breadcrumbs.ts',
       'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',

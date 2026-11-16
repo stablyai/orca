@@ -51,7 +51,6 @@ type TitleStatus = {
 }
 
 const TitleStatusContext = createContext<TitleStatus | null>(null)
-const UnreadRollupPresenceContext = createContext(false)
 
 function useSlotAgentSignals(agents: DashboardAgentRow[]): SlotAgentSignals {
   // Same acknowledgement records the agent rows read, so unread means the same in both places.
@@ -151,16 +150,7 @@ export function WorktreeCardTitleStatusProvider({
     () => ({ offline, exceptions, unread, lineageStatus, at, resolveTargets }),
     [at, exceptions, lineageStatus, offline, resolveTargets, unread]
   )
-  return (
-    <UnreadRollupPresenceContext.Provider value={true}>
-      <TitleStatusContext.Provider value={value}>{children}</TitleStatusContext.Provider>
-    </UnreadRollupPresenceContext.Provider>
-  )
-}
-
-/** False on classic cards, which mount no rollup and so draw no status-lane unread dot. */
-export function useHasWorktreeCardUnreadRollup(): boolean {
-  return useContext(UnreadRollupPresenceContext)
+  return <TitleStatusContext.Provider value={value}>{children}</TitleStatusContext.Provider>
 }
 
 /** True while the card holds an unread result: its own, any of its agents' or a collapsed child's. */

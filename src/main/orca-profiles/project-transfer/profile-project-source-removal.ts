@@ -36,7 +36,11 @@ export function removeSourceRepo(state: PersistedState, repoId: string): Persist
         state.ui.explorerDisplayRootByWorktree,
         repoId
       ),
-      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId)
+      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId),
+      notificationsMutedByWorktree: removeRepoWorktreeRecord(
+        state.ui.notificationsMutedByWorktree,
+        repoId
+      )
     }
   }
   delete next.sparsePresetsByRepo[repoId]
