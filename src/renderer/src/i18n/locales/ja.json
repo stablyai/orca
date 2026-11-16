@@ -20982,7 +20982,6 @@
           "reopen": "再度開く",
           "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。"
         },
-        "ignoredFilesLost": "無視されたファイルは失われます: {{names}}",
         "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
       },
       "atRiskLocalFiles": {

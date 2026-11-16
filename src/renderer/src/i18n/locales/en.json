@@ -22013,8 +22013,21 @@
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again."
         },
-        "ignoredFilesLost": "Ignored files will be lost: {{names}}",
-        "ignoredFilesUnchecked": "Ignored files could not be fully checked"
+        "ignoredFilesUnchecked": "Ignored files could not be fully checked",
+        "ignoredFiles": {
+          "none": "No ignored local files",
+          "unavailable": "Ignored files not checked",
+          "checking": "Checking ignored files…",
+          "lost_one": "{{count}} ignored file will be lost",
+          "lost_other": "{{count}} ignored files will be lost",
+          "lostIncomplete": "{{count}}+ ignored files will be lost",
+          "popoverTitle": "Ignored local files",
+          "showPaths": "Show ignored paths",
+          "popoverDescription": "Only in this worktree — not in the main checkout.",
+          "popoverIncompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted.",
+          "morePaths_one": "and {{count}} more ignored path",
+          "morePaths_other": "and {{count}} more ignored paths"
+        }
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",

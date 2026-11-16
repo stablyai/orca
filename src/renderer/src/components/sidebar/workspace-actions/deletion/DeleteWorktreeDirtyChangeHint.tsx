@@ -9,6 +9,7 @@ import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
 } from './delete-worktree-dirty-change-counts'
+import { DeleteWorktreeRelativePath } from './delete-worktree-relative-path'
 
 export function DeleteWorktreeDirtyChangeHint({
   changeCount,
@@ -80,10 +81,10 @@ export function DeleteWorktreeDirtyChangeHint({
           <button
             type="button"
             aria-label={`${label}: ${t('auto.components.sidebar.DeleteWorktreeDirtyChangeHint.showLoadedPaths', 'Show loaded paths')}`}
-            className="flex h-4 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="group flex h-4 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             {warningLabel}
-            <ChevronRight className="size-3 shrink-0" />
+            <ChevronRight className="size-3 shrink-0 transition-transform duration-150 group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -93,32 +94,40 @@ export function DeleteWorktreeDirtyChangeHint({
             'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
             'Loaded changed paths'
           )}
-          className="w-80 max-w-[calc(100vw-2rem)]"
+          className="w-96 max-w-[calc(100vw-2rem)]"
           wheelScroll
         >
-          <div className="scrollbar-sleek max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-3 text-xs">
-            <p className="mb-1 font-medium">
-              {t(
-                'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
-                'Loaded changed paths'
-              )}
-            </p>
-            <p className="text-muted-foreground">
-              {t(
-                'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedPathsNotice',
-                'Loaded paths may be incomplete or out of date.'
-              )}
-            </p>
+          <div className="flex max-h-[var(--radix-popover-content-available-height)] flex-col text-xs">
+            <div className="border-b border-border/60 px-3 py-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="font-medium text-foreground">
+                  {t(
+                    'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
+                    'Loaded changed paths'
+                  )}
+                </p>
+                {changeCount > 0 ? (
+                  <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
+                    {changeCount}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-muted-foreground">
+                {t(
+                  'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedPathsNotice',
+                  'Loaded paths may be incomplete or out of date.'
+                )}
+              </p>
+            </div>
             <div
               role="region"
               aria-label={t(
                 'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
                 'Loaded changed paths'
               )}
-              tabIndex={0}
-              className="scrollbar-sleek mt-1 max-h-40 min-w-0 overflow-y-auto"
+              className="scrollbar-sleek max-h-56 min-w-0 overflow-y-auto px-3 py-2"
             >
-              <ul className="min-w-0 space-y-0.5 font-mono">
+              <ul className="min-w-0 space-y-1 font-mono">
                 {preview.files.map((file) => (
                   <li key={file.path} className="flex min-w-0 items-baseline gap-2">
                     <span
@@ -128,8 +137,8 @@ export function DeleteWorktreeDirtyChangeHint({
                     >
                       {STATUS_LABELS[file.status]}
                     </span>
-                    <div className="min-w-0 break-all text-foreground">
-                      {file.path}
+                    <div className="min-w-0 wrap-anywhere text-foreground">
+                      <DeleteWorktreeRelativePath path={file.path} />
                       {file.hasUnresolvedConflict ? (
                         <span className="ml-2 font-sans text-destructive">
                           {t(
@@ -144,7 +153,7 @@ export function DeleteWorktreeDirtyChangeHint({
               </ul>
             </div>
             {preview.remainingPathCount > 0 ? (
-              <p className="mt-1 text-muted-foreground">
+              <p className="border-t border-border/60 px-3 py-1.5 text-muted-foreground">
                 {t(
                   'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.moreLoadedPaths',
                   'and {{count}} more loaded paths',

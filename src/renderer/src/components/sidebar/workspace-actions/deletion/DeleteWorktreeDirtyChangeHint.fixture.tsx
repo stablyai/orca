@@ -45,9 +45,11 @@ export const dirty = defineFixture({
 })
 
 export const dirtyWithPathsOpen = defineFixture({
-  width: ROW_WIDTH,
+  width: 420,
   render: () => (
-    <DeleteWorktreeDirtyChangeHint changeCount={17} checkState="complete" preview={preview} />
+    <div className="h-[260px]">
+      <DeleteWorktreeDirtyChangeHint changeCount={17} checkState="complete" preview={preview} />
+    </div>
   ),
   interact: (frame) => {
     frame.querySelector('button')?.click()
