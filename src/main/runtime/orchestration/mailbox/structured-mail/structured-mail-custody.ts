@@ -236,8 +236,9 @@ export function settleStructuredMailAttempt(
       // The agent was sent a pointer, not the mail: it stays unread until `check` takes it.
       retire(false)
       if (owed === 'stale') {
-        // A chat that lost the mailbox cannot `check` it: the new owner is pointed at it.
+        // A chat that lost the mailbox cannot `check` it: its owner now, terminal or chat, is told.
         db.markAsUndelivered([row.message_id])
+        decision.released = true
       }
       break
     }
@@ -245,6 +246,7 @@ export function settleStructuredMailAttempt(
       retire(false)
       if (owed === 'stale') {
         db.markAsUndelivered([row.message_id])
+        decision.released = true
       }
       break
     case 'refused':
