@@ -1,3 +1,5 @@
+import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+
 export type WorktreePtyHostFence = {
   /** `null` is this machine; ABSENT is no fence at all, so every host matches. */
   resolvedConnectionId?: string | null
@@ -11,7 +13,7 @@ export function worktreePtyBelongsToHost(
   fence: WorktreePtyHostFence
 ): boolean {
   if (fence.resolvedRuntimeEnvironmentId !== undefined) {
-    return ptyId.startsWith(`remote:${encodeURIComponent(fence.resolvedRuntimeEnvironmentId)}@@`)
+    return parseRemoteRuntimePtyId(ptyId)?.environmentId === fence.resolvedRuntimeEnvironmentId
   }
   return (
     fence.resolvedConnectionId === undefined ||

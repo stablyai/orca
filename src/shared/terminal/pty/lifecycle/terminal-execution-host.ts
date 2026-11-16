@@ -8,6 +8,7 @@ import {
   isRemoteRuntimePtyId
 } from '../../../remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../remote-runtime/ssh/ssh-pty-id'
+import { parseHostQualifiedPtyId } from './pty-session-id-format'
 
 /** 'foreign' = the id proves the PTY runs off this host but cannot name where. */
 export type PtyExecutionHost = ExecutionHostId | 'foreign' | null
@@ -16,6 +17,10 @@ export type PtyExecutionHost = ExecutionHostId | 'foreign' | null
 export function getPtyExecutionHost(ptyId: string | null | undefined): PtyExecutionHost {
   if (!ptyId) {
     return null
+  }
+  const qualified = parseHostQualifiedPtyId(ptyId)
+  if (qualified) {
+    return qualified.hostId
   }
   const ssh = parseAppSshPtyId(ptyId)
   if (ssh) {

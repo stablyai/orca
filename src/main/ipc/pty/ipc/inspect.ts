@@ -11,7 +11,10 @@ import {
   type ResolvedPtyHost
 } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import {
+  parsePtySessionId,
+  isWithinPtyIdLengthLimit
+} from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { installPtySessionListingIpcHandler } from './session-listing'
 import { ptySizes } from '../delivery/visibility-state'
@@ -40,7 +43,7 @@ export function installPtyInspectIpcHandlers(deps: {
   const readInspectablePtyIds = async (args: { ids?: unknown }): Promise<string[]> => {
     const ids = new Set<string>()
     for (const value of Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []) {
-      if (typeof value === 'string' && value.length > 0 && value.length <= 512) {
+      if (typeof value === 'string' && isWithinPtyIdLengthLimit(value)) {
         ids.add(value)
       }
     }
@@ -251,7 +254,7 @@ export function installPtyInspectIpcHandlers(deps: {
       if (
         typeof args?.ptyId !== 'string' ||
         !isRemoteRuntimePtyId(args.ptyId) ||
-        args.ptyId.length > 512
+        !isWithinPtyIdLengthLimit(args.ptyId)
       ) {
         return
       }

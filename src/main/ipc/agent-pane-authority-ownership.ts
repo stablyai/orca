@@ -1,9 +1,15 @@
+import { parseRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime-pty-id'
+import { parseHostQualifiedPtyId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
+
 export type AgentPaneAuthorityOwnershipSources = {
   getPtyIdForPaneKey?: (paneKey: string) => string | undefined
   getRuntimeTerminalHandleForPaneKey?: (paneKey: string) => string | undefined
 }
 
 function getRemoteRuntimeHandle(ptyId: string): string | null {
+  if (parseHostQualifiedPtyId(ptyId)) {
+    return parseRemoteRuntimePtyId(ptyId)?.handle ?? null
+  }
   if (!ptyId.startsWith('remote:')) {
     return null
   }

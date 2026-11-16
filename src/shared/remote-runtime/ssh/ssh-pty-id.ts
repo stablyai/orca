@@ -1,4 +1,5 @@
 import { parseExecutionHostId } from '../../execution-host'
+import { parseHostQualifiedPtyId } from '../../terminal/pty/lifecycle/pty-session-id-format'
 
 const SSH_PTY_ID_PREFIX = 'ssh:'
 const SSH_PTY_ID_SEPARATOR = '@@'
@@ -16,6 +17,13 @@ export type ParsedSshPtyId = {
 }
 
 export function parseAppSshPtyId(ptyId: string): ParsedSshPtyId | null {
+  const qualified = parseHostQualifiedPtyId(ptyId)
+  if (qualified) {
+    const host = parseExecutionHostId(qualified.hostId)
+    return host?.kind === 'ssh'
+      ? { connectionId: host.targetId, relayPtyId: qualified.ptyId }
+      : null
+  }
   if (!ptyId.startsWith(SSH_PTY_ID_PREFIX)) {
     return null
   }

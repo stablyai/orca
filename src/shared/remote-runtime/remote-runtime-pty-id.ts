@@ -1,4 +1,7 @@
 // Share encoding outside renderer transport so main can identify mirrored PTY runtime owners.
+import { parseExecutionHostId } from '../execution-host'
+import { parseHostQualifiedPtyId } from '../terminal/pty/lifecycle/pty-session-id-format'
+
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const REMOTE_PTY_OWNER_SEPARATOR = '@@'
 
@@ -17,10 +20,21 @@ export function toRemoteRuntimePtyId(handle: string, environmentId?: string | nu
 
 // Why prefix-only: a `remote:` id that fails to parse still runs off this host, never locally.
 export function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
-  return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
+  return (
+    typeof ptyId === 'string' &&
+    (ptyId.startsWith(REMOTE_PTY_ID_PREFIX) ||
+      parseHostQualifiedPtyId(ptyId)?.hostId.startsWith('runtime:') === true)
+  )
 }
 
 export function parseRemoteRuntimePtyId(ptyId: string): RemoteRuntimePtyIdParts | null {
+  const qualified = parseHostQualifiedPtyId(ptyId)
+  if (qualified) {
+    const host = parseExecutionHostId(qualified.hostId)
+    return host?.kind === 'runtime'
+      ? { environmentId: host.environmentId, handle: qualified.ptyId }
+      : null
+  }
   if (!isRemoteRuntimePtyId(ptyId)) {
     return null
   }

@@ -1,7 +1,10 @@
 /** Rewrite differing source/destination paths, such as WSL via \wsl.localhost; SSH identity rewriting must preserve payload bytes. */
 import type { OrcadMigrationCatalogPayload } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../../../shared/orcad-migration/orcad-migration-manifest-fields'
-import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import {
+  parseHostQualifiedPtyId,
+  PTY_SESSION_ID_SEPARATOR
+} from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { rewriteWorktreeIdPath } from '../../../../shared/worktree/id'
 import {
@@ -151,6 +154,12 @@ function rewriteOwnerKey(value: string, rewriter: OrcadMigrationPathRewriter): s
 }
 
 function rewritePtySessionId(value: string, rewriter: OrcadMigrationPathRewriter): string {
+  const qualified = parseHostQualifiedPtyId(value)
+  if (qualified) {
+    return qualified.hostId === 'local'
+      ? `${qualified.hostId}|${rewritePtySessionId(qualified.ptyId, rewriter)}`
+      : value
+  }
   const at = value.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   if (at <= 0) {
     return value
