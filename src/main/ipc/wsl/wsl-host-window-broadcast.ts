@@ -5,7 +5,7 @@ import {
   WSL_HOST_STATUS_CHANNEL,
   type WslHostCapability,
   type WslHostStatus
-} from '../../../shared/wsl-host-types'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { onWslHostsNewWorkChanged } from '../../wsl/host-lifecycle/wsl-host-gate'
 
 function broadcast(channel: string, payload: unknown): void {

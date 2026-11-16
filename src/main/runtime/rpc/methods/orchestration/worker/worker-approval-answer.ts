@@ -20,7 +20,7 @@ import {
 import type { z } from 'zod'
 import type { RpcContext } from '../../../core'
 import { workerApprovalAccess, type WorkerApprovalAccess } from '../access/worker-approval-access'
-import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { formatOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 
 export type WorkerApprovalAnswerReceipt = {
   approvalId: string

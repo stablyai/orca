@@ -3,7 +3,7 @@ import {
   filesystemPathToFileUri,
   fileUriToFilesystemPath
 } from '../../../../../../shared/file-links/file-uri-path'
-import { isWindowsAbsolutePathLike } from '../../../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../../../shared/file-access/cross-platform-path'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { OpenHttpLinkOptions } from '@/lib/browser/navigation/http-link-destinations'
 

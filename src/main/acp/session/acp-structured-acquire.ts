@@ -21,6 +21,7 @@ import { prepareAcpStructuredLaunch } from '../launch/acp-structured-launch-prep
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { acpLaunchPermissionModes } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
+import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
 import { routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
@@ -101,7 +102,8 @@ export async function acquireAcpStructuredSession(input: {
     },
     {
       clientInfo: { name: 'orca', version: '1' },
-      clientCapabilities: spec.dialect.clientCapabilities,
+      // Only a chat can show a URL request's card, so other connections never advertise it.
+      clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {

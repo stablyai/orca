@@ -6,8 +6,8 @@ import { journalOf, queuedCardTexts } from './structured-chat-coordinator-journa
 import { describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { structuredAgentSessionMessageSendMutation } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { agentSessionRefusalNotice } from '../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteKindForMethod } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
@@ -15,7 +15,7 @@ import { captureHostStructuredAgentSessionWork } from '../../../../native-chat/a
 import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
-import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { createStructuredMailboxPointerHost } from '../../mailbox/structured-pointer/structured-mailbox-pointer-host'
 import {
   COORDINATOR,

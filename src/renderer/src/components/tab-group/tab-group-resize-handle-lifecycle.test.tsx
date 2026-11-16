@@ -8,11 +8,11 @@ import {
   acquireWebviewsDragPassthrough,
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
-} from '../browser-pane/host-guest/webview-drag-passthrough'
+} from '../browser-pane/host-guest/drag/webview-drag-passthrough'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-vi.mock('../../store', () => ({
+vi.mock('../../store/index', () => ({
   useAppStore: Object.assign(() => undefined, { getState: () => ({}) })
 }))
 vi.mock('./TabGroupPanel', () => ({ default: () => null }))

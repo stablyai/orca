@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { expect } from './orca-app'
 
 export type PairedTerminalProbePhase = 'baseline' | 'restart' | 'close'

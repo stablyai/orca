@@ -18,8 +18,8 @@ import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/hooks/use-now'
-import { isDelayedUpdatePending } from '../../../../../shared/update-delay'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
+import { isDelayedUpdatePending } from '../../../../../shared/updater/update-delay'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 export function GeneralUpdateSettingsSection({

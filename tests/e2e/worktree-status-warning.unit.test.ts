@@ -5,7 +5,8 @@ import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { WORKTREE_METHODS } from '../../src/main/runtime/rpc/methods/workspaces/worktree'
 import type { WorkspaceStatusDefinition } from '../../src/shared/worktree/types'
-import { DEFAULT_WORKSPACE_STATUSES, getWorkspaceStatus } from '../../src/shared/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../src/shared/workspace/status/workspace-status-defaults'
+import { getWorkspaceStatus } from '../../src/shared/workspace/status/workspace-statuses'
 
 const mocks = vi.hoisted(() => ({
   callMock: vi.fn(),

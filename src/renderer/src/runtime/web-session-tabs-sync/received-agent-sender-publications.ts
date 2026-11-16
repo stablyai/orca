@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { agentSenderPublicationPatch } from '../native-chat/agent-senders/agent-sender-publication-patch'
 import { isCurrentSessionTabsRuntimeFrame } from './publisher-identity-fences'
 import { recordReceivedWebSessionTabsSnapshot } from './tracking'

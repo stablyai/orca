@@ -1,7 +1,7 @@
 import {
   chatAgentsShareConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
-} from '../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome

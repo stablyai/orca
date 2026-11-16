@@ -2,7 +2,7 @@ import type { WorktreeLineageSource } from '../../../../../../shared/sidebar-lis
 import type { DraggedWorktreeCopies } from '../../worktree-list/drag/dragged-worktree-copies'
 import type React from 'react'
 
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { translate } from '@/i18n/i18n'

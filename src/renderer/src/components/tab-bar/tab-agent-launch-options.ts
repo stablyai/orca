@@ -121,11 +121,19 @@ export function buildAgentPickerLaunchOptions(
         : row.kind === 'cli' || row.kind === 'terminal'
     )
     return row
-      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides, t).map((option) => ({
-          ...option,
-          label: entry.label,
-          pickerEntry: entry
-        }))
+      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides, t).map((option) => {
+          const aliases = new Set(option.aliases)
+          for (const alias of [entry.label, ...(entry.aliases ?? [])]) {
+            aliases.add(normalizeAgentAlias(alias))
+            aliases.add(compactAgentAlias(alias))
+          }
+          return {
+            ...option,
+            aliases: [...aliases],
+            label: entry.label,
+            pickerEntry: entry
+          }
+        })
       : []
   })
 }
@@ -267,7 +275,10 @@ export function matchingAgentLaunchOptions(
   const ready = (option: TabAgentLaunchOption) => terminalReadyOption(option, terminalPending)
   // Readiness applies before ranking, so a waiting terminal never outranks a usable chat.
   return [
-    ...matchingAgentPickerLaunchOptions(entries ?? [], query).map(ready),
-    ...findMatchingTabAgentLaunchOptions(query, options.map(ready))
-  ]
+    ...findMatchingTabAgentLaunchOptions(query, options.map(ready)),
+    ...matchingAgentPickerLaunchOptions(entries ?? [], query).map(ready)
+  ].sort(
+    (left, right) =>
+      Number(tabAgentLaunchOptionDisabled(left)) - Number(tabAgentLaunchOptionDisabled(right))
+  )
 }

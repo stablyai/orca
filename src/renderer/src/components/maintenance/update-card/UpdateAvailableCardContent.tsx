@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import type { ChangelogData } from '../../../../../shared/update-status-types'
+import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
 import { Button } from '../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'

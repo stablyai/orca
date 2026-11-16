@@ -1,4 +1,4 @@
-import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-tips'
+import type { FeatureTip, FeatureTipId } from '../../../../shared/feature-education/feature-tips'
 import { translate } from '@/i18n/i18n'
 
 const FEATURE_TIP_COPY: Record<

@@ -1,6 +1,6 @@
 import { app, type BrowserWindow, type Event } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import { uiZoomFactorFromLevel } from '../../../shared/ui-zoom-level'
+import { uiZoomFactorFromLevel } from '../../../shared/app-lifecycle/windows/ui-zoom-level'
 import {
   isBackgroundLaunch,
   isWindowlessLaunch,

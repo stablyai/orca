@@ -1,18 +1,16 @@
-import {
-  formatKeybindingList,
-  getEffectiveKeybindingsForAction,
-  keybindingMatchesAction,
-  parseKeybinding,
-  platformModifiers
-} from '../../../../shared/keybindings'
-import { resolveWindowShortcutAction } from '../../../../shared/window-shortcut-policy'
+import { formatKeybindingList } from '../../../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../../../shared/keybindings/effective'
+import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
+import { parseKeybinding } from '../../../../shared/keybindings/parser'
+import { platformModifiers } from '../../../../shared/keybindings/matching-key'
+import { resolveWindowShortcutAction } from '../../../../shared/keybindings/window-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import {
   readAgentTabShortcutActions,
   resolveAgentTabShortcutAction
 } from '../terminal-agent-tab-shortcut'
-import type { KeybindingOverrides } from '../../../../shared/keybindings'
+import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 

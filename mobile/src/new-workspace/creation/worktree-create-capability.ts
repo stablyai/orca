@@ -12,7 +12,7 @@ import { MOBILE_TASKS_CAPABILITY } from '../../tasks/screen-state/mobile-tasks-c
 import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
-} from '../../../../src/shared/worktree-runtime-capabilities'
+} from '../../../../src/shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import {
   WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS,
   resolveWorktreeCreateIdempotencySupport,

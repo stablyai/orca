@@ -4,7 +4,7 @@ import {
   structuredSessionConfirmedStopsStillListed,
   structuredSessionListedTaskRun,
   type StructuredSessionBackgroundTasksView
-} from '../../../../../../shared/structured-session-background-tasks-view'
+} from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 
 type StoppingBackgroundTasks = {
   sessionId: string

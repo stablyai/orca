@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import {
   isSkillInstallProviderId,
   type SkillInstallProviderId
-} from '../../../shared/skill-install-providers'
+} from '../../../shared/skills/installation/skill-install-providers'
 import { detectInstalledAgentsWithShellPathHydration } from '../../preflight/installed-agent-detection'
 import {
   readUserClaudeConfigDir,

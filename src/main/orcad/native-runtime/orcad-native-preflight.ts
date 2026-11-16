@@ -1,6 +1,6 @@
 import process from 'node:process'
 import { setRuntimeTerminalUnavailableCause } from '../../runtime/terminal/launch/native-terminal-availability'
-import { terminalUnavailableMessage } from '../../../shared/runtime-capability-degradation'
+import { terminalUnavailableMessage } from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 import {
   checkNodePtyPrecondition,
   formatNodePtyPreconditionReport,

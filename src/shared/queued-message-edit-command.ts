@@ -12,16 +12,24 @@ export function queuedMessageEditAcceptsText(
   agent: AgentType,
   reported: readonly AgentSessionSlashCommand[] | undefined,
   hostSetsGoals: boolean,
-  hostSetsInteractionMode: boolean
+  hostSetsInteractionMode: boolean,
+  opensMcpPanel = false
 ): boolean {
-  return prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode)(text)
+  return prepareQueuedMessageEditText(
+    agent,
+    reported,
+    hostSetsGoals,
+    hostSetsInteractionMode,
+    opensMcpPanel
+  )(text)
 }
 
 export function prepareQueuedMessageEditText(
   agent: AgentType,
   reported: readonly AgentSessionSlashCommand[] | undefined,
   hostSetsGoals: boolean,
-  hostSetsInteractionMode: boolean
+  hostSetsInteractionMode: boolean,
+  opensMcpPanel = false
 ): (text: string) => boolean {
   const hostCommand = prepareStructuredAgentSessionComposerCommand(agent, reported)
   return (text) =>
@@ -29,6 +37,7 @@ export function prepareQueuedMessageEditText(
       hostCommand(text) ||
       (hostSetsInteractionMode && agentSessionInteractionCommand(agent, text) !== null) ||
       (hostSetsGoals && isStructuredAgentSessionGoalCommand(text)) ||
-      /^\/resume(?:\s|$)/i.test(text)
+      /^\/resume(?:\s|$)/i.test(text) ||
+      (opensMcpPanel && /^\/mcp(?:\s|$)/i.test(text))
     )
 }

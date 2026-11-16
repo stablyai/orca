@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { createReconciliationDeliveryRuntime } from './client-page-reconciliation-delivery-test-harness'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -16,7 +16,7 @@ it('keeps each subscription last held frame independently of later read replies'
   )
   try {
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
       mobileSessionTabs: [
@@ -38,14 +38,14 @@ it('keeps each subscription last held frame independently of later read replies'
     const now = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(now + 45_001)
     expect(
-      runtime.snapshotForClient(worktree, 'device-a').clientHostedPagesUnreconciled
+      (await runtime.snapshotForClient(worktree, 'device-a')).clientHostedPagesUnreconciled
     ).toBeUndefined()
-    runtime.markClientHostedPagesReconciled('device-a')
+    await runtime.markClientHostedPagesReconciled('device-a')
     expect(frames.map((frame) => [frame.worktree, frame.clientHostedPagesUnreconciled])).toEqual([
       [worktree, undefined]
     ])
     frames.length = 0
-    runtime.markClientHostedPagesReconciled('device-a')
+    await runtime.markClientHostedPagesReconciled('device-a')
     expect(frames).toEqual([])
   } finally {
     vi.restoreAllMocks()

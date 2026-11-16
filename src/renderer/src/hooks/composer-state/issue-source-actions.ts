@@ -50,7 +50,7 @@ import {
   getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'

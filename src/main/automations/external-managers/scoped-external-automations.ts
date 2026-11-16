@@ -2,7 +2,7 @@ import type {
   ScopedExternalAutomationRequest,
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../../shared/external-automation-scope'
+} from '../../../shared/automations/external/external-automation-scope'
 import {
   resolveExternalAutomationScope,
   type DesktopSshTargetRegistry,

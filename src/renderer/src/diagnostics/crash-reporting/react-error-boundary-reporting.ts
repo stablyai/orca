@@ -2,8 +2,8 @@ import type React from 'react'
 import type {
   CrashReportRecord,
   ReactErrorBoundaryReportArgs
-} from '../../../../shared/crash-reporting'
-import { getReactErrorBoundaryAttribution } from '../../../../shared/react-update-depth-attribution'
+} from '../../../../shared/crash-reporting/crash-reporting'
+import { getReactErrorBoundaryAttribution } from '../../../../shared/crash-reporting/react-update-depth-attribution'
 
 type RendererErrorContext = Pick<
   ReactErrorBoundaryReportArgs,

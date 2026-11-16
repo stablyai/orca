@@ -3,7 +3,7 @@ import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyb
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { isPlainEscapeKeyEvent } from '../terminal-pane/input/keyboard/agent-interrupt-key-event'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
-import type { DictationState } from '../../../../shared/speech-types'
+import type { DictationState } from '../../../../shared/speech/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 function isPlainEnterKeyEvent(event: KeyboardEvent): boolean {

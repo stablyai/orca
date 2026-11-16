@@ -1,5 +1,4 @@
 import { statSync, type BigIntStats } from 'node:fs'
-import { stat } from 'node:fs/promises'
 
 export const JOURNAL_LEGACY_SOURCE_RECEIPT = 'journal.legacy-source-copy.v1'
 const VERSION = { version: 1, profileCopyInventoryVersion: 1 } as const
@@ -19,18 +18,18 @@ export type JournalLegacySourceReceipt = {
   | {
       disposition: 'copied-source'
       main: JournalLegacyFileIdentity
-      wal: { kind: 'empty' } | { kind: 'nonempty'; size: string }
+      wal: { kind: 'empty' } | { kind: 'nonempty'; size: string; ino?: string; mtimeNs?: string }
     }
   | { disposition: 'no-source-at-initialization' | 'uncertifiable' }
 )
 
-export function journalLegacyFileIdentity(filename: string): JournalLegacyFileIdentity {
+function journalLegacyFileIdentity(filename: string): JournalLegacyFileIdentity {
   return journalLegacyFileIdentityFromStat(
     statSync(filename, { bigint: true, throwIfNoEntry: false })
   )
 }
 
-export function journalLegacyFileIdentityFromStat(
+function journalLegacyFileIdentityFromStat(
   file: BigIntStats | undefined
 ): JournalLegacyFileIdentity {
   if (!file?.isFile() || file.ino === 0n || file.nlink !== 1n) {
@@ -61,31 +60,6 @@ export function captureJournalLegacySourceReceipt(filename: string): JournalLega
   }
 }
 
-export async function readJournalLegacySourceReceipt(
-  filename: string
-): Promise<JournalLegacySourceReceipt> {
-  try {
-    const [main, wal] = await Promise.all([
-      statIfPresent(filename),
-      statIfPresent(`${filename}-wal`)
-    ])
-    return sourceReceipt(main ? journalLegacyFileIdentityFromStat(main) : undefined, wal)
-  } catch {
-    return { ...VERSION, disposition: 'uncertifiable' }
-  }
-}
-
-async function statIfPresent(filename: string): Promise<BigIntStats | undefined> {
-  try {
-    return await stat(filename, { bigint: true })
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      return undefined
-    }
-    throw error
-  }
-}
-
 function sourceReceipt(
   main?: JournalLegacyFileIdentity,
   wal?: BigIntStats
@@ -100,6 +74,15 @@ function sourceReceipt(
     ...VERSION,
     disposition: 'copied-source',
     main,
-    wal: wal && wal.size > 0n ? { kind: 'nonempty', size: String(wal.size) } : { kind: 'empty' }
+    // Reused WAL frames can keep the size, so the file's own identity tells a new write apart.
+    wal:
+      wal && wal.size > 0n
+        ? {
+            kind: 'nonempty',
+            size: String(wal.size),
+            ino: String(wal.ino),
+            mtimeNs: String(wal.mtimeNs)
+          }
+        : { kind: 'empty' }
   }
 }

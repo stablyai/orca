@@ -1,4 +1,3 @@
-import '../../../../shared/keybindings'
 import { keybindingRunsInTextField } from '../../../../shared/keybindings/matching'
 import type { KeybindingActionId } from '../../../../shared/keybindings/types'
 import { isEditableTarget, isNativeChatPromptTarget } from '../text-input/focus/editable-target'
@@ -6,7 +5,7 @@ import { getShortcutPlatform } from './shortcut-platform'
 import {
   nativeChatPromptClaimsShortcut,
   textInputOwnsComposition
-} from '../../../../shared/text-input-shortcut-policy'
+} from '../../../../shared/keybindings/text-input-shortcut-policy'
 
 type TextKeyEvent = {
   target: EventTarget | null

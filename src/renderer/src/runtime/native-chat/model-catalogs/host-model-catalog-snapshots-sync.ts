@@ -4,7 +4,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   agentsWithSavedModelPick,
   HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
@@ -27,7 +27,7 @@ import {
   subscribeLocalRuntimeCapabilitiesKnown
 } from '../../hosts/capabilities/local-runtime-capabilities'
 import { localStructuredChatsInUse } from '../local-sessions/local-structured-chats'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
 
 const LOCAL = { kind: 'local' } as const

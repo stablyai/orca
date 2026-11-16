@@ -57,7 +57,7 @@ import { readWslMoveSleptScrollbackFromHistory } from '../../src/main/persistenc
 import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 

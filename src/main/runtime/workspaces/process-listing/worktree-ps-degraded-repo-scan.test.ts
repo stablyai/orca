@@ -30,7 +30,7 @@ const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
 
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { _resetWorktreeCatalogOwnerForTests } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 

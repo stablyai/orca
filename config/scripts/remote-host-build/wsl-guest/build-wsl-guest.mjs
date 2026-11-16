@@ -9,7 +9,7 @@ import {
   OPENCODE_SQLITE_READER_FILENAME,
   OPENCODE_WSL_TEXT_TASK_FILENAME,
   WSL_CLAUDE_PROFILE_HELPER_FILENAME
-} from '../../../../src/shared/remote-bundle-artifacts.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/remote-bundle-artifacts.ts'
 
 const __dirname = import.meta.dirname
 const ROOT = join(__dirname, '../../..', '..')

@@ -1,4 +1,4 @@
-import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
+import type { BrowserHistoryEntry } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   LOOPBACK_LOCALHOST_HOSTS,
   normalizeLocalhostHostname
