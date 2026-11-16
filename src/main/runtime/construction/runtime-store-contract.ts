@@ -123,6 +123,7 @@ export type RuntimeStore = {
     agentWorkspaceTrustEnabled?: GlobalSettings['agentWorkspaceTrustEnabled']
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
+    codexSessionSourceHome?: GlobalSettings['codexSessionSourceHome']
     deleteChatHistoryWithWorkspace?: GlobalSettings['deleteChatHistoryWithWorkspace']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']

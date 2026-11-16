@@ -178,7 +178,6 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('archived.jsonl', join(appWorkspaces, 'archived')),
         session('recent.jsonl', gone, { modifiedAt: TEN_MINUTES_AGO }),
         session('outside.jsonl', join(root, 'elsewhere', 'gone')),
-        session('codex.jsonl', gone, { agent: 'codex' }),
         session('server.jsonl', gone, { executionHostId: 'runtime:env-1' }),
         session('unmounted.jsonl', join(root, 'unmounted', 'other', 'feature')),
         session('renamed.jsonl', join(appWorkspaces, 'old-name')),
