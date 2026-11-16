@@ -101,7 +101,10 @@ it('expires replay during continuous activity even while conversion and sweeps w
         }
       }
     },
-    { database: async (operation) => readJournalSqlDatabase(db, operation) },
+    {
+      database: async (operation) => readJournalSqlDatabase(db, operation),
+      compareLegacyChat: async () => null
+    },
     { ensure: async () => null },
     activity,
     (error) => {

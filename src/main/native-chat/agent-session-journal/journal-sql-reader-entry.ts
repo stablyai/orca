@@ -11,8 +11,11 @@ import { readJournalDomainHistoryFrame } from './journal-domain-history-page'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import {
   journalLegacyChatRevision,
+  journalLegacyConversionSource,
   openJournalLegacySource
 } from './database/journal-legacy-source'
+import { compareJournalLegacyChat } from './database/journal-legacy-compare'
+import { isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 
 if (
   !parentPort ||
@@ -93,20 +96,38 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
-        if (!original && existsSync(workerData.originalFilename)) {
-          original = openJournalLegacySource(workerData.originalFilename, { timeout: 5000 })
-        }
-        const prepared = original
-          ? (prepareJournalDomainImport(original, operation.sessionId) ??
-            prepareEmptyConversion(original, operation.sessionId))
+        const source = openOriginal()
+        const from = journalLegacyConversionSource(db, operation.sessionId)
+        const prepared = source
+          ? (prepareJournalDomainImport(source, from) ?? prepareEmptyConversion(source, from))
           : null
         if (prepared) {
           const { pages, ...header } = prepared
           conversions.set(id, pages)
-          reply({ type: 'prepared', id, conversion: header })
+          // A copy takes the original chat's history; the original's revision stays the original's.
+          const conversion =
+            from === operation.sessionId
+              ? header
+              : { ...header, sessionId: operation.sessionId, sourceRevision: null }
+          reply({ type: 'prepared', id, conversion })
         } else {
           reply({ type: 'prepared', id, conversion: null })
         }
+        break
+      }
+      case 'legacy-compare': {
+        const source = openOriginal()
+        let result: Extract<JournalSqlReaderReply, { type: 'legacy-compare' }>['result'] = null
+        try {
+          result = source ? compareJournalLegacyChat(source, db, operation.sessionId) : null
+        } catch (error) {
+          // The chat's own failure is its answer; the caller records it rather than retrying.
+          if (isSqliteStorageFailure(error)) {
+            throw error
+          }
+          result = { error: error instanceof Error ? error.message : String(error) }
+        }
+        reply({ type: 'legacy-compare', id, result })
         break
       }
       case 'conversion-page': {
@@ -154,6 +175,13 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
     })
   }
 })
+
+function openOriginal(): Database.Database | undefined {
+  if (!original && existsSync(workerData.originalFilename)) {
+    original = openJournalLegacySource(workerData.originalFilename, { timeout: 5000 })
+  }
+  return original
+}
 
 /** Preserve empty saved epochs independently of legacy-source retirement. */
 function prepareEmptyConversion(

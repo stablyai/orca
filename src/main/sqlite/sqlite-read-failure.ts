@@ -43,6 +43,28 @@ export function isTransientSqliteContention(error: unknown): boolean {
   return CONTENTION_MESSAGE.test(errorText(error))
 }
 
+const SQLITE_NOMEM = 7
+const SQLITE_READONLY = 8
+const SQLITE_IOERR = 10
+const SQLITE_FULL = 13
+const STORAGE_ERRCODES = new Set([
+  SQLITE_BUSY,
+  SQLITE_LOCKED,
+  SQLITE_NOMEM,
+  SQLITE_READONLY,
+  SQLITE_IOERR,
+  SQLITE_CORRUPT,
+  SQLITE_FULL,
+  SQLITE_CANTOPEN,
+  SQLITE_NOTADB
+])
+
+/** The database or its disk failed, not the row being written: every other row would fail too. */
+export function isSqliteStorageFailure(error: unknown): boolean {
+  const errcode = primaryErrcode(error)
+  return (errcode !== null && STORAGE_ERRCODES.has(errcode)) || isTransientSqliteContention(error)
+}
+
 export type SqliteReadFailureKind =
   /** Another connection holds the lock; the same read can succeed later. */
   | 'contended'

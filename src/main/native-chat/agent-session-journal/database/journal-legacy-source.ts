@@ -100,3 +100,16 @@ export function recordJournalLegacyChatRevision(
     revision
   )
 }
+
+/** A copy kept for an original chat an older Orca continued converts its history from that chat. */
+export function journalLegacyCopySourceKey(copyId: string): string {
+  return `journal.legacy-copy-source:${copyId}`
+}
+
+/** The original chat a copy converts from, or the chat itself. */
+export function journalLegacyConversionSource(db: Database.Database, sessionId: string): string {
+  const row = db
+    .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    .get(journalLegacyCopySourceKey(sessionId))
+  return row === undefined ? sessionId : String(row.value)
+}

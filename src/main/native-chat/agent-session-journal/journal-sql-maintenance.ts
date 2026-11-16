@@ -24,6 +24,7 @@ import {
 } from './journal-domain-import-discard'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
 
 export type JournalSqlMaintenance =
   | { kind: 'records-install' }
@@ -40,6 +41,7 @@ export type JournalSqlMaintenance =
   | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | JournalDomainMaintenance
   | { kind: 'event-tail-prune'; now: number }
+  | ({ kind: 'legacy-compare-settle' } & Parameters<typeof settleJournalLegacyCompare>[1])
 
 export type JournalSqlProjectionState = JournalDomainImportState
 
@@ -94,5 +96,8 @@ export function applyJournalSqlMaintenance(
       return completeJournalDomainCompaction(db, operation.now)
     case 'event-tail-prune':
       return pruneJournalSqlEventTail(db, operation.now)
+    case 'legacy-compare-settle':
+      settleJournalLegacyCompare(db, operation)
+      return null
   }
 }

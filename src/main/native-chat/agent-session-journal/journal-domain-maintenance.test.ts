@@ -250,7 +250,8 @@ it('finishes a retired pass during activity while an already-started conversion 
           passFinished.resolve()
         }
         return result
-      }
+      },
+      compareLegacyChat: async () => null
     },
     {
       ensure: async (_sessionId, foreground) => {

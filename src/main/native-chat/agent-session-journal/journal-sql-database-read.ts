@@ -8,6 +8,10 @@ import { loadAgentSessionStoreRows } from '../../runtime/agent-session/records/a
 import type { AgentSessionStoreState } from '../../runtime/agent-session/records/agent-session-store-state'
 import { readCommandReceipt } from './writing/command-receipt-table'
 import type { CommandReceiptScope } from './writing/command-receipt-schema'
+import {
+  pendingJournalLegacyCompares,
+  type JournalLegacyCompare
+} from './database/journal-legacy-compare'
 
 export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'> & {
   sessionTabs: [tabId: string, sessionId: string][] | null
@@ -22,6 +26,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
+  | { kind: 'legacy-compares'; after: string | null }
 
 export type JournalSqlDatabaseReadResult =
   | { kind: 'pr-watch'; value: PRWatchReadValues[PRWatchRead['kind']] }
@@ -29,6 +34,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
+  | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
   | {
       kind: 'retired-heads'
       heads: { sessionId: string; epoch: string }[]
@@ -85,6 +91,11 @@ function read(
             )
             .get(operation.sessionId)
             ?.epoch?.toString() ?? null
+      }
+    case 'legacy-compares':
+      return {
+        kind: 'legacy-compares',
+        compares: pendingJournalLegacyCompares(db, operation.after)
       }
     case 'sessions': {
       const rows =

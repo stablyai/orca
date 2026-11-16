@@ -72,6 +72,16 @@ async function upgrade(root: string) {
   return {
     db,
     convert: (sessionId: string) => conversions.ensure(sessionId),
+    /** One background pass over converted chats awaiting a compare, as maintenance runs it. */
+    compare: async () => {
+      const page = await pool.database({ kind: 'legacy-compares', after: null })
+      for (const compare of page.kind === 'legacy-compares' ? page.compares : []) {
+        const result = await pool.compareLegacyChat(compare.sessionId)
+        runJournalTransaction(db, () =>
+          applyJournalSqlMaintenance(db, { kind: 'legacy-compare-settle', ...compare, ...result! })
+        )
+      }
+    },
     close: async () => {
       await conversions.close()
       await pool.close()
@@ -125,17 +135,6 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
     .update(readFileSync(journalDatabasePath(root)))
     .digest('hex')
 
-  // Upgrade again; one chat fails to join the first time and joins on the next launch.
-  const blocked = openJournalDomainDatabase(journalDomainDatabasePath(root)).db
-  blocked.exec(`CREATE TRIGGER blocked BEFORE INSERT ON agent_session_records
-    WHEN NEW.session_id='started-older' BEGIN SELECT RAISE(ABORT,'disk full'); END`)
-  blocked.close()
-  const failing = openJournalDomainDatabase(await initializeJournalDomainDatabase(root)).db
-  expect(
-    failing.prepare("SELECT 1 FROM agent_session_records WHERE session_id='started-older'").get()
-  ).toBeUndefined()
-  failing.exec('DROP TRIGGER blocked')
-  failing.close()
   const second = await upgrade(root)
   cleanup.push(second.close)
   const { db } = second
@@ -145,6 +144,9 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
       WHERE session_id NOT IN ('converted','unopened','started-older','closed')`)
     .all()
     .map((row) => String(row.session_id))
+  // Terminal restore waits for the open, so the copy's history converts later, from the original.
+  expect(items(db, copy)).toEqual([])
+  expect(await second.convert(copy)).toBe('epoch')
   expect(items(db, copy)).toEqual([...converted, 'older-turn'])
   expect(
     JSON.parse(
@@ -214,6 +216,13 @@ it('fills in revisions for chats converted before they were kept, then still kee
     insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
   })
   original.pragma('wal_checkpoint(TRUNCATE)')
+  await (await upgrade(root)).close()
+
+  // Written again before the copy converted: that copy reads the current original, so no second.
+  runJournalTransaction(original, () => {
+    insertJournalRow(original, 'converted', turn('older-turn-2', tip + 2))
+  })
+  original.pragma('wal_checkpoint(TRUNCATE)')
   const later = await upgrade(root)
   cleanup.push(later.close)
   const copies = later.db
@@ -221,7 +230,10 @@ it('fills in revisions for chats converted before they were kept, then still kee
     .all()
     .map((row) => String(row.session_id))
   expect(copies).toHaveLength(1)
-  expect(items(later.db, copies[0]!)).toContain('older-turn')
+  expect(await later.convert(copies[0]!)).toBe('epoch')
+  expect(items(later.db, copies[0]!)).toEqual(
+    expect.arrayContaining(['older-turn', 'older-turn-2'])
+  )
   expect(
     later.db
       .prepare("SELECT value FROM agent_session_store_meta WHERE key='session_tabs_recorded'")
@@ -301,9 +313,16 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   // The older Orca continues one converted chat and starts another.
   insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
   olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
+  const known = ['closed', 'converted', 'idle', 'open', 'started-older']
+  const compared = await upgrade(root)
+  // With no revision to compare, the open reads no history; a background pass compares it.
+  expect(
+    compared.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()
+  ).toEqual({ records: known.length })
+  await compared.compare()
+  await compared.close()
   const later = await upgrade(root)
   cleanup.push(later.close)
-  const known = ['closed', 'converted', 'idle', 'open', 'started-older']
   const [copy] = later.db
     .prepare(
       `SELECT session_id FROM agent_session_records WHERE session_id NOT IN (${known
@@ -312,8 +331,9 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     )
     .all(...known)
     .map((row) => String(row.session_id))
+  expect(await later.convert(copy!)).toBe('epoch')
   expect(items(later.db, copy!)).toContain('older-turn')
-  expect(tabbedChats(later.db)).toEqual(['open', copy, 'started-older'])
+  expect(tabbedChats(later.db)).toEqual(['open', 'started-older', copy])
   expect(later.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 1
   })
@@ -328,4 +348,41 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 2
   })
+})
+
+it('records a chat it cannot keep and does not retry it until the older Orca writes it again', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'kept', rows)
+  await (await upgrade(root)).close()
+  olderOrcaChat(original, 'refused', [rows[0], turn('refused-turn', 2)])
+  original.pragma('wal_checkpoint(TRUNCATE)')
+
+  const blocked = openJournalDomainDatabase(journalDomainDatabasePath(root)).db
+  blocked.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_records
+    WHEN NEW.session_id='refused' BEGIN SELECT RAISE(ABORT,'record refused'); END`)
+  blocked.close()
+  const failing = openJournalDomainDatabase(await initializeJournalDomainDatabase(root)).db
+  const recorded = (key: string) =>
+    failing.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)?.value
+  expect(JSON.parse(String(recorded('journal.legacy-failed:refused')))).toMatchObject({
+    error: expect.stringContaining('record refused')
+  })
+  expect(recorded('journal.legacy-revisions-kept.v1')).toBe('1')
+  failing.exec('DROP TRIGGER refused')
+  failing.close()
+
+  const refusedRecord = (db: Database.Database) =>
+    db.prepare("SELECT 1 FROM agent_session_records WHERE session_id='refused'").get()
+  const absorbed = await upgrade(root)
+  expect(refusedRecord(absorbed.db)).toBeUndefined()
+  await absorbed.close()
+
+  insertJournalRow(original, 'refused', turn('refused-turn-2', 3))
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const retried = await upgrade(root)
+  cleanup.push(retried.close)
+  expect(refusedRecord(retried.db)).toEqual({ 1: 1 })
 })

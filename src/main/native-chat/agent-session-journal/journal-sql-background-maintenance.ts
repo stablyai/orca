@@ -4,6 +4,7 @@ import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalSqlMaintenance } from './journal-sql-maintenance'
+import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
@@ -24,7 +25,7 @@ export class JournalSqlBackgroundMaintenance {
 
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
-    private readonly readers: Pick<JournalSqlReaderPool, 'database'>,
+    private readonly readers: Pick<JournalSqlReaderPool, 'database' | 'compareLegacyChat'>,
     private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void,
@@ -111,6 +112,12 @@ export class JournalSqlBackgroundMaintenance {
       if (this.discover) {
         this.discover = false
         try {
+          await compareJournalLegacyChatsWhenIdle(
+            this.writer,
+            this.readers,
+            () => this.boundary(),
+            (error, id) => this.report(error, id)
+          )
           await this.convertSavedChats()
         } catch (error) {
           this.report(error)
