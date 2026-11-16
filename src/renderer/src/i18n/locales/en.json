@@ -6941,8 +6941,7 @@
           "issueCommand": "Issue command",
           "newVmRecipe": "New VM recipe",
           "vmRecipe": "VM recipe",
-          "thisRepository": "this repository",
-          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>"
+          "thisRepository": "this repository"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
@@ -24114,7 +24113,9 @@
       "reviewAction": "Review setup",
       "branchDiffersTitle": "This workspace's branch has different setup commands",
       "branchDiffersBody": "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>.",
-      "branchSetupScript": "Branch's setup script"
+      "branchSetupScript": "Branch's setup script",
+      "runOnce": "Run once",
+      "alwaysTrust": "Always trust"
     },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
@@ -25494,7 +25495,6 @@
     "setupTrust": {
       "reviewTitle": "Approve the new setup commands for this automation?",
       "reviewBody": "A run skipped setup because its branch's <code>orca.yaml</code> setup commands changed. Approving lets later runs use these commands. Only approve if you trust <repo/>.",
-      "approve": "Approve",
       "approved": "Setup approved. Later runs of this automation will run it.",
       "skippedSinceApproved": "Setup didn't run for this run because its branch's orca.yaml setup commands changed. They've since been approved, so later runs run them.",
       "skippedReview": "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved for this automation. Review them to run setup in later runs.",
