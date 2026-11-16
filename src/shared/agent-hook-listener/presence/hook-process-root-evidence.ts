@@ -7,8 +7,11 @@ import type {
   AgentProcessIdentity,
   AgentProcessVerdict
 } from '../../agent-status/process/agent-process-presence'
-import { hasControllingTty } from '../../posix-controlling-terminal'
-import { unreadableArgvName, type ProcessTableRow } from '../../process-table-snapshot'
+import { hasControllingTty } from '../../terminal/pty/native-process/posix-controlling-terminal'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../process-observation/tables/process-table-snapshot'
 import { isShellProcess } from '../../agent-status/process/shell-process-detection'
 import type { TmuxHookPane } from '../../tmux-client-attachment'
 

@@ -4,7 +4,7 @@ import {
   type OrchestrationPeerCaller
 } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import type { RpcContext } from '../../../core'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import type {

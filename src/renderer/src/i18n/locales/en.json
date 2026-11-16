@@ -755,6 +755,7 @@
         "fontKeywordTypeface": "typeface",
         "fontKeywordTypography": "typography",
         "inheritFont": "Same as IDE font",
+        "systemFont": "System font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
         "title": "Chat UI",
@@ -1008,6 +1009,20 @@
         "title": "Passwords",
         "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
         "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "Unviewed for",
+        "unviewedForDescription": "How long a tab goes unviewed before it's freed.",
+        "hoursSuffix": "hours",
+        "title": "Memory Saver",
+        "description": "Frees memory from tabs you haven't viewed. They reload when you open them.",
+        "searchKeywords": {
+          "memory": "memory",
+          "tabs": "tabs",
+          "idle": "idle",
+          "sleep": "sleep",
+          "performance": "performance"
+        }
       }
     },
     "agents": {
@@ -2553,6 +2568,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+click to open in the system browser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Workspace comment",
+        "createdByAutomation": "Created by automation",
+        "linkedTask": "Linked task",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Linked issue",
+        "listeningPort": "Listening port"
       }
     },
     "hooks": {
@@ -4219,6 +4243,8 @@
           "draft": "Draft",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels",
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "allStates": "All",
           "filterPullRequests": "Filter pull requests",
           "filterIssues": "Filter issues",
@@ -4371,6 +4397,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Two Tone",
+            "silent": "Silent",
             "017abebfa6": "System Default"
           }
         }
@@ -4589,7 +4616,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "This terminal will not resume automatically. Cancel and put the workspace to sleep to resume it later.",
             "1d1a7a9c1f": "Cancel",
             "stop_agent_title": "Stop this agent?",
             "stop_command_title": "Stop running command?",
@@ -4666,7 +4692,8 @@
             "terminalProcessLimit": "Your system cannot start another terminal process. Close unused terminals or quit unused processes, then try again.",
             "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
             "title": "Terminal issue",
-            "errorTitle": "Terminal error"
+            "errorTitle": "Terminal error",
+            "copyErrorDetails": "Copy error details"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",
@@ -5269,7 +5296,6 @@
             "c8857b40f7": "Refresh usage data",
             "75ded02687": "Manage Accounts…",
             "ff0fbe9311": "Active",
-            "7657e3db9c": "Codex Account",
             "38b5647724": "Codex usage runtime",
             "ba55303942": "Open Codex details and account switcher",
             "c35af53b73": "Sign in",
@@ -5277,7 +5303,6 @@
             "5c938d39ac": "wk",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
             "59c6e7b4e0": "Visible sessions restart now. Others restart when their worktree becomes active.",
@@ -5570,7 +5595,8 @@
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: one summary per provider",
-            "footerDetailAria": "Usage footer detail"
+            "footerDetailAria": "Usage footer detail",
+            "notChecked": "Not checked"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -5703,11 +5729,6 @@
             "behind": "{{behind}} behind",
             "activeAgents_one": "{{count}} active agent",
             "activeAgents_other": "{{count}} active agents",
-            "completedAgents_one": "{{count}} completed agent",
-            "completedAgents_other": "{{count}} completed agents",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} completed agent retained",
-            "completedAgentsRetained_other": "{{count}} completed agents retained",
             "noTrackedAgents": "No tracked agents running",
             "noTerminalTabs": "No terminal tabs",
             "liveTerminalTabs_one": "{{live}} live of {{count}} terminal tab",
@@ -5760,12 +5781,17 @@
           "AccountSwitchList": {
             "used": "Used",
             "left": "Left",
-            "reset": "Reset"
+            "reset": "Reset",
+            "accounts": "Accounts"
           },
           "InlineUsageBars": {
             "now": "now",
             "resetsNow": "resets now",
             "resetsIn": "resets in {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Show remaining usage",
+            "showUsed": "Show used usage"
           }
         }
       },
@@ -8501,8 +8527,11 @@
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
+          "4054c458e1": "Clear default cookies",
           "80bffd32bf": "Import cookies",
-          "bd7d68f138": "From file…"
+          "bd7d68f138": "From file…",
+          "3b662becd5": "Clear cookies in the Default profile?",
+          "f159cf5a3e": "This may sign you out of sites in this profile."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
@@ -8974,7 +9003,19 @@
           "f2765fbbf6": "GitLab API budget",
           "8cdbaf4b03": "Jira key casing",
           "fdbcd676b0": "GitHub API budget",
-          "074f7aa0d6": "Default compare base"
+          "074f7aa0d6": "Default compare base",
+          "prAutoRefreshUpdateFailed": "Could not update PR auto-refresh on this host.",
+          "prAutoRefreshDefault": "Automatic",
+          "prAutoRefreshReduced": "Less often",
+          "prAutoRefreshOff": "Manual",
+          "prAutoRefreshAbout": "About PR Updates",
+          "prAutoRefreshHintAutomatic": "Keeps pull requests and checks up to date.",
+          "prAutoRefreshHintLessOften": "Checks GitHub less often. Useful if you hit GitHub rate limits.",
+          "prAutoRefreshTitle": "PR Updates",
+          "prAutoRefreshDescription": "How often Orca checks GitHub for pull request and CI changes.",
+          "prAutoRefreshHintOff": "Updates when you push or click Refresh.",
+          "prAutoRefreshUnsupportedHost": "Update Orca on {{host}} to change this",
+          "prAutoRefreshUnknownHost": "the selected server"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",
@@ -12356,6 +12397,7 @@
           "e27c8d45bf": "Diagnostics are disabled by an environment variable."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Press another shortcut, or Esc to cancel.",
           "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
           "70b5d25583": "{{value0}} shortcut",
           "287e07ddde": "Modified",
@@ -14007,7 +14049,8 @@
           "catalog": "Catalog",
           "clear": "Clear filters",
           "themes": "Themes",
-          "languages": "Languages",
+          "codeLanguages": "Code languages",
+          "translations": "Translations",
           "icons": "Icons",
           "commands": "Commands & panels",
           "catalogLabel": "Filter by catalog",
@@ -17524,10 +17567,9 @@
           "725868c75d": "Browse folders",
           "5e7f0d8a80": "Folder picker unavailable for remote files",
           "30099dca46": "Folder",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "file name",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Name your markdown file and pick a folder.",
+          "description": "Name your file and pick a folder.",
           "674b046582": "Save as",
           "nameEmpty": "Name cannot be empty",
           "nameHasSeparators": "Name cannot contain path separators",
@@ -20699,7 +20741,8 @@
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
-        "forkedFrom": "Forked from"
+        "forkedFrom": "Forked from",
+        "forkedFromUnknown": "Forked from another chat"
       },
       "composer": {
         "send": "Send",
@@ -20822,7 +20865,9 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "modelAndEffortValue": "{{model}} · {{effort}}",
+        "modelAndEffort": "Model and effort"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -21272,7 +21317,7 @@
       "queuedMessages": {
         "steer": "Steer",
         "send": "Send",
-        "steerHint": "Submit without interrupting the model",
+        "steerHint": "Send now, while the agent keeps working",
         "sendHint": "Send this message now",
         "delete": "Delete",
         "moreActions": "More actions",
@@ -21542,7 +21587,12 @@
         "commandDescription": "Fork this chat from its latest response",
         "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
-        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "mark": "Fork ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Fork: {{name}}",
+        "sourceTooltip": "Fork of {{name}}",
+        "unknownSourceTooltip": "Fork of another chat"
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
@@ -21697,7 +21747,7 @@
           "pinned": "Pinned",
           "unread": "Unread",
           "comment": "Has comment",
-          "retainedDoneAgents": "Finished agent transcripts",
+          "finishedAgents": "Finished agents",
           "contextPresence": "Open tabs, terminals, comments",
           "completelyEmpty": "Nothing left to lose",
           "noWorkspaces": "No workspaces found.",
@@ -21815,7 +21865,7 @@
               "comment": "Comment",
               "prunable": "Prunable",
               "locked": "Locked",
-              "retainedAgents": "Finished agents"
+              "finishedAgents": "Finished agents"
             }
           },
           "forceDeleteRisk_one": "{{count}} workspace currently shows risk and may need a force delete",
@@ -21970,6 +22020,7 @@
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
         "copySessionIdError": "Unable to copy session ID",
+        "copySessionIdUnavailable": "No session ID to copy",
         "copyOrcaSessionId": "Copy Orca Session ID",
         "orcaSessionIdTooltip": "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca.",
         "orcaSessionIdCopied": "Orca session ID copied",
@@ -22344,8 +22395,6 @@
           "title": "Turn on {{rule}}?",
           "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
           "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
-          "keepNamed": "Keep {{name}}",
-          "keep": "Keep",
           "summary": "{{count}} will be deleted",
           "cancel": "Cancel",
           "turnOn": "Turn on"
@@ -22440,6 +22489,19 @@
           "automationRuns": "Automation workspaces",
           "orchestrationWorkers": "Orchestration workers",
           "off": "Off"
+        },
+        "disableIgnoredFiles": {
+          "title": "Turn off ignored-file protection?",
+          "description": "For projects using these cleanup rules, ignored files will no longer prevent automatic cleanup. Files such as .env and local config may be deleted and cannot be recovered.",
+          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
+          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection.",
+          "noMatches": "No additional workspaces match right now. This setting affects future cleanup in projects using these rules.",
+          "turnOff": "Turn off protection"
+        },
+        "pinAndKeep": {
+          "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
+          "named": "Pin and keep {{name}}",
+          "label": "Pin and keep"
         }
       },
       "repository": {
@@ -22536,6 +22598,18 @@
       "keywordJira": "jira",
       "keywordDefaultProject": "default project",
       "keywordIssuePicker": "issue picker"
+    },
+    "RepositoryBrowserProfileSection": {
+      "title": "Browser profile",
+      "description": "New browser tabs in this project, including ones agents open, use this profile. Point several projects at one profile to share a sign-in.",
+      "keywordProfile": "browser profile",
+      "keywordCookies": "cookies",
+      "keywordSignIn": "sign in",
+      "selectLabel": "Profile for new tabs",
+      "inherit": "Browser setting ({{scope}})",
+      "deletedOption": "Deleted profile",
+      "deleted": "The profile picked for this project was deleted, so new tabs follow the Browser setting.",
+      "saveFailed": "Couldn't save the browser profile. The Orca on this project's host may need an update."
     },
     "managed-runtime": {
       "cancelled": "Installation cancelled.",
@@ -24662,6 +24736,8 @@
       "tabCloseAll": "Close all editor tabs",
       "tabRename": "Rename active tab",
       "tabReopenClosed": "Reopen closed tab",
+      "tabMoveLeft": "Move active tab left",
+      "tabMoveRight": "Move active tab right",
       "tabNextSameType": "Next tab (same type)",
       "tabPreviousSameType": "Previous tab (same type)",
       "tabNextAllTypes": "Next tab (all types)",
@@ -24672,6 +24748,7 @@
       "tabOpenQuickCommandsMenu": "Toggle Quick Commands menu",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
+      "editorToggleChangesView": "Toggle changes view",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",
@@ -24689,6 +24766,7 @@
       "chatFind": "Find in chat",
       "terminalToggleNativeChat": "Switch between Chat UI and terminal",
       "terminalClosePane": "Close active pane",
+      "terminalCopySessionId": "Copy Session ID",
       "terminalSplitRight": "Split terminal right",
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",

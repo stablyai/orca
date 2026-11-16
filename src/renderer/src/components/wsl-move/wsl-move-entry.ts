@@ -4,7 +4,7 @@
  * and the Experimental switch on. Main refuses every call with the gate closed regardless.
  */
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import {
   useWslHostsAcceptNewWork,

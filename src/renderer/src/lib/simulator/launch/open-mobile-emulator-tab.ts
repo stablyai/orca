@@ -1,5 +1,5 @@
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../../shared/emulator-runtime-capabilities'
+import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/emulator-runtime-capabilities'
 import { supportsEmulatorOpeningPreferences } from './emulator-opening-preferences-capability'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

@@ -14,7 +14,7 @@ vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAI
 
 /** Runs one operation and counts the layout frames it published. */
 async function framesOf(
-  fixture: ReturnType<typeof setupMainOwnedWorkspace>,
+  fixture: Awaited<ReturnType<typeof setupMainOwnedWorkspace>>,
   operation: () => Promise<unknown>
 ): Promise<number> {
   const before = fixture.frames()
@@ -23,12 +23,12 @@ async function framesOf(
   return fixture.frames() - before
 }
 
-const tabRow = (fixture: ReturnType<typeof setupMainOwnedWorkspace>) =>
+const tabRow = (fixture: Awaited<ReturnType<typeof setupMainOwnedWorkspace>>) =>
   fixture.session().tabsByWorktree[WORKTREE_ID]?.find((tab) => tab.id === TAB_ID)
 
 describe('CLI terminal commands on a workspace main owns, with no window', () => {
   it('closes the tab in one frame', async () => {
-    const fixture = setupMainOwnedWorkspace()
+    const fixture = await setupMainOwnedWorkspace()
     const handle = fixture.handleOf(PTY_A)
 
     expect(await framesOf(fixture, () => fixture.runtime.closeTerminalTab(handle))).toBe(1)
@@ -40,7 +40,7 @@ describe('CLI terminal commands on a workspace main owns, with no window', () =>
 
 describe("a phone's tab props and pane names on a workspace main owns, with no window", () => {
   it('names only the panes the phone says it renamed', async () => {
-    const fixture = setupMainOwnedWorkspace({ split: true })
+    const fixture = await setupMainOwnedWorkspace({ split: true })
     const root = fixture.session().terminalLayoutsByTabId[TAB_ID]!.root
 
     await fixture.runtime.updateMobileSessionPaneLayout(`id:${WORKTREE_ID}`, {

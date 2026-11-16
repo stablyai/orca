@@ -7,7 +7,7 @@ import type { AgentSessionOptionsResult } from '../../../../../../src/shared/age
 import { callAgentSession } from '../../agent-session/mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from '../../agent-session/mobile-created-structured-sessions'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-options-read-owner'
-import { BoundedMap } from '../../../../../../src/shared/bounded-map'
+import { BoundedMap } from '../../../../../../src/shared/collections/bounded-map'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { AgentSessionOptionCatalog } from '../../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../../../../src/shared/agent-session/options/model-catalog/agent-model-catalog-ownership'

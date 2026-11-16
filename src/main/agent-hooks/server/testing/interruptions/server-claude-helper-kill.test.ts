@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hooks/server/agent-hook-server'
 import { selectFreshExplicitAgentStatus } from '../../../../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { selectRuntimeHookAgentRowForPane } from '../../../../runtime/session-lifecycle/projection/runtime-mobile-agent-status-projection'
-import { buildRunningAgentChildRowModels } from '../../../../../shared/running-agent-child-rows'
+import { buildRunningAgentChildRowModels } from '../../../../../shared/agent-status/presentation/running-agent-child-rows'
 import { AgentHookServer } from '../../agent-hook-server'
 import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
 

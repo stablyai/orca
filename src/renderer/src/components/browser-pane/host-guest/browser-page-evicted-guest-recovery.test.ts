@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBrowserPageWebviewGuestSession } from './browser-page-webview-guest-session'
+import { createBrowserPageWebviewGuestSession } from './lifecycle/browser-page-webview-guest-session'
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(async () => {}),
   registeredIds: new Map<string, number>(),
   isRegistered: vi.fn(async () => true)
 }))
+vi.mock('./browser-webview-disposal', () => ({ replacePersistentWebview: mocks.replace }))
 vi.mock('./webview-registry', () => ({
-  registeredWebContentsIds: mocks.registeredIds,
-  replacePersistentWebview: mocks.replace
+  registeredWebContentsIds: mocks.registeredIds
 }))
 vi.mock('../describe-page/browser-page-load-error', () => ({ browserPageExists: () => true }))
 

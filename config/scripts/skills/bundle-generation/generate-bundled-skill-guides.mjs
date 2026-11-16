@@ -3,7 +3,7 @@ import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { parse } from 'yaml'
-import skillRenames from '../../../../src/shared/bundled-skill-renames.json' with { type: 'json' }
+import skillRenames from '../../../../src/shared/skills/bundled/bundled-skill-renames.json' with { type: 'json' }
 import {
   SHARED_STUB_SOURCE,
   parseSharedStubBlocks,

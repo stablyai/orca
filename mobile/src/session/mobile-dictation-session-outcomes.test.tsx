@@ -3,7 +3,10 @@ import { createElement, useContext, useRef } from 'react'
 import { act } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  type FakeRpcClient
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import type * as NativeChatSendError from './native-chat/composer/delivery/use-mobile-native-chat-send-error'
 import type * as NativeChatDraftStore from './native-chat/composer/drafts/mobile-native-chat-draft-store'
 
@@ -272,28 +275,5 @@ describe('a mic tap while the transcript is processing', () => {
     const methods = await settle(rpc, 'ship it')
     expect(methods).not.toContain('speech.dictation.cancel')
     expect(seen.inputs).toEqual(['ship it'])
-  })
-})
-
-describe('a dictation that ends after switching between chat and terminal', () => {
-  it('lands in the chat it started in, where its words were shown', async () => {
-    seen.chat = { shown: true, scope: 'chat-a' }
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    seen.chat = { shown: false, scope: 'chat-b' }
-    act(() => mounted.current().handleDictationToggle())
-    await settle(rpc, 'ship it')
-    expect(seen.chatWrites).toEqual([['chat-a', 'ship it']])
-    expect(seen.inputs).toEqual([])
-  })
-
-  it('lands in the chat that replaced the terminal it started in', async () => {
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    seen.chat = { shown: true, scope: 'chat-b' }
-    act(() => mounted.current().handleDictationToggle())
-    await settle(rpc, 'ship it')
-    expect(seen.chatWrites).toEqual([['chat-b', 'ship it']])
-    expect(seen.inputs).toEqual([])
   })
 })

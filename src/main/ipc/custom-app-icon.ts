@@ -1,6 +1,9 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { CUSTOM_APP_ICON_ID, type CustomAppIconImportResult } from '../../shared/app-icon'
+import {
+  CUSTOM_APP_ICON_ID,
+  type CustomAppIconImportResult
+} from '../../shared/app-lifecycle/identity/app-icon'
 import { translateMain } from '../i18n/main-i18n'
 import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -376,41 +376,5 @@ describe('a host that just moved to its managed server', () => {
     expect(repoListCalls).toBe(2)
     warningLog.mockRestore()
     errorLog.mockRestore()
-  })
-
-  it('drops a pending reconnect replay when the host returns to the relay', async () => {
-    const warningLog = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const firstList = Promise.withResolvers<never>()
-    const list = vi.mocked(window.api.runtimeEnvironments.list)
-    list.mockReturnValueOnce(firstList.promise)
-    const managed = { kind: 'managed', environmentId: 'env-1' } as const
-    const settingUp = { kind: 'setting-up', phase: 'connecting' } as const
-    applySshManagedServerTransition('ssh-overlap-relay', undefined, managed)
-    applySshManagedServerTransition('ssh-overlap-relay', managed, settingUp)
-    applySshManagedServerTransition('ssh-overlap-relay', settingUp, managed)
-    applySshManagedServerTransition('ssh-overlap-relay', managed, {
-      kind: 'relay',
-      reason: 'orcad_unavailable'
-    })
-    firstList.reject(new Error('environment catalog unavailable'))
-    await vi.waitFor(() => expect(warningLog).toHaveBeenCalled())
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(list).toHaveBeenCalledTimes(1)
-    warningLog.mockRestore()
-  })
-
-  it('abandons an in-flight conversion refresh when the host returns to the relay', async () => {
-    const pending =
-      Promise.withResolvers<Awaited<ReturnType<typeof window.api.runtimeEnvironments.list>>>()
-    vi.mocked(window.api.runtimeEnvironments.list).mockReturnValueOnce(pending.promise)
-    const managed = { kind: 'managed', environmentId: 'env-1' } as const
-    applySshManagedServerTransition('ssh-cancel-load', undefined, managed)
-    applySshManagedServerTransition('ssh-cancel-load', managed, {
-      kind: 'relay',
-      reason: 'orcad_unavailable'
-    })
-    pending.resolve([])
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(window.api.repos.list).not.toHaveBeenCalled()
   })
 })

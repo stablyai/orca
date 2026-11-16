@@ -1,5 +1,5 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 
 export function markGitLabHostedReviewReadyForReview(args: {

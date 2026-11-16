@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { publishSettingsChanges } from './runtime-settings-change-events'
 
 type Listener = (updates: Partial<GlobalSettings>, settings: GlobalSettings) => void

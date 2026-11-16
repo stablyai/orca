@@ -3,7 +3,7 @@ import {
   createCodexCapacityNoticeTracker,
   createCodexReconnectFailedNoticeTracker,
   type CodexNoticeTracker
-} from '../../../../shared/codex-native-notice'
+} from '../../../../shared/agent-status/output/codex-native-notice'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { recognizeAgentProcessFromCommandLine } from '../../../../shared/agent-status/process/agent-process-recognition'

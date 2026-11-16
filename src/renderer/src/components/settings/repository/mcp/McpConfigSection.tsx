@@ -40,7 +40,7 @@ import {
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 

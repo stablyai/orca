@@ -5,7 +5,7 @@ import {
   CLOUD_TRANSCRIPTION_SAMPLE_RATE,
   MAX_CLOUD_TRANSCRIPTION_SECONDS,
   cloudTranscriptionTimeoutMs
-} from '../../shared/dictation-finish-deadlines'
+} from '../../shared/speech/dictation/dictation-finish-deadlines'
 
 const MAX_CLOUD_AUDIO_SAMPLES = MAX_CLOUD_TRANSCRIPTION_SECONDS * CLOUD_TRANSCRIPTION_SAMPLE_RATE
 

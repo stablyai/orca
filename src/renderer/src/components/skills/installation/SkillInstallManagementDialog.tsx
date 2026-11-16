@@ -4,9 +4,9 @@ import { useAppStore } from '@/store/index'
 import type {
   ManagedSkillInstall,
   SkillInstallResult
-} from '../../../../../shared/skill-install-contract'
-import type { SkillBundleInstallResult } from '../../../../../shared/skill-bundle-install-contract'
-import type { SkillCloudPackageDetails } from '../../../../../shared/skill-cloud-contract'
+} from '../../../../../shared/skills/installation/skill-install-contract'
+import type { SkillBundleInstallResult } from '../../../../../shared/skills/installation/skill-bundle-install-contract'
+import type { SkillCloudPackageDetails } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import { skillInstallManagementCopy } from './skill-install-management-copy'
 import { useSkillInstallProgress } from './skill-install-progress-state'
@@ -18,7 +18,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { SkillInstallManagementDialogContent } from './SkillInstallManagementDialogContent'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export function SkillInstallManagementDialog({
   open,

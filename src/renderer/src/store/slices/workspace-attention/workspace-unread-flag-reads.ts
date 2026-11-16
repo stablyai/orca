@@ -1,4 +1,4 @@
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { findKnownWorktreeById } from '../worktrees/listing/detected-worktree-meta'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import '../../../../../../shared/constants'
 import { makeWorktree } from '../worktree.test-fixture'
@@ -54,7 +55,9 @@ it('refuses newly appeared unapproved live agent on local after preparation', as
     connectionId: null,
     terminalHandle: undefined
   })
-  store.setState({ agentStatusByPaneKey: { [entry.paneKey]: entry } })
+  store.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [entry.paneKey]: entry }))
+  })
   gate.resolve({ hasHooks: false })
   expect((await removal).ok).toBe(false)
   expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
@@ -86,7 +89,9 @@ it('refuses newly appeared unapproved live agent on runtime:env-1 after preparat
     connectionId: null,
     terminalHandle: 'remote:env-1@@pty'
   })
-  store.setState({ agentStatusByPaneKey: { [entry.paneKey]: entry } })
+  store.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [entry.paneKey]: entry }))
+  })
   gate.resolve(createCompatibleRuntimeStatusResponse())
   expect((await removal).ok).toBe(false)
   expect(runtimeEnvironmentCall).not.toHaveBeenCalled()

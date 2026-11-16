@@ -36,10 +36,10 @@ describe('parseTaskQuery', () => {
 
   it('extracts assignee, author, label, and review qualifiers', () => {
     const parsed = parseTaskQuery(
-      'assignee:@me author:alice review-requested:@me label:bug free text'
+      'assignee:@me author:alice author:bob review-requested:@me label:bug free text'
     )
     expect(parsed.assignee).toBe('@me')
-    expect(parsed.author).toBe('alice')
+    expect(parsed.authors).toEqual(['alice', 'bob'])
     expect(parsed.reviewRequested).toBe('@me')
     expect(parsed.scope).toBe('pr') // review-requested forces pr
     expect(parsed.labels).toEqual(['bug'])

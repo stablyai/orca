@@ -1,5 +1,5 @@
 import type { AgentWorkingMode } from '../../../../src/shared/agent-status/contracts/agent-status-types'
-import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 export type HomeWorktreeSummary = {
   worktreeId: string

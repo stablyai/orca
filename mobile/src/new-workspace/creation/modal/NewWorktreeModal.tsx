@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../src/shared/execution-host'
-import { getProjectIdentityKey } from '../../../../../src/shared/project-host-setup-projection'
+import { getProjectIdentityKey } from '../../../../../src/shared/project/host-setup/project-host-setup-projection'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../../src/shared/new-workspace/workspace-source'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../../source-selection/mobile-smart-source-modes'

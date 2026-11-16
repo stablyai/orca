@@ -11,10 +11,10 @@ import {
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   CLAUDE_USER_CONFIG_DIR_ENV
-} from '../../../../shared/claude-profile-routing'
+} from '../../../../shared/agent-accounts/claude/claude-profile-routing'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ClaudeManagedAccount } from '../../../../shared/managed-account-types'
+import type { ClaudeManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../../../claude/cli-capabilities/claude-hook-event-versions'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { resolveClaudeCommand } from '../../../codex-cli/command'

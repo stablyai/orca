@@ -1,6 +1,6 @@
 import { findOptionOccurrence } from '../../../shared/command-option-occurrence'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
-import { escapeRegex } from '../../../shared/string-utils'
+import { escapeRegex } from '../../../shared/text/regex-escaping'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
 
 const PROMPT_VALUE_OPTIONS = ['--prompt', '-p']

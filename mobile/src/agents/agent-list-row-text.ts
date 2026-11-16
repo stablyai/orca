@@ -2,7 +2,7 @@ import { getAgentRowPrimaryText } from '../../../src/shared/agent-status/present
 import { formatAgentToolPreviewLine } from '../../../src/shared/agent-status/presentation/agent-tool-preview'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { HomeAgentEntry } from '../worktree/catalog/home-worktree-info'
 import type { AgentStatusGroup } from './agent-list-rows'
 

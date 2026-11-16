@@ -8,7 +8,7 @@ import '../../rpc/compatibility/runtime-capability-proof'
 import '../../hosts/capabilities/local-runtime-capabilities'
 import '../../rpc/subscriptions/runtime-rpc-subscribe'
 import '../requests/structured-agent-session-request-timeouts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { structuredAgentSessionHostSupports } from '../host-capabilities/structured-agent-session-host-support'
 

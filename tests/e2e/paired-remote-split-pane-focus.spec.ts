@@ -1,5 +1,5 @@
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
-import type { RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalRead } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { expect, test } from './helpers/orca-app'
 import {
   callPairedRuntime,

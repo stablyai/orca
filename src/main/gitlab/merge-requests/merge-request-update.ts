@@ -1,4 +1,4 @@
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import type { GitLabMRUpdate } from '../../../shared/gitlab-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import { classifyGlabError } from '../requests/glab-error-classification'

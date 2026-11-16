@@ -18,7 +18,7 @@ import type {
   RepoSourceControlAiOverrides
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 export function saveSourceControlTextPickerDraft({
   source,

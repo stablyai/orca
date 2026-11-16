@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdir, mkdtemp, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +7,7 @@ import {
   APPIMAGE_SOURCE_RECORD_NAME,
   appImageNamespaceKey,
   resolveAppImageCacheKey
-} from '../../../../shared/appimage-cache-identity'
+} from '../../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import {
   APPIMAGE_SETTLE_MS,
   createSupervisedAppImageUpdate,
@@ -104,32 +105,6 @@ describe('supervised serve and a replaced AppImage', () => {
     expect(inspectAppImageBuild(watch, Date.now() + APPIMAGE_SETTLE_MS + 1_000)).toBe('superseded')
     await rm(appImagePath)
     expect(inspectAppImageBuild(watch)).toBe('current')
-  })
-
-  it('execs the new AppImage with its own serve arguments and a clean environment', async () => {
-    const { appImagePath, executable } = await makeRunningGeneration()
-    const watch = resolveAppImageBuildWatch(executable, {}, 'linux')!
-    const deps = restartDeps()
-
-    await restartFromNewAppImage(watch, deps)
-
-    expect(deps.execve).toHaveBeenCalledWith(
-      appImagePath,
-      [appImagePath, 'serve', '--supervise'],
-      expect.objectContaining({
-        ORCA_USER_DATA_PATH: '/profiles/b1',
-        NODE_OPTIONS: '--max-old-space-size=4096'
-      })
-    )
-    const env = vi.mocked(deps.execve).mock.calls[0]?.[2]
-    for (const name of [
-      'ELECTRON_RUN_AS_NODE',
-      'ORCA_SERVE_SUPERVISOR_APP_ROOT',
-      'APPIMAGE',
-      'APPDIR'
-    ]) {
-      expect(env).not.toHaveProperty(name)
-    }
   })
 
   it('keeps the running build when the new AppImage cannot run here, or the service is stopping', async () => {

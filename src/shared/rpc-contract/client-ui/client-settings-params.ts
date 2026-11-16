@@ -7,11 +7,12 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../agent-launch/choices/tui-agent-launch-defaults'
-import { MACHINE_NAME_MAX_LENGTH } from '../../machine-name'
+import { MACHINE_NAME_MAX_LENGTH } from '../../remote-runtime/host-metadata/machine-name'
 import { normalizePRBotAuthorOverrides } from '../../source-control/review-comments/pr-bot-author-overrides'
 import { WorktreeVisibilityDefaultsUpdate } from '../workspaces/worktree-visibility-defaults-params'
 import { WorkspaceCleanupRulesParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { PR_AUTO_REFRESH_CADENCES } from '../../review-refresh-policy'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -133,7 +134,8 @@ export const SettingsUpdate = z
       .optional(),
     nativeChatAutoContinueAfterUsageLimit: z.boolean().optional(),
     nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
-    workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional()
+    workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),
+    prAutoRefresh: z.enum(PR_AUTO_REFRESH_CADENCES).optional()
   })
   .strict()
   .default({})

@@ -1,5 +1,5 @@
-import type { Repo } from '../../../../src/shared/repo-types'
-import type { ProjectGroup } from '../../../../src/shared/project-group-types'
+import type { Repo } from '../../../../src/shared/repository/repo-types'
+import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import { getFolderSourceRepos } from '../../../../src/shared/folder-workspaces/folder-workspace-source-repos'
 import {
   LOCAL_EXECUTION_HOST_ID,

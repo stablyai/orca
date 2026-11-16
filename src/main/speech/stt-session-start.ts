@@ -1,6 +1,6 @@
-import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../shared/speech-model-retirement'
-import { engineDictationLanguage } from '../../shared/dictation-language'
-import type { SpeechModelManifest } from '../../shared/speech-types'
+import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../shared/speech/models/speech-model-retirement'
+import { engineDictationLanguage } from '../../shared/speech/models/dictation-language'
+import type { SpeechModelManifest } from '../../shared/speech/speech-types'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { resolveCloudTranscriptionTarget } from './cloud-transcription-target'
@@ -26,7 +26,7 @@ import {
   initializeSttWorker,
   waitForSttWorkerReady
 } from './stt-worker-startup'
-import { START_DICTATION_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
+import { START_DICTATION_TIMEOUT_MS } from '../../shared/speech/dictation/dictation-finish-deadlines'
 import { STT_WORKER_EXITED_ERROR } from './stt-worker-process'
 import { sileroVadModelPath } from './speech-vad-model'
 

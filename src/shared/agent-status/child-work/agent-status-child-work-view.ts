@@ -15,7 +15,7 @@ import {
   type AgentChildWorkState
 } from './agent-status-child-work'
 import { agentStatusSubjectsEqual } from '../contracts/agent-status-subject'
-import { groupedBy } from '../../grouped-by'
+import { groupedBy } from '../../collections/grouped-by'
 
 /** Publish read-only child views without host bookkeeping. Decode foreign versions permissively or gate by capability, never with the strict record codec. */
 export type AgentChildWorkView = {

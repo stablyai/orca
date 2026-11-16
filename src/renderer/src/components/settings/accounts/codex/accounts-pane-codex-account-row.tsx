@@ -1,5 +1,5 @@
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
-import type { CodexRateLimitAccountsState } from '../../../../../../shared/managed-account-types'
+import type { CodexRateLimitAccountsState } from '../../../../../../shared/agent-accounts/managed-account-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getCodexAccountDisplayDetail } from '@/lib/provider-accounts/codex-account-display-label'

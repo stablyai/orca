@@ -28,7 +28,7 @@ import {
   skipUnlessManagedDockerHost,
   typeInTerminal
 } from './helpers/orcad-managed-workspace'
-import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../src/shared/desktop-browser-bridge-protocol'
+import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../src/shared/browser/client-hosting/desktop-browser-bridge-protocol'
 
 skipUnlessManagedDockerHost()
 

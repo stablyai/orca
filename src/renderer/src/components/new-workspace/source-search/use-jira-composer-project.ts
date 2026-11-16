@@ -1,5 +1,5 @@
 import type { JiraProjectReference } from '../../../../../shared/jira/jira-project-reference'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { resolveJiraSourceHostId } from '../../../../../shared/jira/jira-source-host'

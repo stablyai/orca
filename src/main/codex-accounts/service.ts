@@ -1,19 +1,19 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
+import type { WindowsHostInteractiveLoginSpawn } from '../providers/shell-launch/windows/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
-} from '../../shared/managed-account-types'
-import type { CodexRateLimitResetResult } from '../../shared/rate-limit-types'
-import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
+} from '../../shared/agent-accounts/managed-account-types'
+import type { CodexRateLimitResetResult } from '../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexResetCreditExpectedScope } from '../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { Store } from '../persistence/loading-store/store'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import { admitSelfInitiatedTreeKill } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import type { CodexAccountSelectionTarget } from '../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { CodexAccountIdentity } from './credentials/codex-account-identity'
 import type { CodexAuthIdentity as ResolvedCodexIdentity } from './credentials/codex-auth-identity'
 import { CodexConfigMirror } from './managed-homes/codex-config-mirror'
@@ -30,8 +30,8 @@ import type {
   CodexResetCreditConsumeResult
 } from './account-management/codex-account-service-types'
 import { toCodexManagedAccountSummary } from './account-management/codex-account-service-types'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
-import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/agent-accounts/codex/codex-auth-errors'
+import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 

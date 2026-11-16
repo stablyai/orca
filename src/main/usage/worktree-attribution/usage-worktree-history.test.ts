@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { UsageWorktreeHistory } from './usage-worktree-history'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeSource } from './usage-worktree-metadata'
 

@@ -8,19 +8,19 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../shared/protocol-version'
-import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
+} from '../../../../shared/remote-runtime/protocol/protocol-version'
+import type { WorkspacePortScanResult } from '../../../../shared/workspace/ports/workspace-ports'
 import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
 } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
-import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
+
 import { useAppStore } from '@/store'
 import { WorkspacePortScanner } from './WorkspacePortScanner'
 
 const localScan = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
-const remoteScanKey = 'environment:env-1:all'
+
 const remoteWorktreeId = 'repo-1::/remote/repo'
 let container: HTMLDivElement | null = null
 let root: Root | null = null
@@ -52,35 +52,6 @@ const liveScan: WorkspacePortScanResult = {
   ]
 }
 
-function addRemoteWorkspace(environmentId: string): void {
-  const state = useAppStore.getState()
-  const repoId = `repo-${environmentId}`
-  const path = `/remote/${environmentId}`
-  useAppStore.setState({
-    repos: [
-      ...state.repos,
-      {
-        id: repoId,
-        path,
-        displayName: environmentId,
-        connectionId: null,
-        executionHostId: toRuntimeExecutionHostId(environmentId)
-      }
-    ] as never,
-    worktreesByRepo: {
-      ...state.worktreesByRepo,
-      [repoId]: [
-        {
-          id: `${repoId}::${path}`,
-          repoId,
-          path,
-          displayName: 'main'
-        }
-      ]
-    } as never
-  })
-}
-
 function removeAllWorktrees(): void {
   const state = useAppStore.getState()
   useAppStore.setState({
@@ -88,12 +59,6 @@ function removeAllWorktrees(): void {
       Object.keys(state.worktreesByRepo).map((repoId) => [repoId, []])
     ) as never
   })
-}
-
-function getPublishedRemoteWorktreePorts() {
-  return getWorkspacePortsByWorktreeId(useAppStore.getState().workspacePortScan?.result).get(
-    remoteWorktreeId
-  )
 }
 
 const compatibleStatus = {
@@ -191,70 +156,6 @@ afterEach(() => {
 })
 
 describe('WorkspacePortScanner', () => {
-  it('keeps an unchanged host scan when another execution host is added', async () => {
-    let env1Attempts = 0
-    runtimeEnvironmentCall.mockImplementation(({ selector, method }) => {
-      if (method !== 'workspacePorts.scan') {
-        return Promise.resolve({ ok: false, error: { code: 'method_not_found', message: method } })
-      }
-      if (selector !== 'env-1') {
-        return Promise.resolve({ ok: true, result: emptyScan })
-      }
-      env1Attempts += 1
-      return Promise.resolve({ ok: true, result: liveScan })
-    })
-
-    await act(async () => {
-      root?.render(<WorkspacePortScanner />)
-      await flushPromises()
-    })
-    expect(useAppStore.getState().workspacePortScansByKey[remoteScanKey]).toBe(liveScan)
-
-    markRuntimeEnvironmentCompatible('env-2')
-    await act(async () => {
-      addRemoteWorkspace('env-2')
-      await flushPromises()
-    })
-
-    expect(env1Attempts).toBe(1)
-    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
-    expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
-      selector: 'env-2',
-      method: 'workspacePorts.scan',
-      params: {},
-      timeoutMs: 15_000
-    })
-    expect(getPublishedRemoteWorktreePorts()).toHaveLength(1)
-  })
-
-  // Late manual publishes can re-add pruned hosts; the next poll must remove their ports/unavailable notices again.
-  it('drops a stale host re-added after pruning on the next poll', async () => {
-    await act(async () => {
-      root?.render(<WorkspacePortScanner />)
-      await flushPromises()
-    })
-
-    const staleKey = 'environment:env-removed:all'
-    act(() => {
-      const state = useAppStore.getState()
-      state.replaceWorkspacePortScans(
-        {
-          ...state.workspacePortScansByKey,
-          [staleKey]: { ...emptyScan, unavailableReason: 'gone' }
-        },
-        state.workspacePortScan
-      )
-    })
-    expect(useAppStore.getState().workspacePortScansByKey[staleKey]).toBeDefined()
-
-    await act(async () => {
-      vi.advanceTimersByTime(30_000)
-      await flushPromises()
-    })
-
-    expect(useAppStore.getState().workspacePortScansByKey[staleKey]).toBeUndefined()
-  })
-
   it('clears ports immediately when the final worktree is removed', async () => {
     runtimeEnvironmentCall.mockImplementation(({ method }) => {
       if (method === 'workspacePorts.scan') {

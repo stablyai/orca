@@ -10,13 +10,13 @@ import {
   type MobileViewState
 } from '../worktree/workspace-list/workspace-view-settings'
 
-import type { ServedProjectSections } from '../../../src/shared/project-section-catalog-schema'
+import type { ServedProjectSections } from '../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import type { SectionRepo, Worktree } from '../worktree/workspace-list/workspace-list-types'
 import {
   NO_SERVER_WORKSPACES,
   type ServerWorkspaces
 } from '../worktree/execution-hosts/server-workspaces'
-import type { ProjectGroup } from '../../../src/shared/project-group-types'
+import type { ProjectGroup } from '../../../src/shared/project/groups/project-group-types'
 import { cachedHostWorktrees } from './catalog/host-list-queries'
 import { cachedHostView, useHostViewMemory } from './view-settings/host-view-memory'
 

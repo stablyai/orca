@@ -136,6 +136,33 @@
       "title": "終端機"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca 現已上架 Google Play",
+      "description": "此 App 仍可繼續使用，但之後的更新將透過 Google Play 提供。切換只需要幾分鐘。",
+      "installTitle": "從 Google Play 安裝 Orca",
+      "installDescription": "現在就能安裝，無論你在哪裡。",
+      "openGooglePlay": "開啟 Google Play",
+      "cantUseGooglePlay": "我無法使用 Google Play"
+    },
+    "download": {
+      "title": "取得新版 Orca App",
+      "description": "此 App 仍可繼續使用，但之後的更新與安全性修正將透過新 App 提供。切換只需要幾分鐘。",
+      "installTitle": "下載新 App",
+      "installDescription": "如果手機詢問，請允許瀏覽器安裝 App。",
+      "download": "下載",
+      "keepThisVersion": "繼續使用此版本",
+      "keepThisVersionNote": "你將收不到安全性修正。我們會在一週後再提醒你。"
+    },
+    "pairTitle": "與電腦配對",
+    "pairDescription": "在電腦上的 Orca 中，前往「設定」→「行動版」，然後掃描 QR Code。",
+    "deleteTitle": "刪除此 App",
+    "deleteDescription": "等新 App 顯示你的代理程式後再刪除。在那之前，請繼續使用此 App。",
+    "dataKept": "你的代理程式、聊天和工作區都儲存在電腦上，因此在新 App 中也能全部看到。",
+    "banner": {
+      "seeHowToSwitch": "查看如何切換"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "網址"
@@ -222,6 +249,7 @@
     "message": {
       "copyMessage": "複製訊息",
       "forkFromResponse": "從此回覆建立分支",
+      "scrollMessageToTop": "將此訊息捲動到頂端",
       "forkFromResponseHint": "新聊天將包含此回合結束前的完整回覆"
     },
     "messageActionsSheet": {
@@ -643,7 +671,10 @@
       "busy": "另一個聊天或終端機正在開啟。請稍候，再次從 {{agent}} 聊天建立分支。",
       "unconfirmed": "{{agent}} 無法確認是否已建立分支。它可能已經開啟；請先檢查工作階段歷史記錄，再試一次。",
       "failed": "{{agent}} 無法從此聊天建立分支。{{detail}}",
-      "unsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。"
+      "unsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。",
+      "mark": "分支 ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "分支：{{name}}"
     }
   },
   "common": {
@@ -939,8 +970,10 @@
       "desktopTooOldBody": "已配對的桌面版版本過舊，無法搭配目前的 Orca Mobile 使用。請更新電腦上的 Orca，再重新連線至此主機。",
       "getVersion": "取得 Orca {{version}}",
       "mobileTooOldAppStore": "此桌面版需要較新版本的 Orca Mobile。請從 App Store 更新 Orca Mobile，再重新連線至此主機。",
+      "mobileTooOldGooglePlay": "此桌面版需要較新版本的 Orca Mobile。請從 Google Play 更新 Orca Mobile，再重新連線至此主機。",
       "mobileTooOldGitHubReleases": "此桌面版需要較新版本的 Orca Mobile。請從 GitHub Releases 更新 Orca Mobile，再重新連線至此主機。",
       "openAppStore": "開啟 App Store",
+      "openGooglePlay": "開啟 Google Play",
       "openGitHubReleases": "開啟 GitHub Releases",
       "refreshRecoveryNote": "如果仍顯示此訊息，請移除此主機並重新配對。",
       "refreshWorkspaceBody": "此主機的工作區快取版本低於桌面版要求的版本。請重新連線至此主機，以下載目前版本。",
@@ -949,6 +982,7 @@
       "updateMobileTitle": "更新 Orca Mobile",
       "updateRecoveryNote": "已經更新了嗎？請返回「主機」並重新整理連線。如果仍顯示此訊息，請移除此主機並重新配對。",
       "workspaceNeedsUpdateAppStore": "此桌面版的行動版工作區需要較新版本的 Orca Mobile。請從 App Store 更新 Orca Mobile，再重新連線至此主機。",
+      "workspaceNeedsUpdateGooglePlay": "此桌面版的行動版工作區需要較新版本的 Orca Mobile。請從 Google Play 更新 Orca Mobile，再重新連線至此主機。",
       "workspaceNeedsUpdateGitHubReleases": "此桌面版的行動版工作區需要較新版本的 Orca Mobile。請從 GitHub Releases 更新 Orca Mobile，再重新連線至此主機。"
     },
     "richMarkdownEditor": {
@@ -2791,12 +2825,14 @@
       "title": "外觀"
     },
     "browserSettingsScreen": {
+      "askEachTime": "每次詢問",
+      "askEachTimeDescription": "每次選擇 Orca 瀏覽器、手機瀏覽器或複製連結。",
       "desktopBrowser": "電腦上的 Orca 瀏覽器",
       "desktopBrowserDescription": "在已配對電腦的瀏覽器中開啟，並串流至手機。",
-      "linksDescription": "選擇點按終端機輸出中的 HTTP(S) 連結時，要在哪裡開啟。",
+      "terminalAndChatLinksDescription": "選擇點按終端機輸出和聊天中的網頁連結時，要在哪裡開啟。",
       "linksHeading": "連結",
       "loadFailed": "無法載入瀏覽器偏好設定，請再試一次。",
-      "openTerminalLinks": "開啟終端機連結",
+      "openLinks": "開啟連結",
       "phoneBrowser": "手機瀏覽器",
       "phoneBrowserDescription": "在此手機上的 Safari、Chrome 或其他瀏覽器中開啟。",
       "saveFailed": "無法儲存瀏覽器偏好設定，請再試一次。",

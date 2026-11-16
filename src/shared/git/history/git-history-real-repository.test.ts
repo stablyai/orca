@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { resolveExecutableCommand } from '../../node-cli-command-resolution'
+import { resolveExecutableCommand } from '../../shell/command-resolution/node-cli-command-resolution'
 
 import { gitHistoryTokens } from './git-history-token-store'
 import { loadGitHistoryRefs } from './git-history-revisions'

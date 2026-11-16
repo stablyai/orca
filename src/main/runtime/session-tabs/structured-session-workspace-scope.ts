@@ -12,8 +12,8 @@ import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector
 } from '../../../shared/floating-workspace-worktree'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { composeWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { resolveWorktreeHostRouting } from '../workspaces/catalog/worktree-launch-host-repo'
 import type { RuntimeWorkspaceFileTargets } from '../workspaces/workspace-file-session-targets'

@@ -2,7 +2,7 @@
 // surface reporting-command replies as their answer.
 
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
-import { stripAnsiEscapeSequences } from '../../ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../terminal/protocol/escape/ansi-escape-sequences'
 import { getVerifiedNativeChatCommands } from '../native-chat-agent-profiles'
 import { parseNativeChatCommandEnvelope } from '../native-chat-command-envelope'
 import { isTextBlock, type NativeChatMessage } from '../native-chat-types'

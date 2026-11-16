@@ -16,7 +16,7 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
 } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { nativeChatPreferenceFor } from '../../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   buildAgentLaunchRouteInput,
   type AgentLaunchRouteStore,

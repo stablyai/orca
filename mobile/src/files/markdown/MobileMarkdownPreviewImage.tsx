@@ -4,7 +4,7 @@ import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-th
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileLoadErrorState } from '../../components/feedback/MobileStateView'
-import { MobileNativeChatImageViewer } from '../../session/native-chat/visual/MobileNativeChatImageViewer'
+import { MobileImageViewer } from '../media/presentation/MobileImageViewer'
 import { MobileImageViewerActions } from '../../session/native-chat/visual/MobileImageViewerActions'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { loadMarkdownPreviewImage } from './mobile-markdown-image-source'
@@ -97,7 +97,7 @@ export function MobileMarkdownPreviewImage({ client, worktreeId, documentPath, h
       )}
       {alt ? <Text style={styles.caption}>{alt}</Text> : null}
       {expanded && load.uri ? (
-        <MobileNativeChatImageViewer
+        <MobileImageViewer
           uri={load.uri}
           label={alt || t('files.markdownPreviewImage.imageLabel', 'Markdown image')}
           actions={MobileImageViewerActions}

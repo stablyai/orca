@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { onPageAppInactive } from '../../../../mobile-web-shell/bridge/bridge-app-inactive'
+import { onPageAppInactive } from '../../../../mobile-web-shell/bridge/page-lifecycle/bridge-app-inactive'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
@@ -10,7 +10,7 @@ import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS
 } from '../../../../../../src/shared/agent-session/view/structured-agent-session-item-retention'
-import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-device-store'
+import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   chatTranscriptStoreKey,
   peekStoredChatTranscript,

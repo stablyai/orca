@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DictationEnginePreference } from '../../mobile-web-shell/bridge/bridge-speech-verbs'
+import type { DictationEnginePreference } from '../../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 import { createNativeSpeechServer, type NativeSpeechEngine } from './native-speech'
 
 function engineWith(preference: DictationEnginePreference): NativeSpeechEngine {

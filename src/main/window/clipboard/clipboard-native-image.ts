@@ -2,7 +2,7 @@ import { clipboard, nativeImage, type NativeImage } from 'electron'
 import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
-} from '../../../shared/clipboard-image'
+} from '../../../shared/clipboard/clipboard-image'
 import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 
 export function readClipboardNativeImage(): NativeImage {

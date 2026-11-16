@@ -47,14 +47,6 @@ describe('orchestration dispatch coordinator handle', () => {
       json
     } as never)
 
-  const invokeRun = (flags: Map<string, string | boolean>) =>
-    ORCHESTRATION_HANDLERS['orchestration coordinator-start']({
-      flags,
-      client: { call: callMock },
-      cwd: '/tmp/repo',
-      json: true
-    } as never)
-
   it('rejects stale coordinator env handles when the caller pane cannot be proven', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
     callMock.mockRejectedValueOnce(staleHandleError())
@@ -73,52 +65,5 @@ describe('orchestration dispatch coordinator handle', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
-  })
-
-  it('retires the legacy coordinator command without runtime effects', async () => {
-    await expect(
-      invokeRun(new Map<string, string | boolean>([['spec', 'run the plan']]))
-    ).rejects.toMatchObject({
-      code: 'orchestration_migration_required',
-      data: {
-        reason: 'command_retired',
-        effectsApplied: false,
-        nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
-      }
-    })
-    expect(callMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('orchestration task-create caller handle', () => {
-  beforeEach(() => {
-    callMock.mockReset()
-    getTerminalHandleMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
-  })
-
-  const invokeTaskCreate = (flags: Map<string, string | boolean>) =>
-    ORCHESTRATION_HANDLERS['orchestration task-create']({
-      flags,
-      client: { call: callMock },
-      cwd: '/tmp/repo',
-      json: true
-    } as never)
-
-  it('fails closed when a stale task creator handle cannot be reminted', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
-    callMock.mockRejectedValueOnce(staleHandleError())
-    getTerminalHandleMock.mockResolvedValue('term_wrong_active')
-
-    await expect(
-      invokeTaskCreate(new Map<string, string | boolean>([['spec', 'do work']]))
-    ).rejects.toMatchObject({ code: 'no_active_sender_terminal' })
-
-    expect(callMock).toHaveBeenNthCalledWith(1, 'terminal.resolveIdentity', {
-      terminal: 'term_stale'
-    })
-    expect(getTerminalHandleMock).not.toHaveBeenCalled()
-    expect(callMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -659,6 +659,7 @@
         "fontKeywordTypeface": "Schriftart",
         "fontKeywordTypography": "Typografie",
         "inheritFont": "Wie IDE-Schrift",
+        "systemFont": "Systemschrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
         "title": "Chat-Oberfläche",
@@ -1396,7 +1397,7 @@
             "33290e88ed": "Profil konnte nicht verbunden werden",
             "9fcb07a796": "Profil verbunden",
             "2f6c78a039": "Profil-Authentifizierung konnte nicht aktualisiert werden",
-            "a37b5e6d37": "Vom Profil abgemeldet",
+            "a37b5e6d37": "Von Orca abgemeldet",
             "83600521e7": "Abmelden fehlgeschlagen",
             "76deec8f58": "Organisation konnte nicht gewechselt werden",
             "7d4bc516ee": "Profil konnte nicht gewechselt werden",
@@ -1980,6 +1981,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+Klick zum Öffnen im Systembrowser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Arbeitsbereich-Kommentar",
+        "createdByAutomation": "Durch Automatisierung erstellt",
+        "linkedTask": "Verknüpfte Aufgabe",
+        "pullRequest": "Pull Request",
+        "mergeRequest": "Merge Request",
+        "linkedIssue": "Verknüpftes Issue",
+        "listeningPort": "Lauschender Port"
       }
     },
     "hooks": {
@@ -3624,6 +3634,8 @@
           "draft": "Entwurf",
           "labelCount_one": "{{count}} Label",
           "labelCount_other": "{{count}} Labels",
+          "authorCount_one": "{{count}} Autor",
+          "authorCount_other": "{{count}} Autoren",
           "allStates": "Alle",
           "filterPullRequests": "Pull Requests filtern",
           "filterIssues": "Issues filtern",
@@ -3776,6 +3788,7 @@
             "1e4b81d892": "Dumpfer Schlag",
             "86af8d938c": "Gong",
             "80f7cc95b3": "Zweiton",
+            "silent": "Lautlos",
             "017abebfa6": "Systemstandard"
           }
         }
@@ -3964,7 +3977,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "Dieses Terminal wird nicht automatisch fortgesetzt. Abbrechen und den Arbeitsbereich in den Ruhezustand versetzen, um es später fortzusetzen.",
             "1d1a7a9c1f": "Abbrechen",
             "stop_agent_title": "Diesen Agenten stoppen?",
             "stop_command_title": "Laufenden Befehl stoppen?",
@@ -4041,7 +4053,8 @@
             "remoteTerminalClosed": "Das entfernte Terminal wurde geschlossen.",
             "ptyAllocationLimit": "Das System kann keine weiteren pty-Geräte zuweisen. Einige ungenutzte Terminals in Orca oder einem anderen Programm schließen und anschließend erneut versuchen.",
             "terminalProcessLimit": "Das System kann keinen weiteren Terminal-Prozess starten. Ungenutzte Terminals schließen oder ungenutzte Prozesse beenden und anschließend erneut versuchen.",
-            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen."
+            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen.",
+            "copyErrorDetails": "Fehlerdetails kopieren"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Konsolenlimit von Git Bash erreicht",
@@ -4638,7 +4651,6 @@
             "c8857b40f7": "Nutzungsdaten aktualisieren",
             "75ded02687": "Konten verwalten…",
             "ff0fbe9311": "Aktiv",
-            "7657e3db9c": "Codex-Konto",
             "38b5647724": "Codex-Nutzung: Laufzeitumgebung",
             "ba55303942": "Codex-Details und Kontowechsel öffnen",
             "c35af53b73": "Anmelden",
@@ -4646,7 +4658,6 @@
             "5c938d39ac": "Wo.",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude-Konto",
             "11e2354daf": "Claude-Nutzung: Laufzeitumgebung",
             "3dd7ddfae1": "Claude-Details und Kontowechsel öffnen",
             "59c6e7b4e0": "Sichtbare Sitzungen werden jetzt neu gestartet. Andere werden neu gestartet, sobald ihr Worktree aktiv wird.",
@@ -4924,7 +4935,8 @@
             "compact": "Kompakt",
             "detailedTooltip": "Vollständige Nutzung mit Balken, Beschriftungen und Prozentwerten",
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
-            "footerDetailAria": "Detailangabe in der Nutzungsfußzeile"
+            "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
+            "notChecked": "Nicht geprüft"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",
@@ -5057,11 +5069,6 @@
             "behind": "{{behind}} zurück",
             "activeAgents_one": "{{count}} aktiver Agent",
             "activeAgents_other": "{{count}} aktive Agenten",
-            "completedAgents_one": "{{count}} abgeschlossener Agent",
-            "completedAgents_other": "{{count}} abgeschlossene Agenten",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} abgeschlossener Agent beibehalten",
-            "completedAgentsRetained_other": "{{count}} abgeschlossene Agenten beibehalten",
             "noTrackedAgents": "Keine erfassten Agenten aktiv",
             "noTerminalTabs": "Keine Terminal-Tabs",
             "liveTerminalTabs_one": "{{live}} aktiv von {{count}} Terminal-Tab",
@@ -5114,12 +5121,17 @@
           "AccountSwitchList": {
             "used": "Verbraucht",
             "left": "Übrig",
-            "reset": "Zurücksetzung"
+            "reset": "Zurücksetzung",
+            "accounts": "Konten"
           },
           "InlineUsageBars": {
             "now": "jetzt",
             "resetsNow": "Zurücksetzung jetzt",
             "resetsIn": "Zurücksetzung in {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Verbleibende Nutzung anzeigen",
+            "showUsed": "Verbrauchte Nutzung anzeigen"
           }
         }
       },
@@ -7794,7 +7806,10 @@
           "b4e9d3f2a1c5": "{{value0}} Cookies aus {{value1}} in {{value2}} importiert.",
           "c5a273a809": "Aus {{value0}}",
           "80bffd32bf": "Cookies importieren",
-          "bd7d68f138": "Aus Datei…"
+          "bd7d68f138": "Aus Datei…",
+          "4054c458e1": "Cookies des Standardprofils löschen",
+          "3b662becd5": "Cookies im Standardprofil löschen?",
+          "f159cf5a3e": "Dadurch wirst du möglicherweise auf Websites in diesem Profil abgemeldet."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
@@ -11582,6 +11597,7 @@
           "e27c8d45bf": "Die Diagnose ist durch eine Umgebungsvariable deaktiviert."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Ein anderes Tastenkürzel drücken oder mit Esc abbrechen.",
           "eb72c52c28": "Ein Tastenkürzel drücken oder eine Zusatztaste zweimal antippen (z. B. {{value0}}). Esc bricht ab.",
           "70b5d25583": "Tastenkürzel für {{value0}}",
           "287e07ddde": "Geändert",
@@ -13204,7 +13220,8 @@
           "catalog": "Katalog",
           "clear": "Filter zurücksetzen",
           "themes": "Designs",
-          "languages": "Sprachen",
+          "codeLanguages": "Programmiersprachen",
+          "translations": "Übersetzungen",
           "icons": "Symbole",
           "commands": "Befehle & Panels",
           "catalogLabel": "Nach Katalog filtern",
@@ -16550,10 +16567,9 @@
           "725868c75d": "Ordner durchsuchen",
           "5e7f0d8a80": "Ordnerauswahl für entfernte Dateien nicht verfügbar",
           "30099dca46": "Ordner",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "Dateiname",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Die Markdown-Datei benennen und einen Ordner auswählen.",
+          "description": "Datei benennen und einen Ordner auswählen.",
           "674b046582": "Speichern unter",
           "nameEmpty": "Name darf nicht leer sein",
           "nameHasSeparators": "Name darf keine Pfadtrennzeichen enthalten",
@@ -19471,7 +19487,8 @@
         "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
         "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
         "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
-        "forkedFrom": "Abgezweigt von"
+        "forkedFrom": "Abgezweigt von",
+        "forkedFromUnknown": "Abgezweigt von einem anderen Chat"
       },
       "composer": {
         "send": "Senden",
@@ -19973,7 +19990,7 @@
       "queuedMessages": {
         "steer": "Steuern",
         "send": "Senden",
-        "steerHint": "Ohne Unterbrechung des Modells übermitteln",
+        "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
         "moreActions": "Weitere Aktionen",
@@ -20225,7 +20242,12 @@
         "failed": "{{agent}} konnte diesen Chat nicht abzweigen",
         "hostUnsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
         "failedDetail": "Dein Chat ist unverändert. Versuche es erneut.",
-        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist."
+        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist.",
+        "mark": "Zweig ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Zweig: {{name}}",
+        "sourceTooltip": "Abgezweigt von {{name}}",
+        "unknownSourceTooltip": "Von einem anderen Chat abgezweigt"
       },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",
@@ -20341,7 +20363,7 @@
           "pinned": "Angeheftet",
           "unread": "Ungelesen",
           "comment": "Mit Kommentar",
-          "retainedDoneAgents": "Protokolle abgeschlossener Agenten",
+          "finishedAgents": "Abgeschlossene Agenten",
           "contextPresence": "Offene Tabs, Terminals, Kommentare",
           "completelyEmpty": "Nichts mehr zu verlieren",
           "noWorkspaces": "Keine Arbeitsbereiche gefunden.",
@@ -20459,7 +20481,7 @@
               "comment": "Kommentar",
               "prunable": "Bereinigbar",
               "locked": "Gesperrt",
-              "retainedAgents": "Abgeschlossene Agenten"
+              "finishedAgents": "Abgeschlossene Agenten"
             }
           },
           "forceDeleteRisk_one": "{{count}} Arbeitsbereich weist derzeit Risiken auf und muss möglicherweise zwangsweise gelöscht werden",
@@ -20589,7 +20611,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Sitzungs-ID kopieren",
         "copySessionIdSuccess": "Sitzungs-ID kopiert",
-        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden"
+        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden",
+        "copySessionIdUnavailable": "Keine Sitzungs-ID zum Kopieren"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Orca auf {{value0}} aktualisieren, um Dateien außerhalb seiner Arbeitsbereiche zu öffnen"
@@ -22782,6 +22805,8 @@
       "tabCloseAll": "Alle Editor-Tabs schließen",
       "tabRename": "Aktiven Tab umbenennen",
       "tabReopenClosed": "Geschlossenen Tab erneut öffnen",
+      "tabMoveLeft": "Aktiven Tab nach links verschieben",
+      "tabMoveRight": "Aktiven Tab nach rechts verschieben",
       "tabNextSameType": "Zum nächsten Tab wechseln (gleicher Typ)",
       "tabPreviousSameType": "Zum vorherigen Tab wechseln (gleicher Typ)",
       "tabNextAllTypes": "Zum nächsten Tab wechseln (alle Typen)",
@@ -22792,6 +22817,7 @@
       "tabOpenQuickCommandsMenu": "Menü für Schnellbefehle ein-/ausblenden",
       "editorFind": "Im Editor suchen",
       "editorReplace": "Im Editor ersetzen",
+      "editorToggleChangesView": "Änderungsansicht ein-/ausschalten",
       "fileExplorerUndo": "Dateivorgang rückgängig machen",
       "fileExplorerRedo": "Dateivorgang wiederholen",
       "fileExplorerCopyPath": "Dateipfad kopieren",
@@ -22809,6 +22835,7 @@
       "chatFind": "Im Chat suchen",
       "terminalToggleNativeChat": "Zwischen Chat-Oberfläche und Terminal wechseln",
       "terminalClosePane": "Aktiven Bereich schließen",
+      "terminalCopySessionId": "Sitzungs-ID kopieren",
       "terminalSplitRight": "Terminal nach rechts teilen",
       "terminalSplitDown": "Terminal nach unten teilen",
       "terminalSwitchInputSource": "Eingabequelle / Sprache wechseln (nativ)",

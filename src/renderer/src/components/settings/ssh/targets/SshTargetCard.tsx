@@ -4,7 +4,7 @@ import type {
   SshConnectionState,
   SshConnectionStatus,
   SshTarget
-} from '../../../../../../shared/ssh-types'
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Checkbox } from '../../../ui/checkbox'
