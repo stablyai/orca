@@ -49,7 +49,7 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       ...CUSTOM_EDITOR_EDIT_RATE_LIMIT
     })
   const now = options.now ?? (() => Date.now())
-  const viewState = createCustomEditorViewStateLane(options, now)
+  const viewState = createCustomEditorViewStateLane(options)
   const flushTimeoutMs = options.flushTimeoutMs ?? CUSTOM_EDITOR_FLUSH_TIMEOUT_MS
   let ready = false
   // What the frame is known to hold, so its own edits are never echoed back.

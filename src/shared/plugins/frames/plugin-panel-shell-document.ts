@@ -59,6 +59,8 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
           return value
         })
         if (json === undefined) throw new TypeError('view state must be JSON')
+        // Refused here, before it is kept, so getViewState never shows a view Orca would drop.
+        if (json.length > C.viewStateMaxChars) throw new RangeError('view state is over ' + C.viewStateMaxChars + ' characters of JSON')
         viewState = JSON.parse(json)
         post({ kind: 'evt', event: E.editorViewState, payload: viewState })
       }

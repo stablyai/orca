@@ -4,6 +4,7 @@ import { PLUGIN_DECLARATIVE_POST_GLOBAL, PLUGIN_FRAME_TRANSPORT_GLOBAL } from '.
 import { PLUGIN_HOST_API_MAJOR } from '../workers/plugin-host-api-major'
 import { PLUGIN_FRAME_FACADES_SCRIPT } from './plugin-panel-shell-facades'
 import { PLUGIN_FRAME_DOCUMENT_SCRIPT } from './plugin-panel-shell-document'
+import { CUSTOM_EDITOR_VIEW_STATE_MAX_CHARS } from './plugin-custom-editor-bridge'
 import {
   PLUGIN_FRAME_USER_METHODS,
   pluginFrameMethodsFor,
@@ -52,6 +53,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
     codes: PLUGIN_ERROR_CODES,
     events: FRAME_EVENTS,
     editor: EDITOR_METHODS,
+    viewStateMaxChars: CUSTOM_EDITOR_VIEW_STATE_MAX_CHARS,
     // Iframes get no user-gesture API at all: Orca cannot verify their gestures. A components
     // panel's hidden guest never has activation; its `orca` module routes these through the
     // press grant with host.call instead.
