@@ -3,7 +3,7 @@ import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import { normalizePerforceSettings } from '../../../shared/perforce/perforce-settings'
 
 type PendingPrompt = {
-  path: string
+  key: string
   answer: (open: boolean) => void
   decision: Promise<boolean>
   /** Set once "Always open for edit" is saving: the answer waits for the setting, not the dialog. */
@@ -14,10 +14,12 @@ let pending: PendingPrompt | null = null
 
 /**
  * Asks in an in-app dialog whether to open a read-only Perforce file for edit before saving it.
- * A second save of the same file while the dialog is up waits on the same answer.
+ * A second save of the same file while the dialog is up waits on the same answer; `workspace`
+ * identifies the file's workspace and host, since the same relative path in another one is another file.
  */
-export function askToOpenForEdit(relativePath: string): Promise<boolean> {
-  if (pending?.path === relativePath) {
+export function askToOpenForEdit(relativePath: string, workspace: string): Promise<boolean> {
+  const key = JSON.stringify([workspace, relativePath])
+  if (pending?.key === key) {
     return pending.decision
   }
   let answer: (open: boolean) => void = () => {}
@@ -34,7 +36,7 @@ export function askToOpenForEdit(relativePath: string): Promise<boolean> {
       resolve(open)
     }
   })
-  const current: PendingPrompt = { path: relativePath, answer, decision }
+  const current: PendingPrompt = { key, answer, decision }
   useAppStore.getState().openModal('perforce-open-for-edit', {
     path: relativePath,
     // Why: another modal taking the slot must not leave the save waiting forever.

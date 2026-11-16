@@ -47,16 +47,25 @@ beforeEach(() => {
 
 describe('askToOpenForEdit', () => {
   it("answers with the dialog's choice, and a second save of the file shares it", async () => {
-    const first = askToOpenForEdit('a.cs')
-    const second = askToOpenForEdit('a.cs')
+    const first = askToOpenForEdit('a.cs', 'ws')
+    const second = askToOpenForEdit('a.cs', 'ws')
     expect(modal.opened).toBe(1)
     answerOpenForEditPrompt(true)
     await expect(first).resolves.toBe(true)
     await expect(second).resolves.toBe(true)
   })
 
+  it('asks again for the same path in another workspace', async () => {
+    const first = askToOpenForEdit('a.cs', 'ws')
+    const other = askToOpenForEdit('a.cs', 'other')
+    expect(modal.opened).toBe(2)
+    answerOpenForEditPrompt(true)
+    await expect(other).resolves.toBe(true)
+    await expect(first).resolves.toBe(false)
+  })
+
   it('"Always open for edit" opens this file and stops asking, keeping the other settings', async () => {
-    const save = askToOpenForEdit('a.cs')
+    const save = askToOpenForEdit('a.cs', 'ws')
     const always = alwaysOpenForEdit()
     closeDialog()
     await always
@@ -71,7 +80,7 @@ describe('askToOpenForEdit', () => {
 
   it('does not open the file when "Always open for edit" cannot be saved', async () => {
     updateSettingsOrThrow.mockRejectedValueOnce(new Error('disk full'))
-    const save = askToOpenForEdit('a.cs')
+    const save = askToOpenForEdit('a.cs', 'ws')
     const always = alwaysOpenForEdit()
     closeDialog()
     await expect(always).rejects.toThrow('disk full')
@@ -79,8 +88,8 @@ describe('askToOpenForEdit', () => {
   })
 
   it('declines a prompt that another modal replaced', async () => {
-    const first = askToOpenForEdit('a.cs')
-    const second = askToOpenForEdit('b.cs')
+    const first = askToOpenForEdit('a.cs', 'ws')
+    const second = askToOpenForEdit('b.cs', 'ws')
     await expect(first).resolves.toBe(false)
     answerOpenForEditPrompt(true)
     await expect(second).resolves.toBe(true)

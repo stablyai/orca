@@ -44,7 +44,12 @@ export async function checkoutPerforceFileBeforeWrite(
   if (!readOnly) {
     return
   }
-  if (behavior === 'ask' && !(await askToOpenForEdit(relativePath))) {
+  const workspace = JSON.stringify([
+    target.target,
+    target.connectionId ?? null,
+    target.worktreePath
+  ])
+  if (behavior === 'ask' && !(await askToOpenForEdit(relativePath, workspace))) {
     throw new Error(PERFORCE_EDIT_DECLINED_MESSAGE)
   }
   // Why: a failed call (or an older host's empty answer) leaves the write to report a read-only file.
