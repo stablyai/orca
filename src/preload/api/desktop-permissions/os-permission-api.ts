@@ -9,7 +9,7 @@ import type {
   DeveloperPermissionRequestResult,
   DeveloperPermissionState,
   LocalNetworkConnectionTestResult
-} from '../../../shared/developer-permissions-types'
+} from '../../../shared/app-lifecycle/permissions/developer-permissions-types'
 import type {
   NotificationAttentionAcknowledgement,
   NotificationDeliveryProbeResult,
@@ -19,7 +19,7 @@ import type {
   NotificationPermissionStatusResult,
   NotificationSoundResult,
   StructuredNotificationRead
-} from '../../../shared/notification-settings-types'
+} from '../../../shared/notifications/notification-settings-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 export type NotificationsApi = {

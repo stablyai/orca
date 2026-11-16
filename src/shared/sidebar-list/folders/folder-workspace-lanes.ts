@@ -28,7 +28,7 @@ export function getRenderableFolderWorkspaces(
   for (const folderWorkspace of folderWorkspaces) {
     const projectGroup = projectGroupsById.get(folderWorkspace.projectGroupId)
     // A group filtered out for host visibility legitimately hides its workspaces.
-    if (!projectGroup?.parentPath) {
+    if (!projectGroup) {
       continue
     }
     // Stamp an unstamped folder the way catalog adoption does, so its card, label and section name

@@ -18,7 +18,7 @@ import { DEFAULT_STATUS_BAR_USAGE_FORMAT } from './status-bar/status-bar-usage-f
 import { buildDefaultSettings } from './default-global-settings'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './agent-launch/startup/setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser/site-settings/browser-page-zoom'
-import { getDefaultNotificationSettings } from './notification-settings-defaults'
+import { getDefaultNotificationSettings } from './notifications/notification-settings-defaults'
 import { getDefaultOnboardingState } from './onboarding/onboarding-defaults'
 import {
   defaultTerminalFontFamily,
