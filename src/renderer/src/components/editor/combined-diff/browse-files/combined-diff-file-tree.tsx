@@ -15,6 +15,7 @@ import type {
 } from '../resolve-changes/combined-diff-section-identity'
 import { CombinedDiffFileTreeRows } from './combined-diff-file-tree-rows'
 import { useCombinedDiffFileTreeResize } from './use-combined-diff-file-tree-resize'
+import { DividerFarOverhang } from '@/components/pane-resize/DividerFarOverhang'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   buildCombinedDiffBranchTreeRoots,
@@ -210,189 +211,201 @@ export function CombinedDiffFileTree({
   }
 
   return (
-    // Bound height so the file list owns overflow; useSidebarResize owns width to prevent rerenders snapping an active drag.
-    <aside
-      ref={treeRef}
-      className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-background"
-    >
-      <div className="sticky top-0 z-20 shrink-0 bg-background">
-        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {t('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t(
-              'auto.components.editor.CombinedDiffFileTree.21783df79f',
-              'Collapse file tree'
-            )}
-            onClick={() => onCollapsedChange(true)}
-          >
-            <PanelLeftClose className="size-3.5" />
-          </Button>
-        </div>
-        <div className="flex items-center gap-2 border-b border-border px-2 py-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t(
-                'auto.components.editor.CombinedDiffFileTree.4cc7b83ffe',
-                'Filter files...'
+    <>
+      {/* Bound height so the file list owns overflow; useSidebarResize owns width to prevent rerenders snapping an active drag. */}
+      <aside
+        ref={treeRef}
+        className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-background"
+      >
+        <div className="sticky top-0 z-20 shrink-0 bg-background">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              {t('auto.components.editor.CombinedDiffFileTree.481e63ca52', 'Files')}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t(
+                'auto.components.editor.CombinedDiffFileTree.21783df79f',
+                'Collapse file tree'
               )}
-              className="h-8 pl-7 text-xs"
-            />
+              onClick={() => onCollapsedChange(true)}
+            >
+              <PanelLeftClose className="size-3.5" />
+            </Button>
           </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label={t(
-                  'auto.components.editor.CombinedDiffFileTree.cd0e0ed79e',
-                  'Filter diff files'
+          <div className="flex items-center gap-2 border-b border-border px-2 py-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t(
+                  'auto.components.editor.CombinedDiffFileTree.4cc7b83ffe',
+                  'Filter files...'
                 )}
-                className={cn(activeFilterCount > 0 && 'border-foreground/30 text-foreground')}
-              >
-                <Filter className="size-3.5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" side="bottom" sideOffset={6} className="w-56 p-0">
-              <div className="border-b border-border px-3 py-2 text-xs font-semibold text-foreground">
-                {t('auto.components.editor.CombinedDiffFileTree.c00020f081', 'File extensions')}
-              </div>
-              <div className="max-h-60 overflow-auto py-1 scrollbar-sleek">
-                {availableExtensions.map((extension) => {
-                  const checked = !excludedExtensions.has(extension)
-                  return (
-                    <button
-                      key={extension}
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-                      onClick={() => toggleExtension(extension)}
-                    >
-                      <Check
-                        className={cn('size-3.5 shrink-0', checked ? 'opacity-100' : 'opacity-0')}
-                      />
-                      <span className="min-w-0 flex-1 truncate">
-                        {extension === NO_EXTENSION_KEY
-                          ? t(
-                              'auto.components.editor.CombinedDiffViewer.noExtension',
-                              '(no extension)'
-                            )
-                          : extension}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="border-t border-border py-1">
-                <button
+                className="h-8 pl-7 text-xs"
+              />
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-                  onClick={() => setIncludeViewed((prev) => !prev)}
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label={t(
+                    'auto.components.editor.CombinedDiffFileTree.cd0e0ed79e',
+                    'Filter diff files'
+                  )}
+                  className={cn(activeFilterCount > 0 && 'border-foreground/30 text-foreground')}
                 >
-                  <Check
-                    className={cn('size-3.5 shrink-0', includeViewed ? 'opacity-100' : 'opacity-0')}
-                  />
-                  <span className="min-w-0 flex-1 truncate">
-                    {t('auto.components.editor.CombinedDiffFileTree.be119cb9d1', 'Viewed files')}
-                  </span>
-                </button>
-                {activeFilterCount > 0 && (
+                  <Filter className="size-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" side="bottom" sideOffset={6} className="w-56 p-0">
+                <div className="border-b border-border px-3 py-2 text-xs font-semibold text-foreground">
+                  {t('auto.components.editor.CombinedDiffFileTree.c00020f081', 'File extensions')}
+                </div>
+                <div className="max-h-60 overflow-auto py-1 scrollbar-sleek">
+                  {availableExtensions.map((extension) => {
+                    const checked = !excludedExtensions.has(extension)
+                    return (
+                      <button
+                        key={extension}
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => toggleExtension(extension)}
+                      >
+                        <Check
+                          className={cn('size-3.5 shrink-0', checked ? 'opacity-100' : 'opacity-0')}
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {extension === NO_EXTENSION_KEY
+                            ? t(
+                                'auto.components.editor.CombinedDiffViewer.noExtension',
+                                '(no extension)'
+                              )
+                            : extension}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="border-t border-border py-1">
                   <button
                     type="button"
-                    className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    onClick={resetFilters}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => setIncludeViewed((prev) => !prev)}
                   >
-                    {t('auto.components.editor.CombinedDiffFileTree.eafe1aeb53', 'Reset filters')}
+                    <Check
+                      className={cn(
+                        'size-3.5 shrink-0',
+                        includeViewed ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {t('auto.components.editor.CombinedDiffFileTree.be119cb9d1', 'Viewed files')}
+                    </span>
                   </button>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-      <div ref={setListScrollElement} className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
-        {visibleEntryCount === 0 ? (
-          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {t(
-              'auto.components.editor.CombinedDiffFileTree.f984289373',
-              'No files match the current filters.'
-            )}
+                  {activeFilterCount > 0 && (
+                    <button
+                      type="button"
+                      className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      onClick={resetFilters}
+                    >
+                      {t('auto.components.editor.CombinedDiffFileTree.eafe1aeb53', 'Reset filters')}
+                    </button>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
-        ) : mode === 'all' || mode === 'uncommitted' ? (
-          <>
-            {uncommittedTreeGroups.map((group) => {
-              const rows =
-                uncommittedVisibleRowsByArea?.get(group.area)?.rows ??
-                uncommittedRowsByArea.get(group.area) ??
-                []
-              const visibleFileCounts = uncommittedVisibleRowsByArea?.get(
-                group.area
-              )?.visibleFileCounts
-              if (rows.length === 0) {
-                return null
-              }
-              return (
-                <div key={group.area} className="py-1">
+        </div>
+        <div
+          ref={setListScrollElement}
+          className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek"
+        >
+          {visibleEntryCount === 0 ? (
+            <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+              {t(
+                'auto.components.editor.CombinedDiffFileTree.f984289373',
+                'No files match the current filters.'
+              )}
+            </div>
+          ) : mode === 'all' || mode === 'uncommitted' ? (
+            <>
+              {uncommittedTreeGroups.map((group) => {
+                const rows =
+                  uncommittedVisibleRowsByArea?.get(group.area)?.rows ??
+                  uncommittedRowsByArea.get(group.area) ??
+                  []
+                const visibleFileCounts = uncommittedVisibleRowsByArea?.get(
+                  group.area
+                )?.visibleFileCounts
+                if (rows.length === 0) {
+                  return null
+                }
+                return (
+                  <div key={group.area} className="py-1">
+                    <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                      {group.label}
+                    </div>
+                    <CombinedDiffFileTreeRows
+                      rows={rows}
+                      visibleFileCounts={visibleFileCounts}
+                      {...sharedRowProps}
+                    />
+                  </div>
+                )
+              })}
+              {mode === 'all' && (branchVisibleRows?.rows ?? branchRows).length > 0 ? (
+                <div className="py-1">
                   <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                    {group.label}
+                    {t(
+                      'auto.components.editor.CombinedDiffFileTree.39b6b9e4e4',
+                      'Committed on Branch'
+                    )}
                   </div>
                   <CombinedDiffFileTreeRows
-                    rows={rows}
-                    visibleFileCounts={visibleFileCounts}
+                    rows={branchVisibleRows?.rows ?? branchRows}
+                    visibleFileCounts={branchVisibleRows?.visibleFileCounts}
                     {...sharedRowProps}
                   />
                 </div>
-              )
-            })}
-            {mode === 'all' && (branchVisibleRows?.rows ?? branchRows).length > 0 ? (
-              <div className="py-1">
-                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                  {t(
-                    'auto.components.editor.CombinedDiffFileTree.39b6b9e4e4',
-                    'Committed on Branch'
-                  )}
-                </div>
-                <CombinedDiffFileTreeRows
-                  rows={branchVisibleRows?.rows ?? branchRows}
-                  visibleFileCounts={branchVisibleRows?.visibleFileCounts}
-                  {...sharedRowProps}
-                />
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <CombinedDiffFileTreeRows
-            rows={branchVisibleRows?.rows ?? branchRows}
-            visibleFileCounts={branchVisibleRows?.visibleFileCounts}
-            {...sharedRowProps}
-          />
-        )}
+              ) : null}
+            </>
+          ) : (
+            <CombinedDiffFileTreeRows
+              rows={branchVisibleRows?.rows ?? branchRows}
+              visibleFileCounts={branchVisibleRows?.visibleFileCounts}
+              {...sharedRowProps}
+            />
+          )}
+        </div>
+      </aside>
+      {/* Why: the aside clips overflow; a zero-width anchor at its edge lets the grab area widen without changing layout. */}
+      <div className="relative w-0 shrink-0">
+        <div
+          role="separator"
+          aria-label={t(
+            'auto.components.editor.CombinedDiffFileTree.resizeFileTree',
+            'Resize file tree'
+          )}
+          aria-orientation="vertical"
+          aria-valuemax={Math.round(maxWidth)}
+          aria-valuemin={Math.round(minWidth)}
+          aria-valuenow={Math.round(width)}
+          tabIndex={0}
+          className="group absolute inset-y-0 right-0 z-30 w-1 cursor-col-resize outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onMouseDown={handleResizeStart}
+          onKeyDown={handleResizeKeyDown}
+        >
+          {/* The 1px line carries hover, drag and keyboard focus state. */}
+          <div className="ml-auto h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring group-focus-visible:bg-ring" />
+          <DividerFarOverhang extentPx={4} />
+        </div>
       </div>
-      <div
-        role="separator"
-        aria-label={t(
-          'auto.components.editor.CombinedDiffFileTree.resizeFileTree',
-          'Resize file tree'
-        )}
-        aria-orientation="vertical"
-        aria-valuemax={Math.round(maxWidth)}
-        aria-valuemin={Math.round(minWidth)}
-        aria-valuenow={Math.round(width)}
-        tabIndex={0}
-        className="group absolute inset-y-0 right-0 z-30 w-1 cursor-col-resize outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        onMouseDown={handleResizeStart}
-        onKeyDown={handleResizeKeyDown}
-      >
-        {/* Why: the aside clips the focus ring, so the divider line carries the focus state too. */}
-        <div className="ml-auto h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring group-focus-visible:bg-ring" />
-      </div>
-    </aside>
+    </>
   )
 }

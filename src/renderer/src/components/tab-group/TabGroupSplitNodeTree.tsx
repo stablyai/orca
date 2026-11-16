@@ -108,6 +108,8 @@ function SplitNode({
       </div>
       <ResizeHandle
         direction={node.direction}
+        // Stacked seams keep today's box: the upper pane's horizontal scrollbar sits right above them.
+        growHitArea={isHorizontal}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) =>
           ORCA_LAYOUT_OWNER_IS_MAIN

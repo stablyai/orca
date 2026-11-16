@@ -68,6 +68,8 @@
 .pane-divider::after {
   content: '';
   position: absolute;
+  /* The line extends into perpendicular dividers for the visual join; the parent divider owns those hits. */
+  pointer-events: none;
   border-radius: 1px;
   background: var(--orca-terminal-divider-color, transparent);
   transition: background 100ms ease;
@@ -81,6 +83,18 @@
   left: 50%;
   width: var(--divider-thickness);
   transform: translateX(-50%);
+}
+
+/* Side-by-side dividers widen over the right pane only (away from the left pane's scrollbar).
+   z-index 17 keeps the widening above the pane drag strip (10/16) and horizontal child dividers, so the parent wins crossings. */
+.pane-divider.is-vertical::before {
+  content: '';
+  position: absolute;
+  z-index: 17;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: var(--divider-far-overhang, 0px);
 }
 
 .pane-divider.is-horizontal::after {

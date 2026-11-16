@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
+import { getDividerFarOverhangPx, installDividerNativeDragGuard } from '@/lib/divider-hit-area'
+import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-split-drag-ratio'
 
-const MIN_RATIO = 0.15
-
-const MAX_RATIO = 0.85
+// Matches the .tab-group-split-resize-handle box in main.css.
+const HANDLE_THICKNESS_PX = 6
 
 export function ResizeHandle({
   direction,
+  growHitArea = false,
   onResizeStart,
   onResizeEnd,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
+  /** Widen the grab area over the second pane (away from the first pane's scrollbar) to the shared size. */
+  growHitArea?: boolean
   onResizeStart: () => void
   onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
@@ -26,6 +30,12 @@ export function ResizeHandle({
     },
     []
   )
+
+  useEffect(() => {
+    if (growHitArea) {
+      installDividerNativeDragGuard()
+    }
+  }, [growHitArea])
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -51,6 +61,12 @@ export function ResizeHandle({
       const releaseWebviewDragPassthrough = acquireWebviewsDragPassthrough()
       // Why: measure outside pointermove so pane writes never force a readback.
       let rect = container.getBoundingClientRect()
+      const handleRect = handle.getBoundingClientRect()
+      const handleSize = isHorizontal ? handleRect.width : handleRect.height
+      const startPos = isHorizontal ? event.clientX : event.clientY
+      const startRatio =
+        readSplitRatio(firstPane, secondPane) ??
+        measureSplitRatio(firstPane, secondPane, isHorizontal)
       const resizeObserver = new ResizeObserver(() => {
         rect = container.getBoundingClientRect()
       })
@@ -67,10 +83,16 @@ export function ResizeHandle({
           cleanup()
           return
         }
-        const ratio = isHorizontal
-          ? (moveEvent.clientX - rect.left) / rect.width
-          : (moveEvent.clientY - rect.top) / rect.height
-        const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio))
+        // Why: follow the pointer's displacement, not its absolute position, so an off-center grab never jumps.
+        const clamped = getDraggedSplitRatio({
+          startRatio,
+          startPos,
+          pos: isHorizontal ? moveEvent.clientX : moveEvent.clientY,
+          availablePx: (isHorizontal ? rect.width : rect.height) - handleSize
+        })
+        if (clamped === null) {
+          return
+        }
         draggedRatio = clamped
         // Write pane styles during drag to avoid 60–120 global store updates per second; commit once on release.
         firstPane.style.flex = `${clamped} 1 0%`
@@ -159,7 +181,14 @@ export function ResizeHandle({
     <div
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
-      }${dragging ? ' is-dragging' : ''}`}
+      }${growHitArea ? ' has-far-overhang' : ''}${dragging ? ' is-dragging' : ''}`}
+      style={
+        growHitArea
+          ? ({
+              '--divider-far-overhang': `${getDividerFarOverhangPx(HANDLE_THICKNESS_PX)}px`
+            } as React.CSSProperties)
+          : undefined
+      }
       onPointerDown={onPointerDown}
     />
   )

@@ -1215,6 +1215,24 @@ html.native-shell .app-layout {
   cursor: row-resize;
 }
 
+/* Side-by-side seams widen over the right pane only; the box (and the left pane's scrollbar edge) keeps today's stacking.
+   z-index 31 keeps the far side above in-pane edge UI (diff/outline separators are z-30) in either focus state. */
+.tab-group-split-resize-handle.has-far-overhang::before {
+  content: '';
+  position: absolute;
+  z-index: 31;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: var(--divider-far-overhang);
+}
+
+/* HTML drag-and-drop near pane edges must reach the pane, not the widened grab area. */
+:root[data-divider-dragging] :is(.tab-group-split-resize-handle, .pane-divider)::before,
+:root[data-divider-dragging] [data-divider-overhang] {
+  pointer-events: none;
+}
+
 .tab-group-split-resize-handle::after {
   content: '';
   position: absolute;
