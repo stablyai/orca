@@ -213,6 +213,7 @@ export function createCloudWorkspacesService(deps: {
         return reader.read(id)
       }),
     get: (id: string) => wrap(() => client.get(id)),
+    gitActor: (id: string) => wrap(() => client.gitActor(id)),
     follow: (id: string, follow: boolean) => wrap(() => client.follow(id, follow)),
     patch: (id: string, patch: CloudWorkspacePatch) =>
       wrap(async () => (await client.patch(id, patch)).workspace),
