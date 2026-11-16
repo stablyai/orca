@@ -36,6 +36,7 @@ import {
   type AgentSessionRestartProbeArgs
 } from '../ownership/agent-session-restart-reconciliation'
 import type { AgentSessionRecordCommand } from './agent-session-record-command'
+import type { AgentSessionIdleForget } from './agent-session-record-forget'
 import type {
   AgentSessionReserveRequest,
   AgentSessionReserveResult
@@ -149,7 +150,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   /** Include unreadable records in presence queries. */
   listHeldSessionIds = (): string[] => heldAgentSessionIds(this.state)
 
-  /** Record presence is permanent, including unreadable rows. */
+  /** Includes unreadable rows; workspace cleanup can delete the last chat. */
   holdsRecords = (): boolean => this.state.records.size > 0 || this.state.unreadableRecords.size > 0
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
@@ -324,4 +325,27 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.updateRecord(args.sessionId, { kind: 'options', args })
+
+  /** Deletes a chat at rest for good, with its tab, when `stillWanted` agrees after any conversion
+   *  of it; its journal rows follow in background pages. The caller holds the chat's conversation
+   *  lane, so nothing opens it meanwhile. */
+  forgetIdleChat = async (
+    forget: AgentSessionIdleForget,
+    stillWanted: () => Promise<boolean>
+  ): Promise<boolean> => {
+    const forgotten = await this.journalDatabase.forgetChat(
+      forget.sessionId,
+      async () =>
+        (await stillWanted()) &&
+        this.commitStoreCommand({
+          kind: 'forget-idle',
+          ...forget,
+          legacyTabIds: this.transactions.legacySessionTabIds
+        })
+    )
+    if (forgotten) {
+      this.journalDatabase.requestSweep()
+    }
+    return forgotten
+  }
 }
