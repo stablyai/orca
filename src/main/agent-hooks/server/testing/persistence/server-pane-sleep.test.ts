@@ -277,7 +277,7 @@ it.each(['claude', 'codex'] as const)(
 )
 
 it.each(['claude', 'codex'] as const)(
-  'keeps a mid-turn %s through sleep as Interrupted without a completion',
+  'keeps a mid-turn %s Interrupted through sleep, idle wake and sleep again',
   async (agent) => {
     await agentHook(agent, 'UserPromptSubmit', 4001)
     const emitted = vi.fn()
@@ -289,6 +289,27 @@ it.each(['claude', 'codex'] as const)(
       interrupted: true,
       prompt: 'Finished work',
       paneSleep: { ptyId: 'pty-1' }
+    })
+    server.retireSleepingPaneOnSpawn(PANE, {
+      agentType: agent,
+      providerSession: { key: 'session_id', id: `${agent}-session` }
+    })
+    server.recordLaunchResumeIdentity({
+      paneKey: PANE,
+      worktreeId: 'wt-1',
+      agentType: agent,
+      providerSession: { key: 'session_id', id: `${agent}-session` },
+      launchedAt: Date.now()
+    })
+    if (agent === 'claude') {
+      await agentHook(agent, 'SessionStart', 4002)
+    }
+    expect(read()).toMatchObject({ state: 'done', interrupted: true })
+    await sleepPane(agent, 'pty-2', 4002)
+    expect(read()).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      paneSleep: { ptyId: 'pty-2' }
     })
     expect(emitted.mock.calls.filter(([row]) => !row.isReplay)).toHaveLength(0)
   }
