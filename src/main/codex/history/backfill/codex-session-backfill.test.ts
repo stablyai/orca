@@ -332,7 +332,9 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(existsSync(join(getSystemSessionsRoot(), '2026', '01', '25', 'rollout-a.jsonl'))).toBe(
       false
     )
-    writeManagedSession(join('2026', '03', '01', 'rollout-new.jsonl'), 'new\n')
+    for (const day of ['01', '02', '03']) {
+      writeManagedSession(join('2026', '03', day, 'rollout-new.jsonl'), 'new\n')
+    }
     await startCodexSessionBackfillInBackground()
     expect(
       readFileSync(join(getSystemSessionsRoot(), '2026', '03', '01', 'rollout-new.jsonl'), 'utf-8')
@@ -340,6 +342,57 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(
       readFileSync(join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-a.jsonl'), 'utf-8')
     ).toBe('history\n')
+  })
+
+  it.each([
+    ['month', ['2017', '03']],
+    ['year', ['2017']]
+  ])('resumes a %s subtree cursor through its day folders', async (_kind, cursor) => {
+    writeManagedSession(join('2000', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    writeFileSync(
+      getMarkerPath(),
+      JSON.stringify({
+        ...readMarker(),
+        scanCursor: cursor,
+        scanCheckpoint: ['2026', '02', '28'],
+        launchActive: true
+      })
+    )
+    for (const day of ['01', '02', '03']) {
+      writeManagedSession(join('2026', '03', day, 'rollout-new.jsonl'), 'fresh\n')
+    }
+    writeManagedSession(join('2017', '03', '01', 'rollout-older.jsonl'), 'older\n')
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(
+        join(getSystemSessionsRoot(), '2017', '03', '01', 'rollout-older.jsonl'),
+        'utf-8'
+      )
+    ).toBe('older\n')
+  })
+
+  it('recovers a local rollout below an old UTC-only pending marker', async () => {
+    vi.stubEnv('TZ', 'America/Los_Angeles')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-27T05:00:00Z'))
+    mkdirSync(dirname(getMarkerPath()), { recursive: true })
+    writeFileSync(
+      getMarkerPath(),
+      JSON.stringify({
+        version: 4,
+        coverage: 'full',
+        systemSessionsRoot: getSystemSessionsRoot(),
+        baselineScannedFiles: 1,
+        pendingScanDates: [['2026', '10', '27']],
+        launchActive: true
+      })
+    )
+    writeManagedSession(join('2026', '10', '26', 'rollout-la.jsonl'), 'local\n')
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '10', '26', 'rollout-la.jsonl'), 'utf-8')
+    ).toBe('local\n')
   })
 
   it('recovers a post-install audit interruption without duplicating prior events', async () => {

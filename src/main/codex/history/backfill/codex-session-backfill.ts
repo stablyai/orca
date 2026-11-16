@@ -102,6 +102,7 @@ async function runCodexSessionBackfillOncePerHost(
           : 'bounded',
       coveredScanDates: baseline?.pendingScanDates ?? [],
       progress,
+      resumed: !!scanPlan.scanCursor,
       retainPendingScanDates: options.retainPendingScanDates === true
     })
   }

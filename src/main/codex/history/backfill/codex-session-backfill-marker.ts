@@ -24,6 +24,7 @@ export type CodexSessionBackfillBaseline = {
   hasBaseline: boolean
   scanFrom?: CodexSessionBackfillDate
   scanCursor?: readonly string[]
+  scanCheckpoint?: CodexSessionBackfillDate
   needsScan: boolean
   /** Legacy pending dates remain inclusive lower bounds. */
   pendingScanDates: readonly CodexSessionBackfillDate[]
@@ -51,6 +52,7 @@ export function readCodexSessionBackfillBaseline(
     pendingScanDates: record.pendingScanDates,
     scanFrom: record.scanFrom,
     scanCursor: record.scanCursor,
+    scanCheckpoint: record.scanCheckpoint,
     needsScan:
       record.needsFullScan ||
       record.launchActive ||
@@ -76,6 +78,7 @@ export function writeCodexSessionBackfillMarker(
     coverage: 'full' | 'bounded'
     coveredScanDates: readonly CodexSessionBackfillDate[]
     progress: CodexSessionBackfillScanProgress
+    resumed: boolean
     /** Live panes can still write into these dates, so keep them pending. */
     retainPendingScanDates?: boolean
   }
@@ -100,7 +103,7 @@ export function writeCodexSessionBackfillMarker(
     // Records the retained full-history baseline, including after a bounded pass.
     coverage: fullCoverage ? 'full' : 'bounded',
     completedAt: Date.now(),
-    launchActive: !clearCovered,
+    launchActive: !clearCovered || options.resumed,
     scanFrom:
       generationCurrent && !options.progress.truncated
         ? (options.progress.recentDates.at(-1) ?? current?.scanFrom)
@@ -187,6 +190,7 @@ type CodexSessionBackfillMarkerRecord = {
   launchActive: boolean
   scanFrom?: CodexSessionBackfillDate
   scanCursor?: readonly string[]
+  scanCheckpoint?: CodexSessionBackfillDate
   baselineScannedFiles: number | undefined
 }
 
@@ -203,6 +207,7 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       pendingScanDates?: unknown
       needsFullScan?: unknown
       scanFrom?: unknown
+      scanCheckpoint?: unknown
       scanCursor?: unknown
       launchActive?: unknown
       baselineScannedFiles?: unknown
@@ -225,6 +230,9 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       needsFullScan: marker.needsFullScan === true,
       launchActive: marker.launchActive === true,
       scanFrom: isCodexSessionBackfillDate(marker.scanFrom) ? marker.scanFrom : undefined,
+      scanCheckpoint: isCodexSessionBackfillDate(marker.scanCheckpoint)
+        ? marker.scanCheckpoint
+        : undefined,
       scanCursor:
         Array.isArray(marker.scanCursor) &&
         marker.scanCursor.length <= 3 &&

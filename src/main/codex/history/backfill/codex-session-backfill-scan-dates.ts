@@ -89,7 +89,7 @@ export function resolveCodexSessionBackfillScanPlan(
   return {
     boundedScan: true,
     scanFrom:
-      options.fullScanRequired || !baseline.hasBaseline
+      options.fullScanRequired || !baseline.hasBaseline || !baseline.scanFrom
         ? undefined
         : mergeCodexSessionBackfillDates(
             baseline.pendingScanDates,

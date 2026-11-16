@@ -63,7 +63,10 @@ export async function* listCodexSessionBackfillFilesForDates(
     if (options.shouldStop?.()) {
       return
     }
-    if (cursor && parts.join('/') > cursor.slice(0, parts.length).join('/')) {
+    if (
+      cursor &&
+      parts.slice(0, cursor.length).join('/') > cursor.slice(0, parts.length).join('/')
+    ) {
       return
     }
     if (options.scanFrom && parts.join('/') < options.scanFrom.slice(0, parts.length).join('/')) {
