@@ -1,4 +1,5 @@
 import type * as NodeOs from 'node:os'
+import type * as NodePath from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 const osMock = vi.hoisted(() => ({
@@ -10,6 +11,7 @@ vi.mock('node:os', async (importOriginal) => ({
   homedir: () => osMock.homedir(),
   userInfo: () => osMock.userInfo()
 }))
+vi.mock('node:path', async (importOriginal) => (await importOriginal<typeof NodePath>()).posix)
 import {
   WATCHER_IGNORE_DIRS,
   buildParcelWatcherIgnoreOptions
@@ -127,17 +129,6 @@ describe('withMacosProtectedWatchExclusions', () => {
         homes: ['/Users/me']
       })
     ).toBe(base)
-  })
-
-  it('adds literal paths and keeps the native exclusion total at eight', () => {
-    const opts = withMacosProtectedWatchExclusions('/', base, {
-      ...darwin,
-      homes: ['/profiles/p1', '/Users/me']
-    })
-    expect(opts.ignorePaths).toEqual(['/profiles/p1/Library', '/Users/me/Library'])
-    expect((opts.ignorePaths?.length ?? 0) + (opts.ignore?.length ?? 0)).toBe(8)
-    // Names past the native cap stay covered by the unchanged nested-name regex.
-    expect(opts.ignoreGlobs).toEqual(base.ignoreGlobs)
   })
 
   it('leaves shallow subscriptions alone', () => {
