@@ -18,7 +18,7 @@ import type {
   WorkspaceCopyStreamChoice
 } from '../../../../shared/perforce/workspace-copy/workspace-copy-types'
 import { streamShortName } from '../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { runPerforceCopyOperation } from '../../runtime/runtime-perforce-client'
 import { perforceProjectTarget } from '@/lib/perforce-workspace-target'
 

@@ -3,7 +3,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { streamShortName } from '../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getPerforceCopyUpTarget } from './perforce-copy-target'
 

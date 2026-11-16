@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 const state: { repos: Repo[] } = { repos: [] }
 const readiness = vi.hoisted(() => ({ ready: true, ok: true, calls: 0 }))

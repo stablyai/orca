@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { runWithPerforceSettings } from '../../shared/perforce/p4-settings-context'
 import {
   dispatchPerforceOperation,

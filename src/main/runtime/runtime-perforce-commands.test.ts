@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { currentPerforceSettings } from '../../shared/perforce/p4-settings-context'
 import { localPerforceBackend } from '../../shared/perforce/perforce-backend'
 import { normalizePerforceSettings } from '../../shared/perforce/perforce-settings'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import { RuntimePerforceCommands } from './runtime-perforce-commands'
 
 const backendCalls: { connectionId: string | null; cwd: string; p4Path: string; port: string }[] =

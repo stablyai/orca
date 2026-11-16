@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
   PerforceOperationName,
   PerforceOperationParams,
@@ -32,7 +32,7 @@ import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import { assertRuntimeEnvironmentCapability } from './rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export type PerforceClientSettings = Partial<
   Pick<GlobalSettings, 'perforce' | 'agentCmdOverrides' | 'defaultTuiAgent'>

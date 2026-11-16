@@ -13,7 +13,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { perforceProjectTarget } from '@/lib/perforce-workspace-target'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceCopyUpPreview } from '../../../../shared/perforce/workspace-copy/workspace-copy-types'
 import { runPerforceCopyOperation } from '../../runtime/runtime-perforce-client'
 import { FileSample, SummaryList } from './perforce-copy-delete-sections'

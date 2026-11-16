@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import { useAppStore } from '@/store'
 import { perforceProjectTarget } from '@/lib/perforce-workspace-target'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { isPerforceRepo } from '../../../../shared/repo-kind'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { isPerforceRepo } from '../../../../shared/repository/repo-kind'
 import type {
   WorkspaceCopyIpcResult,
   WorkspaceCopyReadiness,

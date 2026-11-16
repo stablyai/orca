@@ -18,7 +18,7 @@ import type {
 } from '../../../../shared/perforce/workspace-copy/workspace-copy-types'
 import { PerforceCopyRequirement } from './PerforceCopyRequirement'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { runPerforceCopyOperation } from '../../runtime/runtime-perforce-client'
 import { perforceProjectTarget } from '@/lib/perforce-workspace-target'
 

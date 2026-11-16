@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../shared/file-access/cross-platform-path'
 import { normalizePerforceSettings } from '../../../shared/perforce/perforce-settings'
 import type { RuntimeFileOperationArgs } from '../runtime/files/runtime-file-client-types'
 import { runPerforceOperation } from '../runtime/runtime-perforce-client'

@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
 import { isPerforceCopyOperationName } from '../../../../shared/perforce/workspace-copy/workspace-copy-operations'
 import type { WorkspaceCopyIpcResult } from '../../../../shared/perforce/workspace-copy/workspace-copy-types'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 
 // Why the host: a project id can be registered on this computer and on an SSH host at once.

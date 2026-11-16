@@ -2,14 +2,14 @@ import { posix, win32 } from 'node:path'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../shared/cross-platform-path'
+} from '../../shared/file-access/cross-platform-path'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   type ExecutionHostId
-} from '../../shared/execution-host'
-import { isFolderRepo } from '../../shared/repo-kind'
-import type { Repo } from '../../shared/repo-types'
+} from '../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
+import type { Repo } from '../../shared/repository/repo-types'
 import type {
   WorkspaceCopyListEntry,
   WorkspaceCopyListResult

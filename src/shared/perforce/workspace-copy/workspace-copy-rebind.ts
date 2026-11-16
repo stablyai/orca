@@ -2,7 +2,7 @@ import { chmod, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import type { WorkspaceCopyNames } from './workspace-copy-names'
 import { pathExists, type CopySource } from './workspace-copy-source'
-import { escapeRegex } from '../../string-utils'
+import { escapeRegex } from '../../text/regex-escaping'
 
 const NO_SEARCH = new Set(['library', 'temp', 'logs', 'obj', 'node_modules', '.git', 'assets'])
 

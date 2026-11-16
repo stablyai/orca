@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import { resolveWorkspaceCopyBackend } from '../../../perforce/perforce-copy-backend'
 import { createPerforceCopyForWorkspace } from '../../../perforce/perforce-copy-creation'

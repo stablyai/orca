@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { PerforceCopyDeleteDialog } from './PerforceCopyDeleteDialog'
 import type { PerforceCopyDeleteTarget } from './perforce-copy-target'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 
 function readTarget(data: Record<string, unknown>): PerforceCopyDeleteTarget | null {

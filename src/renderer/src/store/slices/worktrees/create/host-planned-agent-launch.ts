@@ -6,7 +6,7 @@ import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-
 import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { PERFORCE_COPY_REQUEST_TIMEOUT_MS } from '../../../../../../shared/perforce/workspace-copy/workspace-copy-operations'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { assertPerforceRuntime, remotePerforceSettings } from '@/runtime/runtime-perforce-client'
 import { pickClientWorktreeCreateSettings } from './client-worktree-create-settings'
 import {

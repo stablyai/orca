@@ -1,7 +1,7 @@
 /** A folder workspace create in a Perforce project becomes a copy on its own stream. */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 

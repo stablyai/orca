@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { normalizePerforceSettings } from '../../../../../shared/perforce/perforce-settings'
 import type { PerforceChordAction } from '../../../../../shared/perforce/perforce-file-chord'
 import { refreshPerforceOpenedFiles } from './perforce-opened-files'

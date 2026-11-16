@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import {
   DEFAULT_PERFORCE_SETTINGS,
   type PerforceSettings

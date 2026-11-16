@@ -1,5 +1,5 @@
-import { isFolderRepo } from '../../../../../shared/repo-kind'
-import type { Repo } from '../../../../../shared/repo-types'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { usePerforceOpenedForEdit } from './perforce-opened-files'
 import { usePerforceSettings } from './use-perforce-settings'
 import { usePerforceWorkspace } from './use-perforce-workspace'

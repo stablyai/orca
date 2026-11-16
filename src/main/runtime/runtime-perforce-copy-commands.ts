@@ -1,5 +1,8 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { runWithPerforceSettings } from '../../shared/perforce/p4-settings-context'
 import type { PerforceSettings } from '../../shared/perforce/perforce-settings'
 import {
@@ -14,8 +17,8 @@ import type {
   WorkspaceCopyListResult,
   WorkspaceCopyRemovalResult
 } from '../../shared/perforce/workspace-copy/workspace-copy-types'
-import { isFolderRepo, isPerforceRepo } from '../../shared/repo-kind'
-import type { Repo } from '../../shared/repo-types'
+import { isFolderRepo, isPerforceRepo } from '../../shared/repository/repo-kind'
+import type { Repo } from '../../shared/repository/repo-types'
 import { invalidateAuthorizedRootsCache } from '../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { resolveWorkspaceCopyBackend } from '../perforce/perforce-copy-backend'
 import {

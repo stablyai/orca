@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceCopyListResult } from '../../../shared/perforce/workspace-copy/workspace-copy-types'
 import { adoptCopyAtPath, resolveWithCopyAdoption } from '../../perforce/perforce-copy-worktrees'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'

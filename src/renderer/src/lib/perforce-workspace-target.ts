@@ -4,16 +4,16 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { isFolderRepo, isPerforceRepo } from '../../../shared/repo-kind'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { isFolderRepo, isPerforceRepo } from '../../../shared/repository/repo-kind'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { RuntimeGitContext } from '../runtime/source-control/git/runtime-git-client-context'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../shared/file-access/cross-platform-path'
 import { isPerforceWorkspaceForFiles } from './perforce-workspace-detection'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
   PerforceProjectTarget,
   PerforceWorkspaceTarget

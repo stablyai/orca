@@ -7,7 +7,7 @@ import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { usePerforceEditedTab } from '../right-sidebar/perforce/use-perforce-edited-tab'
+import { usePerforceEditedTab } from '../../right-sidebar/perforce/use-perforce-edited-tab'
 
 /**
  * A file tab's worktree and repo, plus its label: the display name with an "E " prefix while

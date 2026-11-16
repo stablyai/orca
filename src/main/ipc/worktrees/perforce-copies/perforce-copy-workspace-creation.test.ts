@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import { createPerforceCopyWorkspace } from './perforce-copy-workspace-creation'
 

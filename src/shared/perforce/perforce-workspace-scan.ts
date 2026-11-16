@@ -1,4 +1,7 @@
-import { isPathInsideOrEqual, normalizeRuntimePathForComparison } from '../cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../file-access/cross-platform-path'
 import type { P4CommandResult } from './p4-command'
 
 // The unopened-files scan (`reconcile -n`) per workspace folder. Even a preview takes the client's

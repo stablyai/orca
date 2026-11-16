@@ -1,7 +1,7 @@
 import type { HostProcess, WorkspaceCopyHost } from './workspace-copy-host'
 import { normalizePath, samePath } from './workspace-copy-source'
 import type { WorkspaceCopyHolder, WorkspaceCopyHolderConsent } from './workspace-copy-types'
-import { escapeRegex } from '../../string-utils'
+import { escapeRegex } from '../../text/regex-escaping'
 
 const PROJECT_PATH_ARG = /-projectpath\s+(?:"([^"]+)"|(\S+))/i
 // ps joins argv with spaces and drops quotes, so an unquoted path runs up to the next option.

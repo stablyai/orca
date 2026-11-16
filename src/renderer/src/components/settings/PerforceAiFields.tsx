@@ -17,7 +17,7 @@ export function PerforceAiAgentFields({
   perforce: PerforceSettings
   update: (patch: Partial<PerforceSettings>) => void
 }): React.JSX.Element {
-  const agents = listCommitMessageAgentCapabilities()
+  const agents = listCommitMessageAgentCapabilities('commitMessage')
   const agent = agents.find((candidate) => candidate.id === perforce.aiAgentId)
   const isCustom = perforce.aiAgentId === CUSTOM_AGENT_ID
   const model = agent?.models.find((candidate) => candidate.id === perforce.aiModel)

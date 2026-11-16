@@ -1,4 +1,4 @@
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from './id'
 import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 

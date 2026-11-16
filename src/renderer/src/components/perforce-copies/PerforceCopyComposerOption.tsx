@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { isCopyPlatformUnsupported } from '../../../../shared/perforce/workspace-copy/workspace-copy-platform'
 import type { WorkspaceCopyReadiness } from '../../../../shared/perforce/workspace-copy/workspace-copy-types'
-import { isPerforceRepo } from '../../../../shared/repo-kind'
+import { isPerforceRepo } from '../../../../shared/repository/repo-kind'
 import {
   checkPerforceCopyReadiness,
   perforceCopyChoiceKey,
@@ -13,7 +13,7 @@ import {
 import { PerforceCopyRequirement } from './PerforceCopyRequirement'
 import { PerforceStreamPicker } from './PerforceStreamPicker'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 function gb(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`

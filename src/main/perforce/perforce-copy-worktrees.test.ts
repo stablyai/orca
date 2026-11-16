@@ -1,6 +1,6 @@
 import { win32 } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { WorkspaceCopyListResult } from '../../shared/perforce/workspace-copy/workspace-copy-types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
