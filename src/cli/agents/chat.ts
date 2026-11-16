@@ -149,7 +149,7 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult({ ...result, result: projected }, json, (value) => {
       const header = value.reset ? `cursor reset: ${value.reset}; showing the bounded tail.\n` : ''
-      const footer = `\n---\nhasOlder=${value.hasOlder} hasNewer=${value.hasNewer} nextCursor=${JSON.stringify(value.window.nextCursor ?? null)}`
+      const footer = `\n---\nhasOlder=${value.hasOlder} hasNewer=${value.hasNewer} nextCursor=${JSON.stringify(value.window.nextCursor ?? null)} liveCursor=${JSON.stringify(value.liveCursor ?? null)}`
       return header + (value.lines.length > 0 ? value.lines.join('\n') : '(no rows)') + footer
     })
   },
