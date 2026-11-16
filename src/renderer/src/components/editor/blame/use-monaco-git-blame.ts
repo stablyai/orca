@@ -152,7 +152,7 @@ export function useMonacoGitBlame(params: {
     }
 
     // Main answers from its commit-keyed cache unless HEAD moved, so reloading is one rev-parse.
-    let loadGeneration = 0
+    const loads = { generation: 0 }
     const load = (): void => {
       const state = useAppStore.getState()
       const file = openFileById(state.openFiles, fileId)
@@ -164,9 +164,10 @@ export function useMonacoGitBlame(params: {
         update()
         return
       }
-      const generation = ++loadGeneration
+      loads.generation += 1
+      const generation = loads.generation
       void getRuntimeGitBlame(target.git, target.relativePath).then((result) => {
-        if (disposed || generation !== loadGeneration) {
+        if (disposed || generation !== loads.generation) {
           return
         }
         loading = false

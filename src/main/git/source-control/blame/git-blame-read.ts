@@ -76,7 +76,7 @@ async function runBlame(
   oid: string,
   options: GitRuntimeOptions,
   withoutGlobalConfig = false
-): Promise<string | 'too-large' | null> {
+): Promise<{ stdout: string } | 'too-large' | null> {
   try {
     const { stdout } = await gitExecFileAsync(
       ['blame', '--root', '--incremental', oid, '--', fileName],
@@ -85,7 +85,7 @@ async function runBlame(
         ...(withoutGlobalConfig ? { env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } } : {})
       }
     )
-    return stdout
+    return { stdout }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return 'too-large'
@@ -135,6 +135,6 @@ async function readBlame(
     kind: 'ready',
     headOid: oid,
     headText: blob.content,
-    ...parseGitBlameIncremental(blameOutput)
+    ...parseGitBlameIncremental(blameOutput.stdout)
   }
 }
