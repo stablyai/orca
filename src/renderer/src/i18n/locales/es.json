@@ -21768,6 +21768,7 @@
       "why": "Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
       "accept": "Ejecutar como host",
       "projectNotFound": "No se encontró el proyecto añadido para moverlo. Usa «Mover al host {{distro}}…» en el proyecto de la barra lateral.",
+      "savedUnderAnotherPath": "Esta carpeta ya es un proyecto aquí como {{path}}, que todavía no se puede mover al host {{distro}}. Quita ese proyecto y vuelve a añadir la carpeta para moverla.",
       "existingTitle": "Añadir en el host {{distro}} (recomendado)",
       "existingWhy": "{{distro}} ya se ejecuta como host, así que Git, los archivos y las terminales se ejecutan de forma nativa en Linux en lugar de a través del recurso compartido de Windows.",
       "existingAccept": "Añadir en el host"
