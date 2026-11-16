@@ -1,6 +1,5 @@
 import type {
   CloudWorkspace,
-  CloudWorkspaceGitActor,
   CloudWorkspaceFollow,
   CloudWorkspaceGrant,
   CloudOrgSlug,
@@ -42,8 +41,6 @@ export type CloudWorkspacesApi = {
   available: () => Promise<boolean>
   list: (query: CloudWorkspaceListQuery) => Promise<CloudWorkspaceListResult>
   get: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspace>>
-  /** GH-ACTING-LINE: who the workspace's pushes and PRs go out as right now. */
-  gitActor?: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspaceGitActor>>
   patch: (id: string, patch: CloudWorkspacePatch) => Promise<CloudWorkspacesResult<CloudWorkspace>>
   /** Follow or unfollow a team workspace (PARITY-FOLLOW): the caller's state and its followers. */
   follow: (id: string, follow: boolean) => Promise<CloudWorkspacesResult<CloudWorkspaceFollow>>

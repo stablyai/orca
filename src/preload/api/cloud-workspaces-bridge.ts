@@ -5,7 +5,6 @@ export const cloudWorkspacesApi = {
   available: () => ipcRenderer.invoke('cloudWorkspaces:available'),
   list: (query) => ipcRenderer.invoke('cloudWorkspaces:list', query),
   get: (id) => ipcRenderer.invoke('cloudWorkspaces:get', { id }),
-  gitActor: (id) => ipcRenderer.invoke('cloudWorkspaces:gitActor', { id }),
   patch: (id, patch) => ipcRenderer.invoke('cloudWorkspaces:patch', { id, patch }),
   follow: (id, follow) => ipcRenderer.invoke('cloudWorkspaces:follow', { id, follow }),
   resolveLink: (target, chatId) =>

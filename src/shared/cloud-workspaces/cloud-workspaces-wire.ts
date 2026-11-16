@@ -76,16 +76,33 @@ export const CloudWorkspaceSchema = z.object({
   // on rows the caller may open; older control planes omit it.
   githubActing: z
     .discriminatedUnion('actingAs', [
-      z.object({ actingAs: z.literal('member'), userId: Id, login: z.string().max(39), until: z.number().optional() }),
+      z.object({
+        actingAs: z.literal('member'),
+        userId: Id,
+        login: z.string().max(39),
+        until: z.number().optional()
+      }),
       z.object({
         actingAs: z.literal('bot'),
-        reason: z.enum(['not_github', 'off', 'no_sender_yet', 'sender_not_connected', 'reconnect', 'window_expired']).catch('off')
+        reason: z
+          .enum([
+            'not_github',
+            'off',
+            'no_sender_yet',
+            'sender_not_connected',
+            'reconnect',
+            'window_expired'
+          ])
+          .catch('off')
       })
     ])
     .optional()
     .catch(undefined),
   // The caller's own GitHub connection (shows "Connect GitHub" only to a viewer who isn't connected).
-  you: z.object({ connected: z.boolean(), login: z.string().max(39).optional() }).optional().catch(undefined)
+  you: z
+    .object({ connected: z.boolean(), login: z.string().max(39).optional() })
+    .optional()
+    .catch(undefined)
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>
@@ -107,29 +124,6 @@ export const CloudWorkspaceListResponseSchema = z.object({
   routineRuns: CloudWorkspaceRoutineRunsSchema.optional().catch(undefined)
 })
 export const CloudWorkspaceResponseSchema = z.object({ workspace: CloudWorkspaceSchema })
-/**
- * GH-ACTING-LINE: who the workspace's pushes and PRs go out as right now (the solo owner, else the
- * latest sender within the hour, else Orca's bot), on GET /v1/team/workspaces/:id with feature
- * `git-actor`. Absent: not on GitHub, or member identities off. `viewerConnected`: whether the
- * caller has a usable GitHub connection. `until`: when a shared workspace's window lapses.
- */
-export const CloudGitActorSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('member'),
-    userId: z.string().max(200),
-    login: z.string().min(1).max(100),
-    until: z.number().optional()
-  }),
-  z.object({ kind: z.literal('bot'), reason: z.string().max(60) })
-])
-export type CloudGitActor = z.infer<typeof CloudGitActorSchema>
-export const CloudWorkspaceGitActorSchema = z
-  .object({
-    gitActor: CloudGitActorSchema.optional().catch(undefined),
-    viewerConnected: z.boolean().optional().catch(undefined)
-  })
-  .strip()
-export type CloudWorkspaceGitActor = z.infer<typeof CloudWorkspaceGitActorSchema>
 /** PUT/DELETE /v1/team/workspaces/:id/follow (PARITY-FOLLOW). */
 export const CloudWorkspaceFollowSchema = z.object({
   following: z.boolean(),

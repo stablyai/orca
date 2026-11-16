@@ -3,9 +3,12 @@ import { Github } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { gitActingCaveat, gitActingLine } from '@/components/cloud-workspaces/cloud-git-acting-copy'
+import {
+  gitActingCaveat,
+  gitActingLine,
+  type CloudGitActing
+} from '@/components/cloud-workspaces/cloud-git-acting-copy'
 import { useCloudGitActor } from '@/components/cloud-workspaces/use-cloud-git-actor'
-import type { CloudWorkspaceGitActor } from '../../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 /**
  * GH-ACTING-LINE under Commit/Push in a cloud workspace: who pushes and PRs go out as right now, and,
@@ -16,7 +19,7 @@ export function CloudGitActingNoticeView({
   answer,
   onConnect
 }: {
-  answer: CloudWorkspaceGitActor | null
+  answer: CloudGitActing | null
   onConnect: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()

@@ -1,17 +1,17 @@
-// GH-ACTING-LINE: the git actor of the cloud workspace a worktree belongs to, shared by the people
-// tooltip and the source control panel (one read per workspace). Re-read when Orca is focused,
+// GH-ACTING-LINE: who the cloud workspace a worktree belongs to acts as on GitHub (its
+// `githubActing` and the viewer's `you`), for the source control panel (one read per workspace). Re-read when Orca is focused,
 // when a shared workspace's hour lapses (`until`), and every two minutes while mounted, since
 // another member sending also changes it.
 import { useEffect, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import type { CloudWorkspaceGitActor } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type { CloudGitActing } from './cloud-git-acting-copy'
 import { sandboxIdForWorktree, useCloudWorkspaceIdentities } from './cloud-workspace-identity'
 
 const REFRESH_MS = 2 * 60_000
 const FRESH_MS = 15_000
 
-type Entry = { value: CloudWorkspaceGitActor | null; at: number; inflight: Promise<void> | null }
+type Entry = { value: CloudGitActing | null; at: number; inflight: Promise<void> | null }
 const entries = new Map<string, Entry>()
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach((listener) => listener())
@@ -23,15 +23,12 @@ export function refreshCloudGitActor(sandboxId: string, force = false): Promise<
   if (entry.inflight || (!force && Date.now() - entry.at < FRESH_MS)) {
     return entry.inflight ?? Promise.resolve()
   }
-  const read = window.api.cloudWorkspaces.gitActor
-  if (!read) {
-    return Promise.resolve()
-  }
-  entry.inflight = read(sandboxId)
+  entry.inflight = window.api.cloudWorkspaces
+    .get(sandboxId)
     .then((result) => {
       // A failed read keeps the last answer; the next focus or tick asks again.
       if (result.ok) {
-        entry.value = result.value
+        entry.value = { githubActing: result.value.githubActing, you: result.value.you }
       }
     })
     .catch(() => undefined)
@@ -43,7 +40,7 @@ export function refreshCloudGitActor(sandboxId: string, force = false): Promise<
   return entry.inflight
 }
 
-export function useCloudGitActor(worktreeId: string | null): CloudWorkspaceGitActor | null {
+export function useCloudGitActor(worktreeId: string | null): CloudGitActing | null {
   const hostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const identities = useCloudWorkspaceIdentities()
   const sandboxId = worktreeId ? sandboxIdForWorktree({ id: worktreeId, hostId }, identities) : null
@@ -54,7 +51,7 @@ export function useCloudGitActor(worktreeId: string | null): CloudWorkspaceGitAc
     },
     () => (sandboxId ? (entries.get(sandboxId)?.value ?? null) : null)
   )
-  const until = value?.gitActor?.kind === 'member' ? value.gitActor.until : undefined
+  const until = value?.githubActing?.actingAs === 'member' ? value.githubActing.until : undefined
   useEffect(() => {
     if (!sandboxId) {
       return

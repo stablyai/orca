@@ -1,9 +1,9 @@
 // GH-ACTING-LINE under Commit/Push in a cloud workspace's source control panel.
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { CloudWorkspaceGitActor } from '../../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type { CloudGitActing } from '@/components/cloud-workspaces/cloud-git-acting-copy'
 import { CloudGitActingNoticeView } from './cloud-git-acting-notice'
 
-function fixture(answer: CloudWorkspaceGitActor) {
+function fixture(answer: CloudGitActing) {
   return defineFixture({
     width: 320,
     render: () => (
@@ -18,14 +18,18 @@ function fixture(answer: CloudWorkspaceGitActor) {
 }
 
 export const member = fixture({
-  gitActor: { kind: 'member', userId: 'u1', login: 'octo-dev' },
-  viewerConnected: true
+  githubActing: { actingAs: 'member', userId: 'u1', login: 'octo-dev' },
+  you: { connected: true, login: 'octo-dev' }
 })
 export const botConnect = fixture({
-  gitActor: { kind: 'bot', reason: 'no_connected_member' },
-  viewerConnected: false
+  githubActing: { actingAs: 'bot', reason: 'sender_not_connected' },
+  you: { connected: false }
 })
-export const botStale = fixture({
-  gitActor: { kind: 'bot', reason: 'stale' },
-  viewerConnected: true
+export const noSenderYet = fixture({
+  githubActing: { actingAs: 'bot', reason: 'no_sender_yet' },
+  you: { connected: true }
+})
+export const windowExpired = fixture({
+  githubActing: { actingAs: 'bot', reason: 'window_expired' },
+  you: { connected: true }
 })
