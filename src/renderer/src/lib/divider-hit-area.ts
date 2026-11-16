@@ -25,7 +25,24 @@ export function installDividerNativeDragGuard(): void {
     depth = 0
     root.removeAttribute(NATIVE_DRAG_ATTRIBUTE)
   }
-  window.addEventListener(
+  const clearIfStale = (): void => {
+    if (root.hasAttribute(NATIVE_DRAG_ATTRIBUTE)) {
+      clear()
+    }
+  }
+  // Why: synthetic events from scripts don't reflect the user's drag session, so they must not set or clear the guard.
+  const listen = (type: string, handler: () => void, capture: boolean): void => {
+    window.addEventListener(
+      type,
+      (event) => {
+        if (event.isTrusted) {
+          handler()
+        }
+      },
+      capture
+    )
+  }
+  listen(
     'dragenter',
     () => {
       depth += 1
@@ -33,7 +50,7 @@ export function installDividerNativeDragGuard(): void {
     },
     true
   )
-  window.addEventListener(
+  listen(
     'dragleave',
     () => {
       depth = Math.max(0, depth - 1)
@@ -43,15 +60,10 @@ export function installDividerNativeDragGuard(): void {
     },
     true
   )
-  window.addEventListener('drop', clear, true)
-  window.addEventListener('dragend', clear, true)
-  window.addEventListener('blur', clear)
-  // Why: Chromium sends no pointer events during a drag session, so the first one proves it ended.
-  const clearIfStale = (): void => {
-    if (root.hasAttribute(NATIVE_DRAG_ATTRIBUTE)) {
-      clear()
-    }
-  }
-  window.addEventListener('pointermove', clearIfStale, true)
-  window.addEventListener('pointerdown', clearIfStale, true)
+  listen('drop', clear, true)
+  listen('dragend', clear, true)
+  listen('blur', clear, false)
+  // Why: Chromium sends no pointer events during a drag session, so the first real one proves it ended.
+  listen('pointermove', clearIfStale, true)
+  listen('pointerdown', clearIfStale, true)
 }
