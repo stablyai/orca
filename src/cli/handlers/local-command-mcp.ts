@@ -162,7 +162,7 @@ export function serveLocalCommandMcp(deps: LocalCommandMcpDeps): Promise<void> {
   const handle = (message: JsonRpcMessage): void => {
     const { id, method } = message
     const isRequest = id !== undefined && id !== null
-    switch (method) {
+    switch (method ?? '') {
       case 'initialize': {
         const requested = field(message.params, 'protocolVersion')
         reply(id, {

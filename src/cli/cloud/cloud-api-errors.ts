@@ -36,6 +36,7 @@ function forbiddenMessage(reason: string | null): string {
       return 'This needs a signed-in Orca session, not an Orca API key or workspace token.'
     case 'not_owner':
       return 'Only the person who created this can do that.'
+    case null:
     default:
       return "You don't have access to do this."
   }
@@ -80,6 +81,7 @@ function conflictMessage(reason: string | null): { message: string; nextSteps: s
       return { message: 'The same run is already queued. Nothing was queued.', nextSteps: [] }
     case 'project_name_taken':
       return { message: 'A project with that name already exists.', nextSteps: [] }
+    case null:
     default:
       return {
         message: "Orca Cloud couldn't do that right now. Nothing was changed.",
