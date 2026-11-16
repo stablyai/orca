@@ -1847,7 +1847,6 @@
       "src/main/orcad/credentials/orcad-secret-store.test.ts": 2281,
       "src/main/orcad/testing/serve-lifecycle/orcad-serve-parity.integration.test.ts": 280,
       "src/main/orcad/instance-lock/orcad-stale-lock-reclaim.test.ts": 258,
-      "src/main/orcad/runtime-launch/orcad-startup-qualification.test.ts": 102,
       "src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-shutdown.integration.test.ts": 293,
       "src/main/orcad/native-runtime/orcad-windows-conpty-breakaway.integration.test.ts": 79,
       "src/main/persistence/preferences/persistence-onboarding-language-cohort.test.ts": 1760,
