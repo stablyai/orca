@@ -10,10 +10,8 @@ import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
 } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
-import {
-  deriveNativeChatRowContent,
-  nativeChatRowRendersContent
-} from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
+import { isNativeChatProviderTurnStart } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-provider-turn-start'
 import {
   MobileNativeChatGroupedThought,
   MobileNativeChatReasoningRow
@@ -206,12 +204,8 @@ function MobileNativeChatMessageImpl({
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />
   ) : null
-  // Keep answered receipts visible even when their tool run folds away; an empty system row draws only its bar.
-  if (
-    joinsWorkRun ||
-    (foldedAway && !receipt) ||
-    (isSystem && !receipt && !nativeChatRowRendersContent(message.blocks))
-  ) {
+  // Keep answered receipts visible even when their tool run folds away; a provider turn mark draws only its bar.
+  if (joinsWorkRun || (foldedAway && !receipt) || isNativeChatProviderTurnStart(message)) {
     return <>{statusRow}</>
   }
   if (receipt) {
