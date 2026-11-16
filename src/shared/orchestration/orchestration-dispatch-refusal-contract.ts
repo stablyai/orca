@@ -82,8 +82,8 @@ export function buildInjectRejectionMessage(terminal: string): string {
   return (
     `Cannot dispatch --inject to terminal ${terminal}: no recognized agent detected. ` +
     `Orca detects these agent CLIs (${RECOGNIZED_AGENT_PROCESS_NAMES.join(', ')}). ` +
-    'Start one in the terminal and let it finish launching, ' +
-    'or dispatch without --inject and send the prompt manually.'
+    'Start one in the terminal, let it finish launching, then retry; ' +
+    'or give the Task to a running agent Orca did not start with orca orchestration worker-start --terminal.'
   )
 }
 
@@ -101,7 +101,7 @@ export function injectRejectedRefusal(
       reason,
       nextSteps: [
         'Start a recognized agent CLI in that terminal and wait for it to finish launching, or pick a terminal that already runs one.',
-        'Alternatively dispatch without --inject and deliver the prompt with orca terminal send --terminal <handle> --text <prompt> --enter --json.'
+        'For a running agent Orca did not start, use orca orchestration worker-start --task <task_id> --terminal <handle> --json.'
       ]
     }
   }
