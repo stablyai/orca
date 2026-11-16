@@ -116,7 +116,7 @@ function resetFixture(mode: 'before' | 'available' | 'skip' | 'confirm' | 'unkno
       const buttons = Array.from(
         frame.ownerDocument.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')
       )
-      const button = buttons[0]
+      const button = buttons.at(-1)
       if (!button) {
         throw new Error('Reset-card action did not render')
       }

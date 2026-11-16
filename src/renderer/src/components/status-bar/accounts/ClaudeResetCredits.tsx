@@ -107,36 +107,35 @@ export function ClaudeResetCredits({
       const grant = next.credits?.grants.find(
         (candidate) => candidate.id === next.credits?.nextGrantId
       )
-      if (next.pendingRequestId) {
-        return
+      if (!next.pendingRequestId) {
+        if (!next.credits || !grant || !canUseClaudeResetGrant(next.credits, grant)) {
+          setError(t('claude.resetCredits.notUsable', 'Not available to use right now.'))
+        } else {
+          submitted = {
+            account: next.account,
+            identity: next.identity,
+            grantId: grant.id,
+            expectedResetsLeft: grant.resetsLeft,
+            expectedClears: grant.clears,
+            requestId: createBrowserUuid()
+          }
+          const reply = await callRuntimeRpc<ClaudeResetCreditResult>(
+            owner,
+            'accounts.consumeClaudeResetCredit',
+            submitted,
+            { timeoutMs: 120_000 }
+          )
+          setResult(reply)
+          setOffer({
+            ...next,
+            credits: reply.credits,
+            pendingRequestId:
+              reply.outcome === 'unknown' || (reply.outcome === 'reset' && !reply.verified)
+                ? submitted.requestId
+                : null
+          })
+        }
       }
-      if (!next.credits || !grant || !canUseClaudeResetGrant(next.credits, grant)) {
-        setError(t('claude.resetCredits.notUsable', 'Not available to use right now.'))
-        return
-      }
-      submitted = {
-        account: next.account,
-        identity: next.identity,
-        grantId: grant.id,
-        expectedResetsLeft: grant.resetsLeft,
-        expectedClears: grant.clears,
-        requestId: createBrowserUuid()
-      }
-      const reply = await callRuntimeRpc<ClaudeResetCreditResult>(
-        owner,
-        'accounts.consumeClaudeResetCredit',
-        submitted,
-        { timeoutMs: 120_000 }
-      )
-      setResult(reply)
-      setOffer({
-        ...next,
-        credits: reply.credits,
-        pendingRequestId:
-          reply.outcome === 'unknown' || (reply.outcome === 'reset' && !reply.verified)
-            ? submitted.requestId
-            : null
-      })
     } catch (cause) {
       if (submitted) {
         setResult({
@@ -154,12 +153,11 @@ export function ClaudeResetCredits({
             : t('claude.resetCredits.queryFailed', 'Could not query reset cards.')
         )
       }
-    } finally {
-      busyRef.current = false
-      setBusy(false)
-      setConfirmOpen(false)
-      setSkipFutureConfirm(false)
     }
+    busyRef.current = false
+    setBusy(false)
+    setConfirmOpen(false)
+    setSkipFutureConfirm(false)
   }
 
   if (!credits && !error && !pending && !result) {
