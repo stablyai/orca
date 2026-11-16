@@ -7,6 +7,7 @@ import {
 import { discardEditorGenerations } from './editor-discard-epoch'
 import { requestEditorSaveQuiesce } from '../../autosave/editor-autosave'
 import { flushPendingEditorBuffer } from './editor-pending-flush'
+import { pruneClosedOpenFileFromAllPartitions } from '@/lib/workspace/persistence/prune-closed-open-file'
 
 /** Discard only the last view’s unsaved record; return an autosave hold release for use after tab cleanup. */
 export async function discardEditorBuffer(fileId: string): Promise<() => void> {
@@ -42,6 +43,9 @@ export async function discardEditorFileChangesAndClose(
   fileId: string,
   tabId?: string
 ): Promise<void> {
+  // Capture before the close clears openFiles; superseded host partitions holding this file's
+  // row would otherwise re-materialize the tab (with its draft) at the next hydration (#42761).
+  const closing = useAppStore.getState().openFiles.find((file) => file.id === fileId)
   const release = await discardEditorBuffer(fileId)
   try {
     if (tabId) {
@@ -52,4 +56,11 @@ export async function discardEditorFileChangesAndClose(
   } finally {
     release()
   }
+  if (closing) {
+    void pruneClosedOpenFileFromAllPartitions(window.api.session, {
+      worktreeId: closing.worktreeId,
+      filePath: closing.filePath
+    })
+  }
 }
+
