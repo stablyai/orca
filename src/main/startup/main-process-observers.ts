@@ -2,7 +2,7 @@ import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
-import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
+import { resolveZotzComputerAwakeMode } from '../../shared/zotz/zotz-machine-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
@@ -71,12 +71,7 @@ export function initializeMainProcessObservers(): void {
     }
   })
   state.agentAwakeService = new AgentAwakeService()
-  state.agentAwakeService.setMode(
-    normalizeComputerAwakeMode(
-      store.getSettings().computerAwakeMode,
-      store.getSettings().keepComputerAwakeWhileAgentsRun
-    )
-  )
+  state.agentAwakeService.setMode(resolveZotzComputerAwakeMode(store.getSettings()))
   // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
   state.uninstallRepoMaintenanceIdleGate = installRepoMaintenanceIdleGate({

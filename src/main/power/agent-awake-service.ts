@@ -6,6 +6,7 @@ import {
 } from '../../shared/computer-awake-mode'
 import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
+import { WindowsSystemSleepAssertion } from './windows-system-sleep-assertion'
 import { AgentAwakeStatusLease, type AgentAwakeStatus } from './agent-awake-status-lease'
 
 type PowerSaveBlocker = {
@@ -35,6 +36,7 @@ type AgentAwakeServiceOptions = {
   now?: () => number
   platform?: NodeJS.Platform
   powerMonitor?: PowerMonitorEventSource | null
+  windowsAssertion?: PlatformAwakeAssertion
 }
 
 export class AgentAwakeService {
@@ -46,6 +48,7 @@ export class AgentAwakeService {
   private readonly linuxAssertion: PlatformAwakeAssertion
   private readonly logger: Logger
   private readonly macosAssertion: PlatformAwakeAssertion
+  private readonly windowsAssertion: PlatformAwakeAssertion
   private readonly platform: NodeJS.Platform
   private readonly now: () => number
   private readonly statusLease: AgentAwakeStatusLease
@@ -72,6 +75,9 @@ export class AgentAwakeService {
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
     this.platform = options.platform ?? process.platform
+    this.windowsAssertion =
+      options.windowsAssertion ??
+      new WindowsSystemSleepAssertion({ logger: this.logger, platform: this.platform })
     const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
     if (resumeSource) {
       const onResume = () => this.refresh('power-resume')
@@ -142,6 +148,7 @@ export class AgentAwakeService {
     this.stopBlocker('dispose')
     this.macosAssertion.dispose()
     this.linuxAssertion.dispose()
+    this.windowsAssertion.dispose()
   }
 
   private refresh(reason: string): void {
@@ -153,16 +160,22 @@ export class AgentAwakeService {
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
     if (shouldBlock) {
       const macosAssertionActive = this.startMacosAssertion(reason)
-      if (this.platform !== 'darwin' || !macosAssertionActive) {
+      const windowsAssertionActive = this.startPlatformAssertion(this.windowsAssertion, reason)
+      // A system-only assertion lets the display sleep; fall back to the display blocker without one.
+      const systemAssertionActive =
+        (this.platform === 'darwin' && macosAssertionActive) ||
+        (this.platform === 'win32' && windowsAssertionActive)
+      if (!systemAssertionActive) {
         this.startBlocker(reason, runningStatusCount)
       } else {
-        this.stopBlocker('macos-assertion-active', runningStatusCount)
+        this.stopBlocker('system-assertion-active', runningStatusCount)
       }
       this.startLinuxAssertion(reason)
     } else {
       this.stopBlocker(reason, runningStatusCount)
       this.stopMacosAssertion(reason)
       this.stopLinuxAssertion(reason)
+      this.windowsAssertion.stop(reason)
     }
     this.publishStatus(shouldBlock)
   }
@@ -210,6 +223,19 @@ export class AgentAwakeService {
       return this.macosAssertion.start(reason) !== false
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start macOS system sleep assertion', {
+        reason,
+        mode: this.mode,
+        error: err
+      })
+      return false
+    }
+  }
+
+  private startPlatformAssertion(assertion: PlatformAwakeAssertion, reason: string): boolean {
+    try {
+      return assertion.start(reason) === true
+    } catch (err) {
+      this.logger.warn('[agent-awake] failed to start system sleep assertion', {
         reason,
         mode: this.mode,
         error: err
