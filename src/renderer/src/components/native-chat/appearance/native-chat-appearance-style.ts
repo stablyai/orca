@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   DEFAULT_NATIVE_CHAT_FONT_SIZE,
+  nativeChatContentMaxWidth,
   resolveNativeChatAppearanceSettings
 } from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
@@ -204,7 +205,7 @@ export function nativeChatAppearanceStyle(
     '--chat-ui-font-size': `${uiFontSize}px`,
     '--chat-line-height': `${nativeChatLineHeightPx(fontSize)}px`,
     '--chat-code-font-size': `${codeFontSize}px`,
-    '--chat-content-max-width': width === 'full' ? 'none' : width === 'wide' ? '60rem' : '46rem',
+    '--chat-content-max-width': nativeChatContentMaxWidth(width),
     '--chat-inline-code-ratio': `${codeFontSize / fontSize}em`,
     '--chat-estimated-line-height': (22 * fontSize) / DEFAULT_NATIVE_CHAT_FONT_SIZE,
     '--chat-estimated-chars-per-line': Math.max(
