@@ -1,3 +1,12 @@
+vi.mock('./clipboard-native-image', () => ({
+  readClipboardNativeImage: async () => mocks.readImage()
+}))
+vi.mock('./clipboard-formats', () => ({
+  clipboardFormatReader: {
+    availableFormats: async () => ['image/png'],
+    readBuffer: async () => Buffer.alloc(0)
+  }
+}))
 // Structured chats own pasted images in their host attachment store; temp paths cannot distinguish sent from abandoned pastes.
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
