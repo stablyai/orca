@@ -1,5 +1,5 @@
 import { getFishClaudeShellFunction } from '../launch/agents/claude-shell-function'
-import { FISH_WSL_CWD_REPORT_FUNCTION } from './fish-wsl-cwd-report'
+import { FISH_CWD_REPORT_BLOCK } from '../fish-cwd-report'
 import { buildPosixStdoutFence, type PosixStdoutFence } from '../launch/posix-stdout-fence'
 import { quotePosixShell } from '../launch/shell-argument-quoting'
 
@@ -49,7 +49,7 @@ export function buildWslCapturedLoginShellCommand(
 
 /** A bridge fish pane's `-C`: run after the user's config.fish, so it adds and never replaces. */
 export function getWslFishInitCommand(): string {
-  return `${getFishClaudeShellFunction()}\n${FISH_WSL_CWD_REPORT_FUNCTION}`
+  return `${getFishClaudeShellFunction()}\n${FISH_CWD_REPORT_BLOCK}`
 }
 
 export function buildWslInteractiveLoginShellCommand(): string {

@@ -127,24 +127,31 @@ beforeEach(() => {
   runProcessMock.mockReset()
   acceptSftp()
   spawnSystemSshCommandMock.mockReset()
-  spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
-    const spawnIndex = spawnSystemSshCommandMock.mock.calls.length - 1
-    return createFakeChannel((channel) => {
-      commands.push({
-        script: decodePowerShellCommand(command),
-        executable: command.split(' ')[0] ?? '',
-        stdin: channel.written
+  spawnSystemSshCommandMock.mockImplementation(
+    (_target: SshTarget, command: string, options?: { closeStdin?: boolean }) => {
+      const spawnIndex = spawnSystemSshCommandMock.mock.calls.length - 1
+      const channel = createFakeChannel((ended) => {
+        commands.push({
+          script: decodePowerShellCommand(command),
+          executable: command.split(' ')[0] ?? '',
+          stdin: ended.written
+        })
+        setImmediate(() => {
+          if (spawnIndex === failAtSpawn) {
+            ended.stderr.write(failedWriteStderr)
+            ended.emit('close', failedWriteExit, null)
+          } else {
+            ended.emit('close', 0, null)
+          }
+        })
       })
-      setImmediate(() => {
-        if (spawnIndex === failAtSpawn) {
-          channel.stderr.write(failedWriteStderr)
-          channel.emit('close', failedWriteExit, null)
-        } else {
-          channel.emit('close', 0, null)
-        }
-      })
-    })
-  })
+      // Like the real spawnSystemSshCommand, closeStdin ends input right after spawn.
+      if (options?.closeStdin) {
+        channel.stdin.end()
+      }
+      return channel
+    }
+  )
 })
 
 afterEach(async () => {

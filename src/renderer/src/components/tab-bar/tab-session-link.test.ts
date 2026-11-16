@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { tabSessionLinkRequest } from './tab-session-link'
 
 function chat(id: string, workspace = 'workspace'): Tab {

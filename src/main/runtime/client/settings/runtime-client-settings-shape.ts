@@ -44,6 +44,8 @@ export type RuntimeClientSettings = Pick<
   | 'sourceControlCompareAgainstUpstream'
   | 'prAutoRefresh'
   | 'diffShowWhitespace'
+  | 'newTabMenuLayout'
+  | 'floatingTerminalNewTabMenuLayout'
 > & {
   /** Always set; older hosts omit it, so clients must not write it to them (settings.update is strict). */
   workspaceCleanupPolicy: WorkspaceCleanupRules
@@ -90,4 +92,6 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'nativeChatAutoContinueAfterUsageLimit'
   | 'workspaceCleanupPolicy'
   | 'prAutoRefresh'
+  | 'newTabMenuLayout'
+  | 'floatingTerminalNewTabMenuLayout'
 >

@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { normalizeProxyUrl } from '../../../../shared/network-proxy'
+import { normalizeProxyUrl } from '../../../../shared/network/network-proxy'
 import { normalizeKagiSessionLink } from '../../../../shared/browser/navigation/browser-url'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { ChatUiLaunchTipAudience } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'

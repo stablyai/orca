@@ -9,7 +9,7 @@ import { useAppStore } from '@/store/index'
 import { parseCmdJTaskSourceUrl } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
 import { getWorktreePaletteCreateActionState } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import type { CmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
-import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { PaletteItem } from '../worktree-jump-palette-model'
 
 export function useWorktreeJumpPaletteLocalState({

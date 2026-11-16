@@ -20,7 +20,7 @@ import {
 } from '../../../../shared/execution-host'
 import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
 import { collectWorktreePtyIds } from './worktree-pty-collection'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'

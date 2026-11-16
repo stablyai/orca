@@ -8,7 +8,9 @@ import { browseSshDirectory } from './ssh-remote-directory-browse'
 
 // Runs the generated remote command in a real local `sh`, standing in for the SSH exec channel.
 function shellBackedManager(): Parameters<typeof browseSshDirectory>[0] {
-  const exec = async (command: string): Promise<EventEmitter & { stderr: EventEmitter }> => {
+  const execWithClosedStdin = async (
+    command: string
+  ): Promise<EventEmitter & { stderr: EventEmitter }> => {
     const child = spawn('/bin/sh', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'] })
     const channel = Object.assign(new EventEmitter(), { stderr: new EventEmitter() })
     child.stdout.on('data', (data: Buffer) => channel.emit('data', data))
@@ -19,8 +21,8 @@ function shellBackedManager(): Parameters<typeof browseSshDirectory>[0] {
     })
     return channel
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: browseSshDirectory only calls getConnection(id).exec(command).
-  return { getConnection: () => ({ exec }) } as never
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: browseSshDirectory only calls getConnection(id).execWithClosedStdin(command).
+  return { getConnection: () => ({ execWithClosedStdin }) } as never
 }
 
 describe.skipIf(process.platform === 'win32')('browseSshDirectory over a POSIX shell', () => {

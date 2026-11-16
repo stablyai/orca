@@ -1,7 +1,7 @@
 import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/saved-conversation-title-publication'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab
@@ -23,7 +23,7 @@ import type {
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressing/groups/structured-worker-group-addressing'

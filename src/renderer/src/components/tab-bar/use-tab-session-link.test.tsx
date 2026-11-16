@@ -4,7 +4,7 @@ import { fireEvent, render, screen, cleanup, waitFor } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as I18nModule from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { SessionLinkParticipant, SESSION_LINK_CAPABILITY } from '../../../../shared/session-link'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useTabSessionLink } from './use-tab-session-link'

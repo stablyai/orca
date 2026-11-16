@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
+import { prepareQueuedMessageEditText } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-command'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import {
   useNativeChatPickerState,
