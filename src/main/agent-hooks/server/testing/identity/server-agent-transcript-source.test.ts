@@ -72,8 +72,8 @@ it('reads a terminal agent by its own conversation, never by the pane it was att
   server.ingestRemote(hook('session-b', '/home/u/.claude/projects/p/b.jsonl'), WSL)
   await answered()
   const second = server.getStatusSnapshot()[0]?.orcaSessionId
-  expect(first).toMatch(/^claude_/)
-  expect(second).toMatch(/^claude_/)
+  expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  expect(second).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
   expect(second).not.toBe(first)
 
   expect(await server.terminalAgentTranscriptSource(second!, () => ({}))).toMatchObject({
