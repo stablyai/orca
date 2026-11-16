@@ -10,8 +10,17 @@ import { dashboardRowBucketProjection, readAgentRowTurnRecords } from '../rows/d
 import { resolveDashboardCardTerminalInput } from './dashboard-card-terminal-input'
 import type { DashboardClientHost } from './dashboard-client-host'
 import type { DashboardCardContext } from './dashboard-card-context'
-import { dashboardCardMapWorkspaceMetadata, type ActiveDashboardWorkspace } from './dashboard-snapshot-workspaces'
-import { boundedLabel, boundedLabelOrUndefined, nonEmpty, rowConversationName, rowTask } from './dashboard-card-labels'
+import {
+  dashboardCardMapWorkspaceMetadata,
+  type ActiveDashboardWorkspace
+} from './dashboard-snapshot-workspaces'
+import {
+  boundedLabel,
+  boundedLabelOrUndefined,
+  nonEmpty,
+  rowConversationName,
+  rowTask
+} from './dashboard-card-labels'
 import type { DashboardSnapshotInput } from './build-dashboard-snapshot'
 import { selectTerminalLayoutsForWorktree } from '../../sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { selectRuntimePaneTitlesForWorktree } from '../../sidebar/workspace-card/activity/worktree-card-status-inputs'
@@ -27,15 +36,27 @@ export function buildDashboardSnapshotCard(args: {
   terminalLayoutsByTabId: ReturnType<typeof selectTerminalLayoutsForWorktree>
   paneTitlesByTabId: ReturnType<typeof selectRuntimePaneTitlesForWorktree>
 }): DashboardCard {
-  const { state, workspace, row, includeCardDetails, context, subagents, clientHost, terminalLayoutsByTabId, paneTitlesByTabId } = args
+  const {
+    state,
+    workspace,
+    row,
+    includeCardDetails,
+    context,
+    subagents,
+    clientHost,
+    terminalLayoutsByTabId,
+    paneTitlesByTabId
+  } = args
   const { worktree } = workspace
   const worktreeId = worktree.id
   const parentWorktreeId = worktree.parentWorktreeId
   const turnRecords = readAgentRowTurnRecords(state)
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   // Title-derived rows contain synthetic prompt/message labels, not real conversation; startedAt=0 distinguishes them.
-  const { isTitleDerived, dotState, workingMode, unseen, bucket } =
-    dashboardRowBucketProjection(row, turnRecords)
+  const { isTitleDerived, dotState, workingMode, unseen, bucket } = dashboardRowBucketProjection(
+    row,
+    turnRecords
+  )
   const routingPaneKey = row.activationPaneKey ?? row.paneKey
   const parsed = parsePaneKey(routingPaneKey)
   const tabId = parsed?.tabId ?? row.tab.id
@@ -44,9 +65,7 @@ export function buildDashboardSnapshotCard(args: {
     (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
   // Layouts survive restarts; advertise preview PTYs only when the live ptyIdsByTabId set still contains them.
   const ptyId =
-    layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
-      ? layoutPtyId
-      : null
+    layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId) ? layoutPtyId : null
   // Only live preview-capable cards need host resolution; count-only sidebar rebuilds must skip that cost.
   const terminalInput =
     ptyId && includeCardDetails

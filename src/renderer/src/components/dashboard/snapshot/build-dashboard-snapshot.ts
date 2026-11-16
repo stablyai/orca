@@ -84,7 +84,9 @@ export function buildDashboardSnapshot(
     clientHost.userAgent,
     clientHost.osRelease
   ]
-  const statusOnly = reuse !== undefined && reuse.projection === projection &&
+  const statusOnly =
+    reuse !== undefined &&
+    reuse.projection === projection &&
     inputs.length === reuse.inputs.length &&
     inputs.every((value, index) => value === reuse.inputs[index])
   const changed = statusOnly ? projection.changesSince(reuse.cursor) : null
@@ -104,9 +106,10 @@ export function buildDashboardSnapshot(
   const repoIconsByRepoId: Record<string, RepoIcon | null> = {}
   const includeCardDetails = options.includeCardDetails !== false
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
-  const activeWorktrees = dirtyWorktrees && reuse
-    ? reuse.activeWorktrees
-    : collectActiveDashboardWorkspaces(state, includeCardDetails)
+  const activeWorktrees =
+    dirtyWorktrees && reuse
+      ? reuse.activeWorktrees
+      : collectActiveDashboardWorkspaces(state, includeCardDetails)
   const nextWorkspaces = new Map<string, DashboardWorkspaceBuild>()
   const filterOptions =
     dirtyWorktrees && reuse
@@ -179,18 +182,30 @@ export function buildDashboardSnapshot(
         ? state.agentStatusByPaneKey.get(row.activationPaneKey)
         : undefined
       const children = subagentsByParentPaneKey?.get(row.paneKey)
-      if (prior && prior.row === row && prior.status === status &&
-          prior.activationStatus === activationStatus &&
-          !changed?.has(row.paneKey) && !changed?.has(row.activationPaneKey ?? '') &&
-          equal(children, prior.card.subagents)) {
+      if (
+        prior &&
+        prior.row === row &&
+        prior.status === status &&
+        prior.activationStatus === activationStatus &&
+        !changed?.has(row.paneKey) &&
+        !changed?.has(row.activationPaneKey ?? '') &&
+        equal(children, prior.card.subagents)
+      ) {
         cards.push(prior.card)
         repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
         nextRows.set(row.paneKey, prior)
         continue
       }
       const card = buildDashboardSnapshotCard({
-        state, workspace, row, includeCardDetails, context,
-        subagents: children, clientHost, terminalLayoutsByTabId, paneTitlesByTabId
+        state,
+        workspace,
+        row,
+        includeCardDetails,
+        context,
+        subagents: children,
+        clientHost,
+        terminalLayoutsByTabId,
+        paneTitlesByTabId
       })
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
       cards.push(card)
@@ -209,7 +224,9 @@ export function buildDashboardSnapshot(
     } else {
       for (const worktreeId of dirtyWorktrees) {
         for (const [key, row] of reuse.workspaces.get(worktreeId)?.rows ?? []) {
-          for (const source of row.row.activationPaneKey ? [key, row.row.activationPaneKey] : [key]) {
+          for (const source of row.row.activationPaneKey
+            ? [key, row.row.activationPaneKey]
+            : [key]) {
             const owners = reuse.owners.get(source)
             owners?.delete(worktreeId)
             if (!owners?.size) {

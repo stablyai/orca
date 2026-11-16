@@ -21,30 +21,72 @@ function fleet(size: number) {
     const id = `w${index}`
     const tabId = `t${index}`
     worktrees.push({
-      id, repoId: 'r', path: `/r/${id}`, head: 'abc', branch: 'main',
-      isBare: false, isMainWorktree: false, displayName: id, comment: '',
-      linkedIssue: null, linkedPR: null, linkedLinearIssue: null,
-      isArchived: false, isUnread: false, isPinned: false, sortOrder: index, lastActivityAt: NOW
+      id,
+      repoId: 'r',
+      path: `/r/${id}`,
+      head: 'abc',
+      branch: 'main',
+      isBare: false,
+      isMainWorktree: false,
+      displayName: id,
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: index,
+      lastActivityAt: NOW
     })
-    tabs[id] = [{ id: tabId, worktreeId: id, ptyId: null, title: 'agent', customTitle: null,
-      color: null, sortOrder: 0, createdAt: NOW }]
+    tabs[id] = [
+      {
+        id: tabId,
+        worktreeId: id,
+        ptyId: null,
+        title: 'agent',
+        customTitle: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: NOW
+      }
+    ]
     const paneKey = makePaneKey(tabId, LEAF)
-    entries.push([paneKey, { paneKey, tabId, worktreeId: id, state: 'working', prompt: 'task',
-      updatedAt: NOW, stateStartedAt: NOW - 1000, stateHistory: [], agentType: 'claude' }])
+    entries.push([
+      paneKey,
+      {
+        paneKey,
+        tabId,
+        worktreeId: id,
+        state: 'working',
+        prompt: 'task',
+        updatedAt: NOW,
+        stateStartedAt: NOW - 1000,
+        stateHistory: [],
+        agentType: 'claude'
+      }
+    ])
   }
   store.setState({
     repos: [{ id: 'r', path: '/r', displayName: 'Repo', badgeColor: '#000', addedAt: NOW }],
-    worktreesByRepo: { r: worktrees }, tabsByWorktree: tabs,
+    worktreesByRepo: { r: worktrees },
+    tabsByWorktree: tabs,
     agentStatusByPaneKey: acceptedAgentStatuses(entries)
   })
   return store
 }
 
-function update(store: ReturnType<typeof createTestStore>, key: string, state: AgentStatusEntry['state']) {
+function update(
+  store: ReturnType<typeof createTestStore>,
+  key: string,
+  state: AgentStatusEntry['state']
+) {
   const before = store.getState().agentStatusByPaneKey.get(key)!
-  store.setState({ agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace([
-    [key, { ...before, state, updatedAt: before.updatedAt + 1 }]
-  ]) })
+  store.setState({
+    agentStatusByPaneKey: store
+      .getState()
+      .agentStatusByPaneKey.replace([[key, { ...before, state, updatedAt: before.updatedAt + 1 }]])
+  })
 }
 
 afterEach(() => vi.restoreAllMocks())
@@ -69,19 +111,31 @@ describe('dashboard incremental snapshot contract', () => {
       expect(cached.cards.find((card) => card.paneKey === key)?.dotState).toBe('waiting')
       for (const state of ['working', 'done', 'blocked', 'working'] as const) {
         update(store, key, state)
-        expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(buildDashboardSnapshot(input(), NOW))
+        expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+          buildDashboardSnapshot(input(), NOW)
+        )
       }
       // A reader falling behind the bounded journal recovers from authoritative inputs.
       for (let index = 0; index < 20; index++) {
         update(store, key, index % 2 ? 'working' : 'waiting')
       }
-      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(buildDashboardSnapshot(input(), NOW))
+      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+        buildDashboardSnapshot(input(), NOW)
+      )
       store.setState({ acknowledgedAgentsByPaneKey: { [key]: NOW } })
-      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(buildDashboardSnapshot(input(), NOW))
-      store.setState({ agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace([[key, null]]) })
-      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(buildDashboardSnapshot(input(), NOW))
+      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+        buildDashboardSnapshot(input(), NOW)
+      )
+      store.setState({
+        agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace([[key, null]])
+      })
+      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+        buildDashboardSnapshot(input(), NOW)
+      )
       store.setState({ agentStatusByPaneKey: store.getState().agentStatusByPaneKey.capture() })
-      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(buildDashboardSnapshot(input(), NOW))
+      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+        buildDashboardSnapshot(input(), NOW)
+      )
       expect(buildDashboardSnapshot(input(), NOW, { reuse, includeCardDetails: false })).toEqual(
         buildDashboardSnapshot(input(), NOW, { includeCardDetails: false })
       )

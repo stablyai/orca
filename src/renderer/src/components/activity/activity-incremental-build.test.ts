@@ -31,36 +31,90 @@ function fleet(size: number): Store {
     const tabId = `t${index}`
     const ptyId = index % 2 ? null : `pty-${index}`
     worktrees.push({
-      id, repoId: 'r', path: `/r/${id}`, head: 'abc', branch: 'main',
-      isBare: false, isMainWorktree: false, displayName: id, comment: '',
-      linkedIssue: null, linkedPR: null, linkedLinearIssue: null,
-      isArchived: false, isUnread: false, isPinned: false, sortOrder: index, lastActivityAt: NOW
+      id,
+      repoId: 'r',
+      path: `/r/${id}`,
+      head: 'abc',
+      branch: 'main',
+      isBare: false,
+      isMainWorktree: false,
+      displayName: id,
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: index,
+      lastActivityAt: NOW
     })
-    tabs[id] = [{ id: tabId, worktreeId: id, ptyId, title: 'agent', customTitle: null,
-      color: null, sortOrder: 0, createdAt: NOW }]
+    tabs[id] = [
+      {
+        id: tabId,
+        worktreeId: id,
+        ptyId,
+        title: 'agent',
+        customTitle: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: NOW
+      }
+    ]
     if (ptyId) {
       ptyIdsByTabId[tabId] = [ptyId]
     }
     const paneKey = makePaneKey(tabId, LEAF)
     // Equal start times tie panes across the global cap; staggered evidence decays at different instants.
     const historyAt = NOW - 40_000 - (index % 7) * 1000
-    entries.push([paneKey, { paneKey, tabId, worktreeId: id, state: STATES[index % 3],
-      prompt: `task ${index}`, updatedAt: NOW - (index % 5) * 10 * MINUTE, stateStartedAt: NOW - 1000,
-      stateHistory: index % 2 ? [] : [
-        { state: 'done', prompt: 'earlier', startedAt: historyAt - 1000, observedAt: historyAt - 1000 },
-        { state: 'waiting', prompt: 'earlier', startedAt: historyAt, observedAt: historyAt }
-      ], agentType: 'claude' }])
+    entries.push([
+      paneKey,
+      {
+        paneKey,
+        tabId,
+        worktreeId: id,
+        state: STATES[index % 3],
+        prompt: `task ${index}`,
+        updatedAt: NOW - (index % 5) * 10 * MINUTE,
+        stateStartedAt: NOW - 1000,
+        stateHistory:
+          index % 2
+            ? []
+            : [
+                {
+                  state: 'done',
+                  prompt: 'earlier',
+                  startedAt: historyAt - 1000,
+                  observedAt: historyAt - 1000
+                },
+                { state: 'waiting', prompt: 'earlier', startedAt: historyAt, observedAt: historyAt }
+              ],
+        agentType: 'claude'
+      }
+    ])
   }
   store.setState({
     repos: [{ id: 'r', path: '/r', displayName: 'Repo', badgeColor: '#000', addedAt: NOW }],
-    worktreesByRepo: { r: worktrees }, tabsByWorktree: tabs, ptyIdsByTabId,
+    worktreesByRepo: { r: worktrees },
+    tabsByWorktree: tabs,
+    ptyIdsByTabId,
     agentStatusByPaneKey: acceptedAgentStatuses(entries),
     // One unsupported row shares a live pane (first source wins), one stands alone.
     migrationUnsupportedByPtyId: {
-      'legacy-1': { ptyId: 'legacy-1', paneKey: makePaneKey('t1', LEAF), reason: 'legacy-numeric-pane-key',
-        source: 'local', updatedAt: NOW - 100_000 },
-      'legacy-2': { ptyId: 'legacy-2', paneKey: makePaneKey('t2', LEAF_2), reason: 'legacy-numeric-pane-key',
-        source: 'local', updatedAt: NOW - 90_000 }
+      'legacy-1': {
+        ptyId: 'legacy-1',
+        paneKey: makePaneKey('t1', LEAF),
+        reason: 'legacy-numeric-pane-key',
+        source: 'local',
+        updatedAt: NOW - 100_000
+      },
+      'legacy-2': {
+        ptyId: 'legacy-2',
+        paneKey: makePaneKey('t2', LEAF_2),
+        reason: 'legacy-numeric-pane-key',
+        source: 'local',
+        updatedAt: NOW - 90_000
+      }
     }
   })
   return store
@@ -69,16 +123,28 @@ function fleet(size: number): Store {
 function inputs(store: Store, now: number): BuildActivityEventsArgs {
   const s = store.getState()
   return {
-    chatNames: names, agentStatusByPaneKey: s.agentStatusByPaneKey,
+    chatNames: names,
+    agentStatusByPaneKey: s.agentStatusByPaneKey,
     runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
-    migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId, tabsByWorktree: s.tabsByWorktree,
-    ptyIdsByTabId: s.ptyIdsByTabId, unifiedTabsByWorktree: s.unifiedTabsByWorktree,
-    worktreeMap: getIndexedWorktreeMap(s.worktreesByRepo), repoMap: getIndexedRepoMap(s.repos), repos: s.repos,
+    migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
+    tabsByWorktree: s.tabsByWorktree,
+    ptyIdsByTabId: s.ptyIdsByTabId,
+    unifiedTabsByWorktree: s.unifiedTabsByWorktree,
+    worktreeMap: getIndexedWorktreeMap(s.worktreesByRepo),
+    repoMap: getIndexedRepoMap(s.repos),
+    repos: s.repos,
     resolveWorktree: s.getKnownWorktreeById,
-    resolveWorktreeInputs: [s.worktreesByRepo, s.folderWorkspaces, s.projectGroups, s.repos,
-      s.detectedWorktreesByRepo, s.floatingWorkspacePath],
+    resolveWorktreeInputs: [
+      s.worktreesByRepo,
+      s.folderWorkspaces,
+      s.projectGroups,
+      s.repos,
+      s.detectedWorktreesByRepo,
+      s.floatingWorkspacePath
+    ],
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
-    activityClearedAtByPaneKey: s.activityClearedAtByPaneKey, now
+    activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
+    now
   }
 }
 
@@ -91,8 +157,13 @@ function builder(store: Store) {
       statuses ? { ...args, agentStatusByPaneKey: statuses } : args,
       cached ? events : undefined
     )
-    return { ...built, threads: buildAgentPaneThreads({ ...built, generatedTitlesEnabled: true },
-      cached ? threads : undefined) }
+    return {
+      ...built,
+      threads: buildAgentPaneThreads(
+        { ...built, generatedTitlesEnabled: true },
+        cached ? threads : undefined
+      )
+    }
   }
   return {
     cached: (now = NOW) => run(now, true),
@@ -104,7 +175,9 @@ function builder(store: Store) {
 }
 
 function write(store: Store, replacements: [string, AgentStatusEntry | null][]): void {
-  store.setState({ agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace(replacements) })
+  store.setState({
+    agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace(replacements)
+  })
 }
 
 function ping(store: Store, key: string, patch: Partial<AgentStatusEntry> = {}): void {
@@ -136,8 +209,15 @@ describe('Activity incremental build', () => {
         build.expectEquivalent()
       }
       // Add, remove, and move a pane to the end of status order, which reorders cap ties.
-      write(store, [[makePaneKey('t3', LEAF_2), { ...store.getState().agentStatusByPaneKey.get(
-        makePaneKey('t3', LEAF))!, paneKey: makePaneKey('t3', LEAF_2) }]])
+      write(store, [
+        [
+          makePaneKey('t3', LEAF_2),
+          {
+            ...store.getState().agentStatusByPaneKey.get(makePaneKey('t3', LEAF))!,
+            paneKey: makePaneKey('t3', LEAF_2)
+          }
+        ]
+      ])
       build.expectEquivalent()
       write(store, [[makePaneKey('t5', LEAF), null]])
       build.expectEquivalent()
@@ -145,8 +225,16 @@ describe('Activity incremental build', () => {
       write(store, [[makePaneKey('t1', LEAF), null]])
       write(store, [[makePaneKey('t1', LEAF), moved]])
       build.expectEquivalent()
-      write(store, [[makePaneKey('t2', LEAF), null], [makePaneKey('t2', LEAF),
-        { ...store.getState().agentStatusByPaneKey.get(makePaneKey('t2', LEAF))!, updatedAt: NOW + 2 }]])
+      write(store, [
+        [makePaneKey('t2', LEAF), null],
+        [
+          makePaneKey('t2', LEAF),
+          {
+            ...store.getState().agentStatusByPaneKey.get(makePaneKey('t2', LEAF))!,
+            updatedAt: NOW + 2
+          }
+        ]
+      ])
       build.expectEquivalent()
 
       // Freshness lapses with or without a status write; a backwards clock rebuilds.
@@ -184,15 +272,27 @@ describe('Activity incremental build', () => {
     build.cached()
     const first = makePaneKey('t1', LEAF)
     write(store, [[first, null]])
-    write(store, [[first, { ...store.getState().agentStatusByPaneKey.get(makePaneKey('t4', LEAF))!,
-      paneKey: first, tabId: 't1', worktreeId: 'w1', state: 'done' }]])
+    write(store, [
+      [
+        first,
+        {
+          ...store.getState().agentStatusByPaneKey.get(makePaneKey('t4', LEAF))!,
+          paneKey: first,
+          tabId: 't1',
+          worktreeId: 'w1',
+          state: 'done'
+        }
+      ]
+    ])
     const { events } = build.cached()
     expect(events).toEqual(build.full().events)
     // Every done/waiting pane ties at its current turn; the reserve keeps the first 80 in status order.
     const historical = Array.from(store.getState().agentStatusByPaneKey.values())
       .filter((entry) => entry.state !== 'working')
       .map((entry) => entry.paneKey)
-    const kept = events.filter((event) => event.state !== 'working').map((event) => event.entry.paneKey)
+    const kept = events
+      .filter((event) => event.state !== 'working')
+      .map((event) => event.entry.paneKey)
     expect(kept).toEqual(historical.slice(0, 80))
     expect(kept).not.toContain(first)
   })
