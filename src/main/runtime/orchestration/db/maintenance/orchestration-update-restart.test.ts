@@ -7,12 +7,20 @@ import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
 import { OrchestrationDbMaintenance } from './orchestration-db-maintenance'
 
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof fs>()
+  return { ...actual, statfs: vi.fn(actual.statfs) }
+})
+
 let directory: string
 let db: OrchestrationDb
 let closed = false
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  vi.mocked(fs.statfs).mockImplementation(
+    (await vi.importActual<typeof fs>('node:fs/promises')).statfs
+  )
   if (!closed) {
     db?.close()
   }
@@ -40,7 +48,7 @@ function closeWriters() {
 it('rewrites a legacy file with over 200 MB unused and room on disk, preserving the last write', async () => {
   const { filename, maintenance } = await legacyFile()
   const disk = await statfs(directory)
-  vi.spyOn(fs, 'statfs').mockImplementation(async () => {
+  vi.mocked(fs.statfs).mockImplementation(async () => {
     db.db.prepare("UPDATE runs SET objective = 'last write' WHERE id = 'saved'").run()
     return { ...disk, bavail: 1_000_000, bsize: 4096 }
   })
@@ -80,7 +88,7 @@ it('does not retry an admitted rewrite that failed, even at the next update', as
 it('defers a legacy rewrite when disk is short without recording an attempted rewrite', async () => {
   const { maintenance } = await legacyFile()
   const disk = await statfs(directory)
-  vi.spyOn(fs, 'statfs').mockResolvedValue({ ...disk, bavail: 0 })
+  vi.mocked(fs.statfs).mockResolvedValue({ ...disk, bavail: 0 })
   await maintenance.reclaimOnUpdateRestart(closeWriters)
   expect(db.db.pragma('auto_vacuum', { simple: true })).toBe(0)
   expect(
