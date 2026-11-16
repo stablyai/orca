@@ -2,8 +2,8 @@ import { dirname, posix, resolve } from 'node:path'
 import type {
   SkillInstallResult,
   SkillPlacementResult
-} from '../../../shared/skill-install-contract'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills'
+} from '../../../shared/skills/installation/skill-install-contract'
+import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills/discovery/skills'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { discoverSkills } from '../discovery/skill-native-discovery'
 import { discoverSkillsInWsl } from '../discovery/skill-discovery-wsl'

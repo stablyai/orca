@@ -17,7 +17,7 @@ import {
   type NeedsSetupProjectHostOption
 } from '@/lib/workspace/creation/project-host-setup-options'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { RepoKind } from '../../../../../shared/repo-types'
+import type { RepoKind } from '../../../../../shared/repository/repo-types'
 import { pickLocalProjectLocationFolder } from './pick-local-project-folder'
 import { CloneForm, ExistingFolderForm, LocationActionButton } from './SetProjectLocationForms'
 

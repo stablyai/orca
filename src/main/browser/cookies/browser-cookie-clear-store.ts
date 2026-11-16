@@ -15,7 +15,7 @@ import { restoreEveryCookieIdentity } from './browser-cookie-identity-restore'
 import { normalizeCookiePartitionSite } from './sources/browser-cookie-source-partition'
 import { cdpCookiesFromCommand, type CdpCookie } from './browser-cdp-cookie'
 
-function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
+export function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
   if (sameSite === 'strict') {
     return 'Strict'
   }
@@ -51,7 +51,7 @@ function partitionKeyFromCdp(cookie: CdpCookie): CookieClearPartitionKey | undef
   }
 }
 
-function cookieScopeKey(
+export function cookieScopeKey(
   name: string,
   domain: string | undefined,
   path: string | undefined,
@@ -61,7 +61,7 @@ function cookieScopeKey(
   return normalizedDomain ? JSON.stringify([name, normalizedDomain, path || '/', hostOnly]) : null
 }
 
-function cdpCookieScopeKey(cookie: CdpCookie): string | null {
+export function cdpCookieScopeKey(cookie: CdpCookie): string | null {
   return cookieScopeKey(cookie.name, cookie.domain, cookie.path, !cookie.domain?.startsWith('.'))
 }
 

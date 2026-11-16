@@ -26,7 +26,7 @@ import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
@@ -157,6 +157,8 @@ export function renderTabBarSurface(
         >
           <div
             ref={tabStripRef}
+            // Tab drags clip drop targets to this box (tab-drag-collision.ts).
+            data-tab-strip-scroller=""
             data-active-tab-docked={activeTabDockSide ?? undefined}
             // Why: only `border-r` here — a strip-level `border-l` would render a heavier L-corner than the first tab's own `border-l`.
             className={[
@@ -262,7 +264,7 @@ export function renderTabBarSurface(
                 onSelectMenuOption={handleSelectCreateMenuOption}
                 onDidOpenEntry={() => setNewTabMenuOpen(false)}
               />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
+              {showStaticCreateMenuItems ? <DropdownMenuSeparator className="my-0 mb-1.5" /> : null}
             </>
           ) : null}
           {showStaticCreateMenuItems ? (

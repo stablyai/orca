@@ -35,7 +35,7 @@ describe('OrcaRuntimeService', () => {
         return true
       }
     })
-    syncSinglePty(runtime, 'pty-1')
+    await syncSinglePty(runtime, 'pty-1')
     runtime.onPtyData('pty-1', 'prompt\r\n', 100)
     await runtime.serializeMainTerminalBuffer('pty-1')
 
@@ -98,7 +98,7 @@ describe('OrcaRuntimeService', () => {
       hasRendererSerializer: () => true,
       getSize: () => ({ cols: 80, rows: 24 })
     })
-    syncSinglePty(runtime, 'pty-1')
+    await syncSinglePty(runtime, 'pty-1')
 
     runtime.onPtyData('pty-1', 'live byte', 100)
 
@@ -110,7 +110,7 @@ describe('OrcaRuntimeService', () => {
 
   it('retains cold-restored history in hidden-output recovery while renderer serialization is pending', async () => {
     const runtime = createRuntime()
-    syncSinglePty(runtime, 'cold-pty')
+    await syncSinglePty(runtime, 'cold-pty')
     const paneKey = makePaneKey('tab-1', '44444444-4444-4444-8444-444444444444')
     const generation = declarePendingPaneSerializer(paneKey, undefined)
     try {
@@ -146,7 +146,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       confirmShellForeground
     })
-    syncSinglePty(runtime, 'pty-1')
+    await syncSinglePty(runtime, 'pty-1')
 
     runtime.onPtyData('pty-1', '\x1b[?1049hTUI\x1b]133;D;137\x07shell-marker', 100)
     const shellSnapshotPromise = runtime.serializeHiddenOutputRecoveryBuffer('pty-1')

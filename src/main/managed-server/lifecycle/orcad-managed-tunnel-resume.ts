@@ -36,7 +36,9 @@ export type OrcadManagedServingCheck = (input: {
 
 export type OrcadManagedTunnelResumeOptions = {
   attempts: number
-  resolveEnvironment: (environmentId: string) => KnownRuntimeEnvironment | null
+  resolveEnvironment: (
+    environmentId: string
+  ) => KnownRuntimeEnvironment | null | Promise<KnownRuntimeEnvironment | null>
   timeoutMs: number
 }
 
@@ -105,8 +107,11 @@ export class OrcadManagedTunnelResumeRecovery {
   ): Promise<void> {
     const ownershipGeneration = this.dependencies.ownershipGenerations.get(environmentId) ?? 0
     for (let attempt = 0; attempt < options.attempts; attempt++) {
-      const resolved = this.resolveEnvironment(environmentId, active, options)
-      if (!resolved) {
+      const resolved = await this.resolveEnvironment(environmentId, active, options)
+      if (
+        !resolved ||
+        !this.stillOwned(environmentId, active, ownershipGeneration, managerGeneration)
+      ) {
         return
       }
       if (await this.probeTunnel(resolved.environment, options.timeoutMs)) {
@@ -124,10 +129,11 @@ export class OrcadManagedTunnelResumeRecovery {
     if (!this.stillOwned(environmentId, active, ownershipGeneration, managerGeneration)) {
       return
     }
-    const resolved = this.resolveEnvironment(environmentId, active, options)
+    const resolved = await this.resolveEnvironment(environmentId, active, options)
     const connectionManager = this.dependencies.getConnectionManager()
     if (
       !resolved ||
+      !this.stillOwned(environmentId, active, ownershipGeneration, managerGeneration) ||
       !connectionManager ||
       connectionManager.getConnection(active.targetId) !== active.connection
     ) {
@@ -167,7 +173,10 @@ export class OrcadManagedTunnelResumeRecovery {
     ) {
       return
     }
-    if (!this.resolveEnvironment(environment.id, active, options)) {
+    if (
+      !(await this.resolveEnvironment(environment.id, active, options)) ||
+      !this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration)
+    ) {
       return
     }
 
@@ -187,8 +196,11 @@ export class OrcadManagedTunnelResumeRecovery {
       return
     }
 
-    const current = this.resolveEnvironment(environment.id, active, options)
-    if (!current) {
+    const current = await this.resolveEnvironment(environment.id, active, options)
+    if (
+      !current ||
+      !this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration)
+    ) {
       return
     }
     const { deployment } = current
@@ -202,10 +214,13 @@ export class OrcadManagedTunnelResumeRecovery {
       target,
       connection: active.connection
     })
-    const stillCurrent = (): boolean =>
-      active.connection.getConnectGeneration() === transportGeneration &&
-      this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
-      this.resolveEnvironment(environment.id, active, options) !== null
+    const stillCurrent = async (): Promise<() => boolean> => {
+      const resolved = await this.resolveEnvironment(environment.id, active, options)
+      return () =>
+        active.connection.getConnectGeneration() === transportGeneration &&
+        this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
+        resolved !== null
+    }
     const forward = await forwardToVerifiedOrcad({
       targetId: active.targetId,
       connection: active.connection,
@@ -216,7 +231,7 @@ export class OrcadManagedTunnelResumeRecovery {
       stillCurrent
     })
     // Teardown may occur between the build's last check and recording its forward.
-    if (!forward || !stillCurrent()) {
+    if (!forward || !(await stillCurrent())()) {
       await (forward && this.dependencies.forwards.removeForwardAndWait(forward.id))
       return
     }
@@ -231,12 +246,12 @@ export class OrcadManagedTunnelResumeRecovery {
     await this.dependencies.checkServing?.(current.environment)
   }
 
-  private resolveEnvironment(
+  private async resolveEnvironment(
     environmentId: string,
     active: ActiveOrcadTunnel,
     options: OrcadManagedTunnelResumeOptions
-  ): ResolvedManagedTunnelEnvironment | null {
-    const environment = options.resolveEnvironment(environmentId)
+  ): Promise<ResolvedManagedTunnelEnvironment | null> {
+    const environment = await options.resolveEnvironment(environmentId)
     const deployment = managedTunnelAccess(
       environment,
       this.dependencies.getTargetStore()?.getTarget(active.targetId),

@@ -1,7 +1,7 @@
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../../../transport/rpc/unvalidated-rpc-request-port'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../src/shared/github/repositories/repository-identity'
-import { hasReachedAppVersion } from '../../../../../src/shared/app-version'
+import { hasReachedAppVersion } from '../../../../../src/shared/app-lifecycle/identity/app-version'
 import {
   GITHUB_EXACT_OPERATION_UNSUPPORTED,
   matchesGitHubWorkItemTarget,

@@ -5,7 +5,7 @@ import {
 } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import '../lib/workspace/ownership/worktree-runtime-owner-index'
 import '../lib/workspace/ownership/workspace-catalog-owner-index'
 

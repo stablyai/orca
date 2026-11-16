@@ -13,7 +13,7 @@ import {
   readUntil,
   sessionTabsBaseline
 } from './helpers/layout-compat-baseline'
-import type { RuntimeCapability } from '../../src/shared/protocol-version'
+import type { RuntimeCapability } from '../../src/shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'

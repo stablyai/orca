@@ -1,5 +1,5 @@
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { startCodexHooks } from '../../codex/hooks/reconciliation/codex-hook-reconcile'
 import { adoptLoginShellAgentHomes } from '../../agent-hooks/installation/agent-home-login-shell'
 import { hydrateAgentCliShellPath } from '../../agent-hooks/installation/local-agent-cli-presence'

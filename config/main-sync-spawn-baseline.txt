@@ -39,6 +39,6 @@
 1 src/main/startup/linux-runtime/linux-secret-service-probe.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 3 src/main/wsl/discovery/distro-catalog.ts
-1 src/shared/fish-binary-requirement.ts
-1 src/shared/openssh-default-shell.ts
+1 src/shared/shell/testing/fish-binary-requirement.ts
+1 src/shared/shell/launch/openssh-default-shell.ts
 1 src/shared/secure-storage/secure-file.ts

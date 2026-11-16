@@ -1,6 +1,6 @@
 import { decodeAgentChildWorkViews } from '../../../../src/shared/agent-status/child-work/agent-status-child-work-view-wire'
 import { decodeAgentSubagentsField } from '../../../../src/shared/agent-status/contracts/agent-status-subagent-snapshot'
-import { buildRunningAgentChildRowModels } from '../../../../src/shared/running-agent-child-rows'
+import { buildRunningAgentChildRowModels } from '../../../../src/shared/agent-status/presentation/running-agent-child-rows'
 import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 /** Read the optional catalog fields permissively, including hosts with no child roster. */

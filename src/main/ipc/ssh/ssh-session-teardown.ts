@@ -19,7 +19,7 @@ import { clearHostSettingOverride } from '../../../shared/execution-host/host-se
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { forgetPortForwardRestoreState } from './ssh-managed-port-forward-restore'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import {
   forgetLegacyRelayTarget,
   stopLegacyRelayBridge

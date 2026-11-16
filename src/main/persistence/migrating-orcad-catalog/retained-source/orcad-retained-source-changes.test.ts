@@ -1,8 +1,9 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../../persistence-test-harness'
 import { Store } from '../../loading-store/store'
@@ -85,21 +86,21 @@ afterEach(async () => {
 })
 
 describe('what makes a moved host changed', () => {
-  it('lifts a mark an earlier build set for a group edit, but not one for an added project', () => {
+  it('lifts a mark an earlier build set for a group edit, but not one for an added project', async () => {
     movedHost()
     store.deleteProjectGroup(store.getProjectGroups()[0]!.id)
     store.updateSshTarget(TARGET.id, { orcadFence: { ...FENCE, sourceChangedAt: 'earlier' } })
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(changedAt()).toBeUndefined()
     expect(store.getSshTarget(TARGET.id)?.orcadFence).toEqual(FENCE)
 
     store.addRepo(repo('repo-2', '/srv/tool'))
     store.updateSshTarget(TARGET.id, { orcadFence: { ...FENCE, sourceChangedAt: 'earlier' } })
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(changedAt()).toBe('earlier')
   })
 
-  it('upgrades a server version an earlier build kept, so a later group edit is no change', () => {
+  it('upgrades a server version an earlier build kept, so a later group edit is no change', async () => {
     movedHost()
     store.addRepo(repo('repo-2', '/srv/tool'))
     // What an earlier build's "keep the server's version" wrote: a baseline, no list of kept rows.
@@ -108,21 +109,21 @@ describe('what makes a moved host changed', () => {
       ...head,
       sourceBaselineFingerprint: currentOrcadSourceFingerprint(store, TARGET)
     })
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(changedAt()).toBeUndefined()
 
     store.deleteProjectGroup(store.getProjectGroups()[0]!.id)
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(changedAt()).toBeUndefined()
     store.addRepo(repo('repo-3', '/srv/docs'))
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(changedAt()).toBeDefined()
   })
 
   it('keeps the server version so a later group edit is no change, and a new project is', async () => {
     movedHost()
     store.addRepo(repo('repo-2', '/srv/tool'))
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SshConnectionStore wraps the real test store it is given.
     const claims = new SshConnectionStore(store as never).getOrcadRuntimeClaims()
     await keepOrcadServerVersion({
@@ -134,10 +135,10 @@ describe('what makes a moved host changed', () => {
     expect(changedAt()).toBeUndefined()
 
     store.deleteProjectGroup(store.getProjectGroups()[0]!.id)
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(changedAt()).toBeUndefined()
     store.addRepo(repo('repo-3', '/srv/docs'))
-    reconcileManagedOrcadSshTargets(userDataPath, store, now)
+    await reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(changedAt()).toBeDefined()
   })
 })

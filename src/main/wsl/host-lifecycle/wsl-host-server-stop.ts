@@ -1,6 +1,6 @@
 /** Stop terminals by handle, then managed-decommission orcad/daemon. Claim stopped only with zero-session census, exact serving-orcad identity and retired daemon evidence. */
 import { z } from 'zod'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import type { OrcadDecommissionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-decommission'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
@@ -121,7 +121,7 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
 
 /** Use saved environment pairing and routed RPC for removal, never the bridge's raw pairing offer. */
 export type WslHostRuntimeAccess = {
-  isReady?: (environmentId: string) => boolean
+  isReady?: (environmentId: string) => boolean | Promise<boolean>
   call: (environmentId: string, method: string, params: unknown) => Promise<unknown>
   census: (environmentId: string) => Promise<OrcadTerminalCensus>
 }

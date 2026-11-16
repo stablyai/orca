@@ -1,6 +1,6 @@
 import type { GitHubSourceCollections } from './sources/source-collections'
 import type { GitHubTaskRecordCache } from './task-records/task-record-cache'
-import type { ClassifiedError } from '../../../../shared/classified-error'
+import type { ClassifiedError } from '../../../../shared/errors/classified-error'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/checks/check-types'
 import type {
   GitHubCommentResult,
@@ -15,7 +15,7 @@ import type {
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectTable
@@ -79,7 +79,7 @@ export type GitHubSlice = {
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,

@@ -4,7 +4,7 @@ import type {
   AgentLaunchResult as AgentLaunchPublishedSurface
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeTerminalSend } from '../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'

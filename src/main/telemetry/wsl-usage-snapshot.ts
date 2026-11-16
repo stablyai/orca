@@ -4,13 +4,13 @@ import type {
   WslHostsMovedProjects,
   WslHostsPolicyState
 } from '../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import { isDrvfsLinuxPath, parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import {
   bucketWslUsageCount,
   type WslUsageSnapshotProps
-} from '../../shared/telemetry-wsl-usage-event-schemas'
+} from '../../shared/telemetry/schemas/telemetry-wsl-usage-event-schemas'
 
 export type WslUsageProjectLocation = 'distro_fs' | 'windows_drive'
 

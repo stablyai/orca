@@ -1,5 +1,6 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,

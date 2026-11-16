@@ -1,5 +1,5 @@
 import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,

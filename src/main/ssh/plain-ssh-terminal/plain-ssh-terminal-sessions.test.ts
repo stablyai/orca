@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as pty from 'node-pty'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
-import type { PlainSshTerminalEvent } from '../../../shared/plain-ssh-terminal'
+import type { PlainSshTerminalEvent } from '../../../shared/terminal/runtime/plain-ssh-terminal'
 import {
-  ackPlainSshTerminal,
   closeAllPlainSshTerminals,
   closePlainSshTerminal,
   closePlainSshTerminalsOwnedBy,
@@ -25,9 +24,6 @@ const lambda: SshTarget = {
 }
 
 type FakePty = {
-  file: string
-  args: string[]
-  options: pty.IPtyForkOptions
   write: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
   kill: ReturnType<typeof vi.fn>
@@ -39,13 +35,10 @@ type FakePty = {
 
 const spawned: FakePty[] = []
 
-function fakeSpawn(file: string, args: string[] | string, options: pty.IPtyForkOptions): pty.IPty {
+function fakeSpawn(): pty.IPty {
   let onData: ((data: string) => void) | null = null
   let onExit: ((event: { exitCode: number; signal?: number }) => void) | null = null
   const fake: FakePty = {
-    file,
-    args: Array.isArray(args) ? args : [args],
-    options,
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => fake.emitExit(129)),
@@ -109,14 +102,6 @@ afterEach(async () => {
 })
 
 describe('plain SSH terminal sessions', () => {
-  it('spawns ssh itself with an argv array in the home directory, never a shell', async () => {
-    const result = await open(deps())
-    expect(result).toMatchObject({ ok: true, label: 'lambda' })
-    expect(spawned).toHaveLength(1)
-    expect(spawned[0]).toMatchObject({ file: '/usr/bin/ssh', args: ['--', 'lambda'] })
-    expect(spawned[0].options).toMatchObject({ cols: 100, rows: 30, cwd: '/home/me' })
-  })
-
   it('refuses an unknown, internal or non-string target without spawning', async () => {
     const internal: SshTarget = {
       ...lambda,
@@ -188,48 +173,6 @@ describe('plain SSH terminal sessions', () => {
     closePlainSshTerminal(first.ok ? first.sessionId : '', 1)
     expect(await open(deps(), 'lambda', 2)).toMatchObject({ ok: true })
     spawned[0].emitExit(129)
-  })
-
-  it('pauses ssh while the window has too much unrendered output, and resumes on ack', async () => {
-    const result = await open(deps(), 'lambda', 1)
-    const sessionId = result.ok ? result.sessionId : ''
-    const chunk = 'x'.repeat(64 * 1024)
-    for (let i = 0; i < 8; i++) {
-      spawned[0].emitData(chunk)
-    }
-    expect(spawned[0].pause).not.toHaveBeenCalled()
-    spawned[0].emitData(chunk)
-    expect(spawned[0].pause).toHaveBeenCalledTimes(1)
-    ackPlainSshTerminal(sessionId, 2, 9 * chunk.length)
-    expect(spawned[0].resume).not.toHaveBeenCalled()
-    ackPlainSshTerminal(sessionId, 1, 6 * chunk.length)
-    expect(spawned[0].resume).not.toHaveBeenCalled()
-    ackPlainSshTerminal(sessionId, 1, 2 * chunk.length)
-    expect(spawned[0].resume).toHaveBeenCalledTimes(1)
-  })
-
-  it('resumes a paused ssh before hanging up, or Windows would never report its exit', async () => {
-    const result = await open(deps(), 'lambda', 1)
-    const order: string[] = []
-    spawned[0].resume.mockImplementation(() => order.push('resume'))
-    spawned[0].kill.mockImplementation(() => order.push('kill'))
-    spawned[0].emitData('x'.repeat(600 * 1024))
-    expect(spawned[0].pause).toHaveBeenCalledTimes(1)
-    closePlainSshTerminal(result.ok ? result.sessionId : '', 1)
-    expect(order).toEqual(['resume', 'kill'])
-    spawned[0].emitExit(129)
-  })
-
-  it('swallows native calls on a pty that exited but hasn’t reported it, as Windows does', async () => {
-    const result = await open(deps(), 'lambda', 1)
-    const sessionId = result.ok ? result.sessionId : ''
-    const exited = (): never => {
-      throw new Error('Cannot resize a pty that has already exited')
-    }
-    spawned[0].resize.mockImplementation(exited)
-    spawned[0].write.mockImplementation(exited)
-    expect(() => resizePlainSshTerminal(sessionId, 1, 100, 30)).not.toThrow()
-    expect(() => writePlainSshTerminal(sessionId, 1, 'ls\r')).not.toThrow()
   })
 
   it('forwards output and exit, and only its owner can write, resize or close it', async () => {

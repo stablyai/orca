@@ -1,13 +1,12 @@
 import React from 'react'
-import type { RateLimitBucket } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+import type { RateLimitBucket } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import {
   formatPoolGroupLabel,
   formatPoolWindowLabel,
   type GroupedUsagePool
 } from './usage-pool-label'
 import { formatBareUsagePercentage } from './usage-percentage-label'
-import { usageTextClass } from './usage-health-tone'
 import { useTranslate } from '../../../i18n/use-translate'
 
 // Shortest window first; an unknown window (0) sorts last. Stable, so ties keep agy's order.
@@ -73,10 +72,7 @@ export function GroupedPoolUsage({
               return (
                 <React.Fragment key={key}>
                   {index > 0 ? <span className="text-muted-foreground">·</span> : null}
-                  <span className="tabular-nums">
-                    <span className={usageTextClass(bucket.usedPercent)}>{percentage}</span>
-                    {window ? ` ${window}` : ''}
-                  </span>
+                  <span className="tabular-nums">{`${percentage} ${window}`.trim()}</span>
                 </React.Fragment>
               )
             })}

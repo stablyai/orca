@@ -1,4 +1,4 @@
-import type * as NodeCliCommandResolutionModule from '../../shared/node-cli-command-resolution'
+import type * as NodeCliCommandResolutionModule from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { EventEmitter } from 'node:events'
@@ -42,12 +42,15 @@ vi.mock('../../main/claude-accounts/runtime-auth/keychain', () => ({
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
 // PATH assertions must exercise the real withCliRuntimeOnPath filesystem probes.
-vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
-  getVersionManagerBinPaths: getVersionManagerBinPathsMock,
-  resolveCliCommand: resolveCliCommandMock
-}))
-vi.mock('../../shared/windows-console-input', () => ({
+vi.mock(
+  '../../shared/shell/command-resolution/node-cli-command-resolution',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
+    getVersionManagerBinPaths: getVersionManagerBinPathsMock,
+    resolveCliCommand: resolveCliCommandMock
+  })
+)
+vi.mock('./windows-console-input', () => ({
   stdioForWindowsInteractiveChild: stdioForWindowsInteractiveChildMock
 }))
 
@@ -175,6 +178,28 @@ describe('account CLI handlers', () => {
     } else {
       process.env.WSL_DISTRO_NAME = originalWslDistroName
     }
+  })
+
+  it('selects a Codex account by the name the user gave it', async () => {
+    const codex = {
+      accounts: [
+        { id: 'work-id', email: 'me@example.com', displayName: 'Work' },
+        { id: 'home-id', email: 'me@example.com' }
+      ],
+      activeAccountId: 'home-id'
+    }
+    callMock.mockImplementation((method: string) =>
+      Promise.resolve({
+        id: 'test',
+        ok: true,
+        result: method === 'accounts.list' ? { claude: { accounts: [] }, codex } : codex,
+        _meta: { runtimeId: 'test-runtime' }
+      })
+    )
+    const ctx = context('codex')
+    ctx.flags.set('account', 'work')
+    await ACCOUNT_HANDLERS['account select'](ctx)
+    expect(callMock).toHaveBeenCalledWith('accounts.selectCodex', { accountId: 'work-id' })
   })
 
   it('waits for physical child close before removing interrupted login credentials', async () => {

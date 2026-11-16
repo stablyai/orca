@@ -13,10 +13,10 @@ import {
   createMockDiscoveryChild
 } from '../execution/commit-message-text-generation-test-harness'
 import type { SourceControlAgentSpawnInput } from '../source-control-text-generation-types'
-import type * as Removal from '../../../shared/windows-transient-lock-removal'
+import type * as Removal from '../../../shared/file-write/windows-transient-lock-removal'
 
 const { removeTreeMock } = vi.hoisted(() => ({ removeTreeMock: vi.fn(async () => {}) }))
-vi.mock('../../../shared/windows-transient-lock-removal', async (original) => ({
+vi.mock('../../../shared/file-write/windows-transient-lock-removal', async (original) => ({
   ...(await original<typeof Removal>()),
   removeTree: removeTreeMock
 }))

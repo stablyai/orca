@@ -5,13 +5,13 @@
  * ids are rebuilt by the export's composite rewriters; user text is never touched.
  */
 import { isDeepStrictEqual } from 'node:util'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import {
   PTY_SESSION_ID_SEPARATOR,
   WORKTREE_ID_SEPARATOR
 } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   parseEditorFileId,

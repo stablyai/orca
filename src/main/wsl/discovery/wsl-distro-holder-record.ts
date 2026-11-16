@@ -6,7 +6,7 @@ import {
   writeFileDurable
 } from '../../filesystem/durable-file-write'
 import { hasErrorCode } from '../../daemon/endpoint/identity/daemon-process-inspection'
-import { isPositiveSafeInteger } from '../../../shared/positive-safe-integer'
+import { isPositiveSafeInteger } from '../../../shared/validation/positive-safe-integer'
 
 /** Per-distro record intentionally survives Orca quit so the next launch can re-adopt the surviving holder. */
 export type WslDistroHolderRecord = {

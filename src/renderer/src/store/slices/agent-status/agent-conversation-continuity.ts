@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusObservation } from '../../../../../shared/agent-status/contracts/agent-status-observation'
-import { isCommandCodeNewTurnWhileWorking } from '../../../../../shared/command-code-turn-boundary'
+import { isCommandCodeNewTurnWhileWorking } from '../../../../../shared/agent-status/output/command-code-turn-boundary'
 
 export type AgentConversationSource = Partial<
   Pick<

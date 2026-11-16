@@ -13,7 +13,7 @@ import {
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-protocol/terminal-keyboard-protocol'

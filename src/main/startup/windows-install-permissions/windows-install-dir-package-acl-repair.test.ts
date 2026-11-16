@@ -15,7 +15,7 @@ vi.mock('@orca/process-host', () => ({
   runProcessSync: runProcessSyncMock
 }))
 
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import {
   repairWindowsInstallDirPackageAcl,
   resetWindowsInstallDirAclRepairForTest,

@@ -2,7 +2,7 @@ import 'zod'
 import '../../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import '../connection/mobile-runtime-host-platform'
-import '../../../../src/shared/zod-salvage'
+import '../../../../src/shared/validation/zod-salvage'
 import '../hosts/host-status-reply-schema'
 
 export type RpcRequest = {

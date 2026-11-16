@@ -3,7 +3,7 @@ import type {
   AgentSessionBackgroundTaskRunState,
   AgentSessionBackgroundTaskState
 } from '../../../shared/agent-session/agent-session-background-task-wire'
-import { classifyClaudeBackgroundTaskKind } from '../../../shared/claude-background-task-kind'
+import { classifyClaudeBackgroundTaskKind } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-background-task-kind'
 import {
   liveClaudeTaskRunState,
   record,

@@ -1,15 +1,10 @@
+import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdown-checkpoint'
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
 import { app, type Event } from 'electron'
-import { closeAllWatchers } from '../../ipc/filesystem/watchers/filesystem-watcher-shutdown'
-import { disposeWorktreeBaseDirectoryWatchers } from '../../ipc/worktrees/creation/worktree-base-directory-watcher'
-import { stopFolderRepoGitUpgradeWatch } from '../../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../../ipc/pty/kill-all'
-import {
-  disconnectDaemon,
-  shutdownDaemon
-} from '../../daemon/providers/lifecycle/daemon-provider-state'
+import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
@@ -44,39 +39,15 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
+import { shutdownWatchersOnce } from './filesystem-watcher-quit-shutdown'
+import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
-let watcherShutdownPromise: Promise<void> | null = null
 // Config deletion is best effort, not durable state.
 const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
 // Allow pack-refs time to terminate and unlink its lock.
 const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
-
-function shutdownWatchersOnce(): Promise<void> {
-  if (state.watcherShutdownDone) {
-    return Promise.resolve()
-  }
-  if (!watcherShutdownPromise) {
-    // Await native watcher unsubscribe before Node environment teardown.
-    stopFolderRepoGitUpgradeWatch()
-    watcherShutdownPromise = Promise.allSettled([
-      closeAllWatchers(),
-      disposeWorktreeBaseDirectoryWatchers()
-    ])
-      .then((results) => {
-        for (const result of results) {
-          if (result.status === 'rejected') {
-            console.error('[filesystem-watcher] shutdown failed:', result.reason)
-          }
-        }
-      })
-      .then(() => {
-        state.watcherShutdownDone = true
-      })
-  }
-  return watcherShutdownPromise
-}
 
 function installBeforeQuitHandler(): void {
   app.on('before-quit', (event: Event) => {
@@ -209,6 +180,7 @@ function installWillQuitHandler(): void {
     // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
+    const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
       await state.runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
@@ -284,16 +256,17 @@ function installWillQuitHandler(): void {
     ]).then(() => state.runtime?.closeNotificationDismissals())
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
     const daemonTeardown = removalQuiescence.then(() =>
-      isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+      isDevParentShutdownRequested() ? daemon.shutdownDaemon() : daemon.disconnectDaemon()
     )
     // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
-    settleTeardownWithinDeadline([
+    const teardowns = [
       { name: 'worktree-removals', promise: removalShutdown },
       { name: 'install-park', promise: pendingServeSupervisorQuitCommit() },
       { name: 'state-checkpoint', promise: state.profileShutdownCheckpoint },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
+      { name: 'browser-session-cookies', promise: browserSessionCookieFlush },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
       { name: 'watchers', promise: watcherShutdown },
       { name: 'emulator', promise: emulatorShutdown },
@@ -310,6 +283,11 @@ function installWillQuitHandler(): void {
       { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
       { name: 'state', promise: storeFlush }
+    ]
+    const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
+    settleTeardownWithinDeadline([
+      ...teardowns,
+      { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
     ])
       .then((pendingTeardowns) => {
         if (pendingTeardowns.length > 0) {

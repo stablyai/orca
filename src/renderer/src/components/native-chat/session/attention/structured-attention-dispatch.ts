@@ -3,7 +3,7 @@ import {
   notificationExecutionHostForOwner,
   notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
-} from '../../../../../../shared/notification-source'
+} from '../../../../../../shared/notifications/notification-source'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import type {
@@ -93,7 +93,7 @@ function dispatchStructuredAttention(
   if (!decision.admitted) {
     return
   }
-  const row = state.agentStatusByPaneKey[paneKey]
+  const row = state.agentStatusByPaneKey.get(paneKey)
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   applyAgentAttention(decision, {
     unread: state.markAgentAttentionUnread,

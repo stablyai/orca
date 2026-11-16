@@ -1,10 +1,10 @@
 import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import * as path from 'node:path'
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
-import { InFlightPromiseDedupe } from '../../../../shared/in-flight-promise-dedupe'
-import { iterateNulDelimitedFields } from '../../../../shared/nul-delimited-fields'
+import { InFlightPromiseDedupe } from '../../../../shared/concurrency/in-flight-promise-dedupe'
+import { iterateNulDelimitedFields } from '../../../../shared/git/commands/nul-delimited-fields'
 import { wslDistroForCommand } from '../../../../shared/file-access/wsl-paths'
 import {
   gitReadOptionsForWorktree,

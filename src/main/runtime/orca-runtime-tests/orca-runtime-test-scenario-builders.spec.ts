@@ -127,20 +127,20 @@ async function publishClientHostedPage(
 }
 
 // #10333: serve publishes a ready graph without BrowserWindow; focus-requested creates must stay headless.
-const wireHeadlessServeRuntime = (): RuntimeService => {
+const wireHeadlessServeRuntime = async (): Promise<RuntimeService> => {
   const runtime = new OrcaRuntimeService(store)
   electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   return runtime
 }
 
-function publishLegacyWorkerReveal(
+async function publishLegacyWorkerReveal(
   runtime: RuntimeService,
   identity: { worktreeId: string; tabId: string; leafId: string; ptyId: string },
   title = 'Recovered legacy worker'
-): { tabId: string; identity: typeof identity } {
+): Promise<{ tabId: string; identity: typeof identity }> {
   runtime.attachWindow(TEST_WINDOW_ID)
-  runtime.syncWindowGraph(TEST_WINDOW_ID, {
+  await runtime.syncWindowGraph(TEST_WINDOW_ID, {
     tabs: [
       {
         tabId: identity.tabId,
@@ -286,10 +286,12 @@ function makePostRevealWorkerRecoveryHarness(
   }
 }
 
-function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string[] } = {}): {
+async function makePendingAgentTabActivationRuntime(
+  opts: { disabledTuiAgents?: string[] } = {}
+): Promise<{
   runtime: RuntimeService
   spawn: ReturnType<typeof vi.fn>
-} {
+}> {
   const spawn = vi.fn().mockResolvedValue({ id: 'serve-materialized-pty' })
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
@@ -327,7 +329,7 @@ function makePendingAgentTabActivationRuntime(opts: { disabledTuiAgents?: string
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, spawn }
 }
 

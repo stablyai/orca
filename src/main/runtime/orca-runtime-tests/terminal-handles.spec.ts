@@ -71,7 +71,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
-    runtime.syncWindowGraph(1, graph)
+    await runtime.syncWindowGraph(1, graph)
     const listed = await runtime.listMobileSessionTabs('branch:feature/foo')
     const mobileTab = listed.tabs.find((tab) => tab.type === 'terminal')
     if (!mobileTab?.terminal) {
@@ -107,7 +107,7 @@ describe('OrcaRuntimeService', () => {
     expect(retired).not.toHaveProperty('launchDraftCreatedAt')
 
     runtime.markRendererReloading(1)
-    const replay = runtime.syncWindowGraph(1, {
+    const replay = await runtime.syncWindowGraph(1, {
       ...graph,
       mobileSessionTabs: graph.mobileSessionTabs?.map((snapshot) => ({
         ...snapshot,
@@ -124,7 +124,7 @@ describe('OrcaRuntimeService', () => {
       )
     ).not.toHaveProperty('launchDraft')
 
-    const reconciled = runtime.syncWindowGraph(1, {
+    const reconciled = await runtime.syncWindowGraph(1, {
       ...graph,
       mobileSessionTabs: graph.mobileSessionTabs?.map((snapshot) => ({
         ...snapshot,
@@ -153,7 +153,7 @@ describe('OrcaRuntimeService', () => {
     const paneKey = makePaneKey(tabId, leafId)
 
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -179,7 +179,7 @@ describe('OrcaRuntimeService', () => {
     expect(staleHandle).toBeTruthy()
 
     // terminal.show is read-only; renderer wake/rebind publication must repair the handle surface.
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -202,7 +202,7 @@ describe('OrcaRuntimeService', () => {
 
     await expect(runtime.showTerminal(staleHandle)).rejects.toThrow('terminal_handle_stale')
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId,
@@ -268,7 +268,7 @@ describe('OrcaRuntimeService', () => {
     // Pre-allocated exported handles are the condition used by reload preservation.
     runtime.preAllocateHandleForPty('pty-agent')
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId,
@@ -293,7 +293,7 @@ describe('OrcaRuntimeService', () => {
 
     // A cold-restored leaf can have a new id while retaining the live agent PTY.
     runtime.markRendererReloading(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId,

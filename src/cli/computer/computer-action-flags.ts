@@ -8,9 +8,9 @@ import {
   getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
-  getRequiredStringFlag,
-  getRequiredStringFlagAllowingEmpty
+  getRequiredStringFlag
 } from '../arguments/flags'
+import { getFlagOrStdinPayload } from '../arguments/flag-or-stdin-payload'
 import { RuntimeClientError } from '../runtime/connection/types'
 import {
   validateDragTarget,
@@ -35,24 +35,45 @@ export function getComputerWindowTargetFlags(flags: Map<string, string | boolean
 
 export function getComputerObserveFlags(flags: Map<string, string | boolean>): {
   noScreenshot?: boolean
+  screenshotFormat?: 'png' | 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
   restoreWindow?: boolean
   windowId?: number
   windowIndex?: number
 } {
   return {
     noScreenshot: flags.has('no-screenshot') ? true : undefined,
+    ...getComputerScreenshotFlags(flags),
     ...(flags.has('restore-window') ? { restoreWindow: true } : {}),
     ...getComputerWindowTargetFlags(flags)
   }
 }
 
-export function getComputerActionObserveFlags(flags: Map<string, string | boolean>): {
-  noScreenshot?: boolean
-  restoreWindow?: boolean
-  treeDiff?: boolean
-  windowId?: number
-  windowIndex?: number
+function getComputerScreenshotFlags(flags: Map<string, string | boolean>): {
+  screenshotFormat?: 'png' | 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
 } {
+  const format = getOptionalStringFlag(flags, 'screenshot-format')
+  if (format !== undefined && format !== 'png' && format !== 'jpeg') {
+    throw new RuntimeClientError('invalid_argument', '--screenshot-format must be png or jpeg')
+  }
+  const scale = getOptionalNumberFlag(flags, 'screenshot-scale')
+  if (scale !== undefined && !(scale > 0)) {
+    throw new RuntimeClientError('invalid_argument', '--screenshot-scale must be greater than 0')
+  }
+  const maxEdge = getOptionalPositiveIntegerFlag(flags, 'screenshot-max-edge')
+  return {
+    ...(format !== undefined ? { screenshotFormat: format } : {}),
+    ...(scale !== undefined ? { screenshotScale: scale } : {}),
+    ...(maxEdge !== undefined ? { screenshotMaxEdge: maxEdge } : {})
+  }
+}
+
+export function getComputerActionObserveFlags(
+  flags: Map<string, string | boolean>
+): ReturnType<typeof getComputerObserveFlags> & { treeDiff?: boolean } {
   return {
     ...getComputerObserveFlags(flags),
     ...(flags.has('full-tree') ? {} : { treeDiff: true })
@@ -140,7 +161,7 @@ export function getComputerDragActionFlags(flags: Map<string, string | boolean>)
 export async function getComputerTextActionFlags(flags: Map<string, string | boolean>): Promise<{
   text: string
 }> {
-  return { text: await getTextPayload(flags, 'text') }
+  return { text: await getFlagOrStdinPayload(flags, 'text') }
 }
 
 export async function getComputerTypeTextActionFlags(
@@ -190,42 +211,8 @@ export async function getComputerSetValueActionFlags(
 }> {
   return {
     elementIndex: getRequiredNonNegativeIntegerFlag(flags, 'element-index'),
-    value: await getTextPayload(flags, 'value')
+    value: await getFlagOrStdinPayload(flags, 'value', { allowEmptyStdin: true })
   }
-}
-
-async function getTextPayload(
-  flags: Map<string, string | boolean>,
-  name: 'text' | 'value'
-): Promise<string> {
-  const stdinFlag = `${name}-stdin`
-  if (flags.has(stdinFlag)) {
-    if (flags.has(name)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `Use either --${name} or --${stdinFlag}, not both`
-      )
-    }
-    const payload = await readStdin()
-    if (name === 'text' && payload.length === 0) {
-      throw new RuntimeClientError('invalid_argument', 'Missing text from stdin')
-    }
-    return payload
-  }
-  return name === 'value'
-    ? getRequiredStringFlagAllowingEmpty(flags, name)
-    : getRequiredStringFlag(flags, name)
-}
-
-async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin payload requested but stdin is a TTY')
-  }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-  }
-  return Buffer.concat(chunks).toString('utf8')
 }
 
 function getOptionalPositiveNumberFlag(

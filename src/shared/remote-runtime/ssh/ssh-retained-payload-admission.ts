@@ -12,7 +12,7 @@ import {
   isSshRetainedIdentifier,
   SSH_CONNECTION_ERROR_MAX_UTF8_BYTES
 } from './ssh-retained-payload-limits'
-import { clampUtf8TextPrefix, measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { clampUtf8TextPrefix, measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 export const SSH_PROVIDER_EPOCH_MAX_UTF8_BYTES = 128
 const SSH_PLAIN_SSH_REASON_MAX_UTF8_BYTES = 64

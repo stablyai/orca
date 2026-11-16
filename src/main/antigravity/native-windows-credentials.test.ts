@@ -7,12 +7,12 @@ import {
   createFakeWindowsSecurity,
   FAKE_USER_SID,
   type FakeWindowsSecurity
-} from '../../shared/windows-security-addon.test-fixture'
+} from '../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   setWindowsSecurityForTests,
   resetWindowsSecurityLoadForTests
-} from '../../shared/windows-security-addon'
-import { hardenedDaclSddl } from '../../shared/windows-secure-dacl'
+} from '../../shared/secure-storage/windows-security-addon'
+import { hardenedDaclSddl } from '../../shared/secure-storage/windows-secure-dacl'
 import { credential, harness } from './native-account-test-fixtures'
 import { AntigravityAccountService } from './native-account-service'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'

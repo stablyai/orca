@@ -1,7 +1,7 @@
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
-} from '../../../../../../shared/managed-account-types'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
 import { getRendererAppPlatform } from '../../../../app-shell/platform/renderer-app-platform'
 
 function normalizeFolder(path: string): string {

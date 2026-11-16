@@ -25,7 +25,7 @@ import type { NativeChatTimedRow } from '../conversation/slots/native-chat-timed
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { WorkerApprovalDecision } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 // The person's own Deny: the worker gets this, word for word where its agent takes a message.

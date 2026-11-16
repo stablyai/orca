@@ -13,7 +13,7 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { createRuntimeRpcAbortError } from '../../rpc/calls/abortable-runtime-environment-call'
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { MAX_TIMER_DELAY_MS } from '../../../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../../../../shared/concurrency/timer-delay'
 
 const CACHE_LIMIT = 8
 const CACHE_TTL_MS = 30_000

@@ -2,7 +2,7 @@ import { mainAgentStatusEqual } from '../../../shared/agent-status/lifecycle/mai
 import {
   claudeTeammateIdMatchesName,
   isClaudeChildTurnEndEvent
-} from '../../../shared/claude-subagent-roster'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {

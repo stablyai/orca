@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 

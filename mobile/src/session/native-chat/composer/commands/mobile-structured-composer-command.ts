@@ -14,7 +14,7 @@ import {
   conversationCommandReply,
   heldConversationCommandParts,
   structuredConversationCommandHold
-} from '../../../../../../src/shared/structured-conversation-command-hold'
+} from '../../../../../../src/shared/native-chat/input/commands/structured-conversation-command-hold'
 import { mobileAgentSessionWriteNoticeText } from '../../agent-session/agent-session-write-notice-copy'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { translate } from '../../../../i18n/mobile-i18n'
@@ -56,7 +56,8 @@ export async function dispatchMobileStructuredCommand(input: {
       input.text,
       input.controller.changeThreadGoal !== undefined,
       input.controller.agent,
-      input.controller.snapshot
+      input.controller.snapshot,
+      input.controller.openMcpPanel !== undefined
     )
   ) {
     return input.pending.current ? 'rejected' : null

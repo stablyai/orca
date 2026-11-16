@@ -27,8 +27,10 @@ import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
 
 import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import './use-terminal-bulk-close-actions'
-import '../store/slices/editor/types/open-file.test-fixture'
+import { makeOpenFile } from '../store/slices/editor/types/open-file.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
+import { EMPTY_EDITOR_BUFFER_VIEW_INDEX } from '../store/slices/editor/buffers/editor-buffer-views'
+import { registerEditorFrameFlush } from './editor/save/flush/editor-pending-flush'
 
 const confirmBulkClose = vi.hoisted(() => vi.fn<() => Promise<boolean>>())
 vi.mock('./confirmation-dialog-context', () => ({
@@ -165,6 +167,108 @@ describe('handleTerminalWorkspaceKeyDown editor.save', () => {
         ? { contentType: 'editor', entityId: 'floating-file' }
         : null
     expect(pressCmdS()).toEqual([{ fileId: 'floating-file' }])
+  })
+})
+
+describe('handleTerminalWorkspaceKeyDown editor.toggleChangesView', () => {
+  const setEditorViewMode = vi.fn()
+  const boundController: TerminalActivationController = {
+    ...controller,
+    keybindings: { 'editor.toggleChangesView': ['Mod+Alt+Shift+K'] }
+  }
+
+  function pressToggle(repeat = false): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', {
+      key: 'K',
+      code: 'KeyK',
+      metaKey: true,
+      altKey: true,
+      shiftKey: true,
+      repeat,
+      cancelable: true
+    })
+    Object.defineProperty(event, 'target', { value: document.body })
+    vi.spyOn(event, 'stopPropagation')
+    handleTerminalWorkspaceKeyDown(event, boundController, 'darwin')
+    return event
+  }
+
+  beforeEach(() => {
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+    setEditorViewMode.mockClear()
+    mocks.state = {
+      activeView: 'terminal',
+      activeTabType: 'editor',
+      activeFileId: '/repo/worktree/src/app.ts',
+      getActiveTab: () => null,
+      openFiles: [
+        makeOpenFile({
+          id: '/repo/worktree/src/app.ts',
+          worktreeId: controller.activeWorktreeId!,
+          relativePath: 'src/app.ts'
+        })
+      ],
+      editorViewMode: {},
+      setEditorViewMode,
+      ...EMPTY_EDITOR_BUFFER_VIEW_INDEX
+    }
+  })
+
+  it('toggles the active file between edit and changes like the toolbar', () => {
+    expect(pressToggle().defaultPrevented).toBe(true)
+    expect(setEditorViewMode).toHaveBeenLastCalledWith('/repo/worktree/src/app.ts', 'changes')
+    mocks.state.editorViewMode = { '/repo/worktree/src/app.ts': 'changes' }
+    pressToggle()
+    expect(setEditorViewMode).toHaveBeenLastCalledWith('/repo/worktree/src/app.ts', 'edit')
+  })
+
+  it('flushes a custom editor frame before leaving it, like the toolbar', async () => {
+    const flush = Promise.withResolvers<boolean>()
+    const unregister = registerEditorFrameFlush('/repo/worktree/src/app.ts', () => flush.promise)
+    try {
+      expect(pressToggle().defaultPrevented).toBe(true)
+      expect(setEditorViewMode).not.toHaveBeenCalled()
+      flush.resolve(true)
+      await vi.waitFor(() =>
+        expect(setEditorViewMode).toHaveBeenCalledWith('/repo/worktree/src/app.ts', 'changes')
+      )
+    } finally {
+      unregister()
+    }
+  })
+
+  it('keeps claimed chords and held repeats away from Monaco without toggling again', () => {
+    const repeat = pressToggle(true)
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(repeat.stopPropagation).toHaveBeenCalled()
+    expect(setEditorViewMode).not.toHaveBeenCalled()
+  })
+
+  it('leaves the chord unclaimed when the toolbar has no Changes toggle', () => {
+    mocks.state.openFiles = [
+      makeOpenFile({
+        id: '/repo/worktree/src/app.ts',
+        filePath: '/repo/worktree/notes.ipynb',
+        worktreeId: controller.activeWorktreeId!,
+        relativePath: 'notes.ipynb'
+      })
+    ]
+    expect(pressToggle().defaultPrevented).toBe(false)
+    expect(setEditorViewMode).not.toHaveBeenCalled()
+  })
+
+  it('leaves the chord unclaimed on image tabs, which load as binary', () => {
+    mocks.state.openFiles = [
+      makeOpenFile({
+        id: '/repo/worktree/src/app.ts',
+        filePath: '/repo/worktree/logo.png',
+        worktreeId: controller.activeWorktreeId!,
+        relativePath: 'logo.png'
+      })
+    ]
+    expect(pressToggle().defaultPrevented).toBe(false)
+    expect(setEditorViewMode).not.toHaveBeenCalled()
   })
 })
 

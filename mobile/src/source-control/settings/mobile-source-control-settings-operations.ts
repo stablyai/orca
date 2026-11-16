@@ -6,7 +6,7 @@ import { settingsMember, settingsField } from '../../settings/mobile-settings-pr
 import {
   normalizePRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../src/shared/review-refresh-policy'
+} from '../../../../src/shared/source-control/hosted-review/review-refresh-policy'
 
 export type MobileSourceControlSettings = {
   groupOrder: SourceControlGroupOrder

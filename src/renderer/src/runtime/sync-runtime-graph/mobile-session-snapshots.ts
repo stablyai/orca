@@ -1,5 +1,5 @@
 import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
   graphState,
@@ -7,7 +7,6 @@ import {
   mobilePublicationEpoch
 } from './graph-state'
 import {
-  buildMobileSessionAgentStatusByWorktree,
   buildMobileSessionWorktreeInputs,
   getOpenFileIndexes,
   excludeCrossPlacedEditorFiles
@@ -27,7 +26,11 @@ import {
 import { buildMobileTerminalSurfaceTabs } from './mobile-session-terminal-tabs'
 import { buildMobileMarkdownTab, buildMobileFileTab } from './mobile-session-editor-tabs'
 import { buildMobileBrowserTab } from './mobile-session-browser-tabs'
-import { canReuseMobileSessionSnapshot } from './mobile-session-capture'
+import { buildBrowserPageInventory } from './browser-page-inventory'
+import {
+  canReuseBrowserPageInventory,
+  canReuseMobileSessionSnapshot
+} from './mobile-session-capture'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { AppState } from '@/store/types'
@@ -51,10 +54,6 @@ export function buildMobileSessionTabSnapshots(
     browserTabsByWorktree,
     openFileIndexes,
     editorDraftVersionByFileId: getEditorDraftVersionByFileId(state.editorDrafts, state.openFiles),
-    agentStatusByWorktreeId: buildMobileSessionAgentStatusByWorktree(
-      state.agentStatusByPaneKey ?? {},
-      state.tabsByWorktree
-    ),
     generatedTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     terminalTheme: getMobileTerminalTheme(state, systemPrefersDark)
   }
@@ -214,6 +213,11 @@ export function buildMobileSessionTabSnapshots(
       activeTabType: active?.type ?? null,
       ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),
       ...(tabGroupLayout ? { tabGroupLayout } : {}),
+      // Same array object: equality checks and the wire base stop at identity, not at N rows.
+      browserPageInventory:
+        cached?.content.browserPageInventory && canReuseBrowserPageInventory(cached.inputs, inputs)
+          ? cached.content.browserPageInventory
+          : buildBrowserPageInventory(inputs),
       tabs
     }
     const candidateVersion = ++graphState.mobileSessionSnapshotVersion

@@ -1,8 +1,8 @@
-import type { Repo } from '../../../shared/repo-types'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { getConnectionExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { normalizeGhAccountBinding } from '../../../shared/github/accounts/account-binding'
-import { isGitRepoKind } from '../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../shared/repository/repo-kind'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {

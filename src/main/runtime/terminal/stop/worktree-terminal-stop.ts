@@ -2,7 +2,7 @@ import { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/te
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
-import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace-sleep'
+import { WORKTREE_TERMINALS_SLEEPING_ERROR } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult

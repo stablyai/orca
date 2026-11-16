@@ -20,6 +20,7 @@ import type {
 import type { TitleDisplayClear } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 
 export type RuntimeMobileSessionProjectionHost = {
+  getRendererStatus?(paneKey: string): { row: AgentStatusEntry | undefined } | undefined
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
@@ -32,7 +33,7 @@ export type RuntimeMobileSessionProjectionHost = {
   ): boolean
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
-  getStatusSnapshot(): AgentStatusIpcPayload[]
+  getStatusRows(paneKey: string, terminalHandle: string | null): AgentStatusIpcPayload[]
   getLeafKey(tabId: string, leafId: string): string
   findPty(
     worktreeId: string,

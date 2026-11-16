@@ -13,7 +13,7 @@ import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImpo
 import { useTranslate } from '@/i18n/use-translate'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
-import type { BrowserSessionProfile } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type DetectedBrowserEntry = {
   family: string

@@ -1,7 +1,7 @@
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { bundledSkillInstallAction } from '../../../shared/bundled-skill-summary'
+import { bundledSkillInstallAction } from '../../../shared/skills/bundled/bundled-skill-summary'
 import { nativeBundledSkillFilesystem } from './bundled-skill-filesystem'
 import { previewBundledSkillInstall } from './bundled-skill-installation'
 import { BUNDLED_SKILL_SOURCES } from './bundled-skill-sources'

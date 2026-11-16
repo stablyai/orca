@@ -43,6 +43,17 @@ export async function readContainedPluginArtifactBytes(
   return Buffer.concat(chunks, totalBytes)
 }
 
+/** Whether a real path lies strictly inside the plugin's real root. */
+export function isInsidePluginRoot(rootReal: string, artifactReal: string): boolean {
+  const fromRoot = relative(rootReal, artifactReal)
+  return (
+    fromRoot.length > 0 &&
+    !isAbsolute(fromRoot) &&
+    fromRoot !== '..' &&
+    !fromRoot.startsWith(`..${sep}`)
+  )
+}
+
 export async function resolvePathFromRealRoot(
   rootDir: string,
   rootReal: string,
@@ -51,13 +62,7 @@ export async function resolvePathFromRealRoot(
   maxBytes?: number
 ): Promise<string> {
   const artifactReal = await realpath(resolve(rootDir, ...relativePath.split(/[\\/]/)))
-  const fromRoot = relative(rootReal, artifactReal)
-  if (
-    fromRoot.length === 0 ||
-    isAbsolute(fromRoot) ||
-    fromRoot === '..' ||
-    fromRoot.startsWith(`..${sep}`)
-  ) {
+  if (!isInsidePluginRoot(rootReal, artifactReal)) {
     throw new Error('resolves outside the plugin directory')
   }
   const artifactStat = await stat(artifactReal)

@@ -6,7 +6,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({ root: '', get: vi.fn() }))
-vi.mock('../../../shared/app-environment', () => ({
+vi.mock('../../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => state.root })
 }))
 vi.mock('node:https', () => ({ get: state.get }))

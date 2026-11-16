@@ -6,7 +6,7 @@ import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execut
 import type {
   ProjectHostSetup,
   ProjectHostSetupState
-} from '../../../../../../shared/project-types'
+} from '../../../../../../shared/project/project-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { translateHostDisplayLabel } from '../../../sidebar/execution-host-label'

@@ -44,7 +44,7 @@ import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime
 import { ServeBrowserTabs } from '../../browser/headless/serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/tabs/browser-tab-listing'
 import { readSavedBrowserPageAnnotations } from '../../browser/tabs/browser-tab-annotations'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../browser/headless/serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -78,7 +78,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract setWorkspaceSessionForWorktree(
@@ -147,7 +147,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       this.mobileTookFloor(ptyId, clientId, previousFloor, isCurrent)
   })
 
-  protected readonly serveBrowserTabs = new ServeBrowserTabs({
+  readonly serveBrowserTabs = new ServeBrowserTabs({
     backend: () => (this.getAvailableAuthoritativeWindow() ? null : this.offscreenBrowserBackend),
     livePageIds: (worktreeId) =>
       new Set(

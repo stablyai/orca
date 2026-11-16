@@ -11,7 +11,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import type {
   WorkspaceSleepHost,
   WorkspaceSleepTarget
-} from '../../../../../../shared/workspace-sleep'
+} from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'

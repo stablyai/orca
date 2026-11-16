@@ -1,10 +1,10 @@
 import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
-} from '../../../shared/windows-transient-lock-removal'
+} from '../../../shared/file-write/windows-transient-lock-removal'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { parseWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
