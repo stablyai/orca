@@ -18,7 +18,7 @@ import {
 } from '../node-runtime/managed-runtime-release'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
-import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
+import { providerLaunchFailed } from '../provider-process/provider-executable-missing'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
 
 const PROBE_TIMEOUT_MS = 90_000
@@ -132,14 +132,11 @@ async function observedStartFailure(
   if (error instanceof AgentModelCatalogProbeError && error.reason === 'timeout') {
     return { kind: 'timeout', timeoutMs }
   }
-  if (!probe.exit || !probe.connection) {
+  if (providerLaunchFailed(error) || !probe.exit || !probe.connection) {
     return null
   }
   const stderr = await probe.connection.stderrTailAfterExit()
-  // A supervisor's spawn report is a missing launch, not the runtime's own exit.
-  return supervisedProviderSpawnFailure(probe.exit.code, stderr)
-    ? null
-    : { kind: 'exit', exit: probe.exit, stderr }
+  return { kind: 'exit', exit: probe.exit, stderr }
 }
 
 /** Initializes from a disposable folder, then runs `check` there within the same deadline; rejects

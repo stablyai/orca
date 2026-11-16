@@ -12,6 +12,7 @@ import { isExistingPersistedProfile } from '../../../../shared/sidebar-list/sect
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../../shared/status-bar/usage-percentage-display-change-notice'
 import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace/status/workspace-statuses'
 import {
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -226,6 +227,9 @@ export function normalizeLoadedUiState(
     explorerDisplayRootByWorktree,
     gitGraphFiltersByWorktree: normalizeGitGraphFilters(parsed.ui?.gitGraphFiltersByWorktree),
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
+      parsed.ui?.notificationsMutedByWorktree
+    ),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesReorderedDefaultRepaired: true,

@@ -4,7 +4,7 @@ import { readWorktreeFirstPage } from '../../worktree/catalog/worktree-catalog-f
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
 import { useQueryClient } from '@tanstack/react-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

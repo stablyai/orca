@@ -53,7 +53,8 @@ function getRemoveProjectDescription(
 
 function selectSetupHostLabel(state: AppState, setup: ProjectHostSetup, t: Translate): string {
   const label = selectExecutionHostDisplayLabel(state, setup.hostId, {
-    sshEnvironmentId: setup.runtimeOwnerEnvironmentId ?? null
+    sshEnvironmentId: setup.runtimeOwnerEnvironmentId ?? null,
+    t
   })
   const parsed = parseExecutionHostId(setup.hostId)
   const rawId =

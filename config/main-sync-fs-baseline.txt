@@ -438,6 +438,8 @@
 1 src/main/ports/port-scan-command-client.ts
 1 src/main/ports/port-scan-command-execution.ts
 2 src/main/provider-process/provider-executable-missing.ts
+# One cached startup capability check per state directory, before choosing native versus legacy dispatch.
+3 src/main/provider-process/provider-ownership-journal.ts
 5 src/main/providers/local-pty/local-pty-executable-spawn.ts
 1 src/main/providers/local-pty/local-pty-session-operations.ts
 1 src/main/providers/local-pty/local-pty-shell-ready-wrapper-root.ts

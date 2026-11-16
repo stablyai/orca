@@ -656,6 +656,9 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
+      - name: Build host provider exec helper
+        run: node config/scripts/native-build/posix/build-provider-exec.mjs --host-compiler
+
       - name: Install pinned Codex CLI
         run: |
           set -euo pipefail

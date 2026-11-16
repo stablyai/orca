@@ -93,6 +93,8 @@ export type PersistedUIState = {
   _explorerDisplayRootMigrated?: boolean
   explorerDisplayRootByWorktree?: Record<string, string>
   showDotfilesByWorktree?: Record<string, boolean>
+  /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
+  notificationsMutedByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
   /** Agents host scope stays separate from navigation filters; null means all hosts. */
   agentsVisibleHostIds?: VisibleWorkspaceHostIds
@@ -208,6 +210,8 @@ export type PersistedUIState = {
   codexSharedSettingsNoticeSeen?: boolean
   /** One-shot sidebar note announcing the reworked experimental worktree cards; set on first evaluation, so absent means not yet decided. */
   worktreeCardsUpdateNoticeSeen?: boolean
+  /** One-shot sidebar note inviting Classic users to preview the experimental worktree cards; set when shown. */
+  worktreeCardsIntroNoticeSeen?: boolean
   /** Retired launch card for the speech model update; kept because a paired client from that build still sends it. */
   speechModelUpdateNoticeSeen?: boolean
   /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */

@@ -253,14 +253,19 @@ export function hydrateUnexpectedSignoutDismissal(
   }
 }
 
-/** Normalizes persisted explorer records before hydration, including malformed or absent legacy values. */
-export function sanitizeExplorerPreferences(
+/** Normalizes persisted per-worktree explorer and notification records before hydration, including malformed or absent legacy values. */
+export function sanitizePerWorktreePreferences(
   ui: PersistedUIState
-): Pick<AppState, 'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree'> {
+): Pick<
+  AppState,
+  'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree' | 'notificationsMutedByWorktree'
+> {
   return {
     explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
       ui.explorerDisplayRootByWorktree
     ),
-    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree)
+    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
+    // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
+    notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
   }
 }

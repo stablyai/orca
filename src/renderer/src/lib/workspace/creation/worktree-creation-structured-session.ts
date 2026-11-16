@@ -64,6 +64,7 @@ export async function launchStructuredWorktreeSession(
   }
   // Freeze the first send; unsent typing stays with the composer until its replacement is ready.
   useAppStore.getState().updatePendingWorktreeCreation(args.creationId, {
+    worktreeId: args.worktreeId,
     chatInputHandedOff: true,
     chatHandedOffAt: Date.now()
   })
