@@ -9,16 +9,18 @@ const bundles = mobileWebAppDependenciesPresent()
 const describeEngines = bundles ? describe : describe.skip
 
 const THEME = { colorScheme: 'light', tokens: {} }
-const REPORT =
-  '<button id="show-b" onclick="document.getElementById(\'a\').hidden=true;document.getElementById(\'b\').hidden=false">B</button>' +
-  '<section id="a">Finance</section><section id="b" hidden>Retail</section>' +
-  '<script>window.reached = {}' +
-  ';try { if (document.cookie.indexOf("page-secret") !== -1) window.reached.cookie = true } catch (_) {}' +
-  ';try { if (localStorage.getItem("page-secret")) window.reached.storage = true } catch (_) {}' +
-  ';try { window.reached.page = window.top.document.title } catch (_) {}' +
-  ';try { window.reached.frame = window.parent.document.title } catch (_) {}' +
-  ';fetch("/").then(function () { window.reached.fetch = true }, function () {})' +
-  '.then(function () { window.settled = true })</script>'
+const report = (origin) => `
+<button id="show-b" onclick="document.getElementById('a').hidden=true;document.getElementById('b').hidden=false">B</button>
+<section id="a">Finance</section><section id="b" hidden>Retail</section>
+<script>
+window.reached = {}
+try { if (document.cookie.indexOf('page-secret') !== -1) window.reached.cookie = true } catch (_) {}
+try { if (localStorage.getItem('page-secret')) window.reached.storage = true } catch (_) {}
+try { window.reached.page = window.top.document.title } catch (_) {}
+try { window.reached.frame = window.parent.document.title } catch (_) {}
+fetch('${origin}/').then(function () { window.reached.fetch = true }, function () {})
+  .then(function () { window.settled = true })
+</script>`
 
 const browsers = {}
 let server = null
@@ -35,10 +37,6 @@ beforeAll(async () => {
   const contract =
     await import('../../../../mobile/src/session/native-chat/visual/mobile-native-chat-visual-frame-contract')
   framePath = contract.MOBILE_NATIVE_CHAT_VISUAL_FRAME_PATH
-  documentMessage = contract.mobileNativeChatVisualDocumentMessage(
-    buildNativeChatVisualDocument({ html: REPORT, channel: 'c1', theme: THEME }),
-    'Report'
-  )
   const shellCsp = await readShellCsp()
   const frame = await readChatVisualFrame()
   server = createServer((request, response) => {
@@ -58,6 +56,10 @@ beforeAll(async () => {
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${server.address().port}`
+  documentMessage = contract.mobileNativeChatVisualDocumentMessage(
+    buildNativeChatVisualDocument({ html: report(origin), channel: 'c1', theme: THEME }),
+    'Report'
+  )
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
   browsers.chromium = await chromium.launch({
     headless: true,
