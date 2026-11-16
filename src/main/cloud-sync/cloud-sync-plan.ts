@@ -21,8 +21,8 @@ export type IndexEntry = {
 
 export type LocalStat = { size: number; mtimeMs: number } | null
 
-/** Which rows are on for a workspace (this member's choice on this computer). */
-export type CloudSyncChoice = { context: boolean; mirror: boolean }
+/** Whether `.context` sync is on for a workspace (this member's choice on this computer). */
+export type CloudSyncChoice = { context: boolean }
 
 export type SyncLimits = {
   maxFiles: number
@@ -30,25 +30,16 @@ export type SyncLimits = {
   maxFileBytes: number
 }
 
-// Decimal units, as the window shows them ("2.0 GB", "100 MB").
+// Decimal units, as the window shows them ("250 MB", "50 MB").
 export const CONTEXT_LIMITS: SyncLimits = {
   maxFiles: 5_000,
   maxBytes: 250_000_000,
   maxFileBytes: 50_000_000
 }
-export const MIRROR_LIMITS: SyncLimits = {
-  maxFiles: 100_000,
-  maxBytes: 2_000_000_000,
-  maxFileBytes: 100_000_000
-}
 
-export function limitsFor(choice: CloudSyncChoice): SyncLimits {
-  return choice.mirror ? MIRROR_LIMITS : CONTEXT_LIMITS
-}
-
-export function limitsInfo(choice: CloudSyncChoice): CloudSyncLimitsInfo {
-  const limits = limitsFor(choice)
-  return { maxBytes: limits.maxBytes, maxFileBytes: limits.maxFileBytes }
+export const CONTEXT_LIMITS_INFO: CloudSyncLimitsInfo = {
+  maxBytes: CONTEXT_LIMITS.maxBytes,
+  maxFileBytes: CONTEXT_LIMITS.maxFileBytes
 }
 
 export function emptySyncState(
@@ -69,7 +60,7 @@ export function emptySyncState(
     editedHere: 0,
     skippedLarge: 0,
     overLimit: 0,
-    limits: limitsInfo(choice),
+    limits: CONTEXT_LIMITS_INFO,
     error: null
   }
 }
@@ -164,7 +155,7 @@ export function planSync(input: {
 /**
  * Safety net for anything the watch missed. The VM's watcher can miss a directory created along
  * with its parent (`mkdir -p .context/shots`), so small folders are re-checked often (a few
- * calls each) and large mirrors less often: 30 ms per file, between 30 s and 10 min, and never
+ * calls each) and large ones less often: 30 ms per file, between 30 s and 10 min, and never
  * more than 5% of the time (a slow pass, e.g. on an image without files.statMany, waits longer).
  */
 export const SAFETY_TICK_MS = 30_000

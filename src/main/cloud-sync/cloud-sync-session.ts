@@ -12,23 +12,21 @@ import {
 } from './cloud-sync-local-writes'
 import { isContextPath, isSafeSyncPath } from './cloud-sync-paths'
 import {
+  CONTEXT_LIMITS,
+  CONTEXT_LIMITS_INFO,
   emptySyncState,
   safetyIntervalMs,
   SAFETY_TICK_MS,
-  limitsFor,
-  limitsInfo,
   planSync,
   type LocalStat,
   type RemoteEntry
 } from './cloud-sync-plan'
 import {
-  filterIncluded,
   isWaitingError,
-  listScope,
+  listContext,
   resolveCloudWorktree,
   statFiles,
-  type SyncCall,
-  type SyncScope
+  type SyncCall
 } from './cloud-sync-remote'
 import type { CloudSyncChoice, CloudSyncIndex, CloudSyncStore } from './cloud-sync-store'
 import {
@@ -59,7 +57,7 @@ export type CloudSyncSessionDeps = {
 export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
   const now = deps.now ?? Date.now
   const log = (line: string): void => deps.log?.(`[cloud-sync] ${deps.workspaceId}: ${line}`)
-  let choice = deps.choice
+  const choice = deps.choice
   let stopped = false
   let worktree: { selector: string; root: string } | null = null
   let index: CloudSyncIndex | null = null
@@ -80,11 +78,9 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
   })
 
   const publish = (patch: Partial<CloudSyncState>): void => {
-    state = { ...state, ...patch, choice, limits: limitsInfo(choice) }
+    state = { ...state, ...patch, choice, limits: CONTEXT_LIMITS_INFO }
     deps.emit(state)
   }
-
-  const scope = (): SyncScope => (choice.mirror ? 'workspace' : 'context')
 
   async function loadIndex(): Promise<CloudSyncIndex> {
     index ??= await deps.store.readIndex(deps.workspaceId, deps.folder)
@@ -141,11 +137,10 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
     lastFullPassAt = now()
     const { selector } = await ensureWorktree()
     const current = await loadIndex()
-    const limits = limitsFor(choice)
     if (state.lastSyncedAt === null) {
       publish({ phase: 'starting', error: null })
     }
-    const listed = await listScope(deps.call, selector, scope(), limits.maxFiles, abort.signal)
+    const listed = await listContext(deps.call, selector, CONTEXT_LIMITS.maxFiles, abort.signal)
     const remote = await statFiles(deps.call, selector, listed.paths, abort.signal)
     const paths = new Set([...remote.keys(), ...Object.keys(current.entries)])
     // Manifest cost only (listing + stat), not the copying a first pass does.
@@ -156,8 +151,8 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
   async function incrementalPass(paths: string[]): Promise<void> {
     const { selector } = await ensureWorktree()
     await loadIndex()
-    const included = await filterIncluded(deps.call, selector, scope(), paths, abort.signal)
-    const remote = await statFiles(deps.call, selector, [...included], abort.signal)
+    const included = paths.filter((path) => isSafeSyncPath(path) && isContextPath(path))
+    const remote = await statFiles(deps.call, selector, included, abort.signal)
     await apply({ remote, paths: new Set(paths), scoped: new Set(paths), truncated: 0 })
   }
 
@@ -168,7 +163,7 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
     truncated: number
   }): Promise<void> {
     const current = index!
-    const limits = limitsFor(choice)
+    const limits = CONTEXT_LIMITS
     await mkdir(deps.folder, { recursive: true })
     const local = new Map<string, LocalStat>()
     for (const path of input.paths) {
@@ -176,11 +171,9 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
         local.set(path, await localStatAt(deps.folder, path))
       }
     }
-    // Paths that left scope (mirror turned off) are removed like cloud deletions.
+    // Anything outside `.context` (copied by an older build) is removed like a cloud deletion.
     const remote = new Map(
-      [...input.remote].filter(
-        ([path]) => isSafeSyncPath(path) && (choice.mirror || isContextPath(path))
-      )
+      [...input.remote].filter(([path]) => isSafeSyncPath(path) && isContextPath(path))
     )
     const plan = planSync({
       remote,
@@ -232,7 +225,7 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
     if (!worktree) {
       return
     }
-    const batch = readWatchEvent(event, worktree.root, choice.mirror)
+    const batch = readWatchEvent(event, worktree.root)
     if (batch.kind === 'ready') {
       watchRetryMs = WATCH_RETRY_MIN_MS
     } else if (batch.kind === 'rescan') {
@@ -306,11 +299,6 @@ export function createCloudSyncSession(deps: CloudSyncSessionDeps) {
     /** This computer woke, or the connection came back: anything may have changed meanwhile. */
     resync(): Promise<void> {
       void openWatch()
-      return requestFullPass()
-    },
-    setChoice(next: CloudSyncChoice): Promise<void> {
-      choice = next
-      publish({})
       return requestFullPass()
     },
     /** Stops syncing; the files stay (asleep). */

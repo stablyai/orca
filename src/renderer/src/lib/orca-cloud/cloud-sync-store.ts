@@ -59,13 +59,9 @@ export function useCloudSync(workspaceId: string): CloudSyncView | null {
   return useSyncExternalStore(subscribe, () => views.get(workspaceId) ?? null)
 }
 
-export function isCloudSyncAvailable(): boolean {
-  return api() !== null
-}
-
 export async function setCloudSyncChoice(
   workspaceId: string,
-  patch: { context?: boolean; mirror?: boolean }
+  patch: { context?: boolean }
 ): Promise<void> {
   const bridge = api()
   const current = views.get(workspaceId)
@@ -96,41 +92,4 @@ export function cloudSyncRemovalPreview(
 export function seedCloudSyncView(view: CloudSyncView): void {
   requested.add(view.workspaceId)
   put(view)
-}
-
-/** "Mirror to this computer…" from the workspace menu: the popover opens on the sync section. */
-const focusRequests = new Set<string>()
-const focusListeners = new Set<() => void>()
-/** Lets the workspace menu finish closing (it hands focus back to its trigger) before the popover opens. */
-const MENU_CLOSE_SETTLE_MS = 150
-
-export function requestCloudSyncFocus(workspaceId: string): void {
-  setTimeout(() => {
-    focusRequests.add(workspaceId)
-    for (const listener of focusListeners) {
-      listener()
-    }
-  }, MENU_CLOSE_SETTLE_MS)
-}
-export function takeCloudSyncFocus(workspaceId: string): boolean {
-  return focusRequests.delete(workspaceId)
-}
-/** Calls `listener` when the menu asks for this workspace's sync section (an event, not state). */
-export function onCloudSyncFocusRequest(workspaceId: string, listener: () => void): () => void {
-  const wrapped = (): void => {
-    if (focusRequests.has(workspaceId)) {
-      listener()
-    }
-  }
-  focusListeners.add(wrapped)
-  return () => focusListeners.delete(wrapped)
-}
-export function useCloudSyncFocusRequest(workspaceId: string): boolean {
-  return useSyncExternalStore(
-    (listener) => {
-      focusListeners.add(listener)
-      return () => focusListeners.delete(listener)
-    },
-    () => focusRequests.has(workspaceId)
-  )
 }

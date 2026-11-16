@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -61,6 +61,7 @@ async function setup() {
   return {
     vm,
     service,
+    userData,
     folder,
     views,
     opened,
@@ -82,7 +83,7 @@ describe('cloud sync service', () => {
     expect(await readFile(join(t.folder, '.context/plan.md'), 'utf8')).toBe('plan')
     const view = await t.service.getState('ws')
     expect(view).toMatchObject({
-      choice: { context: true, mirror: false },
+      choice: { context: true },
       displayPath: '~/orca/cloud/Hello-World/my-ws/.context'
     })
     await t.service.openFolder('ws')
@@ -90,15 +91,21 @@ describe('cloud sync service', () => {
     await t.service.dispose()
   })
 
-  it('opens the workspace folder once the mirror is on', async () => {
+  it('loads a choice saved by an older build that also had a mirror field', async () => {
     const t = await setup()
-    await t.service.reconcile()
-    await t.synced()
-    const view = await t.service.setChoice('ws', { mirror: true })
-    expect(view?.displayPath).toBe('~/orca/cloud/Hello-World/my-ws')
-    await vi.waitFor(async () =>
-      expect(await readFile(join(t.folder, 'src/a.ts'), 'utf8')).toBe('a')
+    await mkdir(join(t.userData, 'orca-cloud-sync'), { recursive: true })
+    await writeFile(
+      join(t.userData, 'orca-cloud-sync', 'choices.json'),
+      JSON.stringify({ version: 1, workspaces: { ws: { context: false, mirror: true } } })
     )
+    expect(await t.service.getState('ws')).toMatchObject({
+      choice: { context: false },
+      phase: 'off'
+    })
+    const view = await t.service.setChoice('ws', { context: true })
+    expect(view?.choice).toEqual({ context: true })
+    await t.synced()
+    expect(await readFile(join(t.folder, '.context/plan.md'), 'utf8')).toBe('plan')
     await t.service.dispose()
   })
 
@@ -149,7 +156,7 @@ describe('cloud sync service', () => {
     await t.service.dispose()
   })
 
-  it('turning both off removes the copy', async () => {
+  it('turning sync off removes the copy', async () => {
     const t = await setup()
     await t.service.reconcile()
     await t.synced()

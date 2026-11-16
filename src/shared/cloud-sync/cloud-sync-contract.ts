@@ -1,5 +1,5 @@
-// Cloud → this computer file sync for Orca Cloud workspaces: `.context` (on by default) and an
-// optional read-only mirror of the whole workspace. Main owns the sync; the window shows state.
+// Cloud → this computer file sync for Orca Cloud workspaces: the `.context` folder (plans and
+// screenshots, on by default). Main owns the sync; the window shows state.
 
 export const ORCA_CLOUD_SYNC_CHANNELS = {
   getState: 'orcaCloudSync:getState',
@@ -10,10 +10,10 @@ export const ORCA_CLOUD_SYNC_CHANNELS = {
   changed: 'orcaCloudSync:changed'
 } as const
 
-export type CloudSyncChoiceState = { context: boolean; mirror: boolean }
+export type CloudSyncChoiceState = { context: boolean }
 
 export type CloudSyncPhase =
-  /** Both rows off: nothing on this computer. */
+  /** Sync off: nothing on this computer. */
   | 'off'
   /** First pass in flight, nothing copied yet. */
   | 'starting'
@@ -57,11 +57,7 @@ export type CloudSyncRemovalPreview = { hasLocalCopy: boolean; editedHere: numbe
 
 export type CloudSyncApi = {
   getState: (workspaceId: string) => Promise<CloudSyncView | null>
-  setChoice: (args: {
-    workspaceId: string
-    context?: boolean
-    mirror?: boolean
-  }) => Promise<CloudSyncView | null>
+  setChoice: (args: { workspaceId: string; context?: boolean }) => Promise<CloudSyncView | null>
   openFolder: (workspaceId: string) => Promise<{ ok: boolean }>
   retry: (workspaceId: string) => Promise<void>
   removalPreview: (workspaceId: string) => Promise<CloudSyncRemovalPreview>
