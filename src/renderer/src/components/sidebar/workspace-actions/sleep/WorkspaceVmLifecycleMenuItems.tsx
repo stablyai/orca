@@ -68,7 +68,12 @@ export function getPairedCloudLifecycleAction(state: CloudDotState): {
       return { action: 'resume', retry: false }
     case 'wakeFailed':
       return { action: 'resume', retry: true }
-    default:
+    case 'running':
+    case 'starting':
+    case 'unresponsive':
+    case 'failed':
+    case 'archived':
+    case 'unknown':
       return { action: null, retry: false }
   }
 }
