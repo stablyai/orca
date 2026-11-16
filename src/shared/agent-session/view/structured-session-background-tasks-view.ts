@@ -75,7 +75,7 @@ export function structuredSessionBackgroundTasksView(
     supportsStop,
     // Missing supportsStopAll is legacy support; only explicit false means no untargeted Stop.
     offersStopAll:
-      (!supportsStop && backgroundTasks?.supportsStopAll !== false) ||
+      ((liveWork || incomplete) && !supportsStop && backgroundTasks?.supportsStopAll !== false) ||
       (incomplete && turnId === null),
     incomplete,
     ...(backgroundTasks?.workerDock ? { workerDock: backgroundTasks.workerDock } : {})
