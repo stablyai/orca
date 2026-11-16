@@ -27,8 +27,9 @@ const squash = (text: string): string => text.replace(/\s+/g, '')
 /** Whether the line shows the whole message, given `expected` from nativeChatExpectedLine: its
  *  text, or a text-paste chip; image chips alone prove only an image-only send. */
 export function nativeChatLineShowsMessage(line: string, expected: string): boolean {
+  // An empty line counts only for an image-only send, at the old timing, for agents that draw no chip.
   if (!squash(line)) {
-    return false
+    return expected === ''
   }
   const withoutImages = line.replace(IMAGE_CHIP, '')
   const rest = squash(withoutImages.replace(TEXT_PASTE_CHIP, ''))

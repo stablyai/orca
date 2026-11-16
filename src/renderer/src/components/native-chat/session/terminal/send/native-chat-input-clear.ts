@@ -65,10 +65,8 @@ export function clearThenWrite(
       writeBody()
       return
     }
-    clearAlone(AGENT_TUI_CLEAR_INPUT_MAX, () =>
-      // Never paste onto text the clear could not remove; it would be submitted with the message.
-      readNativeChatInputLine(options?.readInputLine) ? refuse() : writeBody()
-    )
+    // A refusal here would drop non-Claude sends silently, and a slow redraw would refuse a clear that landed.
+    clearAlone(AGENT_TUI_CLEAR_INPUT_MAX, writeBody)
   })
 }
 
