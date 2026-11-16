@@ -20,8 +20,9 @@ async function writeAndFlush(terminal: Terminal, data: string): Promise<void> {
 
 describe('terminal search refresh after output', () => {
   let terminal: Terminal
+  let search: SearchAddon
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers()
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
       const context: CanvasRenderingContext2D = Object.create(null)
@@ -32,6 +33,10 @@ describe('terminal search refresh after output', () => {
     document.body.appendChild(container)
     terminal = new Terminal()
     terminal.open(container)
+    search = new SearchAddon()
+    terminal.loadAddon(search)
+    await writeAndFlush(terminal, 'needle one\r\nplain text\r\n')
+    search.findNext('needle', { decorations: SEARCH_DECORATIONS })
   })
 
   afterEach(() => {
@@ -42,15 +47,22 @@ describe('terminal search refresh after output', () => {
   })
 
   it('keeps a selection the user made while search is open', async () => {
-    const search = new SearchAddon()
-    terminal.loadAddon(search)
-    await writeAndFlush(terminal, 'needle one\r\nplain text\r\n')
-    search.findNext('needle', { decorations: SEARCH_DECORATIONS })
     expect(terminal.getSelection()).toBe('needle')
 
     terminal.select(0, 1, 5)
     await writeAndFlush(terminal, 'needle two\r\n')
 
     expect(terminal.getSelection()).toBe('plain')
+  })
+
+  it('counts matches that arrived during the user selection on the next find', async () => {
+    terminal.select(0, 1, 5)
+    await writeAndFlush(terminal, 'needle two\r\n')
+    const resultCounts: number[] = []
+    search.onDidChangeResults(({ resultCount }) => resultCounts.push(resultCount))
+
+    search.findNext('needle', { decorations: SEARCH_DECORATIONS })
+
+    expect(resultCounts).toEqual([2])
   })
 })
