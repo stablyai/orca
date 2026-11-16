@@ -1,9 +1,9 @@
 import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTabGroup
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type Selection = {
   activeGroupId: string | null

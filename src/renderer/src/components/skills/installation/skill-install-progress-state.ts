@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SkillInstallProgress } from '../../../../../shared/skill-sharing-contract'
+import type { SkillInstallProgress } from '../../../../../shared/skills/sharing/skill-sharing-contract'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function useSkillInstallProgress(): {

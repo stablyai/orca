@@ -1,4 +1,4 @@
-import { DESKTOP_AWAY_SECONDS } from '../../shared/desktop-away-threshold'
+import { DESKTOP_AWAY_SECONDS } from '../../shared/app-lifecycle/presence/desktop-away-threshold'
 
 type IdleMonitor = {
   getSystemIdleState(threshold: number): string

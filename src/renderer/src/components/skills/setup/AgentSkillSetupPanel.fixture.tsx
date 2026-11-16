@@ -7,8 +7,8 @@ import { useAppStore } from '@/store'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { CliSetupTipDialog } from '../../feature-tips/CliSetupTipDialog'
 import SkillsPage from '../SkillsPage'
-import { FEATURE_TIPS } from '../../../../../shared/feature-tips'
-import type { SkillDiscoveryResult } from '../../../../../shared/skills'
+import { FEATURE_TIPS } from '../../../../../shared/feature-education/feature-tips'
+import type { SkillDiscoveryResult } from '../../../../../shared/skills/discovery/skills'
 
 function InstalledSkill(): React.JSX.Element {
   useTranslation()

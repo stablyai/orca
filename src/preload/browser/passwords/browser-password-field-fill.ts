@@ -5,7 +5,7 @@
 import type {
   BrowserPasswordFillRequest,
   BrowserPasswordFillResult
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { isPlaceholderUsernameValue } from './browser-password-field-rules'
 import type { BrowserPasswordFormScanner } from './browser-password-form-scan'
 

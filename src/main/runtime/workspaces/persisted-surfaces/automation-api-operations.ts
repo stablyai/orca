@@ -1,4 +1,4 @@
-import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
+import type { AutomationsChangedPayload } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AutomationOwnerPrecondition,
   AutomationDestination,

@@ -1,10 +1,10 @@
 import {
   isWslHookRelayConnectionId,
   WSL_HOOK_RELAY_CONNECTION_PREFIX
-} from '../../../shared/wsl-hook-relay-contract'
+} from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { providerSessionLocatorIdentifies } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
-import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
 import { AgentIdentityWorkerClient, type AgentIdentityClient } from './agent-identity-worker-client'
 import { AgentIdentityDemand, type KeyDemand } from './agent-identity-demand'

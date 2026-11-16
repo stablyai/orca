@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: vi.fn(() => tmpdir()) } }))
 
 import { parseMuseUsageLine, type MuseUsageParseContext } from './muse-usage-record-parser'
+import { normalizeMuseUsagePersistedFiles } from './persisted-file-normalization'
 import { scanMuseUsageFiles } from './scanner'
 
 const MICROS = 1_790_052_419_142_353
@@ -129,6 +130,26 @@ describe('scanMuseUsageFiles', () => {
     path: string
     displayName: string
   }[] => [{ repoId: 'repo-1', worktreeId: 'wt-1', path: worktreePath, displayName: 'repo/main' }]
+
+  it('rereads a log whose cached record lost its sessions instead of reporting zero usage', async () => {
+    writeSession('2026-09-22', 'a', [
+      metadata(worktreePath),
+      modelCompleted(MICROS, { input_tokens: 100, output_tokens: 10 }, 'm')
+    ])
+    const first = await scanMuseUsageFiles(worktrees(), [], undefined, sessionsDir)
+    const damaged = first.processedFiles.map((file) => ({ ...file }))
+    for (const file of damaged) {
+      Reflect.deleteProperty(file, 'sessions')
+    }
+
+    const second = await scanMuseUsageFiles(
+      worktrees(),
+      normalizeMuseUsagePersistedFiles(damaged),
+      undefined,
+      sessionsDir
+    )
+    expect(second.sessions.reduce((sum, session) => sum + session.totalTokens, 0)).toBe(110)
+  })
 
   it('counts a usage record copied into another session log once', async () => {
     const shared = modelCompleted(MICROS, { input_tokens: 100, output_tokens: 10 }, 'm')

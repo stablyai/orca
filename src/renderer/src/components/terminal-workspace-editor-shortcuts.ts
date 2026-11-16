@@ -1,11 +1,13 @@
-import type { KeybindingActionId } from '../../../shared/keybindings'
-import { useAppStore } from '../store'
+import type { KeybindingActionId } from '../../../shared/keybindings/types'
+import { useAppStore } from '../store/index'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
 } from './editor/autosave/editor-autosave'
 import { getEditorCmdSaveFileId } from './editor/save/commands/editor-cmd-save-target'
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-flush'
+import { canToggleChangesModeForFile } from './editor/view-mode/editor-panel-file-mode'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {
   event: KeyboardEvent
@@ -21,6 +23,8 @@ export function handleTerminalWorkspaceEditorShortcut({
   matchShortcut,
   notifyTerminalCapture
 }: EditorShortcutContext): boolean {
+  const floatingPanelOwnsEvent = (): boolean =>
+    isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
   // Save fallback for focus outside the editor; editor-local handlers own focused saves.
   if (!event.repeat && matchShortcut('editor.save')) {
     const target = event.target as HTMLElement | null
@@ -29,9 +33,7 @@ export function handleTerminalWorkspaceEditorShortcut({
       target?.closest('textarea:not(.xterm-helper-textarea), input') !== null
     if (!inEditor) {
       const state = useAppStore.getState()
-      const floatingPanelOwnsEvent =
-        isEventTargetInsideFloatingWorkspacePanel(event.target) || floatingWorkspaceFocused
-      const requestedFileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent)
+      const requestedFileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent())
       if (requestedFileId) {
         event.preventDefault()
         notifyTerminalCapture('editor.save')
@@ -58,6 +60,26 @@ export function handleTerminalWorkspaceEditorShortcut({
       } else {
         const wrapOn = state.settings?.editorWordWrap !== false
         void state.updateSettings({ editorWordWrap: !wrapOn })
+      }
+      return true
+    }
+  }
+  // Why: keyboard path for the toolbar's Edit/Changes toggle (#11095).
+  if (matchShortcut('editor.toggleChangesView')) {
+    const state = useAppStore.getState()
+    const fileId = getEditorCmdSaveFileId(state, floatingPanelOwnsEvent())
+    const file = fileId ? state.openFiles.find((candidate) => candidate.id === fileId) : undefined
+    if (file && canToggleChangesModeForFile(file)) {
+      // Why: Monaco ignores defaultPrevented, so a chord like Mod+Z would also run its own command.
+      event.preventDefault()
+      event.stopPropagation()
+      if (!event.repeat) {
+        notifyTerminalCapture('editor.toggleChangesView')
+        const nextMode = state.editorViewMode[file.id] === 'changes' ? 'edit' : 'changes'
+        // Why: leaving a custom editor unmounts its frame, which may still hold debounced edits.
+        runAfterEditorFramesFlush(state, [file.id], () =>
+          state.setEditorViewMode(file.id, nextMode)
+        )
       }
       return true
     }

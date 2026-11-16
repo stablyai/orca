@@ -34,7 +34,7 @@ vi.mock(
 vi.mock('../runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: runtime.invalidate
 }))
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { clearRuntimeEnvironmentManualDisconnect } from '../runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { isSshUserDisconnected } from '../../ssh/connection/ssh-user-disconnect'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'

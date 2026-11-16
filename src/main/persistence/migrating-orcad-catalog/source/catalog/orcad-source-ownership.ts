@@ -5,8 +5,8 @@ import {
   type FolderWorkspaceHostState
 } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 export function repoBelongsToOrcadSource(repo: Repo, targetId: string): boolean {
   if (repo.connectionId === targetId) {

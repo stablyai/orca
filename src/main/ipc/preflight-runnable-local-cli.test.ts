@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { removeTree } from '../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
 import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,

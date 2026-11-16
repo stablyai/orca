@@ -7,7 +7,7 @@ import {
   type NetworkProxySettings
 } from '../../../../shared/network-proxy'
 import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
-import { isEligibleLocalCertificateHost } from '../../../../shared/browser-url'
+import { isEligibleLocalCertificateHost } from '../../../../shared/browser/navigation/browser-url'
 
 export type BrowserNetworkTunnelProxy =
   | { kind: 'direct' }

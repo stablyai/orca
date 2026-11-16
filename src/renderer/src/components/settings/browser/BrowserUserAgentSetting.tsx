@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type {
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../../../../shared/browser-user-agent-mode'
+} from '../../../../../shared/browser/identity/browser-user-agent-mode'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { BROWSER_USER_AGENT_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { useTranslate } from '@/i18n/use-translate'

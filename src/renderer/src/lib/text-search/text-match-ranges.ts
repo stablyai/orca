@@ -1,4 +1,4 @@
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 
 export const TEXT_SEARCH_QUERY_MAX_BYTES = 2 * 1024
 

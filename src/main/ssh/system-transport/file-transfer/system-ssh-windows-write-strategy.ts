@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { getSystemSshBuildArgsFromOperationOptions } from '../system-ssh-args'
 import { spawnSystemSshCommand } from '../system-ssh-command'
 import {

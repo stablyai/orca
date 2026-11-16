@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../project-group-types'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { getFolderWorkspaceExecutionHostIdForRows } from './host-filtering'
 
 /** Host headers, filtering and reveal must agree on the folder's execution owner. */

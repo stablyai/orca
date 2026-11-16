@@ -1,5 +1,5 @@
 import type { Tab } from '../../../shared/tab-types'
-import type { KeybindingContext } from '../../../shared/keybindings'
+import type { KeybindingContext } from '../../../shared/keybindings/types'
 import { useAppStore } from '../store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'

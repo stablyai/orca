@@ -11,7 +11,7 @@ import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault
 import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
 import { retryStructuredAgentSessionLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { reopenNativeChatCliForkOrigin } from './native-chat-cli-fork-run'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionConversationOwner } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 
@@ -111,7 +111,7 @@ export async function reportCliChatResumeFailure(
     )
     return
   }
-  const row = useAppStore.getState().agentStatusByPaneKey[source.paneKey]
+  const row = useAppStore.getState().agentStatusByPaneKey.get(source.paneKey)
   const inThisTerminal = !!row && row.providerSession?.id === source.providerSessionId
   if (
     refusal?.code === 'agent_session_conflict' ||

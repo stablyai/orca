@@ -10,8 +10,8 @@ on:
       - 'src/cli/runtime/launch.ts'
       - 'src/cli/runtime/orca-app-executable.ts'
       - 'src/cli/runtime/serve/startup/serve-orcad-launch.ts'
-      - 'src/shared/orcad-local-serve-selection.ts'
-      - 'src/shared/orcad-artifacts.ts'
+      - 'src/shared/remote-runtime/serve-supervisor/orcad-local-serve-selection.ts'
+      - 'src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
   # Catch serve regressions on main between releases.
   schedule:
     - cron: '45 11 * * *'

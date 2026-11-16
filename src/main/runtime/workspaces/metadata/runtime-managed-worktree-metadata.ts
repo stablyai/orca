@@ -5,7 +5,7 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'

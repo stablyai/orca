@@ -2,7 +2,7 @@ import { readTestJournalItems } from '../../../agent-session-journal/journal-obs
 import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { StructuredAgentSessionTransition } from '../structured-agent-session-transition'
 
 import {

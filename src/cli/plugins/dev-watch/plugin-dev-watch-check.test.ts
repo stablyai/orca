@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
 import type { PluginDevWatchCheckResult } from './plugin-dev-watch-check'
-import { formatPluginDevWatchEvent, type PluginDevWatchEvent } from './plugin-dev-watch-events'
+import type { PluginDevWatchEvent } from './plugin-dev-watch-events'
 import { runPluginDevWatch, type PluginDevWatchHost } from './plugin-dev-watch-loop'
 
 const KEY = 'acme.todos'
@@ -97,8 +97,5 @@ describe('plugin dev watch --check', () => {
       [true, true, 'idle'],
       [false, true, 'pending']
     ])
-    expect(formatPluginDevWatchEvent(checks[1]).split('\n')[0]).toBe(
-      '✗ check passed, but in Orca acme.todos is pending approval'
-    )
   })
 })

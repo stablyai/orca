@@ -1,5 +1,5 @@
 import type { ExecutionHostHealth } from '../../../../shared/execution-host/execution-host-health'
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
+import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

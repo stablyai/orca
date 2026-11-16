@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } 
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   chatProviderAgents,
   useHostStructuredAgentsVersion

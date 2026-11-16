@@ -3,7 +3,8 @@ import type { NativeChatMessage } from '../../../../../../src/shared/native-chat
 import type { NativeChatResumePoint } from '../../../../../../src/shared/rpc-contract/native-chat/native-chat-params'
 import { peekStoredChatTranscript } from './mobile-native-chat-transcript-store'
 
-const MAX_CACHED_TRANSCRIPTS = 8
+/** Chats whose rows, row keys and reading state the page keeps between visits. */
+export const MAX_CACHED_TRANSCRIPTS = 8
 
 export type MobileNativeChatCachedTranscript = {
   messages: NativeChatMessage[]

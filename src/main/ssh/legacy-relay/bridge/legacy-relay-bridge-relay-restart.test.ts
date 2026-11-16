@@ -1,7 +1,7 @@
 /** Relay restarts reuse socket and pty-1 ids; identify panes by endpoint plus relay-reported incarnation. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../../../shared/ssh-pty-id'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
+import '../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import {
   ENDPOINT,
   type FakeRelay,

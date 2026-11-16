@@ -2,7 +2,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { firstStructuredChatNamingPrompt } from '../../../shared/structured-chat-naming-eligibility'
+import { firstStructuredChatNamingPrompt } from '../../../shared/native-chat/transcript/structured-chat-naming-eligibility'
 import { firstStructuredAgentSessionPrompt } from '../../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalDomainSubmission, journalDomainInputForItem } from './journal-domain-status-inputs'

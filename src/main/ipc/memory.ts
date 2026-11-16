@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import type { MemorySnapshot } from '../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
 import { collectMemorySnapshot } from '../memory/collector'
 

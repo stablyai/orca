@@ -16,11 +16,11 @@ import {
 import type { BrowserLinkTestStore } from './browser-link-open.test-fixture'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => mocks.getState() } }))
-vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
 }))

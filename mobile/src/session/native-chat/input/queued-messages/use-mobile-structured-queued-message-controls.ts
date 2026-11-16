@@ -1,4 +1,4 @@
-import type { DragReorderMove } from '../../../../components/drag-reorder-positions'
+import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
 import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
 import { useCallback, useMemo } from 'react'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -7,7 +7,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionVisibleFailureFacts } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
-import { mapSettledWithConcurrency } from '../../../../../../src/shared/map-with-concurrency'
+import { mapSettledWithConcurrency } from '../../../../../../src/shared/concurrency/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageDeleteResult,

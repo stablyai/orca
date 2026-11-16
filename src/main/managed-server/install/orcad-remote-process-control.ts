@@ -13,7 +13,7 @@ import {
 import {
   ORCAD_STOP_REQUEST_FILENAME,
   ORCAD_STOP_REQUESTS_CAPABILITY
-} from '../../../shared/orcad-stop-request'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { selectOrcadSlotRuntimeCommand } from './orcad-remote-runtime'
 import { orcadWindowsSlotOpCommand } from './orcad-remote-windows-node'
 

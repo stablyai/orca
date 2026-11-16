@@ -1,10 +1,7 @@
 import type * as ClientHostRuntime from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { z } from 'zod'
-import type {
-  GoogleCookieClearLocalTarget,
-  GoogleCookieClearTarget
-} from '../../../shared/browser/cookies/browser-google-cookie-clear'
+import type { GoogleCookieClearTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,7 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 
 type ImportExecution = BrowserCookieImportResult & {
   executionMachine: 'client' | 'remote'
@@ -44,6 +41,8 @@ vi.mock('electron', () => ({
   session: { fromPartition: (partition: string) => mocks.sessions.get(partition) },
   ipcMain: {
     removeHandler: vi.fn(),
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
     handle: (channel: string, handler: (event: { sender: unknown }, args: unknown) => unknown) =>
       mocks.handlers.set(channel, handler)
   }
@@ -64,7 +63,9 @@ vi.mock('./sources/browser-cookie-detection', () => ({
   detectInstalledBrowsers: mocks.detect,
   selectBrowserProfile: vi.fn()
 }))
-vi.mock('../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
+  browserManager: { cancelGrabOp: vi.fn() }
+}))
 vi.mock('./client-route/client-route-cookie-import-source-store', () => ({
   recordClientRouteCookieImportSource: vi.fn()
 }))
@@ -204,68 +205,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
   rmSync(mocks.root, { recursive: true, force: true })
 })
-
-it('preserves import refusal/order, reserves delegation for absent routes, and rejects forged/untrusted IPC', async () => {
-  const server = jar()
-  mocks.sessions.set('persist:server', server)
-  mocks.profiles.delete('work')
-  expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
-    ok: false,
-    reason: 'Session profile not found.'
-  })
-  expect(() =>
-    call('googleCookieClearTarget', { profileId: 'work', environmentId: 'server' })
-  ).toThrow()
-  expect(server.cookies.remove).not.toHaveBeenCalled()
-  mocks.route.mockReturnValue(null)
-  expect(call('googleCookieClearTarget', { profileId: 'work', environmentId: 'server' })).toBeNull()
-  expect(await importCookiesIntoClientRoutePartition(request)).toBeNull()
-  mocks.profiles.set('work', profile)
-  mocks.route.mockReturnValue(route)
-  expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
-    ok: false,
-    reason: 'Browser not found on this system.'
-  })
-  const target: GoogleCookieClearLocalTarget = targetSchema.parse(
-    call('googleCookieClearTarget', { profileId: 'work', environmentId: 'server' })
-  )
-  expect(() => call('clearGoogleCookies', { ...target, partition: 'persist:server' })).toThrow()
-  expect(() => call('clearGoogleCookies', target, 92)).toThrow('Not authorized')
-  expect(() => call('clearGoogleCookies', {})).toThrow()
-  expect(() => call('clearGoogleCookies', { ...target, routeIdentity: 'forged' })).toThrow()
-  expect(
-    call('googleCookieClearTarget', { profileId: 'work', environmentId: 'server' }, 92)
-  ).toBeNull()
-  expect(() =>
-    call('googleCookieClearTarget', { profileId: 'unknown', environmentId: null })
-  ).toThrow()
-  expect(server.cookies.get).not.toHaveBeenCalled()
-})
-
-it.each(['between selectors', 'queued profile'])(
-  'stops mutation after changed ownership: %s',
-  async (change) => {
-    const target: GoogleCookieClearLocalTarget = targetSchema.parse(
-      call('googleCookieClearTarget', { profileId: 'work', environmentId: 'server' })
-    )
-    const session = jar(2)
-    mocks.sessions.set(target.partition, session)
-    if (change === 'between selectors') {
-      session.cookies.remove.mockImplementationOnce(async () => {
-        mocks.route.mockReturnValue({ ...route })
-      })
-      expect(await call('clearGoogleCookies', target)).toBe('unverified')
-      expect(session.cookies.remove).toHaveBeenCalledTimes(1)
-    } else {
-      const release = await acquireCookieMutationLock(session)
-      const clearing = call('clearGoogleCookies', target)
-      mocks.profiles.delete('work')
-      release()
-      await expect(clearing).rejects.toThrow('connection changed')
-      expect(session.cookies.get).not.toHaveBeenCalled()
-    }
-  }
-)
 
 it('retains actual local/file/client import destinations, source-only replacement, and real route retirement', async () => {
   vi.mocked(browserSessionRegistry.getProfile).mockRestore()

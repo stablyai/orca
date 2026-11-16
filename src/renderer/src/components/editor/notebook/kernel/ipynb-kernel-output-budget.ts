@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { ownRetainedString } from '../../../../../../shared/own-retained-string'
-import { sliceAtCodeUnitLimit } from '../../../../../../shared/surrogate-safe-text-slice'
+import { ownRetainedString } from '../../../../../../shared/text/own-retained-string'
+import { sliceAtCodeUnitLimit } from '../../../../../../shared/text/surrogate-safe-text-slice'
 import { isRecord } from '../document/ipynb-parse'
 import type { NotebookOutput } from './ipynb-kernel-outputs'
 import { noticeOutput } from './ipynb-kernel-runs'

@@ -55,8 +55,9 @@ vi.mock('child_process', async () => {
 
 import { main } from '../index'
 import { useWorktreeAwarenessEnvironment } from '../index-test-harness'
+import { okFixture } from '../runtime/fixtures/runtime-rpc-fixtures'
 
-describe('orca cli worktree awareness', () => {
+function useCliEntryEnvironment(): void {
   const priorExitCode = process.exitCode
   beforeEach(() => {
     process.exitCode = undefined
@@ -73,6 +74,10 @@ describe('orca cli worktree awareness', () => {
     listEnvironmentsMock,
     spawnMock
   })
+}
+
+describe('orca cli worktree awareness', () => {
+  useCliEntryEnvironment()
 
   it("refuses an agent session's caller flag naming another caller before any request", async () => {
     vi.stubEnv('ORCA_AGENT_SESSION_ID', 'f7a1c0de-1111-4222-8333-444455556666')
@@ -85,5 +90,41 @@ describe('orca cli worktree awareness', () => {
       ok: false,
       error: { code: 'consumer_fenced' }
     })
+  })
+})
+
+describe('orchestration inbox --run', () => {
+  useCliEntryEnvironment()
+
+  it('sends --run and refuses rows from other Runs that an older server returns', async () => {
+    callMock.mockResolvedValue(
+      okFixture('req_inbox', {
+        messages: [
+          { id: 'msg_mine', run_id: 'run_x', from_handle: 'a', subject: 'mine' },
+          { id: 'msg_theirs', run_id: 'run_other', from_handle: 'b', subject: 'theirs' }
+        ],
+        count: 2
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['orchestration', 'inbox', '--run', 'run_x', '--full', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.inbox',
+      expect.objectContaining({ run: 'run_x' })
+    )
+    expect(process.exitCode).toBe(1)
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'incompatible_runtime' }
+    })
+  })
+
+  it('refuses an empty --run instead of listing every mailbox', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['orchestration', 'inbox', '--run', '', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
   })
 })

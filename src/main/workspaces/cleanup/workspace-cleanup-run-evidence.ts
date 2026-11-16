@@ -4,14 +4,14 @@ import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   isRepoOnCatalogHost,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../../shared/execution-host'
-import type { RuntimeWorktreePsSummary } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,

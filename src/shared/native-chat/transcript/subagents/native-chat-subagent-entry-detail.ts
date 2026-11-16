@@ -1,7 +1,7 @@
 // What a subagent roster entry says under its name, shared by desktop and mobile.
 
 import { formatAgentToolPreviewLine } from '../../../agent-status/presentation/agent-tool-preview'
-import { claudeListedModelLabel } from '../../../claude-model-list-probe'
+import { claudeListedModelLabel } from '../../../agent-session/options/model-catalog/claude-model-list-probe'
 import {
   nativeChatSessionChoiceShortLabel,
   type NativeChatSessionOptionSay
