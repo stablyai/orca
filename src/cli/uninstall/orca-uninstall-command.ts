@@ -6,6 +6,7 @@ import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-re
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
+import { ensureCliAppEnvironment } from '../runtime/profile/cli-app-environment'
 import { createTerminalConfirm } from '../plugins/dev-watch/plugin-dev-watch-approval'
 import {
   ORCA_UNINSTALL_STEPS,
@@ -48,13 +49,13 @@ function linuxPackageType(layout: PackagedLayout | null): 'deb' | 'rpm' | null {
 }
 
 async function createCliHost(client: RuntimeClient): Promise<OrcaUninstallHost> {
+  const layout = packagedLayout(process.argv[1])
   const [{ resolveOrcaInstallIdentity }, { CliInstaller }, { persistAgentStatusHooksEnabled }] =
     await Promise.all([
       import('../../main/uninstall/orca-install-identity.js'),
       import('../../main/cli/cli-installer.js'),
       import('../agents/agent-hooks.js')
     ])
-  const layout = packagedLayout(process.argv[1])
   // Without the app's own layout the installer cannot tell Orca's command from someone else's.
   const installerOptions: CliInstallerOptions | null = layout
     ? {
@@ -102,6 +103,15 @@ function hasWork(plan: OrcaUninstallPlan): boolean {
     plan.hookScripts !== null ||
     plan.hosts.length > 0
   )
+}
+
+function hasUnfinishedEntry(plan: OrcaUninstallPlan): boolean {
+  const entries = [
+    ...plan.agents,
+    ...plan.hosts,
+    ...[plan.cliCommand, plan.backgroundService, plan.hookScripts].filter((entry) => entry !== null)
+  ]
+  return entries.some((entry) => entry.state === 'error' || entry.state === 'needs-user')
 }
 
 const STATE_LABELS: Record<OrcaUninstallEntryState, string> = {
@@ -194,6 +204,8 @@ function confirmFor(json: boolean): ((question: string) => Promise<boolean>) | n
 export const UNINSTALL_HANDLERS: Record<string, CommandHandler> = {
   uninstall: async ({ client, flags, json }) => {
     rejectRemoteSelectionFlags(flags, 'uninstall; run it on the machine you want to clean up.')
+    // Before main modules load: Claude's remover resolves its profile homes through it.
+    ensureCliAppEnvironment()
     const { buildOrcaUninstallPlan, runOrcaUninstallStep } =
       await import('../../main/uninstall/orca-uninstall-cleanup.js')
     const host = await createCliHost(client)
@@ -224,6 +236,9 @@ export const UNINSTALL_HANDLERS: Record<string, CommandHandler> = {
       plan = await runOrcaUninstallStep(plan, step, host)
     }
     const removeApp = formatRemoveAppLine(plan)
+    if (hasUnfinishedEntry(plan)) {
+      process.exitCode = 1
+    }
     if (json) {
       console.log(JSON.stringify({ ok: true, result: { plan, removeApp } }, null, 2))
       return
