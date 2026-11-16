@@ -198,7 +198,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       options.skipVersionOnlyRepeats === true &&
       prior?.publicationEpoch === snapshot.publicationEpoch &&
       differsOnlyInVersion(prior.applied, effectiveSnapshot)
-    const drawn = options.framesDraw?.(snapshot.worktree) === true
+    const drawn = !versionOnlyRepeat && options.framesDraw?.(snapshot.worktree) === true
     if (!versionOnlyRepeat) {
       // Runs for a drawn workspace too: its tab-id, focus and close-intent ledgers still follow the host.
       const patch = applyWebSessionTabsSnapshot(
