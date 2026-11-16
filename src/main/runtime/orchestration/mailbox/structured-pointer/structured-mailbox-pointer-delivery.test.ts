@@ -274,8 +274,8 @@ const flush = async () => {
   }
 }
 
-describe('structured mailbox delivery: each message whole', () => {
-  it('settles a handoff that wins stale-card withdrawal without sending it to the new owner', async () => {
+describe('structured mailbox delivery: each message as its own card', () => {
+  it('points the new owner at mail whose handoff to the old owner won stale-card withdrawal', async () => {
     const h = harness({ busy: true })
     h.receive('m1')
     await h.deliver()
@@ -286,12 +286,12 @@ describe('structured mailbox delivery: each message whole', () => {
       return { kind: 'accepted' }
     })
     h.delivery.withdrawStale()
-    await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
-    expect(h.records.size).toBe(0)
-    expect(h.sent.map(({ sessionId, operationId }) => [sessionId, operationId])).toEqual([
-      ['session-1', first]
-    ])
-    expect(h.mail.get('m1')?.delivered_at).toBe('now')
+    // The old owner was only pointed at `check`, which it can no longer read: the new owner is.
+    await vi.waitFor(() =>
+      expect(h.sent.map(({ sessionId }) => sessionId)).toEqual(['session-1', 'session-2'])
+    )
+    expect(h.sent[0]!.operationId).toBe(first)
+    expect(h.mail.get('m1')?.read).toBe(0)
   })
 })
 

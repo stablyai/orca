@@ -13,7 +13,7 @@ import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-
 
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId

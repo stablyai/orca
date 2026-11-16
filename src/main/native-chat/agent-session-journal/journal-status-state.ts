@@ -3,7 +3,7 @@ import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-
 import type { JournalReducerState } from './projection/journal-reducer'
 import { renderJournalStatus } from './projection/journal-public-read'
 import { journalInputOrder } from './input-order/journal-input-order'
-import { agentSessionCurrentContextRows } from '../../../shared/agent-session/agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import { newestOpenStructuredAgentSessionAsyncQuestion } from '../../../shared/agent-session/view/structured-agent-session-async-questions'
 
 export type JournalStatusState = ReturnType<typeof projectStructuredAgentSessionStatusState>

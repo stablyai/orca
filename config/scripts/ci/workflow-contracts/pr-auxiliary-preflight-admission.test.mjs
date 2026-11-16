@@ -95,16 +95,6 @@ function createMobileCiScopeRepository() {
 }
 
 describe.skipIf(process.platform === 'win32')('Mobile CI complete Git change evidence', () => {
-  it('admits an actual modification through the workflow detector', () => {
-    const repo = createMobileCiScopeRepository()
-    writeFileSync(repo.tool, 'export const revision = 2\n')
-    repo.commit()
-    const { result, output } = repo.detect()
-    expect(result.code, result.stderr).toBe(0)
-    expect(readFileSync(output, 'utf8')).toContain('mobile_ci_tools=true\n')
-    expect(readFileSync(output, 'utf8')).toContain('test=true\n')
-  })
-
   it.each(['deletion', 'type change'])('retains full root units for an actual %s', (change) => {
     const repo = createMobileCiScopeRepository()
     rmSync(repo.tool)

@@ -8,7 +8,7 @@ import {
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
 import type { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
-import { recordAgentSessionAcquisitionExit } from '../agent-session-acquisition-exit-transition'
+import { recordAgentSessionAcquisitionExit } from '../ownership/agent-session-acquisition-exit-transition'
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,

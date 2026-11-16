@@ -26,7 +26,7 @@ import {
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { findAppWindow } from '../window/app-window-lookup'
-import { isStructuredAttentionRead } from '../../shared/agent-session/agent-session-attention'
+import { isStructuredAttentionRead } from '../../shared/agent-session/view/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getLastObservedDeliveryOutcome,

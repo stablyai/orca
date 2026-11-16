@@ -1,13 +1,13 @@
 import {
   closeStructuredAgentSessionChild,
   type StructuredAgentSessionCloseOptions
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 /** Create structured workers directly; attach is not readiness, so hold the preamble until the agent takes it.
  * Open dispatches retain agents through the idle sweep; settled workers rest and restart on mail. The preamble is a turn, never keystrokes. */
 
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { readAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionFailureDetailText,
