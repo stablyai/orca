@@ -30,7 +30,7 @@ it.each([
     const { dispatchId, worker, notify } = await failedWorker(
       code,
       failure,
-      reset ? Date.now() + 3_600_000 : undefined
+      reset ? Date.UTC(2099, 0, 1, 23, 10) : undefined
     )
     await host.deps.store.setUserConversationName(PEER_CHAT, 'Build worker', 'rename')
     await host.deps.store.setUserConversationName(COORDINATOR, 'Coordinator', 'rename')
