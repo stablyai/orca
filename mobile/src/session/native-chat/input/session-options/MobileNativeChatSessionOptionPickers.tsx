@@ -66,12 +66,6 @@ type PresentationProps = {
   onDrawerAfterClose?: () => void
 }
 
-function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
-  return descriptor?.kind.type === 'select'
-    ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
-    : undefined
-}
-
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
