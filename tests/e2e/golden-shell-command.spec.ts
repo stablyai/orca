@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../src/shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../src/shared/terminal/protocol/escape/ansi-escape-sequences'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible } from './helpers/store'
 import {

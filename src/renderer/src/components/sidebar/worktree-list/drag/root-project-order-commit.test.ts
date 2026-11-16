@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProjectGroup, ProjectGroupUpdate } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from '../../../../../../shared/project-group-order-capability'
+import type {
+  ProjectGroup,
+  ProjectGroupUpdate
+} from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from '../../../../../../shared/project/groups/project-group-order-capability'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {

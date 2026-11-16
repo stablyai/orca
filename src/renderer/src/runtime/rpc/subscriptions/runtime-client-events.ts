@@ -1,14 +1,15 @@
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
-} from '../../../../../shared/runtime-client-events'
-import { isNotificationAttentionAcknowledgement } from '../../../../../shared/notification-settings-types'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import { isRuntimeSubscriptionReplayResponse } from '../../../../../shared/runtime-subscription-replay'
-import { admitSshConnectionState } from '../../../../../shared/ssh-retained-payload-admission'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import { isNotificationAttentionAcknowledgement } from '../../../../../shared/notifications/notification-settings-types'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { isRuntimeSubscriptionReplayResponse } from '../../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
+import { admitSshConnectionState } from '../../../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
+import { readHostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void
@@ -80,6 +81,13 @@ function handleRuntimeClientEventResponse(
   }
   if (message.type === 'browserHostRequested') {
     void answerBrowserClientHostRequest(environmentId, message.requestId)
+    return
+  }
+  // The host's own PR auto-refresh setting governs this client's timers for that host's workspaces.
+  if (message.type === 'settingsChanged') {
+    if (Array.isArray(message.keys) && message.keys.includes('prAutoRefresh')) {
+      void readHostPRAutoRefreshCadence(environmentId)
+    }
     return
   }
   if (message.type === 'sshStateChanged') {

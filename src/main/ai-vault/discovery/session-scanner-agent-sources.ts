@@ -1,11 +1,11 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
-import { resolveAbsoluteDirOverride } from '../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { resolveGrokSessionsDir } from '../../../shared/grok-session-paths'
-import { resolveKiroHomeDir } from '../../../shared/kiro-home'
+import { resolveGrokSessionsDir } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
+import { resolveKiroHomeDir } from '../../../shared/agent-launch/environment/kiro-home'
 import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
@@ -15,7 +15,7 @@ import { isClineSessionMetadataPath } from '../scanners/cline/session-scanner-cl
 import { cursorChatMetaPath } from '../scanners/cursor/session-scanner-cursor-chat-meta'
 import { devinSessionsDbDependencyPath } from '../scanners/devin/session-scanner-devin-db'
 import { resolveKimiSessionsDir } from '../scanners/kimi/session-scanner-kimi-paths'
-import { resolveMuseSessionsDir } from '../../../shared/muse-session-log'
+import { resolveMuseSessionsDir } from '../../../shared/agent-hook-listener/providers/muse/muse-session-log'
 import { isKiroSessionMetadataPath } from '../scanners/kiro/session-scanner-kiro-parser'
 
 import { OPENCLAW_AGENT_SOURCE } from '../scanners/openclaw/openclaw-session-layout'

@@ -1,4 +1,4 @@
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { dedupeInFlightRun } from '../../../runtime/concurrency/in-flight-run-dedupe'
 import { resolveCodexCommand, resolveCodexCommandForSpawn } from '../../../codex-cli/command'
 import { getManagedScriptPath } from '../../hooks/definitions/codex-hook-definition'
@@ -17,7 +17,7 @@ import {
   readMemoizedCodexHookAnswer,
   readMemoizedVersionAnswer
 } from './codex-hook-trust-memo'
-import { normalizeRuntimePathForComparison as codexBinaryKey } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison as codexBinaryKey } from '../../../../shared/file-access/cross-platform-path'
 
 // Cold hash derivation must not delay launches beyond this bound.
 export const CODEX_HOOK_LAUNCH_WAIT_MS = 3_000

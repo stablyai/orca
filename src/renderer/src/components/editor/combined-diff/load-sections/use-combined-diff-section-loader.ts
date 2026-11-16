@@ -7,7 +7,7 @@ import type {
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
-import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult

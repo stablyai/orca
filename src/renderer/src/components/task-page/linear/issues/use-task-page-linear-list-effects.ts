@@ -7,7 +7,7 @@ import type { LinearCollectionResult } from '../../../../../../shared/linear/wor
 import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import type { TaskPageGlobalEffectsModel } from '../../use-task-page-global-effects'
 import { useEffect } from 'react'
-import { isIntegrationCredentialDecryptionError } from '../../../../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../../../../shared/secure-storage/integration-credential-errors'
 import { saveLinearIssueView } from '../../../linear-issue-view-storage'
 import { serializeLinearIssueViewResumeState } from '../../../../../../shared/linear/issue-view-resume-state'
 import { clampLinearIssueListLimit } from '../../../../../../shared/linear/issue-read-limits'

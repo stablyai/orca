@@ -5,7 +5,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
-} from '../../../../../shared/desktop-browser-bridge-protocol'
+} from '../../../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import {
   getDesktopBrowserBridgeRegistry,
   isDesktopBrowserBridgeHostEnabled

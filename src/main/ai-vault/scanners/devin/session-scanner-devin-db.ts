@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { wasWslDistroLastSeenRunningSettled } from '../../../wsl/discovery/wsl-background-distro-gate'
 import { WSL_TRANSCRIPT_RUNNING_LEASE_MS } from '../../../native-chat/transcript-filesystem/wsl-transcript-running-admission'
 import { AsyncLocalStorage } from 'node:async_hooks'
@@ -9,7 +9,7 @@ import { readOpenCodeDatabase } from '../opencode/sqlite/session-scanner-opencod
 import type { SessionSidecarObservation } from '../../parse-cache/session-sidecar-stat'
 import { asRecord } from '../../parsing/session-record-fields'
 import { numberValue } from '../../parsing/session-scanner-token-values'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 
 // Devin stores workspace metadata absent from Windows transcripts in a sibling sessions.db.
 

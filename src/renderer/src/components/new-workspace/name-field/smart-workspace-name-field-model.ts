@@ -2,10 +2,10 @@ import type React from 'react'
 import type { useAppStore } from '@/store'
 import type { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { BaseRefSearchResult } from '../../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   SmartNameMode,

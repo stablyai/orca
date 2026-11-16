@@ -6,7 +6,7 @@ import type {
   BrowserTabInfo
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { redactKagiSessionToken } from '../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
 import { deferBrowserPageNavigation } from '../navigate/browser-page-deferred-navigation'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 

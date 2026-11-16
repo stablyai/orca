@@ -1,5 +1,5 @@
 import type { execFile, execFileSync } from 'node:child_process'
-import { expandWindowsEnvironmentVariables } from '../../../shared/windows-environment-expansion'
+import { expandWindowsEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 import { getRegExePath } from '../../windows/windows-command-paths'
 import { runProcess } from '@orca/process-host'
 import { mergeWindowsPathSegments } from './windows-path-segment-merge'

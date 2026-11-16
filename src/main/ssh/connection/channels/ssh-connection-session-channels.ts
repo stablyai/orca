@@ -5,7 +5,7 @@ import type {
   SFTPWrapper,
   ShellOptions
 } from 'ssh2'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SystemSshBuildArgsOptions } from '../../system-transport/system-ssh-args'
 import { spawnSystemSshCommand } from '../../system-transport/system-ssh-command'
 import { wrapRemoteCommandForPosixShell } from '../../remote-exec/ssh-posix-command-wrapper'

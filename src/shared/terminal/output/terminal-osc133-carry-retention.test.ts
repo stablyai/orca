@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ownRetainedString, resetOwnRetainedStringCopier } from '../../own-retained-string'
+import { ownRetainedString, resetOwnRetainedStringCopier } from '../../text/own-retained-string'
 import { createOsc133CommandFinishedScanner } from './terminal-osc133-command-finished'
 
 const FISH_PROMPT = '\x1b]133;A;click_events=1'

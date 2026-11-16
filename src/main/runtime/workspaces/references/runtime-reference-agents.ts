@@ -5,7 +5,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
@@ -13,7 +13,10 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import { peekOpenedAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-slot'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { structuredSessionMailReach } from '../../orchestration/mailbox/routing/structured-session-mail-address'

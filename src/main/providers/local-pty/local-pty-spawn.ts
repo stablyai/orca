@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
-import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../../shared/jcode-runtime-dir'
+import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../../shared/agent-launch/startup/jcode-runtime-dir'
 import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { prepareMacosTccLoginShell } from '../shell-launch/macos/tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'

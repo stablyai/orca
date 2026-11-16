@@ -6,7 +6,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type {
   ActiveRightSidebarTab,

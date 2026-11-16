@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
@@ -8,6 +9,7 @@ import {
   SESSION
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
+import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import {
   GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
@@ -219,4 +221,57 @@ describe('reattaching a Grok chat the journal holds', () => {
       expect(await notRestoredRows(rig)).toHaveLength(1)
     }
   )
+})
+
+describe('reopening an OpenCode chat whose conversation the agent moved to another folder', () => {
+  it('reopens it in the folder OpenCode lists, starting no new session', async () => {
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('opencode2')!,
+      launch: {
+        resume: {
+          sessionId: 'ses_moved',
+          key: 'acp-key-moved',
+          mayBeUnsaved: async () => false,
+          lossKeys: []
+        }
+      },
+      initialize: { agentCapabilities: { loadSession: true, sessionCapabilities: { list: {} } } },
+      script: (agent) => {
+        // Captured from OpenCode 2.2.7 after its session_move tool moved the session.
+        agent.on('session/load', (frame) => {
+          const { cwd } = z.object({ cwd: z.string() }).parse(frame.params)
+          if (cwd === '/workspace/project') {
+            agent.fail(
+              frame,
+              -32602,
+              'Invalid params: session ses_moved does not belong to cwd: /workspace/project',
+              { sessionId: 'ses_moved', cwd: '/workspace/project' }
+            )
+            return
+          }
+          agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
+        })
+        agent.on('session/list', (frame) =>
+          agent.reply(frame, {
+            sessions: [
+              { sessionId: 'ses_other', cwd: '/workspace/project' },
+              { sessionId: 'ses_moved', cwd: '/workspace/project-worktree' }
+            ]
+          })
+        )
+      }
+    })
+    await rig.acquire()
+    expect(rig.sent('session/load').map((frame) => frame.params)).toMatchObject([
+      { sessionId: 'ses_moved', cwd: '/workspace/project' },
+      { sessionId: 'ses_moved', cwd: '/workspace/project-worktree' }
+    ])
+    expect(rig.sent('session/new')).toHaveLength(0)
+    expect(rig.started().link).toMatchObject({
+      origin: 'resumed',
+      handle: { nativeId: 'ses_moved' }
+    })
+    expect(rig.started().link?.replaces).toBeUndefined()
+    expect(await notRestoredRows(rig)).toHaveLength(0)
+  })
 })

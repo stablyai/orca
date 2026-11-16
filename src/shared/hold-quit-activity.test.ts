@@ -29,7 +29,7 @@ const child: AgentChildWorkView = {
   stoppable: true,
   invocation: { invocationId: 'turn', generation: 1 }
 }
-const busy = (entry: AgentStatusEntry) => hasHoldQuitActiveWork({ [entry.paneKey]: entry }, now)
+const busy = (entry: AgentStatusEntry) => hasHoldQuitActiveWork([entry], now)
 
 describe('hold quit accepted activity projection', () => {
   it('keeps native running tools and compaction busy until the actual turn completes', () => {
@@ -152,7 +152,7 @@ describe('hold quit accepted activity projection', () => {
       now
     )
     expect(busy(remote)).toBe(true)
-    expect(hasHoldQuitActiveWork({ remote }, now + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
+    expect(hasHoldQuitActiveWork([remote], now + AGENT_STATUS_STALE_AFTER_MS + 1)).toBe(false)
     expect(busy({ ...base, updatedAt: 1, structuredHostOwned: true })).toBe(true)
     expect(busy({ ...remote, state: 'done' })).toBe(false)
   })

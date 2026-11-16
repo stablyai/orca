@@ -1,7 +1,7 @@
 import {
   RELAY_HOST_CLOSE_REASON,
   type RelayHostCloseReason
-} from '../../../../shared/relay-host-close-reason'
+} from '../../../../shared/remote-runtime/relay/relay-host-close-reason'
 import { relayStatusCellUrl } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type * as RelayStatus from '../../../../shared/remote-runtime/relay/mobile-relay-status'
 import type { RelayAccessTokenRefresh } from '../session-lifecycle/relay-session-broker-contract'

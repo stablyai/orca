@@ -13,7 +13,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 
 import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem

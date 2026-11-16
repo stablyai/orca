@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { HoldQuitWatchEvent } from './hold-quit-gesture'
-import type { KeybindingOverrides } from '../../shared/keybindings'
+import type { KeybindingOverrides } from '../../shared/keybindings/types'
 import { registerNativePopupQuitSurface } from '../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
 
 const mocks = vi.hoisted(() => {

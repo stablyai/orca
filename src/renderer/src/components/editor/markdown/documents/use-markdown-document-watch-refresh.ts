@@ -3,7 +3,7 @@ import type { FsChangedPayload } from '../../../../../../shared/file-watch/files
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
 import { hasMarkdownExtension } from '../link-routing/markdown-internal-links'
 import { MARKDOWN_DOCUMENT_LIST_JOIN_WINDOW_MS } from './markdown-document-list-request'

@@ -1,7 +1,7 @@
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import {
   EMPTY_HEAD_IDENTITY_SCOPE,
   FULL_HEAD_IDENTITY_SCOPE,

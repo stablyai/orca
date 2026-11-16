@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { inspectProcessLiveness } from '../../../daemon/endpoint/identity/daemon-process-inspection'
 import {
   PI_BACKGROUND_WORK_BRIDGE_FILE,

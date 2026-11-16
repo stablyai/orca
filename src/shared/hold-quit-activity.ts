@@ -3,10 +3,10 @@ import { isAgentStatusFresh } from './agent-status/contracts/agent-status-freshn
 import { isLiveChildWork } from './agent-status/child-work/agent-status-child-work-liveness'
 
 export function hasHoldQuitActiveWork(
-  entries: Record<string, AgentStatusEntry>,
+  entries: Iterable<AgentStatusEntry>,
   now = Date.now()
 ): boolean {
-  return Object.values(entries).some((entry) => {
+  return Array.from(entries).some((entry) => {
     if (
       !isAgentStatusFresh(entry, now) ||
       entry.observation?.origin === 'launch' ||

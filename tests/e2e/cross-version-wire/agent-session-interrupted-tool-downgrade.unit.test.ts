@@ -6,7 +6,7 @@ import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle
 import {
   endedRunningAgentJournalToolCall,
   interruptedAgentJournalToolCall
-} from '../../../src/shared/agent-journal-tool-call-lifecycle'
+} from '../../../src/shared/agent-session/journal/agent-journal-tool-call-lifecycle'
 import type { AgentJournalItemIdentity } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
 import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { readTestJournalItems } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'

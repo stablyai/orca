@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { lstatSync, mkdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
-import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
 import {
   observeFilePublication,

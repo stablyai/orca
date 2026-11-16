@@ -6,7 +6,7 @@ import { buildPtyHostEnv } from './assembly'
 import type { BuildPtyHostEnvOptions } from './types'
 
 const fixture = vi.hoisted(() => ({ userData: '', guestOverlay: '' }))
-vi.mock('../../../../shared/app-environment', () => ({
+vi.mock('../../../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => fixture.userData, onWillQuit: vi.fn() })
 }))
 vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({

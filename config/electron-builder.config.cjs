@@ -166,11 +166,6 @@ const emojiShortcodeDatasetResource = {
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
 const commonExtraResources = [
-  {
-    from: 'node_modules/node-pty/build/Release',
-    to: 'bin',
-    filter: ['journal-file-lock', 'journal-file-lock.exe']
-  },
   relayExtraResource,
   orcadTemplateExtraResource,
   orcadTemplateNodeModulesExtraResource,
@@ -339,6 +334,7 @@ module.exports = {
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
+    'out/main/worker-threads/worker-thread-{entry-path,spawn}.js',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
@@ -358,6 +354,7 @@ module.exports = {
     'out/main/persistence/profile-state/**',
     'out/main/plugins/artifacts/plugin-artifact-validation.js',
     'out/main/plugins/artifacts/plugin-content-hash.js',
+    'out/main/plugins/artifacts/plugin-host-call-validation.js',
     'out/main/plugins/catalog/plugin-catalog-release-entry.js',
     'out/main/environment-doctor/environment-doctor.js',
     'out/main/environment-doctor/environment-doctor-host.js',
@@ -413,17 +410,6 @@ module.exports = {
     if (context.electronPlatformName === 'linux') {
       ensureWaylandClipboard(context.arch)
     }
-    return import('./scripts/native-build/build-journal-file-lock.mjs').then(
-      ({ buildJournalFileLock }) => {
-        const lockName =
-          context.electronPlatformName === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock'
-        buildJournalFileLock(
-          join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', lockName),
-          context.arch === 3 ? 'arm64' : 'x64',
-          { glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false }
-        )
-      }
-    )
   },
   afterPack: async (context) => {
     const resourcesDir =
@@ -553,11 +539,6 @@ module.exports = {
     })
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     if (context.electronPlatformName === 'darwin') {
-      await signMacStandaloneHelper(
-        join(resourcesDir, 'bin', 'journal-file-lock'),
-        'journal file lock',
-        context.packager
-      )
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),

@@ -1,4 +1,4 @@
-import { keybindingMatchesInput } from './keybindings'
+import { keybindingMatchesInput } from './keybindings/matching'
 
 export const HOLD_QUIT_DURATION_MS = 1000
 

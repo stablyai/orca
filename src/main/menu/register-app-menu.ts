@@ -1,11 +1,8 @@
 import { BrowserWindow, Menu, app } from 'electron'
-import {
-  formatKeybindingList,
-  getEffectiveKeybindingsForAction,
-  type KeybindingActionId,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
-import type { UpdateCheckOptions } from '../../shared/update-status-types'
+import { formatKeybindingList } from '../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../shared/keybindings/effective'
+import type { KeybindingActionId, KeybindingOverrides } from '../../shared/keybindings/types'
+import type { UpdateCheckOptions } from '../../shared/updater/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
 import { createAppMenuQuitItems, type AppMenuQuitHandlers } from './app-menu-quit-item'

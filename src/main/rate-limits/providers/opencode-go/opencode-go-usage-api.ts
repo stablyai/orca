@@ -6,7 +6,7 @@ import {
   type OpenCodeGoUsageWindows
 } from './opencode-go-status-parsing'
 import { classifyThrownUsageRequestError } from '../usage-request-failure-kind'
-import type { UsageRateLimitFailureKind } from '../../../../shared/rate-limit-types'
+import type { UsageRateLimitFailureKind } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export const OPENCODE_GO_USAGE_API_URL = 'https://opencode.ai/zen/go/v1/usage'
 const API_TIMEOUT_MS = 15_000

@@ -17,7 +17,7 @@ export function useHoldQuitActivity(): void {
       const state = useAppStore.getState()
       window.api.ui.setHoldQuitActivity?.(
         state.settings?.holdQuitWhileAgentsWork === true &&
-          hasHoldQuitActiveWork(state.agentStatusByPaneKey)
+          hasHoldQuitActiveWork(state.agentStatusByPaneKey.values())
       )
     }
     publish()

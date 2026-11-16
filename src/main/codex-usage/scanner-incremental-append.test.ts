@@ -142,4 +142,25 @@ describe('scanCodexUsageFiles incremental append', () => {
     const second = await scanCodexUsageFiles([], first.processedFiles)
     expect(totalTokens(second.dailyAggregates)).toBe(5)
   })
+
+  it('reparses a grown rollout whose cached record lost its sessions instead of failing the scan', async () => {
+    const rolloutPath = join(sessionsDir, 'rollout-damaged.jsonl')
+    writeFileSync(
+      rolloutPath,
+      `${sessionMeta('session-damaged')}${usageRecordRange(0, RESUMABLE_RECORDS)}`
+    )
+    const first = await scanCodexUsageFiles([], [])
+    expect(recordedResumeOffset(first.processedFiles, rolloutPath)).toBeGreaterThan(0)
+    const damaged = first.processedFiles.map((file) => ({ ...file }))
+    for (const file of damaged) {
+      Reflect.deleteProperty(file, 'sessions')
+    }
+
+    writeFileSync(
+      rolloutPath,
+      `${sessionMeta('session-damaged')}${usageRecordRange(0, RESUMABLE_RECORDS + 5)}`
+    )
+    const second = await scanCodexUsageFiles([], damaged)
+    expect(totalTokens(second.dailyAggregates)).toBe(RESUMABLE_RECORDS + 5)
+  })
 })

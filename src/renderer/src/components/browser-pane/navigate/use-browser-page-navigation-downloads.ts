@@ -22,7 +22,7 @@ import {
   readWorkspaceFileDragSource,
   WORKSPACE_FILE_PATH_MIME
 } from '@/lib/files/drop/workspace-file-drag'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { resolveBrowserAddressBarSubmission } from './browser-address-bar-navigation'
 import { navigateBrowserPageToUrl } from './navigate-browser-page-url'
 import type { BrowserDownloadState } from './browser-download-progress'

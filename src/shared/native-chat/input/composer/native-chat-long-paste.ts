@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from '../../../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../../text/utf8-byte-limits'
 
 export const NATIVE_CHAT_PASTED_TEXT_FILE_THRESHOLD = 32 * 1024
 

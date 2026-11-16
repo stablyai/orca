@@ -1,6 +1,6 @@
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -10,8 +10,8 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
-} from '../../../shared/project-types'
-import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
+} from '../../../shared/project/project-types'
+import { getProjectHostSetupForRepo } from '../../../shared/project/host-setup/project-host-setup-lookup'
 import {
   linkImportedFolderToProject,
   type RepositoryMetadataOwner
@@ -31,7 +31,7 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
-import { sshHostWithoutServerMessage } from '../../../shared/project-host-setup-target'
+import { sshHostWithoutServerMessage } from '../../../shared/project/host-setup/project-host-setup-target'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
   assertWslMoveHostSetupIdWritable,

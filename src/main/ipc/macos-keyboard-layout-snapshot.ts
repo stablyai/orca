@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import type {
   KeyboardLayoutKeyCharacters,
   KeyboardLayoutSnapshot
-} from '../../shared/keyboard-layout-snapshot'
+} from '../../shared/keybindings/keyboard-layout-snapshot'
 
 const HELPER_EXECUTABLE = 'orca-keyboard-layout'
 const HELPER_TIMEOUT_MS = 1000

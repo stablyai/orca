@@ -25,14 +25,14 @@ import {
   orcadNodeRuntimeExecutable,
   orcadTemplateCommonFilenames,
   orcadTemplateTargetFilenames
-} from '../../../../src/shared/orcad-artifacts.ts'
-import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../../../src/shared/orcad-local-serve-selection.ts'
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
+import { ORCAD_LOCAL_SERVE_SELECTION_ENTRY } from '../../../../src/shared/remote-runtime/serve-supervisor/orcad-local-serve-selection.ts'
 import {
   NODE_RUNTIME_PIN,
   nodeRuntimeExecutablePath,
   nodeRuntimeReleaseUrl,
   pinnedNodeRuntimeAsset
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import {
   ensurePinnedNodeExecutable,
   fetchPinnedFile,

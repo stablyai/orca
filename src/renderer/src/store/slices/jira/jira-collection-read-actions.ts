@@ -1,7 +1,7 @@
 import { normalizeJiraStatusSelection } from '../../../../../shared/jira/jira-quick-filters'
 import { jiraListIssuesForTarget, jiraSearchIssues } from '@/runtime/jira/runtime-jira-client'
 import { rowLessSourceTarget } from '@/runtime/hosts/selection/default-creation-host'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
 import type { JiraIssue, JiraSiteSelection } from '../../../../../shared/jira/jira-types'
 import type { JiraSlice, JiraSliceGet, JiraSliceSet } from './jira-slice-contract'
 import {

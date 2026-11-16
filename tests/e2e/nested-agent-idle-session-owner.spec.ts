@@ -23,7 +23,7 @@ import { createDesktopMobilePairingOffer } from './helpers/paired-electron-clien
 import { pairMobileClient } from './helpers/paired-mobile-client'
 import { readAgentProcess } from '../../src/shared/agent-status/process/agent-process-presence-probe'
 import { resolveMobileNativeChat } from '../../mobile/src/session/native-chat/conversation/mobile-native-chat-eligibility'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const SESSION = '11111111-2222-4333-8444-555555555555'
 const REPLY = 'Foreground Claude reply stays selected while a nested Codex reviews.'
@@ -93,7 +93,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
   await expect
     .poll(() =>
       orcaPage.evaluate(
-        (key) => window.__store?.getState().agentStatusByPaneKey[key]?.state,
+        (key) => window.__store?.getState().agentStatusByPaneKey.get(key)?.state,
         descriptor.paneKey
       )
     )
@@ -121,7 +121,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
     await expect
       .poll(() =>
         orcaPage.evaluate(
-          (key) => window.__store?.getState().agentStatusByPaneKey[key]?.providerSession?.id,
+          (key) => window.__store?.getState().agentStatusByPaneKey.get(key)?.providerSession?.id,
           descriptor.paneKey
         )
       )
@@ -158,7 +158,7 @@ test('idle Claude keeps chat, mobile transcript, and return identity through nes
   ).toHaveCount(0)
   expect(
     await orcaPage.evaluate(
-      (key) => window.__store?.getState().agentStatusByPaneKey[key]?.providerSession?.id,
+      (key) => window.__store?.getState().agentStatusByPaneKey.get(key)?.providerSession?.id,
       descriptor.paneKey
     )
   ).toBe(SESSION)

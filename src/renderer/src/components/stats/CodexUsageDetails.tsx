@@ -3,7 +3,7 @@ import type {
   CodexUsageDailyPoint,
   CodexUsageSessionRow,
   CodexUsageSummary
-} from '../../../../shared/codex-usage-types'
+} from '../../../../shared/agent-usage/analytics/codex-usage-types'
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'

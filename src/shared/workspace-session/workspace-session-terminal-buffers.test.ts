@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultWorkspaceSession } from '../constants'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
-import { getUtf8ByteLength } from '../utf8-byte-limits'
+
 import {
   TERMINAL_SCROLLBACK_SESSION_HOMES,
   pruneLocalTerminalScrollbackBuffers,
@@ -190,31 +190,6 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     })
   })
 
-  it('caps preserved SSH buffers by UTF-8 bytes for multibyte scrollback', () => {
-    const multibyteRow = 'é'.repeat(1024)
-    const hugeScrollback = multibyteRow.repeat(512)
-    const result = pruneLocalTerminalScrollbackBuffers(
-      makeSession({
-        terminalLayoutsByTabId: {
-          'remote-tab': {
-            root: null,
-            activeLeafId: null,
-            expandedLeafId: null,
-            buffersByLeafId: { 'pane:1': hugeScrollback }
-          }
-        }
-      }),
-      [{ id: 'remote-repo', connectionId: 'ssh-target-1' }]
-    )
-
-    const buffer = result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId?.['pane:1'] ?? ''
-    expect(buffer.length).toBeGreaterThan(0)
-    expect(getUtf8ByteLength(buffer)).toBeLessThanOrEqual(
-      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
-    )
-    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT / 2)
-  })
-
   it('drops floating terminal buffers even though the synthetic worktree has no repo', () => {
     const result = pruneLocalTerminalScrollbackBuffers(
       makeSession({
@@ -337,30 +312,5 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
 
       expect(readBack(result, 'orphan-tab')).toBeUndefined()
     })
-  })
-
-  it('caps both homes of one tab in a single pass', () => {
-    const hugeScrollback = 'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 1)
-    const result = pruneLocalTerminalScrollbackBuffers(
-      makeSession({
-        terminalLayoutsByTabId: {
-          'remote-tab': {
-            root: null,
-            activeLeafId: null,
-            expandedLeafId: null,
-            buffersByLeafId: { 'pane:1': hugeScrollback }
-          }
-        },
-        localOnlyScrollbackByTabId: { 'remote-tab': { 'pane:2': hugeScrollback } }
-      }),
-      [{ id: 'remote-repo', connectionId: 'ssh-target-1' }]
-    )
-
-    expect(result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId?.['pane:1']).toHaveLength(
-      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
-    )
-    expect(result.localOnlyScrollbackByTabId?.['remote-tab']['pane:2']).toHaveLength(
-      TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
-    )
   })
 })

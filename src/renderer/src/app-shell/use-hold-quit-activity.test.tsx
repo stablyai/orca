@@ -6,9 +6,10 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { createFreshnessScheduler } from '@/store/slices/agent-status/agent-status-freshness-scheduler'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { resetRendererAppPlatformCacheForTests } from '@/app-shell/platform/renderer-app-platform'
 
-const initialEntries: Record<string, AgentStatusEntry> = {}
+const initialEntries = acceptedAgentStatuses()
 const store = createStore(() => ({
   settings: { ...getDefaultSettings('/tmp'), holdQuitWhileAgentsWork: true },
   agentStatusByPaneKey: initialEntries,
@@ -34,17 +35,16 @@ it('publishes silent remote expiry through the existing status scheduler without
     }
   })
   const now = Date.now()
-  const entries: Record<string, AgentStatusEntry> = {
-    remote: {
-      paneKey: 'remote',
-      state: 'working',
-      prompt: 'Remote turn',
-      updatedAt: now + 500_000,
-      mirroredEvidenceReceivedAt: now,
-      stateStartedAt: now,
-      stateHistory: []
-    }
+  const remote: AgentStatusEntry = {
+    paneKey: 'remote',
+    state: 'working',
+    prompt: 'Remote turn',
+    updatedAt: now + 500_000,
+    mirroredEvidenceReceivedAt: now,
+    stateStartedAt: now,
+    stateHistory: []
   }
+  const entries = acceptedAgentStatuses([['remote', remote]])
   store.setState({ agentStatusByPaneKey: entries, agentStatusEpoch: 0 })
   const scheduler = createFreshnessScheduler({
     getStatusEntries: () => store.getState().agentStatusByPaneKey,
