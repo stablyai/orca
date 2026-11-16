@@ -41,6 +41,8 @@ export type Env = {
   /** GH-AS-MEMBER: how long a shared workspace's latest sender keeps acting after their last send (default 60; `0`: no cap). */
   MEMBER_GIT_SHARED_MAX_MINUTES?: string
   /** GH-AS-MEMBER: `on` lets gh in workspaces act as the attested sender (off by default). */
+  /** TEAM-SHARING hold (team-sharing.ts): `on` lets workspaces be shared with the team; anything else holds it. */
+  TEAM_SHARING?: string
   GH_AS_MEMBER?: string
   /**
    * Who sees a member's daily activity heatmap on their profile. `opt_in` (default): only members

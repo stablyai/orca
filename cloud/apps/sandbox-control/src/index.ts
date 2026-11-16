@@ -39,6 +39,7 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { configureTeamSharing, teamSharingEnabled } from './team-sharing'
 import { purgeTeamSecrets, teamDeleteRoute, teamWorkspaceCount } from './team-delete'
 import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneReadSnapshotToOwner, revokeDeviceSessionReaderKeys } from './read-snapshots'
 import { refreshEnvironment, refreshStaleEnvironments, type GoldenRefreshOptions } from './environment-golden-refresh'
@@ -1355,6 +1356,7 @@ async function shareGateway(request: Request, url: URL, env: Env, deps: Deps): P
 }
 
 export async function handleRequest(request: Request, env: Env, deps: Deps = {}): Promise<Response> {
+  configureTeamSharing(env)
   try {
     return await routeRequest(request, env, deps)
   } catch (error) {
@@ -2804,6 +2806,7 @@ export default {
     return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work.catch(() => undefined)) })
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    configureTeamSharing(env)
     // Every minute: routines (schedule slots, run polling). Every fifth minute: everything else.
     ctx.waitUntil(
       lifecycleDeps(env, {}).then(async (life) => {

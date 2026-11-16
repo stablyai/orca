@@ -1,5 +1,6 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
+import { teamSharingEnabled } from './team-sharing'
 import { accountProvider } from './account-providers'
 import { readUsableAgentCredential } from './agent-credentials'
 import { CODEX_FIREWALL_ALL_PATHS, CODEX_FIREWALL_PATHS } from './codex-paths'
@@ -1438,8 +1439,9 @@ export async function createSandbox(
         source_snapshot_id: bootSnapshotId,
         repo_branch: request.repo?.ref ?? null,
         name: request.title ?? null,
-        // A personal account has no team: its workspaces are always private.
-        visibility: request.visibility === 'team' && caller.accountId.includes('org:') ? 'team' : 'private',
+        // A personal account has no team: its workspaces are always private. So is every one while team sharing
+        // is held (team-sharing.ts).
+        visibility: request.visibility === 'team' && caller.accountId.includes('org:') && teamSharingEnabled() ? 'team' : 'private',
         section: request.section ?? null,
         ownership_transferred_at: request.ownershipTransferredAt ?? null
       },
