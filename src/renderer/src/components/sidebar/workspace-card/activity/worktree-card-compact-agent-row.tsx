@@ -14,6 +14,7 @@ import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/pr
 import { formatAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
+import { useAgentRowReferenceDrag } from '@/components/dashboard/rows/use-agent-row-reference-drag'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
 import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
@@ -147,6 +148,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const forkNamed = forked && conversationName !== null
+  const referenceDrag = useAgentRowReferenceDrag(agent, primary, sendTargetStatus !== undefined)
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt
@@ -305,7 +307,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
 
   return (
     <div
-      draggable={false}
+      draggable={referenceDrag.draggable}
       className={cn(
         'compact-agent-row agent-disclosure-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
         'text-muted-foreground worktree-agent-row-hover',
@@ -320,7 +322,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onClick={handleActivate}
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
-      onDragStart={(e) => e.stopPropagation()}
+      onDragStart={(e) => {
+        e.stopPropagation()
+        referenceDrag.onDragStart(e)
+      }}
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}

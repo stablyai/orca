@@ -1,4 +1,5 @@
 import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'
+import { hasAgentReferenceDragData } from '@/lib/agent-session/messaging/agent-reference-drag'
 import { hasNativeFileDragTypes } from '../../../../../../shared/file-import/native-file-drop'
 import {
   type DroppedPathConsumer,
@@ -6,8 +7,8 @@ import {
 } from '../../../../../../shared/file-import/native-file-drop-preparation'
 import type { NativeChatResolvedPathSink } from './use-native-chat-workspace-file-drop'
 
-/** Workspace files use composer handlers; OS files use the pane’s native file owner. */
-export type NativeChatPaneDragKind = 'os' | 'workspace'
+/** Workspace files and dragged agents use composer handlers; OS files use the pane’s native file owner. */
+export type NativeChatPaneDragKind = 'os' | 'workspace' | 'agent'
 
 export type NativeChatPaneDragEvent = {
   currentTarget: { contains: (node: Node | null) => boolean }
@@ -62,6 +63,9 @@ export function nativeChatPaneDragKind(
   if (hasWorkspaceFileDragType(dataTransfer)) {
     return 'workspace'
   }
+  if (hasAgentReferenceDragData(dataTransfer)) {
+    return 'agent'
+  }
   return hasNativeFileDragTypes(dataTransfer.types) ? 'os' : null
 }
 
@@ -114,7 +118,8 @@ export function makeNativeChatPaneFileDropHandlers(host: {
   }
   const showsDropTarget = (event: NativeChatPaneDragEvent): boolean => {
     const kind = nativeChatPaneDragKind(event.dataTransfer)
-    if (kind === null || overNestedOwner(event)) {
+    // The overlay promises a file attachment; a dragged agent is answered by the drop cursor alone.
+    if (kind === null || kind === 'agent' || overNestedOwner(event)) {
       return false
     }
     const claim = host.getClaim(event)
@@ -135,7 +140,8 @@ export function makeNativeChatPaneFileDropHandlers(host: {
       } else if (overNestedOwner(event)) {
         host.setDragActive(false)
       }
-      if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
+      const kind = nativeChatPaneDragKind(event.dataTransfer)
+      if (kind === 'workspace' || kind === 'agent') {
         host.getClaim(event)?.onDragOverCapture(event)
       }
     },
@@ -151,11 +157,14 @@ export function makeNativeChatPaneFileDropHandlers(host: {
     onDropCapture(event) {
       clearNestedHover()
       host.setDragActive(false)
-      if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
+      const kind = nativeChatPaneDragKind(event.dataTransfer)
+      if (kind === 'workspace') {
         const owner = nestedOwner(event)
         host
           .getClaim(event)
           ?.onDropCapture(event, owner ? nestedWorkspaceDropSinks.get(owner)?.sink : undefined)
+      } else if (kind === 'agent') {
+        host.getClaim(event)?.onDropCapture(event)
       }
     }
   }
