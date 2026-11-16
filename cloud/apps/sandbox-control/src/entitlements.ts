@@ -1,5 +1,6 @@
 // Billing Worker client (cloud/apps/billing on nwparker/billing-worker): start checks and usage.
 // Fails closed: without a configured billing URL no sandbox starts, except the local-dev stub.
+import { devOnly } from './dev-only'
 import { z } from 'zod'
 import type { Env } from './env'
 
@@ -95,7 +96,7 @@ export const STOP_RUNNING_REASONS: ReadonlySet<string> = new Set([
 /** Dev operator test accounts (`dev:*`, see auth.ts) never reach billing outside prod. */
 export function withDevAccountBypass(env: Env, client: EntitlementClient): EntitlementClient {
   // SANDBOX_DEV_BILLING_PASSTHROUGH=true sends dev accounts to billing too (live smoke of the internal routes).
-  if (env.SANDBOX_ENV === 'prod' || env.SANDBOX_DEV_BILLING_PASSTHROUGH === 'true') {
+  if (!devOnly(env) || env.SANDBOX_DEV_BILLING_PASSTHROUGH === 'true') {
     return client
   }
   const enforced = devBillingEnforcePrefix(env)
@@ -135,8 +136,8 @@ export function createEntitlementClient(
   doFetch: typeof fetch = env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
 ): EntitlementClient {
   if (env.ENTITLEMENTS_MODE === 'stub') {
-    if (env.SANDBOX_ENV === 'prod') {
-      throw new BillingUnavailableError('stub entitlements refused in prod')
+    if (!devOnly(env)) {
+      throw new BillingUnavailableError('stub entitlements refused outside dev')
     }
     return {
       checkStart: async () => ({ allow: true, reason: null, suspendRunning: false }),
