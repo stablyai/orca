@@ -10,10 +10,17 @@ lifetime, reads one non-negative integer per line from stdin and republishes
 it. EOF, SIGTERM or SIGINT hides the badge before exiting, so a crashed parent
 never leaves a stale count behind.
 
+A dock that restarts while Orca stays open (extension disabled and enabled,
+shell reload) comes back with no launcher state and has missed every earlier
+signal. Docks take the ``com.canonical.Unity`` bus name when they start, so the
+helper replays the current count each time that name gains an owner, the same
+way libunity does.
+
 Usage: launcher-badge.py <desktop-file-name>   (for example ``orca-ide.desktop``)
 Exit codes: 0 clean, 2 unsupported host (no python3-gi or no session bus), 64 usage.
 """
 
+import os
 import signal
 import sys
 
@@ -28,6 +35,8 @@ except (ImportError, ValueError) as error:
 
 LAUNCHER_ENTRY_INTERFACE = "com.canonical.Unity.LauncherEntry"
 LAUNCHER_ENTRY_PATH_PREFIX = "/com/canonical/unity/launcherentry/"
+DOCK_BUS_NAME = "com.canonical.Unity"
+STDIN_READ_BYTES = 4096
 
 
 def object_path_for(desktop_file_name: str) -> str:
@@ -77,21 +86,60 @@ def main(argv) -> int:
         return 2
 
     badge = LauncherBadge(bus, argv[1])
+    loop = GLib.MainLoop()
+    current = {"count": 0}
+    pending = bytearray()
 
-    def hide_and_exit(_signum, _frame):
-        raise SystemExit(0)
+    def publish(count: int) -> None:
+        current["count"] = count
+        badge.publish(count)
 
-    signal.signal(signal.SIGTERM, hide_and_exit)
-    signal.signal(signal.SIGINT, hide_and_exit)
-    signal.signal(signal.SIGHUP, hide_and_exit)
+    def consume(line: bytes) -> None:
+        text = line.decode("utf-8", "replace")
+        count = parse_count(text)
+        if count is None:
+            print(f"launcher-badge: ignoring malformed count {text.strip()!r}", file=sys.stderr)
+            return
+        publish(count)
+
+    def on_stdin(fd, _condition):
+        chunk = os.read(fd, STDIN_READ_BYTES)
+        if not chunk:
+            if pending:
+                consume(bytes(pending))
+            loop.quit()
+            return GLib.SOURCE_REMOVE
+        pending.extend(chunk)
+        while True:
+            newline = pending.find(b"\n")
+            if newline < 0:
+                break
+            line = bytes(pending[:newline])
+            del pending[: newline + 1]
+            consume(line)
+        return GLib.SOURCE_CONTINUE
+
+    def on_dock_appeared(_connection, _name, _owner):
+        # A hidden badge needs no replay: a dock that just started shows none.
+        if current["count"] > 0:
+            badge.publish(current["count"])
+
+    def on_signal():
+        loop.quit()
+        return GLib.SOURCE_REMOVE
+
+    # The main loop, not a blocking stdin read, so a dock restart is handled between counts.
+    GLib.unix_fd_add_full(
+        GLib.PRIORITY_DEFAULT, sys.stdin.fileno(), GLib.IO_IN | GLib.IO_HUP, on_stdin
+    )
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signum, on_signal)
+    Gio.bus_watch_name_on_connection(
+        bus, DOCK_BUS_NAME, Gio.BusNameWatcherFlags.NONE, on_dock_appeared, None
+    )
 
     try:
-        for line in sys.stdin:
-            count = parse_count(line)
-            if count is None:
-                print(f"launcher-badge: ignoring malformed count {line.strip()!r}", file=sys.stderr)
-                continue
-            badge.publish(count)
+        loop.run()
     finally:
         try:
             badge.publish(0)
