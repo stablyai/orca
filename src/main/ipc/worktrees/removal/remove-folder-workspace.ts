@@ -1,5 +1,8 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'

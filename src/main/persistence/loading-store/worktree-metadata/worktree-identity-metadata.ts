@@ -2,14 +2,17 @@ import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-a
 import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { canonicalWorktreeIdentity } from '../../../../shared/worktree/identity'
 import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../shared/worktree/host-qualified-identity'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'

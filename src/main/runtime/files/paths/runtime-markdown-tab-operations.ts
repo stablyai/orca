@@ -4,7 +4,7 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../../../shared/editor/markdown/mobile-markdown-document'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   readMarkdownTabFromDisk,
   saveMarkdownTabToDisk,

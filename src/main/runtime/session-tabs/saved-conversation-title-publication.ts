@@ -6,7 +6,7 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { structuredChatDisplayName } from '../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../agent-session/records/agent-session-record-shown-name'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithSavedConversationTitlePublication extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {

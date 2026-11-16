@@ -19,7 +19,7 @@ import {
   withStoreCrossStoreLineage,
   type HostLineageList
 } from './cross-store-lineage-state'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { replaceWorktreeInRepoLists } from '../listing/worktree-owner-settings'
 import {
   withRepoHostOwnership,

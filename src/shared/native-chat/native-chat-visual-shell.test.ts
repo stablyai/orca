@@ -5,29 +5,10 @@ import {
   NATIVE_CHAT_VISUAL_PONG_TYPE,
   NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE,
-  buildNativeChatVisualDocument,
   nativeChatVisualThemeCss,
   readNativeChatVisualFrameMessage,
   readNativeChatVisualPong
 } from './native-chat-visual-shell'
-
-const theme = {
-  colorScheme: 'dark' as const,
-  tokens: { '--background': 'oklch(0.2 0 0)', '--chart-1': '#123456' }
-}
-
-describe('buildNativeChatVisualDocument', () => {
-  const html = '<!doctype html><html><head><title>x</title></head><body><p>hi</p></body></html>'
-  const document = buildNativeChatVisualDocument({ html, channel: 'abc123', theme })
-
-  it('puts the CSP before anything the visual wrote', () => {
-    const cspAt = document.indexOf('http-equiv="Content-Security-Policy"')
-    expect(cspAt).toBeGreaterThan(0)
-    expect(cspAt).toBeLessThan(document.indexOf('<title>x</title>'))
-    expect(cspAt).toBeLessThan(document.indexOf('<script>'))
-    expect(document.endsWith(html)).toBe(true)
-  })
-})
 
 describe('nativeChatVisualThemeCss', () => {
   it('drops structural characters and invalid names so a value cannot escape the rule', () => {

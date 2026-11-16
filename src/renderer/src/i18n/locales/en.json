@@ -20830,6 +20830,13 @@
         "permissionDenied": "{{agent}} denied permission. View details.",
         "safetyReviewApproved": "{{agent}} approved this action. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
+        "autoReviewDenied": "{{agent}}'s automatic review denied: {{action}}",
+        "autoReviewNoReason": "No reason was given.",
+        "autoReviewApprove": "Approve once",
+        "autoReviewApproved": "Approved",
+        "autoReviewApproveNotRunning": "{{agent}} isn't running. Send it a message to start it, then approve again.",
+        "autoReviewApproveFailed": "Couldn't record your approval. Try again.",
+        "autoReviewApproveHint": "{{agent}} may retry this exact action once. Its review still checks the retry.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
         "forkedFrom": "Forked from",
@@ -21585,7 +21592,22 @@
         "settings": "Open settings in Terminal",
         "extensions": "Open the extension dashboard in Terminal",
         "hotkeys": "Show keyboard shortcuts in Terminal",
-        "mcpManage": "Manage MCP servers"
+        "mcpManage": "Manage MCP servers",
+        "agentsTerminal": "Choose the agent in Terminal",
+        "sessionsTerminal": "Switch sessions in Terminal",
+        "skillsTerminal": "Browse skills in Terminal",
+        "mcpsTerminal": "Manage MCP servers in Terminal",
+        "connectTerminal": "Connect a provider in Terminal",
+        "statusTerminal": "View status in Terminal",
+        "themesTerminal": "Choose a theme in Terminal",
+        "diffTerminal": "Open the diff viewer in Terminal",
+        "editorTerminal": "Open your editor in Terminal",
+        "debugTerminal": "View debug info in Terminal",
+        "helpTerminal": "Show help in Terminal",
+        "forkSessionTerminal": "Fork the session in Terminal",
+        "renameSessionTerminal": "Rename the session in Terminal",
+        "timelineTerminal": "Browse the session timeline in Terminal",
+        "exportTerminal": "Export the session in Terminal"
       },
       "modelDescriptions": {
         "grok_4_7": "xAI's latest frontier model",
@@ -23976,7 +23998,7 @@
         "busy": "Working",
         "idle": "Idle",
         "settingTitle": "When you switch accounts while Claude is running in terminals",
-        "settingDescription": "Restarting continues each terminal conversation on the new account.",
+        "settingDescription": "Restarting continues each terminal conversation on the new account. Busy sessions stop their current work.",
         "keyword": {
           "restart": "restart",
           "running": "running"
@@ -23999,14 +24021,16 @@
         "reasonSharedSession": "Also open in another pane",
         "sharedOne": "1 Claude session stays on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
         "sharedOther": "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
+        "strandedOne": "1 Claude session may still be on {{previous}}. Restart it manually to switch.",
+        "strandedOther": "{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.",
         "notMovedOne": "1 other session wasn't moved.",
         "notMovedOther": "{{count}} other sessions weren't moved.",
         "review": "Review",
         "restartCount_other": "Restart {{count}} sessions",
-        "reviewBody_one": "{{count}} other Claude session wasn't moved to {{next}}.",
-        "reviewBody_other": "{{count}} other Claude sessions weren't moved to {{next}}.",
-        "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
-        "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
+        "reviewBody_one": "{{count}} Claude session wasn't moved to {{next}}.",
+        "reviewBody_other": "{{count}} Claude sessions weren't moved to {{next}}.",
+        "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.",
+        "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.",
         "restartCount_one": "Restart {{count}} session"
       },
       "oauthUsage": {
@@ -24506,7 +24530,9 @@
       "chooseTransition": "Choose a status change:",
       "cancel": "Cancel",
       "noTransition": "No status change to {{column}} is available for {{key}}.",
-      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters."
+      "queryTooLong": "The Jira query is too long. Shorten the query or clear filters.",
+      "reorderColumn": "Reorder {{column}}",
+      "reorderColumnHint": "Issues in this lane: {{count}}. Use the Left and Right arrow keys to move it."
     },
     "favourites": {
       "loadFailed": "Could not load Jira favourites.",

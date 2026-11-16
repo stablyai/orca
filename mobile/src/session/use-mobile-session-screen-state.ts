@@ -1,3 +1,4 @@
+import { DEFAULT_TERMINAL_FONT_STYLE } from '../terminal/preferences/terminal-font-style'
 import { useState, useRef, useMemo } from 'react'
 import { useTerminalSplitLayout } from '../terminal/session/pane-layout/use-terminal-split-layout'
 import { createLiveInputCapture } from '../terminal/session/input-controls/live-input-capture'
@@ -38,6 +39,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const closedTabTombstonesRef = useRef<Map<string, number>>(new Map())
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
   const [terminalTextScale, setTerminalTextScale] = useState(1)
+  const [terminalFontStyle, setTerminalFontStyle] = useState(DEFAULT_TERMINAL_FONT_STYLE)
   const terminalTextScaleRevisionRef = useRef(0)
   const [linkOpenMode, setLinkOpenMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const [liveInputCapture] = useState(createLiveInputCapture)
@@ -118,6 +120,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     terminalTextScale,
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
+    terminalFontStyle,
+    setTerminalFontStyle,
     linkOpenMode,
     setLinkOpenMode,
     liveInputCapture,

@@ -30,11 +30,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
   ),
   featureRoute(
     'feature.floating-terminal',
-    [
-      'floating-terminal-switch-reveal',
-      'floating-terminal-tab-rename-focus',
-      'floating-workspace-pane-height'
-    ],
+    ['floating-terminal-switch-reveal', 'floating-terminal-tab-rename-focus'],
     [`${COMPONENTS}floating-terminal/`]
   ),
   featureRoute(

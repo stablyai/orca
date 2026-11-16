@@ -8,7 +8,7 @@ import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pt
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { registeredPtyProviders, tryGetProviderForPty } from '../provider/registry'
 
 // Coordinate claims across provider boundaries, including shared namespaces reached through different relays.

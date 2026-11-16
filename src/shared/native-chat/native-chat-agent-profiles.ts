@@ -109,6 +109,14 @@ export function getNativeChatCommandReply(
   )
 }
 
+/** Whether a bare command sent over a terminal session opens a TUI screen the chat cannot show. */
+export function nativeChatCommandOpensTerminal(agent: AgentType, command: string): boolean {
+  const text = command.trim()
+  return getVerifiedNativeChatCommands(agent).some(
+    (entry) => entry.opensInTerminal === true && text === `/${entry.name}`
+  )
+}
+
 /** Exclude desktop-only answers: mobile lacks composer answers/transcript reply rows and would offer commands with no visible result. */
 export function getAgentAnsweredNativeChatCommands(
   agent: AgentType

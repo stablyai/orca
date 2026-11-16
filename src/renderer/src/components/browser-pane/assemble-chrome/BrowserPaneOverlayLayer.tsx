@@ -8,7 +8,7 @@ import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-g
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
-import { tabGroupBodyAnchorName } from '../../tab-group/tab-group-body-anchor'
+import { tabGroupBodyAnchorName } from '../../tab-group/retained-pane/tab-group-body-anchor'
 import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { useBrowserGuestPaintRetention } from '../host-guest/retention/browser-guest-paint-retention'
 import {

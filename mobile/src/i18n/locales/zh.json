@@ -125,11 +125,7 @@
       "codeNoLongerValid": "此配对码已过期、已被使用或已被替换。请在电脑上显示新的配对码后重新扫描。"
     },
     "terminalSettings": {
-      "defaultText": "默认（100%）",
       "keepPhoneSize": "保持手机尺寸（默认）",
-      "largeText": "大（125%）",
-      "largerText": "更大（150%）",
-      "largestText": "最大（200%）",
       "leaveAppDescription": "在手机上使用终端时，Orca 会缩小终端尺寸以适应屏幕。关闭应用或切换到其他应用时，此设置决定终端是保持手机尺寸（避免交互式 CLI 工具的界面重新排版），还是恢复为桌面尺寸。您随时可以点击桌面横幅中的“恢复”手动调整尺寸",
       "leaveAppHeading": "离开应用时",
       "noPairedDesktops": "尚未配对桌面。配对后即可设置终端行为",
@@ -138,12 +134,6 @@
       "restoreAfterSeconds_one": "{{count}} 秒后",
       "restoreAfterSeconds_other": "{{count}} 秒后",
       "restoreHost": "恢复 {{name}}",
-      "smallerText": "较小（75%）",
-      "smallestText": "最小（50%）",
-      "textSize": "文字大小",
-      "textSizeDescription": "调整终端文字大小。文字较小时可显示更多列，两侧留有边距；文字较大时显示的列数较少，可横向拖动查看。也可以直接在终端中双指缩放，此设置会随之更新。仅影响当前设备的显示，不会改变桌面终端",
-      "textSizeHeading": "文字大小",
-      "textSizePickerTitle": "终端文字大小",
       "title": "终端"
     }
   },

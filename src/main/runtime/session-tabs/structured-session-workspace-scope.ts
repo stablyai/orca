@@ -6,7 +6,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
   getRepoExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import {
   isFloatingWorkspaceId,

@@ -10,6 +10,10 @@ import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session/lifecycle
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from './native-chat-stopped-before-start'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session/agent-session-fork'
 import type { NativeChatBlock, NativeChatTextBlock } from './native-chat-types'
+import {
+  readCodexAutoReviewDenialFrame,
+  type CodexAutoReviewDenial
+} from '../agent-session/codex-auto-review-denial'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
@@ -48,6 +52,8 @@ export type NativeChatNoticeLook =
       agent: 'Codex' | 'Claude'
       tone: NativeChatNoticeTone
     }
+  /** An action the agent's automatic review denied, which the person may approve one retry of. */
+  | { kind: 'auto-review-denied'; agent: 'Codex'; denial: CodexAutoReviewDenial }
   /** A boxed line with its icon when it has a tone; plain text when it has none. */
   | { kind: 'line'; tone: NativeChatNoticeTone | null }
 
@@ -107,6 +113,10 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   // Declared notification kinds select disclosure; prose and nested failures do not.
   if (presentation === undefined && !block.failure && !block.orcaStop) {
     const frame = block.providerFrame
+    const denial = readCodexAutoReviewDenialFrame(frame)
+    if (denial) {
+      return { kind: 'auto-review-denied', agent: 'Codex', denial }
+    }
     if (frame?.provider === 'codex' && frame.kind === 'notification:guardianWarning') {
       // Codex also reports approvals here; its own TUI hides them by this prefix.
       const approved = block.text.startsWith('Automatic approval review approved (')

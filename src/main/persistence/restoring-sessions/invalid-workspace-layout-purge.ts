@@ -1,8 +1,11 @@
 // Main and renderer must share workspace validity or load will resurrect layouts one side discarded.
 
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { isWorktreeCatalogVersionBefore } from '../../../shared/worktree/catalog/catalog-version'

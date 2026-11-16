@@ -1,6 +1,6 @@
 /** Carry confirmed (worktreeId, executionHostId) through cleanup; IDs repeat across hosts. Refuse ambiguous/hostless/missing refreshed owners rather than risk deleting another host’s uncommitted work (STA-4343). */
 import type { AppState } from '../../types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   canQueueWorkspaceCleanupCandidate,
   needsWorkspaceCleanupRemovalApproval,
