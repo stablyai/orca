@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
   lstatSync,
@@ -208,9 +208,27 @@ describe('close-migration-reopened-tabs', () => {
   // Chromium's SingletonLock symlink is how macOS and Linux show a running Orca.
   it.skipIf(process.platform === 'win32')('refuses to apply while Orca holds the profile', () => {
     const userData = writeProfile()
-    symlinkSync(`${hostname()}-${process.pid}`, path.join(userData, 'SingletonLock'))
-    expect(findRunningOrca(userData, { processName: () => 'Orca' })).toContain(String(process.pid))
-    expect(findRunningOrca(userData, { processName: () => 'launchd' })).toBeNull()
+    // A live node process stands in for Orca's main process; test workers may rename themselves.
+    const holder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: 'ignore'
+    })
+    try {
+      symlinkSync(`${hostname()}-${holder.pid}`, path.join(userData, 'SingletonLock'))
+      expect(findRunningOrca(userData)).toContain(String(holder.pid))
+      expect(findRunningOrca(userData, { processName: () => 'launchd' })).toBeNull()
+
+      const before = snapshot(userData)
+      const refused = run(userData, '--apply')
+      expect(refused.status).toBe(1)
+      expect(snapshot(userData)).toEqual(before)
+      expect(
+        readdirSync(path.dirname(userData)).some((name) =>
+          name.startsWith(`${path.basename(userData)}-chat-backup-`)
+        )
+      ).toBe(false)
+    } finally {
+      holder.kill()
+    }
 
     // orcad.lock outlives Orca; a reused PID or another machine's record must not read as this one.
     const lockDir = mkdtempSync(path.join(tmpdir(), 'orca-tab-repair-lock-'))
@@ -235,15 +253,5 @@ describe('close-migration-reopened-tabs', () => {
     })
     expect(findRunningOrca(lockDir, ticks('42'))).toContain('running')
     expect(findRunningOrca(lockDir, ticks('43'))).toBeNull()
-
-    const before = snapshot(userData)
-    const refused = run(userData, '--apply')
-    expect(refused.status).toBe(1)
-    expect(snapshot(userData)).toEqual(before)
-    expect(
-      readdirSync(path.dirname(userData)).some((name) =>
-        name.startsWith(`${path.basename(userData)}-chat-backup-`)
-      )
-    ).toBe(false)
   })
 })
