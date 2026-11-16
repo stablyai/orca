@@ -102,6 +102,18 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.linkPreviewsSearchHover', 'hover card')
     ]
   },
+  composerSpellcheck: {
+    targetSectionId: 'chat-composer-spellcheck',
+    title: translate('components.settings.nativeChat.composerSpellcheckTitle', 'Check spelling'),
+    description: translate(
+      'components.settings.nativeChat.composerSpellcheckCopy',
+      'Underlines misspelled words in the message box. Turn off to stop spellcheck there without changing it system-wide.'
+    ),
+    keywords: [
+      translate('components.settings.nativeChat.composerSpellcheckSearchSpelling', 'spellcheck'),
+      translate('components.settings.nativeChat.composerSpellcheckSearchAutocorrect', 'autocorrect')
+    ]
+  },
   shellEnvironment: {
     targetSectionId: 'chat-shell-environment',
     title: translate(
