@@ -1,7 +1,10 @@
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { readOpenCodeNativeChatTranscriptFull } from './transcript-history/opencode/transcript-opencode'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
-import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
+import {
+  InFlightPromiseDedupe,
+  stableInFlightKey
+} from '../../shared/concurrency/in-flight-promise-dedupe'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
 import { wslGatedStat } from './transcript-filesystem/wsl-transcript-fs-access'

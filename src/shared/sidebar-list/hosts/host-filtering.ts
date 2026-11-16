@@ -7,8 +7,8 @@ import {
   type ExecutionHostScope
 } from '../../execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../project-group-types'
-import type { Repo } from '../../repo-types'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
+import type { Repo } from '../../repository/repo-types'
 
 /** null means "no host filter" — every host is visible. */
 export function getVisibleSidebarHostIdSet(

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import { createEmptyRateLimitState } from '../../../../../shared/rate-limit-state-factory'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import {
   watchProviderAccounts,
   type ProviderAccountsSnapshot

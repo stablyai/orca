@@ -3,11 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import BrowserSettingsScreen from './browser-settings-screen'
 import { PickerModal } from '../components/sheets/PickerModal'
-import {
-  loadTerminalLinkOpenMode,
-  saveTerminalLinkOpenMode,
-  type MobileTerminalLinkOpenMode
-} from '../storage/preferences'
+import { loadLinkOpenMode, saveLinkOpenMode, type MobileLinkOpenMode } from '../storage/preferences'
 
 vi.mock(
   './settings-screen-frame',
@@ -31,8 +27,9 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ back() {} }) }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon', Globe: 'Icon' }))
 vi.mock('../components/sheets/PickerModal', () => ({ PickerModal: () => null }))
 vi.mock('../storage/preferences', () => ({
-  loadTerminalLinkOpenMode: vi.fn(),
-  saveTerminalLinkOpenMode: vi.fn()
+  DEFAULT_LINK_OPEN_MODE: 'ask',
+  loadLinkOpenMode: vi.fn(),
+  saveLinkOpenMode: vi.fn()
 }))
 let renderer: ReactTestRenderer
 
@@ -43,14 +40,14 @@ afterEach(() => {
 
 describe('browser settings persistence', () => {
   it('does not replace a new selection with an older pending hydration read', async () => {
-    let resolveLoad = (_value: MobileTerminalLinkOpenMode) => {}
-    vi.mocked(loadTerminalLinkOpenMode).mockImplementation(
+    let resolveLoad = (_value: MobileLinkOpenMode) => {}
+    vi.mocked(loadLinkOpenMode).mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveLoad = resolve
         })
     )
-    vi.mocked(saveTerminalLinkOpenMode).mockResolvedValue()
+    vi.mocked(saveLinkOpenMode).mockResolvedValue()
     await act(async () => {
       renderer = create(createElement(BrowserSettingsScreen))
     })
@@ -64,14 +61,14 @@ describe('browser settings persistence', () => {
   })
 
   it('restores the hydrated destination when the save fails before the first read finishes', async () => {
-    let resolveLoad = (_value: MobileTerminalLinkOpenMode) => {}
-    vi.mocked(loadTerminalLinkOpenMode).mockImplementation(
+    let resolveLoad = (_value: MobileLinkOpenMode) => {}
+    vi.mocked(loadLinkOpenMode).mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveLoad = resolve
         })
     )
-    vi.mocked(saveTerminalLinkOpenMode).mockRejectedValue(new Error('storage unavailable'))
+    vi.mocked(saveLinkOpenMode).mockRejectedValue(new Error('storage unavailable'))
     await act(async () => {
       renderer = create(createElement(BrowserSettingsScreen))
     })

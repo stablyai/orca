@@ -2,7 +2,7 @@ import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../../daemon/sessions/immediate-
 import { OrcaRuntimeWithFocusTerminal } from '../terminal/focus/focus-terminal'
 
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 // Include immediate-kill and follow-up inventory budgets; agent exit hooks can delay verification.
 const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = IMMEDIATE_KILL_REPLY_BUDGET_MS + 2_000
 

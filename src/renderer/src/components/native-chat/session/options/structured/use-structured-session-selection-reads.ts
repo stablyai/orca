@@ -3,7 +3,7 @@ import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections
 import { recomputeOn } from '@/lib/recompute-on'
 import type { structuredSessionSelectionAuthority } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import type { StructuredSessionSelectionController } from '../../../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Revalidate the queried base when local operations finish or host authority moves. */
 export function useStructuredSessionSelectionReads(args: {

@@ -15,7 +15,7 @@ import { getSharedManagedScriptPath } from '../../agent-hooks/installation/scrip
 import { isPlainObject } from '../../agent-hooks/installation/configuration/hooks-json-read'
 import { isSafeUnicodeWindowsBatchHookPath } from '../../agent-hooks/installation/commands/windows-hook-command'
 import { wrapWindowsPowerShellEncodedCommand } from '../../agent-hooks/installation/commands/windows-powershell-hook-launcher'
-import { quotePowerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import { getWindowsNativeHookAgent } from '../../agent-hooks/installation/commands/windows-native-hook-executable'
 import {
   wrapRuntimeHomeHookCommand,

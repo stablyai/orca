@@ -15,7 +15,7 @@ import type { RuntimeClient } from '../../../src/cli/runtime/client'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
-} from '../../../src/shared/runtime-types'
+} from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scanner'
 import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './fake-codex-launch-probes'

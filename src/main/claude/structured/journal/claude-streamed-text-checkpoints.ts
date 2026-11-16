@@ -38,6 +38,8 @@ export type ClaudeStreamedTextCheckpoints = {
   latest: (key: string) => string | undefined
   /** End matching rows whose final frames will never arrive; discard empty blocks. */
   finish: (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean) => void
+  /** End root rows only; a subagent's streams continue. */
+  finishRoot: (ended: ClaudeStreamedBlockEnd) => void
   /** Flush before settling; discard retained blocks so interrupted turns cannot accumulate text. */
   settle: () => void
   readonly pending: number
@@ -109,6 +111,20 @@ export function createClaudeStreamedTextCheckpoints(
     checkpointLengths.delete(key)
   }
 
+  const finish = (ended: ClaudeStreamedBlockEnd, only?: (key: string) => boolean): void => {
+    for (const [key, identity] of identities) {
+      if (only && !only(key)) {
+        continue
+      }
+      coalescer.flush(key)
+      const text = latestText.get(key)
+      if (text !== undefined) {
+        deps.persist(identity, text, producerOptions(key), ended)
+      }
+      drop(key)
+    }
+  }
+
   return {
     append: (identity, text, parentToolUseId = null) => {
       const key = agentJournalItemKey(identity)
@@ -141,19 +157,8 @@ export function createClaudeStreamedTextCheckpoints(
     },
     forget: drop,
     latest: (key) => coalescer.snapshot(key)?.text ?? latestText.get(key),
-    finish: (ended, only) => {
-      for (const [key, identity] of identities) {
-        if (only && !only(key)) {
-          continue
-        }
-        coalescer.flush(key)
-        const text = latestText.get(key)
-        if (text !== undefined) {
-          deps.persist(identity, text, producerOptions(key), ended)
-        }
-        drop(key)
-      }
-    },
+    finishRoot: (ended) => finish(ended, (key) => scopes.get(key) === null),
+    finish,
     settle: () => {
       for (const key of identities.keys()) {
         drop(key)

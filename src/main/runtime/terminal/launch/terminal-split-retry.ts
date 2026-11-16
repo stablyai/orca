@@ -1,4 +1,4 @@
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { SPLIT_PANE_WAIT_TIMEOUT_MESSAGE } from './terminal-split-wait-timeout'
 

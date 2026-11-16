@@ -6,8 +6,8 @@ import type { StructuredAgentSessionState } from '../../../../../../src/shared/a
 import {
   structuredSessionBackgroundTasksView,
   type StructuredSessionBackgroundTasksView
-} from '../../../../../../src/shared/structured-session-background-tasks-view'
-import { structuredSessionForegroundCommands } from '../../../../../../src/shared/structured-session-foreground-commands'
+} from '../../../../../../src/shared/agent-session/view/structured-session-background-tasks-view'
+import { structuredSessionForegroundCommands } from '../../../../../../src/shared/agent-session/view/structured-session-foreground-commands'
 import type { StructuredAgentSessionMutationResult } from '../../agent-session/mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 import { mobileStructuredHostClockOffsetMs } from '../../agent-session/mobile-structured-host-clock-offset'

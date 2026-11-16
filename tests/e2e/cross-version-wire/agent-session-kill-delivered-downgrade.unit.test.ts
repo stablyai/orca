@@ -18,10 +18,12 @@ import { turnVerdictFromDeathEvidence } from '../../../src/main/native-chat/agen
 import { releaseStoredAgentSessionOwnerAfterSurfaceClose } from '../../../src/main/runtime/agent-session/ownership/agent-session-surface-release-transition'
 import {
   closeTestAgentSessionDatabase,
-  openTestAgentSessionRecordStore,
+  openTestAgentSessionRecordStore
+} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
   seedTestAgentSessionRecordStore,
   storedTestAgentSessionRecord
-} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
 // The last release before Stop recorded a delivered kill.

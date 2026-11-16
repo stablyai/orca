@@ -1,7 +1,7 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { safeFind } from '../../../terminal-search-safe-find'
 import { buildTerminalSearchOptions } from '../../../terminal-search-options'
-import '../../../../../../shared/keybindings'
+
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type {
   KeybindingOverrides,

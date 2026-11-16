@@ -1,9 +1,9 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
   BrowserScreencastReadyResult,
   BrowserScreencastResult
 } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
-import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/runtime-rpc-feature-interaction-source'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'
 import type {

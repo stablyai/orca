@@ -34,3 +34,9 @@ export type AgentStatusApplyOptions = {
   retry?: boolean
   batch?: AgentStatusBatchContext
 }
+
+export type AgentStatusEventApplicatorArgs = {
+  pendingAgentStatusEvents: PendingAgentStatusEvent[]
+  transientClearWatermarkByConnectionId: Map<string, number>
+  enqueuePendingAgentStatus: (data: AgentStatusIpcPayload, options?: { replay?: boolean }) => void
+}

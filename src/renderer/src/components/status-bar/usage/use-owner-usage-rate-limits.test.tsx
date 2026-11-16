@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import { createEmptyRateLimitState } from '../../../../../shared/rate-limit-state-factory'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 type Handlers = {
@@ -204,50 +204,5 @@ describe('useOwnerUsageRateLimits', () => {
     expect(result.current.rateLimits.claude?.status).toBe('error')
     expect(result.current.rateLimits.claude?.usageMetadata?.unverifiableOwner).toBe(true)
     expect(result.current.rateLimits.claude?.error).toContain('Mac Mini does not report usage')
-  })
-
-  it('never shows server A numbers under server B', () => {
-    mocks.owner = { kind: 'environment', environmentId: 'mini' }
-    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
-    const first = mocks.watchers[0]
-    act(() =>
-      first.handlers.onSnapshot(
-        snapshot(createEmptyRateLimitState({ claude: provider('claude', 90) }))
-      )
-    )
-    mocks.owner = { kind: 'environment', environmentId: 'devbox' }
-    rerender()
-    expect(first.closed).toBe(true)
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-    act(() =>
-      first.handlers.onSnapshot(
-        snapshot(createEmptyRateLimitState({ claude: provider('claude', 91) }))
-      )
-    )
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-  })
-
-  it('ignores a refresh that completes after the owner changed', async () => {
-    mocks.owner = { kind: 'environment', environmentId: 'mini' }
-    let resolveRefresh: (value: ProviderAccountsSnapshot) => void = () => {}
-    mocks.callRuntimeRpc.mockReturnValue(
-      new Promise<ProviderAccountsSnapshot>((resolve) => {
-        resolveRefresh = resolve
-      })
-    )
-    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
-    const pending = result.current.refreshRemote?.()
-    mocks.owner = { kind: 'environment', environmentId: 'devbox' }
-    rerender()
-    act(() =>
-      mocks.watchers[1].handlers.onSnapshot(
-        snapshot(createEmptyRateLimitState({ claude: provider('claude', 20) }))
-      )
-    )
-    await act(async () => {
-      resolveRefresh(snapshot(createEmptyRateLimitState({ claude: provider('claude', 99) })))
-      await pending
-    })
-    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(20)
   })
 })

@@ -16,11 +16,11 @@ import {
   type AgentSessionOperationRow
 } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import {
   editPersistedTestAgentSessionStore,
-  openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
-} from '../../../agent-session/records/agent-session-record-store-test-harness'
+} from '../../../agent-session/records/agent-session-record-store-persistence.test-fixture'
 import type { RpcContext } from '../../core'
 import '../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import '../../dispatcher'

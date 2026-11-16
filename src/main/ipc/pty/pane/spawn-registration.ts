@@ -15,7 +15,7 @@ import {
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 
 /** Track before saving; failed save/stop must not make a potentially live process disappear from ownership. */

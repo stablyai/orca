@@ -1,4 +1,6 @@
 import { Fragment, useMemo, useRef, useState } from 'react'
+import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import { Pressable, Text, View } from 'react-native'
 import { Plus, X } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
@@ -15,6 +17,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabRow,
+  isForkedChatTab,
   type MobileSessionTabGroup,
   type MobileSessionTabRow,
   type MobileSessionTabSummary
@@ -130,7 +133,13 @@ function MobileSessionTabsSheetContent({
         {(guardPress) => (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={[row.title, row.detail, time].filter(Boolean).join(', ')}
+            accessibilityLabel={[
+              isForkedChatTab(row.tab) ? mobileForkAccessibleName(row.title) : row.title,
+              row.detail,
+              time
+            ]
+              .filter(Boolean)
+              .join(', ')}
             accessibilityState={{ selected: current }}
             style={styles.row}
             onPress={guardPress(() => {
@@ -153,7 +162,11 @@ function MobileSessionTabsSheetContent({
                 </View>
                 <View style={styles.text}>
                   <Text style={styles.title} numberOfLines={1}>
-                    {row.title}
+                    {isForkedChatTab(row.tab) ? (
+                      <MobileForkMarkedName name={row.title} />
+                    ) : (
+                      row.title
+                    )}
                   </Text>
                   <Text style={styles.detail} numberOfLines={1}>
                     {row.detail}

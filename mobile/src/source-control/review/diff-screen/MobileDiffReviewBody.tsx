@@ -1,5 +1,5 @@
 import { FileText, ListChecks } from 'lucide-react-native'
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import {
   MobileLoadErrorState,
   MobileOfflineState,

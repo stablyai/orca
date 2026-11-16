@@ -1,6 +1,6 @@
 import { isRepoOnCatalogHost } from '../../../shared/execution-host'
-import type { WorkspaceHookOwner } from '../../../shared/workspace-hook-owner'
-import type { Repo } from '../../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
 import { removeFolderSetupRunnerFiles } from '../../workspace-hooks/folder-setup-runner-files'
 import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'

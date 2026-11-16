@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import { normalizeHookPayload } from './normalize-hook-payload'
-import { clearGrokSessionPathLookupCacheForTests } from '../../grok-session-paths'
+import { clearGrokSessionPathLookupCacheForTests } from '../providers/grok/grok-session-paths'
 import { PANE_KEY } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {

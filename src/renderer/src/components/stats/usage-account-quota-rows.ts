@@ -4,7 +4,7 @@ import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget,
   RateLimitState
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   buildClaudeStatusSwitchGroups,

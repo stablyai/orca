@@ -4,13 +4,13 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import {
   getHiddenImportableExternalWorktrees,
   getVisibleNonOrcaWorktrees
-} from '../../../../../../shared/external-worktree-inbox'
-import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
+import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 
 type Props = {
   repo: Repo

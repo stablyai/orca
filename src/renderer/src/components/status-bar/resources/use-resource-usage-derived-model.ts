@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { AppState } from '../../../store/types'
-import type { MemorySnapshot } from '../../../../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
 import { mergeSnapshotAndSessions } from './workspace-attribution/merge-snapshot-and-sessions'

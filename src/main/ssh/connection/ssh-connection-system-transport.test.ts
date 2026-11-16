@@ -23,7 +23,7 @@ import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 import { writeFileViaSystemSsh } from '../system-transport/file-transfer/system-ssh-file-transfer'
 import { CONNECT_TIMEOUT_MS } from './ssh-connection-timing'
 import { initSshHostKeyStoreFile, trustHostKey } from '../host-keys/ssh-host-key-store'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 vi.mock('../authentication/ssh2-module-load', async () =>
   (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()

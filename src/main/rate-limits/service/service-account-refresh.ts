@@ -4,7 +4,7 @@ import { hasUsageWindows } from './service-result-policy'
 import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget
-} from '../../../shared/codex-selection-lane'
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget
@@ -14,7 +14,7 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState,
   CodexRateLimitResetResult
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
   async refresh(): Promise<RateLimitState> {

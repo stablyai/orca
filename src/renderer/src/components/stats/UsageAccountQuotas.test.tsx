@@ -2,9 +2,9 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import type { CodexManagedAccountSummary } from '../../../../shared/managed-account-types'
+import { createEmptyRateLimitState } from '../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexManagedAccountSummary } from '../../../../shared/agent-accounts/managed-account-types'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { UsageAccountQuotas, UsageAccountQuotaCard } from './UsageAccountQuotas'
 import { buildUsageAccountQuotaRows } from './usage-account-quota-rows'
@@ -373,7 +373,7 @@ describe('account quota coverage', () => {
     )
     expect(screen.getAllByRole('progressbar')).toHaveLength(4)
     expect(screen.getByText('Model group · 1h')).toBeInTheDocument()
-    expect(screen.getByText('Session · 5h')).toBeInTheDocument()
+    expect(screen.getByText('5h')).toBeInTheDocument()
     expect(screen.getByText('Weekly')).toBeInTheDocument()
     expect(screen.getByText('Fable · wk')).toBeInTheDocument()
   })

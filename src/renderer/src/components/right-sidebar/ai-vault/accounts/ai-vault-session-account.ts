@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react'
-import type { ManagedDataAccountsState } from '../../../../../../shared/managed-account-types'
+import type { ManagedDataAccountsState } from '../../../../../../shared/agent-accounts/managed-account-types'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   sessionAccountBinding,

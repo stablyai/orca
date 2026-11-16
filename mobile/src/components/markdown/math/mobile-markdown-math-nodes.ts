@@ -2,7 +2,7 @@ import type { Code, Parent, PhrasingContent, RootContent } from 'mdast'
 import {
   isDisplayMathOpener,
   markdownMathCloser
-} from '../../../../../src/shared/markdown-math-rules'
+} from '../../../../../src/shared/markdown/markdown-math-rules'
 import type { Token } from '../blocks/mobile-markdown-code-nodes'
 
 // The mdast nodes mobile-markdown-math's tokens become, shaped like desktop chat's math nodes.

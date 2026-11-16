@@ -40,7 +40,10 @@ export function isSeenHostReplay(
   >,
   state: string,
   existing:
-    | Pick<AppState['agentStatusByPaneKey'][string], 'state' | 'stateStartedAt' | 'turnEndedAt'>
+    | Pick<
+        NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
+        'state' | 'stateStartedAt' | 'turnEndedAt'
+      >
     | undefined
 ): boolean {
   if (data.isReplay !== true) {

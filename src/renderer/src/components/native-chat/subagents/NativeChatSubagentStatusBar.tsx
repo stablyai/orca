@@ -7,7 +7,7 @@ import { normalizeSubagentState } from '../../../../../shared/native-chat/transc
 import type { NativeChatSubagentEntry } from '../../../../../shared/native-chat/native-chat-types'
 import type { AgentChildRowModel } from '../../../../../shared/agent-status/presentation/agent-child-row-model'
 import { backgroundTaskRowStopId } from '../../../../../shared/background-task-roster'
-import type { StructuredSessionBackgroundTasksView } from '../../../../../shared/structured-session-background-tasks-view'
+import type { StructuredSessionBackgroundTasksView } from '../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 import { structuredSessionBackgroundTaskGroups } from '../tools/tasks/background-task-roster'
 import { sayBackgroundTaskTranslated as sayTask } from '../tools/tasks/background-task-words-text'
 import { useStructuredSessionChildRowContext } from '../tools/tasks/use-structured-session-child-row-context'

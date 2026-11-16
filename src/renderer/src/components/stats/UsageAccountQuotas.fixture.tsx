@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { UsageAccountQuotas } from './UsageAccountQuotas'
 
 const checkedAt = Date.UTC(2026, 9, 28, 6)

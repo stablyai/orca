@@ -1,7 +1,7 @@
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { sessionFileExecutionNamespace } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { throwIfAiVaultScanCancelled } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { sessionSortTime } from '../../parsing/session-scanner-accumulator'
 

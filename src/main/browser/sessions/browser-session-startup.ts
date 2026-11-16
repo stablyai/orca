@@ -9,6 +9,12 @@ import { configureBrowserSiteDisplayStore } from '../site-settings/display/brows
 import { configureBrowserExtensionProfileDataDirectory } from '../extensions/profile-storage/browser-extension-profile-data-directory'
 import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
+import {
+  configureBrowserSessionCookieSnapshots,
+  restoreBrowserSessionCookies
+} from '../cookies/session-restore/browser-session-cookie-restore'
+import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
 import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browser-system-dialogs'
 
@@ -31,6 +37,7 @@ export function initializeBrowserSessionsForApp(
     configureBrowserSiteDisplayStore(activeProfile.profileDirectory)
     configureBrowserExtensionProfileDataDirectory(activeProfile.profileDirectory)
     configureBrowserPasswordVaults(activeProfile.profileDirectory)
+    configureBrowserSessionCookieSnapshots(activeProfile.profileDirectory)
     configureBrowserRoutePartitionBindingsForOrcaProfile({
       orcaProfileId: activeProfile.orcaProfileId,
       profileDirectory: activeProfile.profileDirectory
@@ -54,4 +61,18 @@ export function initializeBrowserSessionsForApp(
 /** Whether a partition may be opened: before this, opening one would skip a pending cookie import. */
 export function browserSessionsInitialized(): boolean {
   return initialized
+}
+
+/** Restored tabs must load through their proxy and signed in. Extensions start with each profile's first page. */
+export async function whenBrowserSessionsReadyForRestoredTabs(): Promise<void> {
+  const profiles = browserSessionRegistry.listProfiles()
+  // Why bounded: a slow cookie restore never blocks launch. Cookie writes need no proxy.
+  const cookiesRestored = withTimeout(restoreBrowserSessionCookies(profiles), 3_000, undefined)
+  try {
+    // Await proxy writes so first guest navigation cannot race them.
+    await awaitBrowserSessionProxies(profiles)
+  } catch {
+    console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
+  }
+  await cookiesRestored
 }

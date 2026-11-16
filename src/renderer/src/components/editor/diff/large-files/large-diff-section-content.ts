@@ -1,5 +1,5 @@
 import type { GitDiffResult } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { LargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import type { LargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 
 export function shouldPruneLargeDiffContent(
   renderLimit: LargeDiffRenderLimit | null | undefined

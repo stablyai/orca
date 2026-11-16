@@ -30,7 +30,7 @@ import {
   extractMessageText,
   normalizeTitleText
 } from '../../parsing/session-scanner-text-normalization'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {

@@ -81,6 +81,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsFastMode === 'boolean'
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
+    ...(typeof row.defaultFastMode === 'boolean' ? { defaultFastMode: row.defaultFastMode } : {}),
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),

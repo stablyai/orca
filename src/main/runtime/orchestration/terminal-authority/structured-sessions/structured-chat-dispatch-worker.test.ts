@@ -4,8 +4,8 @@ import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
 import { agentSessionSendSubmission } from '../../../../../shared/agent-session/agent-session-wire'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { sendChatTask } from '../../../rpc/methods/orchestration/chat-task-delivery'
 import {

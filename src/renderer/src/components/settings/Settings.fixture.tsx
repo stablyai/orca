@@ -1,7 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'
-import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import Settings from './Settings'
 import { ConfirmationDialogContext } from '../confirmation-dialog-context'
 const checkedAt = Date.UTC(2026, 10, 8, 6)

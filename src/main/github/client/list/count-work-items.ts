@@ -4,7 +4,7 @@ import {
   githubRepoContext,
   type LocalGitExecOptions
 } from '../../repositories/github-repository-identity'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items/work-items-query-bounds'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'

@@ -9,7 +9,7 @@ import { delimiter, dirname, join, resolve } from 'node:path'
 import { runProcess, spawnProcess } from '@orca/process-host'
 import { expect, it } from 'vitest'
 import { z } from 'zod'
-import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
+import { DATA_ACCOUNT_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
 
 const eventSchema = z.object({
   name: z.string(),

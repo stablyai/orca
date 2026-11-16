@@ -14,7 +14,7 @@ import type {
   MediaHandleRegistry,
   StagedMedia
 } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES as MEDIA_STAGED_MAX_BYTES } from '../../../../src/shared/clipboard-image'
+import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES as MEDIA_STAGED_MAX_BYTES } from '../../../../src/shared/clipboard/clipboard-image'
 import { MobileImageBase64Accumulator } from '../../files/attachments/mobile-image-base64-accumulator'
 
 // Stage native media behind handles because raw/base64 image sizes exceed reply caps; inject device calls to test provider/cancel/size failures.

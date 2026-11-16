@@ -7,9 +7,9 @@ import type {
   DirectSshAuthority,
   SshConnectionState,
   SshProviderEpoch
-} from '../../../../shared/ssh-types'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { createTestStore } from '../testing/app-store-test-fixture'
 

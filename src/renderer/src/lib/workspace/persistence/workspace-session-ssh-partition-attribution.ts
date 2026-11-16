@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'

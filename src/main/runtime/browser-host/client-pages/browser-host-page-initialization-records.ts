@@ -2,7 +2,7 @@ import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostLeaseAuthority
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostLeaseState } from '../leases/browser-host-lease-records'
 import type { BrowserClientPagePlacementReservation } from '../reconciliation/browser-host-page-placement'
 

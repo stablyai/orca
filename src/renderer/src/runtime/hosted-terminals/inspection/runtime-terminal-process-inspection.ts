@@ -4,7 +4,7 @@ import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimePtyOwner
 } from '../identity/remote-runtime-pty-owner'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   clientOnlyUnverifiableInspection,

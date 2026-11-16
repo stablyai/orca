@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/workspace-setup/setup-script-imports'
 import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'

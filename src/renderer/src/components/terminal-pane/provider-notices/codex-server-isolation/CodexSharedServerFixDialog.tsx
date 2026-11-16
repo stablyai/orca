@@ -13,7 +13,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   CODEX_DISABLE_AUTO_START_COMMAND,
   CODEX_STOP_SHARED_SERVER_COMMAND
-} from '../../../../../../shared/codex-shared-server-command'
+} from '../../../../../../shared/agent-launch/startup/codex-shared-server-command'
 
 type FixStepStatus = 'idle' | 'running' | 'done' | 'failed'
 

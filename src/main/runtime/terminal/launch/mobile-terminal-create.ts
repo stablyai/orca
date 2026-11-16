@@ -6,15 +6,15 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsHost
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
 // Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
@@ -164,7 +164,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
         (await this.resolveWorkspaceSelector(worktreeSelector)).id
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
+        await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+          includeAgentSenders: false
+        }),
         result.tab.id,
         navigation,
         opts.clientNavigationId

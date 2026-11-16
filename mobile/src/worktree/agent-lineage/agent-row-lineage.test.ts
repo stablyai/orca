@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeAgentRow } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { buildAgentRowLineageTree, flattenAgentRowLineage } from './agent-row-lineage'
 
 function row(

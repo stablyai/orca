@@ -5,7 +5,7 @@ import {
 /** Store-free registry/disposal lets shutdown slices stop watchers synchronously without re-entering store initialization through the watcher lifecycle import. */
 import { WorkspaceParkedTerminalRegistry } from './workspace-parked-terminal-registry'
 import { invalidateTerminalParkingInputs } from '../terminal-parking-input-events'
-import type { NotificationWorkspaceOwner } from '../../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../../shared/notifications/notification-source'
 import {
   discardPreHandlerPtyState,
   hasPreHandlerPtyExit

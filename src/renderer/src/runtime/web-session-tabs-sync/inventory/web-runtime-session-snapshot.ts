@@ -1,7 +1,7 @@
 import type { WebSessionTabsSnapshotApplyOptions } from '../state'
 import { recordBrowserInitializationReceipt } from '../browser-initialization-presentation'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { useAppStore } from '../../../store/index'
 import {

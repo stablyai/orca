@@ -1,5 +1,5 @@
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateFolderWorkspaceRemovalOnArchiveHook } from '../../workspaces/removal/folder-workspace-archive-hook'
 import {

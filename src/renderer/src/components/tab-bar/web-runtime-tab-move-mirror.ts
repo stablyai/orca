@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabMove } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '../../store/index'
 import { isWebRuntimeSessionActive } from '../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'

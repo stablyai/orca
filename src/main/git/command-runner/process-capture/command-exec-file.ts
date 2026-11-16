@@ -1,4 +1,4 @@
-import { isWindowsBatchScript } from '../../../../shared/windows-batch-spawn'
+import { isWindowsBatchScript } from '../../../../shared/shell/launch/windows-batch-spawn'
 import { resolveWindowsCommand } from '../../../windows/windows-command-paths'
 import { isMissingCommandBinaryError } from './exec-error'
 import { resolveCommand, type ResolvedCommand } from '../host-routing/wsl-command-resolution'

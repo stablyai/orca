@@ -1,15 +1,18 @@
 import { useEffect } from 'react'
 import { RefreshCw } from 'lucide-react'
-import type { ProviderRateLimits, RateLimitState } from '../../../../shared/rate-limit-types'
-import { clampUsedPercent } from '../../../../shared/usage-percentage-display'
+import type {
+  ProviderRateLimits,
+  RateLimitState
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { clampUsedPercent } from '../../../../shared/agent-usage/display/usage-percentage-display'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
 import { getWindowSections, ProviderIcon } from '../status-bar/usage/provider-usage-panel'
 import { formatPlanLabel } from '../status-bar/usage/usage-roster-formatting'
 import { getProviderUsageErrorMessage } from '../status-bar/usage/usage-error-copy'
-import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
-import { formatWindowLabel } from '../../../../shared/rate-limit-window-label'
+import { getProviderDisplayName } from '../../../../shared/agent-usage/display/usage-provider-windows'
+import { formatWindowLabel } from '../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { buildUsageAccountQuotaRows } from './usage-account-quota-rows'
@@ -71,6 +74,7 @@ export function UsageAccountQuotaCard({
             <span className="text-muted-foreground">
               {label}
               {window.windowMinutes > 0 &&
+              label !== formatWindowLabel(window.windowMinutes) &&
               !(window === provider.weekly && window.windowMinutes === 10080)
                 ? ` · ${formatWindowLabel(window.windowMinutes)}`
                 : ''}

@@ -2,12 +2,12 @@ import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationWorkerServer
 } from './environment-transport'
-import type { RuntimeOrchestrationEnvelope } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeOrchestrationEnvelope } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from '../../workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity'
 
 export abstract class RuntimeFederationOperations extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
-  resolveOrchestrationWorkerServer(selector: string): OrchestrationWorkerServer {
-    return this.orchestrationFederation.resolveWorkerServer(selector)
+  async resolveOrchestrationWorkerServer(selector: string): Promise<OrchestrationWorkerServer> {
+    return await this.orchestrationFederation.resolveWorkerServer(selector)
   }
 
   callOrchestrationWorkerServer(

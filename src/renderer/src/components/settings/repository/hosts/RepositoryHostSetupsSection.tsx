@@ -6,9 +6,9 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { useAppStore } from '../../../../store/index'
 import { getProjectHostSetupProjectionFromState } from '../../../../store/projects/project-host-setup-selector'
 import { cn } from '../../../../lib/class-names'

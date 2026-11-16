@@ -2,7 +2,7 @@ import {
   assertAntigravityReferenceTarget,
   buildAntigravityReferenceStartup
 } from './ai-vault-antigravity-reference-startup'
-import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { normalizeAiVaultResumeFilePath } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-path'
 import type { AiVaultSessionDragPayload } from '@/lib/agent-session/resume/history/ai-vault-session-drag'
 import { resolveAiVaultResumeStartupShell } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'

@@ -4,8 +4,8 @@ import {
   type RuntimeHostStatusSnapshot
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
   PublicKnownRuntimeEnvironment,
   RuntimeEnvironmentRemoval
@@ -16,7 +16,7 @@ import { RUNTIME_ENVIRONMENT_CATALOG_CHANGED_CHANNEL } from '../../../shared/rem
 import {
   WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL,
   type WslOrcadAccountNotAppliedEvent
-} from '../../../shared/wsl-orcad-account-notice'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-orcad-account-notice'
 import {
   subscribeRuntimeEnvironmentFromPreload,
   subscribeCrewAttemptFromPreload,
