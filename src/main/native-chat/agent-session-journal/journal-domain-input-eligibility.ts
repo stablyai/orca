@@ -72,7 +72,8 @@ export function selectJournalEligibleQueueCard(
   now: number,
   facts: JournalSqlQueueFacts,
   allowSteer: boolean,
-  resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>
+  resolved?: Omit<ReturnType<typeof journalDomainInputEligibility>, 'work'>,
+  awaitsAccountMove?: true
 ): JournalDomainQueuePick & { steer: boolean; command: boolean } {
   const state = resolved ?? journalDomainInputEligibility(scope, authority)
   const none = { kind: 'selected' as const, card: null, steer: false, command: false }
@@ -95,7 +96,8 @@ export function selectJournalEligibleQueueCard(
         now,
         steer,
         automatic: true,
-        mail: facts.mail
+        mail: facts.mail,
+        ...(awaitsAccountMove ? { awaitsAccountMove } : {})
       },
       state.context.inputHead
     ),

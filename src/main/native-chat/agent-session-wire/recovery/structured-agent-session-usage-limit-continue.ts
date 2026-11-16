@@ -27,6 +27,8 @@ export class StructuredAgentSessionUsageLimitContinue {
   private running = false
   private disposed = false
   private readonly attempts = new Map<string, Attempt>()
+  /** Due chats whose agent still works on the account they are leaving: the continue waits. */
+  private readonly awaitingMove = new Set<string>()
   private readonly holds = new UsageLimitAccountHolds()
   private readonly cold: UsageLimitColdCuts
 
@@ -69,6 +71,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.stopSettings?.()
     this.cold.clear()
     this.attempts.clear()
+    this.awaitingMove.clear()
     this.holds.clear()
   }
 
@@ -83,6 +86,11 @@ export class StructuredAgentSessionUsageLimitContinue {
     for (const id of this.attempts.keys()) {
       if (!shown.has(id)) {
         this.attempts.delete(id)
+      }
+    }
+    for (const id of this.awaitingMove) {
+      if (!shown.has(id)) {
+        this.awaitingMove.delete(id)
       }
     }
     this.cold.retain(shown)
@@ -110,7 +118,8 @@ export class StructuredAgentSessionUsageLimitContinue {
             ? 'scheduled'
             : 'off'
     // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
-    if (hold.unknownReset && state === 'scheduled') {
+    // Nor while the agent still works on the account the chat is leaving.
+    if ((hold.unknownReset || this.awaitingMove.has(id)) && state === 'scheduled') {
       return undefined
     }
     return {
@@ -188,7 +197,18 @@ export class StructuredAgentSessionUsageLimitContinue {
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
-        if (this.holds.ready(id, cut, this.deps.now(), retryAt)) {
+        const ready = this.holds.ready(id, cut, this.deps.now(), retryAt)
+        // Only due chats ask; a continue sent now would wait behind the old agent's work anyway.
+        const awaiting = ready && (await this.deps.awaitsAccountMove?.(id)) === true
+        if (awaiting !== this.awaitingMove.has(id)) {
+          if (awaiting) {
+            this.awaitingMove.add(id)
+          } else {
+            this.awaitingMove.delete(id)
+          }
+          this.deps.publish(id)
+        }
+        if (ready && !awaiting) {
           due.push({ id, cut, at: attempt?.at ?? 0 })
         }
       }

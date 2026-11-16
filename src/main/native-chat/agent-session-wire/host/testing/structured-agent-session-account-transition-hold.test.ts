@@ -1,0 +1,221 @@
+import { afterEach, expect, it } from 'vitest'
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
+import {
+  createQueuedMessageTestRig,
+  type QueuedMessageTestRig
+} from './structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
+import { reportedChildWork } from './structured-agent-session-host.test-fixture'
+import { appendRewindUsageLimitedTurn } from './structured-agent-session-rewind-usage-limit.test-fixture'
+import { weekly } from './structured-agent-session-usage-limit-fleet.test-fixture'
+import type { UsageLimitAccountScope } from '../../recovery/structured-agent-session-usage-limit-account-hold'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_NOW,
+  HOST_TEST_THREAD
+} from './structured-agent-session-host-test-data.test-fixture'
+
+let rig: QueuedMessageTestRig | undefined
+afterEach(async () => rig?.dispose())
+
+const MAIL: AgentMessageSource = {
+  kind: 'agent',
+  senders: [
+    {
+      party: { address: 'agent:coordinator', terminalHandle: null, orcaSessionId: null },
+      name: null
+    }
+  ],
+  orchestration: { message: 'mail-notice', mailbox: 'agent:worker', dispatchId: null, messages: [] }
+}
+
+/** A chat whose agent runs on account A; `switchTo` changes what its next start would use. */
+async function chatOnAccountA() {
+  let clock = HOST_TEST_NOW
+  let home = '/homes/a'
+  let openDispatch = false
+  // Every account has room from the latest reading on.
+  const room: UsageLimitAccountScope = {
+    scope: 'any',
+    account: { key: 'any', read: () => weekly(0, null, clock), refresh: () => true }
+  }
+  const current = await createQueuedMessageTestRig({
+    now: () => clock,
+    restartable: true,
+    acquiredAccountHome: () => ({ variable: 'CODEX_HOME', path: home }),
+    usageLimitAutoContinue: {
+      isEnabled: () => true,
+      isWorkspaceAsleep: () => false,
+      subscribe: () => () => {},
+      accountUsage: async () => room
+    }
+  })
+  rig = current
+  current.host.deps.launchAccountHome = async () => ({ variable: 'CODEX_HOME', path: home })
+  current.host.deps.hasOpenDispatch = () => openDispatch
+  await eventually(() =>
+    expect(current.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
+  )
+  const child = () => current.host.collaboratorsForTests().sessions.get(SESSION)?.child
+  const accountA = child()!.fence
+  let turn = 0
+  return {
+    accountA,
+    child,
+    /** The agent's last turn hit a usage limit that resets a minute from now. */
+    limited: async () => {
+      await current.store.setSessionTabVisibility(SESSION, true)
+      return appendRewindUsageLimitedTurn(
+        current.host.collaboratorsForTests().sessions.get(SESSION)!.journal,
+        clock
+      )
+    },
+    hostSends: async () =>
+      (
+        await readTestJournalSnapshot(
+          current.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+        )
+      ).submissions.filter((submission) => submission.origin === 'host'),
+    /** One automatic-continue pass, `ms` later. */
+    sweep: async (ms: number) => {
+      clock += ms
+      await current.host.usageLimitContinue.tick()
+    },
+    switchTo: (path: string) => {
+      home = path
+    },
+    setOpenDispatch: (open: boolean) => {
+      openDispatch = open
+    },
+    background: (views: AgentChildWorkView[]) => {
+      clock += 1_000
+      current.host.publishChildWorkEvidence(SESSION, reportedChildWork(views, clock))
+    },
+    /** The agent's own turn (a wake-up or a reply) ends, as the provider reports it. */
+    turnEnds: async () => {
+      clock += 1_000
+      turn += 1
+      current.providerEvents().appendItem(
+        { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: `own-${turn}`, ordinal: turn },
+        {
+          kind: 'turn',
+          turnId: `own-${turn}`,
+          state: 'completed',
+          outcome: 'success',
+          startedAt: clock,
+          completedAt: clock
+        },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      await current.host.flushStreamedEvents(SESSION)
+    },
+    /** Every dispatch of `text`, by the fence of the child that took it. */
+    dispatchedTo: (text: string) =>
+      current.dispatch.mock.calls
+        .filter(([input]) => JSON.stringify(input.body.blocks).includes(text))
+        .map(([input]) => input.fence)
+  }
+}
+
+function devServer(overrides: Partial<AgentChildWorkView> = {}): AgentChildWorkView {
+  return {
+    id: 'child-dev',
+    providerId: 'task-dev',
+    kind: 'command',
+    description: 'npm run dev',
+    state: 'working',
+    membership: 'live',
+    firstObservedAt: HOST_TEST_NOW,
+    observedAt: HOST_TEST_NOW,
+    stoppable: true,
+    invocation: { invocationId: 'spawn-dev', generation: 1 },
+    ...overrides
+  }
+}
+
+it('holds a send behind a background command, then delivers it once on the new account', async () => {
+  const chat = await chatOnAccountA()
+  chat.background([devServer()])
+  chat.switchTo('/homes/b')
+  const sent = rig!.send('next step')
+  expect(await sent.result).toMatchObject({ ok: true })
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: sent.id, state: 'waiting' }])
+  )
+  expect(chat.dispatchedTo('next step')).toEqual([])
+
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+
+  await eventually(async () => expect((await rig!.handoff(sent.id))?.handedOverAt).toBeDefined())
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+  expect(chat.dispatchedTo('next step')).toEqual([chat.child()!.fence])
+  expect(chat.child()!.fence).not.toBe(chat.accountA)
+  expect(rig!.starts).toHaveBeenCalledTimes(2)
+})
+
+it("lets a worker's mail reach its open dispatch past a held send, then moves accounts", async () => {
+  const chat = await chatOnAccountA()
+  chat.setOpenDispatch(true)
+  chat.switchTo('/homes/b')
+  const person = rig!.send('a new task for you')
+  await person.result
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: person.id, state: 'waiting' }])
+  )
+
+  const mail = rig!.send('coordinator reply', undefined, { internal: true, from: MAIL })
+  await mail.result
+  // The reply the dispatch waits on goes to the agent still holding it, on A.
+  await eventually(() => expect(chat.dispatchedTo('coordinator reply')).toEqual([chat.accountA]))
+  expect(chat.dispatchedTo('a new task for you')).toEqual([])
+  const mailSend = await rig!.handoffId(mail.id)
+  await rig!.settleAccepted(mailSend, 'reply')
+
+  chat.setOpenDispatch(false)
+  await chat.turnEnds()
+  await eventually(() => expect(chat.dispatchedTo('a new task for you')).toHaveLength(1))
+  expect(chat.dispatchedTo('a new task for you')).toEqual([chat.child()!.fence])
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+  expect(chat.dispatchedTo('coordinator reply')).toEqual([chat.accountA])
+})
+
+it('keeps a held send through Stop, and Resume delivers it once on the new account', async () => {
+  const chat = await chatOnAccountA()
+  chat.background([devServer()])
+  chat.switchTo('/homes/b')
+  const sent = rig!.send('after the switch')
+  await sent.result
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: sent.id, state: 'waiting' }])
+  )
+  expect(await rig!.stop()).toMatchObject({ ok: true })
+  await eventually(() => expect(chat.child()).toBeNull())
+  expect((await rig!.drafts()).map(({ messageId }) => messageId)).toEqual([sent.id])
+  expect(await rig!.queuePause()).toEqual({ reason: 'stopped' })
+  expect(chat.dispatchedTo('after the switch')).toEqual([])
+  expect(await rig!.resume()).toMatchObject({ ok: true })
+  await eventually(() => expect(chat.dispatchedTo('after the switch')).toHaveLength(1))
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})
+
+it('sends no usage-limit continue to the old account while its subagent still runs', async () => {
+  const chat = await chatOnAccountA()
+  const subagent = devServer({ id: 'child-agent', providerId: 'task-agent', kind: 'agent' })
+  chat.background([subagent])
+  await chat.limited()
+  chat.switchTo('/homes/b')
+  await chat.sweep(15_000)
+  await chat.sweep(15_000)
+  // Not even admitted: a continue accepted now would only wait for, or reach, the agent on A.
+  expect(await chat.hostSends()).toEqual([])
+  expect(await rig!.drafts()).toEqual([])
+
+  chat.background([{ ...subagent, membership: 'settled', state: 'done', outcome: 'succeeded' }])
+  await chat.sweep(15_000)
+  await eventually(() => expect(chat.dispatchedTo('Continue where you left off')).toHaveLength(1))
+  expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.child()!.fence])
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+})

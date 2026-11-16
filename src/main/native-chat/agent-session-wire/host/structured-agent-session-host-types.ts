@@ -205,8 +205,6 @@ export type StructuredAgentSessionHostDeps = {
   hasOpenDispatch?: (
     record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
   ) => boolean
-  /** Explicit switch admission also includes direct chat assignments, even at rest. */
-  hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */

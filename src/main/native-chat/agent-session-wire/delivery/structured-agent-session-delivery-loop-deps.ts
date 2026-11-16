@@ -3,6 +3,7 @@ import type { UnsentSendHold } from '../../agent-session-journal/queued-messages
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
+import type { StructuredAgentSessionOutgrownChild } from '../recovery/structured-agent-session-outgrown-child'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -39,7 +40,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
     sessionId: string,
     continuingId?: string,
     next?: AgentJournalSubmission
-  ) => Promise<void>
+  ) => Promise<StructuredAgentSessionOutgrownChild>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
   retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>

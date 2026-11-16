@@ -37,7 +37,9 @@ export function wireStructuredAgentSessionQueuedMessages(
       const stopping = await ctx.readStopping(sessionId)
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
+      const transition = await ctx.accountTransition?.(sessionId)
       return {
+        ...(transition ? { awaitsAccountMove: true as const } : {}),
         authority: captureHostStructuredAgentSessionWork(
           { store: ctx.deps.store, sessions },
           sessionId,

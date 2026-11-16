@@ -24,6 +24,7 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
+import type { StructuredAgentSessionAccountTransition } from '../recovery/structured-agent-session-outgrown-child'
 
 export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
@@ -57,6 +58,8 @@ export type StructuredAgentSessionMutationContext = {
   /** Join without starting a child, inside existing serialization. */
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   readStopping: (sessionId: string) => Promise<boolean>
+  /** Inside serialization: the account move the running child still defers. */
+  accountTransition?: (sessionId: string) => Promise<StructuredAgentSessionAccountTransition | null>
   wakeDelivery: (sessionId: string) => void
   /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>

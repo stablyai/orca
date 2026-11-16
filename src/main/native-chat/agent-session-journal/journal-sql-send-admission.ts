@@ -132,6 +132,9 @@ export function applyJournalSqlSendAdmission(
       queue = next.card !== null
     }
   }
+  if (operation.awaitsAccountMove && input.body.from === undefined) {
+    queue = true
+  }
   if (
     operation.continuationOfTurnItemId !== undefined &&
     (queue ||

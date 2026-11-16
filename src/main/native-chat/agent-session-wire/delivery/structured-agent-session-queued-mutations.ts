@@ -130,6 +130,16 @@ export function sendQueuedStructuredAgentMessage(
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
       }
+      // A new turn would run on the account the chat is leaving; a steer joins the running one.
+      if (
+        row.body.from === undefined &&
+        work.activeTurnId() === null &&
+        (await context.accountTransition?.(ctx.sessionId))
+      ) {
+        return invalid(
+          'This message sends on the account you switched to once the agent finishes its current work.'
+        )
+      }
       // Commands cannot steer; enforce idle-only Send even for older clients.
       if (row.body.command && work.working()) {
         return invalid("A command can't be sent while the agent is working.")

@@ -20,4 +20,6 @@ export type UsageLimitContinueDeps = UsageLimitCutReads & {
   ) => ReturnType<typeof sendStructuredAgentSessionTurn>
   publish: (id: string) => void
   now: () => number
+  /** Whether the chat's running agent still owes work on the account it is leaving. */
+  awaitsAccountMove?: (id: string) => Promise<boolean>
 }

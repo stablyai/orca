@@ -17,10 +17,25 @@ export function start(
     serialize: context.serialize,
     send: (params) => host.send({ callerKey: 'trusted-local:usage-limit-continue' }, params),
     publish: delivery.publishStatus,
-    now: context.now
+    now: context.now,
+    awaitsAccountMove: (id) =>
+      context.serialize(id, async () => !!(await context.accountTransition?.(id)))
   })
   limit.start()
   return limit
+}
+
+/** Settled background work can release a card waiting for an account move. */
+export function childWorkChanged(
+  tasks: { publish: (id: string) => void },
+  queued: { drain: { schedule: (id: string) => void } },
+  delivery: Pick<StructuredAgentSessionClientDelivery, 'childWorkOpen'>,
+  id: string
+): void {
+  tasks.publish(id)
+  if (!delivery.childWorkOpen(id)) {
+    queued.drain.schedule(id)
+  }
 }
 
 /** A reopened chat re-reads its cut from the loaded journal. */

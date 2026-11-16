@@ -29,14 +29,11 @@ import { structuredAgentSessionConversationFence } from '../host/structured-agen
 import { readStructuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { settleInterruptedStructuredAgentSessionCommands } from '../rewind/structured-rewind-recovery'
 import {
-  retireOutgrownStructuredAgentSessionChild,
-  structuredAgentSessionChildOwesWork
+  structuredAgentSessionChildOwesWork,
+  type StructuredAgentSessionAccountTransition
 } from '../recovery/structured-agent-session-outgrown-child'
-import {
-  structuredAgentSessionLaunchPermission,
-  structuredAgentSessionInputCompilerPermission,
-  structuredAgentSessionImmediatePermission
-} from '../options/structured-agent-session-launch-permission'
+import { createStructuredAgentSessionOutgrownChildHost } from '../recovery/structured-agent-session-outgrown-child-host'
+import { structuredAgentSessionImmediatePermission } from '../options/structured-agent-session-launch-permission'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
@@ -56,6 +53,8 @@ export type StructuredAgentSessionConversationDelivery = {
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
   ) => Promise<void>
+  /** The account move the running child defers; read under the chat's serialization. */
+  accountTransition: (sessionId: string) => Promise<StructuredAgentSessionAccountTransition | null>
 }
 
 export function createStructuredAgentSessionConversationDelivery(input: {
@@ -91,18 +90,11 @@ export function createStructuredAgentSessionConversationDelivery(input: {
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
   const workHost = { store: deps.store, sessions }
-  const retainedWork = (sessionId: string, continuingId?: string) => ({
-    currentWork: () =>
-      readHostStructuredAgentSessionWork(workHost, sessionId, { kind: 'child-work' }),
-    childWork: () => input.clientDelivery.readChildWork(sessionId),
-    childWorkOpen: () => input.clientDelivery.childWorkOpen(sessionId),
-    hasOpenDispatch: () => {
-      const record = deps.store.getConversation(sessionId)
-      return record !== null && deps.hasOpenDispatch?.(record) === true
-    },
-    providerHoldsDispatch: () =>
-      deps.adapter.holdsDispatch?.(sessionId) === true ||
-      [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
+  const outgrown = createStructuredAgentSessionOutgrownChildHost({
+    deps,
+    sessions,
+    clientDelivery: input.clientDelivery,
+    stopOutgrownAgent: input.stopOutgrownAgent
   })
   const loop = new StructuredAgentSessionDeliveryLoop({
     activityChanged: (id) => sessions.get(id)?.workChanged?.(),
@@ -113,51 +105,17 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     trackStart: input.trackStart,
     startProviderChild: input.startProviderChild,
     stopPermissionTransitionChild: input.stopPermissionTransitionChild,
-    retireOutgrownChild: async (sessionId, continuingId, next) => {
-      // Defer retirement while personal Stop holds handover; its next step decides.
-      const session = (await input.clientDelivery.readStopping(sessionId))
-        ? undefined
-        : sessions.get(sessionId)
-      await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
-        next,
-        requiresModelTransitionRestart: (submission) =>
-          session?.child?.phase === 'ready' &&
-          deps.adapter.requiresModelTransitionRestart?.({
-            sessionId,
-            fence: session.child.fence,
-            executionOptions: submission.options
-          }) === true,
-        work: retainedWork(sessionId, continuingId),
-        launchPermission: async () => {
-          const record = deps.store.getRecord(sessionId)
-          return (
-            structuredAgentSessionInputCompilerPermission(session?.journal, continuingId) ??
-            (record ? structuredAgentSessionLaunchPermission(deps, record) : null)
-          )
-        },
-        permissionRequiresAcquisition: (mode) =>
-          structuredAgentSessionInputCompilerPermission(session?.journal, continuingId)
-            ? true
-            : (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, mode) ??
-              mode !== session?.child?.permissionMode),
-        stopAgent: (sessionId) => {
-          deps.store.requireWritableRecord(sessionId)
-          return input.stopOutgrownAgent(sessionId)
-        },
-        launchAccountHome: async () => {
-          const record = deps.store.getRecord(sessionId)
-          return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
-        },
-        logger: deps.logger
-      })
-    },
+    retireOutgrownChild: outgrown.retire,
     immediatePermission: (sessionId) => {
       const record = deps.store.getRecord(sessionId)
       return record ? structuredAgentSessionImmediatePermission(deps, record) : null
     },
     retainedWork: async (sessionId, id) => {
       const session = sessions.get(sessionId)
-      return !!session && (await structuredAgentSessionChildOwesWork(retainedWork(sessionId, id)))
+      return (
+        !!session &&
+        (await structuredAgentSessionChildOwesWork(outgrown.retainedWork(sessionId, id)))
+      )
     },
     readiness: input.readiness,
     startFlights: input.startFlights,
@@ -296,6 +254,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   })
   return {
     loop,
+    accountTransition: outgrown.accountTransition,
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
       input.clientDelivery.publishStatusAndSettlement(sessionId)
