@@ -3,13 +3,13 @@ import type {
   LinuxPackageInstallInstructions,
   UpdateCheckOptions,
   UpdateStatus
-} from '../../shared/update-status-types'
+} from '../../shared/updater/update-status-types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
-} from '../../shared/remote-server-update'
-import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
+} from '../../shared/remote-runtime/host-catalog/remote-server-update'
+import type { ReleaseBuild, ReleaseChannel } from '../../shared/updater/release-channel'
 import type { ReleaseBuildListOptions } from './releases/updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'
 import type { UpdateInstallMode } from './lifecycle/updater-state'

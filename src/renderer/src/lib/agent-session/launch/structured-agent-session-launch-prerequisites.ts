@@ -1,13 +1,13 @@
 import type {
   SelectionOperation,
   SelectionOutcome
-} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+} from '../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
-} from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
+} from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import type { StructuredLaunchState } from './structured-agent-session-launch-state-store'
 import { StructuredAgentSessionLaunchCancelledError } from './structured-agent-session-launch-recovery'

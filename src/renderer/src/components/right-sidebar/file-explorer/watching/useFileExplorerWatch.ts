@@ -15,7 +15,7 @@ import {
   isWorktreeCatchUpPayload,
   ORCA_WORKTREE_FILE_CHANGE_EVENT
 } from '@/hooks/worktree-file-change-event'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
   getFileExplorerOperationOwnerFromState,

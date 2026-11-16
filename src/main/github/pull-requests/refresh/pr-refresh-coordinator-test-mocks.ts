@@ -1,6 +1,10 @@
 import type { PRRefreshRendererPort } from './pr-refresh-renderer-port'
+import type {
+  PreparedPRBranchRead,
+  preparePRBranchRead
+} from '../../client/lookup/pr-for-branch-outcome'
 import { vi, type Mock } from 'vitest'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 
 type PRRefreshWebContentsMock = {
   id: number
@@ -51,11 +55,61 @@ export function rendererPortModuleMock(mocks: PRRefreshCoordinatorMocks): Render
   return { prRefreshRenderers: () => port }
 }
 
-export type ClientModuleMock = { getPRForBranchOutcome: Mock }
+export type ClientModuleMock = {
+  getPRForBranchOutcome: Mock
+  preparePRBranchRead: typeof preparePRBranchRead
+}
 
 export function clientModuleMock(mocks: PRRefreshCoordinatorMocks): ClientModuleMock {
   return {
-    getPRForBranchOutcome: mocks.getPRForBranchOutcomeMock
+    getPRForBranchOutcome: mocks.getPRForBranchOutcomeMock,
+    preparePRBranchRead: async (...args) => {
+      const { prBranchReadKeys, exactRequestMatcher } =
+        await import('../../client/lookup/pr-read-identity')
+      const key = prBranchReadKeys(
+        args[0],
+        args[1],
+        args[2] ?? null,
+        args[3] ?? null,
+        args[4] ?? null,
+        args[5] ?? {}
+      )[1]
+      const prepared: PreparedPRBranchRead = {
+        key,
+        matchesRequest: exactRequestMatcher([
+          args[0],
+          args[1],
+          args[2] ?? null,
+          args[3] ?? null,
+          args[4] ?? null,
+          args[5] ?? {}
+        ]),
+        reprepare: async () => prepared,
+        cached: () => null,
+        isCurrent: () => true,
+        accepts: () => true,
+        didRead: () => true,
+        release: () => {},
+        hold: () => () => {},
+        canRetain: () => true,
+        scheduleError: () => {},
+        pending: () => null,
+        withExecution: (operation) => operation(),
+        read: async (settle) => {
+          const outcome = await mocks.getPRForBranchOutcomeMock(...args)
+          return settle ? settle(outcome, { retained: true }) : outcome
+        },
+        readResult: async (settle) => {
+          const outcome = await mocks.getPRForBranchOutcomeMock(...args)
+          return {
+            outcome: settle ? settle(outcome, { retained: true }) : outcome,
+            sequence: 0,
+            current: () => true
+          }
+        }
+      }
+      return prepared
+    }
   }
 }
 

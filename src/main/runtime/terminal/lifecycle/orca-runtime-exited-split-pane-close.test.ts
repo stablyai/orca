@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const WORKTREE_ID = 'repo::/worktree'
 const LEFT = '11111111-1111-4111-8111-111111111111'
@@ -78,7 +80,10 @@ function phoneSnapshot(session: WorkspaceSessionState): RuntimeMobileSessionTabs
   }
 }
 
-function splitRuntime(): { runtime: OrcaRuntimeService; session: () => WorkspaceSessionState } {
+async function splitRuntime(): Promise<{
+  runtime: OrcaRuntimeService
+  session: () => WorkspaceSessionState
+}> {
   let session = splitSession()
   const runtime = new OrcaRuntimeService(
     partialRuntimeStore({
@@ -90,7 +95,7 @@ function splitRuntime(): { runtime: OrcaRuntimeService; session: () => Workspace
     })
   )
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: 'tab',
@@ -119,12 +124,12 @@ describe('layout-owner build: main closes an exited split pane itself', () => {
       }
     }
     // Listing mints the handles named by retirement notices.
-    const closed = splitRuntime().runtime
+    const closed = (await splitRuntime()).runtime
     await phone(closed)
     await closed.onPtyExit('pty-right', 0, undefined, { providerExitObserved: true })
     expect(await phone(closed)).toEqual({ version: 2, retired: [RIGHT] })
 
-    const kept = splitRuntime().runtime
+    const kept = (await splitRuntime()).runtime
     await phone(kept)
     await kept.onPtyExit('pty-right', 1, undefined, { providerExitObserved: true })
     expect(await phone(kept)).toEqual({ version: 1, retired: [] })

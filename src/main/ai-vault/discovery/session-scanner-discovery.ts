@@ -1,16 +1,19 @@
 import type { Dirent } from 'node:fs'
 import { extname, join } from 'node:path'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { SessionNewestFiles } from './session-newest-files'
 import type { SessionSidecarObservation } from '../parse-cache/session-sidecar-stat'
 import type {
   AiVaultAgent,
   AiVaultScanIssue
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { wslGatedReaddir, wslGatedStat } from '../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../native-chat/wsl-transcript-fs-error'
+import {
+  wslGatedReaddir,
+  wslGatedStat
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../parsing/session-scan-issues'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import type {
@@ -18,7 +21,7 @@ import type {
   SessionFileDiscovery,
   SessionFileWalkOptions
 } from '../session-scanner-types'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import {
   noteAiVaultScanFileFound,

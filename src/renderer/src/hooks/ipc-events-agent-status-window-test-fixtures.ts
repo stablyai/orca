@@ -1,4 +1,4 @@
-import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
+import type * as UIZoomLevelModule from '../../../shared/app-lifecycle/windows/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import type {
@@ -24,6 +24,7 @@ export function buildWindowApi(args: {
     api: {
       repos: { onChanged: () => () => {} },
       automations: { onChanged: () => () => {} },
+      workspaceCleanup: { onRunFinished: () => () => {} },
       worktrees: {
         onChanged: () => () => {},
         onBaseStatus: () => () => {},
@@ -168,7 +169,7 @@ export function stubAuxiliaryModules(): void {
   vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
-  vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+  vi.doMock('../../../shared/app-lifecycle/windows/ui-zoom-level', async (importOriginal) => ({
     ...(await importOriginal<typeof UIZoomLevelModule>()),
     zoomLevelToPercent: vi.fn(() => 100),
     UI_ZOOM_MIN: -3,

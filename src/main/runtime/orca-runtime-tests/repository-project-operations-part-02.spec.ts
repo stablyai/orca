@@ -2,21 +2,21 @@ import * as gitSpawn from '../../git/command-runner/git-spawn'
 import { realpath, lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import '../../../shared/repo-badge-color'
+import '../../../shared/repository/appearance/repo-badge-color'
 import { EventEmitter } from 'node:events'
 import { OrcaRuntimeService } from '../orca-runtime'
 import {
   clearSubmodulePathsCacheForTests,
   listSubmodulePaths
-} from '../../git/source-control/submodule-paths'
+} from '../../git/source-control/submodules/submodule-paths'
 import { execFileSync } from 'node:child_process'
 import '../orca-runtime-test-mocks/setup.spec'
 import { join } from 'node:path'
 import 'node:fs'
-import '../../../shared/project-host-setup-projection'
+import '../../../shared/project/host-setup/project-host-setup-projection'
 import { tmpdir } from 'node:os'
 import { createRuntime, store } from './orca-runtime-test-fixtures.spec'
-import '../../../shared/cross-platform-path'
+import '../../../shared/file-access/cross-platform-path'
 
 // Clone and create register resolved paths (macOS tmpdir is a /var symlink).
 async function mkdtempReal(prefix: string): Promise<string> {

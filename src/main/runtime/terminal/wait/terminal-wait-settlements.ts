@@ -8,8 +8,8 @@ import {
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
-import { terminalDeliveryRefusal } from './terminal-delivery-refusal'
+import { evaluateTuiIdle } from './tui-idle-evidence'
+import { settlesForMidTurnInput, terminalDeliveryRefusal } from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
@@ -44,14 +44,21 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return
     }
     // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
-    const verdict = this.evaluateTuiIdleForPty(pty)
+    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
+      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    )
+    const verdict = evaluateTuiIdle(evidence)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
         this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
         )
-      } else if (verdict.kind === 'ready-strong') {
+      } else if (
+        verdict.kind === 'ready-strong' ||
+        (waiter.acceptsMidTurnInput &&
+          settlesForMidTurnInput(verdict, ptyId, this.tuiIdleEvidenceSource))
+      ) {
         this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
@@ -191,14 +198,6 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return (agent === 'opencode' || agent === 'opencode2') && context
       ? openCodeComposerHoldsDraft(context)
       : !!readTerminalComposerTypedText(context)
-  }
-
-  protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {
-    return evaluateTuiIdle(
-      ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-        buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-      )
-    )
   }
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {

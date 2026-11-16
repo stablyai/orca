@@ -1,4 +1,4 @@
-import { CapabilityProbeCache } from '../../capability-probe-cache'
+import { CapabilityProbeCache } from '../../concurrency/capability-probe-cache'
 
 // Suppress hot-loop failures while detecting in-place Git upgrades during long sessions.
 export const GIT_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000

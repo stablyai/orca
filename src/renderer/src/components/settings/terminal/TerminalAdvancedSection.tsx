@@ -1,7 +1,7 @@
 import { TerminalLimitSetting } from './session-management/TerminalLimitSetting'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../../shared/terminal/input/terminal-word-separator'
 import {
   DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX,
@@ -83,6 +83,10 @@ export function TerminalAdvancedSection({
     setWordSeparatorDraft(draft)
     updateSettings({ terminalWordSeparator: toWordSeparatorSetting(draft) })
   }
+  const wordSeparatorsLabel = t(
+    'auto.components.settings.TerminalPane.8abcfcf8d3',
+    'Word separators'
+  )
   const powerShellImplementation = settings.terminalWindowsPowerShellImplementation ?? 'auto'
   const commitScrollbackRowsDraft = (): void => {
     const trimmed = scrollbackRowsDraft.trim()
@@ -196,7 +200,7 @@ export function TerminalAdvancedSection({
       {hostScope ? <TerminalLimitSetting scope={hostScope} /> : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.TerminalPane.8abcfcf8d3', 'Word separators')}
+        title={wordSeparatorsLabel}
         description={t(
           'settings.terminal.wordSeparators.description',
           'Characters treated as word boundaries for double-click selection, including space.'
@@ -204,7 +208,7 @@ export function TerminalAdvancedSection({
         keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
       >
         <SettingsRow
-          label={t('auto.components.settings.TerminalPane.8abcfcf8d3', 'Word separators')}
+          label={wordSeparatorsLabel}
           description={t(
             'settings.terminal.wordSeparators.description',
             'Characters treated as word boundaries for double-click selection, including space.'
@@ -213,6 +217,7 @@ export function TerminalAdvancedSection({
             <div className="flex w-56 flex-col items-end gap-1">
               <div className="flex w-full items-center gap-1">
                 <Input
+                  aria-label={wordSeparatorsLabel}
                   value={wordSeparatorDraft}
                   onChange={(e) => commitWordSeparatorDraft(e.target.value)}
                   variant="code"

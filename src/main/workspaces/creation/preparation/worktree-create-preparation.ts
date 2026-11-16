@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   discardPreparationEntry,
   trackPreparationDiscard,
@@ -8,15 +8,15 @@ import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
-import type { Repo } from '../../../../shared/repo-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type {
   PreparedCheckoutMissReason,
   PreparedCheckoutOrigin,
   PreparedCheckoutReset,
   WorktreeCreatePhase
-} from '../../../../shared/worktree/create-timing-vocabulary'
+} from '../../../../shared/worktree/creation/create-timing-vocabulary'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult
@@ -53,7 +53,7 @@ import {
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
 
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 export function hasPendingWorktreeCreatePreparations(): boolean {
   return hasPendingPreparations()

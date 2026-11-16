@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../types'
 
 /** Host Sleep answers and the unidentified-owner awake fallback, by chat pane key.

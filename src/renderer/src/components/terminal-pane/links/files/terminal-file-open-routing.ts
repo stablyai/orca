@@ -18,7 +18,7 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
@@ -194,7 +194,8 @@ export function openDetectedFilePath(
     // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
     if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
-      if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)) {
+      const location = line === null ? undefined : { line, column: column ?? undefined }
+      if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID, location)) {
         return
       }
     }

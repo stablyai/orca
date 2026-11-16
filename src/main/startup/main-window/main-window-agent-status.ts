@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { publishedOrcaSessionId } from '../../agent-hooks/identity/pane-agent-identities'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { setMigrationUnsupportedPtyListener } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { getDashboardPopoutWindow } from '../../window/dashboard-popout-window'
@@ -36,6 +37,9 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       structuredHost,
       programStatus,
       programStatusOnly,
+      paneSleep,
+      agentIdentity,
+      identityOnly,
       agentPresence
     }) => {
       if (state.mainWindow?.isDestroyed()) {
@@ -84,12 +88,16 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
         ...pickHostTurnEnd({ turnEndedAt, turnEndDisposition }),
         ...(providerSession ? { providerSession } : {}),
+        ...(publishedOrcaSessionId(agentIdentity) !== undefined
+          ? { orcaSessionId: publishedOrcaSessionId(agentIdentity) }
+          : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {}),
         ...(programStatus ? { programStatus } : {}),
         ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
+        ...(paneSleep ? { paneSleep } : {}),
         ...(agentPresence?.session && !agentPresence.ended
           ? { paneOwner: { agent: agentPresence.agent, session: agentPresence.session } }
           : {}),
@@ -98,8 +106,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
       getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
-      // A facet-only republish (progress tick) is not a state the agent entered.
-      if (programStatusOnly !== true) {
+      // A facet-only republish (progress tick) or a settled id is not a state the agent entered.
+      if (programStatusOnly !== true && identityOnly !== true) {
         options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
       }
     }

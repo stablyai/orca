@@ -1,4 +1,4 @@
-import type { BrowserIdentityModeStatus } from '../../shared/browser-user-agent-mode'
+import type { BrowserIdentityModeStatus } from '../../shared/browser/identity/browser-user-agent-mode'
 
 type DiagnosticConsole = Pick<Console, 'debug' | 'error' | 'info' | 'log' | 'warn'>
 type StderrTarget = Pick<NodeJS.WriteStream, 'write'>

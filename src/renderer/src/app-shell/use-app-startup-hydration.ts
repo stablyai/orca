@@ -35,9 +35,9 @@ import {
   isOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
 import { ensureLocalRuntimeCapabilities } from '../runtime/hosts/capabilities/local-runtime-capabilities'
@@ -45,7 +45,7 @@ import {
   finishStartupWorktreeHydration,
   refreshStartupWorktrees
 } from '../startup/startup-worktree-refresh'
-import type { OnboardingState } from '../../../shared/onboarding-state-types'
+import type { OnboardingState } from '../../../shared/onboarding/onboarding-state-types'
 
 /** Hydrate settings/UI/catalog/session, reconnect and restore terminals before unlocking saves. Failure boots in degraded no-save mode to protect disk state. */
 export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {

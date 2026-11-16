@@ -11,20 +11,20 @@ import {
   isAgentSessionCreateAdmissionRefusal
 } from '../../../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
-  createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionForkSource
 } from '../../../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentCreateSupportReply } from '../../../../../src/shared/agent-session/structured-agent-create-support-reply'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { hasRuntimeRpcErrorCode } from '../../../../../src/shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../src/shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   structuredAgentSessionCreate,
   structuredAgentSupportProbe
 } from './mobile-structured-create-operations'
 import { randomV4Uuid } from '../../../platform/random-v4-uuid'
+import { createOrcaSessionId } from '../../../../../src/shared/agent-session/identity/orca-session-address'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 // Partial: the reply is read before it is checked.
@@ -50,7 +50,7 @@ function createParamsFor(
   tabPlacement: StructuredAgentSessionCreateParams['tabPlacement']
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
-    sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
+    sessionId: createOrcaSessionId(randomV4Uuid),
     worktree,
     agent,
     ...(forkFrom ? { forkFrom } : {}),

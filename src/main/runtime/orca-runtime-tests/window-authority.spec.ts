@@ -1,7 +1,7 @@
-import '../../../shared/layout-owner-switch'
+import '../../../shared/workspace-layout/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import '../orca-runtime'
 import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../session-graph/runtime-graph-reload-lifecycle'
 import '../orca-runtime-test-mocks/setup.spec'
@@ -41,7 +41,7 @@ describe('OrcaRuntimeService', () => {
     vi.useFakeTimers()
     try {
       const runtime = createRuntime()
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
       runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
         tabId: 'host-tab',
         leafId: HEADLESS_LEAF_ID
@@ -64,11 +64,11 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('retires the headless fallback after renderer promotion succeeds', () => {
+  it('retires the headless fallback after renderer promotion succeeds', async () => {
     const runtime = createRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
 
     runtime.markRendererReloading(TEST_WINDOW_ID)
     runtime.markGraphReloadFailed(TEST_WINDOW_ID, 'renderer-process-gone')
@@ -78,7 +78,7 @@ describe('OrcaRuntimeService', () => {
       graphStatus: 'unavailable'
     })
 
-    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: TEST_WINDOW_ID,
       graphStatus: 'ready'
@@ -113,53 +113,53 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('rejects a same-frame graph publication from the superseded renderer generation', () => {
+  it('rejects a same-frame graph publication from the superseded renderer generation', async () => {
     const runtime = createRuntime()
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [],
       leaves: [],
       rendererGeneration: 'renderer-a'
     })
     runtime.markRendererReloading(TEST_WINDOW_ID)
 
-    expect(() =>
+    await expect(
       runtime.syncWindowGraph(TEST_WINDOW_ID, {
         tabs: [],
         leaves: [],
         rendererGeneration: 'renderer-a'
       })
-    ).toThrow('Runtime graph publisher belongs to a superseded renderer generation')
+    ).rejects.toThrow('Runtime graph publisher belongs to a superseded renderer generation')
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: TEST_WINDOW_ID,
       graphStatus: 'reloading'
     })
   })
 
-  it('keeps a restored headless graph pinned to the failed promotion window', () => {
+  it('keeps a restored headless graph pinned to the failed promotion window', async () => {
     const runtime = createRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.attachWindow(TEST_WINDOW_ID)
     runtime.markGraphReloadFailed(TEST_WINDOW_ID, 'renderer-process-gone')
 
-    expect(() =>
+    await expect(
       runtime.syncWindowGraph(2, {
         tabs: [],
         leaves: [],
         rendererGeneration: 'renderer-b'
       })
-    ).toThrow('Runtime graph publisher does not match the pending desktop promotion')
+    ).rejects.toThrow('Runtime graph publisher does not match the pending desktop promotion')
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
       graphStatus: 'ready'
     })
   })
 
-  it('promotes a reopened serve window and hands back again when it closes', () => {
+  it('promotes a reopened serve window and hands back again when it closes', async () => {
     const runtime = createRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.markGraphReady(TEST_WINDOW_ID)
     runtime.markGraphUnavailable(TEST_WINDOW_ID)
 
@@ -168,7 +168,7 @@ describe('OrcaRuntimeService', () => {
       authoritativeWindowId: 2,
       graphStatus: 'reloading'
     })
-    runtime.syncWindowGraph(2, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(2, { tabs: [], leaves: [] })
     runtime.markGraphReady(2)
     expect(runtime.getStatus()).toMatchObject({ authoritativeWindowId: 2, graphStatus: 'ready' })
 

@@ -1,4 +1,4 @@
-import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
+import { terminalPendingLabel } from './launch-menu/new-tab-agent-menu-model'
 import { useImperativeHandle, useRef, type Ref } from 'react'
 import { CornerDownLeft, MessageSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import {
   type AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { agentPickerEntryOptions } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
-import { formatKeybinding } from '../../../../shared/keybindings'
+import { formatKeybinding } from '../../../../shared/keybindings/formatting'
 
 export function agentLaunchSetupArgumentsNote(
   label: string,

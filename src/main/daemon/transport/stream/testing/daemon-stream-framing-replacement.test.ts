@@ -5,7 +5,7 @@ import {
   createBinaryStreamFrameReader,
   type DaemonStreamFraming
 } from '../../framing/daemon-stream-binary-framing'
-import { createNdjsonParser } from '../../../../../shared/main-process-ndjson-framer'
+import { createNdjsonParser } from '../../../../../shared/json-stream/main-process-ndjson-framer'
 import type { DaemonEvent } from '../../../protocol/daemon-stream-events'
 
 describe('daemon stream replacement framing', () => {

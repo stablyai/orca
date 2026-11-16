@@ -14,12 +14,12 @@ import {
   type AgentSessionAttachmentUploadTarget
 } from '../../shared/agent-session/agent-session-attachments'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from './runtime-environments/requests/runtime-environment-transport-routing'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
   RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
-} from './runtime-environments/runtime-environment-manual-disconnect'
-import { stageOneSourceForRuntimeUpload } from './filesystem/filesystem-runtime-upload-staging'
+} from './runtime-environments/connectivity/runtime-environment-manual-disconnect'
+import { stageOneSourceForRuntimeUpload } from './filesystem/imports/filesystem-runtime-upload-staging'
 import { streamExternalFileSlices } from './runtime-upload-file-stream'
 import { formatByteCeiling } from './runtime-import-limits'
 
@@ -135,7 +135,7 @@ export async function uploadPasteToAgentSessionAttachments(
   const stored = await uploadBufferToAgentSessionAttachments(
     {
       ...target,
-      environmentId: resolveEnvironment(userDataPath, runtimeEnvironmentId).id,
+      environmentId: (await resolveEnvironment(userDataPath, runtimeEnvironmentId)).id,
       userDataPath
     },
     name,

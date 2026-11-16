@@ -4,12 +4,12 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type {
   TerminalPaneAdmission,
   TerminalPaneAdmissionOutcome
-} from '../../../persistence/terminal-topology/terminal-pane-admission'
+} from '../../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import type { LayoutRefusalCode } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'

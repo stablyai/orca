@@ -5,13 +5,13 @@ import type { OrcaRuntimeWithGetTerminalInteractiveWait as GetTerminalInteractiv
 import { OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal } from './pty-backed-session-publication'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/terminal-topology-membership'
+import { hasHostAuthoritativeTerminalMembership } from '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedLeaf
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { retireTerminalSurfacesFromSnapshot } from '../terminal/surface/mobile-session-terminal-retirement'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
@@ -39,21 +39,23 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
   }
 
   /** Republish only worktrees whose sender scope differs from the one their last frame carried. */
-  refreshAgentSenderAssociations(): void {
+  async refreshAgentSenderAssociations(): Promise<void> {
     const listeners = this.selectMobileSessionTabsListeners().filter(
       (subscription) => subscription.clientKind !== 'mobile'
     )
     if (listeners.length === 0) {
       return
     }
-    const changed = this.agentProjections.senders.changedScopes(
-      this.mobileSessionTabsByWorktree.keys()
-    )
-    for (const worktreeId of changed) {
-      if (this.selectMobileSessionTabsListeners(worktreeId, undefined, listeners).length > 0) {
-        this.touchMobileSessionTabsForWorktree(worktreeId)
+    await this.agentProjections.senders.withPreparedPublication(() => {
+      const changed = this.agentProjections.senders.changedScopes(
+        this.mobileSessionTabsByWorktree.keys()
+      )
+      for (const worktreeId of changed) {
+        if (this.selectMobileSessionTabsListeners(worktreeId, undefined, listeners).length > 0) {
+          this.touchMobileSessionTabsForWorktree(worktreeId)
+        }
       }
-    }
+    })
   }
 
   /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard re-emits at the same version. */

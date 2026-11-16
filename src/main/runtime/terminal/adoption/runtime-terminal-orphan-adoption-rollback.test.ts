@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/runtime-terminal-contracts'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   GIT_KEY,

@@ -14,13 +14,13 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { worktreeRowSurface } from './worktree-row-locators'
 import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
+import { RuntimeRpcFailureError } from '../../src/cli/runtime/connection/types'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalListResult,
-  RuntimeTerminalSplit,
-  RuntimeWorktreeRecord
-} from '../../src/shared/runtime-types'
+  RuntimeTerminalSplit
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeWorktreeRecord } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 
 test.describe.configure({ mode: 'serial' })
 

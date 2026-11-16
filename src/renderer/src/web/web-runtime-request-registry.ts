@@ -1,5 +1,5 @@
 import { RuntimeConnectionChangedBeforeSendError } from '../runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { WebRuntimePendingRequest } from './web-runtime-connection-frame-router'
 
 const REQUEST_TIMEOUT_MS = 30_000

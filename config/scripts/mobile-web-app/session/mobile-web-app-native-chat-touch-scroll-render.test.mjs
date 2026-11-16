@@ -11,18 +11,18 @@ import {
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from '../preview/mobile-web-app-render-harness.mjs'
 
-// The phone's web pages must pan the transcript by touch and give a pinch to its text-size detector, not page zoom.
+// The phone's web pages must pan the transcript by touch, give a pinch to its text-size detector (not page zoom) and keep the Copy menu.
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
 const entry = `
 import { createRoot } from 'react-dom/client'
 import { Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/MobileNativeChatPageScroll'
+import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/viewport/MobileNativeChatPageScroll'
 import {
   MobileNativeChatPinchZoom,
   useMobileNativeChatPinchGesture
-} from './src/session/native-chat/transcript/mobile-native-chat-pinch-zoom'
+} from './src/session/native-chat/transcript/viewport/mobile-native-chat-pinch-zoom'
 
 function Transcript() {
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture('chat')

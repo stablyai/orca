@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   isAiVaultAgent,
   type AiVaultAgent

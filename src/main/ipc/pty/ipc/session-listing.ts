@@ -1,10 +1,10 @@
-import type { ResourceViewAdmission } from '../../../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../../../shared/diagnostics/resource-view-admission'
 import { assertResourceViewVisible } from '../../../window/visibility/resource-view-admission'
 import { getPtyIpc } from '../pty-host-bindings'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
-} from '../../../providers/pty-process-list-admission'
+} from '../../../providers/pty/process-list-admission'
 import {
   ptySessionIdentity,
   type PtyListedSession,
@@ -15,7 +15,7 @@ import { getProvider, registeredPtyProviders, type ResolvedPtyHost } from '../pr
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
 export function installPtySessionListingIpcHandler(deps: {
   getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined

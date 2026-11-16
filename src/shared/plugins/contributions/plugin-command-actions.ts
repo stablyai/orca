@@ -1,4 +1,4 @@
-import type { KeybindingActionId, PluginKeybindingActionId } from '../../keybindings'
+import type { KeybindingActionId, PluginKeybindingActionId } from '../../keybindings/types'
 import { PLUGIN_SCHEMA_SINCE_V1 } from '../manifest/plugin-schema-field-docs'
 
 /** Closed renderer-owned actions prevent declarative aliases targeting component-private shortcuts. */

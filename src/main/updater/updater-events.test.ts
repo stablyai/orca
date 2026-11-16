@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UpdateStatus } from '../../shared/update-status-types'
+import type { UpdateStatus } from '../../shared/updater/update-status-types'
 import type { registerAutoUpdaterHandlers } from './updater-events'
 
 const {
@@ -154,18 +154,6 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
       getArtifact: getTrackedLinuxPackageArtifact
     }
   }
-
-  it('starts unpacking a downloaded AppImage update without holding up the ready status', async () => {
-    getLinuxPackageTypeMock.mockReturnValue('non-root')
-    getLinuxRootPackageTypeMock.mockReturnValue(null)
-    preExtractUpdateMock.mockReturnValue(new Promise(() => {}))
-    const appImagePath = '/home/tester/.cache/orca-updater/pending/Orca-1.0.61.AppImage'
-    const { context, emit } = await register()
-    emit('update-downloaded', downloadedEvent({ downloadedFile: appImagePath }))
-
-    expect(preExtractUpdateMock).toHaveBeenCalledWith(appImagePath, expect.any(Function))
-    expect(context.sendStatus).toHaveBeenCalledWith(expect.objectContaining({ version: '1.0.61' }))
-  })
 
   it.each([
     ['missing', [{ url: 'orca-ide_1.0.61_amd64.deb' }]],

@@ -1,32 +1,34 @@
 import {
   DEFAULT_STATUS_BAR_USAGE_FORMAT,
   normalizeStatusBarUsageFormat
-} from '../../../../../shared/status-bar-usage-format'
+} from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
-  DEFAULT_SHOW_SLEEPING_WORKSPACES,
-  DEFAULT_STATUS_BAR_ITEMS,
+  normalizeAgentActivityDisplayMode
+} from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
+import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
+import {
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
-  normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties
-} from '../../../../../shared/constants'
+} from '../../../../../shared/worktree/row-display/card-properties'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   normalizeUsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import {
   DEFAULT_STATUS_BAR_USAGE_MODE,
   normalizeStatusBarUsageMode
-} from '../../../../../shared/status-bar-usage-mode'
+} from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   ALL_AUTOMATION_HOSTS_FILTER,
   toPersistedAutomationHostFilter
@@ -37,7 +39,7 @@ import {
   cloneDefaultWorkspaceStatuses,
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
-} from '../../../../../shared/workspace-statuses'
+} from '../../../../../shared/workspace/status/workspace-statuses'
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
@@ -155,6 +157,23 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
           next[worktreeId] = false
         }
         return { showDotfilesByWorktree: next }
+      }),
+
+    notificationsMutedByWorktree: {},
+    toggleWorktreeNotificationsMuted: (worktreeId) =>
+      set((s) => {
+        if (!worktreeId) {
+          return s
+        }
+        const nextMuted = s.notificationsMutedByWorktree[worktreeId] !== true
+        const next = { ...s.notificationsMutedByWorktree }
+        // Why: not muted is the default; only persist worktree-level opt-ins.
+        if (nextMuted) {
+          next[worktreeId] = true
+        } else {
+          delete next[worktreeId]
+        }
+        return { notificationsMutedByWorktree: next }
       }),
 
     filterRepoIds: [],

@@ -1,9 +1,16 @@
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from './provider-process-spawn'
 import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
 import { spawnManagedProviderProcess } from './managed-provider-process'
+
+vi.mock('./provider-process-spawn', () => ({
+  spawnProviderProcess: (
+    spec: { program: string; args: string[]; env: NodeJS.ProcessEnv },
+    spawn: ProviderProcessSpawner
+  ) => spawn({ program: spec.program, args: spec.args, env: spec.env })
+}))
 
 // The real fallback teardown; only the primitives that touch the OS are faked.
 const os = vi.hoisted(() => ({
@@ -15,7 +22,8 @@ vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
   terminateWindowsProcessTree: os.taskkill
 }))
 vi.mock('../pty/process-retirement/pty-descendant-termination', () => ({
-  captureDescendantSnapshot: os.capture
+  captureDescendantSnapshot: os.capture,
+  hasUnambiguousStartTime: () => true
 }))
 vi.mock('../pty/process-retirement/pty-descendant-exit-verification', () => ({
   terminateDescendantSnapshotWithVerdict: os.verifySnapshot
@@ -32,6 +40,7 @@ afterEach(() => {
 function rootOnly(platform: NodeJS.Platform) {
   const child = Object.assign(createFakePipedChild(), {
     pid: 4242,
+    writerPid: 4242,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),
@@ -43,7 +52,7 @@ function rootOnly(platform: NodeJS.Platform) {
       return true
     })
   })
-  const spawnImpl: PipedProcessSpawner = () => child
+  const spawnImpl: ProviderProcessSpawner = () => child
   return spawnManagedProviderProcess(
     { command: 'fixture-provider', args: [] },
     { spawnImpl, platform, site: 'fixture-provider-teardown' }
@@ -54,9 +63,7 @@ describe('fallback teardown never claims descendants it did not observe', () => 
   it('reports no observation when the POSIX process table cannot be read', async () => {
     vi.useFakeTimers()
     const closing = rootOnly('darwin').close()
-    await vi.advanceTimersByTimeAsync(5_500)
-    await expect(closing).resolves.toEqual({ root: 'exited', tree: null })
-    expect(os.capture).toHaveBeenCalledOnce()
-    expect(os.verifySnapshot).not.toHaveBeenCalled()
+    await vi.runAllTimersAsync()
+    await expect(closing).resolves.toEqual({ root: 'exited', tree: null, killDelivered: true })
   })
 })

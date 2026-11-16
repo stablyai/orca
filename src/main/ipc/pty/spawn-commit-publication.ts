@@ -1,7 +1,7 @@
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
-import type { PtySpawnResult } from '../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import {
   codexReattachedHomeRouteField,
   recordCodexPaneAccountForSpawn
@@ -83,6 +83,13 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
   }
   // Publish reverse pane lookup for hook titles and provider cleanup.
   const rememberedPaneKey = rememberPaneKeyForPty(result.id, input.paneKey)
+  if (
+    rememberedPaneKey &&
+    !result.isReattach &&
+    result.agentSessionEnsure?.disposition !== 'adopted'
+  ) {
+    agentHookServer.retireSleepingPaneOnSpawn(rememberedPaneKey)
+  }
   if (input.paneKeyAliases) {
     registerSpawnPaneKeyAliases(result, input.paneKey, input.paneKeyAliases)
   }

@@ -1,5 +1,20 @@
 import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree-scan-cache'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  _resetWorktreeRemovalLifetimeForTests,
+  worktreeRemovalLifetime
+} from '../workspaces/removal/worktree-removal-lifetime'
+import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
+import { readWorktreeRemovalRecords } from '../workspaces/removal/worktree-removal-records'
+import {
+  waitForWorktreeRemovalAcceptance,
+  _resetPendingWorktreeRemovalsForTests
+} from '../workspaces/removal/worktree-background-removal'
+import { removeRuntimeRegisteredLocalWorktree } from '../runtime/workspaces/removal/runtime-registered-local-worktree-removal'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import * as scopedRootsInvalidation from './worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import * as authorizedRootsCache from './worktrees/removal/registered-worktree-roots-cache'
 import {
@@ -13,6 +28,10 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
+
+afterEach(() => {
+  _resetWorktreeRemovalLifetimeForTests()
+})
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   return {
@@ -222,3 +241,164 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeMock).not.toHaveBeenCalled()
   })
 })
+
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+it.each(['ipc', 'runtime'] as const)(
+  '%s refuses after a held preflight loses to committed shutdown, before stopping terminals',
+  async (entry) => {
+    const runtime = setupWorktreeHandlers()
+    const acquireWatcherRemoval = vi.fn(async (_path: string) => ({
+      finish: async (_removed: boolean) => {}
+    }))
+    runtime.acquireFileWatcherRemoval = acquireWatcherRemoval
+    const rows = mockKnownFeatureWorktree()
+    const entered = deferred()
+    const preflight = deferred()
+    assertWorktreeCleanForRemovalMock.mockImplementation(async () => {
+      entered.resolve()
+      await preflight.promise
+    })
+    const invoke = () =>
+      entry === 'ipc'
+        ? Promise.resolve(
+            handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+          )
+        : removeRuntimeRegisteredLocalWorktree({
+            repo: {
+              id: 'repo-1',
+              path: '/workspace/repo',
+              displayName: 'repo',
+              badgeColor: '',
+              addedAt: 0
+            },
+            target: {
+              id: 'repo-1::/workspace/feature-wt',
+              repoId: 'repo-1',
+              path: '/workspace/feature-wt'
+            },
+            registeredWorktree: rows[1],
+            removedPushTarget: undefined,
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this path refuses before consuming store mutations.
+            store: store as unknown as RuntimeStore,
+            localOptions: {},
+            hasLocalOptions: false,
+            force: false,
+            runHooks: false,
+            allowFailedArchiveHook: false,
+            allowUnverifiedPtyStop: false,
+            deleteBranch: true,
+            acquireWatcherRemoval,
+            stopPtys: async () => {
+              await killAllProcessesForWorktreeMock()
+            },
+            closeWatchers: async () => {},
+            preserveBranchHead: (result) => result ?? {},
+            finishRemoval: () => {},
+            onRemoved: () => {},
+            publish: () => {}
+          })
+    const request = invoke()
+    const refused = expect(request).rejects.toThrow('Orca is stopping')
+    await entered.promise
+    await worktreeRemovalLifetime.close()
+    preflight.resolve()
+    await refused
+    expect(runtime.acquireFileWatcherRemoval).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  }
+)
+
+it.each(['ipc', 'runtime'] as const)(
+  '%s finishes actual admission when teardown owned preparation before shutdown',
+  async (entry) => {
+    const runtime = setupWorktreeHandlers()
+    const acquireWatcherRemoval = vi.fn(async (_path: string) => ({
+      finish: async (_removed: boolean) => {}
+    }))
+    runtime.acquireFileWatcherRemoval = acquireWatcherRemoval
+    const rows = mockKnownFeatureWorktree()
+    const directory = await mkdtemp(join(tmpdir(), 'orca-removal-boundary-'))
+    await prepareWorktreeRemovalsForStore({
+      getProfileStorageDirectory: () => directory,
+      getRepos: () => [{ id: 'repo-1' }]
+    })
+    const entered = deferred()
+    const stopped = deferred()
+    killAllProcessesForWorktreeMock.mockImplementation(async () => {
+      entered.resolve()
+      await stopped.promise
+      return { runtimeStopped: 1, providerStopped: 0, registryStopped: 0 }
+    })
+    try {
+      const request =
+        entry === 'ipc'
+          ? Promise.resolve(
+              handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+            )
+          : removeRuntimeRegisteredLocalWorktree({
+              repo: {
+                id: 'repo-1',
+                path: '/workspace/repo',
+                displayName: 'repo',
+                badgeColor: '',
+                addedAt: 0
+              },
+              target: {
+                id: 'repo-1::/workspace/feature-wt',
+                repoId: 'repo-1',
+                path: '/workspace/feature-wt'
+              },
+              registeredWorktree: rows[1],
+              removedPushTarget: undefined,
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cleanup is aborted before store mutations; admission uses the real journal.
+              store: store as unknown as RuntimeStore,
+              localOptions: {},
+              hasLocalOptions: false,
+              force: false,
+              runHooks: false,
+              allowFailedArchiveHook: false,
+              allowUnverifiedPtyStop: false,
+              deleteBranch: true,
+              acquireWatcherRemoval,
+              stopPtys: async () => {
+                await killAllProcessesForWorktreeMock()
+              },
+              closeWatchers: async () => {},
+              preserveBranchHead: (result) => result ?? {},
+              finishRemoval: () => {},
+              onRemoved: () => {},
+              publish: () => {}
+            })
+      await entered.promise
+      const closing = worktreeRemovalLifetime.close()
+      stopped.resolve()
+      if (entry === 'ipc') {
+        void request.catch(() => {})
+        await waitForWorktreeRemovalAcceptance('repo-1::/workspace/feature-wt')
+      } else {
+        await expect(request).resolves.toMatchObject({ removing: true })
+      }
+      await closing
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+      expect(await readWorktreeRemovalRecords(directory)).toEqual([
+        expect.objectContaining({
+          worktreeId: 'repo-1::/workspace/feature-wt',
+          deleteBranch: true,
+          force: false
+        })
+      ])
+    } finally {
+      _resetPendingWorktreeRemovalsForTests()
+      await rm(directory, { recursive: true, force: true })
+    }
+  }
+)

@@ -150,13 +150,17 @@
           "graceHours_one": "{{count}} hour",
           "graceHours_other": "{{count}} hours",
           "graceMinutes_one": "{{count}} minute",
-          "graceMinutes_other": "{{count}} minutes"
+          "graceMinutes_other": "{{count}} minutes",
+          "usageDetail_one": "{{tokens}} tokens · {{known}}/{{count}} run reported",
+          "usageDetail_other": "{{tokens}} tokens · {{known}}/{{count}} runs reported"
         },
         "AutomationRunsDashboard": {
           "historyUnavailable_one": "Run history is unavailable for {{count}} automation. Counts include available history only.",
           "historyUnavailable_other": "Run history is unavailable for {{count}} automations. Counts include available history only.",
           "local": "Local",
-          "remote": "Remote"
+          "remote": "Remote",
+          "runs": "Runs",
+          "triggered": "Triggered"
         },
         "AutomationSchedulePicker": {
           "55b2ef82a4": "Hourly",
@@ -191,6 +195,16 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{failed}} of {{count}} host could not be loaded",
           "partialFailureOfHosts_other": "{{failed}} of {{count}} hosts could not be loaded"
+        },
+        "listGroups": {
+          "active": "Active",
+          "attention": "Needs attention",
+          "paused": "Paused"
+        },
+        "recentRuns": {
+          "allRuns": "All {{count}} runs",
+          "allRuns_one": "All {{count}} run",
+          "allRuns_other": "All {{count}} runs"
         },
         "runHistory": {
           "occurrencesCount_one": "{{count}} time",
@@ -316,6 +330,8 @@
       },
       "github": {
         "PRFilterSections": {
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels"
         },
@@ -922,11 +938,6 @@
           "reviewHiddenWorktrees_one": "Review {{count}} hidden worktree in {{scope}}",
           "reviewHiddenWorktrees_other": "Review {{count}} hidden worktrees in {{scope}}"
         },
-        "PreservedBranchBatchReviewDialog": {
-          "a0f9863597": "Force Delete {{count}} Branches",
-          "a0f9863597_one": "Force Delete {{count}} Branch",
-          "a0f9863597_other": "Force Delete {{count}} Branches"
-        },
         "ProjectGroupDeleteDialog": {
           "moreProjects_one": "+{{count}} more",
           "moreProjects_other": "+{{count}} more",
@@ -1207,10 +1218,6 @@
             "browserTabsOpen_other": "{{count}} browser tabs open",
             "changedFiles_one": "{{count}} changed file",
             "changedFiles_other": "{{count}} changed files",
-            "completedAgentsRetained_one": "{{count}} completed agent retained",
-            "completedAgentsRetained_other": "{{count}} completed agents retained",
-            "completedAgents_one": "{{count}} completed agent",
-            "completedAgents_other": "{{count}} completed agents",
             "dirtyEditorBuffers_one": "{{count}} dirty editor buffer",
             "dirtyEditorBuffers_other": "{{count}} dirty editor buffers",
             "editorFilesOpen_one": "{{count}} editor file open",
@@ -1601,6 +1608,11 @@
     }
   },
   "components": {
+    "RepositoryBrowserProfileSection": {
+      "keywordCookies": "cookies",
+      "keywordProfile": "browser profile",
+      "keywordSignIn": "sign in"
+    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -1839,12 +1851,23 @@
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       },
+      "mcp": {
+        "status": {
+          "tools_one": "{{count}} tool",
+          "tools_other": "{{count}} tools"
+        },
+        "summary": {
+          "needsAuth_one": "{{count}} needs sign-in",
+          "needsAuth_other": "{{count}} need sign-in"
+        }
+      },
       "notices": {
         "compaction": "Context compacted",
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "forkedFrom": "Forked from",
+        "forkedFromUnknown": "Forked from another chat",
         "historyItemTooLarge": "This part of the chat was too large to show.",
         "historyRepaired": "Part of this chat's history couldn't be loaded.",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -1855,6 +1878,10 @@
         "orcaStopUnnamedServer": "the remote server",
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "plan": "Plan",
+        "restartContinueRefused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+        "restartContinueUnconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message.",
+        "restartContinued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+        "restartNotConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue.",
         "stoppedBeforeStart": "Stopped manually"
       },
       "openedPullRequests": {
@@ -2112,6 +2139,40 @@
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
     },
+    "settings": {
+      "workspaceCleanup": {
+        "activity": {
+          "notListed_one": "1 more kept workspace is not listed.",
+          "notListed_other": "{{count}} more kept workspaces are not listed."
+        },
+        "change": {
+          "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
+          "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
+        },
+        "disableIgnoredFiles": {
+          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
+          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection."
+        },
+        "enable": {
+          "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
+          "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on."
+        },
+        "rules": {
+          "inactiveDescription": "No activity for {{count}} days.",
+          "inactiveDescription_one": "No activity for 1 day.",
+          "inactiveDescription_other": "No activity for {{count}} days.",
+          "matchesCount": "Matches {{count}} workspaces now",
+          "matchesCount_one": "Matches 1 workspace now",
+          "matchesCount_other": "Matches {{count}} workspaces now"
+        },
+        "status": {
+          "lastRunFreed_one": "Last run {{when}} removed 1 workspace and freed {{size}}.",
+          "lastRunFreed_other": "Last run {{when}} removed {{count}} workspaces and freed {{size}}.",
+          "lastRunRemoved_one": "Last run {{when}} removed 1 workspace.",
+          "lastRunRemoved_other": "Last run {{when}} removed {{count}} workspaces."
+        }
+      }
+    },
     "tab": {
       "bar": {
         "bulkClose": {
@@ -2139,8 +2200,6 @@
           "workspaceCount_other": "{{count}} workspaces"
         },
         "confirm": {
-          "deleteTitle_one": "Delete {{count}} workspace?",
-          "deleteTitle_other": "Delete {{count}} workspaces?",
           "deletingTitle_one": "Deleting {{count}} workspace",
           "deletingTitle_other": "Deleting {{count}} workspaces"
         },
@@ -2154,6 +2213,12 @@
         }
       },
       "delete": {
+        "ignoredFiles": {
+          "lost_one": "{{count}} ignored file will be lost",
+          "lost_other": "{{count}} ignored files will be lost",
+          "morePaths_one": "and {{count}} more ignored path",
+          "morePaths_other": "and {{count}} more ignored paths"
+        },
         "unsavedEdits": {
           "blocked_one": "Save or close {{count}} unsaved file in {{name}} first",
           "blocked_other": "Save or close {{count}} unsaved files in {{name}} first",
@@ -2250,6 +2315,10 @@
       "linkedCount_one": "{{count}} workspace linked to {{key}}",
       "linkedCount_other": "{{count}} workspaces linked to {{key}}"
     }
+  },
+  "languages": {
+    "pluginsDisabledCount_one": "{{count}} community translation needs plugins turned on.",
+    "pluginsDisabledCount_other": "{{count}} community translations need plugins turned on."
   },
   "localBuild": {
     "liveTerminals_one": "{{count}} live terminal will reconnect after restart.",
@@ -2456,6 +2525,22 @@
         "permissionDenied": "Permission denied",
         "permissionDeniedPublickey": "Permission denied (publickey)"
       }
+    },
+    "uninstall": {
+      "rows": {
+        "agents_one": "Hooks in 1 agent",
+        "agents_other": "Hooks in {{count}} agents",
+        "hostCount_one": "1 host",
+        "hostCount_other": "{{count}} hosts"
+      },
+      "summary": {
+        "agents_one": "hooks in 1 agent",
+        "agents_other": "hooks in {{count}} agents",
+        "hosts_one": "1 SSH host",
+        "hosts_other": "{{count}} SSH hosts",
+        "problems_one": "1 item needs you before you delete the app.",
+        "problems_other": "{{count}} items need you before you delete the app."
+      }
     }
   },
   "sidebar": {
@@ -2577,8 +2662,6 @@
     "discard": {
       "deleteUntrackedFilesDescription_one": "This will permanently delete {{count}} untracked file. This cannot be undone.",
       "deleteUntrackedFilesDescription_other": "This will permanently delete these {{count}} untracked files. This cannot be undone.",
-      "deleteUntrackedTitle_one": "Delete {{count}} untracked file?",
-      "deleteUntrackedTitle_other": "Delete {{count}} untracked files?",
       "unstagedFilesIncludingUntrackedDescription_one": "This will revert unstaged changes and permanently delete any untracked files among {{count}} file. This cannot be undone.",
       "unstagedFilesIncludingUntrackedDescription_other": "This will revert unstaged changes and permanently delete any untracked files among these {{count}} files. This cannot be undone."
     },

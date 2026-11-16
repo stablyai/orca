@@ -4,15 +4,15 @@ import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { useTranslate } from '@/i18n/use-translate'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
-import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/nested-removal'
+import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/removal/nested-removal'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   isLockedWorktreeRemovalError,
   SUBMODULE_DIRTY_REMOVAL_DETAIL,
   type WorktreeForceDeleteReason,
   type WorktreeRemovalTarget
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 
 type DeleteWorktreeFailureToastOptions = {
   error: string

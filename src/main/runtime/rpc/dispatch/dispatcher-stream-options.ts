@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { captureStructuredAgentCliSource } from '../../../native-chat/structured-agent-cli-source'
+import { captureStructuredAgentCliSource } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { OrchestrationEntryCaller } from '../../orchestration/addressing/orchestration-caller-identity'
 import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } from '../core'
 import { resolveRpcCallerIdentity } from '../callers/rpc-caller-identity'

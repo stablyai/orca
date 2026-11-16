@@ -2,8 +2,8 @@ import { focusOpenedBrowserLink } from '../navigation/browser-link-focus'
 import { createBrowserLinkHostMatcher } from '../navigation/browser-link-owner'
 import { resolveBrowserLinkSession } from '../navigation/browser-link-session'
 import { useAppStore } from '@/store/index'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { openLocalBrowserLink, browserLinkCommitIsValid } from '../navigation/browser-link-open'
 import {
   selectBrowserLinkDestination,

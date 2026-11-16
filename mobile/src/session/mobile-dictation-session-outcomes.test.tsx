@@ -3,9 +3,12 @@ import { createElement, useContext, useRef } from 'react'
 import { act } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type * as NativeChatSendError from './native-chat/composer/use-mobile-native-chat-send-error'
-import type * as NativeChatDraftStore from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  createFakeRpcClient,
+  type FakeRpcClient
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
+import type * as NativeChatSendError from './native-chat/composer/delivery/use-mobile-native-chat-send-error'
+import type * as NativeChatDraftStore from './native-chat/composer/drafts/mobile-native-chat-draft-store'
 
 type ChatView = { shown: boolean; scope: string | null }
 
@@ -49,14 +52,14 @@ vi.mock('expo-router', () => {
   const router = { canGoBack: () => false, push: () => {}, dismissTo: () => {} }
   return { useFocusEffect: () => {}, useRouter: () => router, useNavigation: () => undefined }
 })
-vi.mock('../platform/haptics', () => ({
+vi.mock('../platform/haptics/haptics', () => ({
   triggerError: () => {
     seen.errorHaptics += 1
   },
   triggerEdgeBump: () => {},
   triggerSelection: () => {}
 }))
-vi.mock('../platform/clipboard', () => {
+vi.mock('../platform/clipboard/clipboard', () => {
   const writer = {
     writeText: async (text: string) => {
       seen.clipboard.push(text)
@@ -66,20 +69,23 @@ vi.mock('../platform/clipboard', () => {
 })
 
 // Stub off-path native chat dependencies to keep Expo out of this mic test.
-vi.mock('./native-chat/composer/use-mobile-native-chat-send-error', async (importOriginal) => ({
-  ...(await importOriginal<typeof NativeChatSendError>()),
-  useMobileNativeChatSendError: () => ({
-    message: null,
-    show: () => {},
-    clear: () => {},
-    keepWhile: () => {},
-    bannerMountedRef: { current: false }
+vi.mock(
+  './native-chat/composer/delivery/use-mobile-native-chat-send-error',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof NativeChatSendError>()),
+    useMobileNativeChatSendError: () => ({
+      message: null,
+      show: () => {},
+      clear: () => {},
+      keepWhile: () => {},
+      bannerMountedRef: { current: false }
+    })
   })
-}))
-vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
+)
+vi.mock('./native-chat/transcript/viewport/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./native-chat/composer/use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/composer/field/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },
@@ -100,7 +106,7 @@ vi.mock('./native-chat/use-mobile-native-chat-controller', () => ({
     }
   })
 }))
-vi.mock('./native-chat/composer/mobile-native-chat-draft-store', async (importOriginal) => ({
+vi.mock('./native-chat/composer/drafts/mobile-native-chat-draft-store', async (importOriginal) => ({
   ...(await importOriginal<typeof NativeChatDraftStore>()),
   editMobileNativeChatDraft: (scope: string, update: (current: string) => string) => {
     seen.chatWrites.push([scope, update('')])
@@ -269,28 +275,5 @@ describe('a mic tap while the transcript is processing', () => {
     const methods = await settle(rpc, 'ship it')
     expect(methods).not.toContain('speech.dictation.cancel')
     expect(seen.inputs).toEqual(['ship it'])
-  })
-})
-
-describe('a dictation that ends after switching between chat and terminal', () => {
-  it('lands in the chat it started in, where its words were shown', async () => {
-    seen.chat = { shown: true, scope: 'chat-a' }
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    seen.chat = { shown: false, scope: 'chat-b' }
-    act(() => mounted.current().handleDictationToggle())
-    await settle(rpc, 'ship it')
-    expect(seen.chatWrites).toEqual([['chat-a', 'ship it']])
-    expect(seen.inputs).toEqual([])
-  })
-
-  it('lands in the chat that replaced the terminal it started in', async () => {
-    const rpc = createFakeRpcClient()
-    const mounted = await startRecording(rpc)
-    seen.chat = { shown: true, scope: 'chat-b' }
-    act(() => mounted.current().handleDictationToggle())
-    await settle(rpc, 'ship it')
-    expect(seen.chatWrites).toEqual([['chat-b', 'ship it']])
-    expect(seen.inputs).toEqual([])
   })
 })

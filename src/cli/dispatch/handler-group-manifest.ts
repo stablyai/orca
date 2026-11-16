@@ -22,7 +22,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
-    load: async () => (await import('../runtime/cli-lifecycle-handlers.js')).CORE_HANDLERS
+    load: async () => (await import('../runtime/commands/cli-lifecycle-handlers.js')).CORE_HANDLERS
   },
   ...SERVE_PAIRING_HANDLER_GROUPS,
   {
@@ -185,8 +185,10 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'computer capabilities',
       'computer list-apps',
       'computer permissions',
+      'computer launch-app',
       'computer list-windows',
       'computer get-app-state',
+      'computer wait',
       'computer click',
       'computer perform-secondary-action',
       'computer scroll',
@@ -203,6 +205,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'agent-hooks',
     keys: ['agent hooks prepare-codex', 'agent hooks status', 'agent hooks off', 'agent hooks on'],
     load: async () => (await import('../agents/agent-hooks.js')).AGENT_HOOK_HANDLERS
+  },
+  {
+    name: 'uninstall',
+    keys: ['uninstall'],
+    load: async () => (await import('../uninstall/orca-uninstall-command.js')).UNINSTALL_HANDLERS
   },
   {
     name: 'agent-launch',

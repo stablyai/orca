@@ -5,8 +5,8 @@ import {
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions
 } from '../../ipc/filesystem/access/filesystem-auth'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
-import { nativeChatScratchRootFor } from '../../native-chat/native-chat-scratch-folder'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
+import { nativeChatScratchRootFor } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { getFloatingWorkspaceFileRoots } from '../../ipc/floating-workspace-directory'
 
