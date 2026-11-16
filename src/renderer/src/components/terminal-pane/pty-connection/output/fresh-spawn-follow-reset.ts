@@ -195,10 +195,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
   }
 }
 
-/** Nothing on screen or in scrollback to keep or move. */
+/** Nothing on screen or in scrollback, and the cursor home: no content or stale position to fix. */
 function isTerminalBlank(terminal: ConnectPanePtySession['pane']['terminal']): boolean {
   const buffer = terminal.buffer.active
-  if (buffer.baseY > 0) {
+  if (buffer.baseY > 0 || buffer.cursorX > 0 || buffer.cursorY > 0) {
     return false
   }
   for (let row = 0; row < terminal.rows; row += 1) {
