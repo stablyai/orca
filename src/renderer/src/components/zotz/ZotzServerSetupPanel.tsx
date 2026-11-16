@@ -1,6 +1,7 @@
 import { Check, CircleDashed, ExternalLink, Minus, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { isZotzServerAccessReady } from '../../../../shared/zotz/zotz-machine-mode'
 import type {
   ZotzNodeSetupResult,
   ZotzNodeSetupStep
@@ -41,17 +42,17 @@ export function ZotzServerSetupPanel({
 }): React.JSX.Element {
   const t = useTranslate()
   const mountedRef = useMountedRef()
-  const updateSettings = useAppStore((state) => state.updateSettings)
+  const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const [state, setState] = useState<SetupState>('intro')
   const [steps, setSteps] = useState<ZotzNodeSetupStep[]>([])
   const [result, setResult] = useState<ZotzNodeSetupResult | null>(null)
+  const [setupError, setSetupError] = useState(false)
 
   const start = async (): Promise<void> => {
     setState('running')
     setResult(null)
+    setSetupError(false)
     onStart()
-    // Server mode first: it keeps the node awake and exposed from the next launch even if a step fails.
-    await updateSettings({ zotzMachineMode: 'server' })
     const outcome = await runServerSetupWithProgress((next) => {
       if (mountedRef.current) {
         setSteps(next)
@@ -59,16 +60,34 @@ export function ZotzServerSetupPanel({
     })
     if (outcome instanceof Error) {
       toast.error(outcome.message)
-    } else if (mountedRef.current) {
+      if (mountedRef.current) {
+        setSetupError(true)
+        setState('finished')
+      }
+      return
+    }
+    if (mountedRef.current) {
       setSteps(outcome.steps)
       setResult(outcome)
+    }
+    // Persist server mode only after Tailscale, firewall, and network exposure succeed.
+    if (isZotzServerAccessReady(outcome)) {
+      try {
+        await updateSettings({ zotzMachineMode: 'server' })
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error))
+        if (mountedRef.current) {
+          setSetupError(true)
+        }
+      }
     }
     if (mountedRef.current) {
       setState('finished')
     }
   }
 
-  const failed = steps.some((step) => step.status === 'failed')
+  const accessReady = isZotzServerAccessReady(result) && !setupError
+  const failed = setupError || !accessReady || steps.some((step) => step.status === 'failed')
 
   return (
     <div className="space-y-6">
@@ -90,7 +109,7 @@ export function ZotzServerSetupPanel({
           ))}
         </ol>
       ) : null}
-      {state === 'finished' && result?.tailscaleIp ? (
+      {state === 'finished' && accessReady && result?.tailscaleIp ? (
         <section className="space-y-3 rounded-xl border border-border bg-card/50 p-4">
           <h2 className="text-sm font-semibold">{t('zotz.nodeSetup.link.title', 'Access link')}</h2>
           <p className="text-xs text-muted-foreground">
@@ -122,9 +141,14 @@ export function ZotzServerSetupPanel({
         {state === 'finished' ? (
           <>
             {failed ? (
-              <Button type="button" variant="secondary" onClick={() => void start()}>
-                {t('zotz.nodeSetup.retry', 'Run again')}
-              </Button>
+              <>
+                <Button type="button" variant="ghost" onClick={onBack}>
+                  {t('zotz.machineMode.back', 'Back')}
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => void start()}>
+                  {t('zotz.nodeSetup.retry', 'Run again')}
+                </Button>
+              </>
             ) : null}
             <Button type="button" onClick={onDone}>
               {t('zotz.nodeSetup.done', 'Done')}

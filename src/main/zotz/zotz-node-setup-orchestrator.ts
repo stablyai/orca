@@ -1,7 +1,8 @@
 import type {
   ZotzNodeSetupResult,
   ZotzNodeSetupStep,
-  ZotzNodeSetupStepId
+  ZotzNodeSetupStepId,
+  ZotzNodeSetupStepStatus
 } from '../../shared/zotz/zotz-node-setup-contract'
 
 export type ZotzNodeSetupOutcome = {
@@ -13,6 +14,7 @@ export type ZotzNodeSetupOutcome = {
 export type ZotzNodeSetupPhaseContext = {
   tailscaleIp: string | null
   setTailscaleIp: (ip: string | null) => void
+  stepStatus: (id: ZotzNodeSetupStepId) => ZotzNodeSetupStepStatus | undefined
   /** Live detail for a running step, e.g. "waiting for login" with the login page. */
   report: (id: ZotzNodeSetupStepId, detail: string, url?: string) => void
 }
@@ -52,6 +54,7 @@ export async function runZotzNodeSetup(
     setTailscaleIp: (ip) => {
       tailscaleIp = ip
     },
+    stepStatus: (id) => steps.find((step) => step.id === id)?.status,
     report: (id, detail, url) => {
       update(id, { status: 'running', detail, ...(url ? { url } : {}) })
       publish()

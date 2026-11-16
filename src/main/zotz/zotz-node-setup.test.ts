@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { isZotzServerAccessReady } from '../../shared/zotz/zotz-machine-mode'
 import type { ZotzNodeSetupStep } from '../../shared/zotz/zotz-node-setup-contract'
 import type { ZotzNodeSetupEnvironment } from './zotz-node-setup-environment'
 import { runZotzNodeSetup, type ZotzNodeSetupPhase } from './zotz-node-setup-orchestrator'
@@ -227,6 +228,7 @@ describe('Windows server setup', () => {
       networkExposure: 'done',
       autologon: 'skipped'
     })
+    expect(isZotzServerAccessReady(result)).toBe(true)
     const taskXml = files.get(join(windows.userDataPath, 'zotz-server-task.xml'))
     if (!Buffer.isBuffer(taskXml)) {
       throw new Error('the task XML must be written as UTF-16 bytes')
@@ -237,13 +239,17 @@ describe('Windows server setup', () => {
     expect(xml).toContain('<UserId>MSI\\zotz</UserId>')
   })
 
-  it('marks every admin step failed when the UAC prompt is declined', async () => {
-    const { environment } = fakeEnvironment(windows, ({ program }) =>
-      program.endsWith('tailscale.exe')
-        ? { stdout: runningTailnet }
-        : program.endsWith('powershell.exe')
-          ? { stdout: '{"launched":false,"nativeErrorCode":1223,"message":"cancelled"}' }
-          : {}
+  it('marks every admin step failed and skips keep-awake and network exposure when the UAC prompt is declined', async () => {
+    const exposure = vi.fn(async () => {})
+    const keepAwake = vi.fn(() => true)
+    const { environment } = fakeEnvironment(
+      { ...windows, ensureNetworkExposure: exposure, isKeptAwake: keepAwake },
+      ({ program }) =>
+        program.endsWith('tailscale.exe')
+          ? { stdout: runningTailnet }
+          : program.endsWith('powershell.exe')
+            ? { stdout: '{"launched":false,"nativeErrorCode":1223,"message":"cancelled"}' }
+            : {}
     )
     const result = await runZotzNodeSetup(buildZotzNodeSetupPhases(environment), () => {})
     for (const id of ['power', 'windowsUpdate', 'ssh', 'firewall', 'autostart']) {
@@ -253,7 +259,11 @@ describe('Windows server setup', () => {
         detail: 'administrator permission was declined'
       })
     }
-    expect(statuses(result).networkExposure).toBe('done')
+    expect(exposure).not.toHaveBeenCalled()
+    expect(keepAwake).not.toHaveBeenCalled()
+    expect(statuses(result).keepAwake).toBe('skipped')
+    expect(statuses(result).networkExposure).toBe('skipped')
+    expect(isZotzServerAccessReady(result)).toBe(false)
   })
 })
 

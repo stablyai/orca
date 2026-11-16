@@ -2,6 +2,7 @@ import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, userInfo } from 'node:os'
 import { dirname, join } from 'node:path'
+import { isZotzServerAccessReady } from '../../shared/zotz/zotz-machine-mode'
 import type { ZotzNodeSetupResult } from '../../shared/zotz/zotz-node-setup-contract'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
@@ -75,7 +76,11 @@ async function createEnvironment(
       }
       await runtimeRpc.ensureNetworkExposure()
     },
-    isKeptAwake: () => deps.getAgentAwakeService()?.getStatus().active === true,
+    isKeptAwake: () => {
+      const awakeService = deps.getAgentAwakeService()
+      awakeService?.setMode('on')
+      return awakeService?.getStatus().active === true
+    },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: Date.now,
     tailscaleWaitMs: 10 * 60_000
@@ -95,6 +100,7 @@ export function registerZotzNodeSetupHandlers(deps: ZotzNodeSetupHandlerDeps): v
     }
     if (!inFlight) {
       const sender = event.sender
+      const previousAwakeMode = deps.getAgentAwakeService()?.getStatus().mode
       inFlight = createEnvironment(deps)
         .then((environment) =>
           runZotzNodeSetup(buildZotzNodeSetupPhases(environment), (steps) => {
@@ -103,6 +109,12 @@ export function registerZotzNodeSetupHandlers(deps: ZotzNodeSetupHandlerDeps): v
             }
           })
         )
+        .then((result) => {
+          if (!isZotzServerAccessReady(result) && previousAwakeMode) {
+            deps.getAgentAwakeService()?.setMode(previousAwakeMode)
+          }
+          return result
+        })
         .finally(() => {
           inFlight = null
         })

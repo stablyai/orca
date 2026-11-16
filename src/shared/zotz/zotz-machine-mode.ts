@@ -1,5 +1,6 @@
 import { normalizeComputerAwakeMode, type ComputerAwakeMode } from '../computer-awake-mode'
 import type { GlobalSettings } from '../global-settings-types'
+import type { ZotzNodeSetupResult, ZotzNodeSetupStepId } from './zotz-node-setup-contract'
 
 export type ZotzMachineMode = NonNullable<GlobalSettings['zotzMachineMode']>
 
@@ -40,6 +41,20 @@ export function zotzServerNetworkSources(
   return resolveZotzMachineMode(settings) === 'server'
     ? { allowPublic: false, refusePublic: true, pairingAddress: null }
     : null
+}
+
+/** Server mode and pairing links require a connected tailnet, a non-failing firewall step, and active exposure. */
+export function isZotzServerAccessReady(result: ZotzNodeSetupResult | null | undefined): boolean {
+  if (!result?.tailscaleIp) {
+    return false
+  }
+  const status = (id: ZotzNodeSetupStepId) => result.steps.find((step) => step.id === id)?.status
+  const firewall = status('firewall')
+  return (
+    status('tailscale') === 'done' &&
+    (firewall === 'done' || firewall === 'skipped') &&
+    status('networkExposure') === 'done'
+  )
 }
 
 /**

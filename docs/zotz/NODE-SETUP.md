@@ -58,7 +58,7 @@ Antes, la app de escritorio solo escuchaba en `0.0.0.0:6768` después de pulsar 
 - **Desde el arranque**, la app escucha en todas las interfaces con la misma política de origen que `zotz serve --refuse-public`: acepta localhost, LAN y Tailscale y rechaza direcciones públicas.
 - No se fija a la IP de Tailscale: esa IP cambia si el nodo se vuelve a registrar y Tailscale puede levantar después que Zotz al iniciar sesión; además, con una IP fija upstream rechaza abrir la red y el botón de vincular fallaría. En Windows el firewall deja entrar al puerto **solo** desde `100.64.0.0/10`.
 - La IP de Tailscale se lee en vivo (`tailscale status --json`) cada vez que se genera un enlace.
-- El paso "Aceptar conexiones remotas" abre la red en ese momento, sin reiniciar. La política de origen se aplica desde el siguiente arranque.
+- El paso "Aceptar conexiones remotas" abre la red en ese momento (sin reiniciar) y guarda el modo `server` **solo** si Tailscale está conectado y el paso de firewall no falló; si se cancela UAC o falla Tailscale/firewall en un equipo personal o sin configurar, no se abre la red ni se activa el modo servidor. La política de origen se aplica desde el siguiente arranque.
 
 ## Cómo deshacerlo
 

@@ -43,29 +43,38 @@ export default function ZotzMachineModeWizard({
 }): React.JSX.Element {
   const t = useTranslate()
   const previousMode = useAppStore((state) => state.settings?.zotzMachineMode ?? 'unset')
-  const updateSettings = useAppStore((state) => state.updateSettings)
+  const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const [page, setPage] = useState<'choose' | 'server'>('choose')
 
   const choosePersonal = async (): Promise<void> => {
-    await updateSettings({ zotzMachineMode: 'personal' })
+    try {
+      await updateSettings({ zotzMachineMode: 'personal' })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+      return
+    }
     onClose()
     if (previousMode !== 'server') {
       return
     }
     // Leaving server mode stops the OS from relaunching Zotz; system tweaks are undone by hand.
-    const removal = await window.api.zotzNode.removeAutostart()
-    if (removal.ok) {
-      toast.success(t('zotz.machineMode.autostartRemoved', 'Zotz no longer starts at sign-in.'))
-    } else {
-      toast.error(
-        t(
-          'zotz.machineMode.autostartRemoveFailed',
-          'Could not remove the sign-in task: {{detail}}',
-          {
-            detail: removal.detail
-          }
+    try {
+      const removal = await window.api.zotzNode.removeAutostart()
+      if (removal.ok) {
+        toast.success(t('zotz.machineMode.autostartRemoved', 'Zotz no longer starts at sign-in.'))
+      } else {
+        toast.error(
+          t(
+            'zotz.machineMode.autostartRemoveFailed',
+            'Could not remove the sign-in task: {{detail}}',
+            {
+              detail: removal.detail
+            }
+          )
         )
-      )
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
     }
   }
 

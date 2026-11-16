@@ -1,6 +1,6 @@
 import { ZOTZ_AUTOLOGON_URL } from '../../shared/zotz/zotz-node-setup-contract'
 import type { ZotzNodeSetupEnvironment } from './zotz-node-setup-environment'
-import type { ZotzNodeSetupPhase } from './zotz-node-setup-orchestrator'
+import type { ZotzNodeSetupPhase, ZotzNodeSetupPhaseContext } from './zotz-node-setup-orchestrator'
 import {
   findTailscaleCli,
   installTailscale,
@@ -9,6 +9,17 @@ import {
 } from './zotz-tailscale'
 
 const TAILSCALE_POLL_MS = 3_000
+
+function accessPrerequisiteFailure(context: ZotzNodeSetupPhaseContext): string | null {
+  if (context.stepStatus('tailscale') !== 'done' || !context.tailscaleIp) {
+    return 'requires Tailscale'
+  }
+  const firewall = context.stepStatus('firewall')
+  if (firewall !== 'done' && firewall !== 'skipped') {
+    return 'requires the firewall rule'
+  }
+  return null
+}
 
 export function tailscalePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeSetupPhase {
   return {
@@ -55,18 +66,28 @@ export function tailscalePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeS
 export function keepAwakePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeSetupPhase {
   return {
     steps: ['keepAwake'],
-    run: async () => ({
-      keepAwake: environment.isKeptAwake()
-        ? { status: 'done' }
-        : { status: 'failed', detail: 'the keep-awake assertion is not active' }
-    })
+    run: async (context) => {
+      const blocked = accessPrerequisiteFailure(context)
+      if (blocked) {
+        return { keepAwake: { status: 'skipped', detail: blocked } }
+      }
+      return {
+        keepAwake: environment.isKeptAwake()
+          ? { status: 'done' }
+          : { status: 'failed', detail: 'the keep-awake assertion is not active' }
+      }
+    }
   }
 }
 
 export function networkExposurePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeSetupPhase {
   return {
     steps: ['networkExposure'],
-    run: async () => {
+    run: async (context) => {
+      const blocked = accessPrerequisiteFailure(context)
+      if (blocked) {
+        return { networkExposure: { status: 'skipped', detail: blocked } }
+      }
       await environment.ensureNetworkExposure()
       return { networkExposure: { status: 'done', detail: `port ${environment.port}` } }
     }

@@ -69,7 +69,7 @@ export const choose = defineFixture({
 
 export const serverFinished = defineFixture({
   width: 720,
-  store: { updateSettings: async () => {} },
+  store: { updateSettings: async () => {}, updateSettingsOrThrow: async () => {} },
   setup: stubServerSetup,
   render: () => <ZotzMachineModeWizard onClose={() => {}} onKeepOpen={() => {}} />,
   interact: async () => {
