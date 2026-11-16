@@ -80,7 +80,10 @@ it('holds large replies in their readers while main has not consumed the budget'
   ensureWorkerSendLedger()
   pool = new JournalSqlReaderPool(filename, filename, journalSqlReaderPath())
   const readers = pool
-  await readers.database({ kind: 'epoch', sessionId: 'session' })
+  // Warm all four readers so none starts cold inside a measured window.
+  await Promise.all(
+    Array.from({ length: 4 }, () => readers.database({ kind: 'epoch', sessionId: 'session' }))
+  )
   const before = readerBytesPosted()
   let consumed = 0
   const reads = itemIds.map((itemId) =>

@@ -16,6 +16,7 @@ import {
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import { measureJournalReaderReply } from './journal-sql-reader-reply-limit'
 import {
+  returnJournalReaderReplyCredit,
   takeJournalReaderReplyCredit,
   type JournalReaderReplyCreditGrant
 } from './journal-sql-reader-reply-credit'
@@ -44,7 +45,13 @@ function reply(message: JournalSqlReaderReply): void {
     return
   }
   const granted = takeJournalReaderReplyCredit(replyCredit, bytes)
-  port.postMessage({ ...limited, bytes, ...(granted ? {} : { creditWaitExpired: true }) })
+  try {
+    port.postMessage({ ...limited, bytes, ...(granted ? {} : { creditWaitExpired: true }) })
+  } catch (error) {
+    // Main will never see this reply, so it can never return the credit.
+    returnJournalReaderReplyCredit(replyCredit, bytes)
+    throw error
+  }
 }
 
 function creditGrant(value: unknown): JournalReaderReplyCreditGrant | undefined {
