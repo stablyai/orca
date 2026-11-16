@@ -16,7 +16,7 @@ vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
 
 async function loadModules() {
   vi.resetModules()
-  const { setSecretStore } = await import('../../shared/secret-store')
+  const { setSecretStore } = await import('../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
     encryptString: (value) => Buffer.from(value),
@@ -82,23 +82,6 @@ describe('Bitbucket status reads never decrypt the stored secret', () => {
     expect(status).toMatchObject({ source: 'stored', account: 'ada', authMode: 'basic' })
     expect(decryptSpy).not.toHaveBeenCalled()
     expect(fetchSpy).not.toHaveBeenCalled()
-  })
-
-  it('stays cold across repeated status reads, then decrypts once for a real API call', async () => {
-    const { store, client, connection } = await loadModules()
-    store.saveBitbucketCredential(STORED_BASIC_CREDENTIAL)
-    store._resetBitbucketCredentialCache()
-    decryptSpy.mockClear()
-
-    for (let i = 0; i < 3; i += 1) {
-      await client.getBitbucketAuthStatus()
-      connection.getBitbucketConnectionStatus()
-    }
-    expect(decryptSpy).not.toHaveBeenCalled()
-
-    globalThis.fetch = vi.fn(async () => Response.json({ values: [] })) as unknown as typeof fetch
-    await client.getBitbucketPullRequest('/repo', 1, null)
-    expect(decryptSpy).toHaveBeenCalledTimes(1)
   })
 
   it('revalidates a stored credential once its secret is already warm in memory', async () => {

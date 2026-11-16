@@ -15,7 +15,7 @@ import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
 } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import type { RuntimeTerminalSplit } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSplit } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export type WebRuntimeSplitSource = { worktreeId: string; tabId: string; leafId: string }
 

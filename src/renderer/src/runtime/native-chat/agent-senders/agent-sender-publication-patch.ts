@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import type {
   AgentSenderPublication,
   AgentSenderRevision
-} from '../../../../../shared/agent-sender-associations'
+} from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 
 export type AgentSenderPublications = Record<string, Record<string, AgentSenderPublication>>
 type State = Partial<Pick<AppState, 'agentSenderPublicationsByHost'>>

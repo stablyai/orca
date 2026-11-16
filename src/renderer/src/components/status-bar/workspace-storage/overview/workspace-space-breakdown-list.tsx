@@ -5,7 +5,7 @@ import type {
 } from '../../../../../../shared/workspace-disk-space/workspace-space-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { formatCompactCount } from '../workspace-space-format'
-import { formatBytes } from '../../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import { getLargestWorkspaceSpaceItemSize } from '../manager/workspace-space-presentation'
 import { useTranslate } from '@/i18n/use-translate'
 import {

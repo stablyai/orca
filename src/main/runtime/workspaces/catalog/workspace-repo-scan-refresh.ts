@@ -1,5 +1,5 @@
 import { RuntimeWorkspaceCatalog } from './workspace-catalog'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   resolveWorktreeScanCacheTtlMs,

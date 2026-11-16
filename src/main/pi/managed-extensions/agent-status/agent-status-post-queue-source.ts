@@ -1,4 +1,4 @@
-import type { PiAgentKind } from '../../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 export function getPiAgentStatusPostQueueSourceLines(kind: PiAgentKind): string[] {
   return [

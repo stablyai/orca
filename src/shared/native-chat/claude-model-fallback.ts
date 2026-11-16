@@ -1,5 +1,5 @@
 import { MAX_CONTEXT_MODEL_ID_CHARS } from '../agent-session/agent-session-context-usage'
-import { labelFromModelId } from '../model-id-label'
+import { labelFromModelId } from '../agent-session/options/model-catalog/model-id-label'
 import type { NativeChatTextBlock } from './native-chat-types'
 
 export const CLAUDE_MODEL_FALLBACK_FRAME_KIND = 'message:assistant:content:fallback'

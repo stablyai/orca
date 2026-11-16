@@ -10,6 +10,8 @@ export type MobileNativeChatPageListProps = {
   ref: Ref<MobileNativeChatListHandle>
   isFollowing: () => boolean
   onEndDistance: (fromEnd: number, byReader: boolean) => void
+  /** The reader is back where they left `scope`, away from its tail. */
+  onPlaceRestored: (scope: string) => void
   rows: readonly NativeChatMessage[]
   rowKeys: Pick<MobileNativeChatRowKeys, 'scope' | 'keyOf' | 'current' | 'placement'>
   renderItem: (row: { item: NativeChatMessage; index: number }) => ReactElement

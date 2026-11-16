@@ -1,7 +1,7 @@
 // Images cloned with one /etc/machine-id look like one machine to every PID check (#32918).
 import { statSync } from 'node:fs'
 import process from 'node:process'
-import { ORCA_MACHINE_NAME_ENV } from '../../../shared/orcad-managed-launch-env'
+import { ORCA_MACHINE_NAME_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-managed-launch-env'
 import type { OrcadPeerMachine } from './orcad-lock-holder-locality'
 import { currentLinuxBootStartedAtMs } from '../../persistence/profile-state/access/profile-state-access-identity'
 

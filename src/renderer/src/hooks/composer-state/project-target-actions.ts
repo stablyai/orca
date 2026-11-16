@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ComposerModel } from './composer-model'
 
 type ProjectTargetActionsInput = Pick<

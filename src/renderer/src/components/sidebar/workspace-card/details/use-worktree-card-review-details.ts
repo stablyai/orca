@@ -5,9 +5,10 @@ import { getWorkspaceReferenceLinearWorkspaceId } from '../review/workspace-refe
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache/cache-identity'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import {
   deriveWorktreeCardPrDisplay,
   getWorktreeReviewCacheKeys
@@ -56,7 +57,8 @@ export function useWorktreeCardReviewDetails({
           settings,
           repo.connectionId,
           repo.executionHostId,
-          true
+          true,
+          getWorktreeGitHubIssueRepository(worktree)
         )
       : ''
   // Saved workspace bindings keep equal Linear identifiers separate.

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { AgentChildRowModel } from '../../../../../src/shared/agent-status/presentation/agent-child-row-model'
-import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import {
   buildAgentRowLineageTree,
   flattenAgentRowLineage,

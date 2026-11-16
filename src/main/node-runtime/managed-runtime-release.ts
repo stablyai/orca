@@ -4,7 +4,7 @@ import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'no
 import { readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 
 export type ManagedRuntimePin = {

@@ -6,7 +6,7 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isDeepStrictEqual } from 'node:util'
 import { legacyRewindTurns, rewindJournalCut } from './structured-rewind-cut'

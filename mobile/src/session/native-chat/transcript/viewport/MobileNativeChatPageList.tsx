@@ -12,17 +12,20 @@ import {
 import type { NativeScrollEvent, NativeSyntheticEvent, ScrollViewInstance } from 'react-native'
 import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {
-  mobileNativeChatReadingDrift,
+  DRAW_AHEAD_SCREENS,
   measureMobileNativeChatPageRows,
   mobileNativeChatUndrawnHeight,
-  mobileNativeChatReadingPlace,
   mobileNativeChatRowAbove,
   mobileNativeChatRowBoxProps,
-  type MobileNativeChatReadingUnit,
-  type MobileNativeChatDrawnWindow,
+  mobileNativeChatRowOffset,
   type MobileNativeChatScrollNode
 } from './mobile-native-chat-reading-place'
 import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
+import {
+  savedMobileNativeChatDrawn,
+  useMobileNativeChatPlaceKeeper,
+  type MobileNativeChatDrawn
+} from './use-mobile-native-chat-place-keeper'
 import {
   createMobileNativeChatGrowthHold,
   mobileNativeChatHeldRows,
@@ -32,7 +35,6 @@ import {
 
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
-const DRAW_AHEAD_SCREENS = 3
 // While following, rows drawn past this many screens above the tail are dropped.
 const TRIM_SCREENS = 6
 // Fetch ahead far enough for multi-screen phone flicks.
@@ -63,6 +65,7 @@ export function MobileNativeChatPageList({
   roots,
   isFollowing,
   onEndDistance,
+  onPlaceRestored,
   rows: liveRows,
   rowKeys,
   renderItem,
@@ -93,12 +96,15 @@ export function MobileNativeChatPageList({
   const keys = useMemo(() => rows.map(rowKeys.keyOf), [rows, rowKeys.keyOf])
   const indexOf = useMemo(() => new Map(keys.map((key, at) => [key, at])), [keys])
   const n = keys.length
-  const [drawn, setDrawn] = useState<MobileNativeChatDrawnWindow>({
-    scope: rowKeys.scope,
-    firstKey: null,
-    count: 0
-  })
-  const kept = drawn.scope === rowKeys.scope ? drawn : null
+  const [drawn, setDrawn] = useState<MobileNativeChatDrawn>(
+    () =>
+      savedMobileNativeChatDrawn(rowKeys.scope) ?? {
+        scope: rowKeys.scope,
+        firstKey: null,
+        count: 0
+      }
+  )
+  const kept = drawn.scope === rowKeys.scope ? drawn : savedMobileNativeChatDrawn(rowKeys.scope)
   const opening = Math.max(0, n - FIRST_ROWS)
   const firstKey = kept?.firstKey ?? null
   const first = kept?.automatic
@@ -129,8 +135,6 @@ export function MobileNativeChatPageList({
   const own = useRef<number | null>(null)
   const touching = useRef(false)
   const readerScrolledAt = useRef(0)
-  const place = useRef<MobileNativeChatReadingUnit[] | null>(null)
-  const placedLayout = useRef(layoutKey)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const live = useRef<Held>({ rows: liveRows, header: liveHeader, footer: liveFooter, renderItem })
   const ask = useRef(onNearTop)
@@ -155,57 +159,16 @@ export function MobileNativeChatPageList({
     []
   )
 
-  // Keep one reading anchor so whole-pixel corrections cannot accumulate rounding drift.
-  const notePlace = useCallback(
-    (s: Scroller) => {
-      const { first, n, keys, layoutKey, rowKeys } = latest.current
-      const reading = !isFollowing()
-      place.current = reading ? mobileNativeChatReadingPlace(s, rowKeys) : null
-      placedLayout.current = layoutKey
-      if (!reading) {
-        setDrawn((current) =>
-          current.scope === rowKeys.scope && current.detached
-            ? { scope: rowKeys.scope, firstKey: null, count: 0 }
-            : current
-        )
-      } else if (keys[first] !== undefined) {
-        // Appends may slide the opening tail window only until the reader takes it.
-        setDrawn((current) => {
-          if (current.scope !== rowKeys.scope || current.firstKey === null || current.automatic) {
-            return {
-              scope: rowKeys.scope,
-              firstKey: keys[first]!,
-              count: n - first,
-              fromStart: first === 0,
-              detached: true
-            }
-          }
-          return current.fromStart || current.detached ? current : { ...current, detached: true }
-        })
-      }
-    },
-    [isFollowing]
-  )
-
-  const keepPlace = useCallback(
-    (s: Scroller) => {
-      const held = place.current
-      const regrouped = placedLayout.current !== latest.current.layoutKey
-      if (!held || isFollowing() || !(regrouped || resting())) {
-        notePlace(s)
-        return
-      }
-      const drift = mobileNativeChatReadingDrift(held, s, latest.current.rowKeys, roots)
-      if (Math.abs(drift) >= 0.5) {
-        write(s, s.scrollTop + drift)
-      }
-      // A regroup draws other parts: the line is re-read from them.
-      if (regrouped) {
-        notePlace(s)
-      }
-    },
-    [isFollowing, notePlace, resting, roots, write]
-  )
+  const { notePlace, keepPlace } = useMobileNativeChatPlaceKeeper({
+    latest,
+    roots,
+    isFollowing,
+    resting,
+    write,
+    setDrawn,
+    onEndDistance,
+    onPlaceRestored
+  })
 
   const settle = useRef(() => {})
   const [growth] = useState(createMobileNativeChatGrowthHold)
@@ -297,9 +260,19 @@ export function MobileNativeChatPageList({
         if (s) {
           write(s, offset - (s.scrollHeight - s.clientHeight))
         }
+      },
+      scrollRowToTop: (key) => {
+        const s = scroller()
+        const by = s ? mobileNativeChatRowOffset(s, key) : undefined
+        if (s && by !== undefined) {
+          // The tap ended any scroll; growth right after must correct to this row, not re-read a displaced one.
+          readerScrolledAt.current = 0
+          write(s, s.scrollTop + by)
+          notePlace(s)
+        }
       }
     }),
-    [scroller, write]
+    [scroller, write, notePlace]
   )
 
   const drawnHead = useRef<string | undefined>(undefined)

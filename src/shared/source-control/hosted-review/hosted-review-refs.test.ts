@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isRemoteHeadRef, normalizeCreateReviewBaseSearchResults } from './hosted-review-refs'
-import { legacyBaseRefSearchResult } from '../../base-ref-search-result'
+import { legacyBaseRefSearchResult } from '../../worktree/base-refs/base-ref-search-result'
 
 it('normalizes old-server refs-only replies before treating provider details as authoritative', () => {
   expect(

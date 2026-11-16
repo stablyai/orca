@@ -4,7 +4,7 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
 import type { AgentLaunchRouteArgs, AgentLaunchRouteStore } from './agent-launch-route-input'
 import { planAgentSessionLaunch } from './agent-session-launch-plan'

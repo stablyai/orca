@@ -1,6 +1,6 @@
 import type { TerminalOrphanRecoveryOptions } from './web-session-terminal-orphan-recovery-options'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { callRuntimeEnvironmentWithRevision } from '../../rpc/calls/runtime-rpc-environment-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { getSessionTabsRuntimeIdFromResponse } from '../../web-session-tabs-sync/publisher-identity-fences'

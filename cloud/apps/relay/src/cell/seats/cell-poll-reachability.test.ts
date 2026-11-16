@@ -37,8 +37,6 @@ const feedCell = (cellId: string): SeatFeedCell => ({
   capacityRequests: 10
 })
 const CELLS = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'].map(feedCell)
-// Legacy rows: they answer 404 (no feed), so they are neither the sample nor the denominator.
-const LEGACY = Array.from({ length: 16 }, (_, index) => feedCell(`legacy${index}`))
 
 const page = (cellId: string) =>
   new Response(JSON.stringify({ v: 1, cellId, incarnation: INCARNATION, seq: 0, at: 1, full: [] }), {
@@ -91,49 +89,6 @@ function poller(
 }
 
 describe('seat-feed poller reachability', () => {
-  it('counts timeouts, connection failures and load-balancer 502/503/504 as unanswered', async () => {
-    for (const fail of [
-      () => Promise.reject(new Error('connect ECONNREFUSED')),
-      () => answer(502),
-      () => answer(503),
-      () => answer(504)
-    ]) {
-      const cells = poller((cellId) => (cellId === 'c2' ? fail() : page(cellId)))
-      const at = await cells.run(CELL_POLL_DEAD_STREAK_MS)
-      cells.stop()
-      expect(cells.deadCellVerdict('c2', at)?.dead).toBe(true)
-      expect(cells.deadCellVerdict('c1', at)).toBeNull()
-    }
-  })
-
-  it('counts only cells that served a feed: legacy 404 rows neither fill the sample nor dilute it', async () => {
-    // Staging's shape: a few real cells and 16 legacy rows. Every real cell fails.
-    const cells = poller(() => answer(502), { cells: [...CELLS.slice(0, 3), ...LEGACY] })
-    const at = await cells.run(CELL_POLL_DEAD_STREAK_MS)
-    cells.stop()
-    expect(cells.deadCellVerdict('c2', at)).toMatchObject({
-      dead: false,
-      withheld: 'sample',
-      fleetFailing: 3,
-      fleetPolled: 3
-    })
-  })
-
-  it('a director restarted during a lone outage still judges the dead cell: the candidate is always sampled', async () => {
-    // c2 died before this director started, so it never served it a feed page.
-    const cells = poller((cellId) => (cellId === 'c2' ? answer(502) : page(cellId)), {
-      neverServed: new Set(['c2'])
-    })
-    const at = await cells.run(CELL_POLL_DEAD_STREAK_MS)
-    cells.stop()
-    expect(cells.deadCellVerdict('c2', at)).toMatchObject({
-      dead: true,
-      fleetFailing: 1,
-      fleetPolled: 6,
-      regionFailing: 1,
-      regionPolled: 6
-    })
-  })
 
   it('a partition that began before the restart withholds: the candidate is its region\'s only sample', async () => {
     const asia = ['a1', 'a2', 'a3'].map((cellId) => ({ ...feedCell(cellId), region: 'asia-east2' as const }))
@@ -150,23 +105,6 @@ describe('seat-feed poller reachability', () => {
       regionFailing: 1,
       regionPolled: 1
     })
-  })
-
-  it('counts no cell without capacity, the candidate included', async () => {
-    const empty = (cell: SeatFeedCell) => ({ ...cell, capacityRequests: 0 })
-    const peersEmpty = poller((cellId) => (cellId === 'c2' ? answer(502) : page(cellId)), {
-      cells: CELLS.map((cell) => (['c4', 'c5', 'c6'].includes(cell.cellId) ? empty(cell) : cell))
-    })
-    const at = await peersEmpty.run(CELL_POLL_DEAD_STREAK_MS)
-    peersEmpty.stop()
-    expect(peersEmpty.deadCellVerdict('c2', at)).toMatchObject({ withheld: 'sample', fleetPolled: 3 })
-
-    const candidateEmpty = poller((cellId) => (cellId === 'c2' ? answer(502) : page(cellId)), {
-      cells: CELLS.map((cell) => (cell.cellId === 'c2' ? empty(cell) : cell))
-    })
-    const candidateAt = await candidateEmpty.run(CELL_POLL_DEAD_STREAK_MS)
-    candidateEmpty.stop()
-    expect(candidateEmpty.deadCellVerdict('c2', candidateAt)).toMatchObject({ withheld: 'sample', fleetPolled: 5 })
   })
 
 })

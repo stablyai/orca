@@ -1,6 +1,6 @@
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
-import { agentImagePasteWrites } from '../../../../../../../shared/agent-image-paste'
-import { agentImagePastePath } from '../../../../../../../shared/agent-image-paste-path'
+import { agentImagePasteWrites } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
+import { agentImagePastePath } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste-path'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { NATIVE_CHAT_SUBMIT_DELAY_MS } from '../../../../../../../shared/native-chat/input/questions/native-chat-answer-stepping'

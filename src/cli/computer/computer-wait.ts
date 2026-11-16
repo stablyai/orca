@@ -15,7 +15,7 @@ import { cliErrorCode } from '../output/cli-error'
 import { formatGetAppState, formatListWindows } from './computer-format'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 export type ComputerWaitCondition =
   | { kind: 'text'; value: string }

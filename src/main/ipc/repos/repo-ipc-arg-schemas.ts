@@ -1,11 +1,11 @@
-import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-hook-settings-schema'
+import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
-import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
+import { DiffCommentSchema } from '../../../shared/file-review/diff-comment-schema'
 import { normalizeExecutionHostId } from '../../../shared/execution-host'
 import {
   FolderWorkspaceHookCreateShape,

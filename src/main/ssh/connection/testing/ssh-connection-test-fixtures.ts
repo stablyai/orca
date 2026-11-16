@@ -4,7 +4,7 @@ import type { Mock } from 'vitest'
 import type { AnyAuthMethod, AuthenticationType } from 'ssh2'
 import type { SshConnectionCallbacks } from '../ssh-connection-callbacks'
 import type { SshResolvedConfig } from '../../config/ssh-g-config-resolution'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 export function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {

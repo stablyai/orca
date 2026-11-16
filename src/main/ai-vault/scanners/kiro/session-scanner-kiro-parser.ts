@@ -16,7 +16,7 @@ import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-ty
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import type { SkippedTranscriptRecord } from '../../transcripts/session-transcript-record-budget'
 import { arrayValue, asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

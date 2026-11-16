@@ -1,7 +1,7 @@
 import i18next, { type i18n, type TOptions } from 'i18next'
-import { resolvePluralFamilyKey } from '../../../src/shared/i18n-plural-family'
-import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
-import { DEFAULT_UI_LOCALE, type SupportedUiLocale } from '../../../src/shared/ui-locale'
+import { resolvePluralFamilyKey } from '../../../src/shared/i18n/i18n-plural-family'
+import { pseudoLocalizeString } from '../../../src/shared/i18n/pseudo-localization'
+import { DEFAULT_UI_LOCALE, type SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import enRuntimeRequired from './en-runtime-required.json'
 import { importLocaleCatalog, onLocaleCatalogArrival } from './locale-catalog-imports'
 

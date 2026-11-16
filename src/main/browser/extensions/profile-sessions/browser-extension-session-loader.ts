@@ -4,7 +4,7 @@ import {
   registerBrowserSessionFramePreload,
   unregisterBrowserSessionFramePreload
 } from '../../sessions/browser-session-frame-preloads'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
@@ -36,8 +36,10 @@ import {
 type ProfileSessionState = {
   profile: BrowserSessionProfile
   session: Electron.Session
-  /** Startup's sweep and loads; later loads wait for it. */
+  /** The attach's sweep and loads; later loads wait for it. */
   loading: Promise<void>
+  /** Until `loading` settles, when the attach had extensions to load. */
+  loadingExtensions: boolean
   loads: BrowserExtensionProfileLoads
 }
 
@@ -122,8 +124,19 @@ export function attachBrowserExtensionsToProfileSession(
       console.warn('[browser-extensions] Could not initialize extension storage:', error)
       throw error
     })
-  void loading.catch(() => {})
-  stateByProfileId.set(profile.id, { profile, session: sess, loading, loads })
+  const state: ProfileSessionState = {
+    profile,
+    session: sess,
+    loading,
+    loadingExtensions: enabledExtensionIds.length > 0,
+    loads
+  }
+  void loading
+    .catch(() => {})
+    .finally(() => {
+      state.loadingExtensions = false
+    })
+  stateByProfileId.set(profile.id, state)
 }
 
 /** Unloads a profile session's extensions and Orca's wiring; its saved extension data stays. */
@@ -173,21 +186,14 @@ export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<v
   await Promise.all(states.map(unloadProfileSession))
 }
 
-/** One profile session's startup loads, restore hooks included. */
+/** One profile session's attach-time loads, restore hooks included. */
 export function whenBrowserExtensionProfileLoaded(profileId: string): Promise<void> {
   return stateByProfileId.get(profileId)?.loading.catch(() => {}) ?? Promise.resolve()
 }
 
-/** Startup waits briefly so restored tabs get content scripts; a slow load never blocks launch. */
-export async function whenBrowserExtensionSessionsLoaded(timeoutMs: number): Promise<void> {
-  let timer: NodeJS.Timeout | undefined
-  await Promise.race([
-    Promise.all([...stateByProfileId.values()].map((state) => state.loading.catch(() => {}))),
-    new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, timeoutMs)
-    })
-  ])
-  clearTimeout(timer)
+/** Whether the profile's enabled extensions are still loading after its attach. */
+export function isBrowserExtensionProfileLoading(profileId: string): boolean {
+  return stateByProfileId.get(profileId)?.loadingExtensions ?? false
 }
 
 export function getBrowserExtensionSessionForProfile(profileId: string): Electron.Session | null {

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { connect, createServer, type AddressInfo, type Socket } from 'node:net'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { buildForwardProcessSshArgs, type SystemSshBuildArgsOptions } from '../system-ssh-args'
 import { findSystemSsh } from '../system-ssh-binary'
 import { waitForSystemSshForwardStop } from './system-ssh-forward-process'

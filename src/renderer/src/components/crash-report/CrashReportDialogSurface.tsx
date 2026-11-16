@@ -16,9 +16,9 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   formatCrashReportText,
   MAX_USER_NOTES_LENGTH,
-  type CrashReportDiagnosticBundle,
   type CrashReportRecord
-} from '../../../../shared/crash-reporting'
+} from '../../../../shared/crash-reporting/crash-reporting'
+import type { CrashReportDiagnosticBundle } from '../../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 import type { GitHubViewer } from '../../../../shared/github/pull-requests/pull-request-types'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {

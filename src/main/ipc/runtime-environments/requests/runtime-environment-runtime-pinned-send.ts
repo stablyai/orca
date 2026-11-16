@@ -1,9 +1,9 @@
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { sendRemoteRuntimeRequestAbortable } from './runtime-environment-abortable-requests'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { sendRemoteRuntimeSharedControlRequestOnRuntime } from '../connections/runtime-environment-request-connections'
 import type { RuntimeEnvironmentCall } from './runtime-environment-call'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
@@ -37,7 +37,9 @@ async function sendOneShotRequestOnRuntime(
       requestSignal,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
       undefined,
-      requestPreparation
+      requestPreparation,
+      undefined,
+      call.prepareGuard
     )
   } catch (error) {
     if (otherRuntime) {
@@ -81,7 +83,8 @@ export function sendEnvelopedOneShotCall(
         call.envelope,
         call.signal,
         ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-        call.prepareRequest
+        call.prepareRequest,
+        call.prepareGuard
       )
     : sendSupportRoutedCallOnRuntime(route, call, expectedRuntimeId, 'one-shot')
 }

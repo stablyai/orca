@@ -1,4 +1,4 @@
-import { WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type {
   RunApprovedWorktreeSetupArgs,
   RunApprovedWorktreeSetupResult

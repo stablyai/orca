@@ -1,14 +1,14 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalOrphanAdoptionClaim,
   RuntimeTerminalOrphanAdoptionResult
-} from '../../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
+} from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
 } from '../../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { cacheStableSurfaceRecoveryFailure } from '../evidence/web-session-terminal-orphan-recovery-cache'
 import { runInTerminalRecoveryRpcLane } from '../scheduling/web-session-terminal-orphan-recovery-rpc-lane'
 import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'

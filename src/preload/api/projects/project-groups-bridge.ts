@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { NestedRepoScanResult } from '../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../shared/project/groups/project-group-types'
 import type { PreloadApi } from '../../api-types'
 
 export const projectGroupsApi = {

@@ -45,7 +45,8 @@ export type JournalObserverResult = {
   physicalCursor: AgentJournalCursor
   lastActivityAt: number
   authority: JournalWorkAuthority
-  state: JournalStatusState
+  /** goalContinues: the live provider starts the next turn itself, so a settled success is not the end. */
+  state: JournalStatusState & { goalContinues?: true }
   indicators: JournalStatusIndicators
   usageLimitCut: HostUsageLimitCut | null
   orcaStopCut: NativeChatOrcaStopCut | null

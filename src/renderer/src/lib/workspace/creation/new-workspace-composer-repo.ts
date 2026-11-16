@@ -4,8 +4,8 @@ import {
   parseExecutionHostId
 } from '../../../../../shared/execution-host'
 import '../../../../../shared/new-workspace-dialog-repo'
-import { getProjectIdentityKey } from '../../../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../../../shared/repo-types'
+import { getProjectIdentityKey } from '../../../../../shared/project/host-setup/project-host-setup-projection'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment

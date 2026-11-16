@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { worktreeParentPlacementFor } from '../../workspace-actions/parenting/worktree-parent-candidates'
@@ -24,7 +24,7 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getDropFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>

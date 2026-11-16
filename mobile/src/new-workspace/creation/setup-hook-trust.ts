@@ -1,10 +1,10 @@
-import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import {
   canUseRepoWideTrust,
   type OrcaHookTrustKind,
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed
-} from '../../../../src/shared/orca-hook-trust-entries'
+} from '../../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { taskUiStateWrite } from '../../tasks/screen-state/mobile-task-runtime-operations'
 

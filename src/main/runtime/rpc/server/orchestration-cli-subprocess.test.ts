@@ -13,8 +13,8 @@ import {
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceReferenceUrl } from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { isOrchestrationRetryRequestId } from '../../../../shared/orchestration/orchestration-retry-request-id'
 import {
   CALLER,

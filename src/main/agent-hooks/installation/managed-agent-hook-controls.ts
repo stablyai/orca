@@ -5,7 +5,7 @@ import type {
 import {
   getManagedAgentHookTarget,
   isManagedAgentHookTarget
-} from '../../../shared/managed-agent-hook-targets'
+} from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {

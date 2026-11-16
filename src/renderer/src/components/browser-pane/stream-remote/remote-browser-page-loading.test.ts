@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { recordBrowserInitializationReceipt } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import {

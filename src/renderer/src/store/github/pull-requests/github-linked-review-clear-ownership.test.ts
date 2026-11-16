@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { createWorktreeIdentity } from '../../../../../shared/worktree/identity'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { forgeOwnerHostIdForWorkspace } from '../../../runtime/source-control/forge/forge-credential-target'

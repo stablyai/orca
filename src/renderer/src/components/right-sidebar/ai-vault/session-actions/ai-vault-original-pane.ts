@@ -2,7 +2,7 @@ import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-r
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { agentPaneConversationForEntry } from '@/store/slices/agent-status/agent-pane-conversation'
-import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
@@ -190,7 +190,7 @@ export function findAiVaultSessionLiveState(
 ): AgentDotState | null {
   const promptMatchedStates: AgentDotState[] = []
 
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     if (!agentMatches(session, entry.agentType)) {
       continue
     }
@@ -211,7 +211,7 @@ export function findOriginalAiVaultSessionPane(
 ): AiVaultOriginalPaneTarget | null {
   const promptMatchedTargets: AiVaultOriginalPaneTarget[] = []
 
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     if (
       agentMatches(session, entry.agentType) &&
       providerSessionMatches(session, entry.providerSession?.id)
@@ -245,7 +245,7 @@ export function findOriginalAiVaultSessionPane(
 
   for (const conversation of Object.values(state.agentConversationsByPaneKey)) {
     if (
-      state.agentStatusByPaneKey[conversation.paneKey] ||
+      state.agentStatusByPaneKey.get(conversation.paneKey) ||
       !agentMatches(session, conversation.agent) ||
       !agentPaneConversationForEntry(state, { ...conversation, agentType: conversation.agent })
     ) {

@@ -3,18 +3,22 @@ import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'reac
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import '../../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../recovery/browser-page-guest-recovery'
 import { releaseBrowserPageMount } from '../retention/browser-page-mount-admission'
+import { webviewRegistry } from '../webview-registry'
 import { rememberLiveBrowserUrl } from '../../describe-page/live-browser-url-registry'
 import { resolveBrowserWebviewLoadFailure } from '../../navigate/browser-webview-load-failure'
 import { resolveActiveBrowserLoadFailure } from '../../navigate/browser-load-failure-for-url'
-import { isChromiumErrorPage, toDisplayUrl } from '../../describe-page/browser-page-url-display'
-import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser-display-title'
+import {
+  getBrowserDisplayTitle,
+  isChromiumErrorPage,
+  toDisplayUrl
+} from '../../describe-page/browser-page-url-display'
 import type {
   BrowserPageFailLoadEvent,
   BrowserPageRecoveryNavigationValidation,
@@ -61,7 +65,9 @@ export function createBrowserPageWebviewLoadingHandlers({
 }: BrowserPageWebviewLoadingHandlersArgs): BrowserPageWebviewLoadingHandlers {
   const handleDidStopLoading = (): BrowserTabPageState | null => {
     // Admission starts background guests only; after any first load settlement, normal paint-retention rules decide layout.
-    releaseBrowserPageMount(browserTabId)
+    if (webviewRegistry.get(browserTabId) === webview) {
+      releaseBrowserPageMount(browserTabId)
+    }
     const metadata = cachedBrowserGuestMetadata(webview)
     if (!metadata) {
       return null

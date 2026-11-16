@@ -9,7 +9,7 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSnapshot,
   CodexUsageSummary
-} from '../../shared/codex-usage-types'
+} from '../../shared/agent-usage/analytics/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { CodexUsagePersistedState } from './types'

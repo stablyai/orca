@@ -2,8 +2,8 @@ import { z } from 'zod'
 import type {
   MobilePushRegisterResult,
   MobilePushTestResult
-} from '../../../../src/shared/mobile-push-contract'
-import { hostUnionArms, salvagedOptional } from '../../../../src/shared/zod-salvage'
+} from '../../../../src/shared/notifications/mobile-push-contract'
+import { hostUnionArms, salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 // Keep notification replies nullish/optional where callers use optional access; tightening them would replace existing fallback copy with incompatible-reply errors.
 
