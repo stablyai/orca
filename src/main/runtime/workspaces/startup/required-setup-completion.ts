@@ -1,3 +1,4 @@
+import { setupStartFailure } from '../../../../shared/agent-launch/startup/setup-start-failure'
 import type { RuntimeLocalWorktreeTerminalPorts } from './runtime-local-worktree-terminal-startup'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
@@ -28,10 +29,7 @@ export async function waitForRequiredSetup(
   ) {
     return
   }
-  const failure = () =>
-    new Error(
-      `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
-    )
+  const failure = () => new Error(setupStartFailure(agent))
   if (receipt.state !== 'running' || !receipt.terminalHandle) {
     throw failure()
   }

@@ -13,12 +13,14 @@ export type SetupAttemptRecipe = {
 export function createSetupDependentCommand(
   recipe: SetupAttemptRecipe,
   startupCommand: string,
-  startupShell?: AgentStartupShell
+  startupShell?: AgentStartupShell,
+  agent?: string
 ) {
   const commands = createSequencedSetupAgentCommands({
     ...recipe,
     startupCommand,
     startupShell,
+    agent,
     waitTimeoutSeconds: Math.max(1, Math.ceil((recipe.deadline - Date.now()) / 1000))
   })
   return { command: commands.startupCommand, env: commands.startupEnv }

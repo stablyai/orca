@@ -1,3 +1,4 @@
+import { setupStartFailure } from '../../../../shared/agent-launch/startup/setup-start-failure'
 import { createSetupDependentCommand } from '../../../../shared/agent-launch/startup/setup-attempt-recipe'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { recognizeAgentLaunchCommand } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
@@ -133,16 +134,12 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     if (attempt.settled) {
       const { exitCode } = await attempt.completion
       if (exitCode !== 0) {
-        throw new Error(
-          `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
-        )
+        throw new Error(setupStartFailure(agent))
       }
       return undefined
     }
     if (!attempt.recipe || attempt.recipe.deadline <= Date.now()) {
-      throw new Error(
-        `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
-      )
+      throw new Error(setupStartFailure(agent))
     }
     const recipe = {
       ...attempt.recipe,
@@ -152,7 +149,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
           : { family: 'cmd' as const }
     }
     return {
-      ...(args.command ? createSetupDependentCommand(recipe, args.command, args.shell) : {}),
+      ...(args.command ? createSetupDependentCommand(recipe, args.command, args.shell, agent) : {}),
       bind: (ptyId: string) =>
         this.setupTerminalCompletions.bindDependent(args.workspaceId, ptyId, attempt.completion)
     }
@@ -181,9 +178,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     }
     const outcome = await (signal ? waitForPromiseWithSignal(completion, signal) : completion)
     if (outcome.exitCode !== 0) {
-      throw new Error(
-        `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
-      )
+      throw new Error(setupStartFailure(agent))
     }
   }
 
@@ -208,9 +203,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     const outcome =
       completion && (await (signal ? waitForPromiseWithSignal(completion, signal) : completion))
     if (outcome && outcome.exitCode !== 0) {
-      throw new Error(
-        `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
-      )
+      throw new Error(setupStartFailure(agent))
     }
   }
 

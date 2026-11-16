@@ -1,3 +1,4 @@
+import { setupStartFailure } from './setup-start-failure'
 import {
   preparePosixSetupMarkers,
   PREPARE_WINDOWS_SETUP_MARKERS,
@@ -53,6 +54,7 @@ export function createSequencedSetupAgentCommands(args: {
   nonce?: string
   waitTimeoutSeconds?: number
   startupShell?: 'posix' | 'cmd' | 'powershell'
+  agent?: string
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
   const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform, args.shell)
@@ -80,7 +82,8 @@ export function createSequencedSetupAgentCommands(args: {
         markerPath,
         nonce,
         waitTimeoutSeconds,
-        args.startupShell
+        args.startupShell,
+        setupStartFailure(args.agent ?? 'Agent')
       ),
       startupEnv: {
         [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
@@ -92,7 +95,8 @@ export function createSequencedSetupAgentCommands(args: {
     args.startupCommand,
     markerPath,
     nonce,
-    waitTimeoutSeconds
+    waitTimeoutSeconds,
+    setupStartFailure(args.agent ?? 'Agent')
   )
   return {
     completionToken: nonce,
@@ -120,11 +124,14 @@ function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: 
 
   return [
     preparePosixSetupMarkers(markerPath),
-    `rm -f ${marker} ${tmp} 2>/dev/null`,
+    `rm -f ${tmp} 2>/dev/null`,
     setupCommand,
     'status=$?',
     `printf '%s:%s\\n' ${nonceValue} "$status" > ${tmp}`,
-    `mv -f ${tmp} ${marker}`,
+    `ln ${tmp} ${marker} 2>/dev/null || true`,
+    `rm -f ${tmp}`,
+    `IFS=: read -r seen accepted < ${marker} || true`,
+    `if [ "$seen" = ${nonceValue} ] && [[ "$accepted" =~ ^[0-9]+$ ]]; then status=$accepted; else status=1; fi`,
     `printf '\\033]777;${setupCompletionPrefix(nonce)}%s\\007' "$status"`,
     'exit "$status"'
   ].join('; ')
@@ -134,7 +141,8 @@ function buildPosixStartupScript(
   startupCommand: string,
   markerPath: string,
   nonce: string,
-  waitTimeoutSeconds: number
+  waitTimeoutSeconds: number,
+  failure: string
 ): string {
   const marker = quotePosixShellUnlessPlainNoAt(markerPath)
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
@@ -161,12 +169,12 @@ function buildPosixStartupScript(
     // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
     // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
     `if [ "$status" = "0" ]; then exec 3>&-; if [ -n "\${timerpid:-}" ]; then kill "$timerpid" 2>/dev/null; wait "$timerpid" 2>/dev/null; trap - EXIT; fi; echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
-    `echo "Setup failed (exit \${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
+    `echo ${quotePosixShellUnlessPlainNoAt(failure)} >&2;`,
     'exit "${status:-1}";',
     'fi;',
     'fi;',
     'if [ "$SECONDS" -ge "$deadline" ]; then',
-    'echo "Timed out waiting for setup before starting agent." >&2;',
+    `echo ${quotePosixShellUnlessPlainNoAt(failure)} >&2;`,
     'exit 124;',
     'fi;',
     'IFS= read -r -t 1 -u 3 unused || true;',
@@ -231,7 +239,7 @@ function buildWindowsSetupCommand(
     '$tmp = $marker + ".tmp"',
     PREPARE_WINDOWS_SETUP_MARKERS,
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
-    'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
+    'Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue',
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
     '$processInfo.FileName = $env:ComSpec',
     '$processInfo.Arguments = \'/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""\'',
@@ -242,7 +250,10 @@ function buildWindowsSetupCommand(
     '$setupStatus = $process.ExitCode',
     '$utf8 = [System.Text.UTF8Encoding]::new($false)',
     '[System.IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8)',
-    'Move-Item -LiteralPath $tmp -Destination $marker -Force',
+    'try { [IO.File]::Move($tmp, $marker) } catch { if (-not [IO.File]::Exists($marker)) { throw } }',
+    'Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue',
+    '$accepted = [IO.File]::ReadAllText($marker).Trim()',
+    'if ($accepted -match "^([0-9A-Za-z_-]+):([0-9]+)$" -and $Matches[1] -eq $nonce) { $setupStatus = [int]$Matches[2] } else { $setupStatus = 1 }',
     `[Console]::Write(([char]27).ToString() + ']777;${setupCompletionPrefix(nonce)}' + $setupStatus + [char]7)`,
     'exit $setupStatus'
   ].join('; ')
@@ -254,9 +265,9 @@ function buildWindowsStartupCommand(
   markerPath: string,
   nonce: string,
   waitTimeoutSeconds: number,
-  startupShell: 'posix' | 'cmd' | 'powershell' = 'powershell'
+  startupShell: 'posix' | 'cmd' | 'powershell' = 'powershell',
+  failure: string
 ): string {
-  const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   // Use PowerShell for safe bounded marker polling; native Windows runners still launch through cmd.
   const script = [
     // User startup may invoke policy-gated .ps1; apply relief in-payload to avoid the flagged command-line switch.
@@ -274,7 +285,7 @@ function buildWindowsStartupCommand(
     '  exit 1',
     '}',
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
-    `$deadline = (Get-Date).AddSeconds(${timeout})`,
+    `$deadline = (Get-Date).AddSeconds(${Math.max(1, Math.floor(waitTimeoutSeconds))})`,
     '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
     'while ($true) {',
     '  if (Test-Path -LiteralPath $marker) {',
@@ -282,7 +293,7 @@ function buildWindowsStartupCommand(
     '    if ($content -match "^([0-9A-Za-z_-]+):([0-9]+)$" -and $Matches[1] -eq $nonce) {',
     '      $setupStatus = [int]$Matches[2]',
     '      if ($setupStatus -ne 0) {',
-    '        [Console]::Error.WriteLine("Setup failed (exit $setupStatus); skipping agent startup. See the Setup terminal for details.")',
+    `        [Console]::Error.WriteLine(${quotePowerShellLiteral(failure)})`,
     '        exit $setupStatus',
     '      }',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
@@ -306,7 +317,7 @@ function buildWindowsStartupCommand(
     '    }',
     '  }',
     '  if ((Get-Date) -ge $deadline) {',
-    '    [Console]::Error.WriteLine("Timed out waiting for setup before starting agent.")',
+    `    [Console]::Error.WriteLine(${quotePowerShellLiteral(failure)})`,
     '    exit 124',
     '  }',
     '  Start-Sleep -Seconds 1',

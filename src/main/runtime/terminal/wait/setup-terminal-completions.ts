@@ -15,6 +15,7 @@ type WorkspaceAttempt = {
   recipe?: SetupAttemptRecipe
   available: Promise<void>
   publish: () => void
+  publication?: AbortController
 }
 
 type Attempt = {
@@ -22,6 +23,7 @@ type Attempt = {
   scan: (data: string) => void
   completion: Promise<SetupCompletion>
   finish: (exitCode: number | null) => void
+  refuse?: () => void
 }
 
 /** Capture before dispatch; the outcome lives with the PTY record, independently of its output. */
@@ -42,7 +44,11 @@ export class SetupTerminalCompletions {
   private readonly byHandle = new Map<string, Attempt>()
 
   constructor(
-    private readonly changed: (ptyId: string, verdict: TerminalSetupVerdict) => void = () => {}
+    private readonly changed: (ptyId: string, verdict: TerminalSetupVerdict) => void = () => {},
+    private readonly publishFailure: (
+      recipe: SetupAttemptRecipe,
+      signal: AbortSignal
+    ) => Promise<void> = async () => {}
   ) {}
 
   status(ptyId: string): TerminalSetupVerdict {
@@ -61,6 +67,7 @@ export class SetupTerminalCompletions {
         this.begin(ptyId, handle, token, options.setupRequired ? workspaceId : undefined),
       finish: (spawned: boolean) => {
         if (!spawned) {
+          this.exit(ptyId, true)
           this.forget(ptyId)
         }
       }
@@ -72,7 +79,7 @@ export class SetupTerminalCompletions {
     const answer = Promise.withResolvers<SetupCompletion>()
     const finish = (exitCode: number | null): void => answer.resolve({ exitCode })
     const scanner = createSetupCompletionScanner(token, finish)
-    const attempt = { handle, scan: scanner.scan, completion: answer.promise, finish }
+    const attempt: Attempt = { handle, scan: scanner.scan, completion: answer.promise, finish }
     this.attempts.set(ptyId, attempt)
     this.byHandle.set(handle, attempt)
     if (workspaceId) {
@@ -82,6 +89,20 @@ export class SetupTerminalCompletions {
         workspace = this.requiredByWorkspace.get(workspaceId)!
       }
       workspace.bound = true
+      const captured = workspace
+      attempt.refuse = () => {
+        if (captured.settled || !captured.recipe || captured.publication) {
+          return
+        }
+        const abort = new AbortController()
+        captured.publication = abort
+        void this.publishFailure(
+          captured.recipe,
+          AbortSignal.any([abort.signal, AbortSignal.timeout(5000)])
+        )
+          .catch(() => {})
+          .finally(() => this.retireWorkspaceAttempt(workspaceId, captured))
+      }
       void answer.promise.then(({ exitCode }) => workspace.finish(exitCode))
     }
   }
@@ -191,10 +212,8 @@ export class SetupTerminalCompletions {
         workspace.publish()
         clearTimeout(timer)
         answer.resolve({ exitCode })
-        const active = this.activeByWorkspace.get(workspaceId)
-        active?.delete(workspace)
-        if (active?.size === 0) {
-          this.activeByWorkspace.delete(workspaceId)
+        if (!workspace.publication) {
+          this.retireWorkspaceAttempt(workspaceId, workspace)
         }
       }
     }
@@ -236,8 +255,10 @@ export class SetupTerminalCompletions {
     }
     this.dependentIdsByWorkspace.delete(workspaceId)
     for (const attempt of this.activeByWorkspace.get(workspaceId) ?? []) {
+      attempt.publication?.abort()
       attempt.finish(null)
     }
+    this.activeByWorkspace.delete(workspaceId)
     this.requiredByWorkspace.delete(workspaceId)
   }
 
@@ -249,9 +270,20 @@ export class SetupTerminalCompletions {
     this.attempts.get(ptyId)?.scan(data)
   }
 
-  exit(ptyId: string): void {
+  exit(ptyId: string, confirmed = false): void {
     this.forgetDependent(ptyId)
+    if (confirmed) {
+      this.attempts.get(ptyId)?.refuse?.()
+    }
     this.attempts.get(ptyId)?.finish(null)
+  }
+
+  private retireWorkspaceAttempt(workspaceId: string, attempt: WorkspaceAttempt): void {
+    const active = this.activeByWorkspace.get(workspaceId)
+    active?.delete(attempt)
+    if (active?.size === 0) {
+      this.activeByWorkspace.delete(workspaceId)
+    }
   }
 
   forHandle(handle: string): Promise<SetupCompletion> | undefined {
