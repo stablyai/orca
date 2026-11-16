@@ -24,3 +24,6 @@ export type WorkspaceAgentHistoryTally = {
   transcripts: WorkspaceAgentHistoryTranscriptTally
   chats: WorkspaceAgentHistoryChatTally
 }
+
+/** A measure, with the id a confirmed delete passes back so it removes only what was shown. */
+export type WorkspaceAgentHistoryMeasurement = WorkspaceAgentHistoryTally & { planId: string }

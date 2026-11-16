@@ -5,7 +5,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { WorkspaceAgentHistoryTally } from '../../../../../shared/workspace-agent-history/workspace-agent-history-types'
+import type {
+  WorkspaceAgentHistoryMeasurement,
+  WorkspaceAgentHistoryTally
+} from '../../../../../shared/workspace-agent-history/workspace-agent-history-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import { formatBytes } from '../../../../../shared/format-bytes'
 import { Button } from '../../ui/button'
@@ -68,9 +71,9 @@ export function WorkspaceAgentHistorySetting({
 
 // Revisiting Settings reuses a recent measurement instead of rescanning every transcript.
 const MEASUREMENT_REUSE_MS = 60_000
-let lastMeasurement: { tally: WorkspaceAgentHistoryTally; at: number } | null = null
+let lastMeasurement: { tally: WorkspaceAgentHistoryMeasurement; at: number } | null = null
 
-function freshMeasurement(): WorkspaceAgentHistoryTally | null {
+function freshMeasurement(): WorkspaceAgentHistoryMeasurement | null {
   return lastMeasurement && Date.now() - lastMeasurement.at < MEASUREMENT_REUSE_MS
     ? lastMeasurement.tally
     : null
@@ -80,10 +83,10 @@ function formatCount(value: number): string {
   return uiNumberFormat({}).format(value)
 }
 
-function requestHistoryDelete(): Promise<
-  { ok: true; result: WorkspaceAgentHistoryTally } | { ok: false; message: string }
-> {
-  return window.api.aiVault.deleteDeletedWorkspaceHistory().then(
+function requestHistoryDelete(
+  planId: string
+): Promise<{ ok: true; result: WorkspaceAgentHistoryTally } | { ok: false; message: string }> {
+  return window.api.aiVault.deleteDeletedWorkspaceHistory(planId).then(
     (result) => ({ ok: true as const, result }),
     (error: unknown) => ({ ok: false as const, message: errorMessage(error) })
   )
@@ -91,7 +94,7 @@ function requestHistoryDelete(): Promise<
 
 type Measurement =
   | { state: 'measuring' }
-  | { state: 'ready'; tally: WorkspaceAgentHistoryTally }
+  | { state: 'ready'; tally: WorkspaceAgentHistoryMeasurement }
   | { state: 'error'; message: string }
 
 function DeletedWorkspacesHistoryRow(): React.JSX.Element {
@@ -103,7 +106,7 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
   })
   // The dialog keeps the counts it opened with, even while the row re-measures behind it.
   const [confirming, setConfirming] = useState(false)
-  const [confirmTally, setConfirmTally] = useState<WorkspaceAgentHistoryTally | null>(null)
+  const [confirmTally, setConfirmTally] = useState<WorkspaceAgentHistoryMeasurement | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   const [generation, setGeneration] = useState(0)
@@ -134,10 +137,10 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
     ? tally.transcripts.matched - tally.transcripts.inUse + tally.chats.matched - tally.chats.inUse
     : 0
 
-  const confirmDelete = async (): Promise<void> => {
+  const confirmDelete = async (planId: string): Promise<void> => {
     setDeleting(true)
     lastMeasurement = null
-    const outcome = await requestHistoryDelete()
+    const outcome = await requestHistoryDelete(planId)
     if (outcome.ok) {
       const { result } = outcome
       const skipped = result.transcripts.inUse + result.transcripts.failed + result.chats.inUse
@@ -270,7 +273,11 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
             <Button variant="outline" onClick={() => setConfirming(false)} disabled={deleting}>
               {t('components.settings.workspaceCleanup.agentHistory.cancel', 'Cancel')}
             </Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleting}>
+            <Button
+              variant="destructive"
+              onClick={() => confirmTally && void confirmDelete(confirmTally.planId)}
+              disabled={deleting || !confirmTally}
+            >
               {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
               {deleting
                 ? t('components.settings.workspaceCleanup.agentHistory.deleting', 'Deleting…')

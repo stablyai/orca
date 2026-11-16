@@ -22,7 +22,10 @@ import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard
 } from './journal-domain-import-discard'
-import { purgeJournalDomainChatPage } from './journal-domain-chat-purge'
+import {
+  listJournalDomainOrphanChats,
+  purgeJournalDomainChatPage
+} from './journal-domain-chat-purge'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
@@ -34,6 +37,7 @@ export type JournalSqlMaintenance =
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
   | { kind: 'chat-purge'; sessionId: string }
+  | { kind: 'chat-orphans' }
   | {
       kind: 'import-page'
       target: Pick<JournalDomainImportHeader, 'sessionId' | 'epoch'>
@@ -53,6 +57,7 @@ export type JournalSqlMaintenanceResult =
   | JournalDomainMaintenanceResult
   | JournalDomainImportDiscard
   | { more: boolean }
+  | { orphans: { sessionId: string; workspaceId: string }[] }
   | boolean
   | string
   | null
@@ -85,6 +90,8 @@ export function applyJournalSqlMaintenance(
       return discardJournalDomainImportPage(db, operation.sessionId)
     case 'chat-purge':
       return purgeJournalDomainChatPage(db, operation.sessionId)
+    case 'chat-orphans':
+      return listJournalDomainOrphanChats(db)
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

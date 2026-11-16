@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import { readdir } from 'node:fs/promises'
+import { resolveGitCommonDir, resolveGitDir } from '../git/source-control/resolve-git-dir'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -7,6 +9,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 import type { OrcaWorkspaceLayout } from '../../shared/orca-workspace-layout'
 import type {
   WorkspaceAgentHistoryChatTally,
+  WorkspaceAgentHistoryMeasurement,
   WorkspaceAgentHistoryTally
 } from '../../shared/workspace-agent-history/workspace-agent-history-types'
 import { getRepoExecutionHostId, isLocalExecutionHost } from '../../shared/execution-host'
@@ -49,6 +52,11 @@ const EMPTY_TRANSCRIPTS = { total: 0, matched: 0, bytes: 0, inUse: 0, deleted: 0
 let store: WorkspaceAgentHistoryStore | null = null
 let ensureChatHost: () => Promise<unknown> = () => Promise.resolve()
 let queue: Promise<unknown> = Promise.resolve()
+// What the last measure showed; a confirmed delete removes only these, rechecked.
+let lastPlan: { id: string; only: Selection } | null = null
+
+type Selection = { transcripts: readonly string[]; chats: ReadonlySet<string> }
+type RunOutcome = WorkspaceAgentHistoryTally & { candidates: Selection }
 
 export function configureWorkspaceAgentHistory(deps: {
   store: WorkspaceAgentHistoryStore
@@ -73,7 +81,7 @@ export function deleteAgentHistoryForRemovedWorkspace(event: RuntimeWorktreeLife
   void serialize(() =>
     runWorkspaceAgentHistory(
       'delete',
-      { kind: 'removed', paths },
+      { scope: { kind: 'removed', paths }, keepPaths: keepWorkspacePaths(requireStore()) },
       {
         inUseSince: removedAt,
         // Archiving also announces `removed` but keeps the row, and its chats come back on restore.
@@ -91,12 +99,27 @@ export function deleteAgentHistoryForRemovedWorkspace(event: RuntimeWorktreeLife
   })
 }
 
-export function measureDeletedWorkspaceAgentHistory(): Promise<WorkspaceAgentHistoryTally> {
-  return serialize(() => runAlreadyDeleted('measure'))
+export function measureDeletedWorkspaceAgentHistory(): Promise<WorkspaceAgentHistoryMeasurement> {
+  return serialize(async () => {
+    const { candidates, ...tally } = await runAlreadyDeleted('measure')
+    lastPlan = { id: randomUUID(), only: candidates }
+    return { ...tally, planId: lastPlan.id }
+  })
 }
 
-export function deleteDeletedWorkspaceAgentHistory(): Promise<WorkspaceAgentHistoryTally> {
-  return serialize(() => runAlreadyDeleted('delete'))
+/** Deletes what the confirmed measure showed, never anything found since; a stale plan is refused. */
+export function deleteDeletedWorkspaceAgentHistory(
+  planId: string
+): Promise<WorkspaceAgentHistoryTally> {
+  return serialize(async () => {
+    const plan = lastPlan
+    if (plan?.id !== planId) {
+      throw new Error('This measurement is out of date. Measure again before deleting.')
+    }
+    lastPlan = null
+    const { candidates: _candidates, ...tally } = await runAlreadyDeleted('delete', plan.only)
+    return tally
+  })
 }
 
 function serialize<T>(run: () => Promise<T>): Promise<T> {
@@ -105,14 +128,23 @@ function serialize<T>(run: () => Promise<T>): Promise<T> {
   return next
 }
 
-async function runAlreadyDeleted(mode: 'measure' | 'delete'): Promise<WorkspaceAgentHistoryTally> {
+async function runAlreadyDeleted(
+  mode: 'measure' | 'delete',
+  only?: Selection
+): Promise<RunOutcome> {
   const current = requireStore()
   const scope = { kind: 'already-deleted' as const, layouts: safeWorkspaceLayouts(current) }
   const keepPaths = keepWorkspacePaths(current)
   const keepFolderNames = await liveWorktreeAdminNames(current)
-  const ownsWorktreePath = createWorkspaceHistoryOwner({ scope, keepPaths, keepFolderNames })
-  return runWorkspaceAgentHistory(mode, scope, {
+  const ownership = { scope, keepPaths, keepFolderNames }
+  const ownsWorktreePath = createWorkspaceHistoryOwner(ownership)
+  return runWorkspaceAgentHistory(mode, ownership, {
+    only,
     inUseSince: Date.now() - IN_USE_WINDOW_MS,
+    ownsOrphanWorkspace: async (workspaceId) => {
+      const path = worktreeIdPath(workspaceId)
+      return path !== null && (await ownsWorktreePath({ cwd: path, filePath: '' }))
+    },
     ownsChat: async ({ location }) => {
       // Removing a folder workspace keeps its folder, so a missing row proves nothing about the chat.
       if (location.workspaceKind === 'folder') {
@@ -126,41 +158,54 @@ async function runAlreadyDeleted(mode: 'measure' | 'delete'): Promise<WorkspaceA
 
 async function runWorkspaceAgentHistory(
   mode: 'measure' | 'delete',
-  scope: WorkspaceHistoryOwnership['scope'],
+  ownership: WorkspaceHistoryOwnership,
   chats: {
+    only?: Selection
     inUseSince: number
     ownsChat: (chat: AgentSessionConversationView) => boolean | Promise<boolean>
+    /** Owner of journals left by an interrupted purge; only the already-deleted sweep resumes them. */
+    ownsOrphanWorkspace?: (workspaceId: string) => Promise<boolean>
   }
-): Promise<WorkspaceAgentHistoryTally> {
-  const current = requireStore()
-  const keepFolderNames =
-    scope.kind === 'already-deleted' ? await liveWorktreeAdminNames(current) : []
+): Promise<RunOutcome> {
+  const { scope } = ownership
   const transcripts =
     scope.kind === 'removed' && scope.paths.length === 0
-      ? { ...EMPTY_TRANSCRIPTS, deletedFilePaths: [] }
+      ? { ...EMPTY_TRANSCRIPTS, deletedFilePaths: [], candidates: [] }
       : await runWorkspaceHistoryInService({
           mode,
-          ownership: { scope, keepPaths: keepWorkspacePaths(current), keepFolderNames },
+          ownership,
           inUseSince: chats.inUseSince,
-          options: await historyScanOptions()
+          options: await historyScanOptions(),
+          ...(chats.only ? { onlySessions: chats.only.transcripts } : {})
         })
   if (transcripts.deletedFilePaths.length > 0) {
     invalidateAiVaultSessionListCache()
     invalidateAiVaultHostLegCache()
   }
-  const { deletedFilePaths: _deleted, ...transcriptTally } = transcripts
-  return { transcripts: transcriptTally, chats: await runChats(mode, chats.ownsChat) }
+  const { deletedFilePaths: _deleted, candidates, ...transcriptTally } = transcripts
+  const only = chats.only?.chats
+  const chatRun = await runChats(
+    mode,
+    async (chat) => (!only || only.has(chat.sessionId)) && (await chats.ownsChat(chat)),
+    chats.ownsOrphanWorkspace
+  )
+  return {
+    transcripts: transcriptTally,
+    chats: chatRun.tally,
+    candidates: { transcripts: candidates, chats: new Set(chatRun.deletable) }
+  }
 }
 
 async function runChats(
   mode: 'measure' | 'delete',
-  owns: (chat: AgentSessionConversationView) => boolean | Promise<boolean>
-): Promise<WorkspaceAgentHistoryChatTally> {
+  owns: (chat: AgentSessionConversationView) => boolean | Promise<boolean>,
+  ownsOrphanWorkspace?: (workspaceId: string) => Promise<boolean>
+): Promise<{ tally: WorkspaceAgentHistoryChatTally; deletable: string[] }> {
   await ensureChatHost().catch(() => undefined)
   const recordStore = getStructuredAgentSessionHost()?.deps.store
   const tally: WorkspaceAgentHistoryChatTally = { total: 0, matched: 0, inUse: 0, deleted: 0 }
   if (!recordStore) {
-    return tally
+    return { tally, deletable: [] }
   }
   const local = recordStore
     .listConversations()
@@ -178,12 +223,18 @@ async function runChats(
       deletable.push(chat.sessionId)
     }
   }
+  if (mode === 'delete' && ownsOrphanWorkspace && !recordStore.readOnly) {
+    // Resume purges that an exit or error cut short; their records are already gone.
+    await recordStore.purgeOrphanedJournals(ownsOrphanWorkspace).catch((error: unknown) => {
+      console.warn('[workspace-agent-history] could not finish earlier chat purges:', error)
+    })
+  }
   if (mode === 'delete' && deletable.length > 0 && !recordStore.readOnly) {
     const forgotten = await recordStore.forgetConversations(deletable)
     tally.deleted = forgotten.length
     tally.inUse += deletable.length - forgotten.length
   }
-  return tally
+  return { tally, deletable }
 }
 
 /** Account homes include retired ones: a rollout linked into any home keeps its bytes on disk. */
@@ -205,7 +256,15 @@ async function liveWorktreeAdminNames(current: WorkspaceAgentHistoryStore): Prom
     current
       .getRepos()
       .filter((repo) => isLocalExecutionHost(getRepoExecutionHostId(repo)))
-      .map((repo) => readdir(join(repo.path, '.git', 'worktrees')).catch((): string[] => []))
+      .map(async (repo): Promise<string[]> => {
+        try {
+          // A `.git` file points at the real admin folder; its common dir owns `worktrees/`.
+          const commonDir = await resolveGitCommonDir(await resolveGitDir(repo.path))
+          return await readdir(join(commonDir, 'worktrees'))
+        } catch {
+          return []
+        }
+      })
   )
   return [...new Set(names.flat())]
 }

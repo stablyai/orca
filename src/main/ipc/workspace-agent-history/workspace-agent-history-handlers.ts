@@ -20,7 +20,10 @@ export function registerWorkspaceAgentHistoryHandlers(
   ipcMain.handle('aiVault:measureDeletedWorkspaceHistory', () =>
     measureDeletedWorkspaceAgentHistory()
   )
-  ipcMain.handle('aiVault:deleteDeletedWorkspaceHistory', () =>
-    deleteDeletedWorkspaceAgentHistory()
-  )
+  ipcMain.handle('aiVault:deleteDeletedWorkspaceHistory', (_event, planId: unknown) => {
+    if (typeof planId !== 'string') {
+      throw new Error('A measurement is required before deleting.')
+    }
+    return deleteDeletedWorkspaceAgentHistory(planId)
+  })
 }

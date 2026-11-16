@@ -28,6 +28,7 @@ export class SessionSearchInstance {
   private live: LiveIndex | null = null
   private settings: AiVaultSearchSettings = { enabled: false, historyDays: null }
   private transition: Promise<void> | null = null
+  private readonly pendingForget = new Set<string>()
   private readonly onError: (error: unknown) => void
   constructor(private readonly options: SessionSearchInstanceOptions) {
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
@@ -76,6 +77,10 @@ export class SessionSearchInstance {
       })
       try {
         await indexer.initialize()
+        if (this.pendingForget.size > 0) {
+          await indexer.forgetFiles([...this.pendingForget])
+          this.pendingForget.clear()
+        }
       } catch (error) {
         indexer.close()
         await indexer.retired()
@@ -133,7 +138,14 @@ export class SessionSearchInstance {
   }
   async forgetFiles(paths: readonly string[]): Promise<void> {
     await this.transition
-    await this.live?.indexer.forgetFiles(paths)
+    if (this.live) {
+      await this.live.indexer.forgetFiles(paths)
+      return
+    }
+    // With search off the rows stay on disk; drop them before a re-enabled index answers queries.
+    for (const path of paths) {
+      this.pendingForget.add(path)
+    }
   }
   async settled(): Promise<void> {
     await this.transition

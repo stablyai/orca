@@ -1,5 +1,5 @@
 import { JOURNAL_EPOCH_TABLES } from './journal-domain-maintenance'
-import { journalForkStageHeld } from './journal-fork-stage-state'
+import { journalForkAttachmentHeld, journalForkStageHeld } from './journal-fork-stage-state'
 import { deleteJournalSessionRowsPage } from './journal-domain-import-discard'
 import type Database from '../../sqlite/sync-database'
 
@@ -21,11 +21,35 @@ export function purgeJournalDomainChatPage(
   const recorded = db
     .prepare('SELECT 1 AS present FROM agent_session_records WHERE session_id=?')
     .get(sessionId)
-  if (recorded || journalForkStageHeld(db, sessionId)) {
+  // A fork copying this chat holds its rows until the copy settles.
+  if (recorded || journalForkStageHeld(db, sessionId) || journalForkAttachmentHeld(db, sessionId)) {
     return { more: false }
   }
   const more =
     deleteJournalSessionRowsPage(db, sessionId, JOURNAL_EPOCH_TABLES) ||
     deleteJournalSessionRowsPage(db, sessionId, CHAT_TABLES, false)
   return { more }
+}
+
+/** Chats whose record is gone but whose journal remains: a purge an exit or error cut short. */
+export function listJournalDomainOrphanChats(db: Database.Database): {
+  orphans: { sessionId: string; workspaceId: string }[]
+} {
+  const rows = db
+    .prepare(
+      `SELECT c.session_id AS session_id, c.workspace_id AS workspace_id FROM journal_chat_state c
+       WHERE NOT EXISTS (SELECT 1 FROM agent_session_records r WHERE r.session_id = c.session_id)
+       LIMIT 256`
+    )
+    .all()
+  return {
+    orphans: rows.flatMap((row) =>
+      typeof row.session_id === 'string' &&
+      typeof row.workspace_id === 'string' &&
+      !journalForkStageHeld(db, row.session_id) &&
+      !journalForkAttachmentHeld(db, row.session_id)
+        ? [{ sessionId: row.session_id, workspaceId: row.workspace_id }]
+        : []
+    )
+  }
 }

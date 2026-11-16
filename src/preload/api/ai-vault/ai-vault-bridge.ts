@@ -65,7 +65,8 @@ export const aiVaultApi = {
     ipcRenderer.invoke('aiVault:deleteSession', args),
   measureDeletedWorkspaceHistory: () =>
     ipcRenderer.invoke('aiVault:measureDeletedWorkspaceHistory'),
-  deleteDeletedWorkspaceHistory: () => ipcRenderer.invoke('aiVault:deleteDeletedWorkspaceHistory'),
+  deleteDeletedWorkspaceHistory: (planId: string) =>
+    ipcRenderer.invoke('aiVault:deleteDeletedWorkspaceHistory', planId),
   onWindowFocused: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('aiVault:windowFocused', listener)

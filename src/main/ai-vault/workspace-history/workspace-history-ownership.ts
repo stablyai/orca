@@ -3,9 +3,11 @@ import { basename, dirname, join, relative } from 'node:path'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultSessionInScope,
-  createAiVaultScopeCwdMatcher
+  createAiVaultScopeCwdMatcher,
+  sessionFileExecutionNamespace
 } from '../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { OrcaWorkspaceLayout } from '../../../shared/orca-workspace-layout'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 
@@ -89,7 +91,9 @@ export function createWorkspaceHistoryOwner(
     const spellings = [session.cwd, ...(session.cwdAliases ?? [])].filter(
       (spelling): spelling is string => Boolean(spelling)
     )
-    for (const folder of spellings.flatMap((cwd) => workspaceFolders(cwd, scope.layouts))) {
+    for (const folder of spellings.flatMap((cwd) =>
+      workspaceFolders(cwd, scope.layouts, session.filePath)
+    )) {
       // A workspace that still exists keeps its history, whether it sits inside this folder or holds it.
       const survives = keepPaths.some(
         (keep) =>
@@ -116,14 +120,26 @@ export function createWorkspaceHistoryOwner(
 /** The workspace folders a cwd sits in: <root>/<name>, or <root>/<repo>/<name> when nested. */
 function workspaceFolders(
   cwd: string,
-  layouts: readonly OrcaWorkspaceLayout[]
+  layouts: readonly OrcaWorkspaceLayout[],
+  filePath: string
 ): { root: string; path: string }[] {
   return layouts.flatMap((layout) => {
-    if (!layout.path || !isPathInsideOrEqual(layout.path, cwd)) {
+    if (!layout.path) {
+      return []
+    }
+    // A WSL transcript records a Linux cwd; compare it with a UNC root only inside that same distro.
+    const wsl = parseWslUncPath(layout.path)
+    const comparable =
+      wsl &&
+      cwd.startsWith('/') &&
+      sessionFileExecutionNamespace(filePath) === `wsl:${wsl.distro.toLowerCase()}`
+        ? wsl.linuxPath
+        : layout.path
+    if (!isPathInsideOrEqual(comparable, cwd)) {
       return []
     }
     const depth = layout.nestWorkspaces ? 2 : 1
-    const segments = relative(layout.path, cwd).split(/[\\/]/).filter(Boolean)
+    const segments = relative(comparable, cwd).split(/[\\/]/).filter(Boolean)
     return segments.length < depth
       ? []
       : [{ root: layout.path, path: join(layout.path, ...segments.slice(0, depth)) }]

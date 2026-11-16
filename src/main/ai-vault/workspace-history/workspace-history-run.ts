@@ -28,15 +28,20 @@ export type WorkspaceHistoryRequest = {
   /** A session written at or after this time may still be open; it is kept. */
   inUseSince: number
   options: Omit<AiVaultScanOptions, 'signal'>
+  /** Delete only these sessions (keys from a measure the user confirmed); absent means every owned one. */
+  onlySessions?: readonly string[]
 }
 
 export type WorkspaceHistoryResult = WorkspaceAgentHistoryTranscriptTally & {
   /** Transcript paths removed, for the parent's list caches and the search index. */
   deletedFilePaths: string[]
+  /** Keys of the sessions a delete would remove now; a confirmed delete passes them back. */
+  candidates: string[]
 }
 
 // Small batches keep each burst of unlinks short and let cancellation land between them.
 const DELETE_BATCH_SIZE = 32
+const OWNER_REFRESH_MS = 5_000
 const SQLITE_AGENTS = new Set<AiVaultSession['agent']>(['opencode', 'opencode2', 'zcode'])
 
 /** Scan this host's transcripts, keep only those a deleted workspace owns, then count or remove them. */
@@ -69,15 +74,20 @@ export async function runWorkspaceHistory(
     inUse: 0,
     deleted: 0,
     failed: 0,
-    deletedFilePaths: []
+    deletedFilePaths: [],
+    candidates: []
   }
+  const confirmed = request.onlySessions ? new Set(request.onlySessions) : null
   const owned: AiVaultSession[] = []
   for (const [index, session] of sessions.entries()) {
     if (index % 256 === 0) {
       await yieldToEventLoop()
       throwIfAiVaultScanCancelled(signal)
     }
-    if (!(await owns(session))) {
+    if (
+      (confirmed && !confirmed.has(workspaceHistorySessionKey(session))) ||
+      !(await owns(session))
+    ) {
       continue
     }
     result.matched++
@@ -91,6 +101,8 @@ export async function runWorkspaceHistory(
   const context = { options: request.options, wslHomeDirs: request.options.wslHomeDirs ?? [] }
   const sqliteRows = new Map<string, Map<string, AiVaultSession>>()
   const countedInodes = new Set<string>()
+  let freshOwner = createWorkspaceHistoryOwner(request.ownership)
+  let freshOwnerAt = Date.now()
   for (const [index, session] of owned.entries()) {
     if (index % DELETE_BATCH_SIZE === 0) {
       await yieldToEventLoop()
@@ -103,6 +115,7 @@ export async function runWorkspaceHistory(
         session.agent === 'zcode' ? 'zcode' : 'opencode'
       )
       if (row) {
+        result.candidates.push(workspaceHistorySessionKey(session))
         const rows = sqliteRows.get(row.dbPath) ?? new Map<string, AiVaultSession>()
         rows.set(row.sessionId, session)
         sqliteRows.set(row.dbPath, rows)
@@ -121,7 +134,17 @@ export async function runWorkspaceHistory(
       continue
     }
     result.bytes += measured.bytes
+    result.candidates.push(workspaceHistorySessionKey(session))
     if (request.mode === 'measure') {
+      continue
+    }
+    // Ownership is re-proved on fresh disk state: a volume can disconnect while the scan runs.
+    if (Date.now() - freshOwnerAt > OWNER_REFRESH_MS) {
+      freshOwner = createWorkspaceHistoryOwner(request.ownership)
+      freshOwnerAt = Date.now()
+    }
+    if (!(await freshOwner(session))) {
+      result.failed++
       continue
     }
     // The scan may be minutes old, and other homes' Codex copies were never scanned; look again.
@@ -164,6 +187,13 @@ export async function runWorkspaceHistory(
     }
   }
   return result
+}
+
+/** A database row is keyed by database and session; a file session by its transcript path. */
+function workspaceHistorySessionKey(session: AiVaultSession): string {
+  return SQLITE_AGENTS.has(session.agent) && !session.filePath.includes('#')
+    ? buildOpenCodeSqliteCandidatePath(session.filePath, session.sessionId)
+    : session.filePath
 }
 
 // Companions go first, so a refusal part way leaves the transcript listed for a retry. Codex aliases
@@ -211,11 +241,18 @@ async function walkRemovals(
     if (stats.isFile() && !counted.has(key)) {
       counted.add(key)
       bytes += stats.size
-    } else if (stats.isDirectory() && depth < 8) {
+    } else if (stats.isDirectory()) {
       let names: string[] = []
       try {
         names = await readdir(path)
       } catch {
+        // An unreadable folder could hide a live file.
+        newestMtimeMs = Number.POSITIVE_INFINITY
+        return
+      }
+      // Too deep to prove idle: keep it rather than delete files nobody looked at.
+      if (depth >= 8 && names.length > 0) {
+        newestMtimeMs = Number.POSITIVE_INFINITY
         return
       }
       for (const name of names) {

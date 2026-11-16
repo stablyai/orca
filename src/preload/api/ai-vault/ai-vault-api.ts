@@ -28,7 +28,10 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../shared/execution-host'
-import type { WorkspaceAgentHistoryTally } from '../../../shared/workspace-agent-history/workspace-agent-history-types'
+import type {
+  WorkspaceAgentHistoryMeasurement,
+  WorkspaceAgentHistoryTally
+} from '../../../shared/workspace-agent-history/workspace-agent-history-types'
 import type {
   AiVaultScanProgress,
   AiVaultScanProgressUpdate
@@ -62,8 +65,9 @@ export type AiVaultApi = {
   /** Moves a deletable session's transcript to the OS trash; local sessions only. */
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
   /** Counts this computer's history from workspaces that no longer exist. */
-  measureDeletedWorkspaceHistory: () => Promise<WorkspaceAgentHistoryTally>
-  deleteDeletedWorkspaceHistory: () => Promise<WorkspaceAgentHistoryTally>
+  measureDeletedWorkspaceHistory: () => Promise<WorkspaceAgentHistoryMeasurement>
+  /** Deletes only what the measure with this plan id showed. */
+  deleteDeletedWorkspaceHistory: (planId: string) => Promise<WorkspaceAgentHistoryTally>
   /** Fires when any app window regains OS focus. */
   onWindowFocused: (callback: () => void) => () => void
   /** The local scan entry for a request key, if it is still retained. */

@@ -19,3 +19,23 @@ export function purgeForgottenJournalChat(
     }
   })
 }
+
+/** Finish purges an exit or error cut short, for chats whose workspace `owns` proves deleted. */
+export async function purgeOrphanedJournalChats(
+  database: JournalSqlDatabase,
+  owns: (workspaceId: string) => Promise<boolean>
+): Promise<number> {
+  if (database.readOnly) {
+    return 0
+  }
+  const found = await database.serialize('', (writer) => writer.maintain({ kind: 'chat-orphans' }))
+  const orphans = found && typeof found === 'object' && 'orphans' in found ? found.orphans : []
+  let purged = 0
+  for (const orphan of orphans) {
+    if (await owns(orphan.workspaceId)) {
+      await purgeForgottenJournalChat(database, orphan.sessionId)
+      purged++
+    }
+  }
+  return purged
+}

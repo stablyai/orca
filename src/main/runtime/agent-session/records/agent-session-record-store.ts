@@ -53,7 +53,10 @@ import type { JournalSqlDatabase } from '../../../native-chat/agent-session-jour
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from '../agent-session-operation-receipt'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
-import { purgeForgottenJournalChat } from '../../../native-chat/agent-session-journal/journal-chat-purge'
+import {
+  purgeForgottenJournalChat,
+  purgeOrphanedJournalChats
+} from '../../../native-chat/agent-session-journal/journal-chat-purge'
 import { createAgentSessionFoundingStore } from './agent-session-founding-store'
 import type {
   AgentSessionUserNameWrite,
@@ -198,6 +201,10 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     }
     return forgotten
   }
+
+  /** Journals whose chat record was deleted before an earlier purge finished. */
+  purgeOrphanedJournals = (owns: (workspaceId: string) => Promise<boolean>): Promise<number> =>
+    purgeOrphanedJournalChats(this.journalDatabase, owns)
 
   isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
 
