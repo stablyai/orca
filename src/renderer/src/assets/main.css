@@ -1141,7 +1141,8 @@ body[data-modal-overlay-open]
     var(--orca-glass-surface) calc(var(--orca-theme-glass-tint) * 100%),
     transparent
   );
-  background-color: transparent;
+  /* The body's opaque base, under any transparent part of the image. */
+  background-color: var(--background);
   background-image:
     linear-gradient(var(--orca-glass-veil) 0 0),
     linear-gradient(var(--orca-theme-background-veil) 0 0), var(--orca-theme-glass-image);

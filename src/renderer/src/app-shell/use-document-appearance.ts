@@ -125,12 +125,12 @@ export function useDocumentAppearance(): void {
     }
   }, [pluginThemesLoaded, paintsBackground, surfaceOpacity, themeBackground])
 
-  // Why repaint deps: glass raises its tint until the theme's painted chrome text reads over the image.
+  // Why repaint deps: glass raises its tint until the painted chrome text reads over the image.
   useEffect(() => {
     if (pluginThemesLoaded) {
       syncThemeGlass(paintsBackground ? themeBackground : null)
     }
-  }, [pluginThemesLoaded, paintsBackground, themeBackground, appTheme, ready, dark])
+  }, [pluginThemesLoaded, paintsBackground, themeBackground, appTheme, ready, dark, sidebarTint])
 
   const reduceMotion = usePrefersReducedMotion()
   const video =

@@ -2,10 +2,20 @@ import {
   PLUGIN_THEME_GLASS_DEFAULT_TINT,
   type PluginThemeBackground
 } from '../../../../shared/plugins/artifacts/plugin-theme-background'
-import { mix, type Rgba } from '../../../../shared/color/rgba-contrast'
-import type { ThemeGlassBlurResult } from './theme-glass-blur-protocol'
-import { readableGlassTint, type ThemeGlassSurface } from './theme-glass-tint'
+import { mix, over, type Rgba } from '../../../../shared/color/rgba-contrast'
+import {
+  THEME_GLASS_SCALE,
+  type ThemeGlassBlurRequest,
+  type ThemeGlassBlurResult
+} from './theme-glass-blur-protocol'
+import {
+  readableGlassTint,
+  type ThemeGlassLayer,
+  type ThemeGlassSurface,
+  type ThemeGlassText
+} from './theme-glass-tint'
 import { browserColorProbe } from './plugin-theme-tokens'
+import { CONTRAST_RULES, MIN_TEXT_CONTRAST } from './plugin-theme-contrast-rules'
 
 const PROPERTIES = [
   '--orca-theme-glass-image',
@@ -13,16 +23,17 @@ const PROPERTIES = [
   '--orca-theme-glass-tint'
 ] as const
 
-/** Each glass surface's color token (with main.css's fallback) and the text tokens drawn on it. */
-const SURFACE_TOKENS: readonly { surface: readonly string[]; texts: readonly string[] }[] = [
-  {
-    surface: ['--worktree-sidebar'],
-    texts: ['--worktree-sidebar-foreground', '--muted-foreground']
-  },
-  { surface: ['--sidebar'], texts: ['--sidebar-foreground', '--muted-foreground'] },
-  { surface: ['--tab-bar', '--card'], texts: ['--foreground', '--muted-foreground'] },
-  { surface: ['--card'], texts: ['--foreground', '--muted-foreground'] }
+/** Each `data-glass-surface` kind and its color token, first set wins (as main.css resolves it).
+ *  `rules`: the surface is its token's own (sidebars), so that token's contrast rules apply; tab
+ *  bars and the status bar only borrow `--card`'s color. */
+const GLASS_SURFACES: readonly { kind: string; tokens: readonly string[]; rules: boolean }[] = [
+  { kind: 'worktree-sidebar', tokens: ['--worktree-sidebar'], rules: true },
+  { kind: 'sidebar', tokens: ['--sidebar'], rules: true },
+  { kind: 'tab-bar', tokens: ['--tab-bar', '--card'], rules: false },
+  { kind: 'titlebar', tokens: ['--card'], rules: false }
 ]
+// Why: chrome draws plain and secondary text on every surface, beyond its own rule pairs.
+const CHROME_TEXTS = ['--foreground', '--muted-foreground']
 
 type BlurredImage = {
   url: string
@@ -33,7 +44,7 @@ type BlurredImage = {
 }
 
 let blurred: BlurredImage | null = null
-let blurring: string | null = null
+const blurring = new Map<string, Promise<BlurredImage>>()
 // Why kept: a repaint while the blur runs must paint with the newest theme, and a switch must not paint the old image.
 let wanted: { background: PluginThemeBackground; root: HTMLElement } | null = null
 
@@ -51,13 +62,17 @@ function clear(root: HTMLElement): void {
   delete root.dataset.themeGlass
 }
 
-async function blur(url: string): Promise<BlurredImage> {
+async function blur(url: string, tile: boolean): Promise<BlurredImage> {
   const image = new Image()
   // Why: an untagged cross-origin bitmap would taint the worker's canvas and block the read-back.
   image.crossOrigin = 'anonymous'
   image.src = url
   await image.decode()
-  const bitmap = await createImageBitmap(image)
+  const bitmap = await createImageBitmap(image, {
+    resizeWidth: Math.max(1, Math.round(image.naturalWidth / THEME_GLASS_SCALE)),
+    resizeHeight: Math.max(1, Math.round(image.naturalHeight / THEME_GLASS_SCALE)),
+    resizeQuality: 'medium'
+  })
   // Why a worker: the blur and encode would otherwise hold the UI thread for a frame or more.
   const worker = new Worker(new URL('./theme-glass-blur.worker.ts', import.meta.url), {
     type: 'module'
@@ -66,14 +81,17 @@ async function blur(url: string): Promise<BlurredImage> {
     const result = await new Promise<ThemeGlassBlurResult>((resolve, reject) => {
       worker.onmessage = (event: MessageEvent<ThemeGlassBlurResult>) => resolve(event.data)
       worker.onerror = (event) => reject(new Error(event.message))
-      worker.postMessage(bitmap, [bitmap])
+      worker.onmessageerror = () => reject(new Error('unreadable blur result'))
+      const request: ThemeGlassBlurRequest = { bitmap, tile }
+      worker.postMessage(request, [bitmap])
     })
     if (!result.ok) {
       throw new Error(result.error)
     }
     const backdrop: Rgba[] = []
     for (let i = 0; i < result.samples.length; i += 4) {
-      backdrop.push([result.samples[i], result.samples[i + 1], result.samples[i + 2], 1])
+      const alpha = result.samples[i + 3] / 255
+      backdrop.push([result.samples[i], result.samples[i + 1], result.samples[i + 2], alpha])
     }
     return {
       url,
@@ -87,32 +105,54 @@ async function blur(url: string): Promise<BlurredImage> {
   }
 }
 
-function paintedColor(computed: CSSStyleDeclaration, tokens: readonly string[]): Rgba | null {
-  for (const token of tokens) {
-    const value = computed.getPropertyValue(token).trim()
-    if (value) {
-      return browserColorProbe(value)
-    }
+function paintedColor(computed: CSSStyleDeclaration, token: string): Rgba | null {
+  const value = computed.getPropertyValue(token).trim()
+  return value ? browserColorProbe(value) : null
+}
+
+/** The texts drawn on a surface token and on the washes its contrast rules paint over it. */
+function glassLayers(
+  computed: CSSStyleDeclaration,
+  token: string,
+  rules: boolean
+): ThemeGlassLayer[] {
+  const texts = (pairs: readonly { text: string; min: number }[]): ThemeGlassText[] =>
+    pairs.flatMap(({ text, min }) => {
+      const color = paintedColor(computed, text)
+      return color ? [{ color, min }] : []
+    })
+  const chrome = CHROME_TEXTS.map((text) => ({ text, min: MIN_TEXT_CONTRAST }))
+  if (!rules) {
+    return [{ wash: null, texts: texts(chrome) }]
   }
-  return null
+  const direct = CONTRAST_RULES.filter((rule) => rule.surface === token && !rule.over)
+  return [
+    { wash: null, texts: texts([...chrome, ...direct]) },
+    ...CONTRAST_RULES.filter((rule) => rule.over === token).flatMap((rule): ThemeGlassLayer[] => {
+      const wash = paintedColor(computed, rule.surface)
+      return wash ? [{ wash, texts: texts([rule]) }] : []
+    })
+  ]
 }
 
 /** The theme's tint, raised until its chrome text reads over this image (see readableGlassTint). */
 function glassTint(requested: number, image: BlurredImage, root: HTMLElement): number {
-  const computed = getComputedStyle(root)
-  const background = paintedColor(computed, ['--background'])
-  const opacity = computed.getPropertyValue('--orca-theme-background-opacity').trim()
+  const rootStyle = getComputedStyle(root)
+  const background = paintedColor(rootStyle, '--background')
+  if (!background) {
+    return requested
+  }
+  const opacity = rootStyle.getPropertyValue('--orca-theme-background-opacity').trim()
   const percent = opacity === '' ? 100 : Number(opacity) * 100
-  // The body's veil sits between the image and the chrome, as main.css paints it.
-  const backdrop = background
-    ? image.backdrop.map((color) => mix(color, background, percent))
-    : image.backdrop
-  const surfaces = SURFACE_TOKENS.flatMap(({ surface, texts }): ThemeGlassSurface[] => {
-    const color = paintedColor(computed, surface)
-    const textColors = texts.map((token) => paintedColor(computed, [token]))
-    return color && textColors.every(Boolean)
-      ? [{ surface: color, texts: textColors.filter((text): text is Rgba => text !== null) }]
-      : []
+  // Painted as main.css does: the image over the opaque base, then the body's veil.
+  const backdrop = image.backdrop.map((color) => mix(over(color, background), background, percent))
+  const surfaces = GLASS_SURFACES.flatMap(({ kind, tokens, rules }): ThemeGlassSurface[] => {
+    // Why the element: a tinted left sidebar sets its own colors on it.
+    const element = root.querySelector(`[data-glass-surface="${kind}"]`) ?? root
+    const computed = getComputedStyle(element)
+    const token = tokens.find((name) => paintedColor(computed, name))
+    const surface = token ? paintedColor(computed, token) : null
+    return token && surface ? [{ surface, layers: glassLayers(computed, token, rules) }] : []
   })
   return readableGlassTint(requested, backdrop, surfaces)
 }
@@ -129,7 +169,8 @@ function paint(image: BlurredImage, background: PluginThemeBackground, root: HTM
     '--orca-theme-glass-size',
     background.size === 'tile' ? `${image.width}px ${image.height}px` : (background.size ?? 'cover')
   )
-  root.style.setProperty('--orca-theme-glass-tint', tint.toFixed(2))
+  // Why round up: rounding down could paint below the tint that passed the contrast check.
+  root.style.setProperty('--orca-theme-glass-tint', String(Math.ceil(tint * 100 - 1e-9) / 100))
   root.dataset.themeGlass = ''
 }
 
@@ -156,14 +197,15 @@ export function syncThemeGlass(
   }
   clear(root)
   release()
-  if (blurring === url) {
+  if (blurring.has(url)) {
     return
   }
-  blurring = url
-  void blur(url)
+  const pending = blur(url, wanted.background.size === 'tile')
+  blurring.set(url, pending)
+  void pending
     .then(
       (image) => {
-        if (wanted?.background.url !== url) {
+        if (wanted?.background.url !== url || blurred) {
           URL.revokeObjectURL(image.objectUrl)
           return
         }
@@ -174,9 +216,5 @@ export function syncThemeGlass(
         // An image that cannot decode or blur leaves today's opaque chrome.
       }
     )
-    .finally(() => {
-      if (blurring === url) {
-        blurring = null
-      }
-    })
+    .finally(() => blurring.delete(url))
 }

@@ -87,6 +87,7 @@ function renderHostHeaderVirtualRow(
       data-worktree-virtual-row-key={String(vItem.key)}
       data-worktree-sticky-header=""
       data-worktree-sticky-header-active={isActiveStickyHost ? '' : undefined}
+      data-glass-surface="worktree-sidebar"
       data-index={vItem.index}
       ref={ctx.measureVirtualRowElement}
       className={cn(

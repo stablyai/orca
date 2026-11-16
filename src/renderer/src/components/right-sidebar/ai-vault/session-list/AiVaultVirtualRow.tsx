@@ -210,6 +210,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
       ref={measureElement}
       data-index={index}
       data-selected={selected ? 'true' : undefined}
+      data-glass-surface={activeStickyHeader ? 'sidebar' : undefined}
       className={cn(
         'left-0 w-full',
         row.type === 'session' && 'ai-vault-session-row',

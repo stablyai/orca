@@ -247,7 +247,10 @@ function RightSidebarInner(): React.JSX.Element {
             onContextMenu={contextPlugin.onContextMenu}
             onPointerDown={contextPlugin.onPointerDown}
           >
-            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
+            <div
+              data-glass-surface="sidebar"
+              className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset"
+            >
               <TooltipProvider>{sideActivityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>

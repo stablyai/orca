@@ -7,11 +7,23 @@ const WHITE: Rgba = [255, 255, 255, 1]
 
 describe('readableGlassTint', () => {
   it('keeps the requested tint when the text already reads over the image', () => {
-    expect(readableGlassTint(0.5, [BLACK], [{ surface: BLACK, texts: [WHITE] }])).toBe(0.5)
+    expect(
+      readableGlassTint(
+        0.5,
+        [BLACK],
+        [{ surface: BLACK, layers: [{ wash: null, texts: [{ color: WHITE, min: 4.5 }] }] }]
+      )
+    ).toBe(0.5)
   })
 
   it('raises the tint until white text on black chrome reads 4.5:1 over a white image', () => {
     // A 0.5 veil leaves gray 128 (3.9:1); 0.55 leaves gray 115 (4.8:1).
-    expect(readableGlassTint(0.5, [WHITE], [{ surface: BLACK, texts: [WHITE] }])).toBeCloseTo(0.55)
+    expect(
+      readableGlassTint(
+        0.5,
+        [WHITE],
+        [{ surface: BLACK, layers: [{ wash: null, texts: [{ color: WHITE, min: 4.5 }] }] }]
+      )
+    ).toBeCloseTo(0.55)
   })
 })

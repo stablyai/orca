@@ -52,7 +52,7 @@ const glassTintSchema = z
     )
   )
 
-const glassDescription = `Paints the sidebars, tab bars, title bar and status bar with \`path\` blurred once, under each surface's own color. Terminals, editors and chats are unchanged. Off when the theme has a \`videoPath\`, under Reduce Visual Effects or reduced transparency, and in releases before ${PLUGIN_THEME_GLASS_SINCE}.`
+const glassDescription = `Paints the sidebars, tab bars, title bar and status bar with \`path\` blurred once, under each surface's own color. Terminals, editors and chats are unchanged. Off when the theme has a \`videoPath\`, when Background Opacity is 1, under Reduce Visual Effects or reduced transparency, and in releases before ${PLUGIN_THEME_GLASS_SINCE}.`
 
 const backgroundFields = {
   path: pluginRelativePathSchema.meta(

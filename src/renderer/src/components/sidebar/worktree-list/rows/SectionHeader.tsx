@@ -177,6 +177,7 @@ export function renderWorktreeSectionHeaderRow(
       data-worktree-virtual-row-start={vItem.start}
       data-worktree-sticky-header=""
       data-worktree-sticky-header-active={isActiveStickyHeader ? '' : undefined}
+      data-glass-surface={isActiveStickyHeader ? 'worktree-sidebar' : undefined}
       data-index={vItem.index}
       ref={args.measureVirtualRowElement}
       className={cn(
