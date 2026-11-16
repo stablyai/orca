@@ -83,11 +83,13 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     const row = this.state.lastStatusByPaneKey.get(resolved)
     const identity = this.paneAgentIdentity(resolved)
+    const agent = identity?.status.agentType
     const confirmedExit =
       identity &&
+      agent &&
       identity.processTopology !== 'shared' &&
       !this.hasVerifiableAgentProcess(resolved) &&
-      (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, identity.status.agentType))
+      (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, agent))
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
       return
     }
