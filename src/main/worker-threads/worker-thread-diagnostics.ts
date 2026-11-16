@@ -15,6 +15,8 @@ import {
   type WorkerSendLedgerEntry
 } from './worker-send-ledger'
 import type { WorkerThreadRole } from './worker-thread-roles'
+import { readJournalReaderRetention } from '../native-chat/agent-session-journal/journal-sql-reader-retention'
+import { readSubscriberRetention } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-retention'
 import { observeWorkerThreads } from './worker-thread-spawn'
 
 /**
@@ -103,6 +105,7 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
       totalHeapMB: Math.round(total / MB),
       mainHeapMB: Math.round(mainHeap / MB),
       ...mainHeapSpaces(),
+      ...retentionData(),
       workers: heaps.length
     }
     heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
@@ -137,7 +140,8 @@ function annotateCrashReport(
       `main=${Math.round(mainHeap / MB)}MB old=${spaces.mainOldMB}MB ` +
         `large=${spaces.mainLargeObjectMB}MB total=${Math.round(total / MB)}MB ` +
         `workers=${heaps.length} at=${new Date().toISOString()}`
-    ]
+    ],
+    ...retentionAnnotations()
   ]
   for (let index = 0; index < REPORTED_WORKERS; index += 1) {
     const sample = heaps[index]
@@ -159,6 +163,41 @@ function annotateCrashReport(
   }
 }
 
+/** Replies and live text main holds across async boundaries, beside the heap they may explain. */
+function retentionAnnotations(): [string, string][] {
+  const reads = readJournalReaderRetention()
+  const lanes = readSubscriberRetention()
+  return [
+    [
+      'orca-reader-pool',
+      `flight=${reads.inFlight} unconsumed=${reads.unconsumed} wait=${reads.waiting} ` +
+        `oldest=${reads.oldestWaitMs}ms reserved=${Math.round(reads.reservedBytes / MB)}MB ` +
+        `recv=${Math.round(reads.receivedBytes / MB)}MB cons=${Math.round(reads.consumedBytes / MB)}MB`
+    ],
+    [
+      'orca-chat-subscribers',
+      `busy=${lanes.busy} pending=${lanes.pending} oldest=${lanes.oldestMs}ms ` +
+        `liveText=${Math.round(lanes.liveTextBytes / MB)}MB`
+    ]
+  ]
+}
+
+function retentionData(): CrashReportBreadcrumbData {
+  const reads = readJournalReaderRetention()
+  const lanes = readSubscriberRetention()
+  return {
+    readsInFlight: reads.inFlight,
+    readsUnconsumed: reads.unconsumed,
+    readsWaiting: reads.waiting,
+    readsOldestWaitMs: reads.oldestWaitMs,
+    readsReservedMB: Math.round(reads.reservedBytes / MB),
+    subscribersBusy: lanes.busy,
+    subscriberPending: lanes.pending,
+    subscriberOldestMs: lanes.oldestMs,
+    subscriberLiveTextMB: Math.round(lanes.liveTextBytes / MB)
+  }
+}
+
 /** Large-object growth means retained big strings or arrays (payloads); old space, many objects. */
 function mainHeapSpaces(): { mainOldMB: number; mainLargeObjectMB: number } {
   const spaces = getHeapSpaceStatistics()
@@ -174,7 +213,8 @@ function workerAnnotation(sample: WorkerHeap, slot: WorkerSendLedgerEntry | unde
   }
   const lastKB = Math.round(slot.lastBytes / 1024)
   const maxKB = Math.round(slot.maxBytes / 1024)
-  return `${heap} last=${slot.lastKind}/${slot.lastItems}/${lastKB}KB max=${slot.maxKind}/${maxKB}KB`
+  const producedMB = Math.round(slot.producedBytes / MB)
+  return `${heap} prod=${producedMB}MB last=${slot.lastKind}/${slot.lastItems}/${lastKB}KB max=${slot.maxKind}/${maxKB}KB`
 }
 
 function workerHeap(worker: Worker): Promise<number> {
@@ -196,6 +236,7 @@ function workerHeap(worker: Worker): Promise<number> {
 function ledgerData(prefix: string, slot: WorkerSendLedgerEntry): CrashReportBreadcrumbData {
   return {
     [`${prefix}sends`]: slot.sends,
+    [`${prefix}producedMB`]: Math.round(slot.producedBytes / MB),
     [`${prefix}lastKind`]: slot.lastKind,
     [`${prefix}lastItems`]: slot.lastItems,
     [`${prefix}lastBytes`]: slot.lastBytes,
