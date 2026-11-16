@@ -1,8 +1,8 @@
 /** Find sessions affected by account selection; resume preserves the session while launch reads the newly selected account folder. */
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { normalizeCodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
+import { normalizeCodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { resolveAgentAccountRestartResumeStartup } from '../agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from '../../identity/claude-session-pane-holders'
 import { isClaudePaneOnAccount, resolveClaudePaneFolder } from './claude-pane-account-folder'
@@ -15,16 +15,16 @@ import {
   type LocalClaudePane
 } from './claude-pane-inventory'
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
-} from '../../../../../../shared/managed-account-types'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
 
 export type { ClaudeSessionMoveCandidate } from './claude-pane-inventory'
 
 export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   return entry?.agentType === 'claude' && entry.state !== 'done'
 }
 
@@ -36,6 +36,7 @@ export function claudeLaunchAccountId(
   const account = state.accounts.find((candidate) => candidate.id === accountId)
   return account?.runsOnSystemDefault ? null : accountId
 }
+
 
 export function findQueuedClaudeRestartsOnAccount(args: {
   owner: RuntimeClientTarget

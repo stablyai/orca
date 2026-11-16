@@ -9,7 +9,7 @@ import type {
   BranchCompareSnapshot,
   CommitCompareSnapshot,
   OpenConflictMetadata
-} from '../../../../../../shared/editor-tab-view-types'
+} from '../../../../../../shared/editor/views/editor-tab-view-types'
 
 export function getCompareVersion(
   compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>

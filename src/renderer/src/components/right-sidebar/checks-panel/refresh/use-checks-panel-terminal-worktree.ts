@@ -5,7 +5,7 @@ import { installWindowVisibilityInterval } from '@/lib/window-activity/window-vi
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID

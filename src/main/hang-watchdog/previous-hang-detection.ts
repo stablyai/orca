@@ -1,6 +1,6 @@
 import { preservePreviousRendererHangs, reportPreviousRendererHangs } from './renderer-hang-records'
 import { rmSync } from 'node:fs'
-import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { resolveObservabilityConsent } from '../observability'
 import { hasActiveTraceSink } from '../observability/tracer'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'

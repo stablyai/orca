@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -8,14 +9,14 @@ import {
   appendUsageLimitedTurn
 } from './structured-agent-session-rewind-usage-limit.test-fixture'
 import { RestartContinuationSupersededError } from '../../recovery/structured-agent-session-restart-continuation'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import { StructuredAgentSessionUsageLimitContinue } from '../../recovery/structured-agent-session-usage-limit-continue'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW,
   hostTestRestingOptionsRecord
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
@@ -39,7 +40,7 @@ it('automatically continues a failed usage-limited turn after its reset instead 
   await current.host.usageLimitContinue.tick()
   let continuationId: string | undefined
   await eventually(async () => {
-    const snapshot = await current.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(current.host, SESSION)
     continuationId = snapshot.submissions.find(
       (submission) => submission.handedOverAt !== undefined
     )?.clientMessageId
@@ -69,7 +70,7 @@ it('stops automatically continuing once five continues in a row end in another u
   for (let round = 0; round < 8; round += 1) {
     clock = cut.resetsAt + 15_000
     await current.host.usageLimitContinue.tick()
-    const snapshot = await current.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(current.host, SESSION)
     const continuation = snapshot.submissions.find(
       (submission) => submission.origin === 'host' && !sent.includes(submission.clientMessageId)
     )
@@ -87,7 +88,9 @@ it('stops automatically continuing once five continues in a row end in another u
     cut = await appendUsageLimitedTurn(journal, clock, `refail-${round}`, userItemId)
   }
   expect(sent).toHaveLength(5)
-  expect(current.host.usageLimitContinue.readState(SESSION)?.state).toBe('failed')
+  expect(
+    current.host.usageLimitContinue.readState(SESSION, await journal.reads.usageLimitCut())?.state
+  ).toBe('failed')
 })
 
 it('continues every chat whose limit reset in the same pass', async () => {
@@ -117,8 +120,8 @@ it('continues every chat whose limit reset in the same pass', async () => {
       }
     },
     sessions: new Map(ids.map((id) => [id, {}])),
-    readSavedCut: () => null,
-    readLoadedCut: cut,
+    readSavedCut: async () => null,
+    readLoadedCut: async (id) => cut(id),
     serialize: (_id, run) => run(),
     // Each send is answered as superseded, which spends no budget; only who was sent matters here.
     send: async (params) => {

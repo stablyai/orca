@@ -3,7 +3,7 @@ import { useAppStore } from '../../store'
 import { captureWorkspaceEmptiedReaction } from './workspace-emptied-reaction'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { useBulkTabCloseConfirmation } from '../use-bulk-tab-close-confirmation'
-import type { BulkTabCloseScope } from '../../../../shared/bulk-tab-close-confirmation'
+import type { BulkTabCloseScope } from '../../../../shared/workspace-layout/tab-groups/bulk-tab-close-confirmation'
 
 export function useTabGroupCloseScopeCommands({
   groupId,

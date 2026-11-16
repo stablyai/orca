@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { hasTrustedPackageManagerFor } from './linux-package-install-command'
-import type { LinuxRootPackageType } from '../../../shared/update-status-types'
+import type { LinuxRootPackageType } from '../../../shared/updater/update-status-types'
 
 export type LinuxPackageType = LinuxRootPackageType | 'non-root' | 'unusable'
 

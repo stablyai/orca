@@ -1,10 +1,10 @@
 import { resolveLocalBranchName } from '../snapshot/branch-ref-snapshot-data'
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import {
   clampRepoSearchRefsScanLimit,
   REPO_SEARCH_REFS_DEFAULT_LIMIT,
   isRepoSearchRefsRequestLimit
-} from '../../../../shared/repo-search-limits'
+} from '../../../../shared/git/refs/repo-search-limits'
 import { isSafeGitRefName } from '../../../../shared/git/status/git-status-upstream-ref'
 import { isRemoteHeadRef } from '../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { runSearchBaseRefsGit } from './repo-ref-search-command'

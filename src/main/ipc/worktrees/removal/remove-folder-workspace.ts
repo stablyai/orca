@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'

@@ -1,8 +1,8 @@
-import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-worktree-labels'
+import type { LocalhostWorktreeLabelRoute } from '../../../../shared/workspace/ports/localhost-worktree-labels'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Project } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { Project } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
 import { useAppStore } from '@/store/index'
 import { localhostWorktreeLabelRouteForPort } from './workspace-port-localhost-label'
 

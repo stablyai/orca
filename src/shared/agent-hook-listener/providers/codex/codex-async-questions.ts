@@ -1,7 +1,7 @@
 import {
   CODEX_ASYNC_QUESTION_TOOL,
   parseCodexAsyncQuestionsInput
-} from '../../../codex-async-question-input'
+} from '../../../native-chat/input/questions/codex-async-question-input'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
 

@@ -3,7 +3,7 @@ import type { ExactWorkerProviderSession } from '../../../../../shared/orchestra
 import {
   isWslHookRelayConnectionId,
   wslHookRelayConnectionId
-} from '../../../../../shared/wsl-hook-relay-contract'
+} from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 export function selectExactWorkerProviderSession(args: {
   paneKey: string

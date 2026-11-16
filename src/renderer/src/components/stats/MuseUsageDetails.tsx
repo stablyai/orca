@@ -3,7 +3,7 @@ import type {
   MuseUsageDailyPoint,
   MuseUsageSessionRow,
   MuseUsageSummary
-} from '../../../../shared/muse-usage-types'
+} from '../../../../shared/agent-usage/analytics/muse-usage-types'
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection, type UsageBreakdownRow } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'

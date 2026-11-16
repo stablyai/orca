@@ -151,6 +151,33 @@
       "title": "Terminal"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "O Orca agora está no Google Play",
+      "description": "Este app continua funcionando, mas as atualizações agora vêm do Google Play. A troca leva só alguns minutos.",
+      "installTitle": "Instale o Orca pelo Google Play",
+      "installDescription": "Você pode fazer isso agora, de onde estiver.",
+      "openGooglePlay": "Abrir o Google Play",
+      "cantUseGooglePlay": "Não consigo usar o Google Play"
+    },
+    "download": {
+      "title": "Baixe o novo app do Orca",
+      "description": "Este app continua funcionando, mas as atualizações e correções de segurança agora vêm pelo novo app. A troca leva só alguns minutos.",
+      "installTitle": "Baixe o novo app",
+      "installDescription": "Se o celular pedir, permita que o navegador instale apps.",
+      "download": "Baixar",
+      "keepThisVersion": "Continuar usando esta versão",
+      "keepThisVersionNote": "Você vai ficar sem as correções de segurança. Vamos lembrar você em uma semana."
+    },
+    "pairTitle": "Pareie com o seu computador",
+    "pairDescription": "No Orca do seu computador, vá em Configurações → Mobile e escaneie o código.",
+    "deleteTitle": "Exclua este app",
+    "deleteDescription": "Assim que o novo app mostrar seus agentes. Até lá, continue usando este.",
+    "dataKept": "Seus agentes, chats e workspaces ficam salvos no seu computador, então você verá tudo no novo app.",
+    "banner": {
+      "seeHowToSwitch": "Veja como trocar"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"
@@ -244,6 +271,7 @@
     "message": {
       "copyMessage": "Copiar mensagem",
       "forkFromResponse": "Criar ramificação a partir desta resposta",
+      "scrollMessageToTop": "Rolar esta mensagem para o topo",
       "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno"
     },
     "messageActionsSheet": {
@@ -708,7 +736,10 @@
       "busy": "Outro chat ou terminal está abrindo. Aguarde e tente ramificar o chat do {{agent}} novamente.",
       "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação. Ela pode ter sido aberta; confira o histórico de sessões antes de tentar novamente.",
       "failed": "{{agent}} não conseguiu ramificar este chat. {{detail}}",
-      "unsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente."
+      "unsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente.",
+      "mark": "Fork ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Fork: {{name}}"
     }
   },
   "common": {
@@ -1060,8 +1091,10 @@
       "desktopTooOldBody": "A versão do app desktop pareado é antiga demais para a sua versão atual do Orca Mobile. Atualize o Orca no seu computador e tente se conectar a este host novamente.",
       "getVersion": "Baixar o Orca {{version}}",
       "mobileTooOldAppStore": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "mobileTooOldGooglePlay": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
       "mobileTooOldGitHubReleases": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente.",
       "openAppStore": "Abrir a App Store",
+      "openGooglePlay": "Abrir o Google Play",
       "openGitHubReleases": "Abrir GitHub Releases",
       "refreshRecoveryNote": "Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
       "refreshWorkspaceBody": "O espaço de trabalho em cache deste host é mais antigo do que o desktop espera. Reconecte-se a este host para baixar a versão atual.",
@@ -1070,6 +1103,7 @@
       "updateMobileTitle": "Atualizar o Orca Mobile",
       "updateRecoveryNote": "Já atualizou? Volte para Hosts e atualize a conexão. Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
       "workspaceNeedsUpdateAppStore": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "workspaceNeedsUpdateGooglePlay": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
       "workspaceNeedsUpdateGitHubReleases": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente."
     },
     "richMarkdownEditor": {
@@ -3279,12 +3313,14 @@
       "title": "Aparência"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Perguntar sempre",
+      "askEachTimeDescription": "Escolha sempre entre o navegador do Orca, o do celular ou copiar o link.",
       "desktopBrowser": "Navegador do Orca no desktop",
       "desktopBrowserDescription": "Abrir no navegador transmitido pelo seu desktop pareado.",
-      "linksDescription": "Escolha onde abrir os links HTTP(S) ao tocar neles na saída do terminal.",
+      "terminalAndChatLinksDescription": "Escolha onde abrir os links da web ao tocar neles na saída do terminal e no chat.",
       "linksHeading": "LINKS",
       "loadFailed": "Não foi possível carregar as preferências do navegador. Tente novamente.",
-      "openTerminalLinks": "Abrir links do terminal",
+      "openLinks": "Abrir links",
       "phoneBrowser": "Navegador do celular",
       "phoneBrowserDescription": "Abrir no Safari, Chrome ou outro navegador neste celular.",
       "saveFailed": "Não foi possível salvar as preferências do navegador. Tente novamente.",

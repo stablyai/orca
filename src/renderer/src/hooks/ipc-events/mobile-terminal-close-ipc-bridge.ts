@@ -8,7 +8,7 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/worksp
 import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import { useAppStore } from '../../store'
 import {
   afterLayoutFrame,
@@ -21,7 +21,7 @@ import type { EditorTabSelection } from '../../store/slices/editor/types/open-fi
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 // Non-host targets stay off-screen without visit accounting; files.open always names a target, so absence is only legacy switching.
 function openRuntimeEditorTab(

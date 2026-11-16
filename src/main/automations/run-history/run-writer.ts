@@ -1,5 +1,5 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { PublishAutomationsChanged } from '../../../shared/runtime-client-events'
+import type { PublishAutomationsChanged } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type {
   AutomationDispatchResult,
   AutomationRun

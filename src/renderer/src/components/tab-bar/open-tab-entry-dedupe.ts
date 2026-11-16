@@ -3,7 +3,7 @@
 import {
   normalizeRelativePath,
   isCaseInsensitiveRuntimeRoot
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { normalizeBrowserHistoryUrl } from '../../../../shared/workspace-session/workspace-session-browser-history'
 import type { OpenTabSearchResult } from './open-tab-search'
 import type { BrowserHistoryOmniboxRow } from './tab-create-entry-active-option'

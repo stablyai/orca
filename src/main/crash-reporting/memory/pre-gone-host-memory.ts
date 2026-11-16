@@ -1,4 +1,4 @@
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
 import {
   getSystemMemoryDetails,

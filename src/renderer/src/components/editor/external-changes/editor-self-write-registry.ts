@@ -1,5 +1,5 @@
-import { normalizeRuntimePathForComparison as normalizeAbsolutePathForComparison } from '../../../../../shared/cross-platform-path'
-import { MAX_TIMER_DELAY_MS } from '../../../../../shared/timer-delay'
+import { normalizeRuntimePathForComparison as normalizeAbsolutePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
+import { MAX_TIMER_DELAY_MS } from '../../../../../shared/concurrency/timer-delay'
 
 // Self-write echoes can reload TipTap, resetting selection and dropping typing; bound owner/path stamps so later external edits remain visible.
 const SELF_WRITE_TTL_MS = 750

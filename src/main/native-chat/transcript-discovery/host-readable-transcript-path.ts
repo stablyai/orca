@@ -1,6 +1,10 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, posix } from 'node:path'
-import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
+import {
+  isWslUncPath,
+  parseWslUncPath,
+  toWindowsWslPath
+} from '../../../shared/file-access/wsl-paths'
 import {
   uniqueDirs,
   wslHomeSessionDirs,

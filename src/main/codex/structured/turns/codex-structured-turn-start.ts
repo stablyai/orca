@@ -1,70 +1,26 @@
-import { steerCodexTurn } from './codex-structured-turn-steer'
-import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
-import {
-  StructuredAgentSessionInputNotAdmitted,
-  type StructuredAgentSessionAdmitFreshInput
-} from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import type { CodexTurnHost, CodexTurnInput } from './codex-structured-turn-contract'
+import { captureCodexMessageCompilerInputs } from '../catalog/codex-structured-service-tier'
 import {
   codexMessageInputOptions,
-  compileCodexMessageOptions,
-  turnInputFor
-} from './codex-structured-message-options'
+  compileCodexMessageOptions
+} from '../../../../shared/agent-session/options/codex-message-compiler'
+import { steerCodexTurn } from './codex-structured-turn-steer'
+import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import { turnInputFor } from './codex-structured-message-options'
 import { reportedCodexPermissionMode } from '../threads/codex-structured-thread-open'
 import { admitCodexTurnPermission } from './codex-structured-turn-permission'
-import type { CodexSkillReport } from '../catalog/codex-structured-skill-report'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type {
-  AgentJournalMessageItem,
-  AgentJournalTurnJoin
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnJoin } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
-import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
-import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
-import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
-import {
-  codexRunningOrOpeningTurn,
-  codexStopTarget,
-  type CodexTurnOpenWaits
-} from './codex-structured-turn-open-wait'
+import { codexRunningOrOpeningTurn, codexStopTarget } from './codex-structured-turn-open-wait'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
-
-export type CodexTurnHost = {
-  account?: AgentSessionAccountKind
-  skillReport?: Pick<CodexSkillReport, 'hasSkillPath'>
-  connection: Pick<CodexAppServerConnection, 'request'>
-  threadId: string
-  permissions?: CodexSession['permissions']
-  options: Map<string, string>
-  appliedTurnOptions?: Readonly<Record<string, string>>
-  appliedTurnInputOptions?: Readonly<Record<string, string>>
-  appliedSettings?: CodexSession['appliedSettings']
-  reportedOptions?: CodexSession['reportedOptions']
-  catalogAccess?: CodexSession['catalogAccess']
-  dispatchEchoes: CodexDispatchEchoes
-  activeTurnIds?: ReadonlySet<string>
-  /** Running turns whose interrupt Codex already answered: aborted, so never steered. */
-  abortedTurnIds?: ReadonlySet<string>
-  turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
-}
-
-type CodexTurnInput = {
-  clientMessageId: string
-  body: AgentJournalMessageItem
-  requestedAt?: number
-  turnOptions?: Readonly<Record<string, string>>
-  executionOptions?: AgentSessionExecutionOptions
-  signal?: AbortSignal
-  isCurrent?: () => boolean
-  admitFreshInput?: StructuredAgentSessionAdmitFreshInput
-}
 
 /** false means correlation capacity refused the send before writing; null turnId means an unnamed answer. */
 export async function startCodexTurn(
@@ -135,7 +91,10 @@ export async function startCodexTurn(
     }
     requested = {
       interactionMode: 'default',
-      ...compileCodexMessageOptions(host, input.turnOptions ?? Object.fromEntries(host.options))
+      ...compileCodexMessageOptions(
+        captureCodexMessageCompilerInputs(host),
+        input.turnOptions ?? Object.fromEntries(host.options)
+      )
     }
     const { interactionMode, ...nativeOptions } = requested
     const collaborationMode = {

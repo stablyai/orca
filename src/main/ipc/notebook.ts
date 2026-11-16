@@ -15,14 +15,14 @@ import {
   installIpykernel,
   listPythonEnvironments
 } from '../notebook/python-environments'
-import { notebookVenvParent } from '../../shared/notebook-venv-location'
+import { notebookVenvParent } from '../../shared/editor/notebooks/notebook-venv-location'
 import type {
   CreateVenvResult,
   KernelFrameEvent,
   KernelStartResult,
   PythonEnvironment,
   PythonEnvironments
-} from '../../shared/notebook-kernel-types'
+} from '../../shared/editor/notebooks/notebook-kernel-types'
 
 /** Each renderer document's kernels, by notebook file. */
 const kernelsByOwner = new Map<WebContents, Map<string, NotebookKernel>>()

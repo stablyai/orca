@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { createAgentStatusStore } from '../../../shared/agent-status/store/agent-status-store'
-import type { TmuxAgentHookOwner } from '../../../shared/tmux-agent-hook-owner'
+import type { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
 import {
   isTmuxInnerSubject,
   readTmuxUnavailable,

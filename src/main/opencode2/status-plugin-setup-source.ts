@@ -1,5 +1,5 @@
 import { getOpenCode2TuiSource } from './status-plugin-tui-source'
-import { openCodeTuiPluginDirName } from '../../shared/opencode-tui-plugin-install'
+import { openCodeTuiPluginDirName } from '../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
 import { getLegacyOpenCodeTuiSource } from '../opencode/status-hooks/plugin-source/status-plugin-legacy-tui-source'
 
 export function getOpenCode2ModuleSource(pluginID: string, expectedAgent: string): string[] {

@@ -1,4 +1,4 @@
-import type { SpeechModelDownloadFile } from '../../shared/speech-types'
+import type { SpeechModelDownloadFile } from '../../shared/speech/speech-types'
 
 type GgufDownload = readonly [
   repository: string,

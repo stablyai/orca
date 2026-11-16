@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { SkillCloudOwnedShare } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudOwnedShare } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { translate } from '@/i18n/i18n'
 
 function inventoryError(status: string): string {

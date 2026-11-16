@@ -5,14 +5,22 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
-import { deliveryReceipt, exposeMessages, handsOverBatch } from './mailbox-message-receipt'
+import {
+  deliveryReceipt,
+  exposeMessages,
+  handsOverBatch,
+  withReportFollowUps
+} from './mailbox-message-receipt'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { routeAllMailboxPages } from './mailbox-page-routing'
 import { resolveRunScope } from '../runs/run-scope'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
+import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { checkRunPendingMail } from './check-run-pending-mail'
+import type { CheckMailReconciliation } from './check-mail-reconciliation'
+import { withTakenRunCheckNext } from '../receipt-next'
 import { FEDERATION_RELAY_WAIT_REARM_MS } from '../../../../orchestration/federation/relay/federation-relay-scheduler'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
@@ -30,6 +38,8 @@ export async function checkRunMailbox(args: {
   revalidateLegacyCoordinator: (() => string) | undefined
   orchestrationCompatibilityEvidence: RpcContext['orchestrationCompatibilityEvidence']
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
+  reconciliation: CheckMailReconciliation
+  revalidateCaller: () => void
 }): Promise<unknown> {
   const {
     params,
@@ -76,6 +86,7 @@ export async function checkRunMailbox(args: {
     )
   }
   const revalidateConsumer = (): void => {
+    args.revalidateCaller()
     revalidateLegacyCoordinator?.()
     const currentRun = resolveRunScope(runtime, {
       runId: run.id,
@@ -138,20 +149,23 @@ export async function checkRunMailbox(args: {
       : {})
   })
   const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
-  const result = (batch: MailboxDeliveryBatch | undefined) =>
-    deliveryReceipt({
+  const result = (batch: MailboxDeliveryBatch | undefined) => {
+    const receipt = deliveryReceipt({
       mailbox: { runId: run.id },
       batch,
       acknowledged,
       format: params.format === true || params.inject === true
     })
-  // The receipt commits with the take, so --retry-request can always replay a handed-over batch.
-  const takeDelivery = (wakeTypes?: MessageType[]) =>
-    db.takeRunDelivery({
-      runId: run.id,
-      consumerGeneration: generation,
-      wakeTypes,
-      recordTaken: (taken) => args.recordMutationReceipt?.(result(taken))
+    return batch?.finalResponse ? receipt : withReportFollowUps(db, receipt)
+  }
+  const takeDelivery = (wakeTypes?: MessageType[], wake?: MessageWake) =>
+    args.reconciliation.takeRole({
+      mailbox: { runId: run.id, mailboxHandle: address, consumerGeneration: generation, wakeTypes },
+      revalidate: revalidateConsumer,
+      respond: (batch) =>
+        batch?.finalResponse ? result(batch) : withTakenRunCheckNext(db, result(batch), run.id),
+      record: args.recordMutationReceipt,
+      wake
     })
   if (params.peek) {
     const peeked = readPeek()
@@ -159,7 +173,7 @@ export async function checkRunMailbox(args: {
       return peekResult(peeked)
     }
   } else {
-    const current = takeDelivery(params.wait ? typeFilter : undefined)
+    const current = await takeDelivery(params.wait ? typeFilter : undefined)
     if (current || !params.wait) {
       return result(current)
     }
@@ -209,8 +223,6 @@ export async function checkRunMailbox(args: {
   if (params.peek) {
     return { ...peekResult(readPeek()), timedOut: false, cancelled: false, connectionLost: false }
   }
-  const batch = waitResult.share(`${address}:${generation}`, () => takeDelivery(typeFilter))
-  // A waiter that shares another's take has no take transaction, so it receipts the batch on arrival.
-  args.recordMutationReceipt?.(result(batch))
+  const batch = await takeDelivery(typeFilter, waitResult)
   return result(batch)
 }

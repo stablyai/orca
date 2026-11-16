@@ -9,7 +9,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalThreadGoal } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
@@ -24,8 +24,8 @@ import {
 } from './structured-agent-session-turns'
 import { isAgentSessionAttachmentExpiredError } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
+import { readContextStructuredAgentSessionTurnScope } from '../observations/structured-agent-session-read-work'
 
 function refused(
   reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
@@ -81,7 +81,7 @@ export async function performThreadGoalChange(
   let replacesGoal = false
   if (change.kind === 'set') {
     // Read before the objective message lands; it is not a goal transition.
-    replacesGoal = ctx.journal.threadGoal() !== null
+    replacesGoal = (await ctx.journal.reads.threadGoalSource()).goal !== null
   }
   try {
     // Journal first: active goals start work immediately, which must follow the objective in the transcript.
@@ -97,7 +97,7 @@ export async function performThreadGoalChange(
             blocks: [{ type: 'text', text: change.objective }],
             sentAs: 'goal'
           },
-          { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
+          { fence: ctx.fence, turnScope: await readContextStructuredAgentSessionTurnScope(ctx) }
         )
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {
@@ -168,5 +168,6 @@ export function structuredAgentSessionThreadGoalReport(
   if (hostChangesGoal) {
     return { threadGoal: { current, ...contextFloor } }
   }
-  return current ? { reportedThreadGoal: { current, ...contextFloor } } : {}
+  // Sent without a goal too, so a goal the agent sets mid-turn shows from its first journal row.
+  return { reportedThreadGoal: { current, ...contextFloor } }
 }

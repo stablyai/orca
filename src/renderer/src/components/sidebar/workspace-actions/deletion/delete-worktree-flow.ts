@@ -12,7 +12,7 @@ import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   resolveWorktreeBatchDeleteTargets,

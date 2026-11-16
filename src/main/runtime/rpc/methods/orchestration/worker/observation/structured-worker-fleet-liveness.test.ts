@@ -1,11 +1,11 @@
 // Chat-mode workers have no terminal hook stream; worker-list must read the structured host's own verdict.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionConversationView } from '../../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { FleetAgentStatusEvidence } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import {

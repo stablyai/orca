@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { MOBILE_PUSH_APNS_ENVIRONMENTS, MOBILE_PUSH_PLATFORMS } from '../../mobile-push-contract'
+import {
+  MOBILE_PUSH_APNS_ENVIRONMENTS,
+  MOBILE_PUSH_PLATFORMS
+} from '../../notifications/mobile-push-contract'
 
 export const NotificationUnsubscribeParams = z.object({
   subscriptionId: z

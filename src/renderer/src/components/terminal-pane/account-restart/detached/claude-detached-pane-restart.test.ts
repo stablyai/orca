@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
@@ -45,22 +46,25 @@ function seedClaudePane(
         ptyIdsByLeafId: { [LEAF_ID]: OLD_PTY }
       }
     },
-    agentStatusByPaneKey: {
-      [paneKey]: {
-        paneKey,
-        tabId: 'tab-1',
-        state: 'done',
-        prompt: '',
-        updatedAt: 1,
-        stateStartedAt: 1,
-        stateHistory: [],
-        agentType: 'claude',
-        providerSession: { key: 'session_id', id: SESSION_ID },
-        ...overrides
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          state: 'done',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: SESSION_ID },
+          ...overrides
+        }
+      })
+    )
   })
 }
+
 
 describe('detached Claude account-move restart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window

@@ -112,7 +112,8 @@ describe('CodexRuntimeHomeService', () => {
       })
       expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual({
         kind: 'ready',
-        codexHomePath: wslManagedHomePath
+        codexHomePath: wslManagedHomePath,
+        readingAccount: { accountId: 'account-1', runtime: 'wsl', wslDistro: 'Ubuntu' }
       })
     } finally {
       if (originalPlatform) {

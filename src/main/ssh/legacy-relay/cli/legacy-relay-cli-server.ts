@@ -9,7 +9,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../../shared/desktop-browser-bridge-protocol'
+import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { RpcResponse } from '../../../runtime/rpc/core'
 import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'

@@ -5,7 +5,7 @@ import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { ExternalLink, Copy, Plus, RefreshCw, X, GitBranch } from 'lucide-react-native'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
-import { TaskProviderLogo } from '../../components/TaskProviderLogo'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../components/list/ListGroup'
 import { styles } from '../mobile-tasks-legacy-styles'
 import {
