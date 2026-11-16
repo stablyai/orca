@@ -48,7 +48,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   fullAccess: boolean
   /** The saved model the launch line carries. */
   launchModel?: string
-  /** The launched program's version, when the launch checked it. */
+  /** The launched program's version, when its check or managed release names it. */
   version?: string
   resume: {
     sessionId: string
@@ -90,6 +90,8 @@ export type AcpLaunchInvocationDeps = {
 
 /** What a launch runs, and the spec of the backend the account home pins. */
 export type AcpLaunchInvocation = StructuredAgentCommand & {
+  /** The managed release's version, when the launch runs one. */
+  version?: string
   env: Record<string, string>
   envToDelete: string[]
   spec: AcpLaunchSpec
@@ -154,7 +156,7 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth } =
+    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
       await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
@@ -203,7 +205,8 @@ export function acpStructuredLaunchPart(
         args: [...prefixArgs, ...args],
         fullAccess,
         ...(model ? { launchModel: model } : {}),
-        ...(launchVersion.version ? { version: launchVersion.version } : {}),
+        // A managed release's receipt names its version; other programs answer the check.
+        ...((version ?? launchVersion.version) ? { version: version ?? launchVersion.version } : {}),
         resume: head
           ? {
               sessionId: head.handle.nativeId,

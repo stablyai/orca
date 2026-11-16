@@ -47,7 +47,7 @@ const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
 }
 
 // Servers before 1.5.1 offer non-Gemini models only to allowlisted editors such as Zed.
-function antigravityClientInfo(version: string | null | undefined): Implementation {
+function antigravityClientInfo(version: string | null): Implementation {
   return version && isValidAppVersion(version) && compareAppVersions(version, '1.5.1') >= 0
     ? ORCA_ACP_CLIENT_INFO
     : { name: 'zed', version: '0.0.0' }
@@ -63,8 +63,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
-  // The installed runtime is always the pinned one.
-  clientInfo: () => antigravityClientInfo(ANTIGRAVITY_ACP_RUNTIME.pin()?.version),
+  clientInfo: antigravityClientInfo,
   loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
@@ -121,7 +120,6 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   authMethodUnavailableMessage: undefined,
   signIn: undefined,
   dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system' },
-  clientInfo: antigravityClientInfo,
   account: {
     pin: antigravityChatAccount.pin,
     resolve: async ({ launchEnv }) =>
