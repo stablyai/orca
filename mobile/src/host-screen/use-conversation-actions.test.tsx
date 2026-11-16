@@ -6,7 +6,7 @@ import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
+import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
 import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/connection/stable-logical-rpc-client'

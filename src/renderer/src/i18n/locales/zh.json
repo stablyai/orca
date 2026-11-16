@@ -13330,7 +13330,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "无法读取此更新",
-          "newAccess": "新增：{{value0}}",
           "failed": "无法更新 {{value0}}，其他插件已更新",
           "cancel": "取消",
           "updateOne": "更新 1 个插件",
@@ -13344,14 +13343,21 @@
           "allAccess": "查看全部访问权限",
           "newCommands": "命令",
           "newContributions": "代你执行操作的功能",
-          "newEvents": "更多事件",
-          "newPanels": "面板",
+          "newEvents": "响应更多 Orca 事件",
+          "newPanels": "添加面板",
           "newRecipes": "机器配方",
           "newShortcuts": "键盘快捷键",
-          "sourceMoved": "新来源：{{value0}}（原为 {{value1}}）",
           "update": "更新",
-          "review": "查看",
-          "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行"
+          "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行",
+          "newFileTypes": "更改它打开的文件",
+          "newHooks": "可以更改或阻止 Orca 和你的智能体的操作",
+          "newSettings": "一个设置页面",
+          "newStatusBarItems": "状态栏项目",
+          "opensFileTypes": "打开新的文件类型：{{value0}}",
+          "becomesDefaultEditor": "成为 {{value0}} 的默认编辑器",
+          "needApproval": "需要你的批准",
+          "readyToUpdate": "可以更新",
+          "movedRepository": "来自另一个仓库"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",
@@ -13433,11 +13439,11 @@
         },
         "PluginUpdateReview": {
           "title": "查看 {{value0}} 的更新",
-          "back": "返回",
           "approve": "批准并更新",
-          "explain": "此更新请求的权限超出了你已批准的版本。只有在这里批准后才会安装。",
-          "before": "之前",
-          "after": "之后"
+          "uncompared": "Orca 无法将此版本与你批准的版本进行比较。更新前请检查它可以访问的内容。",
+          "newInVersion": "此版本新增：",
+          "titleMany": "审核 {{value0}} 个更新",
+          "history": "在 GitHub 上查看更改"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其发布者",
@@ -13445,7 +13451,8 @@
           "update": "更新前请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
           "installed": "请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
           "label": "非官方插件：",
-          "translations": "翻译可以更改 Orca 中的任何文字。请确认你信任 {{value0}}。"
+          "translations": "翻译可以更改 Orca 中的任何文字。请确认你信任 {{value0}}。",
+          "community": "社区插件"
         },
         "pluginConsentCopy": {
           "addsCommands": "添加命令",
@@ -13463,11 +13470,15 @@
           "movedTitle": "{{value0}} {{value1}} 来自不同的仓库",
           "accessTitle": "{{value0}} {{value1}} 请求更多访问权限",
           "manyTitle": "{{value0}} 个插件更新等待你审核",
-          "oneDescription": "发布者：{{value0}}。在你审核之前不会更新。",
-          "manyDescription": "在你审核之前不会更新。",
-          "review": "审核",
           "dismiss": "关闭",
-          "movedInstalled": "在你审查之前会保持关闭。"
+          "movedInstalled": "在你审查之前会保持关闭。",
+          "approveAll": "全部批准并更新",
+          "approveOne": "批准并更新",
+          "details": "详情",
+          "failed": "无法更新 {{value0}}",
+          "morePlugins": "以及另外 {{value0}} 个插件",
+          "uncompared": "Orca 无法将其与你批准的版本进行比较。",
+          "held": "{{value0}} 在你审核后发生了变化，因此正在 设置 → 插件 中等待你审核。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "请确认你信任此文件夹",
@@ -16202,13 +16213,6 @@
                       "skillNotInstalled": "Orca CLI 技能尚未安装"
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "无法隐藏移动模拟器"
-                    }
-                  }
                 }
               }
             }
@@ -16233,17 +16237,6 @@
             "5789936d9a": "在代理控制屏幕时预览 iOS 模拟器",
             "8014b4b80b": "保留",
             "6e051a40b7": "隐藏"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "移动模拟器已隐藏",
-                  "c46c979c1d": "随时重新启用移动模拟器",
-                  "600f9a745a": "设置 › 移动模拟器"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模拟器键盘输入的粘贴内容过大",
@@ -23689,21 +23682,13 @@
     "language": {
       "back": "语言",
       "requestPrompt": "你希望 Orca 支持哪种语言？",
-      "requestSuccess": "语言请求已记录。你可以继续设置",
       "requestError": "无法记录你的请求。请重试",
       "retry": "重试",
       "requestAction": "请求语言支持",
       "title": "显示语言",
-      "device": "系统语言：{{language}}",
-      "unsupported": "系统语言：{{language}}。暂不支持此语言",
-      "unknown": "无法检测系统语言。请在下方选择语言",
-      "loadError": "无法加载此语言。请重试",
-      "saveError": "无法保存你的语言偏好设置。请重试",
-      "other": "其他语言…",
       "settingsError": "无法加载你的设置",
       "loadingSettings": "正在加载设置…",
-      "loading": "正在加载语言…",
-      "saving": "正在保存语言…"
+      "loading": "正在加载语言…"
     }
   },
   "resourceManager": {

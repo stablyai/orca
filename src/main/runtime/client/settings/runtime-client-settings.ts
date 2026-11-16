@@ -42,6 +42,7 @@ import type {
   RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
+import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 
 /** Which Orca cloud services this host registered; headless hosts register none. */
 export type RuntimeSharingServicePresence = {
@@ -104,6 +105,11 @@ export class RuntimeClientSettingsController {
       sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream === true,
       prAutoRefresh: normalizePRAutoRefreshCadence(settings.prAutoRefresh),
       diffShowWhitespace: settings.diffShowWhitespace === true,
+      // Paired clients render the same + menu customization they can edit.
+      newTabMenuLayout: normalizeNewTabMenuLayout(settings.newTabMenuLayout),
+      floatingTerminalNewTabMenuLayout: normalizeNewTabMenuLayout(
+        settings.floatingTerminalNewTabMenuLayout
+      ),
       // Omitted without a service: clients treat absence as "ask the host", which names the real cause.
       ...(this.sharingServices?.artifacts() === false
         ? {}

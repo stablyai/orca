@@ -7,7 +7,7 @@ import { ClaudeDiffPanelNoticeBanner } from '../provider-notices/claude-diff-pan
 import { NewerDaemonHoldBanner } from '../session-restore/newer-daemon/NewerDaemonHoldBanner'
 import { WorkerAutoCloseBanner } from '../worker-lifetime/WorkerAutoCloseBanner'
 import { WslDistroStoppedHoldCard } from '../session-restore/wsl-distro/WslDistroStoppedHoldCard'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
 export function TerminalPaneCodexRestartPortals({

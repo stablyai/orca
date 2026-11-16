@@ -1,4 +1,4 @@
-import { isFloatingWorkspaceId } from '../../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import type { WorkspaceDirectoryState } from '@/lib/workspace/paths/workspace-directory'
 import { firstRegisteredStructuredChatTab } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'

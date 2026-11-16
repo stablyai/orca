@@ -9,7 +9,7 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../shared/workspace/identity/floating-workspace-worktree'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'

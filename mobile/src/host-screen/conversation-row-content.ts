@@ -1,4 +1,4 @@
-import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/agent-session/journal/harness-injected-user-turns'
 import { isGenericConversationTitle } from '../../../src/shared/project-conversation-list'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { ConversationHistory } from './conversation-records'

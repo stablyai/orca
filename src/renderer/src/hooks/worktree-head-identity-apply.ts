@@ -11,7 +11,10 @@ export type WorktreeHeadIdentityApplyDeps = {
   ) => void
 }
 
-function findWorktreeByPath(worktrees: Worktree[], worktreePath: string): Worktree | undefined {
+export function findWorktreeByPath<T extends Worktree>(
+  worktrees: readonly T[],
+  worktreePath: string
+): T | undefined {
   const exact = worktrees.find((worktree) => worktree.path === worktreePath)
   if (exact) {
     return exact
