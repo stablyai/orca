@@ -5826,7 +5826,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} 연결 끊김",
           "runtimeHostProject": "Orca 서버의 프로젝트",
           "runtimeHostProjectNamed": "{{hostName}}의 프로젝트",
-          "ef18787206": "삭제 대기 중"
+          "ef18787206": "삭제 대기 중",
+          "notificationsMuted": "알림 음소거됨"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "에이전트",
@@ -5920,7 +5921,9 @@
           "copyPathOption": "경로",
           "copyNameOption": "워크트리 이름",
           "lineageSubmenu": "상위 및 하위",
-          "projectGroupSubmenu": "프로젝트 그룹"
+          "projectGroupSubmenu": "프로젝트 그룹",
+          "muteNotifications": "알림 음소거",
+          "unmuteNotifications": "알림 음소거 해제"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",

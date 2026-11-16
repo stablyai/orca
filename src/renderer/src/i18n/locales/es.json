@@ -6076,7 +6076,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} está desconectado",
           "runtimeHostProject": "Proyecto en servidor de Orca",
           "runtimeHostProjectNamed": "Proyecto en {{hostName}}",
-          "ef18787206": "En cola para eliminación"
+          "ef18787206": "En cola para eliminación",
+          "notificationsMuted": "Notificaciones silenciadas"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -6172,7 +6173,9 @@
           "copyPathOption": "Ruta",
           "copyNameOption": "Nombre del worktree",
           "lineageSubmenu": "Padre e hijos",
-          "projectGroupSubmenu": "Grupo de proyecto"
+          "projectGroupSubmenu": "Grupo de proyecto",
+          "muteNotifications": "Silenciar notificaciones",
+          "unmuteNotifications": "Reactivar notificaciones"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",

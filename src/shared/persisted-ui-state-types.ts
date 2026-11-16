@@ -93,6 +93,8 @@ export type PersistedUIState = {
   _explorerDisplayRootMigrated?: boolean
   explorerDisplayRootByWorktree?: Record<string, string>
   showDotfilesByWorktree?: Record<string, boolean>
+  /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
+  notificationsMutedByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
   /** Agents host scope stays separate from navigation filters; null means all hosts. */
   agentsVisibleHostIds?: VisibleWorkspaceHostIds

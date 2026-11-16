@@ -6369,7 +6369,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} déconnecté",
           "runtimeHostProject": "Projet sur serveur Orca",
           "runtimeHostProjectNamed": "Projet sur {{hostName}}",
-          "ef18787206": "En attente de suppression"
+          "ef18787206": "En attente de suppression",
+          "notificationsMuted": "Notifications désactivées"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -6465,7 +6466,9 @@
           "copyPathOption": "Chemin",
           "copyNameOption": "Nom du worktree",
           "lineageSubmenu": "Parent et enfants",
-          "projectGroupSubmenu": "Groupe de projets"
+          "projectGroupSubmenu": "Groupe de projets",
+          "muteNotifications": "Désactiver les notifications",
+          "unmuteNotifications": "Réactiver les notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Mise à jour requise",

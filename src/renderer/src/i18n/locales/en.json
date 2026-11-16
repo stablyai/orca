@@ -7288,7 +7288,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} disconnected",
           "runtimeHostProject": "Project on Orca server",
           "runtimeHostProjectNamed": "Project on {{hostName}}",
-          "ef18787206": "Queued for deletion"
+          "ef18787206": "Queued for deletion",
+          "notificationsMuted": "Notifications muted"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -7384,7 +7385,9 @@
           "copyPathOption": "Path",
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
-          "projectGroupSubmenu": "Project Group"
+          "projectGroupSubmenu": "Project Group",
+          "muteNotifications": "Mute Notifications",
+          "unmuteNotifications": "Unmute Notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
