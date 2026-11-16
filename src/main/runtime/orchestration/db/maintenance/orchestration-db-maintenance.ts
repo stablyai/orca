@@ -1,9 +1,5 @@
-import { access, constants, stat, statfs } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname } from 'node:path'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { OrchestrationDb } from '../orchestration-db'
-import Database from '../../../../sqlite/sync-database'
 import { pruneSettledChatOutputCopies } from './settled-chat-output-copy-prune'
 
 const MINUTE = 60_000
@@ -11,15 +7,6 @@ const PRUNE_INTERVAL_MS = 6 * 60 * MINUTE
 // Bound each minute's reclaim, as the chat journal does.
 const RECLAIM_PAGES_PER_PASS = 1024
 const RECLAIM_PAGES_PER_STEP = 16
-
-function readOrchestrationDbStorage({ db }: OrchestrationDb) {
-  const pageSize = Number(db.pragma('page_size', { simple: true }))
-  return {
-    databaseBytes: Number(db.pragma('page_count', { simple: true })) * pageSize,
-    reclaimableBytes: Number(db.pragma('freelist_count', { simple: true })) * pageSize,
-    shrinksItself: Number(db.pragma('auto_vacuum', { simple: true })) === 2
-  }
-}
 
 /** Prunes settled internal history every six hours and returns free pages, at a tenth of the thread. */
 export class OrchestrationDbMaintenance {
@@ -29,7 +16,6 @@ export class OrchestrationDbMaintenance {
 
   constructor(
     private readonly orchestrationDb: OrchestrationDb,
-    private readonly filename: string,
     private readonly chatIsReadable: (dispatchId: string) => boolean
   ) {}
 
@@ -41,79 +27,6 @@ export class OrchestrationDbMaintenance {
     this.stopped.abort()
     clearTimeout(this.timer)
     this.timer = undefined
-  }
-
-  private storage() {
-    return readOrchestrationDbStorage(this.orchestrationDb)
-  }
-
-  private async hasSpaceForRewrite(): Promise<boolean> {
-    const { databaseBytes, reclaimableBytes } = this.storage()
-    const copyBytes = Math.ceil((databaseBytes - reclaimableBytes) * 1.1)
-    const [databaseDir, tempDir] = [dirname(this.filename), await sqliteTempDirectory()]
-    const [databaseFree, tempFree, databaseDevice, tempDevice] = await Promise.all([
-      freeBytes(databaseDir),
-      freeBytes(tempDir),
-      stat(databaseDir).then((info) => info.dev),
-      stat(tempDir).then((info) => info.dev)
-    ])
-    const shortfall =
-      databaseDevice === tempDevice
-        ? databaseFree < 2 * copyBytes && { neededBytes: 2 * copyBytes, freeBytes: databaseFree }
-        : (databaseFree < copyBytes && { neededBytes: copyBytes, freeBytes: databaseFree }) ||
-          (tempFree < copyBytes && { neededBytes: copyBytes, freeBytes: tempFree })
-    return !shortfall
-  }
-
-  /** Called only after update quit has drained writers; no await follows closing their connection. */
-  async reclaimOnUpdateRestart(closeWriters: () => void): Promise<void> {
-    this.stop()
-    try {
-      const { shrinksItself, reclaimableBytes } = this.storage()
-      const row = this.orchestrationDb.db
-        .prepare('SELECT reclaim_failed FROM orchestration_maintenance WHERE id = 1')
-        .get()
-      if (shrinksItself || reclaimableBytes <= 200_000_000 || row?.reclaim_failed) {
-        return
-      }
-      if (!(await this.hasSpaceForRewrite())) {
-        return
-      }
-      // Commit before work: an interrupted attempt must not repeat at every update.
-      this.orchestrationDb.db.pragma('synchronous = FULL')
-      this.recordReclaim(true)
-      const settledRuns = new Map<string, boolean>()
-      for (let after: string | null = ''; after !== null;) {
-        after = pruneSettledChatOutputCopies(
-          this.orchestrationDb,
-          after,
-          this.chatIsReadable,
-          settledRuns
-        ).next
-      }
-      this.recordPrune()
-      closeWriters()
-      const db = new Database(this.filename)
-      try {
-        // VACUUM's temporary copy stays on disk; SQLite commits or rolls back the whole rewrite.
-        db.pragma('temp_store = FILE')
-        db.pragma('synchronous = FULL')
-        db.pragma('auto_vacuum = INCREMENTAL')
-        db.exec('VACUUM')
-        db.prepare('UPDATE orchestration_maintenance SET reclaim_failed = 0 WHERE id = 1').run()
-        db.pragma('wal_checkpoint(TRUNCATE)')
-      } finally {
-        db.close()
-      }
-    } catch (error) {
-      try {
-        this.orchestrationDb.db.pragma('synchronous = FULL')
-        this.recordReclaim(true)
-      } catch {
-        // After closing the writer, the already committed marker covers failed VACUUMs too.
-      }
-      console.warn('[orchestration] update database maintenance failed', error)
-    }
   }
 
   private arm(): void {
@@ -153,7 +66,8 @@ export class OrchestrationDbMaintenance {
       // Persisted so a restart does not rescan before the interval.
       this.recordPrune()
     }
-    if (this.storage().shrinksItself) {
+    // Only incremental files can return pages; others reuse them as they are freed.
+    if (Number(this.orchestrationDb.db.pragma('auto_vacuum', { simple: true })) === 2) {
       for (let page = 0; page < RECLAIM_PAGES_PER_PASS; page += RECLAIM_PAGES_PER_STEP) {
         if (!(await this.slice(() => this.reclaimFreePages()))) {
           return
@@ -176,15 +90,6 @@ export class OrchestrationDbMaintenance {
          ON CONFLICT(id) DO UPDATE SET pruned_at = excluded.pruned_at`
       )
       .run(Date.now())
-  }
-
-  private recordReclaim(failed: boolean): void {
-    this.orchestrationDb.db
-      .prepare(
-        `INSERT INTO orchestration_maintenance (id, reclaim_failed) VALUES (1, ?)
-         ON CONFLICT(id) DO UPDATE SET reclaim_failed = excluded.reclaim_failed`
-      )
-      .run(failed ? 1 : 0)
   }
 
   /** True while free pages remain. */
@@ -215,33 +120,4 @@ export class OrchestrationDbMaintenance {
     }
     return result
   }
-}
-
-async function freeBytes(directory: string): Promise<number> {
-  const disk = await statfs(directory)
-  return disk.bavail * disk.bsize
-}
-
-// SQLite's search order for its temporary files: unixTempFileDir in os_unix.c, and on Windows
-// GetTempPathW, which reads TMP before TEMP (Node's tmpdir() reads TEMP first).
-async function sqliteTempDirectory(): Promise<string> {
-  if (process.platform === 'win32') {
-    const { TMP, TEMP, USERPROFILE } = process.env
-    return TMP || TEMP || USERPROFILE || tmpdir()
-  }
-  const { SQLITE_TMPDIR, TMPDIR } = process.env
-  for (const directory of [SQLITE_TMPDIR, TMPDIR, '/var/tmp', '/usr/tmp', '/tmp']) {
-    if (!directory) {
-      continue
-    }
-    try {
-      if ((await stat(directory)).isDirectory()) {
-        await access(directory, constants.W_OK | constants.X_OK)
-        return directory
-      }
-    } catch {
-      // SQLite skips folders it cannot write to and search.
-    }
-  }
-  return '.'
 }

@@ -26,7 +26,6 @@ import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
-import { disarmUpdateInstallExitWatchdog } from '../../updater/update-install-exit-watchdog'
 import { isQuittingForUpdate } from '../../updater/updater-service'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
@@ -285,14 +284,12 @@ function installWillQuitHandler(): void {
       { name: 'stats', promise: statsFlush },
       { name: 'state', promise: storeFlush }
     ]
-    let teardownComplete = false
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
     settleTeardownWithinDeadline([
       ...teardowns,
       { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
     ])
       .then((pendingTeardowns) => {
-        teardownComplete = pendingTeardowns.length === 0
         if (pendingTeardowns.length > 0) {
           console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
         }
@@ -304,15 +301,6 @@ function installWillQuitHandler(): void {
       })
       // Last before quitting, so it saves every extension write accepted during teardown.
       .then(() => closeBrowserExtensionProfileDocumentStores())
-      .then(async () => {
-        // ShipIt waits for exit. NSIS may kill us; AppImage already launched its successor.
-        if (updateQuitInProgress && process.platform === 'darwin' && teardownComplete) {
-          await state.runtime?.reclaimOrchestrationDbOnUpdateRestart(
-            disarmUpdateInstallExitWatchdog
-          )
-        }
-      })
-      .catch((error) => console.warn('[shutdown] Update database maintenance failed', error))
       .then(() => {
         daemonDisconnectDone = true
         app.quit()
