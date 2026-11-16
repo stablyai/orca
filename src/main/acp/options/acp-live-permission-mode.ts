@@ -13,7 +13,7 @@ type LivePermissionSession = Pick<
 
 // Mode writes per running chat, in pick order, so an earlier pick never lands after a later one.
 const modeWrites = new WeakMap<LivePermissionSession, Promise<void>>()
-// Chats whose last mode write went unanswered: it may still land, so their mode is unknown.
+// Agents with an unanswered mode write: it may still land, so their mode stays unknown until a restart.
 const unansweredModes = new WeakSet<object>()
 
 /** The choice the agent runs under now: Orca's own for requests it answers, else the agent's
@@ -83,7 +83,6 @@ async function writeAcpSessionMode(
       }
       throw error
     })
-  unansweredModes.delete(session)
   session.options.adoptConfigOptions(reply.configOptions)
   session.permission = mode
 }
