@@ -29,6 +29,13 @@ describe('GraphQL approvals', () => {
       // its event may be in the variables.
       '\u001f\u008b\u0008binary',
       gql('mutation M($i: X!) { addPullRequestReview(input: $i) { clientMutationId } ', { i: { pullRequestId: 'P', event: 'APPROVE' } }),
+      // Unreadable in other ways: no query string, oversized, a batch entry without a query.
+      JSON.stringify({ variables: {} }),
+      gql(`query { viewer { login } } # ${'x'.repeat(300 * 1024)}`),
+      JSON.stringify([{ query: 'query { viewer { login } }' }, { notAQuery: 1 }]),
+      // Branch protection and rulesets.
+      gql('mutation { updateBranchProtectionRule(input: { branchProtectionRuleId: "B", requiredApprovingReviewCount: 0 }) { clientMutationId } }'),
+      gql('mutation { deleteRepositoryRuleset(input: { repositoryRulesetId: "R" }) { clientMutationId } }'),
       // Review G4: dismissing a review unblocks a merge.
       gql('mutation { dismissPullRequestReview(input: { pullRequestReviewId: "R", message: "x" }) { clientMutationId } }')
     ]) {
@@ -77,6 +84,16 @@ describe('review G2 and G4: unnormalized write paths; approval-shaped REST actio
 
   it('dismissals, fork-run approvals and environment approvals are refused; repository-id routes are covered', () => {
     expect(requestApproves({ method: 'PUT', path: '/repos/o/r/pulls/7/reviews/9/dismissals', body: '{}' })).toBe(true)
+    for (const [method, path] of [
+      ['PUT', '/repos/o/r/branches/main/protection'],
+      ['DELETE', '/repos/o/r/branches/main/protection/required_pull_request_reviews'],
+      ['PATCH', '/repos/o/r/branches/main/protection/required_pull_request_reviews'],
+      ['POST', '/repos/o/r/rulesets'],
+      ['PUT', '/repos/o/r/rulesets/4']
+    ] as const) {
+      expect(requestApproves({ method, path, body: '{}' }), path).toBe(true)
+    }
+    expect(requestApproves({ method: 'GET', path: '/repos/o/r/branches/main/protection', body: null })).toBe(false)
     expect(requestApproves({ method: 'POST', path: '/repos/o/r/actions/runs/5/approve', body: null })).toBe(true)
     expect(requestApproves({ method: 'POST', path: '/repos/o/r/actions/runs/5/pending_deployments', body: JSON.stringify({ state: 'approved', environment_ids: [1] }) })).toBe(true)
     expect(requestApproves({ method: 'POST', path: '/repos/o/r/actions/runs/5/pending_deployments', body: JSON.stringify({ state: 'rejected', environment_ids: [1] }) })).toBe(false)

@@ -7,7 +7,7 @@ import { Kind, parse, type DocumentNode, type FragmentDefinitionNode, type Selec
 
 const pathOfEarly = (path: string) => (path.split('?')[0] ?? '').toLowerCase()
 export const APPROVAL_REFUSED_MESSAGE =
-  "Approvals have to be done by a person on GitHub, not from an Orca Cloud workspace. Open the pull request on github.com to approve it."
+  "Approvals have to be done by a person on GitHub, not from an Orca Cloud workspace (that includes dismissing reviews, approving workflow runs or deployments, and changing branch protection). Open github.com to do it."
 
 /** The answer a refused approval gets: GitHub-shaped JSON for REST, a GraphQL error for /graphql. */
 export function approvalRefusal(path: string): { deny: string; answer: { status: number; contentType: string; body: string } } {
@@ -35,6 +35,10 @@ const DISMISSAL_PATH = /\/pulls\/\d+\/reviews\/\d+\/dismissals\/?$/i
 /** Approving a fork PR's workflow run, or an environment deployment waiting for review. */
 const RUN_APPROVAL_PATH = /\/actions\/runs\/\d+\/approve\/?$/i
 const PENDING_DEPLOYMENTS_PATH = /\/actions\/runs\/\d+\/pending_deployments\/?$/i
+/** Branch protection and rulesets: changing them could drop the required reviews (whatever the App may do). */
+const PROTECTION_PATH = /\/branches\/[^/]+\/protection(\/|$)|\/rulesets(\/|$)/i
+/** A GraphQL body this large is refused unread (review: oversized). */
+const MAX_GRAPHQL_BODY = 256 * 1024
 
 const pathOf = (path: string) => (path.split('?')[0] ?? '').toLowerCase()
 const writes = (method: string) => !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())
@@ -68,6 +72,9 @@ export function requestApproves(request: { method: string; path: string; body: s
     return true
   }
   if (method === 'POST' && RUN_APPROVAL_PATH.test(pathname)) {
+    return true
+  }
+  if (writes(method) && PROTECTION_PATH.test(pathname)) {
     return true
   }
   if (!approvalCheckReadsBody(request.method, request.path)) {
@@ -108,12 +115,20 @@ function restApproves(body: string | null): boolean {
 
 const REVIEW_MUTATIONS = new Set(['addPullRequestReview', 'submitPullRequestReview'])
 /** Approval-shaped mutations refused whatever their input (review G4). */
-const ALWAYS_REFUSED_MUTATIONS = new Set(['dismissPullRequestReview'])
+const ALWAYS_REFUSED_MUTATIONS = new Set([
+  'dismissPullRequestReview',
+  'createBranchProtectionRule',
+  'updateBranchProtectionRule',
+  'deleteBranchProtectionRule',
+  'createRepositoryRuleset',
+  'updateRepositoryRuleset',
+  'deleteRepositoryRuleset'
+])
 type Variables = Record<string, unknown>
 
 /** Fails toward "approves": an unreadable body, or a review mutation whose event can't be resolved. */
 export function graphqlApproves(body: string | null): boolean {
-  if (body === null) {
+  if (body === null || body.length > MAX_GRAPHQL_BODY) {
     return true
   }
   let parsed: unknown
@@ -128,24 +143,22 @@ export function graphqlApproves(body: string | null): boolean {
   return requests.some((request) => requestBodyApproves(request))
 }
 
-/** Review G3: a query graphql-js can't parse but GitHub might: refused if it names a review mutation at all. */
-function mentionsReviewMutation(text: string): boolean {
-  return /addPullRequestReview|submitPullRequestReview|dismissPullRequestReview/i.test(text)
-}
 
 function requestBodyApproves(request: unknown): boolean {
+  // Anything this check can't read is refused (fail closed): no query string, or a query graphql-js can't parse
+  // (GitHub's parser might still accept it, and the event may sit in the variables).
   if (!request || typeof request !== 'object') {
-    return false
+    return true
   }
   const { query, variables } = request as { query?: unknown; variables?: unknown }
   if (typeof query !== 'string') {
-    return false
+    return true
   }
   let document: DocumentNode
   try {
     document = parse(query, { noLocation: true, maxTokens: 20_000 })
   } catch {
-    return mentionsReviewMutation(query)
+    return true
   }
   const vars: Variables = variables && typeof variables === 'object' && !Array.isArray(variables) ? (variables as Variables) : {}
   const fragments = new Map<string, FragmentDefinitionNode>()
