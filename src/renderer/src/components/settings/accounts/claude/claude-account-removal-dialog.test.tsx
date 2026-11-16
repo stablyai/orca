@@ -88,6 +88,20 @@ describe('Claude account removal dialog', () => {
     expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
   })
 
+  it('starts over when the dialog now belongs to another host', async () => {
+    api.measureRetainedHistory.mockResolvedValueOnce({ bytes: 512 })
+    const target = { id: 'a', runtime: { runtime: 'host' as const } }
+    const view = render(<ClaudeAccountRemovalDialog model={model()} target={target} />)
+    await act(async () => {})
+    fireEvent.click(screen.getByRole('checkbox'))
+    const remote = {
+      ...model(),
+      accountOwner: { kind: 'environment' as const, environmentId: 'server' }
+    }
+    view.rerender(<ClaudeAccountRemovalDialog model={remote} target={target} />)
+    expect(screen.getByRole('checkbox').getAttribute('aria-checked')).toBe('false')
+  })
+
   it('says an older host deletes the conversations, and removes the old way there', async () => {
     api.measureRetainedHistory.mockRejectedValueOnce(
       Object.assign(new Error('Unknown method'), { code: 'method_not_found' })

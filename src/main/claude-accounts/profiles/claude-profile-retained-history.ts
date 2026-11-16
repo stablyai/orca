@@ -116,6 +116,10 @@ export async function measureRetainedClaudeHistory(
 }
 
 async function unlinkNestedLinks(dir: string): Promise<void> {
+  // Re-check: a folder swapped for a link after its parent was listed must not be walked.
+  if (!(await isRealDirectory(dir))) {
+    return
+  }
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name)
     if (entry.isSymbolicLink()) {
@@ -153,6 +157,9 @@ async function removeIfEmpty(dir: string): Promise<void> {
 
 // Only rmdir: it refuses a folder a writer just put a file in, so pruning never deletes history.
 async function pruneEmptyDirectories(dir: string): Promise<void> {
+  if (!(await isRealDirectory(dir))) {
+    return
+  }
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       await pruneEmptyDirectories(join(dir, entry.name))
@@ -182,9 +189,14 @@ export async function removeClaudeProfileFolder(
     // Decided per entry as it is removed, so history a writer adds meanwhile is never swept up.
     for (const entry of await readdir(home, { withFileTypes: true })) {
       const path = join(home, entry.name)
-      if (!retained(entry)) {
+      // A history link that became a real folder after the listing is kept like one.
+      const nowRetained =
+        !options.deleteRetainedHistory &&
+        HISTORY_DIRS.includes(entry.name) &&
+        (await isRealDirectory(path))
+      if (!retained(entry) && !nowRetained) {
         await removeWithoutFollowingLinks(path)
-      } else if (entry.isDirectory()) {
+      } else if (entry.isDirectory() || nowRetained) {
         await pruneEmptyDirectories(path).catch(() => {})
       }
     }

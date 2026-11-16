@@ -5,6 +5,7 @@ import {
   measureClaudeRetainedHistory,
   removeClaudeProviderAccount
 } from '@/runtime/provider-accounts/observations/claude-account-removal-client'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Button } from '../../../ui/button'
 import { Checkbox } from '../../../ui/checkbox'
 import {
@@ -246,7 +247,8 @@ export function ClaudeAccountRemovalDialog({
       <DialogContent showCloseButton={false}>
         {content ? (
           <ClaudeAccountRemovalContent
-            key={shown.generation}
+            // A different host's account can share the id: start over when the owner changes.
+            key={`${shown.generation}:${getProviderAccountsOwnerKey(model.accountOwner)}`}
             model={model}
             target={content}
             accountLabel={account ? getManagedAccountInlineLabel(account) : ''}
