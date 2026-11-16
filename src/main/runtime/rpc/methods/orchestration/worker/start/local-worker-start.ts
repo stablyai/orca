@@ -27,7 +27,10 @@ import {
   persistWorkerSetupWaitOutcome
 } from './readiness/worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
-import { assertExplicitWorkerUsable } from './placement/explicit-worker-terminal-validation'
+import {
+  assertExplicitWorkerUsable,
+  explicitWorkerWorkspace
+} from './placement/explicit-worker-terminal-validation'
 import { resolveDispatchAssigneeParty } from '../../../../../orchestration/addressing/orchestration-party'
 import { chatAssigneeOf, chatWorkerMode } from '../../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './placement/created-worker-terminal-custody'
@@ -63,7 +66,8 @@ export async function startLocalWorker(args: {
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
   const params = terminal ? { ...args.params, terminal: terminal.address } : args.params
   const chat = terminal ? chatAssigneeOf(terminal) : null
-  const requestedWorktree = params.worktree ?? 'current'
+  const requestedWorktree =
+    params.worktree ?? (await explicitWorkerWorkspace(runtime, db, terminal))
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
   const creationTargetFor = (callerWorktreeId: string) =>
     resolveWorkerWorktreeCreationTarget({
@@ -72,29 +76,24 @@ export async function startLocalWorker(args: {
       repo: params.repo,
       callerWorktreeId
     })
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
-    return createsWorktree
-      ? { repo: (await creationTargetFor(callerWorkspaceId)).repoSelector }
-      : {
-          worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
-        }
-  })
+  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
+    runtime,
+    params.from,
+    callerSession
+  )
+  const existingWorktree =
+    requestedWorktree === 'current' ? `id:${coordinatorWorktreeId}` : requestedWorktree
+  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () =>
+    createsWorktree
+      ? { repo: (await creationTargetFor(coordinatorWorktreeId)).repoSelector }
+      : { worktree: existingWorktree }
+  )
   let openCodeModelLaunchSupported = false
   if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
     openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
       runtime,
       launchParams,
-      { worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree }
+      { worktree: existingWorktree }
     )
   }
 
@@ -105,11 +104,6 @@ export async function startLocalWorker(args: {
     openCodeModelLaunchSupported
   })
 
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
-    runtime,
-    params.from,
-    callerSession
-  )
   const creationTarget = createsWorktree
     ? await creationTargetFor(coordinatorWorktreeId)
     : undefined
@@ -121,11 +115,7 @@ export async function startLocalWorker(args: {
     })
   }
   let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
-    creationTarget
-      ? undefined
-      : requestedWorktree === 'current'
-        ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
-        : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+    creationTarget ? undefined : await runtime.showManagedTerminalWorkspace(existingWorktree)
   await assertExplicitWorkerUsable({
     runtime,
     db,

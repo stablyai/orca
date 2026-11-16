@@ -6130,8 +6130,7 @@
           "issueCommand": "议题命令",
           "newVmRecipe": "新的 VM 配方",
           "vmRecipe": "VM 配方",
-          "thisRepository": "此仓库",
-          "alwaysTrustRepo": "始终信任 <repo/> 中的 <code>orca.yaml</code>"
+          "thisRepository": "此仓库"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "取消工作树创建",
@@ -22413,7 +22412,6 @@
       "annotate": "注释",
       "grab": "抓取",
       "draw": "绘制",
-      "annotateOptions": "更多注释工具",
       "copyAllNotes": "复制所有注释",
       "clearNotes": "清除注释",
       "resetZoom": "重置缩放",
@@ -25047,7 +25045,6 @@
     "setupTrust": {
       "reviewTitle": "要批准此自动化的新设置命令吗？",
       "reviewBody": "由于分支的 <code>orca.yaml</code> 设置命令已更改，某次运行跳过了设置。批准后，之后的运行将使用这些命令。仅在你信任 <repo/> 时批准。",
-      "approve": "批准",
       "approved": "已批准设置。此自动化之后的运行将执行它。",
       "skippedSinceApproved": "由于分支的 orca.yaml 设置命令已更改，此次运行未执行设置。这些命令此后已获批准，之后的运行将执行它们。",
       "skippedReview": "设置未运行：此次运行分支中的 orca.yaml 设置命令与此自动化已批准的命令不同。请审查它们，以便之后的运行执行设置。",

@@ -562,7 +562,6 @@
       "annotate": "Annotate",
       "grab": "Grab",
       "draw": "Draw",
-      "annotateOptions": "More annotate tools",
       "copyAllNotes": "Copy all notes",
       "clearNotes": "Clear notes",
       "resetZoom": "Reset zoom",
@@ -1502,7 +1501,7 @@
     "uninstall": {
       "groupTitle": "Uninstall",
       "title": "Uninstall Orca",
-      "searchDescription": "Remove agent hooks, the orca command, the background service and SSH host files.",
+      "searchDescription": "Remove agent hooks, the orca command, the background service and hooks on SSH hosts.",
       "keywords": {
         "uninstall": "uninstall",
         "remove": "remove",
@@ -1530,28 +1529,33 @@
       "button": "Uninstall",
       "uninstalling": "Uninstalling…",
       "rows": {
-        "agents_one": "Hooks in 1 agent",
-        "agents_other": "Hooks in {{count}} agents",
-        "hosts": "SSH hosts",
-        "hostCount_one": "1 host",
-        "hostCount_other": "{{count}} hosts",
+        "hooksIn": "Hooks in {{targets}}",
         "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
         "service": "Background service",
         "hookScripts": "Hook scripts"
       },
       "retry": "Retry",
+      "hookTargets": {
+        "agents_one": "1 agent",
+        "agents_other": "{{count}} agents",
+        "sshHosts_one": "1 SSH host",
+        "sshHosts_other": "{{count}} SSH hosts"
+      },
+      "path": {
+        "codexAccount": "Orca-managed Codex account",
+        "appData": "Orca app data"
+      },
       "host": {
+        "ssh": "SSH",
         "connected": "Connected",
-        "offline": "Offline"
+        "notConnected": "Not connected.",
+        "notConnectedRun": "Not connected. Run <cmd>{{command}}</cmd> on the host."
       },
       "summary": {
-        "agents_one": "hooks in 1 agent",
-        "agents_other": "hooks in {{count}} agents",
+        "hooksIn": "hooks in {{targets}}",
         "cliCommand": "the <cmd>{{name}}</cmd> CLI",
         "service": "a background service",
         "hookScripts": "hook scripts",
-        "hosts_one": "1 SSH host",
-        "hosts_other": "{{count}} SSH hosts",
         "nothing": "Nothing outside the app to remove.",
         "loading": "Checking what Orca installed…",
         "done": "Removed. Delete the app to finish.",
@@ -6957,8 +6961,7 @@
           "issueCommand": "Issue command",
           "newVmRecipe": "New VM recipe",
           "vmRecipe": "VM recipe",
-          "thisRepository": "this repository",
-          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>"
+          "thisRepository": "this repository"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
@@ -22616,7 +22619,13 @@
           "waiting": "Inactive {{elapsed}} of {{after}} days",
           "title": "Activity",
           "notListed_one": "1 more kept workspace is not listed.",
-          "notListed_other": "{{count}} more kept workspaces are not listed."
+          "notListed_other": "{{count}} more kept workspaces are not listed.",
+          "chatsDeletedCount_one": "1 chat deleted",
+          "chatsDeletedCount_other": "{{count}} chats deleted",
+          "chatsDeleted_one": "Deleted 1 chat from a deleted workspace",
+          "chatsDeleted_other": "Deleted {{count}} chats from deleted workspaces",
+          "chatsFailed_one": "1 chat couldn't be deleted",
+          "chatsFailed_other": "{{count}} chats couldn't be deleted"
         },
         "runFailed": "Couldn't run cleanup.",
         "updateFailed": "Couldn't save the cleanup rules.",
@@ -22682,7 +22691,10 @@
           "activityDescription": "What each cleanup run removed and kept.",
           "history": "history",
           "runs": "runs",
-          "envFile": ".env"
+          "envFile": ".env",
+          "chat": "chat",
+          "transcripts": "transcripts",
+          "diskSpace": "disk space"
         },
         "cleanUpNow": "Clean up now",
         "status": {
@@ -22700,7 +22712,9 @@
           "review": "Review workspaces",
           "turnOnHint": "Turn on a rule to use this.",
           "justNow": "just now",
-          "inUnderAMinute": "in under a minute"
+          "inUnderAMinute": "in under a minute",
+          "lastRunChats_one": "Last run {{when}} deleted 1 chat from a deleted workspace.",
+          "lastRunChats_other": "Last run {{when}} deleted {{count}} chats from deleted workspaces."
         },
         "change": {
           "title": "Change {{rule}}?",
@@ -22731,6 +22745,15 @@
           "description": "Selected workspaces will be pinned when you confirm. Pinned workspaces are excluded from automatic cleanup until you unpin them.",
           "named": "Pin and keep {{name}}",
           "label": "Pin and keep"
+        },
+        "chatHistory": {
+          "title": "Chat history",
+          "updateFailed": "Couldn't update the setting on {{host}}.",
+          "unsupported": "Update Orca on {{host}} to use this setting there.",
+          "confirmTitle": "Delete chat history from deleted workspaces?",
+          "confirmDescription": "Orca will delete Claude Code chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "deleteWithWorkspace": "Delete chat history with the workspace",
+          "deleteWithWorkspaceDescription": "Claude Code chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         }
       },
       "repository": {
@@ -24155,7 +24178,10 @@
       "reviewAction": "Review setup",
       "branchDiffersTitle": "This workspace's branch has different setup commands",
       "branchDiffersBody": "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>.",
-      "branchSetupScript": "Branch's setup script"
+      "branchSetupScript": "Branch's setup script",
+      "runOnce": "Run once",
+      "alwaysTrust": "Always trust",
+      "alwaysTrustScope": "Always trust runs future <code>orca.yaml</code> changes in <repo/> without asking."
     },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
@@ -25535,7 +25561,6 @@
     "setupTrust": {
       "reviewTitle": "Approve the new setup commands for this automation?",
       "reviewBody": "A run skipped setup because its branch's <code>orca.yaml</code> setup commands changed. Approving lets later runs use these commands. Only approve if you trust <repo/>.",
-      "approve": "Approve",
       "approved": "Setup approved. Later runs of this automation will run it.",
       "skippedSinceApproved": "Setup didn't run for this run because its branch's orca.yaml setup commands changed. They've since been approved, so later runs run them.",
       "skippedReview": "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved for this automation. Review them to run setup in later runs.",

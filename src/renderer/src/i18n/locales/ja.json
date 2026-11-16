@@ -6097,8 +6097,7 @@
           "issueCommand": "Issue コマンド",
           "newVmRecipe": "新しい VM レシピ",
           "vmRecipe": "VM レシピ",
-          "thisRepository": "このリポジトリ",
-          "alwaysTrustRepo": "<repo/> の <code>orca.yaml</code> を常に信頼する"
+          "thisRepository": "このリポジトリ"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "ワークツリーの作成をキャンセルする",
@@ -22026,7 +22025,6 @@
       "annotate": "注釈",
       "grab": "取得",
       "draw": "描き込み",
-      "annotateOptions": "その他の注釈ツール",
       "copyAllNotes": "すべてのメモをコピー",
       "clearNotes": "メモをクリア",
       "resetZoom": "ズームをリセット",
@@ -24657,7 +24655,6 @@
     "setupTrust": {
       "reviewTitle": "このオートメーションの新しいセットアップコマンドを承認しますか？",
       "reviewBody": "ブランチの <code>orca.yaml</code> のセットアップコマンドが変更されたため、実行でセットアップがスキップされました。承認すると、以降の実行でこれらのコマンドが使われます。<repo/> を信頼できる場合のみ承認してください。",
-      "approve": "承認",
       "approved": "セットアップを承認しました。このオートメーションの以降の実行で実行されます。",
       "skippedSinceApproved": "ブランチの orca.yaml のセットアップコマンドが変更されたため、この実行ではセットアップが実行されませんでした。その後承認されたため、以降の実行では実行されます。",
       "skippedReview": "セットアップは実行されませんでした。この実行のブランチにある orca.yaml のセットアップコマンドが、このオートメーションで承認済みのものと異なります。以降の実行でセットアップを実行するには、内容を確認してください。",

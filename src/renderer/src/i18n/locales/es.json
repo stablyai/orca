@@ -5756,8 +5756,7 @@
           "issueCommand": "Comando de issue",
           "newVmRecipe": "Nueva receta de VM",
           "vmRecipe": "Receta de VM",
-          "thisRepository": "este repositorio",
-          "alwaysTrustRepo": "Confiar siempre en <code>orca.yaml</code> de <repo/>"
+          "thisRepository": "este repositorio"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancelar creación del worktree",
@@ -23763,7 +23762,6 @@
     "setupTrust": {
       "reviewTitle": "¿Aprobar los nuevos comandos de configuración de esta automatización?",
       "reviewBody": "Una ejecución omitió la configuración porque cambiaron los comandos de configuración de <code>orca.yaml</code> de su rama. Si los apruebas, las ejecuciones posteriores usarán estos comandos. Apruébalos solo si confías en <repo/>.",
-      "approve": "Aprobar",
       "approved": "Configuración aprobada. Las ejecuciones posteriores de esta automatización la ejecutarán.",
       "skippedSinceApproved": "La configuración no se ejecutó en esta ejecución porque cambiaron los comandos de configuración de orca.yaml de su rama. Ya se aprobaron, así que las ejecuciones posteriores los ejecutarán.",
       "skippedReview": "No se ejecutó la configuración: la rama de esta ejecución contiene comandos de configuración de orca.yaml diferentes de los aprobados para esta automatización. Revísalos para que las ejecuciones posteriores ejecuten la configuración.",
