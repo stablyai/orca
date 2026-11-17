@@ -24,6 +24,7 @@ import {
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
+  RepoHooksRead,
   RepoIssueCommandWrite,
   RepoList,
   RepoPath,
@@ -225,8 +226,9 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.hooks',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.getRepoHooks(params.repo)
+    params: RepoHooksRead,
+    handler: async (params, { runtime }) =>
+      runtime.getRepoHooks(params.repo, { createSource: params.createSource })
   }),
   defineMethod({
     name: 'repo.hooksCheck',
