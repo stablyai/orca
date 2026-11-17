@@ -7,11 +7,14 @@ const worker = vi.hoisted(() => ({
   available: true,
   spawn: vi.fn()
 }))
-const treeKills = vi.hoisted(() => ({
-  args: [] as string[][],
-  killers: [] as EventEmitter[],
-  via: [] as ('main' | 'worker')[]
-}))
+const treeKills = vi.hoisted(() => {
+  const state: { args: string[][]; killers: EventEmitter[]; via: ('main' | 'worker')[] } = {
+    args: [],
+    killers: [],
+    via: []
+  }
+  return state
+})
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeChildProcess>()
   const { EventEmitter } = await import('node:events')
@@ -195,7 +198,10 @@ describe('Windows process creation off the calling loop', () => {
     child.receive({ type: 'spawn', id: 1, pid: 4242 })
     child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
     await vi.waitFor(() => expect(treeKills.via).toEqual(['worker']))
-    const queued = treeKills.killers[0] as WorkerThreadChildProcess
+    const queued = treeKills.killers[0]
+    if (!(queued instanceof WorkerThreadChildProcess)) {
+      throw new Error('taskkill was not queued on the worker')
+    }
     queued.receive({
       type: 'error',
       id: 99,

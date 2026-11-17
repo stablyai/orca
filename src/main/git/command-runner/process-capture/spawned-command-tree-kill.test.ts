@@ -5,11 +5,13 @@ import type * as NodeChildProcess from 'node:child_process'
 import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { spawnMock, admitMock, workerTaskkill } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
-  admitMock: vi.fn(() => true),
-  workerTaskkill: { available: false, killers: [] as WorkerChildModule.WorkerThreadChildProcess[] }
-}))
+const { spawnMock, admitMock, workerTaskkill } = vi.hoisted(() => {
+  const workerTaskkill: {
+    available: boolean
+    killers: WorkerChildModule.WorkerThreadChildProcess[]
+  } = { available: false, killers: [] }
+  return { spawnMock: vi.fn(), admitMock: vi.fn(() => true), workerTaskkill }
+})
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeChildProcess>()),
@@ -162,18 +164,19 @@ describe('Git command tree termination', () => {
     try {
       workerTaskkill.available = true
       const child = childWithPid(1234)
+      const rootKill = vi.spyOn(child, 'kill').mockReturnValue(true)
       const pending = killSpawnedCommandTree(child)
       const killer = workerTaskkill.killers[0]!
       const stopKiller = vi.spyOn(killer, 'kill')
       await vi.advanceTimersByTimeAsync(10_000)
       expect(stopKiller).not.toHaveBeenCalled()
-      expect(child.kill).not.toHaveBeenCalled()
+      expect(rootKill).not.toHaveBeenCalled()
 
       killer.receive({ type: 'spawn', id: 99, pid: 777 })
       await vi.advanceTimersByTimeAsync(2_000)
       await pending
       expect(stopKiller).toHaveBeenCalledOnce()
-      expect(child.kill).toHaveBeenCalledOnce()
+      expect(rootKill).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }
@@ -181,6 +184,7 @@ describe('Git command tree termination', () => {
   it('does not rerun a taskkill the worker already started when the worker dies', async () => {
     workerTaskkill.available = true
     const child = childWithPid(1234)
+    const rootKill = vi.spyOn(child, 'kill').mockReturnValue(true)
     const pending = killSpawnedCommandTree(child)
     const killer = workerTaskkill.killers[0]!
     killer.receive({ type: 'spawn', id: 99, pid: 777 })
@@ -194,6 +198,7 @@ describe('Git command tree termination', () => {
     })
     await pending
     expect(spawnMock).not.toHaveBeenCalled()
+    expect(rootKill).toHaveBeenCalledOnce()
   })
   it('still kills the tree when the worker reports the PID after the wait', async () => {
     vi.useFakeTimers()
