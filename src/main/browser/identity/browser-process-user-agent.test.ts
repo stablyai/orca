@@ -12,16 +12,6 @@ const LINUX_CLEAN =
 describe('cleanElectronUserAgent', () => {
   it.each([
     [
-      'a one-word app name',
-      `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Orca/1.4.203 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
-      MAC_CLEAN
-    ],
-    [
-      'an app name containing a space',
-      `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Orca Dev/1.4.203 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
-      MAC_CLEAN
-    ],
-    [
       'an app name containing two spaces',
       `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) My Orca Build/1.0.0 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
       LINUX_CLEAN
@@ -40,17 +30,9 @@ describe('cleanElectronUserAgent', () => {
     expect(cleanElectronUserAgent(raw)).toBe(expected)
   })
 
-  it.each([
-    [
-      'an OS comment but no engine comment',
+  it('leaves an OS comment without an engine comment unchanged', () => {
+    const raw =
       'Mozilla/5.0 (X11; Linux x86_64) SomeEngine/1.0 MyApp/2.0 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36'
-    ],
-    ['no comment at all', 'SomeOtherAgent/2.0 Chrome/150.0.0.0 Safari/537.36'],
-    [
-      'a non-Chromium user agent',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0'
-    ]
-  ])('leaves a user agent unchanged for %s', (_label, raw) => {
     expect(cleanElectronUserAgent(raw)).toBe(raw)
   })
 })

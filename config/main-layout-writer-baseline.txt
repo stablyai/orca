@@ -6,7 +6,7 @@
 1 src/main/ipc/pty/pane/fresh-pane-binding.ts
 1 src/main/ipc/pty/pane/pane-owner-replacement.ts
 3 src/main/ipc/pty/pane/stable-owner.ts
-1 src/main/ipc/pty/spawn-commit-binding.ts
+1 src/main/ipc/pty/spawn/spawn-commit-binding.ts
 1 src/main/ipc/renderer-shutdown-checkpoint.ts
 1 src/main/ipc/runtime-environments/catalog/runtime-environment-removal-cleanup.ts
 1 src/main/ipc/runtime-environments/catalog/runtime-environment-session-reconcile.ts

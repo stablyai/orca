@@ -52,6 +52,34 @@ function dispatchIdentityLines(params: PreambleParams): string {
   ].join('\n')
 }
 
+// Chat mail arrives directly; terminal workers need the check syntax so they never guess `check --from`.
+function checkLines({
+  chat,
+  unreadMail,
+  cli,
+  workerHandle
+}: {
+  chat: boolean
+  unreadMail?: boolean
+  cli: string
+  workerHandle: string
+}): string {
+  if (chat) {
+    return unreadMail
+      ? `  # Messages for this task arrive next, one at a time.
+
+`
+      : ''
+  }
+  const comment = unreadMail
+    ? 'Messages for this task are waiting; read them'
+    : 'When Orca says you have messages, read them'
+  return `  # ${comment}:
+  ${cli} orchestration check --terminal ${workerHandle}
+
+`
+}
+
 // Place behavior rules beside CLI examples, where agent readers use them.
 export function buildDispatchPreamble(params: PreambleParams): string {
   // Dev agents must reach the dev socket through orca-dev.
@@ -76,14 +104,7 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
 === CLI COMMANDS ===
 
 \`\`\`sh
-${
-  params.unreadMail
-    ? `  # Messages for this task are waiting; read them:
-  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
-
-`
-    : ''
-}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.workerHandle })}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
   ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"

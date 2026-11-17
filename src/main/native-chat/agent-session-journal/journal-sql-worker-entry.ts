@@ -19,6 +19,9 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-journal-sql-writer')
 
 function legacyDestinationMain(filename: string): string {
   return legacyDestinationFileIdentity(lstatSync(filename, { bigint: true }))

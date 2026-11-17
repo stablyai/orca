@@ -26,12 +26,9 @@ import { getEffectiveHooks, runHook } from '../../../workspace-hooks/hooks'
 import type { ArchiveHookOverride } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
 import { gateWorktreeRemovalOnArchiveHook } from '../../../workspaces/removal/worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import {
-  cleanupUnusedWorktreePushTargetRemote,
-  notifyWorktreesChanged
-} from '../../worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote, notifyWorktreesChanged } from '../worktree-remote'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
-import { formatWorktreeRemovalError } from '../../worktree-logic'
+import { formatWorktreeRemovalError } from '../paths/worktree-logic'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'

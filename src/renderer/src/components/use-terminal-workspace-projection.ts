@@ -3,12 +3,12 @@ import { useAppStore } from '../store'
 import { hasFeatureInteraction } from '../../../shared/feature-education/interactions/feature-interactions'
 import { setForegroundTerminalTabIds } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
-import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
-import { getEffectiveLayoutForWorktree as getEffectiveLayout } from './terminal/split-group-mount'
+import { useTerminalProviderSnapshotCapability } from './terminal/provider-snapshots/use-terminal-provider-snapshot-capability'
+import { getEffectiveLayoutForWorktree as getEffectiveLayout } from './terminal/workspace-mounting/split-group-mount'
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import type { TerminalWorkspaceStoreController } from './use-terminal-workspace-store-bindings'
-import { useWorktreeFiles } from './terminal/use-worktree-files'
+import { useWorktreeFiles } from './terminal/workspace-files/use-worktree-files'
 
 // Read every render: the titlebar strip can mount after this host. A hook result is never memoized.
 function useTitlebarTabsTarget(): HTMLElement | null {

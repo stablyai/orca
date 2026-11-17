@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Terminal } from 'lucide-react'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
+import { AgentPickerResultsScroller } from './AgentPickerResultsScroller'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { choiceMatches, type AgentPickerChoice } from './agent-picker-search-rows'
@@ -210,7 +211,7 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
+      <AgentPickerResultsScroller>
         <div data-agent-picker-agent-results>
           {showBlankTerminal ? (
             <AgentDefaultContextMenu
@@ -289,7 +290,7 @@ export function AgentLaunchPickerMenu({
             </DropdownMenuItem>
           ) : null}
         </div>
-      </div>
+      </AgentPickerResultsScroller>
     </div>
   )
 }

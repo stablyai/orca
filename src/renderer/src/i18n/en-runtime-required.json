@@ -886,8 +886,8 @@
         "DeleteWorktreeDialog": {
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
           "removeBatchFolder_other": "Remove <target>{{count}} workspaces</target> from Orca. Project folders on disk will not be deleted.",
-          "removeBatchGit_one": "Remove <target>{{count}} workspace</target> from git and delete its workspace folder.",
-          "removeBatchGit_other": "Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.",
+          "removeBatchGit_one": "Deletes {{count}} worktree and its branch (kept if unmerged).",
+          "removeBatchGit_other": "Deletes {{count}} worktrees and their branches (kept if unmerged).",
           "removeBatchMixed_one": "Remove <target>{{count}} workspace</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeBatchMixed_other": "Remove <target>{{count}} workspaces</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenFolder_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Project folders on disk will not be deleted.",
@@ -2233,7 +2233,9 @@
           "closedToast_one": "Closed {{count}} file with unsaved edits from {{workspace}}",
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
-          "discarded_other": "Unsaved edits in {{count}} files will be discarded:"
+          "discarded_other": "Unsaved edits in {{count}} files will be discarded:",
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     }
@@ -2630,6 +2632,7 @@
         "guestUnanswered": "The distro is running but didn’t answer Orca’s check.",
         "installLockWaitGivesUp_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.",
         "installLockWaitGivesUp_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes.",
+        "installLockWaitHolderGone": "The other Orca install in this distro stopped. Orca takes over in a few seconds.",
         "installLockWait_one": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.",
         "installLockWait_other": "Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minutes.",
         "orcadUnanswered": "Orca’s server in the distro didn’t answer.",
@@ -2855,6 +2858,18 @@
     "compact": {
       "linkedAndScannedCount_one": "{{size}} in linked worktrees · {{count}} workspace",
       "linkedAndScannedCount_other": "{{size}} in linked worktrees · {{count}} workspaces"
+    }
+  },
+  "worktree": {
+    "delete": {
+      "loss": {
+        "changes_one": "{{count}} uncommitted change",
+        "changes_other": "{{count}} uncommitted changes",
+        "unsavedFiles_one": "{{count}} unsaved file",
+        "unsavedFiles_other": "{{count}} unsaved files"
+      },
+      "withChildrenTitle_one": "Delete {{name}} and {{count}} child workspace?",
+      "withChildrenTitle_other": "Delete {{name}} and {{count}} child workspaces?"
     }
   },
   "worktreeJumpPalette": {

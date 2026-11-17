@@ -3,6 +3,7 @@ import {
   useAppStateView,
   useAppStateViewActive
 } from '@/store/retained-views/app-state-view'
+import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import { toast } from 'sonner'
 import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
@@ -110,6 +111,7 @@ export function ReviewNotesSendMenuContent({
         selectTerminalLayoutsForWorktree(state, worktreeId),
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId),
         state.agentStatusEpoch
       ]
       if (shallow(inputs, nextInputs)) {

@@ -8,7 +8,7 @@ import {
   forgetRefusedPaneResume,
   namesRefusedResume
 } from '@/lib/agent-session/resume/forget-refused-pane-resume'
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/pane-authority/agent-pane-authority'
 import { resolvePaneKey } from '../../lib/agent-status/ownership/agent-status-pane-ownership'
 import type {
   AgentStatusClearIpcPayload,

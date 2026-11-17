@@ -84,13 +84,9 @@
       "optionLayoutUnknown": "不明な配列 — Optionで文字を入力します（安全な既定値）",
       "optionShortcutHint": "Optionショートカットには「両方」、アクセント付き文字や記号には「オフ」、用途を左右のOptionキーに分けるには「左」または「右」を選んでください。",
       "windows": {
-        "administratorApproval": "Windows が承認を求めます。普段お使いのアカウントを使用してください。",
         "administratorDialogScope": "これによりアプリ全体の権限が変更されます。SSH と WSL はそれぞれ独自の権限を保持します。",
         "administratorDocumentation": "ガイドを読む",
         "administratorLabel": "管理者モード",
-        "administratorPromptCancellation": "Windows のプロンプトをキャンセルすると、保持されているターミナルとともに Orca が再び開きます。SSH と WSL の権限はそれぞれのホストで管理されたままです。",
-        "administratorRestartConsequences": "先に作業を保存してください。承認後、現在のローカルターミナルホスト上のターミナルと Agent が閉じられます。復元されたタブは新規管理者シェルを開きます。",
-        "administratorRestartFailed": "Orca を再起動できませんでした。もう一度試すか、マニュアルの手順を使用してください。",
         "administratorScope": "Orca アプリの権限。既存のターミナルでは異なる場合があります。",
         "administratorSearchDescription": "Orca の Windows 権限を確認するか、管理者承認で再起動します。",
         "administratorStatus": "管理者",
@@ -98,7 +94,6 @@
         "checkingAdministrator": "確認中…",
         "closeAdministratorHelp": "閉じる",
         "closeLocalSessions": "作業を保存し、すべてのローカルターミナルセッションを閉じてから、Orca を終了してください。",
-        "confirmAdministratorRestart": "管理者として再起動しますか？",
         "keywordAdmin": "管理者",
         "keywordAdministrator": "管理者",
         "keywordElevated": "昇格",
@@ -107,7 +102,6 @@
         "keywordUac": "uac",
         "launchAdministrator": "Windows のスタートメニューで Orca を右クリックし、「管理者として実行」を選択します。普段お使いのアカウントで Windows のプロンプトを承認してください。",
         "launchStandard": "Windows のスタートメニューから Orca を通常どおり開きます。",
-        "manualAdministratorHelp": "マニュアルの手順",
         "restartAdministrator": "管理者として再起動",
         "restartingAdministrator": "再起動中…",
         "retainedTerminalPermissions": "新規ターミナルが引き続き以前の権限を使用している場合は、セッションの管理を開き、「デーモンを再起動」を選択します。これにより、ローカルターミナルと実行中のコマンドが閉じられます。",
@@ -115,7 +109,12 @@
         "runAdministratorHelp": "管理者ガイド",
         "standardStatus": "標準ユーザー",
         "unknownAdministrator": "判定できません",
-        "10aafff216": "セッションの管理を開く"
+        "10aafff216": "セッションの管理を開く",
+        "confirmOrcaAdministratorRestart": "Orca を管理者として再起動しますか?",
+        "administratorRestartSummary": "ローカルのターミナルと Agent は閉じられます。Windows が承認を求めます。",
+        "orcaCouldNotRestart": "Orca を再起動できませんでした。",
+        "manualAdministratorSteps": "手動の手順",
+        "restartOrca": "再起動"
       },
       "limit": {
         "label": "実行中のターミナルの上限",
@@ -3946,14 +3945,7 @@
         "pane": {
           "CloseTerminalDialog": {
             "1d1a7a9c1f": "キャンセル",
-            "stop_agent_title": "この Agent を停止しますか?",
-            "stop_command_title": "実行中のコマンドを停止しますか?",
-            "stop_chat_description": "このチャットを閉じると、Agent の現在の作業が停止します。",
-            "stop_agent_description": "このターミナルを閉じると、Agent の現在の作業が停止します。",
-            "stop_command_description": "このターミナルを閉じると、その中で実行中のコマンドが停止します。",
-            "dont_ask_again": "実行中のターミナルでは今後確認しない",
-            "stop_agent_confirm": "Agent を停止",
-            "stop_command_confirm": "停止して閉じる"
+            "stop_agent_title": "この Agent を停止しますか?"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "操作を取り戻す",
@@ -4904,7 +4896,9 @@
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
             "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要",
             "notChecked": "未確認",
-            "modelWeeklyLimit": "{{model}} の週間上限: {{usage}}"
+            "modelWeeklyLimit": "{{model}} の週間上限: {{usage}}",
+            "resetsIn": "{{duration}}後にリセット",
+            "resetsNow": "今リセット"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -5996,7 +5990,7 @@
           "gitBlocksMainWorktree": "Git ではメインワークツリーを削除できません。",
           "removeBatchFolder_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeBatchMixed_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
-          "removeBatchGit_other": "git から<target>{{count}} 個のワークスペース</target>を削除し、そのワークスペースフォルダーも削除します。",
+          "removeBatchGit_other": "{{count}} 個のワークツリーとそのブランチを削除します（未マージのブランチは保持されます）。",
           "removeWithChildrenFolder_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeWithChildrenMixed_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
           "removeWithChildrenGit_other": "git から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除し、それらのワークスペースフォルダーも削除します。",
@@ -6018,9 +6012,6 @@
           "a940f3c96e": "子ワークスペースは削除されます",
           "alsoDeletesChildren_other": "このワークスペースを削除すると、{{count}} 件の子ワークスペースも削除されます。",
           "moreChildren_other": "ほか {{count}} 件"
-        },
-        "DeleteWorktreeWarningPanels": {
-          "mainWorktreeNotice": "これは<strong>メインワークツリー</strong>（元のクローンディレクトリ）です。"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "ワークツリーリストに表示",
@@ -6849,9 +6840,7 @@
         },
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "キャンセル",
-          "cf95e3b5bb": "閉じる",
-          "deleting": "削除中…",
-          "forceDeleting": "強制削除中…"
+          "cf95e3b5bb": "閉じる"
         },
         "local": {
           "base": {
@@ -7085,11 +7074,8 @@
           "sshImportSynced": "{{value0}} ホスト{{value1}} を同期しました。"
         },
         "ForgetSshWorkspaceDialog": {
-          "ghostBody": "{{host}} は保存済みの SSH ホストではなくなったため、このワークスペースは稼働中のホストに接続されていません。Orca から削除することのみ可能です。リモート上のファイルとブランチはそのまま残ります。",
           "cancel": "キャンセル",
-          "forget": "Orca から削除",
-          "removeTitle": "「{{name}}」を Orca から削除しますか？",
-          "savedHostBody": "このワークスペースのプロジェクトは {{host}} 上の Orca サーバーで提供されていないため、そこで削除することはできません。Orca から削除することはできます。{{host}} 上のファイル、Git ワークツリー、ブランチはそのまま残ります。"
+          "forget": "Orca から削除"
         },
         "MarkdownImageLightbox": {
           "image": "画像",
@@ -7346,8 +7332,6 @@
         "useDaemonActions": {
           "01af244097": "キャンセル",
           "1bbea41a77": "すべてのターミナルセッションを強制終了しますか?",
-          "d762b41f41": "再起動に失敗しました。",
-          "b5954e12d3": "再起動に失敗しました - ログを確認してください。",
           "0e9da1b98e": "デーモンが再起動されました。",
           "71a8d342b0": "ターミナルタブがありません: {{value0}}/{{value1}}。閉じる試行失敗: {{value2}}。正確なPTYシャットダウン要求が受け入れられました: {{value3}}。失敗: {{value4}}。",
           "2e57c1a940": "管理リクエストが失敗したため、デーモンのシャットダウン結果が検証されていません。",
@@ -7358,7 +7342,6 @@
           "c34fb1098d": "ターミナルタブが閉じられ、シャットダウンリクエストが送信されました。",
           "d9657ac204": "ターミナルセッションのシャットダウンリクエストが送信されました。",
           "e8f25bd903": "ターミナルクリーンアップを完了できませんでした。",
-          "a702d4196e": "これにより、すべてのワークスペースのターミナルタブが閉じられ、現在のターミナルセッションのシャットダウンがリクエストされます。保存されていないターミナル作業は失われます。デーモン自体は実行を続け、新規ターミナルはすぐに開けます。この操作は取り消せません。",
           "01d6b7c64e": "ターミナルを開くと Agent が再起動します。リモートホスト上のターミナルは影響を受けません。",
           "922548bc66": "ターミナルサービスを再起動しますか?",
           "confirmRestart": "再起動",
@@ -7990,6 +7973,9 @@
             "modeAriaLabel": "Agent ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
             "modePopout": "ポップアウト"
+          },
+          "worktreeCardStyle": {
+            "title": "カードのスタイル"
           }
         },
         "FloatingWorkspacePane": {
@@ -12542,32 +12528,21 @@
             "dialog": {
               "connectFailed": "接続に失敗しました",
               "title": "Bitbucket を接続する",
-              "description": "Bitbucket Cloud 認証情報を使用して、PR とビルドステータスを参照します。 Orca は保存する前にそれを確認します。",
-              "remoteRuntime": "アクティブなリモートランタイムではなく、このマシンに保存されます。代わりにリモートランタイムで ORCA_BITBUCKET_* を設定してください。環境変数は、ここで保存した内容より常に優先されます。",
-              "environmentManaged": "Bitbucket は ORCA_BITBUCKET_* 環境変数によってすでに設定されており、これが優先されます。 Orca に認証情報を保存するには、これらの設定を解除します。",
               "authModeLabel": "Bitbucket の認証方法",
               "modeBasic": "メールとAPIトークン",
               "modeToken": "アクセストークン",
               "accessToken": "アクセストークン",
               "accessTokenPlaceholder": "リポジトリ、プロジェクト、またはワークスペースのアクセストークン",
-              "email": "アトラシアンアカウントのメールアドレス",
               "emailPlaceholder": "you@example.com",
               "apiToken": "APIトークン",
               "apiTokenPlaceholder": "Atlassian API トークン",
-              "baseUrl": "API ベース URL (オプション)",
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
-              "tokenHint": "リポジトリ、プロジェクト、ワークスペースのアクセストークンは、一致する Bitbucket 設定ページから作成され、PR への読み取りアクセスが必要です。",
-              "basicHint": "アカウントの Atlassian API トークンを作成し、それを所有する電子メールアドレスと組み合わせます。",
-              "scopesTitle": "次の Bitbucket API トークンのスコープを選択してください:",
               "scopeUser": "アカウント名の表示",
               "scopeRepository": "ビルドステータスの読み取り",
               "scopeReadPullRequest": "PR の読み取り",
               "scopeWritePullRequest": "PR の作成",
               "scopesWriteNote": "読み取り専用で使う場合は書き込みスコープを省略してください。書き込みには読み取りが含まれないため、各スコープを個別に選択してください。",
-              "docsLink": "Bitbucket API トークンのドキュメント",
-              "storageNote": "OS キーチェーンが使用可能な場合は、暗号化されたストレージを使用してこのマシンに保存されます。 ORCA_BITBUCKET_* 環境変数は、ここで保存したものよりも常に優先されます。",
               "cancel": "キャンセル",
-              "verifying": "確認中…",
               "connect": "接続"
             }
           },
@@ -13403,17 +13378,12 @@
           }
         },
         "recoverServer": {
-          "title": "Orca のサーバーを復旧",
-          "description": "以前の実行時のロックが残っているため、このホストの Orca サーバーを起動できません。",
           "checking": "ロックを確認中…",
-          "confirmCheck": "このホームフォルダーを共有している他のマシンで Orca は実行されていません",
           "cancel": "キャンセル",
           "confirm": "ロックを解除して再起動",
-          "eligible": "このマシンの以前のアドレスでは何も応答しませんが、同じ名前でこのホームフォルダーを共有する別のマシンがある可能性を Orca は否定できません。",
           "host": "ホスト",
           "lockBoot": "書き込み時のブート",
           "currentBoot": "現在のブート",
-          "warning": "このホームフォルダーを共有する他のマシンでこのプロファイルの Orca が実行されていない場合にのみ続行してください。",
           "none": "解除するロックはもうありません。このホストの Orca サーバーを起動するには再接続してください。",
           "manualCommand": "ホストで次を実行するか、詳細に表示されているロックファイルを削除してください:",
           "manualDelete": "他のマシンが使用していないことを確認したら、詳細に表示されているロックファイルを削除してください。",
@@ -15108,8 +15078,8 @@
             "databaseCount_other": "{{value0}} 個のデータベース",
             "scanning": "{{value0}}をスキャン中",
             "checking": "{{value0}} を確認中",
-            "scanned": "{{value0}}をスキャン済み",
-            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み"
+            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み",
+            "historyRefreshed": "履歴を更新しました"
           },
           "run": {
             "source": {
@@ -17223,17 +17193,11 @@
       "crash": {
         "report": {
           "CrashReportDialog": {
-            "b4951cd27c": "レポートの送信",
-            "88fea8e84e": "送信しないでください",
-            "50b00dc327": "詳細をコピー",
-            "6d3ebe216a": "診断テキスト",
             "835037edc9": "Orca",
             "8e24fe4f75": "クラッシュレポートが送信されました。",
             "8b8473c544": "クラッシュレポートがコピーされました。",
             "765591798d": "クラッシュレポートを確認しています…",
-            "ead6fc0510": "自動のクラッシュレポートは取得されませんでした。詳細を送信し、利用できる場合は最近の診断ログを添付できます。",
-            "b082f27490": "最近の診断ログを添付",
-            "e59f0b9427": "上限を設けて秘匿処理したログをまとめ、レポートと一緒に送信します。"
+            "ead6fc0510": "自動のクラッシュレポートは取得されませんでした。詳細を送信し、利用できる場合は最近の診断ログを添付できます。"
           },
           "submit": {
             "notice": {
@@ -17256,10 +17220,8 @@
             "closedTitle": "Orca が予期せず終了しました",
             "reportDescription": "プライバシーに配慮したクラッシュレポートを送信します。利用可能な場合は、機密情報を除去した最近の診断ログが含まれます。",
             "uiErrorDescription": "プライバシーに配慮した診断レポートを送信して、失敗した UI の把握にご協力ください。",
-            "closedDescription": "プライバシーに配慮した診断レポートを送信して、何が起きたかの把握にご協力ください。",
             "reportNotesPlaceholder": "任意: 何が起きましたか？",
             "uiErrorNotesPlaceholder": "任意: この UI エラーの前に何をしていましたか？",
-            "closedNotesPlaceholder": "任意: Orca が終了する前に何をしていましたか？",
             "renderErrorIn": "{{surface}} で React レンダリングエラー",
             "renderError": "React レンダリングエラー"
           }
@@ -18382,7 +18344,6 @@
       },
       "confirmation": {
         "dialog": {
-          "8490e5d36a": "確認する",
           "56f5c60e0c": "キャンセル",
           "92bac3217e": "今後表示しない"
         },
@@ -18509,32 +18470,13 @@
         "routing": {
           "preference": {
             "dialog": {
-              "badge": "ターミナルリンク",
-              "preview": "プレビュー",
-              "title": "ターミナルのリンクを Orca のブラウザで開きますか？",
-              "description": "ターミナルのリンクを Orca のブラウザで開くか、システムブラウザを使い続けます。",
               "orca": {
-                "button": "Orca で開く",
-                "note": "Orca はインポート済み Cookie を使ってログイン済みサイトを開けます。"
-              },
-              "settings": {
-                "note": "後で [設定] → [ブラウザ] から変更できます。"
+                "button": "Orca で開く"
               },
               "system": {
                 "button": "システムブラウザを使用"
               },
-              "link": {
-                "label": "リンク"
-              },
-              "shortcut": {
-                "note": {
-                  "prefix": "リンクを Orca で開く場合、",
-                  "suffix": "クリックで今回だけシステムブラウザで開きます。"
-                }
-              },
               "keep": {
-                "title": "ターミナルのリンクを Orca のブラウザで開き続けますか？",
-                "description": "またはシステムブラウザを既定で使用します。",
                 "orca": {
                   "button": "Orca のままにする"
                 }
@@ -20989,7 +20931,9 @@
           "closedToast_one": "{{workspace}} の未保存の編集がある {{count}} 個のファイルを閉じました",
           "closedToast_other": "{{workspace}} の未保存の編集がある {{count}} 個のファイルを閉じました",
           "reopen": "再度開く",
-          "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。"
+          "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。",
+          "line_one": "{{count}} 個のファイルの未保存の編集内容が破棄されます: {{files}}",
+          "line_other": "{{count}} 個のファイルの未保存の編集内容が破棄されます: {{files}}"
         },
         "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
       },
@@ -21001,25 +20945,14 @@
     "agentSessionContinuation": {
       "preparingContext": "保存されたチャットのコンテキストを準備中…",
       "handOffToAnotherAgent": "別の Agent に引き継ぐ",
-      "dialogTitle": "別の Agent に引き継ぐ",
-      "dialogDescription": "この時点から新しい Agent セッションを開始します。元のセッションは変更されません。",
       "untitledSession": "現在のセッション",
-      "originalAgent": "元の Agent: {{agent}}",
       "agent": "Agent",
       "selectAgent": "Agent を選択",
       "detectingAgents": "このワークスペースホストで Agent を検出中…",
       "detectionFailed": "このワークスペースホストで Agent を検出できませんでした。",
-      "noAgents": "このワークスペースホストで有効な Agent が検出されませんでした。",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "このワークスペースホストで利用できる Agent は、{{agent}} と利用上限を共有するものだけです。別の Agent を有効にするか、インストールしてください。",
       "context": "コンテキスト",
-      "modeFocused": "要点を引き継ぐ（推奨）",
-      "modeFocusedDescription": "最新の状態と現在のワークスペースを使い、必要な場合だけ過去の詳細を読みます。",
-      "modeLoadedDescription": "このチャットに読み込まれている最近のメッセージと現在のワークスペースを使います。",
-      "modeCapturedDescription": "キャプチャしたテキストと現在のワークスペースを使います。",
-      "modeFull": "セッション全文",
-      "modeFullDescription": "続行前に、保存されたセッション全体を新規 Agent に読ませます。時間がかかり、多くのコンテキスト、プラン使用量、またはAPIクレジットを消費する可能性があります。",
-      "startsIn": "開始場所:",
-      "startSession": "新規セッションを開始",
       "starting": "開始中…",
       "noContext": "新規セッションで続けるためのコンテキストがありません。",
       "agentDisabled": "Agent 設定で {{agent}} が無効になっています。",
@@ -21028,7 +20961,14 @@
       "deliveryFailed": "新規 {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
       "launchFailed": "新規 {{agent}} セッションを開始できませんでした。",
       "deliveryUnconfirmed": "Orca は {{agent}} がセッションコンテキストを受け取ったことを確認できませんでした。新規セッションを確認し、入力が空の場合は自分で貼り付けてください。",
-      "copyPrompt": "プロンプトをコピー"
+      "copyPrompt": "プロンプトをコピー",
+      "dialogTitleSentence": "別の Agent に引き継ぐ",
+      "metaWithAgent": "{{agent}} から · {{session}} · 元のセッションは変更されません",
+      "meta": "{{session}} · 元のセッションは変更されません",
+      "modeLatestStatus": "最新の状況（推奨）",
+      "modeFullTranscript": "完全なトランスクリプト",
+      "modeFullCost": "時間がかかり、プランや API クレジットを多く消費します。",
+      "startSessionSentence": "セッションを開始"
     },
     "terminalPane": {
       "TerminalContextMenu": {
@@ -21361,6 +21301,29 @@
         "folderArchiveDescription": "ワークスペースの削除前に実行される、ローカルおよび共有のスクリプトです。",
         "folderSetupFieldDescription": "新しいワークスペースの作成後に実行されます。子ワークツリーの作成、依存関係のインストール、env ファイルのコピーなどに使います。",
         "folderArchiveFieldDescription": "ワークスペースの削除前に実行されます。"
+      },
+      "bitbucket": {
+        "credentials": {
+          "dialog": {
+            "createToken": "作成する",
+            "environmentManagedLine": "ORCA_BITBUCKET_* 環境変数で設定されています。ここで保存するには解除してください。",
+            "savedLocallyOnly": "このコンピューターにのみ保存されます。",
+            "accessTokenNeeds": "プルリクエストの読み取り権限が必要です。",
+            "atlassianEmail": "Atlassian のメールアドレス",
+            "requiredScopes": "必要なスコープ",
+            "apiBaseUrl": "API ベース URL",
+            "close": "閉じる",
+            "verifyingEllipsis": "確認中…"
+          }
+        }
+      },
+      "recoverServer": {
+        "titleOnHost": "{{host}} の古いロックを解除しますか?",
+        "titleGeneric": "古いロックを解除しますか?",
+        "summary": "以前の実行でロックが残っているため、Orca のサーバーを起動できません。",
+        "confirmCheckHomeFolder": "このホームフォルダーを共有する他のマシンで Orca は実行されていません",
+        "details": "詳細",
+        "clearing": "解除中…"
       }
     },
     "agentChildRow": {
@@ -21635,11 +21598,67 @@
       "selectedAgentNeedsPermission": "選択中の Agent には許可が必要です。",
       "activeAgentNeedsPermission": "アクティブな Agent には許可が必要です。",
       "statusUnverified": "{{target}} Agent の状態を確認できませんでした。",
+      "approvalUnseen": "{{target}} Agent が承認を待っている可能性があります。ターンが終わってからメモを送信してください。",
+      "hostUpdateRequired": "{{target}} Agent のホストの Orca を更新すると、メモを送信できます。",
       "notReady": "{{target}} Agent は、まだ入力を受け付けられる状態ではありませんでした。",
       "notWritable": "{{target}} Agent はメモを受け付けませんでした。",
       "selectedSubmitFailed": "メモは選択中のターミナルにすでに貼り付けられている可能性がありますが、送信できませんでした。",
       "activeSubmitFailed": "メモはアクティブなターミナルにすでに貼り付けられている可能性がありますが、送信できませんでした。",
       "notWritableSelection": "{{target}} Agent は選択範囲を受け付けませんでした。"
+    },
+    "crash": {
+      "report": {
+        "CrashReportDialogSurface": {
+          "closedSummary": "修正に役立つ、プライバシーに配慮したレポートを送信してください。",
+          "closedNotesQuestion": "何をしていましたか?（任意）"
+        }
+      }
+    },
+    "link": {
+      "routing": {
+        "preference": {
+          "dialog": {
+            "keepInOrcaTitle": "ターミナルのリンクを引き続き Orca で開きますか?",
+            "openInOrcaTitle": "ターミナルのリンクを Orca で開きますか?",
+            "shortcutSummary": "{{shortcut}}-クリックで一度だけシステムブラウザーで開きます。設定で変更できます。"
+          }
+        }
+      }
+    },
+    "shared": {
+      "useDaemonActions": {
+        "restartFailed": "ターミナルサービスを再起動できませんでした。",
+        "killAllSessionsDescription": "すべてのターミナルセッションとその Agent を終了します（タブが開いていないものも含む）。未保存の作業は失われます。",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
+      }
+    },
+    "sidebar": {
+      "ForgetSshWorkspaceDialog": {
+        "removeFromOrcaTitle": "{{name}} を Orca から削除しますか?",
+        "ghostHostLine": "{{host}} は保存済みのホストではなくなりました。ファイルはそのホストに残ります。",
+        "disconnectedHostLine": "{{host}} は接続されていません。ファイルはホストに残ります。",
+        "filesStayLine": "ファイルは {{host}} に残ります。",
+        "removing": "削除中…"
+      }
+    },
+    "terminal": {
+      "pane": {
+        "CloseTerminalDialog": {
+          "stopChatAgentTitle": "このチャットの Agent を停止しますか?",
+          "stopAgentInWorkspaceTitle": "「{{name}}」の Agent を停止しますか?",
+          "stopRunningCommandTitle": "実行中のコマンドを停止しますか?",
+          "agentWorkStops": "現在の作業は停止し、再開されません。",
+          "sleepWorkspaceInstead": "代わりにワークスペースをスリープ",
+          "stopAgentSentence": "Agent を停止",
+          "stopAndClose": "停止して閉じる"
+        }
+      }
+    },
+    "ui": {
+      "dialog": {
+        "cancel": "キャンセル",
+        "tryAgain": "再試行"
+      }
     }
   },
   "dashboardPopout": {
@@ -22046,6 +22065,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "新しいカードを試す",
+      "dismiss": "後で",
+      "body": "すべてのカードに Agent の状態、未読ドット、子の概要を表示します。",
+      "switchBack": "<path>ワークスペースのオプション › カードのスタイル</path> からいつでも元に戻せます",
+      "switchLabel": "カードのスタイル",
+      "classic": "クラシック",
+      "new": "新しい",
+      "keep": "新しいものを使う",
+      "useClassic": "クラシックを使う",
+      "laterToast": "ワークスペースのオプション › カードのスタイル からいつでも新しいカードを試せます",
+      "saveFailedToast": "カードのスタイルを保存できませんでした。もう一度お試しください。",
+      "keptTitle": "新しいカードを使用中です",
+      "keptBody": "ここの カードのスタイル で変更できます。"
+    },
     "revealFiltered": {
       "title": "隠されたワークスペースを明らかにしますか?",
       "description": "アクティブなワークスペースはサイドバーに表示されません。これを表示すると、それを非表示にしているフィルターのみが調整されます。",
@@ -22119,7 +22153,8 @@
         "peerCheckFailed": "Orca は WSL ホストに、このコンピューター上の別の Orca がまだ使用しているかを問い合わせられませんでした: {{detail}}",
         "removalUnrecorded": "Orca は、今回の削除後も実行中のものを記録できませんでした: {{detail}}",
         "installLockWait_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca が引き継ぎます。",
-        "installLockWaitGivesUp_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca は待機をやめます。"
+        "installLockWaitGivesUp_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca は待機をやめます。",
+        "installLockWaitHolderGone": "このディストリビューションの別の Orca のインストールが停止しました。数秒後に Orca が引き継ぎます。"
       }
     },
     "agentSummary": {
@@ -22666,14 +22701,12 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "インデックス付けされた履歴に一致するセッションがありません。別のクエリまたはスコープを試してください。",
       "loadMore": "さらに一致をロードする",
       "indexedHistory": "インデックス付き履歴",
       "hostsSkipped": "検索されていません: {{value0}}",
       "sortRelevance": "最も関連性の高い",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
-      "consent": "全文検索を有効にしますか？Orca は、会話の全文を含むローカルの Agent トランスクリプトから、このコンピュータ上にインデックスを作成します。内容はマスキングされません。ペアリングされた認証済みクライアントは、このインデックスを検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
       "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
@@ -22700,7 +22733,9 @@
         "unreachable": "接続不可",
         "scopeNotFound": "そのホストに検索範囲が見つかりません",
         "agentNotSupported": "Agent 未対応"
-      }
+      },
+      "consentTranscriptIndex": "検索ではセッションの詳細とメッセージのプレビューが照合されます。会話の全文を検索するには、全文検索を有効にしてください（ローカルのトランスクリプトをマスキングせずにインデックス化します）。ペアリングされたデバイスからも検索できます。",
+      "noMatchesToShow": "表示できる一致するセッションはありません。"
     }
   },
   "sessionHistory": {
@@ -23068,28 +23103,22 @@
       "oldTerminalDialogRisk": "サーバーを共有する Codex セッションが同時に終了する可能性があり、Agent のステータスが間違っている可能性があります。",
       "oldTerminalDialogCause": "古いターミナルは依然として Codex サーバーを共有しています。新規ターミナルを開いて、別のサーバーで Codex を実行します。",
       "fix": "修理",
-      "dialogTitle": "各 Codex タブに独自のサーバーを与える",
-      "dialogDescription": "ターミナルで直接開始された Codex セッションは、1 つのバックグラウンドサーバーを共有します。 Orca は、開始する Codex セッションを個別に保持します。セッションがサーバーを共有している場合、1 つを閉じると他のセッションも終了し、Agent のステータスが不正になる可能性があります。",
-      "copy": "コピー",
       "copied": "コピーしました",
-      "done": "完了",
-      "step1Title": "Codex サーバー共有をオフにする",
-      "step1Note": "これにより Codex 設定が変更されるため、Orca の外部にも適用されます。",
-      "step2Title": "稼働中の共有サーバーを停止します",
-      "undo": "元に戻すには、codex features enable daemon_auto_start を実行します。",
-      "step2Warning": "サーバーを共有している開いている Codex セッションをすべて閉じます。",
-      "turnOff": "消す",
       "turningOff": "オフにしています…",
-      "turnedOff": "オフになっています",
-      "turnOffFailed": "Orca はこれをオフにすることができませんでした。",
       "stopServer": "サーバーを停止する",
       "stopping": "停止中…",
-      "stopped": "停止しました",
-      "stopFailed": "Orca はサーバーを停止できませんでした。",
-      "confirmStopTitle": "共有サーバーを停止しますか?",
-      "confirmStopDescription": "これにより、Orca 外部のものも含め、それを共有している開いている Codex セッションがすべて閉じられます。",
       "cancel": "キャンセル",
-      "runs": "実行コマンド"
+      "copyCommand": "コマンドをコピー",
+      "howToUndo": "元に戻す方法",
+      "undoRun": "共有を再度オンにするには、次を実行します:",
+      "turnOffSharing": "共有をオフにする",
+      "dialogQuestion": "Codex の各タブに専用のサーバーを割り当てますか?",
+      "stopSummary": "実行中のサーバーを停止し、それを使っているすべての Codex セッションを閉じます。",
+      "dialogSummary": "Codex のサーバー共有をオフにします（Orca の外でも適用されます）。",
+      "alsoStop": "実行中のサーバーも停止する（Orca の外も含め、それを使うすべての Codex セッションが閉じます）",
+      "couldNotTurnOff": "共有をオフにできませんでした。",
+      "stopFailedAfterOff": "共有はオフになりましたが、サーバーは停止しませんでした。",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "ペインを新規タブに移動できませんでした。"
@@ -23267,7 +23296,36 @@
       "nestedChildrenCannotBeKept": "このワークスペース内にある子ワークスペースのフォルダーは、保持する前にこのワークスペースの外へ移動する必要があります。",
       "childrenChanged": "子ワークスペースが変更されました。ワークスペースの一覧を確認して、もう一度お試しください。",
       "childrenChangedClearPreserve": "子ワークスペースが変更されました。削除内容を確認するには、このオプションをオフにしてください。",
-      "detachFailed": "すべての子ワークスペースを切り離すことはできませんでした。親ワークスペースは削除されていません。{{error}}"
+      "detachFailed": "すべての子ワークスペースを切り離すことはできませんでした。親ワークスペースは削除されていません。{{error}}",
+      "loss": {
+        "changes_one": "未コミットの変更 {{count}} 件",
+        "changes_other": "未コミットの変更 {{count}} 件",
+        "uncountedChanges": "未コミットの変更",
+        "unsavedFiles_one": "未保存のファイル {{count}} 個",
+        "unsavedFiles_other": "未保存のファイル {{count}} 個",
+        "both": "{{changes}}と{{files}}が失われます",
+        "one": "{{what}}が失われます",
+        "all": "{{changes}}、{{files}}、無視されたファイルが失われます",
+        "withIgnored": "{{what}}と無視されたファイルが失われます",
+        "ignoredOnly": "無視されたファイルが失われます"
+      },
+      "showChanges": "変更を表示",
+      "unsavedSuffix": "（未保存）",
+      "onHost": "{{host}} 上",
+      "forceDeletingEllipsis": "強制削除中…",
+      "deletingEllipsis": "削除中…",
+      "forceDelete": "強制削除",
+      "alwaysForceDelete": "常に強制削除",
+      "batchTitle": "{{count}} 個のワークスペースを削除しますか?",
+      "batchVerb": "{{count}} 個のワークスペースを削除",
+      "withChildrenTitle_one": "{{name}} と子ワークスペース {{count}} 個を削除しますか?",
+      "withChildrenTitle_other": "{{name}} と子ワークスペース {{count}} 個を削除しますか?",
+      "allVerb": "すべて削除",
+      "singleTitle": "{{name}} を削除しますか?",
+      "singleVerb": "ワークスペースを削除",
+      "forceExplanation": "変更があるため、Git で削除できませんでした。強制削除すると、その変更も削除されます。",
+      "errorDetails": "詳細",
+      "changesIncomplete": "一部の変更を完全には確認できませんでした。"
     }
   },
   "mediaPreview": {
@@ -23369,10 +23427,7 @@
     "moreActions": "その他の強制削除オプション",
     "alwaysForceDeleteBranches": "保持したブランチを常に削除する",
     "moreBranchActions": "その他のブランチ削除オプション",
-    "alwaysForceDeleteBranchesDescription": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
-    "moreDeleteOptions": "その他の削除オプション",
-    "alwaysDelete": "常に削除",
-    "alwaysDeleteTooltip": "今後の削除ではこの確認をスキップします。"
+    "alwaysForceDeleteBranchesDescription": "将来のワークスペースの削除後に保持されるブランチに適用されます。"
   },
   "workspace": {
     "branchChoice": {
@@ -23749,7 +23804,6 @@
     },
     "resources": "リソース",
     "ptys": "PTY",
-    "localDaemonScope": "これはこのコンピューター上のターミナルに影響します。",
     "countUnavailable": "ターミナル数を取得できません",
     "openToObserve": "リソースを開いてターミナルセッションを監視します。",
     "refresh": "更新",
@@ -24377,10 +24431,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "このホストでは{{agent}}のモデルを利用できません。現在の選択はそのまま適用されます。",
-    "catalogFailed": "{{agent}}のモデルを読み込めませんでした。Agent 選択を閉じて開き直してください。",
-    "catalogSignIn": "{{agent}}にサインインしてモデルを読み込み、Agent 選択を開き直してください。",
-    "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
-    "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
     "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "検索、例: Opus 5.5…",
     "searchAgents": "Agent を検索…",
@@ -24400,6 +24450,7 @@
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル",
     "workspaceStartupFailed": "{{agent}} を起動できませんでした。この設定の引数を確認して再試行してください。",
     "sameAsTextDefault": "デフォルトと同じ · {{value0}}",
+    "effortDefault": "既定",
     "chatChoicesNote": "CLI フラグがない {{agent}} のモデルまたは推論レベルの選択はチャットに適用されます。",
     "composedChoicesNote": "{{agent}} の推論レベルと速度の選択はモデルの引数に含まれます。"
   },
@@ -24948,7 +24999,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "Agent に許可が必要です",
-      "statusStale": "Agent のステータスが古くなっています"
+      "approvalUnseen": "Agent が承認を待っている可能性があります",
+      "hostUpdateRequired": "この Agent に送信するには、このホストの Orca を更新してください"
     }
   },
   "wslDistroHold": {
@@ -25119,5 +25171,17 @@
       "read": "使用量を読み込めませんでした。もう一度 [更新] をお試しください。",
       "retry": "更新"
     }
+  },
+  "crashReport": {
+    "freeze": {
+      "includeRedacted": "保存済みのフリーズレポートと最近のログを含める（秘匿化済み）",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
+    },
+    "includeRecentLogsRedacted": "最近のログを含める（秘匿化済み）",
+    "details": "詳細",
+    "copyDetails": "詳細をコピー",
+    "dontSend": "送信しない",
+    "sending": "送信中…",
+    "sendReport": "レポートを送信"
   }
 }

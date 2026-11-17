@@ -16,8 +16,8 @@ import {
   rethrowWithUserMessage
 } from '../../filesystem/local-file-io/filesystem-create-path-guards'
 import { classifyFilesystemDirectoryEntries } from '../../filesystem/local-file-io/filesystem-symlink-directory-entries'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../ipc/local-worktree-runtime-options'
-import { listMarkdownDocuments } from '../../ipc/markdown-documents'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../ipc/worktrees/local-worktree-runtime-options'
+import { listMarkdownDocuments } from '../../ipc/filesystem/search/markdown-documents'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'

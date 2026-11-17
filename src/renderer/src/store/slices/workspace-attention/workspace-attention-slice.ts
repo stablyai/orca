@@ -27,7 +27,7 @@ import {
   type HostScopedWorktreeKey
 } from '../../../../../shared/worktree/host-qualified-identity'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
-import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import { getAgentPaneExecutionHost } from '../agent-status/pane-authority/agent-pane-execution-host'
 import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'

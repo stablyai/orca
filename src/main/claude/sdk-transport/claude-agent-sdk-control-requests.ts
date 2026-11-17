@@ -268,7 +268,12 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
     initializationResult: () =>
       runClaudeControl('initialize', () => query.initializationResult(), null),
     getContextUsage: (options) =>
-      runClaudeControl('get_context_usage', () => query.getContextUsage(), options?.timeoutMs),
+      runClaudeControl(
+        'get_context_usage',
+        // 'full' makes one token-count API call per category on each fresh CLI; CLIs before 2.1.257 ignore detail.
+        () => query.getContextUsage({ detail: 'summary' }),
+        options?.timeoutMs
+      ),
     renameSession: (title, sessionId, options) => {
       const rename = claudeQuerySessionRenamer(query)
       return rename

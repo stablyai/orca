@@ -126,7 +126,12 @@ const DETAIL_COPY: Record<WslHostStatusDetailCode, (values: Values) => string | 
           DETAIL.installLockWaitGivesUp.other,
           { count, defaultValue_one: DETAIL.installLockWaitGivesUp.one }
         )
-  }
+  },
+  installLockWaitHolderGone: () =>
+    translate(
+      'sidebar.wslHosts.statusDetails.installLockWaitHolderGone',
+      DETAIL.installLockWaitHolderGone
+    )
 }
 
 function isCopyCode<Code extends string>(copy: Record<Code, unknown>, code: unknown): code is Code {
