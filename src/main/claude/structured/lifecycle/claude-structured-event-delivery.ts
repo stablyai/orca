@@ -1,3 +1,7 @@
+import {
+  advanceClaudeRemoteControl,
+  CLAUDE_REMOTE_CONTROL_OFF
+} from '../remote-control/claude-remote-control-machine'
 import { ClaudePluginInputError } from '../../sdk-transport/claude-plugin-ui'
 import { claudePromptCardWritten } from '../../child-work/claude-child-work-evidence'
 import type {
@@ -30,6 +34,13 @@ export function emitClaudeStructuredSessionEvent({
     deps.onEvent?.(event)
   }
   if (event.type === 'ended' || event.type === 'retiring') {
+    // The host drops the child's link with the child; late answers must not report it again.
+    if (session) {
+      session.remoteControl = advanceClaudeRemoteControl(
+        session.remoteControl ?? CLAUDE_REMOTE_CONTROL_OFF,
+        { type: 'exited' }
+      ).phase
+    }
     session?.delivery.dispose()
     session?.childWork.clear()
     session?.backgroundTasks.clear()

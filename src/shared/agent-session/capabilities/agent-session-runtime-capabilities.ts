@@ -119,6 +119,9 @@ export const AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY 
 // The host saves Skip on an async question card for every device; older hosts hide it per screen.
 export const AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY =
   'agent-session.skip-async-questions.v1' as const
+// The host answers agentSession.providerRemoteControl and publishes providerRemoteControl.
+export const AGENT_SESSION_PROVIDER_REMOTE_CONTROL_RUNTIME_CAPABILITY =
+  'agent-session.provider-remote-control.v1' as const
 export const AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY =
   'native-chat.text-attachment-read.v1' as const
 // Readers must explicitly honor stoppable:false on live child rows. The Stop capability alone predates this field and cannot prove safe rendering.
@@ -184,6 +187,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_MCP_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
     AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PROVIDER_REMOTE_CONTROL_RUNTIME_CAPABILITY,
     AGENT_SESSION_TURN_ITEM_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,

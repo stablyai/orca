@@ -1,3 +1,4 @@
+import { claudeRemoteControlPromptBody } from '../remote-control/claude-remote-control-prompt'
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import {
@@ -99,6 +100,7 @@ export function journalClaudeMessage(
       : envelope.parentToolUseId
   const stamp = ctx.corrections.stampFor(producerRef)
   const outputEnvelope = claudeOutputEnvelope(envelope)
+  const remotePrompt = claudeRemoteControlPromptBody(envelope, message, clientMessageId)
   ctx.threadGoal.observe(message)
   const source: ClaudeTurnSource = {
     sessionId: envelope.sessionId,
@@ -106,7 +108,7 @@ export function journalClaudeMessage(
     assistant: envelope.role === 'assistant'
   }
   const openOutputTurn = (): void => ctx.turn.ensureOpen(message, source, observedAt)
-  const messageBody = claudeMessageBody(outputEnvelope)
+  const messageBody = claudeMessageBody(outputEnvelope) ?? remotePrompt
   const ordinaryFailure =
     typeof message.api_error === 'string' && message.api_error !== 'usage_limit_reached'
       ? {
@@ -220,7 +222,8 @@ export function journalClaudeMessage(
   const sendEchoTurn = claudeTurnOpenedBySendEcho({
     envelope,
     frame: message,
-    startsTurn,
+    // The person's prompt from Claude's apps opens a turn as Orca's own send would.
+    startsTurn: startsTurn || (remotePrompt !== null && !ctx.turn.isOpen),
     observedAt,
     ...(requestedAt === undefined ? {} : { requestedAt }),
     userItemId: agentJournalItemKey(identity)

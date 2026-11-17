@@ -1,3 +1,4 @@
+import { agentSessionProviderRemoteControlsEqual } from '../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import { agentSessionBackgroundTasksEqual } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
@@ -53,6 +54,8 @@ export function structuredStatusSummariesEqual(
     a.stopping === b.stopping &&
     a.awaitsAnswer === b.awaitsAnswer &&
     a.asyncQuestionsSkippedThrough === b.asyncQuestionsSkippedThrough &&
+    agentSessionProviderRemoteControlsEqual(a.providerRemoteControl, b.providerRemoteControl) &&
+    a.providerRemoteControlChoice === b.providerRemoteControlChoice &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     structuredStatusChildrenEqual(a.children, b.children) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)

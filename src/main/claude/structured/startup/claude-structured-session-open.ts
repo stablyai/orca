@@ -7,7 +7,12 @@ import type {
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { readClaudeStructuredSessionSettings } from '../launch/claude-structured-session-acquisition-options'
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
-import { readClaudeRemoteControlAutoEnable } from './claude-structured-init-proof'
+import { readClaudeRemoteControlDefault } from './claude-structured-init-proof'
+import { claudeRemoteControlAtStart } from '../remote-control/claude-remote-control-start'
+import {
+  claudeRemoteControlLinkDeps,
+  driveClaudeRemoteControl
+} from '../remote-control/claude-remote-control-link'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import type {
   ClaudeSession,
@@ -82,7 +87,7 @@ async function openStartingClaudeSession(
     request.signal
   )
   // Settled: the open above resolves only after these facts do.
-  const remoteControl = readClaudeRemoteControlAutoEnable((await facts).initialization)
+  const claudeRemoteControl = readClaudeRemoteControlDefault((await facts).initialization)
   const current = () => {
     if (sessions.get(request.sessionId) !== session || request.signal.aborted) {
       throw new Error('claude session closed before startup completed')
@@ -135,27 +140,19 @@ async function openStartingClaudeSession(
   }
   startup.open()
   // After catch-up, so a turn sent from the phone cannot race the transcript catch-up.
-  if (remoteControl) {
-    connectClaudeRemoteControl(session, request.sessionId, deps)
+  const connect = claudeRemoteControlAtStart({
+    claude: claudeRemoteControl,
+    ...(deps.remoteControlStart?.(request.sessionId) ?? {
+      setting: 'claude-code',
+      choice: undefined
+    })
+  })
+  if (connect) {
+    driveClaudeRemoteControl(
+      session,
+      connect,
+      claudeRemoteControlLinkDeps(request.sessionId, deps, (event) => emit(session, event))
+    )
   }
   return { ...result, link: session.link, newConversation: !resumesTranscript }
-}
-
-/** Mirrors a terminal session's auto-connect; a refusal leaves the chat working without it. */
-function connectClaudeRemoteControl(
-  session: ClaudeSession,
-  sessionId: string,
-  deps: ClaudeStructuredSessionAdapterDeps
-): void {
-  void session.connection
-    .enableRemoteControl?.({ timeoutMs: deps.requestTimeoutMs })
-    .catch((error: unknown) => {
-      if (!session.connection.closed) {
-        deps.logger?.warn('connecting a Claude chat to Remote Control failed', {
-          scope: 'claude-remote-control',
-          sessionId,
-          error
-        })
-      }
-    })
 }

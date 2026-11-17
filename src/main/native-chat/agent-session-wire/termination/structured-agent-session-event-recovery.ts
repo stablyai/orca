@@ -1,3 +1,4 @@
+import { recordProviderChildRemoteControl } from '../host/structured-agent-session-provider-child'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from '../providers/structured-agent-session-adapter'
 import type { JournalWriterSettled } from '../../agent-session-journal/journal-sql-failure'
@@ -154,6 +155,20 @@ export class StructuredAgentSessionEventRecovery {
 
   /** Settle/report exits without automatic restart; next-send delivery owns queued work and startup. */
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
+    if (event.type === 'provider-remote-control') {
+      const session = this.context.sessions.get(event.sessionId)
+      if (
+        session &&
+        recordProviderChildRemoteControl(
+          session,
+          { generation: event.acquisitionGeneration, fence: event.fence },
+          event.remoteControl
+        )
+      ) {
+        this.context.publishStatus?.(event.sessionId)
+      }
+      return
+    }
     if (event.type === 'retiring') {
       const session = this.context.sessions.get(event.sessionId)
       const child = session?.child

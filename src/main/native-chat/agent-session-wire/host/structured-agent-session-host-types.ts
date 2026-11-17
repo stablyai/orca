@@ -1,3 +1,4 @@
+import type { AgentSessionProviderRemoteControl } from '../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import type {
   AgentModelCatalogSource,
   AgentModelCatalogService
@@ -117,6 +118,8 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly heldSends?: () => ReadonlySet<string> | undefined
   readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
   close?: StructuredAgentSessionChildClose
+  /** The child's own remote link as it last reported it; memory-only. */
+  providerRemoteControl?: AgentSessionProviderRemoteControl
 }
 
 /** Writer death proof comes only from stopAgentSessionProviderRoot or observed exit. */

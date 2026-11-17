@@ -1,3 +1,4 @@
+import type { ClaudeRemoteControlDefault } from '../remote-control/claude-remote-control-start'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import { CLAUDE_DEFAULT_SETTING_SOURCES } from '../launch/claude-structured-launch-resolution'
 import type { ClaudeSession } from '../claude-structured-session-state'
@@ -88,14 +89,15 @@ export function readClaudeModels(initialization: unknown): unknown[] {
     : []
 }
 
-/** The CLI leaves Remote Control auto-connect to SDK hosts; it reports the user's setting at initialize.
- * An org or rollout default asks hosts for the TUI's disclosure notice, which Orca does not show yet. */
-export function readClaudeRemoteControlAutoEnable(initialization: unknown): boolean {
-  return (
-    isRecord(initialization) &&
-    initialization.remote_control_auto_enable === true &&
-    initialization.remote_control_auto_on_by_default !== true
-  )
+/** The CLI leaves Remote Control auto-connect to SDK hosts; it reports its resolved setting at
+ * initialize, and whether only an organization or rollout default turned it on. */
+export function readClaudeRemoteControlDefault(
+  initialization: unknown
+): ClaudeRemoteControlDefault {
+  return {
+    enabled: isRecord(initialization) && initialization.remote_control_auto_enable === true,
+    byDefault: isRecord(initialization) && initialization.remote_control_auto_on_by_default === true
+  }
 }
 
 /** Empty reports do not retract capabilities: SessionStart and older initialize replies omit them. */

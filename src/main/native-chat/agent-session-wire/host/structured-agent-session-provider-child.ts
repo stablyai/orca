@@ -1,5 +1,6 @@
 // Match child endings by generation/fence so stale exits cannot end newer children; conversation state outlives them.
 
+import type { AgentSessionProviderRemoteControl } from '../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
@@ -46,6 +47,24 @@ export function markProviderChildStarted(
     session.workChanged?.()
   }
   return child !== null
+}
+
+/** Only the child that reported it may set its link; a later child starts without one. */
+export function recordProviderChildRemoteControl(
+  session: ChildBearer,
+  identity: StructuredAgentSessionProviderChildIdentity,
+  remoteControl: AgentSessionProviderRemoteControl | null
+): boolean {
+  const child = matchingChild(session, identity)
+  if (!child) {
+    return false
+  }
+  if (remoteControl) {
+    child.providerRemoteControl = remoteControl
+  } else {
+    delete child.providerRemoteControl
+  }
+  return true
 }
 
 /** Current adapter-held children prove life without PID probes; previous runtimes prove nothing here. */

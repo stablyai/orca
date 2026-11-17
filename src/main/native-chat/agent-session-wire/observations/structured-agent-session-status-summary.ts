@@ -84,6 +84,12 @@ export function structuredAgentSessionStatusSummary({
       ? { awaitsAnswer: true as const }
       : {}),
     ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
+    ...(session.child?.providerRemoteControl
+      ? { providerRemoteControl: session.child.providerRemoteControl }
+      : {}),
+    ...(record?.providerRemoteControl
+      ? { providerRemoteControlChoice: record.providerRemoteControl }
+      : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),
     // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
@@ -201,6 +207,8 @@ export function releasedStructuredStatusSummary(
     stopping: _stopping,
     restartResume: _restartResume,
     reportedModel: _reportedModel,
+    // The link lives and ends with its child; a released chat has none.
+    providerRemoteControl: _providerRemoteControl,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

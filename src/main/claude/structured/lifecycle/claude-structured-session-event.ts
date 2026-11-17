@@ -1,5 +1,6 @@
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type * as SessionAdapter from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderRemoteControlEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-remote-control-event'
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
 import type { ClaudeStartedSend } from '../claude-structured-session-state'
 
@@ -40,6 +41,7 @@ export type ClaudeStructuredSessionEvent =
     }
   | { type: 'auth-diagnostic'; sessionId: string; diagnostic: ClaudeAuthDiagnostic }
   | SessionAdapter.StructuredAgentSessionOptionsReportedEvent
+  | StructuredAgentSessionProviderRemoteControlEvent
   | (SessionAdapter.StructuredAgentSessionRetiringEvent & {
       providerSessionId: string
       unopenedSend?: ClaudeStartedSend

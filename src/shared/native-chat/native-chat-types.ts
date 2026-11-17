@@ -18,6 +18,7 @@ import type {
   AgentJournalToolCallEnding,
   AgentJournalToolCallState
 } from '../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalMessageSource } from '../agent-session/remote-control/agent-journal-message-sent-from'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatToolMetadata } from './tools/native-chat-tool-identity'
 import type { AgentMessageSource } from '../agent-session/journal/agent-session-message-source'
@@ -235,6 +236,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   parentId?: string
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
+  /** Where the person sent a user message from when it was not Orca. */
+  sentFrom?: AgentJournalMessageSource
   /** Its text was shortened to fit the copy sent to this client; the host keeps it whole. */
   shortened?: true
   /** The journal row's own lifecycle; absent means unknown, never live. */

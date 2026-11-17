@@ -1,3 +1,4 @@
+import type { NativeChatClaudeRemoteControl } from '../native-chat/settings/native-chat-claude-remote-control'
 import type { AgentLaunchChoices } from '../agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from '../telemetry/telemetry-settings-types'
 import type { BrowserProfileScope } from '../browser/profiles/browser-profile-scope'
@@ -214,6 +215,9 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Opt-in: when a chat stops on a usage limit with a known reset time, send it "Continue where
    *  you left off." once the limit resets, unless that chat was told not to. */
   nativeChatAutoContinueAfterUsageLimit?: boolean
+  /** Whether Claude chats join Claude Code's Remote Control when they start; absent follows Claude
+   *  Code's own "Enable Remote Control for all sessions". Each chat can still turn it on or off. */
+  nativeChatClaudeRemoteControl?: NativeChatClaudeRemoteControl
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean
   /** Hovering a web link in chat fetches the page to preview it; absent means on. GitHub cards ignore this. */

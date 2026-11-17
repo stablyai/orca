@@ -7,6 +7,7 @@ import type {
 import type { SlashCommandSuggestion } from '../../native-chat/input/commands/native-chat-slash-commands'
 import {
   CONVERSATION_COMMANDS,
+  STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_COMMAND,
   STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
 } from './structured-agent-session-slash-menu'
 import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
@@ -37,6 +38,8 @@ export type StructuredAgentSessionComposerOptions = {
   changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
   /** Without it, /mcp remains agent-handled text. */
   openMcpPanel?: () => void
+  /** Flips Claude's Remote Control; false when the host refused. Without it, the host is refused. */
+  toggleRemoteControl?: () => Promise<boolean>
 }
 
 /** Visible condition holding a refusal: agent/prompt/background work, an in-flight send or a Retry card. */
@@ -68,13 +71,28 @@ function commandParts(text: string, agent?: AgentType) {
   }
   const typed = match[1]!.toLowerCase()
   // Codex's /new starts a new chat, which its app-server would read as prose; `$` skills never share the name.
-  const name = agent === 'codex' && typed === 'new' ? 'clear' : typed
+  const name =
+    agent === 'codex' && typed === 'new'
+      ? 'clear'
+      : agent === 'claude' && typed === 'rc'
+        ? STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_COMMAND.name
+        : typed
   const argument = match[2]?.trim() ?? ''
   // Other commands take one line; a longer message that starts with their name is for the agent.
   return /[\n\r\u2028\u2029]/.test(argument) &&
     !CONVERSATION_COMMANDS.some((entry) => entry.name === name)
     ? null
     : { name, typed, argument }
+}
+
+/** Claude refuses /remote-control in a chat it does not draw itself, so a Claude chat's is always Orca's. */
+function isClaudeRemoteControlCommand(
+  command: { name: string } | null,
+  agent: AgentType | undefined
+): boolean {
+  return (
+    agent === 'claude' && command?.name === STRUCTURED_AGENT_SESSION_REMOTE_CONTROL_COMMAND.name
+  )
 }
 
 function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
@@ -92,6 +110,7 @@ export function isStructuredAgentSessionComposerCommand(
   const command = commandParts(text, agent)
   return Boolean(
     (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
+    isClaudeRemoteControlCommand(command, agent) ||
     (agentSessionInteractionCommand(agent ?? '', text) !== null &&
       snapshot.some((entry) => entry.id === 'interactionMode'))
   )
@@ -119,7 +138,9 @@ export function prepareStructuredAgentSessionComposerCommand(
   const names = new Set(structuredRecognizedCommands().map((entry) => entry.name))
   return (text) => {
     const command = commandParts(text, agent)
-    return command !== null && names.has(command.name)
+    return (
+      command !== null && (names.has(command.name) || isClaudeRemoteControlCommand(command, agent))
+    )
   }
 }
 
@@ -216,6 +237,22 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.snapshot)
   ) {
     return { handled: false, accepted: false, error: null }
+  }
+  if (isClaudeRemoteControlCommand(command, controller.agent)) {
+    if (command.argument) {
+      return {
+        handled: true,
+        accepted: false,
+        ...structuredComposerFailure('commandTakesNoArguments', { name: command.typed })
+      }
+    }
+    return controller.toggleRemoteControl
+      ? { handled: true, accepted: await controller.toggleRemoteControl(), error: null }
+      : {
+          handled: true,
+          accepted: false,
+          ...structuredComposerFailure('commandUnsupportedByHost', { name: command.typed })
+        }
   }
   if (command.name === 'clear' || command.name === 'compact') {
     if (command.argument && !(command.name === 'compact' && controller.compactInstructions)) {

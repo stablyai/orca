@@ -1,3 +1,4 @@
+import { isClaudeRemoteControlPromptFrame } from '../remote-control/claude-remote-control-prompt'
 import {
   observeClaudeCommandLifecycle,
   releaseClaudeDispatchesUnansweredAtIdle
@@ -114,6 +115,10 @@ export function resolveClaudeReplayTurn(
     return null
   }
 
+  // A prompt sent from Claude's own apps is never one of Orca's sends, whatever its text.
+  if (isUserReplay && isClaudeRemoteControlPromptFrame(message)) {
+    return null
+  }
   if (isUserReplay) {
     // Older CLIs may mint replay UUIDs; join by content only with one match and no candidates across the timeout boundary.
     const replayContentKey = claudeDispatchContentKey(envelope.content)

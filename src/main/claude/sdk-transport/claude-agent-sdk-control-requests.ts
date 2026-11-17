@@ -55,12 +55,23 @@ export function claudeQueryAsyncCanceller(
   return typeof cancel === 'function' ? cancel.bind(query) : null
 }
 
+/** Claude's answer to `remote_control` enabled:true; enabled:false answers nothing. */
+export type ClaudeRemoteControlAnswer = { sessionUrl?: string }
+
 // enableRemoteControl sends `remote_control` but is absent from Query's declaration.
-function claudeQueryRemoteControlEnabler(query: Query): (() => Promise<unknown>) | null {
-  const enable = 'enableRemoteControl' in query ? query.enableRemoteControl : null
-  return typeof enable === 'function'
-    ? (): Promise<unknown> => Promise.resolve(enable.call(query, true))
+function claudeQueryRemoteControl(
+  query: Query
+): ((enabled: boolean) => Promise<ClaudeRemoteControlAnswer>) | null {
+  const send = 'enableRemoteControl' in query ? query.enableRemoteControl : null
+  return typeof send === 'function'
+    ? async (enabled) => readClaudeRemoteControlAnswer(await send.call(query, enabled))
     : null
+}
+
+function readClaudeRemoteControlAnswer(answer: unknown): ClaudeRemoteControlAnswer {
+  const fields = typeof answer === 'object' && answer !== null ? answer : {}
+  const sessionUrl = 'session_url' in fields ? fields.session_url : undefined
+  return typeof sessionUrl === 'string' && sessionUrl.startsWith('https://') ? { sessionUrl } : {}
 }
 
 // renameSession sends `rename_session` with source 'host' (the CLI's user rename) but is absent
@@ -219,9 +230,12 @@ export type ClaudeControlSurface = {
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
   /** The `/mcp` panel's requests; test connections leave it out. */
   mcp?: ClaudeMcpControls
-  /** Connects this session to Remote Control (claude.ai/code and the Claude mobile app); test
-   * connections leave it out. */
-  enableRemoteControl?: (options?: ClaudeControlOptions) => Promise<unknown>
+  /** Connects or disconnects this session's Remote Control (claude.ai/code and the Claude apps);
+   * test connections leave it out. */
+  remoteControl?: (
+    enabled: boolean,
+    options?: ClaudeControlOptions
+  ) => Promise<ClaudeRemoteControlAnswer>
 }
 
 type InterruptingQuery = {
@@ -306,10 +320,10 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
             )
           )
     },
-    enableRemoteControl: (options) => {
-      const enable = claudeQueryRemoteControlEnabler(query)
-      return enable
-        ? runClaudeControl('remote_control', enable, options?.timeoutMs)
+    remoteControl: (enabled, options) => {
+      const send = claudeQueryRemoteControl(query)
+      return send
+        ? runClaudeControl('remote_control', () => send(enabled), options?.timeoutMs)
         : Promise.reject(
             new ClaudeControlRequestError(
               'remote_control',

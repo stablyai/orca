@@ -7,9 +7,9 @@ import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome as DispatchOutcome,
   StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionAdapter as SessionAdapter,
-  StructuredAgentSessionSetOptionInput as SetOptionInput
+  StructuredAgentSessionAdapter as SessionAdapter
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionSetOptionInput as SetOptionInput } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 
 import { rejectedAcpDispatch } from '../turns/acp-dispatch-rejection'
 import type { AcpStructuredSession } from './acp-structured-session-contract'

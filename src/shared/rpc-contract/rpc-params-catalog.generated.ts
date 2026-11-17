@@ -658,6 +658,7 @@ import {
 } from './structured-agent-session/agent-session-attachment-params'
 import { CurrentRequestsParams } from './structured-agent-session/agent-session-current-requests-params'
 import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
+import { ProviderRemoteControlParams } from './structured-agent-session/provider-remote-control-params'
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
@@ -896,6 +897,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.mcp': AgentSessionMcpParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
+  'agentSession.providerRemoteControl': ProviderRemoteControlParams,
   'agentSession.queuedMessageDelete': QueuedMessageActionParams,
   'agentSession.queuedMessageEditHold': QueuedMessageEditHoldParams,
   'agentSession.queuedMessageMove': QueuedMessageMoveParams,

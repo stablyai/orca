@@ -1,4 +1,8 @@
 import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
+import type {
+  AgentSessionProviderRemoteControl,
+  AgentSessionProviderRemoteControlChoice
+} from './remote-control/agent-session-provider-remote-control'
 import type { AgentSessionUnavailable } from './failures/agent-session-availability'
 import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
 import type { AgentSessionUsageLimitContinue } from './lifecycle/stopping/agent-session-usage-limit-continue-wire'
@@ -238,6 +242,11 @@ export type AgentSessionStatusSummary = {
   /** The newest async question row the person skipped: clients hide it and every earlier question.
    *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
   asyncQuestionsSkippedThrough?: string
+  /** The provider's own remote link for the running child (Claude Code's Remote Control); absent
+   *  while off, while no child runs, and from older hosts. */
+  providerRemoteControl?: AgentSessionProviderRemoteControl
+  /** The person's saved Remote Control choice for this chat; absent follows the global setting. */
+  providerRemoteControlChoice?: AgentSessionProviderRemoteControlChoice
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */

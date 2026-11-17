@@ -18,6 +18,7 @@ import type { AgentSessionContextUsage } from '../conversation-context/agent-ses
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
 import type { AgentMessageSource } from './agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
+import type { AgentJournalMessageSource } from '../remote-control/agent-journal-message-sent-from'
 import type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
@@ -76,6 +77,9 @@ export type AgentJournalMessageItem = {
   /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
    *  goal's objective, and the provider pursues it without a turn of its own. */
   sentAs?: AgentJournalMessageSendMode
+  /** Absent ⇒ sent from Orca. `provider-remote-control` ⇒ the person sent it to the agent from the
+   *  provider's own apps (Claude Code's Remote Control), so Orca saw it only as the agent's echo. */
+  sentFrom?: AgentJournalMessageSource
   /** Present on a conversation command the user sent, such as `/compact`. The text is what the
    *  user typed; this names the command and its instructions so no reader parses it. Open like
    *  `sentAs`. */

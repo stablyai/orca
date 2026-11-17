@@ -1,3 +1,5 @@
+import type { AgentSessionProviderRemoteControlChoice } from '../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
+import type { NativeChatClaudeRemoteControl } from '../../../shared/native-chat/settings/native-chat-claude-remote-control'
 import type { StructuredAgentSessionChildWorkProducer } from '../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { ClaudeStartupOutcome } from './startup/claude-structured-startup-outcome'
 import type {
@@ -31,6 +33,7 @@ import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-in
 import type { ClaudeInitializeFacts } from './startup/claude-structured-session-startup'
 
 import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
+import type { ClaudeRemoteControlPhase } from './remote-control/claude-remote-control-machine'
 
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
@@ -71,6 +74,11 @@ export type ClaudeStructuredSessionAdapterDeps = {
     fence: number
   }) => Promise<void>
   logger?: StructuredAgentSessionLogger
+  /** The chat's saved Remote Control choice and the host's setting, read at each start. */
+  remoteControlStart?: (sessionId: string) => {
+    choice: AgentSessionProviderRemoteControlChoice | undefined
+    setting: NativeChatClaudeRemoteControl
+  }
   /** Advance the durable resume point in place at a turn end; bookkeeping, never a turn failure. */
   persistResumePoint?: (input: {
     sessionId: string
@@ -151,6 +159,8 @@ export type ClaudeSession = {
   cliFlag?: ClaudeCliFlagCheck
   /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
   flagSettingsControl?: ClaudeCliFlagFact
+  /** This process's Remote Control link; absent is off. */
+  remoteControl?: ClaudeRemoteControlPhase
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker

@@ -1,4 +1,5 @@
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { nativeChatClaudeRemoteControl } from '../../../../shared/native-chat/settings/native-chat-claude-remote-control'
 import { preModeChatGetsFullAccess } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { StructuredAgentSessionRuntimeDeps } from '../installation/structured-agent-session-runtime-contract'
@@ -9,11 +10,13 @@ export function structuredAgentSettingGates(
   getSettings: () => ReturnType<RuntimeStore['getSettings']>
 ): Pick<
   StructuredAgentSessionRuntimeDeps,
-  'resolveAgentFullAccess' | 'piManagedExtensionsEnabled'
+  'resolveAgentFullAccess' | 'piManagedExtensionsEnabled' | 'resolveClaudeRemoteControl'
 > {
   return {
     resolveAgentFullAccess: (agent) =>
       isTuiAgent(agent) && preModeChatGetsFullAccess(agent, getSettings(), process.platform),
-    piManagedExtensionsEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'pi')
+    piManagedExtensionsEnabled: () => isAgentStatusHooksEnabledForAgent(getSettings(), 'pi'),
+    resolveClaudeRemoteControl: () =>
+      nativeChatClaudeRemoteControl(getSettings().nativeChatClaudeRemoteControl)
   }
 }

@@ -1,3 +1,7 @@
+import {
+  claudeRemoteControlLinkDeps,
+  setClaudeSessionRemoteControl
+} from './remote-control/claude-remote-control-link'
 import { dispatchClaudeCommand } from './turns/claude-structured-command-dispatch'
 import { isKillDeliveredExitReceipt } from './lifecycle/claude-kill-delivered-exit-receipt'
 import { manageClaudeMcp } from './lifecycle/claude-structured-mcp'
@@ -217,6 +221,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     settleClaudePromptFreeingChild(this.asker(request), answerClaudeStructuredPrompt)
+  setProviderRemoteControl: NonNullable<StructuredAgentSessionAdapter['setProviderRemoteControl']> =
+    (sessionId, enabled) =>
+      setClaudeSessionRemoteControl(this.sessions.get(sessionId), enabled, (session) =>
+        claudeRemoteControlLinkDeps(sessionId, this.deps, (event) => this.emit(session, event))
+      )
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     claudeOptions.setClaudeStructuredSessionOption(
       this.session(input.sessionId),

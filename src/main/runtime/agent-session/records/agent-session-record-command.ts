@@ -1,4 +1,5 @@
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionProviderRemoteControlChoice } from '../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import { withAcquiredAgentSessionAccount } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import {
@@ -66,6 +67,7 @@ export type AgentSessionRecordCommand =
     }
   | { kind: 'cancel-continue'; cut: UsageLimitContinueIdentity }
   | { kind: 'skip-async-questions'; itemId: string }
+  | { kind: 'provider-remote-control'; choice: AgentSessionProviderRemoteControlChoice }
   | { kind: 'last-turn'; lastTurn?: AgentSessionLastTurn }
   | { kind: 'rewind'; fence: number; rewind: AgentSessionRewindRecord }
   | { kind: 'sleep'; now: number; fence: number }
@@ -167,6 +169,12 @@ export function applyAgentSessionRecordCommand(
       break
     case 'skip-async-questions':
       next = { ...record, asyncQuestionsSkippedThrough: command.itemId }
+      break
+    case 'provider-remote-control':
+      next =
+        record.providerRemoteControl === command.choice
+          ? record
+          : { ...record, providerRemoteControl: command.choice }
       break
     case 'last-turn': {
       const { lastTurn: previous, ...rest } = record

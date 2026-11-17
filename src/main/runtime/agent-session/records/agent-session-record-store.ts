@@ -37,6 +37,7 @@ import {
 } from '../ownership/agent-session-restart-reconciliation'
 import type { AgentSessionRecordCommand } from './agent-session-record-command'
 import type { AgentSessionIdleForget } from './agent-session-record-forget'
+import type { AgentSessionProviderRemoteControlChoice } from '../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import type {
   AgentSessionReserveRequest,
   AgentSessionReserveResult
@@ -254,6 +255,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   skipAsyncQuestions = (id: string, itemId: string) =>
     this.updateRecord(id, { kind: 'skip-async-questions', itemId })
+
+  setProviderRemoteControl = (id: string, choice: AgentSessionProviderRemoteControlChoice) =>
+    this.updateRecord(id, { kind: 'provider-remote-control', choice })
 
   /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
   async reconcileOnRestart(args: AgentSessionRestartProbeArgs) {

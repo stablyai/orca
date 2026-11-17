@@ -13,6 +13,7 @@ import {
   type AgentJournalRenderItem,
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
+import { isAgentJournalMessageSource } from '../remote-control/agent-journal-message-sent-from'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import { agentJournalToolCallLifecycle } from '../journal/agent-journal-tool-call-lifecycle'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
@@ -179,6 +180,7 @@ export function projectStructuredItemToNativeChat(
   // Reducer updates replace journal items, so unchanged rows keep their render caches.
   const projected = itemBlocks(item)
   const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
+  const sentFrom = item.body.kind === 'message' ? item.body.sentFrom : undefined
   const lifecycle = item.body.kind === 'message' ? messageLifecycle(item.body) : {}
   const command = item.body.kind === 'message' ? item.body.command : undefined
   // Validate wire-origin sender fields from any host version.
@@ -191,6 +193,7 @@ export function projectStructuredItemToNativeChat(
         blocks: projected.blocks,
         // A send mode this build cannot name renders as an ordinary message.
         ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {}),
+        ...(sentFrom !== undefined && isAgentJournalMessageSource(sentFrom) ? { sentFrom } : {}),
         ...lifecycle,
         ...(command ? { command } : {}),
         ...(from && projected.role === 'user' ? { from } : {}),
