@@ -156,8 +156,9 @@ function launchHere(owner: DeferredProviderOwner, spawn: () => ChildProcess): vo
   owner.attach(child.pid, new Map(child.stdio.map((stream, fd) => [fd, stream])))
 }
 
-/** Starts the native owner under the host when the host can read the chat's folder; otherwise
- * here. Either way this app holds every owner pipe, so ownership is the same as a direct launch. */
+/** Starts the native owner under the host when the host can read the chat's folder, and here
+ * otherwise or when the host's start fails before attach. Either way this app holds every owner
+ * pipe, so ownership is the same as a direct launch. */
 export async function launchProviderOwner(
   owner: DeferredProviderOwner,
   spec: ProviderSpawnSpec,
@@ -178,7 +179,7 @@ export async function launchProviderOwner(
     return
   }
   const listener = new ProviderOwnerListener()
-  let dispatched = false
+  let attached = false
   try {
     const path = await listener.listen()
     if (owner.canceled) {
@@ -188,8 +189,6 @@ export async function launchProviderOwner(
     if (!isCurrentHostedIdentity(client, identity)) {
       throw new Error('Provider host changed before launch')
     }
-    // From here a lost reply may still have started an owner, so this app never launches another.
-    dispatched = true
     const result = await client.request<HostedProviderSpawnResult>(
       'spawnProvider',
       hostedLaunch(spec, path, listener.nonce),
@@ -206,15 +205,18 @@ export async function launchProviderOwner(
     if (!Number.isSafeInteger(pid) || pid <= 1) {
       throw new Error('Provider host returned no process')
     }
-    owner.attach(pid, await withProviderStartDeadline(listener.ready, START_TIMEOUT_MS))
+    const pipes = await withProviderStartDeadline(listener.ready, START_TIMEOUT_MS)
+    // Only attaching can open the owner's gate, so until here no CLI ran and no input left this app.
+    attached = true
+    owner.attach(pid, pipes)
   } catch (error) {
-    // Closing every pipe makes an owner started by an unanswered request cancel at its gate.
+    // Closing every pipe makes an owner started by an unanswered request exit at its gate.
     void listener.ready.then(
       (pipes) => pipes.forEach((pipe) => pipe.destroy()),
       () => {}
     )
     await listener.close()
-    if (dispatched || owner.canceled) {
+    if (attached || owner.canceled) {
       owner.fail(error instanceof Error ? error : new Error('Provider could not start'))
     } else {
       launchHere(owner, spawnHere)
