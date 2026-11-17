@@ -57,7 +57,9 @@ function olderOrcaChat(original: Database.Database, sessionId: string, history: 
       .run(`tab-${sessionId}`, sessionId, 0)
     // An older Orca writes tab rows only with this marker.
     original
-      .prepare("INSERT OR REPLACE INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
+      .prepare(
+        "INSERT OR REPLACE INTO agent_session_store_meta VALUES('session_tabs_recorded','1')"
+      )
       .run()
   })
 }
@@ -293,8 +295,6 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     .prepare('INSERT INTO agent_session_records VALUES(?,?)')
     .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id!='open'").run()
-  // As every older Orca that saves tabs leaves its index.
-  original.prepare("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')").run()
   const first = await upgrade(root)
   expect(await first.convert('idle')).toBe('epoch')
   expect(await first.convert('converted')).toBe('epoch')
@@ -324,19 +324,27 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   })
 
   // Baselines now exist, so a later write by the older Orca is still kept, and nothing else moves.
-  // A chat it continued while closed there joins its own history row without reopening.
+  // A chat it continued while closed there stays closed when its history row reaches it; one it
+  // started and closed with no provider conversation yet still opens, as nothing else reaches it.
   insertJournalRow(original, 'idle', turn('older-idle-turn', tip + 1))
   insertJournalRow(original, 'closed', turn('older-closed-turn', tip + 1))
+  original
+    .prepare(`UPDATE agent_session_records SET record_json=json_set(record_json,
+      '$.providerHandleChain',json('[{"linkId":"closed-link"}]')) WHERE session_id='closed'`)
+    .run()
+  olderOrcaChat(original, 'started-closed', [rows[0], turn('started-closed-turn', 2)])
+  original.prepare("DELETE FROM agent_session_tabs WHERE session_id='started-closed'").run()
   await later.close()
   cleanup.pop()
   const again = await upgrade(root)
   cleanup.push(again.close)
-  expect(tabbedChats(again.db)).toHaveLength(4)
+  expect(tabbedChats(again.db)).toHaveLength(5)
+  expect(tabbedChats(again.db)).toContain('started-closed')
   expect(tabbedChats(again.db)).not.toContain('closed')
   expect(await again.convert('closed')).toBe('epoch')
   expect(items(again.db, 'closed')).toContain('older-closed-turn')
   expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
-    records: known.length + 2
+    records: known.length + 3
   })
 })
 

@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
 import {
   finishJournalDomainImport,
@@ -10,6 +9,7 @@ import {
 import { runJournalTransaction } from './journal-database'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
 import { journalDatabasePath } from './journal-host-database'
+import { showAdoptedChat, type AdoptedTabs } from './journal-legacy-adopted-tabs'
 import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey,
@@ -89,14 +89,7 @@ type Pass = {
 type Claim = SqliteRow
 
 /** The original's tabs and claims, and this file's tabs, read once per pass. */
-type Adoption = {
-  savedTabs: Map<string, string>
-  claims: Map<string, Claim[]>
-  tabbed: Set<string>
-  takenTabs: Set<string>
-  nextPosition: number
-  tabsRecorded: boolean
-}
+type Adoption = AdoptedTabs & { claims: Map<string, Claim[]> }
 
 /**
  * A baseline is the original's revision when it was read. A write changes the original's identity
@@ -224,22 +217,7 @@ function adoptChat(
     CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
       '$.conversationCommand') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
-  // A chat joining as itself keeps its own history row, so it opens only if the older build had it
-  // open. A copy shares its original's provider history, so only a tab reaches it.
-  const saved = adoption.savedTabs.get(id)
-  if (as !== id || saved !== undefined) {
-    if (!adoption.tabsRecorded) {
-      recordTabIndex(db, adoption)
-    }
-    addTab(
-      db,
-      adoption,
-      as,
-      as === id && saved !== undefined && !adoption.takenTabs.has(saved)
-        ? saved
-        : structuredAgentSessionTabId(as)
-    )
-  }
+  showAdoptedChat(db, adoption, id, as, record)
   const session = source
     .prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?')
     .get(id)
@@ -251,34 +229,6 @@ function adoptChat(
   if (as !== id) {
     insertClaims(db, as, adoption.claims.get(id) ?? [])
   }
-}
-
-/**
- * A file that never recorded its tab index shows chats by the ids its clients pass in, which a
- * kept chat can't be among. Recording the index with every chat here shown keeps what was shown.
- */
-function recordTabIndex(db: Database.Database, adoption: Adoption): void {
-  for (const { session_id: id } of db
-    .prepare('SELECT session_id FROM agent_session_records')
-    .all()) {
-    addTab(db, adoption, String(id), structuredAgentSessionTabId(String(id)))
-  }
-  writeMeta(db, AGENT_SESSION_TABS_RECORDED, '1')
-  adoption.tabsRecorded = true
-}
-
-function addTab(db: Database.Database, adoption: Adoption, sessionId: string, tab: string): void {
-  if (adoption.tabbed.has(sessionId) || adoption.takenTabs.has(tab)) {
-    return
-  }
-  db.prepare('INSERT INTO agent_session_tabs(tab_id,session_id,position) VALUES(?,?,?)').run(
-    tab,
-    sessionId,
-    adoption.nextPosition
-  )
-  adoption.nextPosition += 1
-  adoption.tabbed.add(sessionId)
-  adoption.takenTabs.add(tab)
 }
 
 /**
