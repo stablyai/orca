@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { CreateFromPicker } from './CreateFromPicker'
 
@@ -51,5 +52,42 @@ export const collidingBranches = defineFixture({
       })
       observer.observe(document.body, { childList: true, subtree: true })
     })
+  }
+})
+
+function RequiredBaseline() {
+  const [value, setValue] = useState('')
+  return (
+    <div className="min-h-72 space-y-2 p-4">
+      <p className="text-xs text-muted-foreground">Baseline (required)</p>
+      <CreateFromPicker
+        repoId={repo.id}
+        repoMap={new Map([[repo.id, { ...repo, worktreeBaseRef: 'refs/remotes/origin/main' }]])}
+        worktrees={[]}
+        value={value}
+        requireExplicitSelection
+        onValueChange={setValue}
+      />
+    </div>
+  )
+}
+
+export const requiredBaseline = defineFixture({
+  width: 380,
+  setup: collidingBranches.setup,
+  render: () => <RequiredBaseline />
+})
+
+export const requiredDefaultSelected = defineFixture({
+  ...requiredBaseline,
+  interact: async (frame) => {
+    await collidingBranches.interact?.(frame)
+    const defaultRow = Array.from(document.querySelectorAll<HTMLElement>('[cmdk-item]')).find(
+      (row) => row.textContent?.includes('(default)')
+    )
+    if (!defaultRow) {
+      throw new Error('Default branch is missing')
+    }
+    defaultRow.click()
   }
 })

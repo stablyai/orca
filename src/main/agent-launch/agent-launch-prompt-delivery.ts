@@ -11,8 +11,7 @@ import type {
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { agentPromptRidesLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-startup'
 
-import type { CreatedSurface } from './agent-launch-executor'
-import type { AgentLaunchSurfaceExecution } from './agent-launch-execution'
+import type { CreatedSurface, AgentLaunchSurfaceExecution } from './agent-launch-execution'
 import type { AgentLaunchStructuredSurface } from './agent-launch-surface-factories'
 
 function structuredLaunchSubmitText(intent: Pick<AgentLaunchIntent, 'prompt'>): string | undefined {

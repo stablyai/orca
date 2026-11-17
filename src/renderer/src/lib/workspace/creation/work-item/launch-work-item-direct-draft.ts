@@ -1,3 +1,5 @@
+import { withAgentWorktreePolicy } from '../../../../../../shared/agent-launch/policy/agent-worktree-policy'
+import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
 import { resolveGitHubWorkItemIdentity } from '../../../../../../shared/new-workspace/github-work-item-identity'
 import {
   getWorkspaceIntentName,
@@ -35,4 +37,15 @@ export function getDirectWorkItemIdentity(item: LaunchableWorkItem) {
       ? resolveGitHubWorkItemIdentity({ type: item.type, number: item.number, url: item.url })
       : null
   return { itemType: identity?.type ?? item.type, itemNumber: identity?.number ?? item.number }
+}
+
+export function getDirectWorkItemPolicyPrompt(
+  item: LaunchableWorkItem,
+  repoKind: string | undefined,
+  baseline: string | undefined
+): string {
+  return withAgentWorktreePolicy(getLaunchableWorkItemDraftContent(item), {
+    baseline,
+    workspaceKind: repoKind === 'folder' ? 'folder' : 'git-worktree'
+  })
 }

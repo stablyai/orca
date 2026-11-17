@@ -1,3 +1,4 @@
+import { withAgentWorktreePolicy } from '../../../../../../shared/agent-launch/policy/agent-worktree-policy'
 import {
   resolveAgentStartupPlanInputs,
   type AgentStartupSettings
@@ -41,7 +42,8 @@ export function resolveFolderWorkspaceLaunchDraft(
   note: string
 ): string | null {
   const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note)
-  return (draftPrompt ?? prompt.trim()) || null
+  const draft = (draftPrompt ?? prompt.trim()) || null
+  return draft ? withAgentWorktreePolicy(draft, { workspaceKind: 'folder' }) : null
 }
 
 export function buildFolderWorkspaceLinkedStartupPlan(args: {

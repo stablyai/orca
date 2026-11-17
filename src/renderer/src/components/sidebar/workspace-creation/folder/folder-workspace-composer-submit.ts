@@ -1,3 +1,4 @@
+import { withAgentWorktreePolicy } from '../../../../../../shared/agent-launch/policy/agent-worktree-policy'
 import { toast } from 'sonner'
 import {
   buildFolderWorkspaceStartupPayload,
@@ -100,6 +101,7 @@ export async function submitFolderWorkspaceCreate({
           : (preferences?.agentLaunchChoices ?? settings.agentLaunchChoices)
       }
     : settings
+  const taskPrompt = withAgentWorktreePolicy(note, { workspaceKind: 'folder' })
   const startupPlan =
     quickAgent && launchPlatform && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
@@ -127,7 +129,7 @@ export async function submitFolderWorkspaceCreate({
               isRemote: launchIsRemote
             }),
             ...(agentEnv ? { agentEnv } : {}),
-            prompt: note,
+            prompt: taskPrompt,
             allowEmptyPromptLaunch: true
           })
         : null
@@ -145,7 +147,7 @@ export async function submitFolderWorkspaceCreate({
           runtimeEnvironmentId,
           executionHostId: getRepoExecutionHostId(projectGroup)
         },
-        prompt: launchDraftPrompt ?? note,
+        prompt: launchDraftPrompt ?? taskPrompt,
         promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
       }
     : null
@@ -192,7 +194,7 @@ export async function submitFolderWorkspaceCreate({
       ? {
           ...buildFolderWorkspaceHostStartupPayload({
             quickAgent,
-            note,
+            note: taskPrompt,
             launchDraftPrompt,
             agentArgs,
             sessionOptions,
@@ -231,7 +233,7 @@ export async function submitFolderWorkspaceCreate({
     requestedAgentArgs,
     sessionOptions,
     launchDraftPrompt,
-    note,
+    note: taskPrompt,
     launchSource
   })
   if (result.warning) {

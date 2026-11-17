@@ -60,7 +60,12 @@ export function startRuntimeLocalBaseRefRefresh(args: {
     void refresh.catch(() => undefined)
     return {
       finish: async () => {
-        await args.timing.time('refresh_base_ref', () => refresh)
+        const result = await args.timing.time('refresh_base_ref', () => refresh)
+        if (!result.ok) {
+          throw new Error(
+            `Could not refresh base ref "${args.base.baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+          )
+        }
       }
     }
   }

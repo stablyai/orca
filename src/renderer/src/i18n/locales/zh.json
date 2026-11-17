@@ -23929,6 +23929,11 @@
         "provisionFailed": "虚拟机未创建，或创建过程被中断，请打开设置将其销毁或移除"
       },
       "suspendFailed": "挂起虚拟机工作区失败"
+    },
+    "baseline": {
+      "label": "基线分支（必选）",
+      "required": "请先选择基线分支，再创建工作区。",
+      "select": "选择基线分支…"
     }
   },
   "tabHoverCard": {

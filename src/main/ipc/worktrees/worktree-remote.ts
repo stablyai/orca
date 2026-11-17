@@ -15,8 +15,7 @@ import type {
   CreateWorktreeProgressEvent,
   CreateWorktreeResult,
   SetupTrustMismatch,
-  WorktreeCheckoutProgress,
-  WorktreeCreateBaseFallback
+  WorktreeCheckoutProgress
 } from '../../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
@@ -1124,10 +1123,8 @@ async function performLocalWorktreeCreate(
   }
 
   let remoteTrackingBase: RemoteTrackingBase | null = null
-  let baseFallback: WorktreeCreateBaseFallback | undefined
   let remoteTrackingRefresh: {
     base: RemoteTrackingBase
-    hadLocalBaseRef: boolean
     promise: Promise<RemoteFetchResult>
   } | null = null
   let legacyFetchPromise: Promise<void> | null = null
@@ -1138,37 +1135,27 @@ async function performLocalWorktreeCreate(
       baseBranch,
       ...localWorktreeGitOptionArgs
     )
+    if (
+      remoteTrackingBase &&
+      !(await runtime.hasRemoteTrackingRef(
+        repo.path,
+        remoteTrackingBase,
+        ...localWorktreeGitOptionArgs
+      )) &&
+      (await hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions))
+    ) {
+      // A slash-named local branch is an explicit source, not an offline fallback.
+      remoteTrackingBase = null
+    }
     if (remoteTrackingBase) {
-      const [hasRemoteTrackingBaseRef, hasNamedLocalBaseRef] = await Promise.all([
-        runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase, ...localWorktreeGitOptionArgs),
-        hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions)
-      ])
-      const hasFallbackLocalBaseRef =
-        !hasNamedLocalBaseRef &&
-        (await hasLocalWorktreeBaseRef(repo.path, remoteTrackingBase.branch, localGitExecOptions))
-      const hasLocalBaseRef =
-        hasRemoteTrackingBaseRef || hasNamedLocalBaseRef || hasFallbackLocalBaseRef
-      if (!hasRemoteTrackingBaseRef && hasLocalBaseRef) {
-        // Offline creation can still use a local base when tracking refresh fails.
-        if (hasFallbackLocalBaseRef) {
-          baseBranch = remoteTrackingBase.branch
-        }
-        baseFallback = {
-          requestedRef: remoteTrackingBase.base,
-          localRef: baseBranch
-        }
-        remoteTrackingBase = null
-      } else {
-        emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
-        remoteTrackingRefresh = {
-          base: remoteTrackingBase,
-          hadLocalBaseRef: hasRemoteTrackingBaseRef,
-          promise: runtime.getOrStartRemoteTrackingBaseRefresh(
-            repo.path,
-            remoteTrackingBase,
-            ...localWorktreeGitOptionArgs
-          )
-        }
+      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
+      remoteTrackingRefresh = {
+        base: remoteTrackingBase,
+        promise: runtime.getOrStartRemoteTrackingBaseRefresh(
+          repo.path,
+          remoteTrackingBase,
+          ...localWorktreeGitOptionArgs
+        )
       }
     } else if (!(await hasLocalWorktreeBaseRef(repo.path, baseBranch, localGitExecOptions))) {
       // Local bases retain best-effort origin refresh; verified review SHAs already have their objects.
@@ -1509,13 +1496,12 @@ async function performLocalWorktreeCreate(
   if (remoteTrackingRefresh) {
     await timing.time('refresh_base_ref', async () => {
       const result = await remoteTrackingRefresh.promise
-      if (!result.ok && !remoteTrackingRefresh.hadLocalBaseRef) {
+      if (!result.ok) {
         throw new Error(
           `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}". Check your network and try again.`
         )
       }
       if (
-        !remoteTrackingRefresh.hadLocalBaseRef &&
         !(await runtime?.hasRemoteTrackingRef(
           repo.path,
           remoteTrackingRefresh.base,
@@ -1936,7 +1922,6 @@ async function performLocalWorktreeCreate(
       ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
-    ...(baseFallback ? { baseFallback } : {}),
     ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
     ...(createWarning ? { warning: createWarning } : {}),
     timing: timing.finish()
