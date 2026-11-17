@@ -6,8 +6,8 @@ import { resolveBaseRefSearchSelector } from './base-ref-search-selector'
 /** canonical: full refs; git-short: Git's short name, qualified only when ambiguous; unqualified: ambiguous refs omitted. */
 export type RepoSearchRefSelectorForm = 'canonical' | 'git-short' | 'unqualified'
 
-// Keeps each for-each-ref argv well under Windows' 32K command-line limit.
-const MAX_PATTERN_CHARS_PER_CALL = 16_000
+// Windows caps a command line at 32K, and WSL's login-shell fallback repeats the command three times.
+const MAX_PATTERN_CHARS_PER_CALL = 6_000
 
 /** Older clients display refName raw, so give one page the selectors pre-snapshot hosts sent. */
 export async function toGitShortRefSelectors(
