@@ -21866,7 +21866,6 @@
       },
       "workingLocation": {
         "in": "Working in {{name}}",
-        "inBranch": "Working in {{name}} ({{branch}})",
         "open": "Open worktree",
         "revealFailed": "Could not show that worktree."
       }

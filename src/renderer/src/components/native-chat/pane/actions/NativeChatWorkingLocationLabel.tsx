@@ -15,15 +15,11 @@ export function NativeChatWorkingLocationLabel({
   onOpen: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const label =
-    location.kind === 'worktree' && location.branch
-      ? t('components.native-chat.workingLocation.inBranch', 'Working in {{name}} ({{branch}})', {
-          name: location.displayName,
-          branch: location.branch
-        })
-      : t('components.native-chat.workingLocation.in', 'Working in {{name}}', {
-          name: location.displayName
-        })
+  const label = t('components.native-chat.workingLocation.in', 'Working in {{name}}', {
+    name: location.displayName
+  })
+  // The branch only qualifies the name, so it stays in the tooltip with the path.
+  const branch = location.kind === 'worktree' ? location.branch : null
   return (
     <div
       className="flex min-w-0 items-center gap-1.5 pl-2 text-xs text-muted-foreground"
@@ -35,7 +31,8 @@ export function NativeChatWorkingLocationLabel({
           <span className="min-w-0 truncate">{label}</span>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {location.path}
+          {branch ? <div>{branch}</div> : null}
+          <div>{location.path}</div>
         </TooltipContent>
       </Tooltip>
       {location.kind === 'worktree' ? (
