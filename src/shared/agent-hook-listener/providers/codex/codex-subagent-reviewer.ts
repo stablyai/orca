@@ -1,6 +1,7 @@
 import { extname, isAbsolute } from 'node:path'
 
 import {
+  markReviewerEvidenceDeferred,
   readJsonlCursor,
   rolloutCursorReadDeferred,
   type JsonRecord
@@ -84,6 +85,7 @@ export function reconcileCodexSubagentReviewer(
     state.reviewerCursorsByPath.set(normalizedPath, cursor)
   }
   if (rolloutCursorReadDeferred(cursor)) {
+    markReviewerEvidenceDeferred()
     return
   }
   const records = readJsonlCursor(cursor, isCodexStatusTranscriptLine)

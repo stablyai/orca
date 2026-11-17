@@ -50,6 +50,8 @@ export type JsonRecord = Record<string, unknown>
 export type PrefetchedRolloutReads = {
   /** Set once the hook stopped waiting; a closed prefetch starts no further reads. */
   closed?: true
+  /** Set when a parent or reviewer read was deferred in this scope, so reviewer evidence may be stale. */
+  deferred?: true
   cursors: { filePath: string; offset: number; carry: string; read: JsonlCursorBytes | undefined }[]
   firstRecords: Map<string, JsonlFirstRecord>
   sizes: Map<string, number | null>
@@ -138,6 +140,18 @@ function prefetchedReadIndex(reads: PrefetchedRolloutReads, cursor: JsonlCursor)
 /** Inside a prefetch scope, a read nobody prefetched is deferred to the async poll instead of blocking. */
 export function rolloutCursorReadDeferred(cursor: JsonlCursor): boolean {
   return prefetched !== undefined && prefetchedReadIndex(prefetched, cursor) === -1
+}
+
+/** Records that a read carrying approval-reviewer evidence was deferred in this scope. */
+export function markReviewerEvidenceDeferred(): void {
+  if (prefetched) {
+    prefetched.deferred = true
+  }
+}
+
+/** Whether this hook's normalization skipped a read of reviewer evidence, which may therefore be stale. */
+export function reviewerEvidenceDeferred(): boolean {
+  return prefetched?.deferred === true
 }
 
 export function rolloutHeadReadDeferred(filePath: string): boolean {

@@ -8,6 +8,7 @@ import {
   readTranscriptDirectory,
   readTranscriptDirectoryAsync,
   record,
+  markReviewerEvidenceDeferred,
   rolloutCursorReadDeferred,
   rolloutReadsPrefetched,
   type JsonlCursor,
@@ -362,7 +363,9 @@ export function reconcileCodexSubagentTranscript(
     return false
   }
   let changed = begun.changed
-  if (!rolloutCursorReadDeferred(state.parent)) {
+  if (rolloutCursorReadDeferred(state.parent)) {
+    markReviewerEvidenceDeferred()
+  } else {
     const parentRecords = readJsonlCursor(state.parent, isCodexStatusTranscriptLine)
     changed = applyCodexParentTranscript(state, roster, parentRecords) || changed
   }

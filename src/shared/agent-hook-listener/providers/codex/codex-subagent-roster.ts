@@ -238,6 +238,9 @@ export async function readPendingCodexSubagentIdentities(
       continue
     }
     const missKey = `${transcriptPath}:${await rolloutFileSizeAsync(transcriptPath)}`
+    if (!current()) {
+      break
+    }
     if (child.identityMissKey === missKey) {
       continue
     }
