@@ -70,7 +70,12 @@ on NTFS and ReFS alike), so the check stops at 64 folders, shallowest first, and
 eight threads: about 0.8 s for a Unity project's top two levels. A program holding only a deeper
 folder is not named; the delete then refuses before touching Perforce and says a program has the
 folder open. A shell and what it started show as one entry. The user closes them and chooses **Check again**, or
-opts in to ending them. Consent covers the exact processes shown (pid and start time). Orca never
+opts in to ending them. Consent covers the exact processes shown (pid and start time); a process
+whose start time cannot be read is never ended. Ending re-reads the process table and signals the
+pid only if its name, command line and start time still match. A pid reused in the moment between
+that check and the signal is not ruled out (Node has no handle-based kill): macOS hands out pids in
+sequence up to 99,999, so reuse within that moment is practically impossible, and on Windows it is
+very unlikely; the daemon's stale-process kill makes the same trade-off. Orca never
 ends itself or Explorer, and leaves its own terminals out of the list because removal closes them.
 The generic worktree delete, the CLI and batch delete refuse a copy
 (`PERFORCE_COPY_GENERIC_REMOVAL_MESSAGE`).
