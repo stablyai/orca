@@ -31,6 +31,9 @@ function validatePanelSvg(bytes: Buffer): void {
   parser.on('doctype', () => {
     throw new Error('icon contains forbidden SVG content')
   })
+  parser.on('processinginstruction', () => {
+    throw new Error('icon contains forbidden SVG content')
+  })
   parser.on('opentag', (tag) => {
     if (!rootSeen) {
       rootSeen = true

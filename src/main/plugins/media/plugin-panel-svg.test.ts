@@ -31,6 +31,7 @@ it('accepts contained SVG icons and rejects unsafe or malformed files', async ()
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><image href="https://example.com"/></svg>',
     '<svg viewBox="0 0 24 24"/>',
     '<svg xmlns="urn:not-svg" viewBox="0 0 24 24"/>',
+    '<?xml-stylesheet href="https://example.com/x"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"/>',
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><!-- bad--comment --></svg>',
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="url(https://example.com/x)"/></svg>',
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><style>@import "https://example.com/x";</style></svg>',
