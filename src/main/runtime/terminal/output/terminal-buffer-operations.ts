@@ -138,6 +138,10 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     if (restoredSnapshot) {
       return restoredSnapshot
     }
+    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
+      // Only the provider saw the dropped output; the hidden renderer missed it too.
+      return this.serializeProviderTerminalBuffer(ptyId, opts)
+    }
     const headlessSnapshot = await this.serializeHeadlessWithProviderHistory(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
