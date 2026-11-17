@@ -2316,13 +2316,20 @@ html.native-shell .app-layout {
 
 /* Search and deep-link target: a tint out to the enclosing card's edges that fades.
    An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
-   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
+   The bleed vars are measured per target, since nested and sub-row targets sit further in.
+   A row with no card around it grows a rounded halo instead, so the tint clears its text. */
 .settings-target-highlight {
   --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
   box-shadow:
     inset 0 0 0 100vmax var(--settings-target-tint),
     calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
-    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+    0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
+}
+
+.settings-target-highlight[data-settings-target-loose] {
+  --settings-target-halo: 10px;
+  border-radius: var(--radius-md);
 }
 
 [data-settings-scroll-list] .settings-target-highlight {
@@ -2341,13 +2348,15 @@ html.native-shell .app-layout {
     box-shadow:
       inset 0 0 0 100vmax var(--settings-target-tint),
       calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
-      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint),
+      0 0 0 var(--settings-target-halo, 0px) var(--settings-target-tint);
   }
   100% {
     box-shadow:
       inset 0 0 0 100vmax transparent,
       calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
-      var(--settings-target-bleed-right, 0px) 0 0 transparent;
+      var(--settings-target-bleed-right, 0px) 0 0 transparent,
+      0 0 0 var(--settings-target-halo, 0px) transparent;
   }
 }
 
