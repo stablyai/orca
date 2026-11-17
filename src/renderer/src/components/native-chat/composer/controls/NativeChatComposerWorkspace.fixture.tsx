@@ -11,6 +11,7 @@ function workspaceFixture({
   width = 640,
   hostId = 'local',
   folder = false,
+  projectName = 'orca',
   checkout = 'orca',
   folderName = 'notes',
   machineName = '',
@@ -20,6 +21,7 @@ function workspaceFixture({
   width?: number
   hostId?: 'local' | `runtime:${string}` | `ssh:${string}`
   folder?: boolean
+  projectName?: string
   checkout?: string
   folderName?: string
   machineName?: string
@@ -28,7 +30,7 @@ function workspaceFixture({
   const repo: Repo = {
     id: 'composer-preview',
     path: '/preview/orca',
-    displayName: 'orca',
+    displayName: projectName,
     badgeColor: '',
     addedAt: 1,
     kind: folder ? 'folder' : 'git',
@@ -126,6 +128,12 @@ function workspaceFixture({
         }
         return
       }
+      if (projectName !== checkout) {
+        const project = frame.querySelector<HTMLElement>('[data-chat-footer-project]')
+        if (!project || project.getBoundingClientRect().width === 0) {
+          throw new Error('The project name must be visible in the composer footer')
+        }
+      }
       const button =
         frame.querySelector<HTMLButtonElement>('[aria-label^="Switch branch:"]') ??
         Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).at(-1)
@@ -171,7 +179,7 @@ function workspaceFixture({
         const checkoutButton = frame.querySelector<HTMLButtonElement>(
           `[aria-label="Copy ${checkout}"]`
         )
-        const checkoutKind = checkoutButton?.lastElementChild
+        const checkoutKind = checkoutButton?.querySelector<HTMLElement>('[data-chat-footer-kind]')
         if (
           checkoutButton &&
           checkoutKind &&
@@ -198,6 +206,15 @@ function workspaceFixture({
 }
 
 export const shortBranch = workspaceFixture()
+export const projectAndWorktree = workspaceFixture({
+  projectName: 'orca',
+  checkout: 'feature-worktree'
+})
+export const longProjectAndWorktree = workspaceFixture({
+  projectName: 'orca-desktop-platform-services',
+  checkout: 'feature-keep-the-composer-branch-button-within-a-narrow-pane',
+  width: 440
+})
 export const longBranch = workspaceFixture({
   branch: 'feature/keep-the-composer-branch-button-within-a-narrow-pane'
 })
