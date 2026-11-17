@@ -20,7 +20,7 @@ async function assertBrowserIdentitySupported({ client }: HandlerContext): Promi
   if (capabilities.includes(BROWSER_IDENTITY_RUNTIME_CAPABILITY)) {
     return
   }
-  // Only a host's Orca server serves the desktop bridge, and it has no app browser of its own.
+  // Only a host's Orca server serves the desktop bridge, and it has no identity setting of its own.
   if (capabilities.includes(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE,

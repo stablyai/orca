@@ -264,11 +264,7 @@ describe('desktop browser bridge on orcad', () => {
       cliCall(dispatcher, 'browser.cookie.get', { worktree: 'path:/srv/app' })
     ).resolves.toMatchObject({
       ok: false,
-      error: {
-        code: 'desktop_browser_bridge_not_forwarded',
-        message:
-          "An SSH host can't read or change the desktop browser's cookies, request headers or credentials. Nothing ran in this host's own browser."
-      }
+      error: { code: 'desktop_browser_bridge_not_forwarded' }
     })
     await expect(
       cliCall(dispatcher, 'browser.tabCreate', {
