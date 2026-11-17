@@ -198,7 +198,7 @@ describe('buffered Windows processes on the shared worker', () => {
     vi.useFakeTimers()
     const child = new WorkerThreadChildProcess(1, () => true)
     worker.spawn.mockReturnValue(child)
-    const pids: Array<number | undefined> = []
+    const pids: (number | undefined)[] = []
     const stderr: string[] = []
     const observed: string[] = []
     const pending = runProcess(
