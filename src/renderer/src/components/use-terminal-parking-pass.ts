@@ -1,4 +1,4 @@
-import { MountedTerminalWorktrees } from './terminal/split-group-mount'
+import { MountedTerminalWorktrees } from './terminal/workspace-mounting/split-group-mount'
 import { useEffect, useRef } from 'react'
 import { useTerminalParkingWorkspaceChanges } from './terminal-pane/parking/use-terminal-parking-workspace-changes'
 import { invalidateTerminalParkingInputs } from './terminal-pane/parking/terminal-parking-input-events'

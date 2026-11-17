@@ -37,7 +37,9 @@ vi.mock('../../store', () => ({
 vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
-vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
+vi.mock('@/components/terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: vi.fn()
+}))
 vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
   runSleepWorktree: vi.fn()
 }))

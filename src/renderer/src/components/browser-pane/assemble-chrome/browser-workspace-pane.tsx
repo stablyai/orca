@@ -17,7 +17,7 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { RemoteBrowserPagePane } from '../stream-remote/remote-browser-page-pane'
-import { ClientHostedBrowserPagePane } from '../ClientHostedBrowserPagePane'
+import { ClientHostedBrowserPagePane } from './client-hosted/ClientHostedBrowserPagePane'
 import { BrowserPagePane } from './browser-page-pane'
 import { WorkspaceDocPagePane } from '../workspace-doc/workspace-doc-page-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'

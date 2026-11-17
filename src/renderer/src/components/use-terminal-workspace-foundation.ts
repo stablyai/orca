@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { MountedTerminalWorktrees } from './terminal/split-group-mount'
+import { MountedTerminalWorktrees } from './terminal/workspace-mounting/split-group-mount'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store/index'
