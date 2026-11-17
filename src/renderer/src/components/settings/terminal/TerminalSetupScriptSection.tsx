@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { getTerminalSetupScriptSearchEntries } from './appearance/terminal-window-search'

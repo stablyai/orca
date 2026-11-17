@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { ensureWorktreeHasInitialTerminal } from './initial-surface/worktree-initial-terminal-seeding'
 import {
   createMockStore,
