@@ -31,6 +31,17 @@ type ImeEnterGestureEvent = Pick<
 
 // Hangul has no candidate step, so the Enter that commits it is the user's own Enter.
 const HANGUL_ONLY = /^\p{Script=Hangul}+$/u
+const LATIN_ONLY = /^[\p{Script=Latin}\p{M}]+$/u
+const NON_ASCII = /[^\p{ASCII}]/u
+
+/** Hangul, and Vietnamese Telex/VNI (Latin with diacritics), have no candidate step either. Plain
+ * ASCII stays a confirm: Pinyin's Enter commits the typed letters instead of sending. */
+function commitsWithOwnEnter(committedText: string): boolean {
+  return (
+    HANGUL_ONLY.test(committedText) ||
+    (LATIN_ONLY.test(committedText) && NON_ASCII.test(committedText))
+  )
+}
 
 /** Carry confirmation through the next frame: Windows/Linux redispatch bare Enter before keyup, macOS after. Scope expiry by gesture identity so older frames cannot clear newer carry. */
 export function useImeEnterGestureOwnership(): {
@@ -65,7 +76,7 @@ export function useImeEnterGestureOwnership(): {
       }
     }
     const settleCarryAtCompositionEnd = (committedText: string): void => {
-      if (HANGUL_ONLY.test(committedText)) {
+      if (commitsWithOwnEnter(committedText)) {
         stateRef.current.pendingEnter = null
       } else if (stateRef.current.pendingEnter?.awaitsKeyUp === false) {
         // A commit key with an unknown code may never send the keyup that would expire its carry.
@@ -132,7 +143,7 @@ export function useImeEnterGestureOwnership(): {
         if (
           compositionWasActive &&
           !stateRef.current.pendingEnter &&
-          !HANGUL_ONLY.test(committedText)
+          !commitsWithOwnEnter(committedText)
         ) {
           // IBus can finish composition before its only unmarked confirming Enter.
           stateRef.current.pendingEnter = { awaitsKeyUp: false }
