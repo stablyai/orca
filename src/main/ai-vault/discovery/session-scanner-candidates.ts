@@ -4,8 +4,8 @@ import {
   codexRolloutHardlinkIdentity,
   canonicalCodexRolloutKey,
   codexSessionRootRank,
-  dedupeCodexRolloutCopyAliases,
-  dedupeCodexRolloutFileAliases
+  dedupeCodexRolloutFileAliases,
+  groupCodexRolloutCopyAliases
 } from '../scanners/codex/codex-session-root-dedup'
 import { antigravityHistoryPathForBrainDir } from '../scanners/antigravity/session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from '../scanners/codex/session-scanner-codex-paths'
@@ -92,14 +92,16 @@ export async function sessionCandidatesFromDiscoveries(
       }
     }
   }
-  const candidates: SessionFileChoice[] = await dedupeCodexRolloutCopyAliases(
-    legacy,
-    CODEX_ALIAS_ACCESSORS,
-    (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
-    options.signal
-  )
-  for (const named of canonical.values()) {
-    const group = named.length > 1 ? dropCodexHardlinkAliases(named) : named
+  // Outranked copies stay as alternatives so search can retire their rows when the preferred copy flips.
+  const candidates: SessionFileChoice[] = (
+    await groupCodexRolloutCopyAliases(
+      legacy,
+      CODEX_ALIAS_ACCESSORS,
+      (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
+      options.signal
+    )
+  ).map((group) => (group.length === 1 ? group[0] : { ...group[0], alternatives: group }))
+  for (const group of canonical.values()) {
     group.sort(
       (a, b) =>
         Number(a.file.sizeBytes === 0) - Number(b.file.sizeBytes === 0) ||
