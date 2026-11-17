@@ -168,6 +168,9 @@ function streamInSpan(
           }
           child.stdout?.off('data', onStdoutData)
           child.stderr?.off('data', onStderrData)
+          if ('discardOutput' in child) {
+            child.discardOutput()
+          }
           child.off('error', onError)
           child.off('close', onClose)
           options.signal?.removeEventListener('abort', onAbort)

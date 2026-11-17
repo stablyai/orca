@@ -101,3 +101,32 @@ it('never starts a launch cancelled while queued, and replays early requests for
   expect(events).toContainEqual({ type: 'close', id: 1, code: null, signal: 'SIGTERM' })
   expect(endStdin).toHaveBeenCalled()
 })
+
+it('keeps output on the worker once the reader discards it', async () => {
+  const stdout = new PassThrough()
+  const child = Object.assign(new EventEmitter(), {
+    stdout,
+    stderr: new PassThrough(),
+    stdin: new PassThrough(),
+    kill: vi.fn()
+  })
+  spawn.mockReset().mockReturnValue(child)
+  const events: WorkerThreadChildEvent[] = []
+  const port = Object.assign(new EventEmitter(), {
+    postMessage: (event: WorkerThreadChildEvent) => events.push(event)
+  })
+  serveWorkerThreadChildProcesses(port)
+  port.emit('message', { type: 'spawn', id: 1, spec: { program: 'git', args: [] } })
+  await nextTurn()
+  stdout.write('read')
+  await nextTurn()
+  port.emit('message', { type: 'discard-output', id: 1 })
+  stdout.write('discarded')
+  await nextTurn()
+
+  const forwarded = events.flatMap((event) =>
+    event.type === 'stdout' ? [Buffer.from(event.chunk).toString()] : []
+  )
+  expect(forwarded).toEqual(['read'])
+  expect(stdout.isPaused()).toBe(false)
+})

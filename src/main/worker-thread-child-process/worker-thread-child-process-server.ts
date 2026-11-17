@@ -39,6 +39,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       stopping: boolean
       closed: boolean
       groupTerminated: boolean
+      discardingOutput?: boolean
     }
   >()
 
@@ -68,6 +69,9 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     children.set(id, state)
     const postOutput = (type: 'stdout' | 'stderr', chunk: Buffer): void => {
+      if (state.discardingOutput) {
+        return
+      }
       state.pendingOutputBytes += chunk.byteLength
       if (state.pendingOutputBytes >= OUTPUT_HIGH_WATER_BYTES) {
         child.stdout?.pause()
@@ -168,6 +172,11 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
           child.stdout?.resume()
           child.stderr?.resume()
         }
+      } else if (request.type === 'discard-output') {
+        state.discardingOutput = true
+        state.pendingOutputBytes = 0
+        child.stdout?.resume()
+        child.stderr?.resume()
       } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)
       } else if (request.type === 'stdin-end') {

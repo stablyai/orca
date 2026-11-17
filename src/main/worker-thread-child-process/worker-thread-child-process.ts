@@ -96,6 +96,13 @@ export class WorkerThreadChildProcess extends EventEmitter {
     return this.send({ type: 'kill', id: this.id, signal }) && !exited
   }
 
+  /** The reader is done; later output stays on the worker instead of crossing to this thread. */
+  discardOutput(): void {
+    if (!this.closed) {
+      this.send({ type: 'discard-output', id: this.id })
+    }
+  }
+
   /** Withdraws a launch the worker has not started yet; no effect once it has. */
   cancelPendingSpawn(): void {
     if (!this.closed && this.pid === undefined) {
