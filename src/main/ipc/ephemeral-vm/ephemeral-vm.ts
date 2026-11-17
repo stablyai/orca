@@ -37,7 +37,17 @@ import {
 } from './ephemeral-vm-recipe-context'
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
 import type { PluginService } from '../../plugins/plugin-service'
-import { getApprovedPluginVmRecipes } from '../../plugins/contributions/plugin-approved-vm-recipes'
+import {
+  buildEphemeralEnvironmentName,
+  listPickerRecipes,
+  noteCloudCreatePhase,
+  noteCloudCreateProvisionChunk,
+  provisionRecipeMissing,
+  refuseOrcaCloudWithoutGithub,
+  registerEphemeralVmCloudHandlers,
+  withProviderRecipes,
+  type EphemeralVmProvisionArgs
+} from '../ephemeral-vm-cloud'
 import { resolveProvisionedRootSource } from '../../ephemeral-vm/provisioned-root-source'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
 import {
@@ -45,8 +55,7 @@ import {
   pickEphemeralVmFailureCode,
   type EphemeralVmFailure
 } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
-
-const activeProvisionControllers = new Map<string, AbortController>()
+import { activeProvisionControllers } from '../provision-controllers'
 
 export type EphemeralVmProvisionIpcResult =
   | {
@@ -75,6 +84,7 @@ export type EphemeralVmProvisionIpcResult =
     } & EphemeralVmFailure)
 
 export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
+  registerEphemeralVmCloudHandlers(store)
   ipcMain.removeHandler('ephemeralVm:listRecipes')
   ipcMain.removeHandler('ephemeralVm:listRecipeCatalog')
   ipcMain.removeHandler('ephemeralVm:doctor')
@@ -84,13 +94,13 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
   reconcileInterruptedEphemeralVmProvisionsOnStartup(app.getPath('userData'))
 
   ipcMain.handle('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {
-    return listRecipes(store, args.repoId, await getApprovedPluginVmRecipes(pluginService))
+    return listPickerRecipes(store, args.repoId, pluginService)
   })
 
   ipcMain.handle(
     'ephemeralVm:listRecipeCatalog',
     async (): Promise<EphemeralVmRecipeCatalogEntry[]> => {
-      return listRecipeCatalog(store, await getApprovedPluginVmRecipes(pluginService))
+      return listRecipeCatalog(store, await withProviderRecipes(pluginService))
     }
   )
 
@@ -104,7 +114,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       if (!repo.ok) {
         return repo.doctor(args.recipeId)
       }
-      const pluginRecipes = await getApprovedPluginVmRecipes(pluginService)
+      const pluginRecipes = await withProviderRecipes(pluginService)
       return doctorEphemeralVmRecipe({
         repoPath: repo.repo.path,
         recipeId: args.recipeId,
@@ -116,19 +126,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
 
   ipcMain.handle(
     'ephemeralVm:provision',
-    async (
-      _event,
-      args: {
-        repoId: string
-        recipeId: string
-        workspaceName?: string
-        projectId?: string
-        workspaceId?: string
-        branch?: string
-        ref?: string
-        provisionId?: string
-      }
-    ): Promise<EphemeralVmProvisionIpcResult> => {
+    async (_event, args: EphemeralVmProvisionArgs): Promise<EphemeralVmProvisionIpcResult> => {
       const repo = getRecipeRepo(store, args.repoId)
       if (!repo.ok) {
         return provisionFailure(repo.failure)
@@ -136,11 +134,16 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       const recipe = resolveRecipeForRepo(
         repo.repo.path,
         args.recipeId,
-        await getApprovedPluginVmRecipes(pluginService)
+        await withProviderRecipes(pluginService)
       )
       if (!recipe) {
-        return provisionFailure(ephemeralVmFailure('recipeNotFound', { recipeId: args.recipeId }))
+        return provisionFailure(await provisionRecipeMissing(args.recipeId))
       }
+      const refused = await refuseOrcaCloudWithoutGithub(recipe, repo.repo.path)
+      if (refused) {
+        return provisionFailure(refused)
+      }
+      noteCloudCreatePhase(args.provisionId, 'provision-start')
       const controller = args.provisionId ? new AbortController() : null
       if (args.provisionId && controller) {
         activeProvisionControllers.set(args.provisionId, controller)
@@ -149,6 +152,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         if (!args.provisionId) {
           return
         }
+        noteCloudCreateProvisionChunk(args.provisionId, chunk)
         _event.sender.send('ephemeralVm:provisionEvent', {
           provisionId: args.provisionId,
           stream,
@@ -190,6 +194,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           projectId: args.projectId,
           workspaceId: args.workspaceId,
           workspaceName: args.workspaceName,
+          ...(args.idempotencyKey ? { idempotencyKey: args.idempotencyKey } : {}),
           ...(repoUrl ? { repoUrl } : {}),
           ...(args.branch ? { branch: args.branch } : {}),
           ...(sourceRef ? { ref: sourceRef } : {}),
@@ -203,6 +208,21 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
             ok: false,
             error: result.start.error,
             ...pickEphemeralVmFailureCode(result.start),
+            stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
+            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
+          }
+        }
+        // Why: a started runtime that fails to connect or pair is cleaned up, not leaked.
+        const failAfterStart = async (error: unknown): Promise<EphemeralVmProvisionIpcResult> => {
+          await cleanupEphemeralVmRuntime({
+            userDataPath: app.getPath('userData'),
+            repoPath: repo.repo.path,
+            recipe,
+            runtimeId: result.runtime.id
+          }).catch(() => undefined)
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
             stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
             stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
           }
@@ -231,47 +251,26 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
               warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
             }
           } catch (error) {
-            await cleanupEphemeralVmRuntime({
-              userDataPath: app.getPath('userData'),
-              repoPath: repo.repo.path,
-              recipe,
-              runtimeId: result.runtime.id
-            }).catch(() => undefined)
-            return {
-              ok: false,
-              error: error instanceof Error ? error.message : String(error),
-              stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
-              stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
-            }
+            return await failAfterStart(error)
           }
         }
 
         let environment: Awaited<ReturnType<typeof addEnvironmentFromPairingCode>>
         try {
           environment = await addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
-            name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
+            name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id, recipe),
             pairingCode: connection.pairingCode,
             source: 'ephemeral-vm'
           })
         } catch (error) {
-          await cleanupEphemeralVmRuntime({
-            userDataPath: app.getPath('userData'),
-            repoPath: repo.repo.path,
-            recipe,
-            runtimeId: result.runtime.id
-          }).catch(() => undefined)
-          return {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-            stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
-            stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
-          }
+          return await failAfterStart(error)
         }
         const runtime = requireEphemeralVmRecipeResult(
           updateEphemeralVmRuntimeStatus(app.getPath('userData'), result.runtime.id, {
             runtimeEnvironmentId: environment.id
           })
         )
+        noteCloudCreatePhase(args.provisionId, 'provision-end')
         return {
           ok: true,
           connectionType: 'orca-server',
@@ -300,10 +299,6 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       return { cancelled: true }
     }
   )
-}
-
-function buildEphemeralEnvironmentName(repoName: string, runtimeId: string): string {
-  return `${repoName} VM ${runtimeId.slice(-8)}`
 }
 
 function provisionFailure(failure: EphemeralVmFailure): EphemeralVmProvisionIpcResult {

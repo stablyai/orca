@@ -1,4 +1,5 @@
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
+import { stoppedLeafForResume, throwIfClientDisconnected } from './sleeping-leaf-resume'
 import {
   recordTerminalLaunchMetadata,
   resolveTerminalLaunchResult,
@@ -128,9 +129,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           agentTeamsPlan?.env
         )
         const terminalColorQueryReplies = getTerminalViewerColors()
-        if (launchOpts.signal?.aborted) {
-          throw new Error('client_disconnected')
-        }
+        throwIfClientDisconnected(launchOpts.signal)
         try {
           const { launchAgent } = launchOpts
           launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
@@ -181,9 +180,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       try {
         // A pane moved from another host reopens where it last was, until a spawn commits.
         cwd = (await hint.peekCwd(launchOpts.cwd)) ?? cwd
-        if (launchOpts.signal?.aborted) {
-          throw new Error('client_disconnected')
-        }
+        throwIfClientDisconnected(launchOpts.signal)
         const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
           ...initialSize,
           cwd,
@@ -192,6 +189,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           preAllocatedHandle,
           tabId,
           leafId,
+          ...stoppedLeafForResume(launchOpts, this.leaves.get(this.getLeafKey(tabId, leafId))),
           spawnFresh,
           onOutcome: (outcome, operation) => {
             claimedStablePaneCreate?.acceptOutcome?.(outcome, operation)

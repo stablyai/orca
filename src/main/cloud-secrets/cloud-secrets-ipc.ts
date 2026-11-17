@@ -1,0 +1,233 @@
+// Renderer bridge to Orca Cloud secrets. Values travel renderer -> main -> control plane once per save;
+// nothing returns them, and failures surface as codes only (an error message could quote a value).
+import { app, ipcMain } from 'electron'
+import { z } from 'zod'
+import {
+  CLOUD_SECRET_SCOPES,
+  CLOUD_SECRET_WORKSPACE_MODES,
+  MAX_CLOUD_SECRET_BATCH,
+  type CloudSecretsResult,
+  type CloudSecretsStatus
+} from '../../shared/cloud-secrets/cloud-secrets-wire'
+import { withCloudBuildDefaults } from '../cloud-build-defaults'
+import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
+import { orcaCloudSandboxIdFor } from '../hosted-sandbox/orca-cloud-sandbox-id'
+import { getOrcaCloudAvailability } from '../hosted-sandbox/hosted-sandbox-install'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  cloudSecretNameError,
+  cloudSecretSwapped,
+  cloudSecretValueError
+} from '../../shared/cloud-secrets/cloud-secret-rules'
+import {
+  desktopKeyValueForCloud,
+  setCloudDesktopKeysUserDataPath
+} from '../hosted-sandbox/cloud-desktop-keys'
+import {
+  cloudSecretsFailureCode,
+  createCloudSecretsClient,
+  type CloudSecretsClient
+} from './cloud-secrets-client'
+import {
+  forgetAgentApiKeyCloudVariables,
+  recordAgentApiKeyCloudWrite,
+  setAgentApiKeyCloudClient
+} from '../agent-api-keys/agent-api-key-cloud-connection'
+
+const Repo = z.string().trim().min(3).max(256)
+const Target = z.object({ scope: z.enum(CLOUD_SECRET_SCOPES), repo: Repo.optional() })
+const Name = z
+  .string()
+  .max(128)
+  .regex(/^[A-Z_][A-Z0-9_]*$/)
+const Value = z
+  .string()
+  .min(1)
+  .max(64 * 1024)
+const PutRequest = z.object({ target: Target, name: Name, value: Value })
+const RemoveRequest = z.object({ target: Target, name: Name })
+const BatchRequest = z
+  .object({
+    target: Target,
+    set: z.record(Name, Value).optional(),
+    delete: z.array(Name).max(MAX_CLOUD_SECRET_BATCH).optional()
+  })
+  .refine(
+    (request) =>
+      Object.keys(request.set ?? {}).length + (request.delete?.length ?? 0) <=
+      MAX_CLOUD_SECRET_BATCH
+  )
+const EffectiveRequest = z.object({
+  repo: Repo.optional(),
+  workspace: z.enum(CLOUD_SECRET_WORKSPACE_MODES).optional()
+})
+const RefreshRequest = z.object({ runtimeEnvironmentId: z.string().min(1).max(256) })
+const SaveDesktopKeyRequest = z.object({
+  agent: z.string().refine(isTuiAgent),
+  envName: Name
+})
+
+const CHANNELS = [
+  'cloudSecrets:status',
+  'cloudSecrets:list',
+  'cloudSecrets:put',
+  'cloudSecrets:remove',
+  'cloudSecrets:batch',
+  'cloudSecrets:effective',
+  'cloudSecrets:refreshEnv',
+  'cloudSecrets:saveDesktopKey',
+  'cloudSecrets:workspaceSharing'
+] as const
+
+async function attempt<T>(
+  client: CloudSecretsClient | null,
+  run: (client: CloudSecretsClient) => Promise<T>
+): Promise<CloudSecretsResult<T>> {
+  if (!client) {
+    return { ok: false, error: 'not_configured' }
+  }
+  try {
+    return { ok: true, value: await run(client) }
+  } catch (error) {
+    const code = cloudSecretsFailureCode(error)
+    console.warn(`[cloud-secrets] request failed: ${code}`)
+    return { ok: false, error: code }
+  }
+}
+
+export function registerCloudSecretsHandlers(userDataPath: string): void {
+  setCloudDesktopKeysUserDataPath(userDataPath)
+  // Packaged integration builds read no shell env; their control-plane URL is baked in.
+  const config = getHostedSandboxConfig(
+    userDataPath,
+    withCloudBuildDefaults(process.env),
+    app.isPackaged
+  )
+  const client = config
+    ? createCloudSecretsClient({
+        baseUrl: config.controlPlaneUrl,
+        getAccessToken: config.getAccessToken,
+        fetch: config.fetch
+      })
+    : null
+  // Agent API keys saved while signed in are written to personal secrets through the same client.
+  setAgentApiKeyCloudClient(client)
+  for (const channel of CHANNELS) {
+    ipcMain.removeHandler(channel)
+  }
+  // A malformed request is a renderer bug, not something the user typed.
+  const invalid = { ok: false, error: 'unknown' } as const
+
+  ipcMain.handle('cloudSecrets:status', async (): Promise<CloudSecretsStatus> => ({
+    available: client !== null && (await getOrcaCloudAvailability()) === 'offered'
+  }))
+  ipcMain.handle('cloudSecrets:list', (_event, raw: unknown) => {
+    const target = Target.safeParse(raw)
+    return target.success ? attempt(client, (c) => c.list(target.data)) : invalid
+  })
+  // Fable #5: a personal variable the user sets or deletes here no longer holds a desktop key the vault saved,
+  // so Settings › Agent API keys stops showing that key as "Saved in your Orca account".
+  const forgetPersonal = async <T>(
+    target: { scope: string },
+    names: readonly string[],
+    result: CloudSecretsResult<T>
+  ): Promise<CloudSecretsResult<T>> => {
+    if (result.ok && target.scope === 'personal') {
+      await forgetAgentApiKeyCloudVariables(names)
+    }
+    return result
+  }
+  ipcMain.handle('cloudSecrets:put', async (_event, raw: unknown) => {
+    const request = PutRequest.safeParse(raw)
+    return request.success
+      ? forgetPersonal(
+          request.data.target,
+          [request.data.name],
+          await attempt(client, (c) => c.put(request.data.target, request.data.name, request.data.value))
+        )
+      : invalid
+  })
+  ipcMain.handle('cloudSecrets:remove', async (_event, raw: unknown) => {
+    const request = RemoveRequest.safeParse(raw)
+    return request.success
+      ? forgetPersonal(
+          request.data.target,
+          [request.data.name],
+          await attempt(client, async (c) => {
+            await c.remove(request.data.target, request.data.name)
+            return true as const
+          })
+        )
+      : invalid
+  })
+  ipcMain.handle('cloudSecrets:batch', async (_event, raw: unknown) => {
+    const request = BatchRequest.safeParse(raw)
+    return request.success
+      ? forgetPersonal(
+          request.data.target,
+          [...Object.keys(request.data.set ?? {}), ...(request.data.delete ?? [])],
+          await attempt(client, (c) =>
+            c.batch(request.data.target, { set: request.data.set, delete: request.data.delete })
+          )
+        )
+      : invalid
+  })
+  ipcMain.handle('cloudSecrets:effective', (_event, raw: unknown) => {
+    const request = EffectiveRequest.safeParse(raw ?? {})
+    return request.success
+      ? attempt(client, (c) => c.effective(request.data.repo, undefined, request.data.workspace))
+      : invalid
+  })
+  // One desktop-sealed key, unsealed here and sent once to the user's personal Cloud secrets; the
+  // renderer names it (agent + variable) and never sees the value. Each call is one explicit click.
+  ipcMain.handle('cloudSecrets:saveDesktopKey', async (_event, raw: unknown) => {
+    const request = SaveDesktopKeyRequest.safeParse(raw)
+    if (!request.success || !isTuiAgent(request.data.agent)) {
+      return invalid
+    }
+    const { agent, envName } = request.data
+    const nameError = cloudSecretNameError(envName)
+    if (nameError) {
+      return { ok: false, error: nameError }
+    }
+    // Only keys the workspace gets as a stand-in: anything else would sit there in full.
+    if (!cloudSecretSwapped(envName)) {
+      return { ok: false, error: 'not_swappable' }
+    }
+    const value = await desktopKeyValueForCloud(agent, envName)
+    if (!value) {
+      return { ok: false, error: 'not_found' }
+    }
+    const valueError = cloudSecretValueError(envName, value)
+    if (valueError) {
+      return { ok: false, error: valueError }
+    }
+    const result = await attempt(client, (c) => c.put({ scope: 'personal' }, envName, value))
+    if (result.ok) {
+      // So Settings › Agent API keys shows it as saved in the Orca account.
+      await recordAgentApiKeyCloudWrite(agent, envName)
+    }
+    return result
+  })
+  // Reads the control plane only; never wakes the sandbox.
+  ipcMain.handle('cloudSecrets:workspaceSharing', (_event, raw: unknown) => {
+    const request = RefreshRequest.safeParse(raw)
+    if (!request.success) {
+      return invalid
+    }
+    const sandboxId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    return sandboxId
+      ? attempt(client, (c) => c.workspaceSharing(sandboxId))
+      : { ok: false, error: 'not_found' }
+  })
+  ipcMain.handle('cloudSecrets:refreshEnv', (_event, raw: unknown) => {
+    const request = RefreshRequest.safeParse(raw)
+    if (!request.success) {
+      return invalid
+    }
+    const sandboxId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    return sandboxId
+      ? attempt(client, (c) => c.refreshEnv(sandboxId))
+      : { ok: false, error: 'not_found' }
+  })
+}

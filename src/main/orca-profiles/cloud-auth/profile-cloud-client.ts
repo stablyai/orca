@@ -1,3 +1,4 @@
+import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -38,7 +39,9 @@ export class OrcaCloudRequestError extends Error {
   // Preserve the server error discriminator so callers can distinguish business 4xx outcomes.
   constructor(
     public readonly statusCode: number,
-    public readonly errorCode?: string
+    public readonly errorCode?: string,
+    /** Auth's finer `reason` beside `error` (a refused refresh: expired, revoked, sso_required…). */
+    public readonly reason?: string
   ) {
     super(`orca_cloud_request_failed_${statusCode}`)
     this.name = 'OrcaCloudRequestError'
@@ -85,12 +88,17 @@ function normalizeCapabilities(value: unknown): OrcaCloudCapabilities {
       }
     }
   }
+  const consoleOrigin =
+    typeof record.consoleOrigin === 'string'
+      ? cleanCloudServiceOrigin(record.consoleOrigin, false)
+      : null
   return {
     flags,
     refreshedAt:
       typeof record.refreshedAt === 'number' && Number.isFinite(record.refreshedAt)
         ? record.refreshedAt
-        : Date.now()
+        : Date.now(),
+    ...(consoleOrigin ? { consoleOrigin } : {})
   }
 }
 
@@ -171,18 +179,23 @@ export function isAmbiguousCloudRequestFailure(error: unknown): boolean {
 }
 
 // Proxies, CDNs and gateways answer with HTML; only the auth server's JSON carries a verdict.
-async function readCloudErrorCode(response: Response): Promise<string | undefined> {
+async function readCloudError(response: Response): Promise<{ error?: string; reason?: string }> {
   if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
     await cancelUnreadResponseBody(response)
-    return undefined
+    return {}
   }
   try {
     const body: unknown = await response.json()
-    return body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-      ? body.error
-      : undefined
+    if (!body || typeof body !== 'object') {
+      return {}
+    }
+    return {
+      ...('error' in body && typeof body.error === 'string' ? { error: body.error } : {}),
+      // Additive: older auth deployments send no reason.
+      ...('reason' in body && typeof body.reason === 'string' ? { reason: body.reason } : {})
+    }
   } catch {
-    return undefined
+    return {}
   }
 }
 
@@ -199,7 +212,8 @@ async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions
     signal: AbortSignal.timeout(options?.timeoutMs ?? CLOUD_REQUEST_TIMEOUT_MS)
   })
   if (!response.ok) {
-    throw new OrcaCloudRequestError(response.status, await readCloudErrorCode(response))
+    const failure = await readCloudError(response)
+    throw new OrcaCloudRequestError(response.status, failure.error, failure.reason)
   }
   return (await response.json()) as T
 }
@@ -267,7 +281,8 @@ export async function createOrcaCloudProfile(
 export async function selectOrcaCloudOrg(
   config: OrcaCloudAuthConfig,
   session: OrcaCloudSession,
-  orgId: string
+  /** null asks auth to clear the active team (personal account). */
+  orgId: string | null
 ): Promise<SelectOrgResponse> {
   const response = await postJson<{
     cloud: unknown

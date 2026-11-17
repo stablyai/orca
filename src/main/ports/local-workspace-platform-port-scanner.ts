@@ -256,15 +256,30 @@ async function mapLinuxInodesToPids(inodes: Set<number>): Promise<Map<number, nu
   return result
 }
 
+// Node 22+ names its main thread "MainThread", which is what /proc/<pid>/comm reports for every Node server.
+const LINUX_THREAD_NAME_COMMS = new Set(['MainThread'])
+
+export function linuxProcessName(
+  comm: string | undefined,
+  argv0: string | undefined
+): string | undefined {
+  if (comm && !LINUX_THREAD_NAME_COMMS.has(comm)) {
+    return comm
+  }
+  const executable = argv0?.split('/').pop()
+  return executable || comm || undefined
+}
+
 async function loadLinuxProcessMetadata(pid: number): Promise<ProcessMetadata> {
   const [comm, cmdline, cwd] = await Promise.all([
     readTextIfAvailable(`/proc/${pid}/comm`),
     readTextIfAvailable(`/proc/${pid}/cmdline`),
     readlink(`/proc/${pid}/cwd`).catch(() => undefined)
   ])
+  const argv = cmdline?.split('\u0000').filter(Boolean) ?? []
   return {
-    processName: comm?.trim() || undefined,
-    commandLine: cmdline?.split('\u0000').join(' ').trim() || undefined,
+    processName: linuxProcessName(comm?.trim(), argv[0]),
+    commandLine: argv.join(' ').trim() || undefined,
     cwd
   }
 }

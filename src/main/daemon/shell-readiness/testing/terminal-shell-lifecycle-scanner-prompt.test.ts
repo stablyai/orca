@@ -53,3 +53,43 @@ describe('idle at a shell prompt', () => {
     expect(mirror.claimIdlePrompt()).toBe(true)
   })
 })
+
+describe('a freshly spawned shell', () => {
+  const fresh = (...chunks: string[]): TerminalShellLifecycleScanner => {
+    const scanner = new TerminalShellLifecycleScanner({ freshShell: true })
+    for (const chunk of chunks) {
+      scanner.scan(chunk)
+    }
+    return scanner
+  }
+
+  it('claims its own first prompt only once', () => {
+    const scanner = fresh('motd\r\n', PROMPT)
+    expect(scanner.isIdleAtPrompt).toBe(true)
+    scanner.forgetIdlePrompt()
+    expect(scanner.isIdleAtPrompt).toBe(false)
+  })
+
+  it('still needs a clean cycle once a command or failure intervenes', () => {
+    expect(fresh(`${C}startup\r\n`, PROMPT).isIdleAtPrompt).toBe(false)
+    expect(fresh(D1, PROMPT).isIdleAtPrompt).toBe(false)
+  })
+
+  it('is conservative again after a seed (restored or attached stream)', () => {
+    const scanner = fresh()
+    scanner.seedOwner(undefined)
+    scanner.scan(PROMPT)
+    expect(scanner.isIdleAtPrompt).toBe(false)
+  })
+
+  it('leaves a scanner that joins mid-stream conservative', () => {
+    expect(idleAfter(PROMPT)).toBe(false)
+  })
+
+  it('reaches the mirror the runtime claims from', () => {
+    const mirror = new PtyShellOwnershipMirror(async () => false, { freshShell: true })
+    mirror.scan(PROMPT)
+    expect(mirror.claimIdlePrompt()).toBe(true)
+    expect(mirror.claimIdlePrompt()).toBe(false)
+  })
+})

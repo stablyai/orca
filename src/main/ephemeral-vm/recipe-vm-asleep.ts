@@ -8,6 +8,7 @@ import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host/execution
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
+import { isPairedCloudEnvironmentDormant } from '../cloud-workspaces/cloud-paired-dormant'
 
 /**
  * The one answer to "may Orca dial this VM in the background?" (#36363). A VM is asleep while its
@@ -36,13 +37,14 @@ export async function prepareRecipeVmEnvironmentSleepCheck(
     return () => {
       try {
         const vm = findEnvironmentEphemeralVmRuntime(userDataPath, environment)
-        return vm ? isVmAsleep(vm) : false
+        // A paired cloud server has no VM record here: its control plane's last answer decides.
+        return vm ? isVmAsleep(vm) : isPairedCloudEnvironmentDormant(environmentId)
       } catch {
         return false
       }
     }
   } catch {
-    return () => false
+    return () => isPairedCloudEnvironmentDormant(environmentId)
   }
 }
 
@@ -67,11 +69,11 @@ export async function prepareRecipeVmServerSleepCheck(
   let root: string
   try {
     if (!storeRoot) {
-      return () => false
+      return () => isPairedCloudEnvironmentDormant(environmentId)
     }
     root = storeRoot()
   } catch {
-    return () => false
+    return () => isPairedCloudEnvironmentDormant(environmentId)
   }
   return prepareRecipeVmEnvironmentSleepCheck(root, environmentId)
 }

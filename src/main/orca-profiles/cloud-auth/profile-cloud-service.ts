@@ -1,9 +1,14 @@
+import {
+  clearSignedOutCloudData,
+  ORCA_CLOUD_AUTH_STOPPED_ERRORS,
+  revokeCloudReaderKeyBestEffort,
+  type OrcaCloudSetupSignIn
+} from './profile-cloud-sign-in-session-data'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
   CreateCloudLinkedOrcaProfileResult,
   OrcaProfileAuthStatus,
-  SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
 } from '../../../shared/orca-profiles/orca-profiles'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
@@ -20,6 +25,7 @@ import {
   revokeOrcaCloudSession
 } from './profile-cloud-client'
 import { beginOrcaCloudPkceFlow, type OrcaCloudAuthorizationCode } from './profile-cloud-pkce'
+import { continueCloudSetupInBrowser, pkceSignInOptions } from './profile-cloud-setup-sign-in'
 import {
   createCloudLinkedOrcaProfileRecord,
   linkOrcaProfileToCloud,
@@ -28,12 +34,11 @@ import {
 import { runWithFreshOrcaCloudSession } from '../cloud-session/profile-cloud-session-refresh'
 import {
   connectDevOrcaCloudProfile,
-  createDevCloudLinkedOrcaProfile,
-  selectDevOrcaCloudOrg
+  createDevCloudLinkedOrcaProfile
 } from './profile-cloud-dev-service'
 import { getOrcaProfileAuthStatusFromProfile } from './profile-cloud-auth-status'
-import { selectCloudOrg } from '../cloud-org/profile-cloud-org-selection'
 import {
+  cancelOrcaCloudSignIn,
   endOrcaCloudSignInProgress,
   setOrcaCloudSignInLink,
   startOrcaCloudSignInProgress
@@ -42,13 +47,17 @@ import { clearRelayRegionPreferenceCache } from '../../runtime/mobile-cloud-rela
 
 import './profile-cloud-capability-refresh'
 
+// Org switching lives beside the org selection it drives; callers keep importing it from here.
+export { selectCurrentOrcaProfileOrg } from '../cloud-org/profile-cloud-org-select-current'
+
 let nextCloudConnectAttempt = 0
 let linkedCloudConnectAttempt = 0
 
 function invalidateOutstandingCloudConnectAttempts(): void {
   nextCloudConnectAttempt += 1
   linkedCloudConnectAttempt = nextCloudConnectAttempt
-  endOrcaCloudSignInProgress()
+  // Also closes the pending loopback listener, so a late browser callback has nowhere to land.
+  cancelOrcaCloudSignIn()
 }
 
 export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfileAuthStatus {
@@ -56,7 +65,9 @@ export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfi
 }
 
 export async function connectCurrentOrcaProfile(
-  userDataPath: string
+  userDataPath: string,
+  /** Cloud setup's sign-in, or a plain one that may skip the browser. */
+  setup?: OrcaCloudSetupSignIn | { openBrowser?: boolean }
 ): Promise<ConnectCurrentOrcaProfileResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (isOrcaCloudDevAuthEnabled()) {
@@ -81,6 +92,9 @@ export async function connectCurrentOrcaProfile(
   const browserWait = new AbortController()
   startOrcaCloudSignInProgress(attempt, () => browserWait.abort())
   let respondToBrowser: OrcaCloudAuthorizationCode['respond'] | undefined
+  // Cancel (or a newer attempt) aborts this one at any stage before the session is saved.
+  const stale = (): boolean => attempt < linkedCloudConnectAttempt || browserWait.signal.aborted
+  let end: 'timed-out' | undefined
   const finish = (result: ConnectCurrentOrcaProfileResult): ConnectCurrentOrcaProfileResult => {
     respondToBrowser?.(
       result.status === 'failed'
@@ -92,12 +106,13 @@ export async function connectCurrentOrcaProfile(
   try {
     const code = await beginOrcaCloudPkceFlow(configState.config, active.profile.id, {
       signal: browserWait.signal,
-      onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link)
+      onAuthorizeUrl: (link) => setOrcaCloudSignInLink(attempt, link),
+      ...pkceSignInOptions(setup)
     })
     respondToBrowser = code.respond
     // The callback listener has closed, so its browser link is dead.
     setOrcaCloudSignInLink(attempt, null)
-    if (attempt < linkedCloudConnectAttempt) {
+    if (stale()) {
       return finish({
         status: 'cancelled',
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
@@ -107,7 +122,7 @@ export async function connectCurrentOrcaProfile(
       ...code,
       localProfileId: active.profile.id
     })
-    if (attempt < linkedCloudConnectAttempt) {
+    if (stale()) {
       return finish({
         status: 'cancelled',
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
@@ -116,6 +131,7 @@ export async function connectCurrentOrcaProfile(
     signInCloudSession(active.profile.id, userDataPath, exchange)
     const list = linkOrcaProfileToCloud(active.profile.id, exchange.cloud, userDataPath)
     linkedCloudConnectAttempt = attempt
+    await continueCloudSetupInBrowser(setup, code)
     return finish({
       status: 'connected',
       auth: getCurrentOrcaProfileAuthStatus(userDataPath),
@@ -124,17 +140,14 @@ export async function connectCurrentOrcaProfile(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (message === 'orca_cloud_auth_timeout' && attempt === nextCloudConnectAttempt) {
+    if (!stale() && message === 'orca_cloud_auth_timeout' && attempt === nextCloudConnectAttempt) {
+      end = 'timed-out'
       return finish({
         status: 'timed-out',
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
       })
     }
-    if (
-      message === 'orca_cloud_auth_timeout' ||
-      message === 'orca_cloud_auth_denied' ||
-      message === 'orca_cloud_auth_cancelled'
-    ) {
+    if (browserWait.signal.aborted || ORCA_CLOUD_AUTH_STOPPED_ERRORS.has(message)) {
       return finish({
         status: 'cancelled',
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
@@ -146,7 +159,9 @@ export async function connectCurrentOrcaProfile(
       error: message
     })
   } finally {
-    endOrcaCloudSignInProgress(attempt)
+    // Every return above answered the tab already; this only covers an unexpected throw.
+    respondToBrowser?.({ status: 'cancelled' })
+    endOrcaCloudSignInProgress(attempt, end)
   }
 }
 
@@ -159,6 +174,11 @@ export async function signOutCurrentOrcaProfile(
   const active = ensureActiveOrcaProfile(userDataPath)
   const configState = getOrcaCloudAuthConfig()
   const session = readCloudSession(active.profile.id, userDataPath)
+  if (session.status === 'found') {
+    // While the session still mints tokens: revoke this device's reader key server-side so no
+    // later sleep seals to it. Bounded (a couple of seconds) and never fails the sign-out.
+    await revokeCloudReaderKeyBestEffort()
+  }
   // Fence before network I/O so in-flight refreshes cannot save after sign-out.
   invalidateCloudSessionChanges(active.profile.id, userDataPath)
   if (!isOrcaCloudDevAuthEnabled() && configState.configured && session.status === 'found') {
@@ -175,6 +195,7 @@ export async function signOutCurrentOrcaProfile(
   }
   signOutCloudSession(active.profile.id, userDataPath)
   const list = unlinkOrcaProfileFromCloud(active.profile.id, userDataPath)
+  await clearSignedOutCloudData(active.profile.id, userDataPath)
   try {
     clearRelayRegionPreferenceCache(userDataPath)
   } catch {
@@ -243,62 +264,6 @@ export async function createCloudLinkedOrcaProfile(
       activeProfileId: list.activeProfileId,
       profiles: list.profiles,
       profile: list.profile
-    }
-  } catch (error) {
-    return {
-      status: 'failed',
-      auth: getCurrentOrcaProfileAuthStatus(userDataPath),
-      error: error instanceof Error ? error.message : String(error)
-    }
-  }
-}
-
-export async function selectCurrentOrcaProfileOrg(
-  userDataPath: string,
-  orgId: string
-): Promise<SelectOrcaProfileOrgResult> {
-  const active = ensureActiveOrcaProfile(userDataPath)
-  if (isOrcaCloudDevAuthEnabled()) {
-    const result = selectDevOrcaCloudOrg(active, userDataPath, orgId)
-    if (result.status !== 'updated') {
-      return {
-        status: 'reconnect-required',
-        auth: getOrcaProfileAuthStatusFromProfile(active, userDataPath)
-      }
-    }
-    return {
-      status: 'selected',
-      auth: getCurrentOrcaProfileAuthStatus(userDataPath),
-      activeProfileId: result.list.activeProfileId,
-      profiles: result.list.profiles
-    }
-  }
-
-  const configState = getOrcaCloudAuthConfig()
-  if (!configState.configured) {
-    return {
-      status: 'unconfigured',
-      auth: getOrcaProfileAuthStatusFromProfile(active, userDataPath)
-    }
-  }
-  try {
-    const list = await selectCloudOrg({
-      config: configState.config,
-      active,
-      userDataPath,
-      orgId
-    })
-    if (!list) {
-      return {
-        status: 'reconnect-required',
-        auth: getOrcaProfileAuthStatusFromProfile(active, userDataPath)
-      }
-    }
-    return {
-      status: 'selected',
-      auth: getCurrentOrcaProfileAuthStatus(userDataPath),
-      activeProfileId: list.activeProfileId,
-      profiles: list.profiles
     }
   } catch (error) {
     return {

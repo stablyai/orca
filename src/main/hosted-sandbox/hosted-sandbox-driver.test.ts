@@ -1,0 +1,304 @@
+import { describe, expect, it, vi } from 'vitest'
+import {
+  getEphemeralVmRecipeResultConnection,
+  parseEphemeralVmRecipeResult
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import { runEnvironmentProviderDriverContract } from '../environment-providers/environment-provider-driver-contract.test-support'
+import {
+  environmentHandleFromRecipeResult,
+  environmentRecipeResult
+} from '../environment-providers/environment-provider-recipe-adapter'
+import { isHostedEntitlementDenied } from './hosted-environment-provider'
+import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
+import {
+  CLONE_STALL_MS,
+  createHostedSandboxDriver,
+  HOSTED_SANDBOX_DELETE_NOT_CONFIRMED,
+  HOSTED_SANDBOX_DRIVER_ID,
+  CANCEL_CLEANUP_UNCONFIRMED,
+  waitForClone
+} from './hosted-sandbox-driver'
+import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
+import { createFakeHostedControlPlane } from './fake-hosted-control-plane.test-support'
+
+function setup(options: { token?: string; fetch?: typeof fetch } = {}) {
+  const plane = createFakeHostedControlPlane()
+  const client = createHostedSandboxControlPlaneClient({
+    baseUrl: 'https://sandbox.cloud.test',
+    getAccessToken: async () => options.token ?? plane.token,
+    fetch: options.fetch ?? plane.fetch
+  })
+  return { plane, client, driver: createHostedSandboxDriver(client) }
+}
+
+async function rejection(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => null,
+    (error: unknown) => error
+  )
+}
+
+runEnvironmentProviderDriverContract('HostedSandboxDriver', async () => {
+  const { plane, client, driver } = setup()
+  return {
+    driver,
+    liveEnvironmentIds: async () =>
+      [...plane.sandboxes.values()].filter((s) => s.status !== 'destroyed').map((s) => s.id),
+    reopenDriver: () => createHostedSandboxDriver(client)
+  }
+})
+
+describe('HostedSandboxDriver', () => {
+  it('surfaces the billing deny reason when Orca Cloud refuses a start', async () => {
+    const { plane, driver } = setup()
+    plane.denyNextStart('included_hours_exhausted')
+    const error = await rejection(driver.create({ workspaceId: 'ws-1' }))
+    expect(isHostedEntitlementDenied(error)).toBe(true)
+    expect(isEnvironmentProviderError(error) && error.reason).toBe('included_hours_exhausted')
+  })
+
+  it('sends only the Orca token and maps a rejected token to unauthorized', async () => {
+    const { plane, driver } = setup({ token: 'expired' })
+    const error = await rejection(driver.create({ workspaceId: 'ws-1' }))
+    expect(isEnvironmentProviderError(error, 'unauthorized')).toBe(true)
+    expect(plane.requests.map((r) => r.authorization)).toEqual(['Bearer expired'])
+  })
+
+  it('does not follow redirects, so the bearer token cannot be forwarded off-origin', async () => {
+    const seen: RequestInit[] = []
+    const { driver } = setup({
+      fetch: async (_input, init) => {
+        seen.push(init ?? {})
+        return new Response(null, { status: 302, headers: { location: 'https://evil.test/' } })
+      }
+    })
+    const error = await rejection(driver.create({ workspaceId: 'ws-1' }))
+    expect(isEnvironmentProviderError(error, 'invalid_response')).toBe(true)
+    expect(seen[0]?.redirect).toBe('manual')
+  })
+
+  it('rejects a success payload that does not match the wire contract', async () => {
+    const { driver } = setup({ fetch: async () => Response.json({ sandbox: { id: 'x' } }) })
+    const error = await rejection(driver.create({ workspaceId: 'ws-1' }))
+    expect(isEnvironmentProviderError(error, 'invalid_response')).toBe(true)
+  })
+
+  it('refuses a plain-HTTP control plane outside loopback', () => {
+    expect(() =>
+      createHostedSandboxControlPlaneClient({
+        baseUrl: 'http://sandbox.cloud.test',
+        getAccessToken: async () => 't'
+      })
+    ).toThrow(/HTTPS/)
+  })
+
+  it('round-trips through the recipe result the runtime record stores', async () => {
+    const { driver } = setup()
+    const ready = await driver.create({ workspaceId: 'ws-1' })
+    expect(ready.result).toEqual(
+      environmentRecipeResult(ready.handle, readyConnection(ready), 'orca-worktree')
+    )
+    const recipeResult = environmentRecipeResult(
+      ready.handle,
+      readyConnection(ready),
+      'provisioned-root'
+    )
+    const parsed = parseEphemeralVmRecipeResult(JSON.stringify(recipeResult))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) {
+      return
+    }
+    expect(environmentHandleFromRecipeResult(parsed.result, HOSTED_SANDBOX_DRIVER_ID)).toEqual(
+      ready.handle
+    )
+    expect(environmentHandleFromRecipeResult(parsed.result, 'shell-recipe')).toBeNull()
+    expect((await driver.resume(ready.handle)).handle.environmentId).toBe(
+      ready.handle.environmentId
+    )
+  })
+
+  it('keeps a capped session alive and rolls it over onto the same disk', async () => {
+    const { driver } = setup()
+    const created = await driver.create({ workspaceId: 'ws-rollover' })
+    const renewed = await driver.renewLease(created.handle, 10 * 60_000)
+    expect(renewed.status).toBe('running')
+    expect(renewed.session!.leaseExpiresAt!).toBeLessThanOrEqual(renewed.session!.deadlineAt!)
+
+    const rolled = await driver.rollover(created.handle)
+    expect(rolled.handle.environmentId).toBe(created.handle.environmentId)
+    expect(rolled.session.startedAt).toBeGreaterThan(created.session.startedAt)
+    expect(rolled.session.deadlineAt! - rolled.session.startedAt).toBeLessThanOrEqual(
+      driver.capabilities.maxSessionMs!
+    )
+    await driver.destroy(created.handle)
+  })
+
+  it('never reports a delete the control plane did not confirm (another identity sees not_found)', async () => {
+    const { plane, driver } = setup()
+    const created = await driver.create({ workspaceId: 'ws-other-owner' })
+    // The control plane answers not_found for a sandbox this token can't see, e.g. one created
+    // under a different signed-in user. The VM is still running and billing.
+    plane.sandboxes.delete(created.handle.environmentId)
+    const error = await rejection(driver.destroy(created.handle))
+    expect(isEnvironmentProviderError(error, 'not_found')).toBe(true)
+    expect(isEnvironmentProviderError(error) && error.reason).toBe(
+      HOSTED_SANDBOX_DELETE_NOT_CONFIRMED
+    )
+  })
+
+  it('treats a repeat delete of a destroyed sandbox as done', async () => {
+    const { driver } = setup()
+    const created = await driver.create({ workspaceId: 'ws-repeat-delete' })
+    await driver.destroy(created.handle)
+    await expect(driver.destroy(created.handle)).resolves.toBeUndefined()
+  })
+})
+
+function readyConnection(ready: {
+  result: Parameters<typeof getEphemeralVmRecipeResultConnection>[0]
+}) {
+  const connection = getEphemeralVmRecipeResultConnection(ready.result)
+  if (connection.type !== 'orca-server') {
+    throw new Error('expected an orca-server connection')
+  }
+  return connection
+}
+
+describe('waitForClone', () => {
+  type Status = Awaited<ReturnType<HostedSandboxControlPlaneClient['cloneStatus']>>
+  function fakeClient(statuses: (Status | Error)[]) {
+    const destroyed: string[] = []
+    let index = 0
+    return {
+      destroyed,
+      client: {
+        cloneStatus: async (): Promise<Status> => {
+          const next = statuses[Math.min(index++, statuses.length - 1)]!
+          if (next instanceof Error) {
+            throw next
+          }
+          return next
+        },
+        destroy: async (id: string) => {
+          destroyed.push(id)
+          return { id, status: 'destroyed' as const }
+        }
+      }
+    }
+  }
+
+  it('reports each change in git progress once, then returns when the clone is done', async () => {
+    const { client, destroyed } = fakeClient([
+      { state: 'running', percent: 10, stage: 'download' },
+      { state: 'running', percent: 10, stage: 'download' },
+      new Error('one failed poll'),
+      { state: 'running', percent: 70, stage: 'checkout' },
+      { state: 'done' }
+    ])
+    const progress: unknown[] = []
+    await waitForClone(client, 'sbx_1', { onProgress: (p) => progress.push(p) }, { pollMs: 0 })
+    expect(progress).toEqual([
+      { phase: 'cloning' },
+      { phase: 'cloning', percent: 10, message: 'download' },
+      { phase: 'cloning', percent: 70, message: 'checkout' }
+    ])
+    expect(destroyed).toEqual([])
+  })
+
+  it('an environment boot reports its fetch as an update', async () => {
+    const { client } = fakeClient([
+      { state: 'running', percent: 30, stage: 'download' },
+      { state: 'done' }
+    ])
+    const progress: unknown[] = []
+    await waitForClone(
+      client,
+      'sbx_1',
+      { onProgress: (p) => progress.push(p) },
+      { pollMs: 0, mode: 'update' }
+    )
+    expect(progress).toEqual([
+      { phase: 'updating' },
+      { phase: 'updating', percent: 30, message: 'download' }
+    ])
+  })
+
+  it('a failed clone deletes the sandbox and fails with its reason', async () => {
+    const { client, destroyed } = fakeClient([{ state: 'failed', reason: 'repo_unreachable' }])
+    const error = await rejection(waitForClone(client, 'sbx_1', {}, { pollMs: 0 }))
+    expect(isEnvironmentProviderError(error, 'conflict') && error.reason).toBe(
+      'clone:repo_unreachable'
+    )
+    expect(destroyed).toEqual(['sbx_1'])
+  })
+
+  it('a clone whose progress stops moving fails as stalled instead of spinning forever', async () => {
+    let clock = 0
+    const { client, destroyed } = fakeClient([{ state: 'running', percent: 60, stage: 'checkout' }])
+    const error = await rejection(
+      waitForClone(client, 'sbx_1', {}, { pollMs: 0, now: () => (clock += 60_000) })
+    )
+    expect(isEnvironmentProviderError(error) && error.reason).toBe('clone:clone_stalled')
+    expect(CLONE_STALL_MS).toBe(5 * 60_000)
+    expect(destroyed).toEqual(['sbx_1'])
+  })
+
+  it('cancel deletes the sandbox the caller never received', async () => {
+    const { client, destroyed } = fakeClient([{ state: 'running', percent: 5, stage: 'download' }])
+    const abort = new AbortController()
+    const waiting = rejection(
+      waitForClone(client, 'sbx_1', { signal: abort.signal }, { pollMs: 5 })
+    )
+    abort.abort()
+    const error = await waiting
+    expect(isEnvironmentProviderError(error, 'aborted')).toBe(true)
+    // Confirmed deleted: the window may say "Sandbox deleted".
+    expect(isEnvironmentProviderError(error) && error.reason).not.toBe(CANCEL_CLEANUP_UNCONFIRMED)
+    expect(destroyed).toEqual(['sbx_1'])
+  })
+
+  // Regression: a delete that failed (or wasn't confirmed) was swallowed, so the window said
+  // "Sandbox deleted" while the sandbox kept running and billing, with no Try again.
+  it('a cancel whose delete is not confirmed says so, so the window offers Try again', async () => {
+    for (const destroy of [
+      async () => {
+        throw new Error('offline')
+      },
+      async (id: string) => ({ id, status: 'running' as const })
+    ]) {
+      const { client } = fakeClient([{ state: 'running', percent: 5, stage: 'download' }])
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const abort = new AbortController()
+      const waiting = rejection(
+        waitForClone({ ...client, destroy }, 'sbx_1', { signal: abort.signal }, { pollMs: 5 })
+      )
+      abort.abort()
+      const error = await waiting
+      expect(isEnvironmentProviderError(error, 'aborted')).toBe(true)
+      expect(isEnvironmentProviderError(error) && error.reason).toBe(CANCEL_CLEANUP_UNCONFIRMED)
+      warn.mockRestore()
+    }
+  })
+
+  it('a failed clone whose delete is not confirmed keeps its own reason, and logs the leftover', async () => {
+    const { client } = fakeClient([{ state: 'failed', reason: 'repo_unreachable' }])
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const error = await rejection(
+      waitForClone(
+        {
+          ...client,
+          destroy: async () => {
+            throw new Error('offline')
+          }
+        },
+        'sbx_1',
+        {},
+        { pollMs: 0 }
+      )
+    )
+    expect(isEnvironmentProviderError(error) && error.reason).toBe('clone:repo_unreachable')
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('sbx_1 not confirmed deleted'))
+    warn.mockRestore()
+  })
+})

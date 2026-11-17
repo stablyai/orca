@@ -1,5 +1,6 @@
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
+  BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   type BrowserNetworkTunnelSocket,
   type BrowserNetworkTunnelStream
@@ -9,6 +10,7 @@ export function createBrowserNetworkTunnelStream(options: {
   id: number
   socket: BrowserNetworkTunnelSocket
   windowBytes: number
+  earlyData: boolean
   onConnectTimeout: (stream: BrowserNetworkTunnelStream) => void
 }): BrowserNetworkTunnelStream {
   const stream: BrowserNetworkTunnelStream = {
@@ -18,11 +20,16 @@ export function createBrowserNetworkTunnelStream(options: {
     receiveWindowBytes: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     connected: false,
     closed: false,
-    receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+    // Early data is the only credit a client holds before Opened grants the rest of the window.
+    receiveCredit: options.earlyData
+      ? BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES
+      : BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     sendCredit: 0,
     pendingToClient: [],
     pendingToClientBytes: 0,
     pendingDestinationWriteReleases: new Set(),
+    earlyData: options.earlyData,
+    heldDestinationWrites: [],
     clientEnded: false,
     destinationEnded: false,
     destinationClosed: false,
@@ -50,5 +57,7 @@ export function retireBrowserNetworkTunnelStream(
   releaseRetainedBytes(stream.pendingToClientBytes)
   stream.pendingToClient = []
   stream.pendingToClientBytes = 0
+  // Early data for a destination that never connected is dropped, never delivered later.
+  stream.heldDestinationWrites = []
   stream.socket.destroy()
 }

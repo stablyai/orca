@@ -8,6 +8,7 @@ import {
   TerminalMultiplexSnapshotRequestFrame
 } from './stream-schemas'
 import { getTerminalInputSequenceLedger } from './terminal-input-sequence-ledger'
+import { admitRequestedSnapshotRows } from './terminal-full-depth-snapshot-limit'
 import { handleMultiplexInputFrame } from './terminal-multiplex-input-frame'
 import {
   getOutputAfterSnapshotSeq,
@@ -173,7 +174,10 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
     let sentSnapshotOutputSeq: number | undefined
     let sentSnapshotEscapeTail: string | undefined
     try {
-      const scrollbackRows = normalizeMultiplexSnapshotScrollbackRows(request.scrollbackRows)
+      const scrollbackRows = admitRequestedSnapshotRows(
+        stream.ptyId,
+        normalizeMultiplexSnapshotScrollbackRows(request.scrollbackRows)
+      )
       let serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
         stream.ptyId,

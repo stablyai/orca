@@ -58,6 +58,8 @@ export type RuntimePtyController = {
     preAllocatedHandle: string
     tabId: string
     leafId: string
+    /** This pane's stopped PTY: never adopted, so the launch spawns fresh in the same leaf. */
+    stoppedPtyId?: string
   }): Promise<{
     result: PtySpawnResult
     owner: {

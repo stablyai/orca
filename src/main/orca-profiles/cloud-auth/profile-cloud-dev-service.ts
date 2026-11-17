@@ -69,7 +69,7 @@ export function refreshDevOrcaCloudProfile(
 export function selectDevOrcaCloudOrg(
   active: ActiveOrcaProfileState,
   userDataPath: string,
-  orgId: string
+  orgId: string | null
 ): DevMutationResult {
   if (
     !active.profile.cloud ||
@@ -80,7 +80,7 @@ export function selectDevOrcaCloudOrg(
   const session = createDevOrcaCloudSession({
     localProfileId: active.profile.id,
     cloudProfileId: active.profile.cloud.cloudProfileId,
-    orgId
+    orgId: orgId ?? undefined
   })
   signInCloudSession(active.profile.id, userDataPath, session)
   return {

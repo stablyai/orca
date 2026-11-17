@@ -1,5 +1,6 @@
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
+import { takePrewarmedProfileStateWriterThread } from './profile-state-writer-prewarm'
 
 /** Recovery must observe thread exit before replacing its owner. */
 export class ProfileStateWriterThread {
@@ -16,11 +17,14 @@ export class ProfileStateWriterThread {
       exit: (code: number) => void
     }
   ) {
-    this.worker = spawnWorkerThread(workerPath, {
-      name: 'orca-profile-state-writer',
-      workerData,
-      execArgv: []
-    })
+    const prewarmed = takePrewarmedProfileStateWriterThread(workerPath)
+    this.worker =
+      prewarmed ??
+      spawnWorkerThread(workerPath, {
+        name: 'orca-profile-state-writer',
+        workerData,
+        execArgv: []
+      })
     this.worker.on('message', handlers.message)
     this.worker.on('error', handlers.error)
     this.worker.once('exit', (code) => {
@@ -28,6 +32,10 @@ export class ProfileStateWriterThread {
       this.exit.resolve()
       handlers.exit(code)
     })
+    if (prewarmed) {
+      // A prewarmed thread waits for its initialization as its first message.
+      this.worker.postMessage(workerData)
+    }
   }
 
   get exited(): boolean {

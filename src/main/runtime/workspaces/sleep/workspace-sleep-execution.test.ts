@@ -61,6 +61,21 @@ describe('sleepWorkspaces', () => {
   // #36923: a Sleep asked for while the VM wakes keeps its place in the queue and stops what the
   // woken server runs once the wake is done.
 
+  // The window swaps "Keep awake" for "Wake to continue" the moment a reopen can no longer
+  // keep the VM up, never on a timer guess.
+  it('tells the window when the VM suspend is committed, and only then', async () => {
+    const { log, deps: d } = deps()
+    await sleepWorkspaces(d, queued(), { targets: [local('wt')] })
+    expect(log.indexOf('suspending wt')).toBeGreaterThan(log.indexOf('chats wt'))
+    expect(log.indexOf('suspending wt')).toBeLessThan(log.indexOf('vm wt'))
+    expect(log.indexOf('ended wt')).toBeGreaterThan(log.indexOf('vm wt'))
+
+    const reopened = deps({ watchReopen: () => () => true })
+    await sleepWorkspaces(reopened.deps, queued(), { targets: [local('wt')] })
+    expect(reopened.log).not.toContain('suspending wt')
+    expect(reopened.log).not.toContain('vm wt')
+  })
+
   it('keeps a workspace open when its host cannot prove the stop, and pauses its queue', async () => {
     const notices: unknown[] = []
     const { log, deps: d } = deps({

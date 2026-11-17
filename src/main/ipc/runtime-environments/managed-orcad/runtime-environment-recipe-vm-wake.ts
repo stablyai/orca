@@ -27,11 +27,10 @@ import type {
   RecipeVmOpening,
   RecipeVmState
 } from '../../../runtime/workspaces/sleep/recipe-vm-operations'
-
-type RecipeVmEnvironment = Pick<KnownRuntimeEnvironment, 'id' | 'source' | 'orcadDeployment'>
+export type RecipeVmEnvironment = Pick<KnownRuntimeEnvironment, 'id' | 'source' | 'orcadDeployment'>
 
 /** The workspace and stored state of the live recipe VM serving this environment. */
-function recipeVmOf(
+export function recipeVmOf(
   userDataPath: string,
   environment: RecipeVmEnvironment
 ): { workspaceId: string; recordSuspended: boolean } | null {

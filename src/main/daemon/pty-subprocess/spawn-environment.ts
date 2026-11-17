@@ -6,6 +6,11 @@ import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-ses
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
+import { ORCA_PTY_SESSION_ENV } from '../../runtime/terminal/stop/pty-marked-stragglers'
+import {
+  applyCloudSessionEnv,
+  cachedCloudSessionEnv
+} from '../../runtime/secrets/cloud-session-env'
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -30,6 +35,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { PtySubprocessOptions } from './pty-subprocess'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/clipboard/remote-viewer-clipboard-env'
 import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
+import { WORKSPACE_PORT_ENV_KEYS } from '../../../shared/workspace-port-block'
 import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -40,6 +46,8 @@ const PANE_IDENTITY_ENV_KEYS = [
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
   'ORCA_WSL_CLI_DIR',
   'JCODE_RUNTIME_DIR',
+  // The host's own port block (a VM launcher sets one) is not this pane's workspace block.
+  ...WORKSPACE_PORT_ENV_KEYS,
   // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
   REMOTE_VIEWER_CLIPBOARD_ENV,
   // A server's own launch env; a user's `orcad` in this shell is not that server.
@@ -178,7 +186,12 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   const inheritedEnv = stripInheritedBuildModeEnv(process.env)
   restoreManagedDataAccountEnvironment(inheritedEnv)
   const env: Record<string, string> = {
-    ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),
+    // Orca Cloud: the daemon's env is from orcad's start; lay the live session env over it, under the
+    // launch's own values and before its requested deletions (an account strip must win).
+    ...mergeGitConfigEnvProtocol(
+      applyCloudSessionEnv(inheritedEnv, cachedCloudSessionEnv(inheritedEnv)),
+      opts.env
+    ),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
@@ -212,6 +225,9 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   // Mirror pane identity only after stripping, so aliases cannot retain removed ownership.
   applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'
+  // Every process of this PTY, including ones that later leave its session, can be found and reaped by
+  // id after a stop (runtime/terminal/stop/pty-marked-stragglers.ts). Set last so nothing overrides it.
+  env[ORCA_PTY_SESSION_ENV] = opts.sessionId
   return env
 }
 

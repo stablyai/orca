@@ -19,6 +19,15 @@ export type EnvironmentProviderCapabilities = Readonly<{
 export type EnvironmentProviderPhase =
   | 'provisioning'
   | 'booting'
+  /** The repo clones in the VM after it is up; `percent` is git's overall progress. */
+  | 'cloning'
+  /** The repo came prebuilt (an environment build): only what changed is fetched. */
+  | 'updating'
+  /** The repo's environment was held back (security rebuild); `message` is its id. */
+  | 'environment-held'
+  /** Before the create answers: whether its repository step will clone or update (names the step once). */
+  | 'plan-clone'
+  | 'plan-update'
   | 'connecting'
   | 'suspending'
   | 'resuming'
@@ -26,13 +35,20 @@ export type EnvironmentProviderPhase =
 
 export type EnvironmentProviderCallContext = {
   signal?: AbortSignal
-  onProgress?: (progress: { phase: EnvironmentProviderPhase; message?: string }) => void
+  onProgress?: (progress: {
+    phase: EnvironmentProviderPhase
+    message?: string
+    /** 0-100 while the phase reports progress (cloning). */
+    percent?: number
+  }) => void
 }
 
 export type EnvironmentCreateSpec = {
   /** Orca's workspace id; one environment per workspace. */
   workspaceId: string
   workspaceName?: string
+  /** One per user intent; the provider dedupes creates by it (Idempotency-Key). */
+  idempotencyKey?: string
   projectId?: string
   machineSize?: string
   region?: string

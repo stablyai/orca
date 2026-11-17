@@ -82,7 +82,7 @@ export function check(
   id: string,
   status: EnvironmentDoctorCheckStatus,
   message: string,
-  extra: { remediation?: string } = {}
+  extra: { remediation?: string; code?: string; params?: Record<string, string> } = {}
 ): EnvironmentDoctorCheck {
   return { id, category, status, message, ...extra }
 }

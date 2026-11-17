@@ -15,8 +15,7 @@ import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accou
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type {
   HostAccountSignInChannel,
-  HostAccountSignInProvider,
-  HostAccountSignInStatus
+  HostAccountSignInProvider
 } from '../../../../shared/agent-accounts/host-account-sign-in-types'
 import type {
   CodexRateLimitResetOutcome,
@@ -35,6 +34,7 @@ import {
 } from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
+import { hostCodexLaunchHome, runHostAccountSignIn } from './host-account-sign-in-runner'
 import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
 import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
 import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'
@@ -283,14 +283,12 @@ export class RuntimeAccountController {
   }
 
   /** Adds a host account whose login a client on another device finishes. */
-  async runHostSignIn(
-    provider: HostAccountSignInProvider,
-    channel: HostAccountSignInChannel
-  ): Promise<Pick<HostAccountSignInStatus, 'claude' | 'codex'>> {
-    const { claudeAccounts, codexAccounts } = this.requireServices()
-    return provider === 'claude'
-      ? { claude: await claudeAccounts.addAccountWithPastedCode(channel) }
-      : { codex: await codexAccounts.addAccountWithDeviceCode(channel) }
+  runHostSignIn(provider: HostAccountSignInProvider, channel: HostAccountSignInChannel) {
+    return runHostAccountSignIn(this.requireServices(), provider, channel)
+  }
+
+  hostCodexLaunchHome(): string | null {
+    return hostCodexLaunchHome(this.services)
   }
 
   removeCodex(accountId: string): Promise<CodexRateLimitAccountsState> {

@@ -7,6 +7,7 @@ import type {
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import { OrcaCloudRequestError } from '../cloud-auth/profile-cloud-client'
+import { cloudOrgMemberFields } from './profile-cloud-org-member-cloud-fields'
 
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
 const ORG_ROLES: readonly OrcaOrgRole[] = ['owner', 'admin', 'member']
@@ -54,7 +55,8 @@ function normalizeMember(value: unknown): OrcaOrgMember | null {
     userId: userId ?? null,
     email,
     displayName: optionalString(record.displayName),
-    role: normalizeRole(record.role, 'member')
+    role: normalizeRole(record.role, 'member'),
+    ...cloudOrgMemberFields(record)
   }
 }
 
@@ -74,7 +76,7 @@ function normalizePendingInvite(value: unknown): OrcaOrgPendingInvite | null {
   }
 }
 
-function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
+export function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
   if (!value || typeof value !== 'object') {
     throw new Error('invalid_orca_org_members_roster')
   }
@@ -94,15 +96,16 @@ function normalizeRoster(value: unknown): OrcaOrgMembersRoster {
     pendingInvites,
     // Malformed roles must not widen UI permissions; the server still authorizes mutations.
     viewerRole: normalizeRole(record.viewerRole, 'member'),
-    canManageMembers: record.canManageMembers === true
+    canManageMembers: record.canManageMembers === true,
+    ...(record.directoryManaged === true ? { directoryManaged: true } : {})
   }
 }
 
-function orgMembersUrl(config: OrcaCloudAuthConfig, orgId: string, path: string): string {
+export function orgMembersUrl(config: OrcaCloudAuthConfig, orgId: string, path: string): string {
   return `${config.apiBaseUrl}/v1/desktop/orgs/${encodeURIComponent(orgId)}${path}`
 }
 
-async function extractErrorCode(response: Response): Promise<string | undefined> {
+export async function extractErrorCode(response: Response): Promise<string | undefined> {
   try {
     const body = (await response.json()) as unknown
     if (
@@ -119,7 +122,11 @@ async function extractErrorCode(response: Response): Promise<string | undefined>
 }
 
 // Reject redirects to avoid leaking access tokens; timeouts bound renderer IPC waits.
-function requestInit(method: 'GET' | 'POST', accessToken: string, body?: unknown): RequestInit {
+export function requestInit(
+  method: 'GET' | 'POST',
+  accessToken: string,
+  body?: unknown
+): RequestInit {
   return {
     method,
     headers: {
@@ -153,53 +160,5 @@ export async function listOrcaCloudOrgMembers(
     orgMembersUrl(config, orgId, '/members'),
     requestInit('GET', session.accessToken),
     normalizeRoster
-  )
-}
-
-export async function inviteOrcaCloudOrgMember(
-  config: OrcaCloudAuthConfig,
-  session: OrcaCloudSession,
-  args: { orgId: string; email: string; role: OrcaOrgRole }
-): Promise<void> {
-  await requestOrgMembers(
-    orgMembersUrl(config, args.orgId, '/invites'),
-    requestInit('POST', session.accessToken, { email: args.email, role: args.role }),
-    () => undefined
-  )
-}
-
-export async function revokeOrcaCloudOrgInvite(
-  config: OrcaCloudAuthConfig,
-  session: OrcaCloudSession,
-  args: { orgId: string; email: string }
-): Promise<void> {
-  await requestOrgMembers(
-    orgMembersUrl(config, args.orgId, '/invites/revoke'),
-    requestInit('POST', session.accessToken, { email: args.email }),
-    () => undefined
-  )
-}
-
-export async function changeOrcaCloudOrgMemberRole(
-  config: OrcaCloudAuthConfig,
-  session: OrcaCloudSession,
-  args: { orgId: string; userId: string; role: OrcaOrgRole }
-): Promise<void> {
-  await requestOrgMembers(
-    orgMembersUrl(config, args.orgId, '/members/role'),
-    requestInit('POST', session.accessToken, { userId: args.userId, role: args.role }),
-    () => undefined
-  )
-}
-
-export async function removeOrcaCloudOrgMember(
-  config: OrcaCloudAuthConfig,
-  session: OrcaCloudSession,
-  args: { orgId: string; userId: string }
-): Promise<void> {
-  await requestOrgMembers(
-    orgMembersUrl(config, args.orgId, '/members/remove'),
-    requestInit('POST', session.accessToken, { userId: args.userId }),
-    () => undefined
   )
 }

@@ -48,7 +48,10 @@ vi.mock('../ipc/runtime-environments/connections/runtime-environment-request-con
   getRemoteRuntimeSharedControlDiagnostics: () =>
     state.sharedControlState ? { state: state.sharedControlState } : null
 }))
-vi.mock('../ssh/targets/ssh-target-registry', () => ({ getRegisteredSshState: () => undefined }))
+vi.mock('../ssh/targets/ssh-target-registry', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getRegisteredSshState: () => undefined
+}))
 vi.mock('./runtime-service', () => ({ resumeEphemeralVmRuntime: mocks.resume }))
 vi.mock('./runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: vi.fn(),

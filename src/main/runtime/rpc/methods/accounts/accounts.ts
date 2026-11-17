@@ -1,9 +1,7 @@
-import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
+import { defineMethod, defineStreamingMethod } from '../../core'
 import { ACCOUNT_RENAME_METHODS } from './account-rename-methods'
 import type { OrcadFeature } from '../../startup/orcad-readiness'
-import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
-import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
-import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { HOST_SIGN_IN_METHODS } from './host-sign-in-methods'
 import {
   AddDataAccountParams,
   SelectDataAccountParams,
@@ -18,11 +16,7 @@ import {
   RemoveAccountParams,
   SelectAccountParams,
   SelectClaudeAccountParams,
-  SelectCodexAccountForTargetParams,
-  HostAccountSignInStartParams,
-  HostAccountSignInWaitParams,
-  HostAccountSignInFlowParams,
-  HostAccountSignInCodeParams
+  SelectCodexAccountForTargetParams
 } from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
@@ -32,26 +26,6 @@ let accountsSubscriptionSeq = 0
 
 // Why 10s: well under the CLI's 60s request timeout even when several Codex homes probe slowly.
 const STALE_USAGE_WAIT_MS = 10_000
-
-const hostSignIns = new WeakMap<OrcaRuntimeService, HostAccountSignInFlows>()
-function hostSignInFlows(runtime: OrcaRuntimeService): HostAccountSignInFlows {
-  let flows = hostSignIns.get(runtime)
-  if (!flows) {
-    flows = new HostAccountSignInFlows((provider, channel) =>
-      runtime.runHostAccountSignIn(provider, channel)
-    )
-    hostSignIns.set(runtime, flows)
-  }
-  return flows
-}
-
-/** The caller a sign-in belongs to, as its transport proved it; one it can't name gets none. */
-function signInOwner({ caller }: Pick<RpcContext, 'caller'>): string {
-  if (!caller) {
-    throw new Error('This client cannot add accounts on this host.')
-  }
-  return rpcCallerOperationKey(caller)
-}
 
 const ACCOUNT_METHOD_DEFINITIONS = [
   // Only the owning desktop pushes this host's account launch environment, including WSL.
@@ -219,35 +193,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
       })
     }
   }),
-  // Credentials stay on this host; the caller opens the page and relays its code (#20009).
-  defineMethod({
-    name: 'accounts.hostSignInStart',
-    permission: 'accounts-admin',
-    params: HostAccountSignInStartParams,
-    handler: async ({ provider }, ctx) =>
-      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider)
-  }),
-  defineMethod({
-    name: 'accounts.hostSignInWait',
-    permission: 'accounts-admin',
-    params: HostAccountSignInWaitParams,
-    handler: async ({ flowId, afterRevision }, ctx) =>
-      hostSignInFlows(ctx.runtime).wait(signInOwner(ctx), flowId, afterRevision, ctx.signal)
-  }),
-  defineMethod({
-    name: 'accounts.hostSignInSubmitCode',
-    permission: 'accounts-admin',
-    params: HostAccountSignInCodeParams,
-    handler: async ({ flowId, code }, ctx) =>
-      hostSignInFlows(ctx.runtime).submitCode(signInOwner(ctx), flowId, code)
-  }),
-  defineMethod({
-    name: 'accounts.hostSignInCancel',
-    permission: 'accounts-admin',
-    params: HostAccountSignInFlowParams,
-    handler: async ({ flowId }, ctx) =>
-      hostSignInFlows(ctx.runtime).cancel(signInOwner(ctx), flowId)
-  }),
+  ...HOST_SIGN_IN_METHODS,
   // Stream rate-limit polls and account switches to mobile without reopening the screen.
   defineStreamingMethod({
     name: 'accounts.subscribe',

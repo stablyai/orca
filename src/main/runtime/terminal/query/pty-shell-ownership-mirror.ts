@@ -6,14 +6,20 @@ const SETTLE_DEADLINE_MS = 750
 
 /** Observe emulator bytes without pausing or injecting; daemon hosts confirm stream ownership, direct local PTYs use fresh process inspection. */
 export class PtyShellOwnershipMirror {
-  private readonly scanner = new TerminalShellLifecycleScanner()
+  private readonly scanner: TerminalShellLifecycleScanner
   private confirmInFlight = false
   private confirmAttempt = 0
   private latestCandidateGeneration: number | undefined
   private settleWaiters: (() => void)[] = []
   private disposed = false
 
-  constructor(private readonly confirm: () => Promise<boolean>) {}
+  /** `freshShell`: bytes start at the shell's spawn, so its first prompt may claim idle; seeds reset it. */
+  constructor(
+    private readonly confirm: () => Promise<boolean>,
+    opts: { freshShell?: boolean } = {}
+  ) {
+    this.scanner = new TerminalShellLifecycleScanner(opts)
+  }
 
   scan(data: string): void {
     if (this.disposed) {

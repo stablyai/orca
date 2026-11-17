@@ -1,9 +1,24 @@
 import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles/orca-profiles'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
-import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
+import {
+  getOrcaCloudAuthConfig,
+  isOrcaCloudDevAuthEnabled,
+  isPackagedOrcaBuild
+} from './profile-cloud-auth-config'
+import { forcedOrcaCloudAvailability } from './orca-cloud-forced'
 import { readCloudSession } from '../cloud-session/profile-cloud-session-owner'
+import { getReconnectReason } from '../cloud-session/profile-cloud-reconnect-reason'
 
 export function getOrcaProfileAuthStatusFromProfile(
+  active: ActiveOrcaProfileState,
+  userDataPath: string
+): OrcaProfileAuthStatus {
+  const status = readAuthStatus(active, userDataPath)
+  const forced = forcedOrcaCloudAvailability(process.env, isPackagedOrcaBuild())
+  return forced === null ? status : { ...status, orcaCloudForced: forced }
+}
+
+function readAuthStatus(
   active: ActiveOrcaProfileState,
   userDataPath: string
 ): OrcaProfileAuthStatus {
@@ -48,12 +63,14 @@ export function getOrcaProfileAuthStatusFromProfile(
     }
   }
 
+  const reconnectReason = getReconnectReason(active.profile.id)
   return {
     activeProfileId: active.profile.id,
     configured,
     state: 'reconnect-required',
     persistence: 'none',
     cloud,
+    ...(reconnectReason ? { reconnectReason } : {}),
     credentialError:
       session.status === 'decrypt-failed' || session.status === 'unreadable'
         ? session.error

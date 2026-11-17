@@ -31,6 +31,11 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-
 import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import {
+  installOrcadWorkProbes,
+  startOrcadWorkVerdictBeacon
+} from '../orcad/orcad-work-verdict-beacon'
+import { orcadPostReadyDeps, startOrcadPostReadyWork } from '../orcad/orcad-post-ready-work'
 
 export async function activateBackendRuntime(
   host: BackendCoreHost,
@@ -47,6 +52,9 @@ export async function activateBackendRuntime(
     timed,
     registerCleanup
   )
+  // The imports below hold the event loop ~100 ms; let the daemon fork first and boot alongside.
+  const { daemonLaunchHeadStart } = await import('../orcad/daemon/orcad-daemon-supervision')
+  await daemonLaunchHeadStart(daemonStartup)
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { createOrcadRuntimeRpcServer } = await import('../orcad/host-runtime/orcad-runtime-rpc')
   const { registerHeadlessPtyRuntime } = await import('../ipc/pty/register-headless-runtime')
@@ -228,14 +236,6 @@ export async function activateBackendRuntime(
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
   featureReadiness.open('sessionSearch')
 
-  const { startAgentStateRulesLiveUpdates } =
-    await import('../runtime/agent-state-rules/agent-state-rules-live-update')
-  startAgentStateRulesLiveUpdates(profileStore, (rules) =>
-    console.info(`[orcad] agent state rules ${rules.version} (${rules.source})`)
-  )
-  // Paired phones dictate through this host; keep its model loaded the same way the desktop does.
-  const { startSpeechModelWarmup } = await import('../speech/speech-model-warmup')
-  startSpeechModelWarmup(profileStore)
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const { repairDuplicatePtyPanesOnStart } =
       await import('../runtime/terminal/identity/moved-pane-owner-rekey')
@@ -322,14 +322,21 @@ export async function activateBackendRuntime(
   reclaimManagedRuntimeReleasesAtLaunch(runtime)
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
+  void startOrcadPostReadyWork(orcadPostReadyDeps(runtime, profileStore, rpc))
 
-  await idleExitStartup.start({
-    rpc,
+  // The idle exit and the control plane's work verdict read the same busy signals.
+  const workProbes = {
     agentStates: () => agentHookServer.getStatusSnapshot(),
-    hasStagedMigration: () => profileStore.hasStagedOrcadMigrationCatalog(),
     automationsBusy: () => orcadSchedulersKeepHostBusy(runtime, profileStore),
     emulatorsBusy: async () =>
-      (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false,
+      (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false
+  }
+  installOrcadWorkProbes(workProbes)
+  registerCleanup(startOrcadWorkVerdictBeacon(() => runtime.terminalRunFacts.readLatestInputAt()))
+  await idleExitStartup.start({
+    rpc,
+    ...workProbes,
+    hasStagedMigration: () => profileStore.hasStagedOrcadMigrationCatalog(),
     registerCleanup
   })
   return { readiness }

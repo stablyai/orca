@@ -1,0 +1,96 @@
+import type {
+  AgentConfigSyncStatus,
+  CloudAgentConfigSyncPreferences
+} from '../../../shared/agent-config-sync/agent-config-sync-contract'
+import { listEphemeralVmRuntimes } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+
+export const MAX_EXCLUDED = 1024
+
+// Off until the user turns it on: a cloud workspace can be shared with a team, and skills are
+// the user's own prompts. One switch in Settings is the consent.
+export const DEFAULT_PREFERENCES: CloudAgentConfigSyncPreferences = {
+  autoSync: false,
+  shareAcrossAgents: false,
+  excluded: [],
+  optedIn: []
+}
+
+class RuntimeCallError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | undefined
+  ) {
+    super(message)
+  }
+}
+
+/** One call to the workspace host; a host error throws with its code, for `errorCode`. */
+export async function callCloudHost(
+  userDataPath: string,
+  environmentId: string,
+  method: string,
+  params: unknown,
+  timeoutMs: number
+): Promise<unknown> {
+  const response = await callRuntimeEnvironment(
+    userDataPath,
+    environmentId,
+    method,
+    params,
+    timeoutMs
+  )
+  if (response.ok) {
+    return response.result
+  }
+  throw new RuntimeCallError(response.error.message, response.error.code)
+}
+
+/** The workspace's runtime record, only when it is an Orca Cloud workspace. */
+export function findCloudRuntime(userDataPath: string, environmentId: string) {
+  return listEphemeralVmRuntimes(userDataPath).find(
+    (runtime) =>
+      runtime.runtimeEnvironmentId === environmentId && runtime.recipe?.provider === 'orca-cloud'
+  )
+}
+
+/** Shared by the skills and MCP syncs: both statuses report the same three failures. */
+export function errorCode(error: unknown): AgentConfigSyncStatus['error'] {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
+  if (code === 'method_not_found') {
+    return 'host-outdated'
+  }
+  return /unavailable|timeout|unreachable/.test(code) ? 'host-unreachable' : 'failed'
+}
+
+/** Repo-relative files git tracks under the project agent folders. */
+export async function trackedAgentConfigPaths(repoPath: string): Promise<ReadonlySet<string>> {
+  const { stdout } = await gitExecFileAsync(
+    ['ls-files', '-z', '--', '.claude/skills', '.claude/commands', '.agents/skills'],
+    { cwd: repoPath, timeout: 10_000 }
+  )
+  return new Set(stdout.split('\0').filter(Boolean))
+}
+
+function keysOf(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((key): key is string => typeof key === 'string' && key.length <= 300)
+        .slice(0, MAX_EXCLUDED)
+    : []
+}
+
+export function parsePreferences(text: string): CloudAgentConfigSyncPreferences {
+  const raw: unknown = JSON.parse(text)
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_PREFERENCES, excluded: [], optedIn: [] }
+  }
+  return {
+    autoSync: 'autoSync' in raw && raw.autoSync === true,
+    shareAcrossAgents: 'shareAcrossAgents' in raw && raw.shareAcrossAgents === true,
+    excluded: keysOf('excluded' in raw ? raw.excluded : undefined),
+    optedIn: keysOf('optedIn' in raw ? raw.optedIn : undefined)
+  }
+}

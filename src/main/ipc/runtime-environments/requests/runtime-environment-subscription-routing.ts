@@ -9,7 +9,7 @@ import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-r
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
-  resolveManagedRuntimeEnvironment,
+  resolveSubscribedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from '../managed-orcad/runtime-environment-managed-tunnel'
 import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
@@ -19,6 +19,7 @@ import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remo
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeRuntimeEnvironmentSubscriptionEvents } from '../subscriptions/runtime-environment-subscription-events'
 import { runtimeCallQueuePool } from './runtime-environment-call-queue'
+import { noteRuntimeEnvironmentFailure } from '../runtime-environment-rejection-observer'
 import { isTimedPRRead } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
 import { enqueueRuntimeSubscription } from '../../../../shared/remote-runtime/rpc/runtime-rpc-subscription-queue'
 import {
@@ -72,7 +73,7 @@ export async function subscribeRuntimeEnvironment(
   await crewAttempt?.assertCurrent()
   const environment = crewAttempt
     ? await resolveEnvironment(userDataPath, selector)
-    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
+    : await resolveSubscribedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
   await crewAttempt?.assertCurrent()
   throwIfSignalAborted(signal)
   if (crewAttempt) {
@@ -154,6 +155,7 @@ export async function subscribeRuntimeEnvironment(
       }
       return subscription
     } catch (error) {
+      noteRuntimeEnvironmentFailure(environment.id, error)
       if (error instanceof Error && error.name !== 'AbortError') {
         error.message = withRuntimeUnreachableHint(
           environment,

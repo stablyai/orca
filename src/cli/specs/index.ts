@@ -25,6 +25,10 @@ import { JIRA_COMMAND_SPECS } from './jira'
 import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
 import { VM_ENV_COMMAND_SPECS } from './vm-env'
+import { CLOUD_ENV_COMMAND_SPECS } from './cloud-env'
+import { CLOUD_SSH_COMMAND_SPECS } from './cloud-ssh'
+import { SECRET_COMMAND_SPECS } from './secret'
+import { LOCAL_COMMAND_COMMAND_SPECS } from './local-command'
 import { SKILL_COMMAND_SPECS } from './skills'
 import { ARTIFACT_COMMAND_SPECS } from './artifacts'
 import { SEARCH_COMMAND_SPECS } from './search'
@@ -36,6 +40,7 @@ import { PAIR_COMMAND_SPECS } from './pair'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
 import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
 import { WORKSPACE_CLEANUP_COMMAND_SPECS } from './workspace-cleanup'
+import { CLOUD_COMMAND_SPECS } from '../cloud/cloud-specs'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -65,6 +70,10 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...LINEAR_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
   ...VM_ENV_COMMAND_SPECS,
+  ...CLOUD_ENV_COMMAND_SPECS,
+  ...CLOUD_SSH_COMMAND_SPECS,
+  ...SECRET_COMMAND_SPECS,
+  ...LOCAL_COMMAND_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,
   ...SKILL_COMMAND_SPECS,
   ...SEARCH_COMMAND_SPECS,
@@ -74,5 +83,6 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...PLUGIN_RUNTIME_COMMAND_SPECS,
   ...PLUGIN_VIEW_COMMAND_SPECS,
   ...PLUGIN_INSTALL_COMMAND_SPECS,
-  ...PAIR_COMMAND_SPECS
+  ...PAIR_COMMAND_SPECS,
+  ...CLOUD_COMMAND_SPECS
 ]

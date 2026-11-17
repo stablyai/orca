@@ -9,6 +9,10 @@ import { openProfileStateDatabase } from '../database/profile-state-database'
 import { readProfileStateSnapshot } from '../documents/profile-state-documents'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
+import {
+  prewarmProfileStateWriterThread,
+  takePrewarmedProfileStateWriterThread
+} from './profile-state-writer-prewarm'
 
 let bundleRoot: string
 let workerPath: string
@@ -180,5 +184,44 @@ describe('persistent profile state write worker', () => {
     expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
     await client.close()
     expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
+  })
+
+  it('adopts a prewarmed thread, initializing it with its first message', async () => {
+    const f = fixture()
+    prewarmProfileStateWriterThread(workerPath)
+    const client = clientFor(f.initialization)
+    await client.ready
+    await client.writeCompleteSerializedDomains([
+      { domain: 'settings', payload: '{"theme":"light"}' }
+    ])
+    // The thread was consumed, not left for a later writer.
+    expect(takePrewarmedProfileStateWriterThread(workerPath)).toBeNull()
+    await client.close()
+    expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'light' } })
+  })
+
+  it('discards a prewarmed thread for another entry and starts its own', async () => {
+    const f = fixture()
+    const other = script(
+      f.root,
+      "require('node:worker_threads').parentPort.on('message', () => {})"
+    )
+    prewarmProfileStateWriterThread(other)
+    const client = clientFor(f.initialization)
+    await client.ready
+    await client.writeCompleteSerializedDomains([
+      { domain: 'settings', payload: '{"theme":"light"}' }
+    ])
+    await client.close()
+    expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'light' } })
+  })
+
+  it('does not adopt a prewarmed thread that has died', async () => {
+    const f = fixture()
+    const dying = script(f.root, 'process.exit(3)')
+    prewarmProfileStateWriterThread(dying)
+    // ast-grep-ignore: test-no-real-time-wait -- the thread's exit is only observable through the prewarm slot's private listener, and taking the slot ends the test.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(takePrewarmedProfileStateWriterThread(dying)).toBeNull()
   })
 })

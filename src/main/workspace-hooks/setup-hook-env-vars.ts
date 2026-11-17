@@ -1,6 +1,8 @@
 import { getRuntimePathBasename } from '../../shared/file-access/cross-platform-path'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/shell/launch/terminal-git-credential-guard'
 import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { buildWorkspacePortEnv } from '../../shared/workspace-port-block'
+import { peekWorkspacePortBlock } from '../workspace-ports/workspace-port-block-registry'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 
 /** The workspace a hook runs for; folder workspaces share one directory, so the path can't name them. */
@@ -42,7 +44,18 @@ export function getSetupEnvVars(
     CONDUCTOR_ROOT_PATH: repo.path,
     CONDUCTOR_WORKSPACE_PATH: worktreePath,
     CONDUCTOR_WORKSPACE_NAME: workspaceName,
-    GHOSTX_ROOT_PATH: repo.path
+    GHOSTX_ROOT_PATH: repo.path,
+    ...getWorkspacePortEnv(worktreePath)
+  }
+}
+
+function getWorkspacePortEnv(worktreePath: string): Record<string, string> {
+  try {
+    // Setup terminals get the block from their own spawn; this covers hook processes run directly.
+    const block = peekWorkspacePortBlock(worktreePath)
+    return block ? buildWorkspacePortEnv(block) : {}
+  } catch {
+    return {}
   }
 }
 

@@ -13,6 +13,8 @@ import { getOrcadCliLauncherPath } from '../serve-startup/orcad-cli-launcher'
 import { createOrcadSecretStore, type OrcadSecretStore } from '../credentials/orcad-secret-store'
 import { setSpeechServiceFactories } from '../../speech/speech-runtime-service'
 import { orcadSpeechServiceFactories } from './orcad-speech-services'
+import { readOrcadBuildCommit } from '../orcad-build-commit'
+import { setRuntimeBuildCommit } from '../../runtime/hosts/runtime-build-commit'
 
 let quitRegisteredHandlers = (): void => {}
 
@@ -61,6 +63,11 @@ export function stampOrcadAppVersion(installRoot: () => string = resolveOrcadIns
 
 export function installOrcadHostAdapters(): void {
   stampOrcadAppVersion()
+  // Desktops read it from status.get to tell which build a cloud sandbox runs (version skew).
+  // Async read: status.get answered in the first milliseconds simply omits it.
+  void Promise.resolve()
+    .then(() => readOrcadBuildCommit(resolveOrcadInstallRoot()))
+    .then(setRuntimeBuildCommit, () => {})
   setAppEnvironment(createNodeAppEnvironment())
   orcadSecretStore = createOrcadSecretStore()
   setSecretStore(orcadSecretStore)

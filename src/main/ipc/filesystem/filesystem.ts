@@ -8,6 +8,7 @@ import {
 } from './filesystem-handler-context'
 import { registerFilesystemReadHandlers } from './reads/filesystem-read-handlers'
 import { registerFilesystemDownloadHandlers } from './downloads/filesystem-download-handlers'
+import { registerRuntimeDownloadHandlers } from '../../runtime-downloads/runtime-download-handlers'
 import { registerFilesystemWriteHandlers } from './mutations/filesystem-write-handlers'
 import { registerFilesystemSearchHandlers } from './search/filesystem-search-handlers'
 import { registerFilesystemGitStatusHandlers } from './source-control/filesystem-git-status-handlers'
@@ -33,6 +34,7 @@ export function registerFilesystemHandlers(
 
   registerFilesystemReadHandlers(context)
   registerFilesystemDownloadHandlers(context)
+  registerRuntimeDownloadHandlers()
   registerFilesystemWriteHandlers(context)
   registerFilesystemSearchHandlers(context)
   registerFilesystemGitStatusHandlers(context)

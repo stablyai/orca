@@ -21,6 +21,10 @@ import {
   PAIRING_CREATE_OFFER_METHOD,
   PairingCreateOfferParamsSchema
 } from '../../../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
+import {
+  PAIRING_REVOKE_DEVICE_METHOD,
+  PairingRevokeDeviceParamsSchema
+} from '../../../../../shared/remote-runtime/pairing/pairing-revoke-device-contract'
 
 export const PAIRING_METHODS = [
   defineMethod({
@@ -33,6 +37,18 @@ export const PAIRING_METHODS = [
         throw new Error('pairing_context_unavailable')
       }
       return await ctx.pairingOffers.create(params)
+    }
+  }),
+  defineMethod({
+    name: PAIRING_REVOKE_DEVICE_METHOD,
+    // Owner CLI only, like createOffer: a paired client must never revoke another device.
+    permission: 'pairing-admin',
+    params: PairingRevokeDeviceParamsSchema,
+    handler: async (params, ctx) => {
+      if (!ctx.pairingOffers) {
+        throw new Error('pairing_context_unavailable')
+      }
+      return await ctx.pairingOffers.revoke(params)
     }
   }),
   defineMethod({

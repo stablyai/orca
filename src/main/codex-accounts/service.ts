@@ -32,6 +32,8 @@ import type {
 import { toCodexManagedAccountSummary } from './account-management/codex-account-service-types'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/agent-accounts/codex/codex-auth-errors'
 import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
+import { withoutHostBrowser } from './codex-remote-browser-login'
+import { codexLoginChannelOptions } from './codex-login-channel-options'
 
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 
@@ -320,7 +322,7 @@ export class CodexAccountService {
             stdio,
             // Hide the outer wrapper; the dedicated login console remains visible.
             windowsHide: true,
-            env
+            env: deviceChannel?.callback ? withoutHostBrowser(env) : env
           })
         },
         killProcessTree: killLoginProcessTree,
@@ -328,16 +330,8 @@ export class CodexAccountService {
           this.cancelPendingCodexLogin = cancel
           cancelThisLogin = cancel
         },
-        onAuthUrl: (url) => this.setPendingLoginUrl(url),
         openWslAuthUrl: this.openWslLoginUrl,
-        ...(deviceChannel
-          ? {
-              deviceAuth: {
-                onPrompt: ({ url, userCode }) =>
-                  deviceChannel.onPrompt({ url, userCode, needsCode: false })
-              }
-            }
-          : {})
+        ...codexLoginChannelOptions(deviceChannel, (url) => this.setPendingLoginUrl(url))
       })
     } finally {
       deviceChannel?.signal.removeEventListener('abort', cancelForChannel)

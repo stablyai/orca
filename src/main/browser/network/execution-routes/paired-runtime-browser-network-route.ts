@@ -11,6 +11,7 @@ import {
 } from '../tunnels/browser-network-tunnel-outbound-memory-budget'
 import { PairedRuntimeBrowserNetworkTransport } from './paired-runtime-browser-network-transport'
 import { RemoteBrowserSocksServer } from '../tunnels/remote-browser-socks-server'
+import { openOutsideWorkspace, type LoopbackOnlyRoute } from './workspace-loopback-host'
 
 const outboundMemoryBudgets = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
 
@@ -28,6 +29,7 @@ type PairedRuntimeBrowserNetworkRouteOptions = {
   onError?: (error: Error) => void
   /** The route stayed dark after bounded recovery; its pages cannot reach the network. */
   onUnavailable?: (error: Error) => void
+  loopbackOnly?: LoopbackOnlyRoute // see workspace-loopback-host.ts
 }
 
 type BrowserNetworkRouteAddress = { host: string; port: number }
@@ -53,7 +55,8 @@ export class PairedRuntimeBrowserNetworkRoute {
     this.recoveryGraceMs = resolveBrowserHostReconnectDelay(options.recoveryGraceMs, 15_000)
     this.recoveryRetryDelayMs = resolveBrowserHostReconnectDelay(options.recoveryRetryDelayMs)
     this.socks = new RemoteBrowserSocksServer({
-      open: (target) => this.openTarget(target)
+      open: (target) =>
+        openOutsideWorkspace(options.loopbackOnly, target) ?? this.openTarget(target)
     })
   }
 

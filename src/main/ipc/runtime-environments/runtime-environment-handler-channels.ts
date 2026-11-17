@@ -31,5 +31,7 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:previewOrcadDeltaMove',
   'runtimeEnvironments:moveOrcadDelta',
   'runtimeEnvironments:keepOrcadServerVersion',
-  'runtimeEnvironments:allowOrcadMoveLeavingBehind'
+  'runtimeEnvironments:allowOrcadMoveLeavingBehind',
+  'runtimeEnvironments:openAuthCallbackForward',
+  'runtimeEnvironments:closeAuthCallbackForward'
 ] as const

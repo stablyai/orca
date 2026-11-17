@@ -14,7 +14,7 @@ import {
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './app-launch/open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
-import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
+import { getCliStatus, getOfflineRuntimeAdmission, runtimeBuildFields } from './status/status'
 import type { OfflineRuntimeAdmission } from './status/status'
 import { projectRemoteAppStatus } from '../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { sendRequest } from './connection/transport'
@@ -250,7 +250,7 @@ export class RuntimeClient {
               status: response.result
             }),
             runtimeId: response.result.runtimeId,
-            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+            ...runtimeBuildFields(response.result),
             ...(response.result.remoteUpdateSupport
               ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
               : {}),

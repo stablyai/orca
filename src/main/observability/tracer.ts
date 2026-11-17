@@ -2,7 +2,13 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes } from 'node:crypto'
-import { redactSpan, type RedactableSpan, type SpanEvent, type SpanExit } from './redactor'
+import {
+  redactSpan,
+  redactValue,
+  type RedactableSpan,
+  type SpanEvent,
+  type SpanExit
+} from './redactor'
 
 export type TracerSink = {
   push(record: unknown): void
@@ -211,10 +217,14 @@ export function _resetTracerForTests(): void {
   // Context tests should create their own withSpan scope.
 }
 
-/** Worker spans are already redacted before crossing the internal transport. */
+/** Worker spans are redacted before crossing the transport; redact again here, where the stored-key
+ * registry (values only the main process knows) is populated. Idempotent. */
 export function recordRelayedSpan(record: unknown): void {
+  if (!activeSink) {
+    return
+  }
   try {
-    activeSink?.push(record)
+    activeSink.push(redactValue(record))
   } catch {
     /* Diagnostics cannot fail a request. */
   }

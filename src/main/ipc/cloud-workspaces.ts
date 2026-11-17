@@ -1,0 +1,260 @@
+// IPC for team cloud workspaces. Every handler answers `not_configured` when this build has no
+// Orca Cloud control plane, so the renderer can hide the section instead of erroring.
+import { randomUUID } from 'node:crypto'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { app, ipcMain } from 'electron'
+import { z } from 'zod'
+import { withCloudBuildDefaults } from '../cloud-build-defaults'
+import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
+import {
+  createCloudWorkspacesService,
+  type CloudWorkspacesService
+} from '../cloud-workspaces/cloud-workspaces-service'
+import { setCloudReaderKeyRevoker } from '../cloud-workspaces/cloud-reader-key-store'
+import { profileReaderKey, profileReadPins } from '../cloud-workspaces/cloud-read-profile-access'
+import { setCloudPairingVerifiedListener } from '../cloud-workspaces/cloud-pairing-seam'
+import { requestCloudGonePrune } from '../hosted-sandbox/cloud-gone-prune-request'
+import { registerOwnerChangeHandlers } from './cloud-workspaces-owner-change'
+import { wakePairedSandbox } from '../cloud-workspaces/cloud-paired-wake'
+import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
+import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
+import type { RemovedServerStore } from './runtime-environments/catalog/runtime-environment-removal-cleanup'
+import {
+  CloudEnvironmentId as EnvironmentId,
+  createCloudWorkspacesPairings,
+  readActiveAccountBindings,
+  STARTUP_PRUNE_DELAY_MS
+} from './cloud-workspaces-pairings'
+
+const Id = z.string().regex(/^sbx_[0-9a-f]{24}$/)
+const GrantId = z.string().regex(/^grt_[0-9a-f]{24}$/)
+const ChatId = z.string().min(1).max(256)
+const LinkTarget = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('id'), workspaceId: Id }),
+  z.object({
+    kind: z.literal('number'),
+    org: z.string().regex(/^[a-z0-9-]{1,40}$/),
+    number: z.number().int().min(1).max(999_999_999)
+  })
+])
+const ListQuery = z
+  .object({
+    scope: z.enum(['mine', 'all']).optional(),
+    by: z.string().max(128).optional(),
+    repo: z.string().max(2048).optional(),
+    section: z.string().max(64).optional(),
+    archived: z.enum(['exclude', 'include', 'only']).optional(),
+    routines: z.enum(['exclude', 'include']).optional()
+  })
+  .strict()
+const Patch = z
+  .object({
+    title: z.string().max(120).nullable().optional(),
+    branch: z.string().max(255).nullable().optional(),
+    section: z.string().max(64).nullable().optional(),
+    archived: z.boolean().optional(),
+    ownerUserId: z.string().max(128).optional(),
+    tokenUsdMicros: z.number().int().min(0).optional()
+  })
+  .strict()
+const Prompts = z.object({
+  prompts: z.array(z.object({ id: z.string(), name: z.string(), body: z.string() })).max(50),
+  prInstructions: z.string().max(8000)
+})
+
+let service: CloudWorkspacesService | null = null
+let servicePromise: Promise<CloudWorkspacesService | null> | undefined
+
+function getService(): Promise<CloudWorkspacesService | null> {
+  if (servicePromise) {
+    return servicePromise
+  }
+  const starting = (async () => {
+    const userDataPath = app.getPath('userData')
+    const config = getHostedSandboxConfig(
+      userDataPath,
+      withCloudBuildDefaults(process.env),
+      app.isPackaged
+    )
+    if (!config) {
+      return null
+    }
+    service = createCloudWorkspacesService({
+      userDataPath,
+      config,
+      clientId: await clientIdFor(userDataPath),
+      readerKey: profileReaderKey(userDataPath),
+      readPins: profileReadPins(userDataPath)
+    })
+    const started = service
+    setCloudReaderKeyRevoker((timeoutMs) => started.revokeReaderKey(timeoutMs))
+    setCloudPairingVerifiedListener((pairingCode) => started.confirmPairing(pairingCode))
+    return service
+  })()
+  servicePromise = starting
+  // A failed start (e.g. unreadable user data) must not stick; the next call tries again.
+  starting.catch(() => {
+    if (servicePromise === starting) {
+      servicePromise = undefined
+    }
+  })
+  return starting
+}
+
+/**
+ * The owner's asleep view merges this in (main process). Null when it cannot be read (no control
+ * plane, keychain, network); the view then keeps showing this computer's own copy.
+ */
+export async function readCloudWorkspaceSnapshot(
+  sandboxId: string
+): Promise<CloudReadSnapshotState | null> {
+  if (!Id.safeParse(sandboxId).success) {
+    return null
+  }
+  const s = await getService().catch(() => null)
+  const result = await s?.readSnapshot(sandboxId)
+  return result?.ok ? result.value : null
+}
+
+/** The team registry service, for main-process readers (null when this build has no control plane). */
+export const getCloudWorkspacesService = getService
+
+/** Stable per-install id (one per device, not per window), sent with synced sidebar prefs writes. */
+async function clientIdFor(userDataPath: string): Promise<string> {
+  const file = join(userDataPath, 'cloud-workspaces-client-id')
+  try {
+    const existing = (await readFile(file, 'utf8')).trim()
+    if (/^[A-Za-z0-9_.:-]{8,128}$/.test(existing)) {
+      return existing
+    }
+  } catch {
+    // First run.
+  }
+  const id = `desktop-${randomUUID()}`
+  try {
+    await writeFile(file, id, { mode: 0o600 })
+  } catch {
+    // The id still works for this session.
+  }
+  return id
+}
+
+let quitHookInstalled = false
+
+const NOT_CONFIGURED = { ok: false as const, error: 'not_configured' }
+const INVALID = { ok: false as const, error: 'invalid_request' }
+const IdArgs = z.object({ id: Id })
+
+/** Registers a handler that answers `not_configured` without a control plane and `invalid_request` for bad args. */
+export type ServeCloudWorkspaces = <S extends z.ZodType>(
+  channel: string,
+  schema: S,
+  fn: (service: CloudWorkspacesService, args: z.output<S>) => unknown
+) => void
+
+export function registerCloudWorkspacesHandlers(
+  options: { removedServerStore?: RemovedServerStore } = {}
+): void {
+  const { prune, updateBindings, settleDeleted } = createCloudWorkspacesPairings(
+    getService,
+    options.removedServerStore
+  )
+  const handle = (channel: string, fn: (args: unknown) => unknown): void => {
+    ipcMain.removeHandler(channel)
+    ipcMain.handle(channel, (_event, args: unknown) => fn(args))
+  }
+  const serve: ServeCloudWorkspaces = (channel, schema, fn) =>
+    handle(channel, async (args) => {
+      const parsed = schema.safeParse(args)
+      const s = await getService()
+      return !s ? NOT_CONFIGURED : parsed.success ? fn(s, parsed.data) : INVALID
+    })
+  handle('cloudWorkspaces:available', async () => (await getService()) !== null)
+  serve(
+    'cloudWorkspaces:list',
+    z.preprocess((args) => args ?? {}, ListQuery),
+    async (s, query) => {
+      const result = await s.list(query)
+      // Each successful refresh also checks this device's pairings and own records (throttled).
+      if (result.ok) {
+        void prune.run()
+        void requestCloudGonePrune()
+      }
+      return result
+    }
+  )
+  serve('cloudWorkspaces:get', IdArgs, (s, { id }) => s.get(id))
+  serve('cloudWorkspaces:patch', z.object({ id: Id, patch: Patch }), (s, { id, patch }) =>
+    s.patch(id, patch)
+  )
+  serve(
+    'cloudWorkspaces:resolveLink',
+    z.object({ target: LinkTarget, chatId: ChatId.nullable().optional() }),
+    (s, { target, chatId }) => s.resolveLink(target, chatId)
+  )
+  serve('cloudWorkspaces:openGrant', IdArgs, (s, { id }) => s.openGrant(id))
+  serve('cloudWorkspaces:readSnapshot', IdArgs, (s, { id }) => s.readSnapshot(id))
+  serve('cloudWorkspaces:listGrants', IdArgs, (s, { id }) => s.listGrants(id))
+  serve('cloudWorkspaces:revokeGrant', z.object({ id: Id, grantId: GrantId }), (s, a) =>
+    s.revokeGrant(a.id, a.grantId)
+  )
+  serve('cloudWorkspaces:wake', IdArgs, (s, { id }) => wakePairedSandbox(s, id))
+  serve('cloudWorkspaces:sleep', IdArgs, (s, { id }) => s.sleep(id))
+  serve('cloudWorkspaces:destroy', IdArgs, async (s, { id }) => {
+    const result = await s.destroy(id)
+    // Deleted from here: its pairing or own record, server and projects go now.
+    if (result.ok) {
+      await settleDeleted(id)
+    }
+    return result
+  })
+  handle(
+    'cloudWorkspaces:localWorkspaces',
+    async () => (await getService())?.localWorkspaces() ?? []
+  )
+  // A window resolves only the active account's pairings.
+  handle('cloudWorkspaces:environmentBindings', () => readActiveAccountBindings())
+  handle('cloudWorkspaces:bindEnvironment', async (args) => {
+    const parsed = z
+      .object({
+        sandboxId: Id,
+        runtimeEnvironmentId: EnvironmentId,
+        grantId: GrantId.nullable().optional()
+      })
+      .safeParse(args)
+    if (parsed.success) {
+      const { sandboxId, runtimeEnvironmentId, grantId } = parsed.data
+      const accountId = prune.accountForNewBinding()
+      await updateBindings((current) => ({
+        ...current,
+        [sandboxId]: { environmentId: runtimeEnvironmentId, grantId: grantId ?? null, accountId }
+      }))
+    }
+  })
+  handle('cloudWorkspaces:setActive', async (args) => {
+    const parsed = z
+      .object({ sandboxId: Id.nullable(), leased: z.boolean().optional() })
+      .safeParse(args)
+    const s = await getService()
+    if (parsed.success) {
+      s?.setActive(parsed.data)
+    }
+  })
+  serve('cloudWorkspaces:getOrgPrompts', z.unknown(), (s) => s.getOrgPrompts())
+  serve(
+    'cloudWorkspaces:putOrgPrompts',
+    z.object({ document: Prompts, revision: z.number().int().min(0) }),
+    (s, { document, revision }) => s.putOrgPrompts(document, revision)
+  )
+  registerCloudWorkspacePrefsHandlers(serve)
+  registerOwnerChangeHandlers(serve)
+  // Handlers are re-registered per main window; the quit hook must only be added once.
+  if (!quitHookInstalled) {
+    quitHookInstalled = true
+    // Startup: pairings whose sandbox was deleted while this app was closed go now. Delayed so
+    // the Orca session is restored first; a list that still fails just leaves everything alone.
+    setTimeout(() => void prune.run({ force: true }), STARTUP_PRUNE_DELAY_MS).unref?.()
+    app.once('will-quit', () => service?.dispose())
+  }
+}

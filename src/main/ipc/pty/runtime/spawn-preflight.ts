@@ -18,7 +18,11 @@ import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { resolvePtySpawnStartupTarget } from '../host-env/spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
-import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../host-env/spawn-pane-env'
+import {
+  ptySpawnPaneFromIds,
+  stampPtySpawnPaneEnv,
+  stampWorkspacePortEnv
+} from '../host-env/spawn-pane-env'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   ensureJcodeRuntimeDir,
@@ -143,6 +147,7 @@ export async function prepareRuntimePtySpawn(
       pane,
       jcodeRuntimeDir: jcodeEnv?.[JCODE_RUNTIME_DIR_ENV_KEY]
     })
+    await stampWorkspacePortEnv(ctx.env, pane?.worktreeId)
   }
   const hostEnv = await resolvePtySpawnHostEnv({
     launchAgent: args.launchAgent,

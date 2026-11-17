@@ -88,6 +88,16 @@ export function parseArgs(
 
     const flag = assignment
     if (BOOLEAN_FLAGS.has(flag)) {
+      const next = argv[i + 1]
+      if (
+        next !== undefined &&
+        /^\d+$/.test(next) &&
+        specForPathPrefix(specs, commandPath)?.optionalNumberFlags?.includes(flag)
+      ) {
+        flagEntries.push([flag, next])
+        i += 1
+        continue
+      }
       flagEntries.push([flag, true])
       continue
     }

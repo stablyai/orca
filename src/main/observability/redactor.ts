@@ -1,3 +1,7 @@
+import {
+  redactRegisteredSecretValues,
+  registerRedactedSecretValue
+} from '../../shared/redacted-secret-values'
 import { redactCredentialAssignments } from './credential-assignment-redaction'
 
 // Apply idempotent redaction at sink write, bundle collection and server ingest.
@@ -10,8 +14,15 @@ const STANDALONE_BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi
 const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'anthropic-key', re: /sk-ant-[a-zA-Z0-9_-]{40,}/g },
   { tag: 'openai-key', re: /sk-(?:proj-)?[a-zA-Z0-9_-]{32,}/g },
-  { tag: 'github-token', re: /gh[pousr]_[A-Za-z0-9]{36,}/g },
+  // Dotted tails cover JWT-format installation tokens (ghs_<header>.<payload>.<signature>).
+  { tag: 'github-token', re: /gh[pousr]_[A-Za-z0-9_]{36,}(?:\.[A-Za-z0-9_-]+)*/g },
+  { tag: 'github-token', re: /github_pat_[A-Za-z0-9_]{22,}/g },
+  // Vercel API/AI Gateway keys and access tokens (vck_, vcp_, vci_, vca_, vcr_).
+  { tag: 'vercel-token', re: /\bvc[kpiar]_[A-Za-z0-9_-]{20,}/g },
+  // A pairing code is a bearer credential for the paired host.
+  { tag: 'pairing-code', re: /orca:\/\/pair\?[^\s"'<>]+/g },
   { tag: 'aws-access-key-id', re: /AKIA[0-9A-Z]{16}/g },
+  { tag: 'google-api-key', re: /AIza[0-9A-Za-z_-]{35}/g },
   {
     tag: 'aws-secret-access-key',
     re: /aws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}/gi
@@ -88,12 +99,14 @@ function shouldDropAttributeKey(key: string, mode: RedactorMode): boolean {
   return false
 }
 
+export { registerRedactedSecretValue }
+
 /** Idempotent so sink, bundle and server passes can safely repeat. */
 export function redactString(input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
     return input
   }
-  let out = input
+  let out = redactRegisteredSecretValues(input, '[redacted:stored-key]')
 
   // Assignment rewrites can otherwise erase the markers identifying whole credentials.
   // Redaction tags are stable identifiers used by external NDJSON tools.

@@ -1,4 +1,7 @@
-import { RuntimeRpcCallQueuePool } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
+import {
+  RuntimeRpcCallQueuePool,
+  type RuntimeRpcCallLane
+} from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
 
 export const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
 
@@ -7,7 +10,8 @@ export function enqueueRuntimeCall<T>(
   method: string,
   run: () => Promise<T>,
   signal?: AbortSignal,
-  params?: unknown
+  params?: unknown,
+  lane?: RuntimeRpcCallLane
 ): Promise<T> {
-  return runtimeCallQueuePool.enqueue(selector, method, run, 0, signal, params)
+  return runtimeCallQueuePool.enqueue(selector, method, run, 0, signal, params, lane)
 }

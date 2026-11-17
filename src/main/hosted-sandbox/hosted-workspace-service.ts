@@ -1,0 +1,330 @@
+// Orca Cloud workspace surfaces for the window: status panel, Restart, archive/unarchive, wake
+// progress and OOM notices. Maps the renderer's workspace id to its Orca Cloud runtime record.
+import { requestCloudGonePrune } from './cloud-gone-prune-request'
+import { notePairedCloudStatusRead } from '../cloud-workspaces/cloud-paired-dormant'
+import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import { failQueuedCloudPrompts } from './cloud-offline-seam'
+import { ipcMain, type BrowserWindow } from 'electron'
+import { listTeamCloudRuntimes } from './orca-cloud-active-account'
+import { HOSTED_ACCOUNT_CHANNELS, registerHostedAccountHandlers } from './hosted-account-ipc'
+import {
+  listEphemeralVmRuntimes,
+  updateEphemeralVmRuntimeStatus
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import {
+  ORCA_CLOUD_WORKSPACE_CHANNELS as CH,
+  type CloudWakeProgressEvent,
+  type CloudWakeSource,
+  type CloudWorkspaceTarget
+} from '../../shared/hosted-sandbox/cloud-workspace-api'
+import type { HostedSandboxReadyResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
+import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
+import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
+import { autoResumeAgentsAfterRollover, listRestartOfferIds } from './hosted-agent-auto-resume'
+import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
+import { toReady } from './hosted-sandbox-driver'
+import { wakeBillingDenial } from './hosted-environment-provider'
+import { noteWakeTimeline } from './cloud-wake-timeline'
+import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
+import { getCloudSyncService } from '../cloud-sync/cloud-sync-ipc'
+import {
+  archivePairedOrNotCloud,
+  unarchivePairedOrNotCloud,
+  type CloudArchiveArgs
+} from './cloud-workspace-paired-archive'
+import {
+  findCloudSandbox,
+  registerCloudArchiveInfoHandler,
+  restartPairedOrNotCloud
+} from './cloud-workspace-target'
+import { registerCloudArchiveHookHandlers } from './cloud-archive-hook-ipc'
+import {
+  NOT_CLOUD,
+  createOomTracker,
+  failure,
+  findCloudRuntime,
+  readCachedCheckouts,
+  announceWakeUsable,
+  withSandboxFacts,
+  type CloudRuntime
+} from './hosted-workspace-runtime'
+
+export {
+  findCloudRuntime,
+  getHostedWorkspaceService,
+  setArchiveCheckoutsProvider,
+  setHostedWorkspaceService
+} from './hosted-workspace-runtime'
+
+export type HostedWorkspaceService = {
+  emitWakeProgress(event: Omit<CloudWakeProgressEvent, 'at'>): void
+  /** Who asked for the next wake of this workspace (message/ssh/preview); read once by the step. */
+  noteWakeSource(workspaceId: string, source: CloudWakeSource): void
+  takeWakeSource(workspaceId: string): CloudWakeSource
+  /** One OOM check for every running cloud workspace (the install beat calls it). */
+  pollOom(): Promise<void>
+  dispose(): void
+}
+
+/** Git state from the client-side offline cache, used when archiving a VM that is already asleep. */
+export function installHostedWorkspaceService(deps: {
+  userDataPath: string
+  client: HostedSandboxControlPlaneClient
+  windows: () => readonly BrowserWindow[]
+  /** Restart lease schedulers after a lifecycle change. */
+  syncSessions: () => void
+  /** Stop the lease scheduler of one environment (its session is about to be replaced). */
+  stopSession: (environmentId: string) => void
+  log?: (line: string) => void
+  /** The active team; OOM polling and the window's cloud ids skip every other team's sandbox. */
+  activeAccountId?: () => string | null
+}): HostedWorkspaceService {
+  const log = deps.log ?? ((line: string) => console.error(line))
+  // Records this service reads on its own (not per a window's request) stay in the active team.
+  const activeCloudRuntimes = () =>
+    listTeamCloudRuntimes(deps.userDataPath, deps.activeAccountId?.())
+  const wakeSources = new Map<string, CloudWakeSource>()
+  // Wakes in flight per workspace, so every phase carries the source the first one named.
+  const wakes = new Map<string, { source: CloudWakeSource; startedAt: number }>()
+  const broadcast = (channel: string, payload: unknown): void => {
+    for (const window of deps.windows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send(channel, payload)
+      }
+    }
+  }
+  const oom = createOomTracker((event) => broadcast(CH.oom, event))
+
+  async function reconnect(found: CloudRuntime, ready: HostedSandboxReadyResponse): Promise<void> {
+    const runtimeEnvironmentId = found.runtime.runtimeEnvironmentId
+    updateEphemeralVmRuntimeStatus(deps.userDataPath, found.runtime.id, {
+      status: 'running',
+      recipeResult: toReady(ready).result
+    })
+    if (!runtimeEnvironmentId) {
+      return
+    }
+    const { environment } = await applyResumedRuntimePairing({
+      userDataPath: deps.userDataPath,
+      environmentId: runtimeEnvironmentId,
+      pairingCode: ready.connection.pairingCode,
+      invalidateTransport: invalidateRuntimeEnvironmentTransport,
+      // Restart/rollover: the reconnect proves the kept token; re-pair later only if refused.
+      confirmInBackground: true,
+      onRepairedInBackground: (repaired) =>
+        noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt, true)
+    })
+    noteRecipeVmWakePairing(
+      environment.id,
+      environment.pairingRevision ?? environment.createdAt,
+      true
+    )
+  }
+
+  /** The step answers before the window re-pairs; `ready` fires once the runtime record says running. */
+  const announceReadyWhenRunning = (workspaceId: string, startedAt: number): Promise<void> =>
+    announceWakeUsable(deps.userDataPath, workspaceId, startedAt, {
+      isCurrent: () => wakes.get(workspaceId)?.startedAt === startedAt,
+      emit: (event) => service.emitWakeProgress(event)
+    })
+
+  const service: HostedWorkspaceService = {
+    emitWakeProgress(event) {
+      if (event.phase === 'waking') {
+        wakes.set(event.workspaceId, { source: event.source, startedAt: event.startedAt })
+      }
+      const inFlight = wakes.get(event.workspaceId)
+      const source = inFlight?.source ?? event.source
+      if (event.phase === 'ready' || event.phase === 'failed') {
+        wakes.delete(event.workspaceId)
+      }
+      const at = Date.now()
+      noteWakeTimeline({ ...event, source }, at)
+      broadcast(CH.wakeProgress, { ...event, source, at } satisfies CloudWakeProgressEvent)
+      if (event.phase === 'connecting' && event.source !== 'restart') {
+        void announceReadyWhenRunning(event.workspaceId, event.startedAt)
+      }
+    },
+    noteWakeSource(workspaceId, source) {
+      wakeSources.set(workspaceId, source)
+    },
+    takeWakeSource(workspaceId) {
+      const source = wakeSources.get(workspaceId) ?? 'open'
+      wakeSources.delete(workspaceId)
+      return source
+    },
+    async pollOom() {
+      // One store snapshot per pass (each lookup used to re-read the whole store).
+      const all = listEphemeralVmRuntimes(deps.userDataPath)
+      const targets = activeCloudRuntimes().flatMap((runtime) => {
+        const workspaceId = runtime.status === 'running' ? runtime.workspaceId : undefined
+        const found = workspaceId ? findCloudRuntime(deps.userDataPath, workspaceId, all) : null
+        return workspaceId && found ? [{ workspaceId, sandboxId: found.sandboxId }] : []
+      })
+      oom.prune(new Set(targets.map((target) => target.sandboxId)))
+      for (const { workspaceId, sandboxId } of targets) {
+        try {
+          const { status } = await deps.client.workspaceStatus(sandboxId)
+          oom.observe(workspaceId, sandboxId, status)
+        } catch {
+          // Status is advisory; the next beat retries.
+        }
+      }
+    },
+    dispose() {
+      for (const channel of [
+        CH.getStatus,
+        CH.restart,
+        CH.archive,
+        CH.unarchive,
+        CH.getArchive,
+        CH.listCloudWorkspaceIds,
+        ...HOSTED_ACCOUNT_CHANNELS
+      ]) {
+        ipcMain.removeHandler(channel)
+      }
+    }
+  }
+
+  service.dispose()
+  ipcMain.handle(CH.listCloudWorkspaceIds, () =>
+    activeCloudRuntimes()
+      .filter((runtime) => runtime.workspaceId)
+      .map((runtime) => runtime.workspaceId!)
+  )
+
+  registerHostedAccountHandlers(deps.client)
+
+  ipcMain.handle(CH.getStatus, async (_event, args: CloudWorkspaceTarget) => {
+    const found = findCloudSandbox(deps.userDataPath, args)
+    if (!found) {
+      return NOT_CLOUD
+    }
+    try {
+      const { sandbox, status } = await deps.client.workspaceStatus(found.sandboxId)
+      oom.observe(args.workspaceId, found.sandboxId, status)
+      notePairedCloudStatusRead(found, status)
+      return { ok: true, value: withSandboxFacts(status, sandbox) }
+    } catch (error) {
+      // Gone server-side: prune it now rather than show "Couldn't start" until the next relist.
+      if (isEnvironmentProviderError(error, 'not_found')) {
+        void requestCloudGonePrune()
+      }
+      return failure(error)
+    }
+  })
+
+  ipcMain.handle(CH.restart, async (_event, args: CloudWorkspaceTarget) => {
+    const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
+    if (!found) {
+      return restartPairedOrNotCloud(deps, args, (event) => service.emitWakeProgress(event))
+    }
+    const startedAt = Date.now()
+    service.emitWakeProgress({
+      workspaceId: args.workspaceId,
+      phase: 'waking',
+      source: 'restart',
+      startedAt
+    })
+    const call = found.runtime.runtimeEnvironmentId
+      ? createHostedRuntimeEnvironmentCall(deps.userDataPath, found.runtime.runtimeEnvironmentId)
+      : null
+    // Offers the host already holds were left for the user; only this restart's are continued.
+    const offersBeforeDrain = call ? await listRestartOfferIds(call) : null
+    // The scheduler holds the old session's deadline and would warn/roll over the new one; a fresh one starts on sync.
+    deps.stopSession(found.sandboxId)
+    try {
+      const ready = await deps.client.restart(found.sandboxId)
+      service.emitWakeProgress({
+        workspaceId: args.workspaceId,
+        phase: 'connecting',
+        source: 'restart',
+        startedAt
+      })
+      await reconnect(found, ready)
+      deps.syncSessions()
+      service.emitWakeProgress({
+        workspaceId: args.workspaceId,
+        phase: 'ready',
+        source: 'restart',
+        startedAt
+      })
+      if (call) {
+        // Same continuation as a rollover: chats the restart interrupted carry on by themselves.
+        void autoResumeAgentsAfterRollover(call, startedAt, offersBeforeDrain).catch(
+          (error: unknown) => log(`[orca-cloud] auto-resume after restart failed: ${String(error)}`)
+        )
+      }
+      return { ok: true, value: null }
+    } catch (error) {
+      service.emitWakeProgress({
+        workspaceId: args.workspaceId,
+        phase: 'failed',
+        source: 'restart',
+        startedAt,
+        message: error instanceof Error ? error.message : String(error),
+        ...wakeBillingDenial(error)
+      })
+      deps.syncSessions()
+      return failure(error)
+    }
+  })
+
+  ipcMain.handle(CH.archive, async (_event, args: CloudArchiveArgs) => {
+    const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
+    if (!found) {
+      return archivePairedOrNotCloud(deps, args)
+    }
+    try {
+      const checkouts = (await readCachedCheckouts(args.workspaceId)) ?? undefined
+      await deps.client.archive(found.sandboxId, {
+        ...(args.pullRequests?.length ? { pullRequests: args.pullRequests.slice(0, 50) } : {}),
+        ...(checkouts?.length ? { checkouts: checkouts.slice(0, 20) } : {})
+      })
+      updateEphemeralVmRuntimeStatus(deps.userDataPath, found.runtime.id, { status: 'suspended' })
+      failQueuedCloudPrompts([args.workspaceId], 'The workspace was archived before this was sent.')
+      // The archive toast said so: the copy synced to this computer goes now, not on the next check.
+      void getCloudSyncService()?.noteArchived(args.workspaceId)
+      deps.syncSessions()
+      return { ok: true, value: null }
+    } catch (error) {
+      return failure(error)
+    }
+  })
+
+  ipcMain.handle(CH.unarchive, async (_event, args: CloudWorkspaceTarget) => {
+    const found = findCloudRuntime(deps.userDataPath, args.workspaceId)
+    if (!found) {
+      return unarchivePairedOrNotCloud(deps, args, (event) => service.emitWakeProgress(event))
+    }
+    const startedAt = Date.now()
+    service.emitWakeProgress({
+      workspaceId: args.workspaceId,
+      phase: 'waking',
+      source: 'unarchive',
+      startedAt
+    })
+    try {
+      // The control plane resumes the disk; the window then runs its ordinary wake, which re-pairs.
+      await deps.client.unarchive(found.sandboxId)
+      deps.syncSessions()
+      return { ok: true, value: null }
+    } catch (error) {
+      service.emitWakeProgress({
+        workspaceId: args.workspaceId,
+        phase: 'failed',
+        source: 'unarchive',
+        startedAt,
+        message: error instanceof Error ? error.message : String(error),
+        ...wakeBillingDenial(error)
+      })
+      return failure(error)
+    }
+  })
+
+  registerCloudArchiveInfoHandler(deps.userDataPath, deps.client)
+  registerCloudArchiveHookHandlers(deps.userDataPath, deps.client, log)
+
+  return service
+}

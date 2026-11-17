@@ -10,6 +10,8 @@ export type CommandSpec = {
   allowedFlags: string[]
   // Flag repeatability varies by command, even for the same flag name.
   repeatableFlags?: string[]
+  // Globally boolean flags that this command also accepts with a number (`--wait 300`).
+  optionalNumberFlags?: string[]
   positionalArgs?: string[]
   variadicPositional?: boolean
   examples?: string[]

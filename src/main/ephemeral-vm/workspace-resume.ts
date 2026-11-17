@@ -14,6 +14,15 @@ import {
   pickEphemeralVmFailureCode
 } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { resumeEphemeralVmRuntime } from './runtime-service'
+import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
+import {
+  preopenWokenSharedControl,
+  refreshAfterWokenControl,
+  startCloudArchivedCheck,
+  startCloudWake,
+  withCloudSleptElsewhere,
+  type WokenServerReopenOptions
+} from './workspace-resume-cloud'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
 import { applyResumedRuntimePairing } from './runtime-resume-pairing'
@@ -25,6 +34,7 @@ import {
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
+import { reconnectSharedControlIfIdle } from '../ipc/runtime-environments/runtime-environment-shared-control-reconnect'
 import {
   getRemoteRuntimeSharedControlDiagnostics,
   getRuntimeEnvironmentStatusOwner,
@@ -45,10 +55,11 @@ export async function resumeEphemeralVmWorkspace(
   request: VmWakeRequest
 ): Promise<EphemeralVmRuntimeRecord | null> {
   const userDataPath = app.getPath('userData')
-  const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
-  if (!runtime) {
+  const found = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
+  if (!found) {
     return null
   }
+  const runtime = await withCloudSleptElsewhere(userDataPath, workspaceId, found)
   // A VM recorded as up whose host Orca gave up reaching may have been stopped or reclaimed by its
   // provider (#34089): its recipe's resume brings it back. A failure there keeps the record as it
   // was, so a VM that was only out of reach is still reconnected as before.
@@ -67,6 +78,7 @@ export async function resumeEphemeralVmWorkspace(
       updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, { status: runtime.status })
     }
   }
+  const archivedCheck = startCloudArchivedCheck(runtime, workspaceId)
   // After the recipe marked the VM running, an SSH host Orca cannot reach again is still a failed
   // resume, saved with its reason so the row can explain it after a restart.
   const failAfterResume = (error: unknown): void => {
@@ -88,19 +100,22 @@ export async function resumeEphemeralVmWorkspace(
     }
     throw new Error(RECIPE_VM_UNREACHABLE_WITHOUT_RESUME_MESSAGE)
   }
+  const cloudWake = startCloudWake(userDataPath, workspaceId, runtime, lostContact, archivedCheck)
   const result = await resumeEphemeralVmRuntime({
     userDataPath,
     repoPath: recipeContext.repoPath,
     recipe: recipeContext.recipe,
     runtimeId: runtime.id
-  })
+  }).catch(cloudWake.stopAndRethrow)
   if (!result.ok) {
     restoreAfterFailedRecovery()
+    await cloudWake.failed()
     throw new EphemeralVmFailureError({
       error: result.error,
       ...pickEphemeralVmFailureCode(result)
     })
   }
+  cloudWake.resumed()
   if (lostContact && runtime.runtimeEnvironmentId) {
     // The resume restarted the VM; its server's old failures say nothing about the new boot.
     clearRuntimeEnvironmentContactLoss(runtime.runtimeEnvironmentId)
@@ -120,7 +135,8 @@ export async function resumeEphemeralVmWorkspace(
       userDataPath,
       environmentId: runtime.runtimeEnvironmentId,
       pairingCode,
-      invalidateTransport: invalidateRuntimeEnvironmentTransport
+      invalidateTransport: invalidateRuntimeEnvironmentTransport,
+      ...cloudWake.pairingOptions
     })
     noteRecipeVmWakePairing(
       environment.id,
@@ -129,7 +145,7 @@ export async function resumeEphemeralVmWorkspace(
     )
   }
   if (connection.type !== 'ssh' && runtime.runtimeEnvironmentId) {
-    reestablishWokenServer(userDataPath, runtime.runtimeEnvironmentId)
+    reestablishWokenServer(userDataPath, runtime.runtimeEnvironmentId, cloudWake.reopen)
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
   // recipe had no resume step to run.
@@ -165,6 +181,7 @@ export async function resumeEphemeralVmWorkspace(
       throw error
     }
   }
+  syncHostedSessions()
   return result.runtime
 }
 
@@ -184,13 +201,23 @@ function isPairedServerContactLost(environmentId: string): boolean {
 
 /** Nothing retried this server's control socket or health probe while its VM slept; reopen them.
  *  On the next turn, once this wake is no longer pending, so the reopen is not refused as waking. */
-function reestablishWokenServer(userDataPath: string, environmentId: string): void {
+function reestablishWokenServer(
+  userDataPath: string,
+  environmentId: string,
+  options: WokenServerReopenOptions = {}
+): void {
   setTimeout(async () => {
     try {
-      reconnectRemoteRuntimeSharedControlConnection(environmentId)
-      void (await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId))
-        .refresh({ reconnect: true })
-        .catch(() => {})
+      await preopenWokenSharedControl(userDataPath, environmentId, options)
+      reconnectSharedControlIfIdle({
+        getDiagnostics: () => getRemoteRuntimeSharedControlDiagnostics(environmentId),
+        reconnectNow: () => reconnectRemoteRuntimeSharedControlConnection(environmentId)
+      })
+      refreshAfterWokenControl(environmentId, options, async () => {
+        void (await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId))
+          .refresh({ reconnect: true })
+          .catch(() => {})
+      })
     } catch (error) {
       console.warn('[ephemeral-vm] reconnect after wake failed', error)
     }

@@ -124,3 +124,26 @@ export async function holdOpenUntilUp(
     stopAbortWatch()
   }
 }
+
+/** Holds a request that does not open the workspace while the wake already in flight settles; a VM
+ *  that is not waking answers at once with where it stands. Never starts a wake. */
+export async function awaitInFlightWake(
+  pending: readonly VmOperation[],
+  recordSuspended: boolean,
+  sleepRequests: WorkspaceSleepRequests,
+  worktreeId: string,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<RecipeVmOpening | 'asleep'> {
+  signal?.throwIfAborted()
+  const state = vmStateOf(pending, recordSuspended)
+  if (state !== 'waking') {
+    return state === 'up' ? 'up' : 'asleep'
+  }
+  const sleep = sleepRequests.next(worktreeId)
+  try {
+    return await holdOpenUntilUp(pendingVmWake(pending), sleep.requested, timeoutMs, signal)
+  } finally {
+    sleep.stop()
+  }
+}

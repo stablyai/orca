@@ -1,0 +1,173 @@
+import { describe, expect, it } from 'vitest'
+import type { CloudOomEvent } from '../../shared/hosted-sandbox/cloud-workspace-api'
+import type { HostedWorkspaceStatus } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { HostedSandboxViewSchema } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { noteCloudPairingBindings } from '../cloud-workspaces/cloud-paired-environment-ids'
+import { createOomTracker, withGitSetup, withSandboxFacts } from './hosted-workspace-runtime'
+import { findCloudSandbox } from './cloud-workspace-target'
+
+function status(checkedAt: number, uptimeSeconds: number, oomKills: number): HostedWorkspaceStatus {
+  return {
+    state: 'ready',
+    metrics: {
+      cpuPercent: 1,
+      cpus: 4,
+      load1: 0,
+      memTotalBytes: 8,
+      memUsedBytes: 1,
+      diskTotalBytes: 8,
+      diskUsedBytes: 1,
+      uptimeSeconds,
+      oomKills,
+      lastOomVictim: oomKills ? 'node' : null,
+      orcadAlive: true
+    },
+    uptimeMs: 0,
+    usage: { totalMs: 0, centsPerHour: 75, costCents: 0 },
+    archive: null,
+    checkedAt
+  }
+}
+
+describe('OOM tracker', () => {
+  it('announces each new kill once per boot, despite clock jitter', () => {
+    const events: CloudOomEvent[] = []
+    const tracker = createOomTracker((event) => events.push(event))
+    const t0 = 1_000_000_000
+    tracker.observe('ws', 'sbx', status(t0, 100, 1))
+    // Same boot, readings straddle a minute boundary: no repeat.
+    tracker.observe('ws', 'sbx', status(t0 + 60_400, 160, 1))
+    tracker.observe('ws', 'sbx', status(t0 + 120_000, 220, 2))
+    expect(events.map((e) => e.oomKills)).toEqual([1, 2])
+    expect(events[0]?.victim).toBe('node')
+  })
+
+  it('treats a new boot as a fresh counter and forgets stopped sandboxes', () => {
+    const events: CloudOomEvent[] = []
+    const tracker = createOomTracker((event) => events.push(event))
+    tracker.observe('ws', 'sbx', status(1_000_000_000, 100, 1))
+    // Restarted: uptime is small again, counter restarts at 1.
+    tracker.observe('ws', 'sbx', status(1_000_600_000, 20, 1))
+    expect(events).toHaveLength(2)
+    tracker.prune(new Set())
+    tracker.observe('ws', 'sbx', status(1_000_660_000, 80, 1))
+    expect(events).toHaveLength(3)
+  })
+
+  it('announces guard kills as the guard stopping a named process, counted with kernel kills', () => {
+    const events: CloudOomEvent[] = []
+    const tracker = createOomTracker((event) => events.push(event))
+    const guarded = (checkedAt: number, uptime: number, kernel: number, guardKills: number) => ({
+      ...status(checkedAt, uptime, kernel),
+      memory: {
+        pressure: 'high' as const,
+        guardKills,
+        lastGuardVictim: guardKills ? 'tsc' : null,
+        lastGuardKillAt: guardKills ? checkedAt : null,
+        guarded: true
+      }
+    })
+    const t0 = 1_000_000_000
+    tracker.observe('ws', 'sbx', guarded(t0, 100, 0, 0))
+    tracker.observe('ws', 'sbx', guarded(t0 + 60_000, 160, 0, 1))
+    tracker.observe('ws', 'sbx', guarded(t0 + 120_000, 220, 0, 1))
+    tracker.observe('ws', 'sbx', guarded(t0 + 180_000, 280, 1, 1))
+    expect(events).toEqual([
+      { workspaceId: 'ws', oomKills: 1, victim: 'tsc', stoppedBy: 'guard', at: expect.any(Number) },
+      { workspaceId: 'ws', oomKills: 2, victim: 'node', at: expect.any(Number) }
+    ])
+  })
+
+  it('ignores a status without metrics', () => {
+    const events: CloudOomEvent[] = []
+    createOomTracker((event) => events.push(event)).observe('ws', 'sbx', {
+      ...status(1, 1, 0),
+      metrics: null
+    })
+    expect(events).toEqual([])
+  })
+})
+
+describe('archive checkouts trim', () => {
+  it('keeps cached repo state under the archive body limit', async () => {
+    const { trimCheckouts } = await import('./hosted-workspace-runtime')
+    const big = Array.from({ length: 20 }, (_, i) => ({
+      path: `/w/${i}`,
+      branch: 'b',
+      head: 'h',
+      upstream: null,
+      ahead: null,
+      behind: null,
+      commits: [],
+      changes: [],
+      diffStat: null,
+      fileCount: 2000,
+      files: Array.from({ length: 2000 }, (_, f) => `src/some/long/path/file-${f}.ts`)
+    }))
+    const trimmed = trimCheckouts(big)
+    expect(JSON.stringify(trimmed).length).toBeLessThanOrEqual(200 * 1024)
+    expect(trimmed[0]!.files.length).toBeGreaterThan(0)
+  })
+})
+
+describe('failed git setup on the status read', () => {
+  it('passes the sandbox view’s failed git setup to the window, and nothing otherwise', () => {
+    const read = status(1_000, 10, 0)
+    expect(withGitSetup(read, { gitSetup: 'failed' })).toEqual({ ...read, gitSetupFailed: true })
+    expect(withGitSetup(read, {})).toBe(read)
+  })
+
+  it('carries the sandbox region for the card details', () => {
+    const read = status(1_000, 10, 0)
+    expect(withSandboxFacts(read, { region: 'iad1' })).toEqual({ ...read, region: 'iad1' })
+    expect(withSandboxFacts(read, { region: 'pdx1', gitSetup: 'failed' })).toEqual({
+      ...read,
+      gitSetupFailed: true,
+      region: 'pdx1'
+    })
+  })
+
+  it('the strict sandbox view accepts the field the server sends with feature git-setup', () => {
+    const view = {
+      id: 'sb_1',
+      workspaceId: 'ws_1',
+      status: 'running',
+      machineSize: 'standard',
+      region: 'iad',
+      session: null,
+      createdAt: 1
+    }
+    expect(HostedSandboxViewSchema.safeParse({ ...view, gitSetup: 'failed' }).success).toBe(true)
+    expect(HostedSandboxViewSchema.safeParse({ ...view, gitSetup: 'other' }).success).toBe(false)
+  })
+})
+
+describe('findCloudSandbox', () => {
+  it('answers for a paired server only while it is bound to a sandbox', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-paired-status-'))
+    try {
+      noteCloudPairingBindings({ sbx_paired: { environmentId: 'env-gh' } })
+      expect(
+        findCloudSandbox(userDataPath, { workspaceId: 'row', environmentId: 'env-gh' })
+      ).toEqual({
+        sandboxId: 'sbx_paired',
+        owned: null
+      })
+      // No server named, or one that is not bound: not cloud (a window can't name any sandbox).
+      expect(findCloudSandbox(userDataPath, { workspaceId: 'row' })).toBeNull()
+      expect(
+        findCloudSandbox(userDataPath, { workspaceId: 'row', environmentId: 'env-other' })
+      ).toBeNull()
+      noteCloudPairingBindings({})
+      expect(
+        findCloudSandbox(userDataPath, { workspaceId: 'row', environmentId: 'env-gh' })
+      ).toBeNull()
+    } finally {
+      noteCloudPairingBindings({})
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
+})

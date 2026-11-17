@@ -1,3 +1,4 @@
+import { observeCloudOfflineAnswer } from '../../../hosted-sandbox/cloud-offline-seam'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
@@ -25,8 +26,8 @@ import type { Store } from '../../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from '../catalog/runtime-environment-removal-cleanup'
 import { removeRedundantManagedPairing } from '../catalog/runtime-environment-redundant-managed-removal'
 import { readSettingsWithRuntimeEnvironmentPreference } from '../catalog/runtime-environment-preference'
-import { verifyAndAddRuntimeEnvironmentFromPairingCode } from '../pairing/runtime-environment-pairing-verification'
-import { publishVerifiedPairing } from '../pairing/runtime-environment-verified-pairing-publish'
+import { withCloudPairingMark } from '../../../cloud-workspaces/cloud-paired-environment-ids'
+import { verifyAddAndPublishPairing } from '../pairing/runtime-environment-verified-pairing-add'
 import {
   closeRemoteRuntimeRequestConnection,
   getRuntimeEnvironmentStatusSnapshots
@@ -40,6 +41,7 @@ import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-statu
 import { noteRuntimeEnvironmentConnectRequested } from '../pairing/runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from '../catalog/runtime-environment-host-key'
 import { withWslOrcadAccountEnv } from '../../../wsl/orcad/wsl-orcad-account-env'
+import { withHostAgentApiKeyEnv } from '../../../hosted-sandbox/cloud-desktop-keys'
 import { clearSshCredentialDeclinedForEnvironment } from '../../../ssh/authentication/ssh-credential-decline'
 import {
   disconnectManagedHostOfEnvironmentForUser,
@@ -81,7 +83,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       (environment) => !isGatedOffWslHost(environment)
     )
     await readSettingsWithRuntimeEnvironmentPreference(store, getUserDataPath())
-    return environments.map(publicRuntimeEnvironmentWithHostKey)
+    // Paired Orca Cloud workspaces' servers are Orca Cloud for every renderer check.
+    return environments.map((environment) =>
+      withCloudPairingMark(publicRuntimeEnvironmentWithHostKey(environment))
+    )
   })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
@@ -97,17 +102,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
   ipcMain.handle(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
-    async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
-      const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
-      if (result.ok) {
-        await publishVerifiedPairing(
-          getUserDataPath(),
-          result,
-          result.updatedExisting ? { invalidateTransport } : null
-        )
-      }
-      return result
-    }
+    (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) =>
+      verifyAddAndPublishPairing(getUserDataPath(), args, invalidateTransport)
   )
   ipcMain.handle('runtimeEnvironments:resolve', async (_event, args: { selector: string }) =>
     redactRuntimeEnvironment(await resolveEnvironment(getUserDataPath(), args.selector))
@@ -287,7 +283,9 @@ function registerPassiveCallHandler(
           getUserDataPath(),
           environment.id,
           args.method,
-          accounts.params,
+          await withHostAgentApiKeyEnv(environment.id, args.method, accounts.params, () =>
+            callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
+          ),
           args.timeoutMs,
           args.expectedEnvironmentPairingRevision,
           undefined,
@@ -300,6 +298,8 @@ function registerPassiveCallHandler(
         }
         throw error
       }
+      // Orca Cloud: keep read-only answers for the asleep view (never served back as live).
+      observeCloudOfflineAnswer(environment.id, args.method, args.params, response)
       observeWslOrcadHostResponse(environment.id, args.method, response)
       recordAnswer?.(environment, args.method, response)
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)

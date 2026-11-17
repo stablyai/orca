@@ -1,4 +1,14 @@
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
+import { registerAgentApiKeyHandlers } from '../../agent-api-keys/agent-api-key-ipc'
+import {
+  getCloudWorkspacesService,
+  registerCloudWorkspacesHandlers
+} from '../../ipc/cloud-workspaces'
+import { installCloudPairingRecovery } from '../../cloud-workspaces/cloud-pairing-recovery-install'
+import { registerCloudApiHandlers } from '../../cloud-api/cloud-api-ipc'
+import { registerCloudSecretsHandlers } from '../../cloud-secrets/cloud-secrets-ipc'
+import { registerOrcaCloudAgentsHandlers } from '../../orca-cloud-agents/orca-cloud-agents-ipc'
+import { registerSshAgentSignInHandlers } from '../../ssh/agent-sign-in/ssh-agent-sign-in-ipc'
 import { registerCoreHandlers } from '../../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../../window/attach-main-window-services'
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
@@ -22,6 +32,7 @@ import {
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/remote-runtime/relay/relay-host-close-reason'
+import { syncHostedSessions } from '../../hosted-sandbox/hosted-session-sync'
 
 let attachmentTail: Promise<void> = Promise.resolve()
 
@@ -73,6 +84,14 @@ async function installMainWindowCoreServices(
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
+  registerAgentApiKeyHandlers(app.getPath('userData'))
+  registerCloudWorkspacesHandlers({ removedServerStore: store })
+  // A cloud workspace server that refuses this computer's pairing gets one fresh grant.
+  installCloudPairingRecovery(getCloudWorkspacesService)
+  registerCloudApiHandlers()
+  registerCloudSecretsHandlers(app.getPath('userData'))
+  registerOrcaCloudAgentsHandlers(app.getPath('userData'))
+  registerSshAgentSignInHandlers()
   await registerCoreHandlers(
     store,
     runtime,
@@ -112,6 +131,8 @@ async function installMainWindowCoreServices(
         void state.desktopRelayInstaller?.authChanged()
         state.desktopRelayService?.authMutated()
         desktopConnectorCloud()?.accountChanged()
+        // A team switch moves Orca Cloud to another account: stop keeping the old team's sandboxes alive.
+        syncHostedSessions()
       },
       // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
       onBeforeOrcaProfileSignOut: () => {

@@ -12,6 +12,7 @@ import {
 import type { EphemeralVmRuntimeRecord } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { cleanupOwnedEphemeralVmRuntime } from '../../ephemeral-vm/owned-runtime-cleanup'
 import { stopEphemeralVmRuntimeCleanup } from '../../ephemeral-vm/runtime-cleanup-control'
+import { suspendEphemeralVmRuntime } from '../../ephemeral-vm/runtime-service'
 import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload
@@ -20,7 +21,15 @@ import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 import { ephemeralVmFailure } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { attachEphemeralVmRuntimeToWorkspace } from '../../ephemeral-vm/runtime-attachment'
 import { forgetInterruptedEphemeralVmProvision } from '../../ephemeral-vm/runtime-provisioning-persistence'
+import { installCloudSsh } from '../../cloud-ssh/cloud-ssh-main'
 import { pendingVmCheckouts } from '../../ephemeral-vm/pending-vm-checkouts'
+import { cloudSandboxIdForEnvironment } from '../../hosted-sandbox/hosted-remote-desktop'
+import {
+  preflightCloudWorkspaceDelete,
+  type CloudDeletePreflight
+} from '../../hosted-sandbox/cloud-delete-preflight'
+import { probeCloudServer } from '../../hosted-sandbox/cloud-server-probe'
+import { getHostedSandboxControlPlaneClient } from '../../hosted-sandbox/hosted-sandbox-install'
 import {
   parsePendingVmCheckouts,
   PENDING_VM_CHECKOUTS_CHANGED_CHANNEL
@@ -107,10 +116,14 @@ function registerPendingVmCheckoutHandlers(): void {
 }
 
 export function registerEphemeralVmRuntimeHandlers(store: Store): void {
+  // Orca Cloud SSH (orca ssh, Remote-SSH) rides on the same runtime records.
+  installCloudSsh(store)
   registerPendingVmCheckoutHandlers()
   ipcMain.removeHandler('ephemeralVm:attachWorkspace')
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')
+  ipcMain.removeHandler('ephemeralVm:suspendRuntime')
+  ipcMain.removeHandler('ephemeralVm:preflightCloudDelete')
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
   ipcMain.removeHandler('ephemeralVm:forgetRuntime')
   ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
@@ -139,9 +152,48 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   )
 
   ipcMain.handle(
+    'ephemeralVm:preflightCloudDelete',
+    (_event, args: { runtimeEnvironmentId: string }): Promise<CloudDeletePreflight> =>
+      preflightCloudWorkspaceDelete(
+        cloudSandboxIdForEnvironment(
+          app.getPath('userData'),
+          String(args?.runtimeEnvironmentId ?? '')
+        ),
+        getHostedSandboxControlPlaneClient(),
+        () => probeCloudServer(app.getPath('userData'), String(args?.runtimeEnvironmentId ?? ''))
+      )
+  )
+
+  ipcMain.handle(
     'ephemeralVm:cleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
       return cleanupOwnedEphemeralVmRuntime(store, app.getPath('userData'), args.runtimeId)
+    }
+  )
+
+  // A create blocked on a failed environment check holds a sandbox no workspace owns yet, so the
+  // window's idle sleep never sees it. The build sheet sleeps it after a few unused minutes.
+  ipcMain.handle(
+    'ephemeralVm:suspendRuntime',
+    async (_event, args: { runtimeId: string }): Promise<{ ok: boolean; error?: string }> => {
+      const userDataPath = app.getPath('userData')
+      const runtimeId = String(args?.runtimeId ?? '')
+      const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
+      if (!runtime || runtime.workspaceId || runtime.recipe?.provider !== 'orca-cloud') {
+        return { ok: false, error: 'Not a sandbox waiting on its create.' }
+      }
+      try {
+        const context = getRuntimeRecipeContext(store, userDataPath, runtimeId)
+        const result = await suspendEphemeralVmRuntime({
+          userDataPath,
+          repoPath: context.repoPath,
+          recipe: context.recipe,
+          runtimeId
+        })
+        return result.ok ? { ok: true } : { ok: false, error: result.error }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
     }
   )
 

@@ -1,7 +1,5 @@
 import {
-  buildRegistry,
   isStreamingMethod,
-  type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
   type RpcMethod,
   type RpcRegistry,
@@ -34,10 +32,12 @@ import { runWithActiveRpcCaller } from './callers/active-call'
 import { admitRpcRequest } from './dispatch/rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './startup/orcad-readiness'
 import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
+import { RpcRegistrySource, type RpcMethodSource } from './dispatch/rpc-method-source'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
-  methods: readonly RpcAnyMethodDeclaration[]
+  /** A loader defers importing handler modules to the first call (or preloadMethods). */
+  methods: RpcMethodSource
   /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
   callerScope?: RpcCallerScope
 }
@@ -51,7 +51,7 @@ type AdmittedUnaryCall = {
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
-  private readonly registry: RpcRegistry
+  private readonly registry: RpcRegistrySource
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly pinnedCallerScope: RpcCallerScope | undefined
@@ -59,9 +59,14 @@ export class RpcDispatcher {
   constructor({ runtime, methods, callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
-    this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
+    this.registry = new RpcRegistrySource(methods, withoutMethodsThisHostDoesNotServe)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
+  }
+
+  /** Loads a lazy method table now; a no-op for a method list. Never rejects. */
+  preloadMethods(): Promise<void> {
+    return this.registry.preload()
   }
 
   async dispatch(request: RpcRequest, options?: RpcDispatchStreamingOptions): Promise<RpcResponse> {
@@ -189,16 +194,15 @@ export class RpcDispatcher {
     meta: RpcEnvelopeMeta,
     isTransportSupported: (method: RpcMethod | RpcStreamingMethod) => method is M
   ) {
-    return admitRpcRequest(
-      {
-        runtime: this.runtime,
-        registry: this.registry,
-        meta,
-        pinnedCallerScope: this.pinnedCallerScope
-      },
-      request,
-      options,
-      isTransportSupported
+    return this.registry.withRegistry(
+      (registry: RpcRegistry) =>
+        admitRpcRequest(
+          { runtime: this.runtime, registry, meta, pinnedCallerScope: this.pinnedCallerScope },
+          request,
+          options,
+          isTransportSupported
+        ),
+      (error: unknown) => ({ rejected: mapDispatcherError(request, meta, error) })
     )
   }
 

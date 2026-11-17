@@ -14,7 +14,6 @@ import type { BrowserNetworkTunnelOutboundMemoryLease } from './browser-network-
 import {
   BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
   BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS,
-  BROWSER_NETWORK_TUNNEL_MAX_STREAMS,
   validateBrowserNetworkTunnelGeneration,
   type BrowserNetworkTunnelFlowControl
 } from './browser-network-tunnel-stream-state'
@@ -24,6 +23,8 @@ import {
 } from './browser-network-tunnel-source-flow'
 import {
   createBrowserNetworkTunnelClientStream,
+  refuseBrowserNetworkTunnelClientOpen,
+  startEarlyBrowserNetworkTunnelClientStream,
   type BrowserNetworkTunnelClientStream
 } from './browser-network-tunnel-client-stream'
 import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
@@ -41,6 +42,8 @@ type BrowserNetworkTunnelClientOptions = {
   outboundMemory?: Pick<BrowserNetworkTunnelOutboundMemoryLease, 'claimApplicationBytes'>
   maxStreamIds?: number
   flowControl?: BrowserNetworkTunnelFlowControl
+  /** Only when the host accepted it: see BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES. */
+  earlyData?: boolean
   onClosed?: (error: Error) => void
   now?: () => number
 }
@@ -50,6 +53,7 @@ export class BrowserNetworkTunnelClient {
   private readonly outboundMemory: BrowserNetworkTunnelClientOptions['outboundMemory']
   private readonly maxStreamIds: number
   private readonly flowControl: BrowserNetworkTunnelFlowControl
+  readonly earlyData: boolean
   private readonly frameReceiver: BrowserNetworkTunnelFrameReceiver
   private readonly onClosed: BrowserNetworkTunnelClientOptions['onClosed']
   private readonly streams = new Map<number, BrowserNetworkTunnelClientStream>()
@@ -61,6 +65,7 @@ export class BrowserNetworkTunnelClient {
     this.outboundMemory = options.outboundMemory
     this.onClosed = options.onClosed
     this.flowControl = options.flowControl ?? BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL
+    this.earlyData = options.earlyData === true
     this.maxStreamIds = options.maxStreamIds ?? BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS
     if (
       !Number.isSafeInteger(this.maxStreamIds) ||
@@ -96,18 +101,15 @@ export class BrowserNetworkTunnelClient {
     return this.nextStreamId > this.maxStreamIds
   }
 
+  /**
+   * With early data the stream resolves at once, before the host connects it, so the first bytes
+   * (up to BROWSER_NETWORK_TUNNEL_EARLY_DATA_BYTES; the rest after Opened) ride right behind Open.
+   * A destination failure then destroys the socket with the error; the host drops early bytes.
+   */
   open(target: BrowserNetworkTunnelOpen): Promise<BrowserNetworkTunnelDuplex> {
-    if (this.closed) {
-      return Promise.reject(new Error('Browser tunnel is closed'))
-    }
-    if (this.streams.size >= BROWSER_NETWORK_TUNNEL_MAX_STREAMS) {
-      return Promise.reject(new Error('Browser tunnel stream limit exceeded'))
-    }
-    if (this.streamIdsExhausted) {
-      return Promise.reject(new Error('Browser tunnel stream id limit exceeded'))
-    }
     let openPayload: Uint8Array<ArrayBufferLike>
     try {
+      refuseBrowserNetworkTunnelClientOpen(this.closed, this.streams.size, this.streamIdsExhausted)
       openPayload = encodeBrowserNetworkTunnelOpen(target)
     } catch (error) {
       return Promise.reject(error)
@@ -116,6 +118,7 @@ export class BrowserNetworkTunnelClient {
     const { stream, opening } = createBrowserNetworkTunnelClientStream(
       id,
       this.flowControl.streamWindowBytes,
+      this.earlyData,
       {
         writeBytes: (bytes, callback) => this.writeStream(id, bytes, callback),
         requestRead: () => this.readStream(id),
@@ -129,6 +132,10 @@ export class BrowserNetworkTunnelClient {
     this.streams.set(id, stream)
     if (!this.frameSender.send(BrowserNetworkTunnelOpcode.Open, id, openPayload)) {
       this.close(new Error('Browser tunnel transport rejected an open frame'))
+    } else if (this.earlyData) {
+      startEarlyBrowserNetworkTunnelClientStream(stream, this.frameSender, (error) =>
+        this.close(error)
+      )
     }
     return opening
   }
@@ -183,7 +190,7 @@ export class BrowserNetworkTunnelClient {
     callback: (error?: Error | null) => void
   ): void {
     const stream = this.streams.get(streamId)
-    if (!stream || !stream.opened || stream.localEnded) {
+    if (!stream || !(stream.opened || stream.earlyData) || stream.localEnded) {
       callback(new Error('Browser tunnel stream is not writable'))
       return
     }

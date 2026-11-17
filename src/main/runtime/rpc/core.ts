@@ -1,4 +1,8 @@
 import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
+import type {
+  PairingRevokeDeviceParams,
+  PairingRevokeDeviceResult
+} from '../../../shared/remote-runtime/pairing/pairing-revoke-device-contract'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -57,6 +61,8 @@ export type PairingRpcContext = {
 // Mints new pairing credentials, so only the host owner's local transport provides it.
 export type PairingOffersRpcContext = {
   create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
+  /** Revokes a paired device and closes its open sockets now (not at its next sign-in). */
+  revoke(params: PairingRevokeDeviceParams): Promise<PairingRevokeDeviceResult>
 }
 
 export type RpcEnvelopeMeta = {
@@ -126,6 +132,8 @@ export type RpcContext = {
   pairedDeviceId?: string
   // Delegated phones use their parent desktop's workspaces.
   pairedDeviceParentId?: string
+  // The pairing offer this device came from (a device-key fork keeps its offer's id).
+  pairedDeviceOriginId?: string
   // Host-assigned transport identity; absent means the caller could not be established.
   caller?: RpcCallerIdentity
   // Set only by the in-process plugin host: the plugin a call acts for, kept as provenance.

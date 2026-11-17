@@ -3,9 +3,14 @@ import { closesAppOsc133Zone } from '../../../shared/terminal/output/terminal-os
 /** OSC 133 hint that a shell sits at its prompt. Apps print these markers too (#10923), so any
  * doubt is 'unknown' and only a clean C → D;0 → A cycle at the shell's own depth reaches 'prompt'. */
 export class TerminalShellPromptPhase {
-  private phase: 'unknown' | 'command' | 'ended' | 'prompt' = 'unknown'
+  private phase: 'unknown' | 'command' | 'ended' | 'prompt'
   // Zones an app or nested shell opened inside the shell's command; their D closes them, not it.
   private nestedZones = 0
+
+  /** A freshly spawned shell has no command in flight, so its own first prompt is a clean cycle. */
+  constructor(start: 'unknown' | 'spawn' = 'unknown') {
+    this.phase = start === 'spawn' ? 'ended' : 'unknown'
+  }
 
   get atPrompt(): boolean {
     return this.phase === 'prompt'

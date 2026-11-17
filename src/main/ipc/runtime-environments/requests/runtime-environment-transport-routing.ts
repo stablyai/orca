@@ -15,6 +15,8 @@ import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-env
 import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import type { RuntimeRpcCallLane } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
+import { holdForInFlightRecipeVmWake } from '../managed-orcad/runtime-environment-recipe-vm-wake-hold'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
   sendRemoteRuntimeRequestAbortable
@@ -26,6 +28,7 @@ import {
 } from './runtime-environment-support-routing'
 import { shouldUseSharedControlEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { sendEnvelopedOneShotCall } from './runtime-environment-runtime-pinned-send'
+import { noteRuntimeEnvironmentFailure } from '../runtime-environment-rejection-observer'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -43,6 +46,8 @@ export async function callRuntimeEnvironment(
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
+    /** Queue lane override; see RuntimeRpcCallLane. */
+    lane?: RuntimeRpcCallLane
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
@@ -71,6 +76,7 @@ export async function callRuntimeEnvironment(
     )
   }
   const environment = await resolveEnvironment(userDataPath, selector)
+  const held = await holdForInFlightRecipeVmWake(userDataPath, environment, method, options)
   // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {
@@ -87,7 +93,8 @@ export async function callRuntimeEnvironment(
             pairingRevision: expectedEnvironmentPairingRevision,
             runtimeId: options?.expectedEnvironmentRuntimeId
           },
-          options?.signal
+          options?.signal,
+          held ?? undefined
         )
         if (prepared.failure) {
           return prepared.failure
@@ -156,9 +163,11 @@ export async function callRuntimeEnvironment(
         return response
       },
       options?.signal,
-      params
+      params,
+      options?.lane
     )
   } catch (error) {
+    noteRuntimeEnvironmentFailure(environment.id, error)
     if (error instanceof Error && error.name !== 'AbortError') {
       error.message = withRuntimeUnreachableHint(environment, error.message, endpoint)
     }

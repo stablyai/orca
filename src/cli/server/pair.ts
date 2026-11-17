@@ -7,6 +7,14 @@ import {
   type PairingCreateOfferParams,
   type PairingCreateOfferResult
 } from '../../shared/remote-runtime/pairing/pairing-create-offer-contract'
+import {
+  TURN_SENDER_METHOD,
+  type TurnSenderResult
+} from '../../shared/remote-runtime/pairing/turn-sender-contract'
+import {
+  PAIRING_REVOKE_DEVICE_METHOD,
+  type PairingRevokeDeviceResult
+} from '../../shared/remote-runtime/pairing/pairing-revoke-device-contract'
 
 export function formatPairingOffer(offer: PairingCreateOfferResult): string {
   if (!offer.available) {
@@ -36,6 +44,17 @@ export function formatPairingOffer(offer: PairingCreateOfferResult): string {
 
 export const PAIR_HANDLERS: Record<string, CommandHandler> = {
   pair: async ({ client, flags, json }) => {
+    const revoke = getOptionalStringFlag(flags, 'revoke')
+    if (revoke) {
+      // Headless hosts: revoke one paired device and drop its live sessions now.
+      const response = await client.call<PairingRevokeDeviceResult>(PAIRING_REVOKE_DEVICE_METHOD, {
+        deviceId: revoke
+      })
+      printResult(response, json, (result) =>
+        result.revoked ? `Revoked ${revoke}.` : `No paired device ${revoke}.`
+      )
+      return
+    }
     const mobile = flags.get('mobile') === true
     if (flags.get('relay') === true && !mobile) {
       throw new RuntimeClientError('invalid_argument', '--relay applies only with --mobile')
@@ -61,5 +80,13 @@ export const PAIR_HANDLERS: Record<string, CommandHandler> = {
     if (!response.result.available) {
       process.exitCode = 1
     }
+  },
+  sender: async ({ client, json }) => {
+    const response = await client.call<TurnSenderResult>(TURN_SENDER_METHOD, undefined)
+    printResult(response, json, (result) =>
+      result.sender
+        ? `Last message from device ${result.sender.deviceId}.`
+        : 'No paired device has messaged this agent.'
+    )
   }
 }

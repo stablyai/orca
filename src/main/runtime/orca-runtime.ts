@@ -2,10 +2,6 @@ import type { SessionOptionValue } from '../../shared/native-chat/input/native-c
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
-import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
-import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
-import { publishWorkspaceViewChanges } from './client/settings/runtime-workspace-view-change-events'
-import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
@@ -28,8 +24,8 @@ import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent
 import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-record-warmup-gate'
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-runtime/session-graph/remote-layout-snapshot'
+import { wireRuntimeStoreChanges } from './construction/runtime-store-change-wiring'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
-import { registerWorktreeCatalogRoutes } from './workspaces/catalog/worktree-catalog-live-route'
 import {
   listReferenceWorkspaces,
   selectWarmedReferenceWorkspace,
@@ -67,6 +63,7 @@ import {
   PeerMailRelay,
   type PeerServerAnswerStatus
 } from './orchestration/federation/peer-mail/peer-mail-relay'
+import { terminalHandleAgent, type TerminalHandleAgent } from './secrets/terminal-handle-agent'
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
@@ -203,11 +200,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
-    registerWorktreeCatalogRoutes(this.store)
-    publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
-    publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
-    publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
-    syncPRAutoRefreshCadence(this.store)
+    wireRuntimeStoreChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
   /** What mobileRelay.hosts.list answers changed. */
@@ -337,6 +330,15 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
     return this.store?.getRemoteLayoutSnapshots?.() ?? {}
   }
+
+  /** The agent a terminal runs and its worktree, from host records (never from request params). */
+  getTerminalHandleAgent(handle: string): TerminalHandleAgent | null {
+    return terminalHandleAgent(this.handles.get(handle), (ptyId) => this.getPtyAgent(ptyId))
+  }
+
+  /** Whether this host knows a worktree by id (a caller's hint is kept only when it does). */
+  isKnownWorktree = async (id: string): Promise<boolean> =>
+    (await this.getResolvedWorktreeMap()).has(id)
 
   /** Return the already-open record store without waiting. */
   openedAgentSessionRecordStore(): AgentSessionRecordStore | null {

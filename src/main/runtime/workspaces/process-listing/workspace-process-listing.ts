@@ -8,7 +8,7 @@ import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/
 
 import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
-import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
+import { buildRuntimeWorktreePsSummariesWithCloud } from './runtime-worktree-ps-cloud-summaries'
 import {
   buildRuntimeWorktreeSummaryPathIndex,
   createRuntimeWorktreePsSummaryLookup
@@ -86,7 +86,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    const summaries = buildRuntimeWorktreePsSummaries({
+    const summaries = buildRuntimeWorktreePsSummariesWithCloud({
       store: this.store,
       resolvedWorktrees,
       platformByRepoId,

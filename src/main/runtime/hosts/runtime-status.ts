@@ -1,3 +1,4 @@
+import { ORCA_CLOUD_HOST_RUNTIME_CAPABILITY } from '../../../shared/hosted-sandbox/orca-cloud-host-capability'
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -93,6 +94,9 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
         // Only hosts running their own usage poller can consume saved keys.
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY || this.getUsageRateLimits() !== null)
     )
+    if (process.env.ORCA_IS_CLOUD === '1') {
+      capabilities.push(ORCA_CLOUD_HOST_RUNTIME_CAPABILITY)
+    }
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }

@@ -52,6 +52,7 @@ function openedStream(
   stream.opened = true
   clearTimeout(stream.connectTimeout)
   if (
+    !stream.earlyData &&
     !actions.send(
       BrowserNetworkTunnelOpcode.WindowUpdate,
       stream.id,

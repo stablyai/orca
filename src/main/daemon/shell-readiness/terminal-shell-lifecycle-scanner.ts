@@ -47,8 +47,13 @@ export class TerminalShellLifecycleScanner {
   private altActive = false
   private commandEnteredAlternateScreen = false
   private adjacentMarkers = ''
-  private readonly promptPhase = new TerminalShellPromptPhase()
+  private readonly promptPhase: TerminalShellPromptPhase
   private readonly inputModes = new TerminalArmedInputModes()
+
+  /** `freshShell`: the stream starts at a spawned shell's first byte, not mid-session. */
+  constructor(opts: { freshShell?: boolean } = {}) {
+    this.promptPhase = new TerminalShellPromptPhase(opts.freshShell ? 'spawn' : 'unknown')
+  }
 
   get owner(): TerminalOwner | undefined {
     return this.ownerState

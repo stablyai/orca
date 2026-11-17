@@ -1,4 +1,5 @@
 import { agentPromptObservationSignal } from './agent-prompt-signals'
+import { untilAborted } from '../wait/until-aborted'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
@@ -219,9 +220,10 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       return true
     }
     const generation = this.getPtyLifecycleGeneration(ptyId)
+    const watch = this.launchComposerReadyByPtyId.get(ptyId)
     return (
-      // No pending watch: not a fresh launch, or its watch already settled.
-      ((await this.launchComposerReadyByPtyId.get(ptyId)) ?? true) &&
+      // No pending watch: not a fresh launch, or its watch already settled. A cancelled request stops waiting.
+      (watch ? await untilAborted(watch, options.signal) : true) &&
       // A held send must not land in a replacement process or outlive its cancelled request.
       this.getPtyLifecycleGeneration(ptyId) === generation &&
       options.signal?.aborted !== true

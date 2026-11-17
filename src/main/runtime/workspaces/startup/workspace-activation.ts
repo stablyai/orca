@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithForegroundInspection } from './workspace-foreground-inspection'
+import { claimQuietWake } from '../../../ephemeral-vm/quiet-wakes'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsClients,
@@ -72,7 +73,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       throw new Error('repo_not_found')
     }
     // A workspace this host runs on a recipe VM (over its SSH target) wakes with its opening;
-    // the wake can outlast activation, so it runs on its own and records its failure.
+    // the wake can outlast activation, so it runs on its own and records its failure. Opening it
+    // claims any wake started on intent (no failure is hidden, no short idle window).
+    claimQuietWake(worktree.id)
     void this.wakeWorkspaceVm(worktree.id).catch((error: unknown) =>
       console.warn('[runtime] workspace VM wake failed', error)
     )
@@ -246,7 +249,18 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
 
   /** Hold submits to a fresh launch of `agent` until its composer is up (launch-composer-watch.ts). */
   watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void {
-    watchLaunchComposer(this.launchComposerReadyByPtyId, this.freshComposerPtyHost(), ptyId, agent)
+    watchLaunchComposer(
+      this.launchComposerReadyByPtyId,
+      this.freshComposerPtyHost(),
+      ptyId,
+      agent,
+      {
+        readLaunchedAgentForeground: (id, launched) =>
+          this.readLaunchedAgentForeground(id, launched),
+        subscribeToTerminalData: (id, listener) => this.subscribeToTerminalData(id, listener),
+        readRecentTerminalOutput: (id) => this.readRecentTerminalOutput(id)
+      }
+    )
   }
 
   private freshComposerPtyHost(): FreshComposerPtyHost {

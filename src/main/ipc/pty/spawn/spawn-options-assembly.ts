@@ -1,4 +1,8 @@
 import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
+import {
+  withHostAgentApiKeyLaunchEnv,
+  withoutCarriedAgentCredentials
+} from '../../../hosted-sandbox/cloud-desktop-keys'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -149,7 +153,12 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
       : {})
   })
-  const env = openCodeLaunch.env
+  // Stored API keys ride only a fresh agent launch; a reattach or command-less shell gets none.
+  const env = withoutCarriedAgentCredentials(
+    input.preAdoptedStablePane || input.launchCommand === undefined
+      ? openCodeLaunch.env
+      : await withHostAgentApiKeyLaunchEnv(openCodeLaunch.env, launchAgent, connectionId)
+  )
   const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command

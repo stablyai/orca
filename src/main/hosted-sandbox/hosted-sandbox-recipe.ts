@@ -1,0 +1,254 @@
+// "Orca Cloud" as a built-in per-workspace environment: listed first wherever recipes are, run
+// in-process through the HostedSandboxDriver, and answering like a recipe process would.
+import { z } from 'zod'
+import { EphemeralVmRecipeResultSchema } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { ephemeralVmFailure, type EphemeralVmFailure } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import { normalizeGitRemoteUrl } from '../../shared/git/remotes/git-remote-identity'
+import type { OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
+import {
+  registerEphemeralVmRecipeStepProvider,
+  type RecipeStepProvider,
+  type RecipeStepProviderResult
+} from '../../shared/ephemeral-vm-recipe-step-providers'
+import { getRemoteUrl } from '../git/remotes/repo-remote-queries'
+import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
+import {
+  isHostedEntitlementDenied,
+  wakeBillingDenial,
+  type HostedEnvironmentProviderDriver,
+  type HostedEnvironmentReady
+} from './hosted-environment-provider'
+import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
+import {
+  createHostedSandboxDriver,
+  HOSTED_SANDBOX_DELETE_NOT_CONFIRMED,
+  HOSTED_SANDBOX_DRIVER_ID
+} from './hosted-sandbox-driver'
+import type { HostedSandboxConfig } from './hosted-sandbox-config'
+
+import { ORCA_CLOUD_RECIPE_ID } from '../../shared/hosted-sandbox/orca-cloud-recipe-id'
+
+export { ORCA_CLOUD_RECIPE_ID }
+
+export const ORCA_CLOUD_RECIPE: OrcaVmRecipe = {
+  id: ORCA_CLOUD_RECIPE_ID,
+  name: 'Orca Cloud',
+  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
+  provider: 'orca-cloud',
+  create: 'orca-cloud create',
+  suspend: 'orca-cloud suspend',
+  resume: 'orca-cloud resume',
+  destroy: 'orca-cloud destroy',
+  // create includes cloning the repo (VM-side cap 15 min, stall cap 5 min): it reports progress throughout.
+  timeoutSeconds: { create: 1200, resume: 180, suspend: 420, destroy: 120 }
+}
+
+const LifecyclePayload = z.looseObject({ recipeResult: EphemeralVmRecipeResultSchema.optional() })
+
+export function createHostedSandboxRecipeClient(config: HostedSandboxConfig) {
+  return createHostedSandboxControlPlaneClient({
+    baseUrl: config.controlPlaneUrl,
+    getAccessToken: config.getAccessToken,
+    fetch: config.fetch
+  })
+}
+
+export function createHostedSandboxRecipeDriver(
+  config: HostedSandboxConfig,
+  client = createHostedSandboxRecipeClient(config)
+): HostedEnvironmentProviderDriver {
+  return createHostedSandboxDriver(client)
+}
+
+/** https clone URL the control plane can mint a GitHub App token for; null for non-GitHub remotes. */
+async function hostedSandboxRepoUrl(repoPath: string): Promise<string | null> {
+  const remote = await getRemoteUrl(repoPath)
+  const normalized = remote ? normalizeGitRemoteUrl(remote) : null
+  return normalized?.startsWith('github.com/') ? `https://${normalized}.git` : null
+}
+
+/**
+ * The sandbox can only clone from GitHub, so a repo without a GitHub remote is refused before the
+ * control plane starts (and bills) a sandbox that could never open the workspace: the project has
+ * no identity a sandbox checkout can match.
+ */
+export async function refuseOrcaCloudWithoutGithub(
+  recipe: Pick<OrcaVmRecipe, 'provider'>,
+  repoPath: string
+): Promise<EphemeralVmFailure | null> {
+  if (recipe.provider !== 'orca-cloud' || (await hostedSandboxRepoUrl(repoPath))) {
+    return null
+  }
+  return ephemeralVmFailure('cloudNoGithubRemote')
+}
+
+function ok(stdout: string): RecipeStepProviderResult {
+  return { stdout, stderr: '', exitCode: 0, signal: null }
+}
+
+/** A control-plane failure as the build sheet reads it: a reason line and a failure code. */
+export function hostedCreateFailure(error: unknown): RecipeStepProviderResult {
+  const base = { stdout: '', exitCode: 1, signal: null }
+  if (
+    isHostedEntitlementDenied(error) &&
+    (error.reason === 'concurrency_limit' || error.reason === 'member_concurrency_limit')
+  ) {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.reason}\n`,
+      failure: ephemeralVmFailure('cloudConcurrencyLimit')
+    }
+  }
+  if (isHostedEntitlementDenied(error)) {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.reason ?? 'no plan'}\n`,
+      failure: ephemeralVmFailure('cloudPlanRequired')
+    }
+  }
+  if (isEnvironmentProviderError(error, 'conflict') && error.reason === 'github_not_connected') {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.reason}\n`,
+      failure: ephemeralVmFailure('cloudGithubNotConnected')
+    }
+  }
+  if (isEnvironmentProviderError(error, 'conflict') && error.reason?.startsWith('clone:')) {
+    return {
+      ...base,
+      // The reason line tells the sheet which clone failure to explain.
+      stderr: `Orca Cloud: ${error.reason.slice('clone:'.length)}\n`,
+      failure: ephemeralVmFailure('cloudCloneFailed')
+    }
+  }
+  if (isEnvironmentProviderError(error) && error.reason === HOSTED_SANDBOX_DELETE_NOT_CONFIRMED) {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.message}\n`,
+      failure: ephemeralVmFailure('cloudDeleteNotConfirmed')
+    }
+  }
+  if (isEnvironmentProviderError(error, 'unauthorized')) {
+    return { ...base, stderr: '', failure: ephemeralVmFailure('cloudSignInRequired') }
+  }
+  if (
+    isEnvironmentProviderError(error, 'unavailable') ||
+    isEnvironmentProviderError(error, 'timeout')
+  ) {
+    return {
+      ...base,
+      stderr: `${error.message}\n`,
+      failure: ephemeralVmFailure('cloudUnavailable')
+    }
+  }
+  return { ...base, stderr: `${error instanceof Error ? error.message : String(error)}\n` }
+}
+
+type HostedProgress = { phase: string; percent?: number; message?: string }
+
+/** `clone-progress <percent> <stage>` lines drive the sheet's clone step; the plain log hides them. */
+export function hostedProgressLine({ phase, percent, message }: HostedProgress): string {
+  if (phase === 'environment-held' && message && /^[A-Za-z0-9_-]{1,64}$/.test(message)) {
+    return `[orca-cloud] environment-held ${message}\n`
+  }
+  return (phase === 'cloning' || phase === 'updating') && percent !== undefined
+    ? `[orca-cloud] clone-progress ${percent} ${message === 'checkout' ? 'checkout' : 'download'}\n`
+    : `[orca-cloud] ${phase}\n`
+}
+
+export function createHostedSandboxStepProvider(
+  driver: HostedEnvironmentProviderDriver,
+  hooks: {
+    onReady?: (ready: HostedEnvironmentReady) => void
+    onStopped?: (environmentId: string) => void
+    /** Wake progress for the window's "Waking…" overlay (resume only). */
+    onWake?: (event: {
+      workspaceId: string
+      phase: 'waking' | 'connecting' | 'ready' | 'failed'
+      startedAt: number
+      message?: string
+      billingDenial?: { reason: string | null }
+    }) => void
+  } = {}
+): RecipeStepProvider {
+  return async ({ mode, repoPath, context, stdin, signal, onStderr }) => {
+    const ctx = {
+      signal,
+      onProgress: (progress: HostedProgress) => onStderr?.(hostedProgressLine(progress))
+    }
+    try {
+      if (mode === 'create') {
+        const repoUrl = await hostedSandboxRepoUrl(repoPath)
+        const ready = await driver.create(
+          {
+            // One create attempt = one sandbox: a retried attempt reuses the instance id.
+            workspaceId: context.instanceId ?? context.workspaceId ?? 'workspace',
+            ...(context.workspaceName ? { workspaceName: context.workspaceName } : {}),
+            ...(context.idempotencyKey ? { idempotencyKey: context.idempotencyKey } : {}),
+            machineSize: 'standard',
+            ...(repoUrl
+              ? { repo: { url: repoUrl, ...(context.branch ? { ref: context.branch } : {}) } }
+              : {})
+          },
+          ctx
+        )
+        hooks.onReady?.(ready)
+        return ok(JSON.stringify(ready.result))
+      }
+      const payload = LifecyclePayload.parse(JSON.parse(stdin ?? '{}'))
+      const handle = payload.recipeResult
+        ? environmentHandleFromRecipeResult(payload.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
+        : null
+      if (!handle) {
+        return { stdout: '', stderr: 'Not an Orca Cloud environment.\n', exitCode: 1, signal: null }
+      }
+      if (mode === 'resume') {
+        const workspaceId = context.workspaceId
+        const startedAt = Date.now()
+        if (workspaceId) {
+          hooks.onWake?.({ workspaceId, phase: 'waking', startedAt })
+        }
+        try {
+          const ready = await driver.resume(handle, ctx)
+          if (workspaceId) {
+            hooks.onWake?.({ workspaceId, phase: 'connecting', startedAt })
+          }
+          hooks.onReady?.(ready)
+          return ok(JSON.stringify(ready.result))
+        } catch (error) {
+          if (workspaceId) {
+            hooks.onWake?.({
+              workspaceId,
+              phase: 'failed',
+              startedAt,
+              message: error instanceof Error ? error.message : String(error),
+              ...wakeBillingDenial(error)
+            })
+          }
+          throw error
+        }
+      }
+      await (mode === 'suspend' ? driver.suspend(handle, ctx) : driver.destroy(handle, ctx))
+      hooks.onStopped?.(handle.environmentId)
+      return ok('')
+    } catch (error) {
+      const result = hostedCreateFailure(error)
+      // Only streamed stderr reaches the build log, so the control plane's reason must be streamed too.
+      if (result.stderr) {
+        onStderr?.(result.stderr)
+      }
+      return result
+    }
+  }
+}
+
+export function registerHostedSandboxRecipe(
+  driver: HostedEnvironmentProviderDriver,
+  hooks: Parameters<typeof createHostedSandboxStepProvider>[1] = {}
+): () => void {
+  return registerEphemeralVmRecipeStepProvider(
+    'orca-cloud',
+    createHostedSandboxStepProvider(driver, hooks)
+  )
+}

@@ -1,12 +1,26 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { createServer, type Server, type ServerResponse } from 'node:http'
-import { shell } from 'electron'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import {
   ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS,
   orcaCloudCallbackPage,
   type OrcaCloudCallbackOutcome
 } from './profile-cloud-callback-page'
+import { ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR } from '../../../shared/orca-profile-reconnect-reason'
+import {
+  applySignInAuthorizeParams,
+  openOrcaCloudAuthorizeUrl,
+  orcaCloudSignInTimeoutMs,
+  type OrcaCloudSignInPkceOptions
+} from './profile-cloud-setup-sign-in'
+
+export {
+  connectCurrentArgsFromUnknown,
+  ORCA_CLOUD_SIGN_IN_TIMEOUT_MS,
+  orcaCloudSignInTimeoutMs,
+  pkceSignInOptions,
+  type ConnectCurrentArgs
+} from './profile-cloud-setup-sign-in'
 
 export type OrcaCloudAuthorizationCode = {
   code: string
@@ -16,9 +30,13 @@ export type OrcaCloudAuthorizationCode = {
   state: string
   /** Answers the waiting browser tab once Orca knows whether sign-in finished. */
   respond: (outcome: OrcaCloudCallbackOutcome) => void
+  /**
+   * Cloud setup: answers the waiting tab by sending it on to `location` instead (setup continues in
+   * the same tab). Only an https page may follow a sign-in; anything else gets the "signed in" page.
+   */
+  redirect: (location: string) => void
 }
 
-const AUTH_TIMEOUT_MS = 5 * 60 * 1000
 // Longer than the code exchange request timeout, so the app normally answers first.
 const BROWSER_RESPONSE_TIMEOUT_MS = 45 * 1000
 
@@ -47,7 +65,10 @@ function closeServer(server: Server): void {
 export function beginOrcaCloudPkceFlow(
   config: OrcaCloudAuthConfig,
   localProfileId: string,
-  options: { onAuthorizeUrl?: (url: string) => void; signal?: AbortSignal } = {}
+  options: {
+    onAuthorizeUrl?: (url: string) => void
+    signal?: AbortSignal
+  } & OrcaCloudSignInPkceOptions = {}
 ): Promise<OrcaCloudAuthorizationCode> {
   const codeVerifier = createCodeVerifier()
   const nonce = base64Url(randomBytes(32))
@@ -87,6 +108,21 @@ export function beginOrcaCloudPkceFlow(
         response.end(orcaCloudCallbackPage(outcome))
         closeServer(server)
       }
+      // Cloud setup continues in the same tab; only an https page may follow a sign-in.
+      const redirect = (location: string): void => {
+        if (!location.startsWith('https://')) {
+          respond({ status: 'connected' })
+          return
+        }
+        if (answered) {
+          return
+        }
+        answered = true
+        clearTimeout(responseTimeout)
+        response.writeHead(302, { location, 'cache-control': 'no-store' })
+        response.end()
+        closeServer(server)
+      }
       const responseTimeout = setTimeout(
         () => respond({ status: 'failed', error: 'orca_cloud_auth_response_timeout' }),
         BROWSER_RESPONSE_TIMEOUT_MS
@@ -97,7 +133,8 @@ export function beginOrcaCloudPkceFlow(
         nonce,
         redirectUri,
         state,
-        respond
+        respond,
+        redirect
       })
     }
 
@@ -119,6 +156,15 @@ export function beginOrcaCloudPkceFlow(
         if (returnedState !== state) {
           // Stray loopback probes must not cancel the user’s login.
           writeInvalidCallback(response)
+          return
+        }
+        if (url.searchParams.get('error') === 'sso_required') {
+          // The team requires single sign-on and this sign-in came another way.
+          response.writeHead(400)
+          response.end(
+            'Your team requires single sign-on. Return to Orca, sign in again and choose Sign in with SSO.'
+          )
+          rejectFlow(new Error(ORCA_CLOUD_AUTH_SSO_REQUIRED_ERROR))
           return
         }
         if (url.searchParams.has('error')) {
@@ -146,7 +192,7 @@ export function beginOrcaCloudPkceFlow(
 
     const timeout = setTimeout(() => {
       rejectFlow(new Error('orca_cloud_auth_timeout'))
-    }, AUTH_TIMEOUT_MS)
+    }, orcaCloudSignInTimeoutMs())
     const cancel = (): void => rejectFlow(new Error('orca_cloud_auth_cancelled'))
     options.signal?.addEventListener('abort', cancel, { once: true })
     server.once('close', () => {
@@ -154,6 +200,10 @@ export function beginOrcaCloudPkceFlow(
       options.signal?.removeEventListener('abort', cancel)
     })
     server.once('error', rejectFlow)
+    if (options.signal?.aborted) {
+      cancel()
+      return
+    }
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
       if (!address || typeof address === 'string') {
@@ -171,8 +221,10 @@ export function beginOrcaCloudPkceFlow(
       authorizeUrl.searchParams.set('code_challenge', createCodeChallenge(codeVerifier))
       authorizeUrl.searchParams.set('code_challenge_method', 'S256')
       authorizeUrl.searchParams.set('local_profile_id', localProfileId)
+      applySignInAuthorizeParams(authorizeUrl, options.authorizeParams)
       options.onAuthorizeUrl?.(authorizeUrl.toString())
-      void shell.openExternal(authorizeUrl.toString()).catch((error) => {
+      const open = openOrcaCloudAuthorizeUrl(authorizeUrl.toString(), options.openBrowser)
+      void open.catch((error) => {
         rejectFlow(
           error instanceof Error ? error : new Error('orca_cloud_auth_browser_open_failed')
         )

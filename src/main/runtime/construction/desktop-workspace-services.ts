@@ -26,13 +26,17 @@ export function desktopWorkspaceSleepPlatform(
   userDataPath: () => string
 ): RuntimeConstructionDependencies['workspaceSleepPlatform'] {
   return {
+    // Sleep's own calls and observations never wait on a wake in flight.
     callEnvironment: (environmentId, method, params, timeoutMs) =>
       callRuntimeEnvironment(
         getRuntimeEnvironmentRegistryRoot(),
         environmentId,
         method,
         params,
-        timeoutMs
+        timeoutMs,
+        undefined,
+        undefined,
+        { preparation: { recipeVmHoldMs: 0 } }
       ),
     ownsVm: (workspaceId) =>
       findWorkspaceEphemeralVmRuntime(userDataPath(), workspaceId) !== undefined,
@@ -52,6 +56,8 @@ export function installDesktopWorkspaceVmWaker(
     noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
     holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
       runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
+    awaitWake: (workspaceId, suspended, timeoutMs, signal) =>
+      runtime.awaitWorkspaceVmWake(workspaceId, suspended, timeoutMs, signal),
     openEnvironment: async (selector) => {
       const root = getRuntimeEnvironmentRegistryRoot()
       return openRecipeVmEnvironment(root, await resolveEnvironment(root, selector))

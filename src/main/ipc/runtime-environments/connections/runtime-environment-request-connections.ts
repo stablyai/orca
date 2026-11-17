@@ -29,6 +29,7 @@ import {
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
 import { noteRuntimeEnvironmentSharedControlContact } from '../status/runtime-environment-contact-loss'
+import { reconnectSharedControlIfIdle } from '../runtime-environment-shared-control-reconnect'
 import { declareWslHostClient } from '../../../wsl/host-lifecycle/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
@@ -58,7 +59,10 @@ export const {
   getRemoteRuntimeSharedControlDiagnostics,
   sendRemoteRuntimeSharedControlRequest,
   ensureRemoteRuntimeSharedControlConnection,
-  reconnectRemoteRuntimeSharedControlConnection,
+  // A status refresh must not tear down a control socket that is already dialing or up (e.g. one
+  // pre-opened for a wake): only an idle one is reopened.
+  reconnectRemoteRuntimeSharedControlConnection: (environmentId) =>
+    reconnectSharedControlIfIdle(sharedControlConnections.get(environmentId)?.connection),
   pauseRemoteRuntimeSharedControlRetry
 })
 

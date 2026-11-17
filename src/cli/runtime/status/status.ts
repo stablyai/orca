@@ -3,6 +3,7 @@ import type {
   RuntimeStatus
 } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeHostConnectionState } from '../../../shared/remote-runtime/host-status/runtime-host-connection-state'
+import { runtimeBuildFields } from '../runtime-build-fields'
 import {
   findTransport,
   type RuntimeMetadata
@@ -17,6 +18,9 @@ import type {
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { isProcessRunning } from '../connection/runtime-pid-liveness'
 import { runtimeAccessDeniedError } from '../connection/runtime-access-denied'
+
+// The client projects a live status with the same build fields.
+export { runtimeBuildFields }
 
 export async function getCliStatus(
   userDataPath: string
@@ -115,7 +119,7 @@ function projectConnectedStatus(
         status: response.result
       }),
       runtimeId: response.result.runtimeId,
-      ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+      ...runtimeBuildFields(response.result),
       ...(response.result.remoteUpdateSupport
         ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
         : {}),

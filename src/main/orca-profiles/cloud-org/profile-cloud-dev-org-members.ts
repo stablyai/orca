@@ -1,15 +1,10 @@
 import type {
   OrcaOrgMember,
   OrcaOrgMembersRoster,
-  OrcaOrgPendingInvite,
-  OrcaProfileOrgMemberChangeRoleArgs,
-  OrcaProfileOrgMemberInviteArgs,
-  OrcaProfileOrgMemberMutationResult,
-  OrcaProfileOrgMemberRemoveArgs,
-  OrcaProfileOrgInviteRevokeArgs
+  OrcaOrgPendingInvite
 } from '../../../shared/orca-profiles/orca-profiles'
 
-// With no dev-auth server, this roster mirrors real membership states and mutation results.
+// With no dev-auth server, this roster mirrors real membership states (the console manages it).
 type DevOrgRoster = {
   members: OrcaOrgMember[]
   pendingInvites: OrcaOrgPendingInvite[]
@@ -28,7 +23,8 @@ function devSelf(): OrcaOrgMember {
     userId: cleanEnvString(process.env.ORCA_CLOUD_DEV_USER_ID, 'dev-user'),
     email: cleanEnvString(process.env.ORCA_CLOUD_DEV_EMAIL, 'dev@orca.local'),
     displayName: cleanEnvString(process.env.ORCA_CLOUD_DEV_DISPLAY_NAME, 'Orca Dev'),
-    role: 'owner'
+    role: 'owner',
+    mfa: 'on'
   }
 }
 
@@ -40,10 +36,17 @@ function seedDevRoster(): DevOrgRoster {
         userId: 'dev-teammate-1',
         email: 'teammate@orca.local',
         displayName: 'Dev Teammate',
-        role: 'admin'
+        role: 'admin',
+        mfa: 'off'
       },
       // Null user IDs exercise members who have not signed in yet.
-      { userId: null, email: 'invited-member@orca.local', displayName: undefined, role: 'member' }
+      {
+        userId: null,
+        email: 'invited-member@orca.local',
+        displayName: undefined,
+        role: 'member',
+        mfa: 'off'
+      }
     ],
     pendingInvites: [{ email: 'pending@orca.local', role: 'member', createdAt: Date.now() }]
   }
@@ -74,62 +77,4 @@ export function listDevOrcaCloudOrgMembers(orgId: string): OrcaOrgMembersRoster 
     viewerRole: 'owner',
     canManageMembers: true
   }
-}
-
-export function inviteDevOrcaCloudOrgMember(
-  args: OrcaProfileOrgMemberInviteArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  const email = args.email.toLowerCase()
-  if (roster.members.some((member) => member.email.toLowerCase() === email)) {
-    return { status: 'conflict', reason: 'already_member' }
-  }
-  if (roster.pendingInvites.some((invite) => invite.email.toLowerCase() === email)) {
-    return { status: 'conflict', reason: 'already_invited' }
-  }
-  roster.pendingInvites.push({ email: args.email, role: args.role, createdAt: Date.now() })
-  return { status: 'ok' }
-}
-
-export function revokeDevOrcaCloudOrgInvite(
-  args: OrcaProfileOrgInviteRevokeArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  const email = args.email.toLowerCase()
-  const index = roster.pendingInvites.findIndex((invite) => invite.email.toLowerCase() === email)
-  if (index === -1) {
-    return { status: 'not-found' }
-  }
-  roster.pendingInvites.splice(index, 1)
-  return { status: 'ok' }
-}
-
-export function changeDevOrcaCloudOrgMemberRole(
-  args: OrcaProfileOrgMemberChangeRoleArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  if (args.userId === devSelf().userId) {
-    return { status: 'invalid', reason: 'cannot_change_own_role' }
-  }
-  const member = roster.members.find((candidate) => candidate.userId === args.userId)
-  if (!member) {
-    return { status: 'not-found' }
-  }
-  member.role = args.role
-  return { status: 'ok' }
-}
-
-export function removeDevOrcaCloudOrgMember(
-  args: OrcaProfileOrgMemberRemoveArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  if (args.userId === devSelf().userId) {
-    return { status: 'invalid', reason: 'cannot_remove_self' }
-  }
-  const index = roster.members.findIndex((candidate) => candidate.userId === args.userId)
-  if (index === -1) {
-    return { status: 'not-found' }
-  }
-  roster.members.splice(index, 1)
-  return { status: 'ok' }
 }

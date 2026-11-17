@@ -1,4 +1,4 @@
-import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
+import { createStructuredAgentSessionCommitWake } from './structured-agent-session-commit-wake'
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -17,7 +17,6 @@ import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-ses
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 
 import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
-import { structuredAgentSessionCommandRunning } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 import type {
@@ -220,6 +219,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     stopping: input.clientDelivery.readStopping,
     now: () => deps.now?.() ?? Date.now(),
     acquireAborts: input.acquireAborts,
+    resolveWorkspacePath: deps.resolveWorkspacePath,
     recordRanOptions: (sessionId, fence) =>
       createStructuredAgentSessionRanRecorder(
         { deps, sessions, now: () => deps.now?.() ?? Date.now() },
@@ -243,37 +243,14 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       loop.wake(sessionId)
     }
   }
-  const wakesQueued = new Set<string>()
-  const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
-    if (wakesQueued.has(sessionId)) {
-      return
-    }
-    wakesQueued.add(sessionId)
-    void input
-      .serialize(sessionId, async () => {
-        wakesQueued.delete(sessionId)
-        await input.deliveryOrder.reconcile(sessionId, journal)
-        const work = await hostStructuredAgentSessionCurrentWork(
-          { store: deps.store, sessions },
-          sessionId
-        )
-        if (
-          work &&
-          !structuredAgentSessionCommandRunning(work) &&
-          (await selectableStructuredSubmission(journal, work))
-        ) {
-          void loop.wake(sessionId)
-        }
-      })
-      .catch((error: unknown) => {
-        wakesQueued.delete(sessionId)
-        deps.logger.warn('waking the delivery loop after a commit failed', {
-          scope: 'delivery-wake',
-          sessionId,
-          error
-        })
-      })
-  }
+  const afterCommit = createStructuredAgentSessionCommitWake({
+    serialize: input.serialize,
+    deliveryOrder: input.deliveryOrder,
+    currentWork: (sessionId) =>
+      hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
+    wake: (sessionId) => loop.wake(sessionId),
+    logger: deps.logger
+  })
   // Queue death-proof revisions without awaiting: the writer may already hold session serialization.
   const stopResettling = deps.store.onDeathEvidence((sessionId) => {
     const session = sessions.get(sessionId)

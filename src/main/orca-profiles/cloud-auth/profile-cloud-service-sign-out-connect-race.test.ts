@@ -32,7 +32,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./profile-cloud-pkce', () => ({
-  beginOrcaCloudPkceFlow: beginOrcaCloudPkceFlowMock
+  beginOrcaCloudPkceFlow: beginOrcaCloudPkceFlowMock,
+  pkceSignInOptions: () => ({})
 }))
 
 vi.mock('./profile-cloud-client', () => ({
@@ -84,7 +85,9 @@ describe('Orca cloud sign-out vs newer connect', () => {
       codeVerifier: 'code-verifier',
       nonce: 'nonce',
       redirectUri: 'http://127.0.0.1:4100/auth/callback',
-      state: 'state'
+      state: 'state',
+      respond: vi.fn(),
+      redirect: vi.fn()
     })
     exchangeOrcaCloudAuthCodeMock.mockResolvedValue({
       accessToken: 'access-token',

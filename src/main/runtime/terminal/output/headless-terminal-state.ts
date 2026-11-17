@@ -79,22 +79,26 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       emulator,
       outputSequence: 0,
       writeChain: Promise.resolve(),
-      ownership: new PtyShellOwnershipMirror(async () => {
-        const controller = this.ptyController
-        const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
-        if (
-          !controller?.confirmShellForeground ||
-          this.headlessTerminals.get(ptyId) !== constructed
-        ) {
-          return false
-        }
-        const confirmed = await controller.confirmShellForeground(ptyId)
-        return (
-          confirmed &&
-          this.headlessTerminals.get(ptyId) === constructed &&
-          this.getPtyLifecycleGeneration(ptyId) === lifecycleGeneration
-        )
-      })
+      ownership: new PtyShellOwnershipMirror(
+        async () => {
+          const controller = this.ptyController
+          const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
+          if (
+            !controller?.confirmShellForeground ||
+            this.headlessTerminals.get(ptyId) !== constructed
+          ) {
+            return false
+          }
+          const confirmed = await controller.confirmShellForeground(ptyId)
+          return (
+            confirmed &&
+            this.headlessTerminals.get(ptyId) === constructed &&
+            this.getPtyLifecycleGeneration(ptyId) === lifecycleGeneration
+          )
+        },
+        // Linux proves an idle first prompt from /proc (idle-shell-prompt-claim); others keep a full cycle.
+        { freshShell: process.platform === 'linux' }
+      )
     }
     state = constructed
     return state

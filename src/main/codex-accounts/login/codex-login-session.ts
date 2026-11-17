@@ -63,6 +63,7 @@ type CodexLoginSessionDependencies = {
   openWslAuthUrl?: ((url: string) => void) | null
   /** Runs `codex login --device-auth` on a Linux/macOS host for a person on another device. */
   deviceAuth?: { onPrompt: (prompt: { url: string; userCode: string }) => void }
+  remoteBrowser?: true
 }
 
 type LoginCancellation = {
@@ -100,7 +101,8 @@ async function runCodexLoginProcess(
 ): Promise<void> {
   const wslInfo = parseWslUncPath(managedHomePath)
   const deviceAuth = dependencies.deviceAuth ?? null
-  const loginTimeoutMs = deviceAuth ? DEVICE_AUTH_TIMEOUT_MS : LOGIN_TIMEOUT_MS
+  const loginTimeoutMs =
+    deviceAuth || dependencies.remoteBrowser ? DEVICE_AUTH_TIMEOUT_MS : LOGIN_TIMEOUT_MS
   if (wslInfo) {
     await assertWslCodexCliAvailable(wslInfo)
   }

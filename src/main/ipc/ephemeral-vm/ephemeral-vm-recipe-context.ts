@@ -5,6 +5,7 @@ import { listEphemeralVmRuntimes } from '../../../shared/remote-runtime/ephemera
 import type { EphemeralVmRuntimeRecord } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { isFolderRepo, isGitRepoKind } from '../../../shared/repository/repo-kind'
 import type { OrcaVmRecipe } from '../../../shared/workspace-setup/orca-yaml-hook-types'
+import { reserveBuiltInProviderRecipes } from '../ephemeral-vm-recipe-context-cloud'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailure,
@@ -164,8 +165,9 @@ export function combineEphemeralVmRecipes(
   repoRecipes: readonly OrcaVmRecipe[],
   pluginRecipes: readonly OrcaVmRecipe[]
 ): OrcaVmRecipe[] {
-  const repoIds = new Set(repoRecipes.map((recipe) => recipe.id))
-  return [...repoRecipes, ...pluginRecipes.filter((recipe) => !repoIds.has(recipe.id))]
+  const { builtIns, repo, plugins } = reserveBuiltInProviderRecipes(repoRecipes, pluginRecipes)
+  const repoIds = new Set(repo.map((recipe) => recipe.id))
+  return [...builtIns, ...repo, ...plugins.filter((recipe) => !repoIds.has(recipe.id))]
 }
 
 function failedRecipeRepo(repoPath: string | null, failure: EphemeralVmFailure): RecipeRepoResult {

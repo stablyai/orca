@@ -10,6 +10,7 @@ import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
 } from '../../../../../shared/rpc-contract/terminal/agent-session-params'
+import { withAgentKeyLaunchEnv } from '../../../../../shared/agent-api-keys/agent-key-launch-env'
 
 function callerContext(context: RpcContext): RuntimeAgentSessionRpcCaller {
   const { pairedDeviceId, clientId, clientKind, signal } = context
@@ -32,6 +33,23 @@ function withExecutionHostAgentPresentation<T extends { presentation?: 'backgrou
     : params
 }
 
+/** Carried keys ride the account env the launch already merges over its plan; nothing downstream keeps the request. */
+export function withKeyEnvFolded<
+  T extends { accountEnv?: Record<string, string>; keyEnv?: Record<string, string> }
+>(params: T): T {
+  if (!params.keyEnv) {
+    return params
+  }
+  // An Orca Cloud VM never takes a desktop's keys (they would sit here in plaintext); its agents
+  // get Cloud secrets as egress placeholders instead. The desktop already withholds them.
+  if (process.env.ORCA_IS_CLOUD === '1') {
+    return { ...params, keyEnv: undefined }
+  }
+  const accountEnv = withAgentKeyLaunchEnv(params.accountEnv, params.keyEnv)
+  const folded: T = { ...params, keyEnv: undefined, ...(accountEnv ? { accountEnv } : {}) }
+  return folded
+}
+
 function assertOperationTimestampWithinFutureSkew(clientOperationId: string): void {
   const timestamp = parseAgentSessionOperationTimestamp(clientOperationId)
   if (timestamp === null || timestamp > Date.now() + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) {
@@ -48,7 +66,10 @@ export const AGENT_SESSION_METHODS = [
     params: EnsureAgentSessionParams,
     handler: (params, context) =>
       context.runtime.ensureAgentSession(
-        withExecutionHostAgentPresentation(params, context.clientKind),
+        withExecutionHostAgentPresentation(
+          params.kind === 'explicit' ? withKeyEnvFolded(params) : params,
+          context.clientKind
+        ),
         callerContext(context)
       )
   }),
@@ -60,7 +81,7 @@ export const AGENT_SESSION_METHODS = [
     handler: (params, context) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
       return context.runtime.createAgentSession(
-        withExecutionHostAgentPresentation(params, context.clientKind),
+        withExecutionHostAgentPresentation(withKeyEnvFolded(params), context.clientKind),
         callerContext(context)
       )
     }

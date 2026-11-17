@@ -13,6 +13,11 @@ import {
   type RecipeHostRemovalState
 } from '../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host/execution-host'
+import {
+  refuseCloudCleanedWithoutDestroy,
+  refuseCloudDeleteUnlessAlone,
+  refuseCloudDeleteWithoutDestroy
+} from './workspace-removal-cloud'
 
 export type RecipeWorkspaceRemoveParams = z.infer<typeof WorktreeRemove>
 
@@ -167,6 +172,7 @@ export async function removeRecipeWorkspace(
     throw new Error('Recipe workspace ownership changed. Refresh and try again.')
   }
   const environmentId = runtime.runtimeEnvironmentId
+  const isOrcaCloud = refuseCloudDeleteWithoutDestroy(runtime)
   const { destroyHost: _destroyHost, ...forwarded } = params
   let checkoutResult: Record<string, unknown> = {}
   // A provisioned root is the VM's primary checkout, protected from ordinary Git deletion.
@@ -177,6 +183,20 @@ export async function removeRecipeWorkspace(
         "This workspace's environment is asleep. Open the workspace to wake it, then delete it again."
       )
     }
+    // Other workspaces on the same environment keep it alive; no answer is not proof it's empty.
+    const otherWorkspaces = async (): Promise<unknown[] | undefined> => {
+      const listed = await ports.call(environmentId, 'worktree.list', {})
+      const parsedList = listed.ok ? Worktrees.safeParse(listed.result).data : undefined
+      return parsedList && parsedList.truncated !== true
+        ? parsedList.worktrees.filter(
+            (worktree) =>
+              worktree.isMainWorktree !== true &&
+              worktree.removing !== true &&
+              worktree.id !== params.worktree.slice(3)
+          )
+        : undefined
+    }
+    await refuseCloudDeleteUnlessAlone(isOrcaCloud, runtime, otherWorkspaces)
     const response = await ports.call(environmentId, 'worktree.rm', {
       ...forwarded,
       hostId: 'local',
@@ -202,18 +222,8 @@ export async function removeRecipeWorkspace(
       }
       checkoutResult = { ...removed, removed: true }
     }
-    // Other workspaces on the same environment keep it alive; no answer is not proof it's empty.
-    const listed = await ports.call(environmentId, 'worktree.list', {})
-    const parsedList = listed.ok ? Worktrees.safeParse(listed.result).data : undefined
-    const remaining =
-      parsedList && parsedList.truncated !== true
-        ? parsedList.worktrees.filter(
-            (worktree) =>
-              worktree.isMainWorktree !== true &&
-              worktree.removing !== true &&
-              worktree.id !== params.worktree.slice(3)
-          )
-        : undefined
+    // Orca Cloud proved its sandbox was this workspace's alone above, so it goes on to destroy.
+    const remaining = isOrcaCloud ? [] : await otherWorkspaces()
     if (!remaining || remaining.length > 0) {
       return { ...checkoutResult, removed: true, host: { runtimeId: runtime.id, state: 'kept' } }
     }
@@ -226,6 +236,7 @@ export async function removeRecipeWorkspace(
       { runtimeId: runtime.id }
     )
   }
+  refuseCloudCleanedWithoutDestroy(isOrcaCloud, runtime, cleaned)
   return {
     ...checkoutResult,
     removed: true,

@@ -32,6 +32,7 @@ import {
 import { runWindowsBreakawayLaunchIfRequested } from './runtime-launch/windows-breakaway-launcher'
 import { parseArgs } from './serve-startup/orcad-command-arguments'
 import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
+import { prewarmProfileStateWriterThread } from '../persistence/profile-state/writer/profile-state-writer-prewarm'
 import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 
 // A fatal V8 trap must crash, never spin on a JS fault-signal listener.
@@ -102,6 +103,9 @@ function startOrcadProcess(): void {
     } else {
       // Stdout is the readiness API; send incidental diagnostics to stderr.
       reserveServeStdoutForReadiness()
+      // The profile store's writer thread boots (~40 ms) during preflight and imports; the store
+      // adopts it.
+      prewarmProfileStateWriterThread()
       void preflightBundledOrcadStartup()
         .then((qualified) => {
           onNodePtyLoadFailure(() => void discardBundledOrcadStartupQualification())

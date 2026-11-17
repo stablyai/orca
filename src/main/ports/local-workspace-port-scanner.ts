@@ -11,6 +11,7 @@ import {
   reconcileAdvertisedUrls
 } from './local-workspace-port-attribution'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
+import { hostManagedListenerConfig, isHostManagedListener } from './host-managed-listeners'
 import {
   getWorkspacePortScanCooldown,
   isWorkspacePortScanCommandTimeout,
@@ -43,13 +44,31 @@ export async function scanWorkspacePorts(
       worktrees,
       options.requireMetadata
     )
-    const attributedPorts = attributePortsToWorkspaces(rawPorts, normalizedWorktrees)
+    const hostManaged = hostManagedListenerConfig()
+    const managedFlags = await Promise.all(
+      rawPorts.map((port) => isHostManagedListener(port, hostManaged))
+    )
+    const managed = new Set(
+      rawPorts
+        .filter((_, index) => managedFlags[index])
+        .map((port) => `${port.host}:${port.port}:${port.pid ?? 'unknown'}`)
+    )
+    // Orca's own listeners (runtime socket, hook server) run with a workspace in their command line but are not its servers.
+    const attributedPorts = attributePortsToWorkspaces(
+      rawPorts.map((port) =>
+        port.pid === process.pid ? { ...port, cwd: undefined, commandLine: undefined } : port
+      ),
+      normalizedWorktrees
+    )
     // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
     if (metadataAvailable && complete) {
       reconcileAdvertisedUrls(attributedPorts, normalizedWorktrees, urlWatcher)
     }
     const ports = attributedPorts
-      .map((port) => enrichPort(port, urlWatcher))
+      .map((port) => {
+        const enriched = enrichPort(port, urlWatcher)
+        return managed.has(enriched.id) ? { ...enriched, hostManaged: true as const } : enriched
+      })
       .sort(compareWorkspacePorts)
       .slice(0, MAX_PORTS)
     return { platform: process.platform, scannedAt: Date.now(), ports }

@@ -8,6 +8,14 @@ const AGENT_ID_FLAG_HELP =
   "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  ssh: {
+    workspace: '--workspace <name>     Orca Cloud workspace name, SSH host name (orca-…), or id',
+    command: '--command <text>       Run this command over SSH instead of an interactive shell',
+    print: '--print                Print the ssh command instead of running it'
+  },
+  'ssh-proxy': {
+    workspace: '--workspace <name>     Orca Cloud workspace name, SSH host name (orca-…), or id'
+  },
   'agent list': {
     state: '--state <state>        Only agents in this state: working, blocked, waiting or done'
   },

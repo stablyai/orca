@@ -1,5 +1,6 @@
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
+import { FILE_ARCHIVE_METHODS } from './files-archive-methods'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { dirListingPageCache } from './files-read-dir-page'
 import { FILE_STAGED_SAVE_METHODS } from './files-staged-save-methods'
@@ -210,6 +211,7 @@ export const FILE_METHODS = [
   }),
   ...FILE_MUTATION_METHODS,
   ...FILE_STAGED_SAVE_METHODS,
+  ...FILE_ARCHIVE_METHODS,
   defineMethod({
     name: 'files.search',
     permission: 'workspace',

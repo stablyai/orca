@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { buildServiceUrlDefault } from '../cloud-build-defaults'
 
 const PRODUCTION_ARTIFACTS_API_URL = 'https://share.onorca.dev'
 
@@ -16,7 +17,9 @@ export function resolveArtifactCloudApiUrl(
   packaged = isPackaged()
 ): string {
   const candidate = override?.trim() || env.ORCA_ARTIFACTS_API_URL?.trim()
-  const url = new URL(candidate || PRODUCTION_ARTIFACTS_API_URL)
+  const url = new URL(
+    candidate || buildServiceUrlDefault('artifactsApiUrl', PRODUCTION_ARTIFACTS_API_URL)
+  )
   const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
   const firstParty = ['onorca.dev', 'orca.dev'].some(
     (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)
@@ -31,6 +34,15 @@ export function resolveArtifactCloudApiUrl(
     throw new Error('Artifact API URL must be an origin without credentials, paths, or parameters.')
   }
   return url.origin
+}
+
+/** The artifacts origin this build resolves, or none when its configuration is invalid. */
+export function configuredArtifactOrigins(): string[] {
+  try {
+    return [resolveArtifactCloudApiUrl()]
+  } catch {
+    return []
+  }
 }
 
 export function allowsArtifactCloudAuthOverride(

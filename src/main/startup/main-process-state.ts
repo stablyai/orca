@@ -39,6 +39,7 @@ import type { ServeOptions } from './serve-launch/serve-options'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import {
+  CloudWorkspaceLinkState,
   PluginInstallLinkState,
   SkillShareDeepLinkState
 } from './open-routing/skill-share-deep-link-state'
@@ -143,6 +144,7 @@ export const mainProcessState = {
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
   skillShareDeepLinks: new SkillShareDeepLinkState(),
   pluginInstallLinks: new PluginInstallLinkState(),
+  cloudWorkspaceLinks: new CloudWorkspaceLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
   // Window existence does not prove listener readiness; only the renderer pull does, otherwise pushes silently vanish.

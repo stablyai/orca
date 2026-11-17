@@ -2,6 +2,8 @@ import { STATUS_METHODS } from './host-management/status'
 import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
+import { ORCAD_WORK_VERDICT_METHODS } from './orcad/orcad-work-verdict-method'
+import { ORCAD_DISK_USAGE_METHODS } from './orcad/orcad-disk-usage-method'
 import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
 import { AI_VAULT_METHODS } from './history/ai-vault'
@@ -28,6 +30,7 @@ import { STATS_METHODS } from './host-management/stats'
 import { DIAGNOSTICS_METHODS } from './host-management/diagnostics'
 import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
 import { ACCOUNT_METHODS } from './accounts/accounts'
+import { AGENT_CONFIG_METHODS } from './agent-config/agent-mcp-sync-method'
 import { ANTIGRAVITY_ACCOUNT_METHODS } from './accounts/antigravity-accounts'
 import { USAGE_CREDENTIAL_METHODS } from './accounts/usage-credentials'
 import { PREFLIGHT_METHODS } from './preflight/preflight'
@@ -35,6 +38,7 @@ import { COMPUTER_METHODS } from './computer/computer'
 import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
 import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 import { FILE_METHODS } from './files/files'
+import { FILE_STAT_MANY_METHODS } from './files/files-stat-many-methods'
 import { GIT_METHODS } from './source-control/git/git'
 import { GITHUB_METHODS } from './source-control/github/github'
 import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
@@ -45,7 +49,12 @@ import { JIRA_METHODS } from './integrations/jira/jira'
 import { SSH_METHODS } from './ssh/ssh'
 import { MANAGED_SERVER_METHODS } from './host-management/managed-server'
 import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
+import { ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS } from './orca-cloud/orca-cloud-device-enrollment'
+import { CLOUD_SSH_METHODS } from './cloud-ssh/cloud-ssh-methods'
+import { SECRET_REQUEST_METHODS } from './secrets/secret-requests'
+import { LOCAL_COMMAND_METHODS } from './local-commands/local-command-methods'
 import { ENVIRONMENT_DOCTOR_METHODS } from './host-management/environment-doctor'
+import { CLOUD_ENVIRONMENT_METHODS_RPC } from './cloud-environments/cloud-environments'
 import { SPEECH_METHODS } from './speech/speech'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
@@ -91,6 +100,8 @@ export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
   ...DESKTOP_WINDOW_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
+  ...ORCAD_WORK_VERDICT_METHODS,
+  ...ORCAD_DISK_USAGE_METHODS,
   ...ORCAD_MIGRATION_METHODS,
   ...SESSION_TERMINAL_SCROLLBACK_METHODS,
   ...AGENT_HOOK_METHODS,
@@ -128,6 +139,7 @@ export const ALL_RPC_METHODS = [
   ...DIAGNOSTICS_METHODS,
   ...TERMINAL_DAEMON_METHODS,
   ...ACCOUNT_METHODS,
+  ...AGENT_CONFIG_METHODS,
   ...ANTIGRAVITY_ACCOUNT_METHODS,
   ...USAGE_CREDENTIAL_METHODS,
   ...PREFLIGHT_METHODS,
@@ -138,6 +150,7 @@ export const ALL_RPC_METHODS = [
   ...(ORCA_LAYOUT_OWNER_IS_MAIN ? [...LAYOUT_APPLY_METHODS, ...LAYOUT_VIEW_REPORT_METHODS] : []),
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
+  ...FILE_STAT_MANY_METHODS,
   ...GIT_METHODS,
   ...GITHUB_METHODS,
   ...GITLAB_METHODS,
@@ -148,7 +161,12 @@ export const ALL_RPC_METHODS = [
   ...SSH_METHODS,
   ...MANAGED_SERVER_METHODS,
   ...RECIPE_VM_WAKE_METHODS,
+  ...ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS,
+  ...SECRET_REQUEST_METHODS,
+  ...LOCAL_COMMAND_METHODS,
+  ...CLOUD_SSH_METHODS,
   ...ENVIRONMENT_DOCTOR_METHODS,
+  ...CLOUD_ENVIRONMENT_METHODS_RPC,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
   ...LINK_PREVIEW_METHODS,

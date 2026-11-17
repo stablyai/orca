@@ -104,6 +104,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.setupShortcutForwarding(browserTabId, guest)
     this.setupMouseWheelZoomForwarding(browserTabId, guest)
     this.setupTargetUrlForwarding(browserTabId, guest)
+    this.setupRemoteDesktopGuest(browserTabId, guest)
     this.flushPendingLoadFailure(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
@@ -132,7 +133,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.grabShortcutCleanupByTabId,
       this.shortcutForwardingCleanupByTabId,
       this.mouseWheelZoomCleanupByTabId,
-      this.targetUrlCleanupByTabId
+      this.targetUrlCleanupByTabId,
+      this.remoteDesktopCleanupByTabId
     ].map((owners) => ({ owners, dispose: owners.get(browserTabId) }))
     const downloads: string[] = []
     for (const [downloadId, download] of this.downloadsById) {
@@ -258,6 +260,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.pendingDownloadIdsByGuestId.clear()
     this.mouseWheelZoomCleanupByTabId.clear()
     this.targetUrlCleanupByTabId.clear()
+    this.remoteDesktopCleanupByTabId.clear()
     this.annotationViewportBridgeOpsByTabId.clear()
   }
 }

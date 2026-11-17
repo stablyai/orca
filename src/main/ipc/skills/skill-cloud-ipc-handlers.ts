@@ -26,6 +26,7 @@ import {
 import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
 import { registerSkillInstallManagementIpcHandlers } from './skill-install-management-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
+import { configuredArtifactOrigins } from '../../artifacts/artifact-cloud-config'
 import { sendBundleInstallProgress, sendSkillInstallProgress } from './skill-install-progress-ipc'
 import {
   skillCloudBundlePackageVersionInstallSchema,
@@ -143,6 +144,8 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       remoteInstallCancellation.finish(operationId, signal)
     }
   }
+  // Why: builds pointed at another artifacts host (staging) publish links on that host.
+  handleMainWindowSkillIpc('skills:shareLinkOrigins', () => configuredArtifactOrigins())
   handleMainWindowSkillIpc('skills:resolveShare', (_event, shareId: unknown) =>
     runtime.resolveSkillShare(z.string().min(1).max(128).parse(shareId), {})
   )
