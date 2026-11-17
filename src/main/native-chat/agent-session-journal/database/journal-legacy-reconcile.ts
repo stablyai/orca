@@ -98,6 +98,10 @@ type Adoption = {
   tabsRecorded: boolean
 }
 
+/**
+ * A baseline is the original's revision when it was read. A write changes the original's identity
+ * for good, so while it still matches the saved receipt, no write followed any baseline here.
+ */
 function missingBaselines(source: Database.Database, db: Database.Database): [string, string][] {
   return source
     .prepare('SELECT session_id FROM agent_session_records')
