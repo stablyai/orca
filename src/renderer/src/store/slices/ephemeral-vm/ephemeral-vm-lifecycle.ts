@@ -147,6 +147,9 @@ function sameRuntimes(
       left.status === right.status &&
       left.runtimeEnvironmentId === right.runtimeEnvironmentId &&
       left.canSuspend === right.canSuspend &&
+      left.updatedAt === right.updatedAt &&
+      left.projectId === right.projectId &&
+      left.environmentBuildId === right.environmentBuildId &&
       left.failure?.error === right.failure?.error &&
       left.failure?.errorCode === right.failure?.errorCode &&
       JSON.stringify(left.failure?.errorParams) === JSON.stringify(right.failure?.errorParams)

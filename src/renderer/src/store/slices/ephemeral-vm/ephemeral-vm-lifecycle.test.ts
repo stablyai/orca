@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { create } from 'zustand'
+import type { AppState } from '../../types'
 import type { EphemeralVmRuntimeRecord } from '../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
-import { projectEphemeralVmWorkspaceRuntimes } from './ephemeral-vm-lifecycle'
+import {
+  createEphemeralVmLifecycleSlice,
+  projectEphemeralVmWorkspaceRuntimes
+} from './ephemeral-vm-lifecycle'
 
 const result: EphemeralVmRuntimeRecord['recipeResult'] = {
   schemaVersion: 1,
@@ -49,5 +54,35 @@ describe('Orca Cloud environment builds', () => {
     )
     const plain = project([record('vm', 'running', { recipeResult: result })])
     expect(plain.ephemeralVmRuntimesByWorkspaceId['ws-1']?.environmentBuildId).toBeUndefined()
+  })
+})
+
+describe('refreshEphemeralVmRuntimes', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('publishes a refresh that only moves updatedAt, projectId or the environment build', async () => {
+    let records = [record('vm', 'running', { recipeResult: result })]
+    vi.stubGlobal('window', { api: { ephemeralVm: { listRuntimes: async () => records } } })
+    const store = create<AppState>()(
+      (...args) => createEphemeralVmLifecycleSlice(...args) as unknown as AppState
+    )
+    const runtime = () => store.getState().ephemeralVmRuntimesByWorkspaceId['ws-1']
+    await store.getState().refreshEphemeralVmRuntimes()
+
+    records = [record('vm', 'running', { recipeResult: result, updatedAt: 2 })]
+    await store.getState().refreshEphemeralVmRuntimes()
+    expect(runtime()?.updatedAt).toBe(2)
+
+    records = [
+      record('vm', 'running', { recipeResult: result, updatedAt: 2, projectId: 'project-1' })
+    ]
+    await store.getState().refreshEphemeralVmRuntimes()
+    expect(runtime()?.projectId).toBe('project-1')
+
+    const unchanged = runtime()
+    await store.getState().refreshEphemeralVmRuntimes()
+    expect(runtime()).toBe(unchanged)
   })
 })
