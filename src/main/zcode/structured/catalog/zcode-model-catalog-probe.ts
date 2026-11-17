@@ -95,7 +95,7 @@ export function createZcodeModelCatalogProbe(
             env: launch.env,
             // A desktop parent's ZCODE_* vars leak through the spawn's process-env base and flip
             // the backend out of the protocol this probe speaks.
-            envToDelete: zcodeDesktopEnvKeys(environment)
+            envToDelete: zcodeDesktopEnvKeys(environment, launch.env)
           },
           {
             onServerRequest: (request) => asks?.(request)

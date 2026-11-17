@@ -76,12 +76,10 @@ export class ZcodeStructuredOptions {
       })
     }
     for (const model of this.models) {
-      // A refreshed row must not lose its levels to an older placeholder for the same id.
+      // The model's own reported facts outrank the generic placeholder: a row listing fewer
+      // levels than the generic menu is still the authoritative one for that model.
       const existing = merged.get(model.id)
-      const richer =
-        (model.reasoningLevels.length ?? 0) >= (existing?.reasoningLevels.length ?? 0)
-          ? model
-          : (existing ?? model)
+      const richer = model.reasoningLevels.length > 0 ? model : (existing ?? model)
       merged.set(model.id, richer)
     }
     this.models = [...merged.values()]
@@ -243,7 +241,10 @@ export class ZcodeStructuredOptions {
       return { model: value }
     }
     if (key === 'effort') {
-      const model = parseZcodeModelOption(this.currentModelId ?? '')
+      // Capture the model identity before the await: an availability push that lands mid-request
+      // must not make the stored effort name a different model than the one this write updated.
+      const requestedModelId = this.currentModelId ?? ''
+      const model = parseZcodeModelOption(requestedModelId)
       if (!model) {
         throw new Error('zcode effort follows a selected model; pick a model first')
       }
@@ -260,7 +261,7 @@ export class ZcodeStructuredOptions {
         },
         { timeoutMs }
       )
-      this.selectedEffort = { modelId: this.currentModelId ?? '', level: value }
+      this.selectedEffort = { modelId: requestedModelId, level: value }
       return { effort: value }
     }
     if (key === 'interactionMode') {

@@ -114,9 +114,12 @@ export function applyJournalSqlRewindCommand(
         ? {
             ...handle,
             nativeId: rewind.providerFork.sessionId,
+            // A fork without its own cursor must drop the source's leaf (Claude's resumeCursor):
+            // the fork session has no transcript of its own, and an inherited leaf would make
+            // the next launch resume the source conversation's tail instead.
             ...(rewind.providerFork.resumeCursor
               ? { resumeCursor: rewind.providerFork.resumeCursor }
-              : {})
+              : { resumeCursor: undefined })
           }
         : null
       : (handle ?? null)

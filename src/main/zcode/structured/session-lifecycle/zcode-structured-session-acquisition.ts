@@ -37,13 +37,38 @@ export class ZcodeAcquisitions {
   private readonly starts = new ProviderAcquisitionStarts<never>()
   private readonly endings = new AgentSessionStartEndings()
   private readonly retiring = new Set<Promise<void>>()
+  /** Acquisitions still resolving a launch or spawning; shutdown waits for them. */
+  private readonly pendingAcquires = new Set<Promise<unknown>>()
+  /**
+   * Children whose failed-start cleanup could not prove their exit. Release and shutdown keep
+   * reaping them here, since the adapter never published them into the session map.
+   */
+  private readonly failedStarts = new Map<string, ZcodeStructuredSession>()
 
   constructor(
     private readonly deps: ZcodeStructuredSessionAdapterDeps,
     private readonly sessions: Map<string, ZcodeStructuredSession>
   ) {}
 
-  async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
+  acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
+    const pending = this.acquireNow(input)
+    this.pendingAcquires.add(pending)
+    void pending
+      .catch(() => undefined)
+      .then(() => {
+        this.pendingAcquires.delete(pending)
+      })
+    return pending
+  }
+
+  /** A start whose cleanup could not prove the child's exit; release and shutdown still reap it. */
+  retainFailedStart(sessionId: string, session: ZcodeStructuredSession): void {
+    this.failedStarts.set(sessionId, session)
+  }
+
+  private async acquireNow(
+    input: StructuredAgentSessionAcquireInput
+  ): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
     const attempt = this.starts.begin(input.signal)
     try {
@@ -78,6 +103,7 @@ export class ZcodeAcquisitions {
         generation,
         events: input.events,
         forceClose: (id, reason) => void this.forceClose(id, reason),
+        retainFailedStart: (id, child) => this.retainFailedStart(id, child),
         onSettled: (settlement) => this.deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
         recordStartFailure: (failure) => this.endings.record(sessionId, generation, failure)
       })
@@ -122,16 +148,55 @@ export class ZcodeAcquisitions {
   }
 
   acknowledgeSessionRelease(sessionId: string): void {
+    const retained = this.failedStarts.get(sessionId)
+    if (retained !== undefined) {
+      this.failedStarts.delete(sessionId)
+      const retirement = retained
+        .close()
+        .catch(() => false)
+        .then((stopped) => {
+          if (stopped) {
+            this.failedStarts.delete(sessionId)
+          }
+        })
+      this.trackRetirement(retirement)
+      return
+    }
     const retirement = acknowledgeZcodeSessionRelease(this.sessions, sessionId)
+    this.trackRetirement(retirement)
+  }
+
+  /** Closes the retained failed-start child when one exists, else the published session. */
+  async closeOwned(sessionId: string): Promise<boolean> {
+    const retained = this.failedStarts.get(sessionId)
+    if (retained !== undefined) {
+      this.failedStarts.delete(sessionId)
+      return retained.close().catch(() => false)
+    }
+    return closeZcodeSession(this.sessions, sessionId)
+  }
+
+  forceClose = async (sessionId: string, reason: string): Promise<void> => {
+    this.failedStarts.delete(sessionId)
+    await forceCloseZcodeSession(this.sessions, sessionId, reason)
+  }
+
+  closeAll = async (): Promise<void> => {
+    // An acquire still resolving its launch or spawn would register a child after the sweep;
+    // shutdown waits for those attempts, then closes everything they may have published.
+    await Promise.allSettled(this.pendingAcquires)
+    // Deleting the current entry during Map iteration is safe.
+    for (const [sessionId, session] of this.failedStarts) {
+      this.failedStarts.delete(sessionId)
+      await session.close().catch(() => false)
+    }
+    await closeAllZcodeSessions(this.sessions, this.endings, (sessionId) =>
+      closeZcodeSession(this.sessions, sessionId)
+    )
+  }
+
+  private trackRetirement(retirement: Promise<void>): void {
     this.retiring.add(retirement)
     void retirement.then(() => this.retiring.delete(retirement))
   }
-
-  forceClose = (sessionId: string, reason: string): Promise<void> =>
-    forceCloseZcodeSession(this.sessions, sessionId, reason)
-
-  closeAll = (): Promise<void> =>
-    closeAllZcodeSessions(this.sessions, this.endings, (sessionId) =>
-      closeZcodeSession(this.sessions, sessionId)
-    )
 }

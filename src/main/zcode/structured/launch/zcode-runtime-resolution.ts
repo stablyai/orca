@@ -129,11 +129,11 @@ function readSyncTo(fd: number, buffer: Buffer, length: number, position = 0): n
 export function zcodeProviderEnv(runtimeCommand: string): Record<string, string> {
   const env: Record<string, string> = {}
   const personal = personalProviderConfigPath()
-  if (personal) {
+  // The CLI reads the builtin path verbatim only beside a personal config; without one the pair
+  // is incomplete and the table would silently not load.
+  const builtin = personal ? builtinProviderTablePath(runtimeCommand) : null
+  if (personal && builtin) {
     env.ZCODE_PERSONAL_PROVIDER_CONFIG_FILE = personal
-  }
-  const builtin = builtinProviderTablePath(runtimeCommand)
-  if (builtin) {
     env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE = builtin
   }
   return env
@@ -212,11 +212,11 @@ export async function zcodeBundledLaunch(pathEnv: string | null | undefined): Pr
 /** The newest-shaped Node a chat backend can run under, exactly as the wrapper resolves its own. */
 async function resolveSystemNode(pathEnv: string | null | undefined): Promise<string | null> {
   const override = process.env.ZCODE_NODE?.trim()
-  if (override && (await runnableNode22(override))) {
+  if (override && (await runnableNodeWithSqlite(override))) {
     return override
   }
   for (const candidate of ['/opt/homebrew/bin/node', '/usr/local/bin/node']) {
-    if (await runnableNode22(candidate)) {
+    if (await runnableNodeWithSqlite(candidate)) {
       return candidate
     }
   }
@@ -226,7 +226,7 @@ async function resolveSystemNode(pathEnv: string | null | undefined): Promise<st
       continue
     }
     const candidate = join(dir, executable)
-    if (await runnableNode22(candidate)) {
+    if (await runnableNodeWithSqlite(candidate)) {
       return candidate
     }
   }
@@ -234,10 +234,11 @@ async function resolveSystemNode(pathEnv: string | null | undefined): Promise<st
 }
 
 /**
- * The bundle needs >= 22 for node:sqlite; probe `-v` once per candidate and cache the verdict so
- * repeated launches never re-run the (possibly slow) shim probe.
+ * The bundle needs `node:sqlite`, which only runs unflagged from 22.13 (the launch adds no
+ * experimental flag); probe `-v` once per candidate and cache the verdict so repeated launches
+ * never re-run the (possibly slow) shim probe.
  */
-function runnableNode22(candidate: string): Promise<boolean> {
+function runnableNodeWithSqlite(candidate: string): Promise<boolean> {
   const cached = node22Verdicts.get(candidate)
   if (cached) {
     return cached
@@ -246,11 +247,14 @@ function runnableNode22(candidate: string): Promise<boolean> {
   // missing path fails fast anyway.
   const verdict = runProcess({ program: candidate, args: ['-v'], timeoutMs: 5000 })
     .then((result) => {
-      const major =
-        result.code === 0
-          ? Number.parseInt(result.stdout.trim().replace(/^v/u, ''), 10)
-          : Number.NaN
-      if (!(Number.isSafeInteger(major) && major >= 22)) {
+      const match = result.code === 0 ? /^v(\d+)\.(\d+)\./u.exec(result.stdout.trim()) : null
+      const major = match ? Number.parseInt(match[1] ?? '', 10) : Number.NaN
+      const minor = match ? Number.parseInt(match[2] ?? '', 10) : Number.NaN
+      const adequate =
+        Number.isSafeInteger(major) &&
+        Number.isSafeInteger(minor) &&
+        (major > 22 || (major === 22 && minor >= 13))
+      if (!adequate) {
         node22Verdicts.delete(candidate)
         return false
       }

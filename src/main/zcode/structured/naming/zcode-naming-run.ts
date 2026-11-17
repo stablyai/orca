@@ -45,9 +45,13 @@ export class ZcodeNamingRuns {
   }): Promise<string | null> {
     const attempt = new AbortController()
     const abortFromSignal = (): void => attempt.abort(new Error('naming cancelled'))
+    // An already-cancelled caller must not spawn anything, even before the listener lands.
+    if (input.signal?.aborted) {
+      return null
+    }
     input.signal?.addEventListener('abort', abortFromSignal, { once: true })
     this.inFlight.add(attempt)
-    const home = await mkdtemp(join(tmpdir(), 'orca-zcode-naming-'))
+    let home: string | null = null
     try {
       if (!this.deps.resolveChatCredentials()) {
         return null
@@ -55,13 +59,16 @@ export class ZcodeNamingRuns {
       if (attempt.signal.aborted || input.shouldExecute?.() === false) {
         return null
       }
+      home = await mkdtemp(join(tmpdir(), 'orca-zcode-naming-'))
       return await this.run({ ...input, attempt, home })
     } catch {
       return null
     } finally {
       input.signal?.removeEventListener('abort', abortFromSignal)
       this.inFlight.delete(attempt)
-      await rm(home, { recursive: true, force: true }).catch(() => undefined)
+      if (home !== null) {
+        await rm(home, { recursive: true, force: true }).catch(() => undefined)
+      }
     }
   }
 
@@ -96,7 +103,7 @@ export class ZcodeNamingRuns {
         cwd: home,
         env: launch.env,
         // Desktop-inherited ZCODE_* keys leak through the spawn's process-env base.
-        envToDelete: zcodeDesktopEnvKeys(environment)
+        envToDelete: zcodeDesktopEnvKeys(environment, launch.env)
       },
       {
         onServerRequest: (request) => this.answerAsk(connection, request),
@@ -169,11 +176,16 @@ export class ZcodeNamingRuns {
       if (sent?.accepted !== true) {
         return null
       }
+      // Abort ends the wait at once: the finally below closes the connection instead of leaving
+      // the naming child running for the rest of its budget.
       const outcome = await Promise.race([
         turnOver,
         new Promise<'timeout'>((resolve) => {
           const timer = setTimeout(() => resolve('timeout'), Math.max(1, deadline - Date.now()))
           timer.unref()
+        }),
+        new Promise<'aborted'>((resolve) => {
+          attempt.signal.addEventListener('abort', () => resolve('aborted'), { once: true })
         })
       ])
       attempt.signal.throwIfAborted()

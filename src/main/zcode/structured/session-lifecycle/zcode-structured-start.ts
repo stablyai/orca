@@ -49,6 +49,8 @@ export async function startZcodeStructuredSession(input: {
   generation: string
   events: StructuredAgentSessionEventSink | undefined
   forceClose: (sessionId: string, reason: string) => void
+  /** A cleanup whose exit proof failed; release and shutdown keep reaping the retained child. */
+  retainFailedStart: (sessionId: string, session: ZcodeStructuredSession) => void
   onSettled: (settlement: ZcodeSendSettlement) => void
   /** The adapter's start-failure registry, so a dead child's open answers with its verdict. */
   recordStartFailure: (failure: AgentSessionStartFailure) => void
@@ -79,7 +81,12 @@ export async function startZcodeStructuredSession(input: {
       ),
     acquire.signal
   ).catch(async (error: unknown) => {
-    await child.connection.close().catch(() => undefined)
+    // A close that cannot prove exit leaves the child alive: retain it so release and
+    // shutdown can still reap it, instead of discarding an owned process.
+    const proven = await child.connection.close().catch(() => false)
+    if (!proven) {
+      input.retainFailedStart(acquire.identity.sessionId, child.session)
+    }
     throw error
   })
   child.session.declareModels(probe.declaredModels)
@@ -88,7 +95,10 @@ export async function startZcodeStructuredSession(input: {
   // adapter owns nothing until sessions.set, so this function closes the child like the
   // readiness path does.
   const process = await child.process.catch(async (error: unknown) => {
-    await child.connection.close().catch(() => undefined)
+    const proven = await child.connection.close().catch(() => false)
+    if (!proven) {
+      input.retainFailedStart(acquire.identity.sessionId, child.session)
+    }
     throw error
   })
   return {
@@ -135,12 +145,22 @@ async function spawnWiredChild(
   const whenServerAsks = new Promise<void>((resolve) => {
     announceServerAsk = resolve
   })
+  // The reader starts before the session routes are installed: everything that lands in that
+  // window is buffered here and replayed once the session can answer — a dropped bootstrap ask
+  // would leave zcode waiting for a reply that never comes.
+  const earlyNotifications: { method: string; params: unknown }[] = []
+  const earlyServerRequests: { method: string; params: unknown; id: number | string }[] = []
   let routes: {
     notification: (method: string, params: unknown) => void
     serverRequest: (method: string, params: unknown, id: number | string) => void
   } = {
-    notification: () => undefined,
-    serverRequest: () => announceServerAsk?.()
+    notification: (method, params) => {
+      earlyNotifications.push({ method, params })
+    },
+    serverRequest: (method, params, id) => {
+      announceServerAsk?.()
+      earlyServerRequests.push({ method, params, id })
+    }
   }
   let child: WiredChild | null = null
   const connection = await spawnZcodeAppServerConnection(
@@ -209,6 +229,13 @@ async function spawnWiredChild(
     }
   }
   child = { connection, session, launch, process: identity.read(connection.pid), whenServerAsks }
+  // Live frames route straight from here; anything buffered before this line replays in order.
+  for (const frame of earlyNotifications.splice(0)) {
+    routes.notification(frame.method, frame.params)
+  }
+  for (const request of earlyServerRequests.splice(0)) {
+    routes.serverRequest(request.method, request.params, request.id)
+  }
   return child
 }
 

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type {
   AgentSessionContextUsage,
   AgentSessionTokenUsage
@@ -16,6 +15,7 @@ import type {
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
 import { zcodeModelStreamingEvents, zcodeToolUpdatedEvents } from './zcode-tool-stream-translation'
 import { zcodeGoalSetEvents } from './zcode-goal-events'
+import { ZcodeTurnAttribution } from './zcode-turn-attribution'
 
 // zcode session events → provider timeline events. One turn runs at a time; `turn.started`
 // names its input (the provider echo that proves a send landed) and later events carry no
@@ -47,6 +47,7 @@ export class ZcodeTimelineTranslator {
   private readonly inFlight: { clientMessageId: string; text: string }[] = []
   /** Each turn key's provider input message id — the fork/rewind anchor session/messages matches. */
   private readonly turnInputMessageIds = new Map<string, string>()
+  private readonly attribution = new ZcodeTurnAttribution()
 
   constructor(options: ZcodeTimelineTranslatorOptions) {
     this.providerSessionId = options.providerSessionId
@@ -149,12 +150,13 @@ export class ZcodeTimelineTranslator {
       readString(payload.foregroundExecutionId) ??
       readString(payload.messageId)
     const inputMessageId = readString(payload.messageId)
-    if (turnKey !== null && inputMessageId !== null) {
-      this.turnInputMessageIds.set(turnKey, inputMessageId)
-    }
     const events: ProviderTimelineEvent[] = []
     const inputText = readString(payload.input)
     const isBackground = payload.inputSource === 'background_task'
+    if (turnKey !== null && inputMessageId !== null) {
+      this.turnInputMessageIds.set(turnKey, inputMessageId)
+    }
+    this.attribution.started(inputMessageId, turnKey, isBackground)
     if (this.openTurnKey === null) {
       this.openTurnKey = turnKey
       events.push({ type: 'turn.open', ...(turnKey ? { turn: turnKey } : {}), at })
@@ -186,6 +188,11 @@ export class ZcodeTimelineTranslator {
 
   private turnCompleted(payload: unknown, at: number): ProviderTimelineEvent[] {
     const record = readRecord(payload)
+    const usage = usageEvent(readTokenUsage(record?.usage), at, this.providerSessionId)
+    // A background task's turn ended: the foreground turn keeps running, its usage still counts.
+    if (this.attribution.endsBackgroundTurn(readString(record?.inputId))) {
+      return usage
+    }
     const events: ProviderTimelineEvent[] = [
       {
         type: 'turn.end',
@@ -196,13 +203,8 @@ export class ZcodeTimelineTranslator {
         ...(typeof record?.durationMs === 'number' ? { durationMs: record.durationMs } : {})
       }
     ]
-    const usage = readTokenUsage(record?.usage)
-    if (usage) {
-      events.push({
-        type: 'context.usage',
-        usage: { used: { kind: 'estimate', usage, capturedAt: at } },
-        join: { thread: this.providerSessionId }
-      })
+    if (usage.length > 0) {
+      events.push(usage[0]!)
     }
     this.openTurnKey = null
     return events
@@ -210,6 +212,10 @@ export class ZcodeTimelineTranslator {
 
   private turnFailed(payload: unknown, at: number): ProviderTimelineEvent[] {
     const record = readRecord(payload)
+    // A background task's failure never ends the foreground turn or adds a failure row.
+    if (this.attribution.endsBackgroundTurn(readString(record?.inputId))) {
+      return []
+    }
     const message =
       readString(readRecord(record?.error)?.message) ?? 'zcode ended this turn with an error.'
     const failure = agentSessionFailureWords(
@@ -284,6 +290,24 @@ export class ZcodeTimelineTranslator {
   }
 }
 
+/** The context-usage fact row for a token reading, or nothing without one. */
+function usageEvent(
+  usage: AgentSessionTokenUsage | null,
+  at: number,
+  providerSessionId: string
+): ProviderTimelineEvent[] {
+  if (!usage) {
+    return []
+  }
+  return [
+    {
+      type: 'context.usage',
+      usage: { used: { kind: 'estimate', usage, capturedAt: at } },
+      join: { thread: providerSessionId }
+    }
+  ]
+}
+
 /** Map a zcode usage object onto Orca's cache-exclusive token shape. */
 function readTokenUsage(usage: unknown): AgentSessionTokenUsage | null {
   const record = readRecord(usage)
@@ -315,8 +339,4 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
-}
-
-export function digestZcodePayload(text: string): string {
-  return createHash('sha256').update(text).digest('hex')
 }

@@ -58,7 +58,7 @@ async function withZcodeHeadlessConnection<T>(input: {
       cwd: input.environment.HOME ?? homedir(),
       env: launch.env,
       // Desktop-inherited ZCODE_* keys leak through the spawn's process-env base.
-      envToDelete: zcodeDesktopEnvKeys(input.environment)
+      envToDelete: zcodeDesktopEnvKeys(input.environment, launch.env)
     },
     { onServerRequest: (ask) => answerHeadlessAsk(connection, ask, input.credentials) }
   )

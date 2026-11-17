@@ -74,19 +74,46 @@ async function scanZcodeAtRest(
         cwd,
         env: launch.env,
         // Desktop-inherited ZCODE_* keys leak through the spawn's process-env base.
-        envToDelete: zcodeDesktopEnvKeys(environment)
+        envToDelete: zcodeDesktopEnvKeys(environment, launch.env)
       },
       { onServerRequest: (request) => answerProbeAsk(connection, request) }
     )
+    // A retired scan closes the child, so its request settles at once and the probe permit
+    // frees for the next background scan instead of riding the timeout out.
+    const abortClose = (): void => {
+      void connection.close().catch(() => undefined)
+    }
+    signal.addEventListener('abort', abortClose, { once: true })
     try {
-      const commands = await requestZcodeSkillCatalog(
-        connection,
-        { workspace: { workspacePath: cwd, workspaceKey: cwd } },
-        CATALOG_TIMEOUT_MS,
-        () => signal.throwIfAborted()
-      )
-      return { commands: commands ?? [], fromAgent: true }
+      // The backend accepts nothing until storage boots; retry inside the scan's own budget
+      // instead of spending it on one request that can stall until the timeout.
+      const deadline = Date.now() + CATALOG_TIMEOUT_MS
+      for (;;) {
+        try {
+          const commands = await requestZcodeSkillCatalog(
+            connection,
+            { workspace: { workspacePath: cwd, workspaceKey: cwd } },
+            Math.max(1, deadline - Date.now()),
+            () => signal.throwIfAborted()
+          )
+          if (!isCurrent()) {
+            return { commands: undefined, fromAgent: false }
+          }
+          return { commands: commands ?? [], fromAgent: true }
+        } catch (error) {
+          // A boot still in progress retries within the remaining budget; an aborted or
+          // spent scan surfaces as a failed attempt so the catalog schedules its own retry.
+          if (signal.aborted || Date.now() >= deadline) {
+            throw error
+          }
+          await new Promise<void>((resolveRetry) => {
+            const timer = setTimeout(resolveRetry, 1_000)
+            timer.unref()
+          })
+        }
+      }
     } finally {
+      signal.removeEventListener('abort', abortClose)
       await connection.close().catch(() => undefined)
     }
   } finally {

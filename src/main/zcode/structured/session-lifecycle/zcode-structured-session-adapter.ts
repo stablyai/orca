@@ -9,6 +9,7 @@ import type {
   StructuredAgentSessionSetOptionInput
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
 import type {
   AgentSessionMcpOperation,
@@ -17,7 +18,6 @@ import type {
 import type { ZcodeStructuredSession } from './zcode-structured-session'
 import { ZcodeAcquisitions } from './zcode-structured-session-acquisition'
 import { manageZcodeSessionMcp } from '../catalog/zcode-mcp'
-import { closeZcodeSession } from './zcode-structured-session-close'
 import { zcodeCopyConversation, zcodeForkForRewind } from './zcode-structured-session-fork'
 import { dispatchZcodeTurn } from './zcode-structured-session-dispatch'
 import { changeZcodeThreadGoal } from './zcode-structured-session-goal'
@@ -78,7 +78,12 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
       throw new AgentSessionOptionRejectedError('zcode session is not open yet')
     }
     try {
-      return await session.setOption(input.key, input.value, this.deps.requestTimeoutMs ?? null)
+      // The write races its own timeout; the caller's signal (app quit) must cut the wait too.
+      const write = waitForPromiseWithSignal(
+        session.setOption(input.key, input.value, this.deps.requestTimeoutMs ?? null),
+        input.signal
+      )
+      return await write
     } catch (error) {
       throw new AgentSessionOptionRejectedError(
         error instanceof Error ? error.message : String(error)
@@ -259,7 +264,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   closeSession = (sessionId: string): Promise<boolean> => {
     this.acquisitions.retire(sessionId)
-    return closeZcodeSession(this.sessions, sessionId)
+    return this.acquisitions.closeOwned(sessionId)
   }
 
   disposeSession = this.closeSession
@@ -268,7 +273,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     this.closeSession(input.sessionId)
 
   forceCloseSession = (sessionId: string): Promise<boolean> =>
-    closeZcodeSession(this.sessions, sessionId)
+    this.acquisitions.closeOwned(sessionId)
 
   hasOwnedAcquisition = (sessionId: string): boolean => this.sessions.has(sessionId)
 

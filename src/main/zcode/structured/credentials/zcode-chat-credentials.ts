@@ -40,7 +40,9 @@ export function resolveZcodeChatCredentials(
     return { site: source.site, apiKey, providerId: zcodePlanProviderId(source.site) }
   }
   const v2 = readZcodeV2PlanCredential(localZcodeCredentialHost())
-  if (v2.status === 'ok') {
+  // An explicit settings site is the connected plan; a v2 credential for the other family would
+  // entitle a plan the user did not select, so it only serves as the default.
+  if (v2.status === 'ok' && (!source.site || siteOfBaseUrl(v2.baseUrl) === source.site)) {
     return {
       site: siteOfBaseUrl(v2.baseUrl),
       apiKey: v2.apiKey,

@@ -115,7 +115,9 @@ export function zcodeModelCatalogDiscovery({
     // The projection names the account's current model alongside the listing.
     listingNamesConfiguredModel: true,
     probe: createZcodeModelCatalogProbe({
-      resolveEnvironment: environment.resolveBaseEnvironment,
+      // The per-agent overlay decides which PATH finds zcode; probing the base environment
+      // would report the CLI missing where a chat launch would find it.
+      resolveEnvironment: () => environment.resolveAgentEnvironment('zcode'),
       resolveCommandSettings: deps.resolveAgentCommandSettings,
       resolveLaunchArgs: () => deps.resolveLaunchArgs('zcode'),
       resolveChatCredentials: () =>

@@ -20,6 +20,8 @@ type OpenRequest = {
   reply: (response: AgentSessionPromptResponse | null) => unknown
   claimed: boolean
   withdrawing: boolean
+  /** Every announce awaiting the answer — one per frame, resolved iteratively at settlement. */
+  settlers: ((reply: unknown) => void)[]
   settle: (reply: unknown) => void
 }
 
@@ -43,16 +45,13 @@ export class ZcodeStructuredPrompts {
   handle(method: string, params: unknown, frameId: number | string): Promise<unknown> {
     const existing = this.findByRequest(params)
     if (existing) {
-      // A reannounce of a request we already opened joins its answer.
+      // A reannounce of a request we already opened joins its answer; resolvers stay in a list
+      // so settlement resolves them iteratively, never through chained callbacks.
       if (!existing.frameIds.includes(frameId)) {
         existing.frameIds.push(frameId)
       }
       return new Promise((resolve) => {
-        const previousSettle = existing.settle
-        existing.settle = (reply) => {
-          previousSettle(reply)
-          resolve(reply)
-        }
+        existing.settlers.push(resolve)
       })
     }
     const presentation = zcodeInteractionPresentation(method, params)
@@ -88,11 +87,14 @@ export class ZcodeStructuredPrompts {
         reply: presentation.reply as (response: AgentSessionPromptResponse | null) => unknown,
         claimed: false,
         withdrawing: false,
+        settlers: [resolve],
         settle: (reply) => {
           if (this.open.get(key) === entry) {
             this.open.delete(key)
           }
-          resolve(reply)
+          for (const settle of entry.settlers.splice(0)) {
+            settle(reply)
+          }
         }
       }
       this.open.set(key, entry)
