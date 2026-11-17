@@ -207,7 +207,14 @@ async function dismissOverlays(page) {
         )
       })
     )
-    if (!blocked) {
+    // Status notices (e.g. a changed-display card) sit over the sidebar too and close on Escape.
+    const notice = await page.evaluate(() =>
+      [...document.querySelectorAll('[role="status"]')].some(
+        (element) =>
+          getComputedStyle(element).position === 'fixed' && element.getClientRects().length > 0
+      )
+    )
+    if (!blocked && !notice) {
       return
     }
     await page.keyboard.press('Escape')

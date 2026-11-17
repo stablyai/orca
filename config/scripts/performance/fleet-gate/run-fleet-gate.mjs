@@ -100,6 +100,10 @@ function ensureBuild(repoRoot, sha) {
   const log = path.join(buildsDir, `${sha}.log`)
   fs.writeFileSync(log, '')
   console.log(`[fleet-gate] building ${sha.slice(0, 12)} (log ${log})`)
+  // A PR head or scratch commit may not be local yet; fetch it by id so --old/--new take any pushed commit.
+  if (spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: repoRoot }).status !== 0) {
+    run('git', ['fetch', '--quiet', 'origin', sha], repoRoot, log)
+  }
   run('git', ['clone', '--quiet', '--shared', '--no-checkout', repoRoot, dir], buildsDir, log)
   run('git', ['checkout', '--quiet', '--detach', sha], dir, log)
   run('pnpm', ['install', '--frozen-lockfile', '--prefer-offline'], dir, log)
