@@ -16,7 +16,7 @@ function resolve(
   return (
     resolved && {
       selected: resolved.selected,
-      chats: agents.map((agent) => resolved.startsAsChat(agent))
+      chats: agents.map((agent) => resolved.nativeChatDefaultFor(agent))
     }
   )
 }
@@ -31,7 +31,10 @@ describe('resolveNewTabAgentSurfaces', () => {
       agentDefaultSurface: 'terminal' as const,
       nativeChatProviders: { claude: true }
     }
-    expect(resolve(null, desktop)).toEqual({ selected: undefined, chats: [true, false, false] })
+    expect(resolve(null, desktop)).toEqual({
+      selected: undefined,
+      chats: [undefined, undefined, undefined]
+    })
     expect(resolve('chat', desktop)).toEqual({ selected: 'chat', chats: [true, true, false] })
   })
 

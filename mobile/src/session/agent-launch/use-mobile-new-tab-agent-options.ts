@@ -137,22 +137,24 @@ export function useMobileNewTabAgentOptions(args: {
   // The host runs an agent as a chat only when its agents list has it.
   const structuredHost =
     args.hostCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) === true
-  const registered = useMobileRegisteredAgents(
-    client,
-    connected && structuredHost && (open || args.prefetch)
-  )
+  const registered = useMobileRegisteredAgents(client, connected && structuredHost && open)
   const picked = useSerializedStoredState<AgentLaunchSurface | null>(
     null,
     loadNewAgentSurface,
     saveNewAgentSurface
   )
   const { refresh, setValue, persist } = picked
-  // Every sheet open re-reads it: another mounted session may have saved a newer pick.
   useEffect(() => {
-    if (open || args.prefetch) {
+    if (args.prefetch) {
       refresh()
     }
-  }, [open, args.prefetch, refresh])
+  }, [args.prefetch, refresh])
+  // Every sheet open re-reads it: another mounted session may have saved a newer pick.
+  useEffect(() => {
+    if (open) {
+      refresh()
+    }
+  }, [open, refresh])
   const hostDefaults = useMemo(() => nativeChatDefaultsOf(settings.data?.settings), [settings.data])
   const surfaces = useMemo(
     () =>
@@ -171,13 +173,11 @@ export function useMobileNewTabAgentOptions(args: {
       surfaces
         ? listed.map((option) => ({
             ...option,
-            ...(registered && !registered.some((row) => row.agent === option.agent)
-              ? { cliOnly: true }
-              : {}),
-            nativeChatDefault: surfaces.startsAsChat(option.agent)
+            cliOnly: !surfaces.canChat(option.agent),
+            nativeChatDefault: surfaces.nativeChatDefaultFor(option.agent)
           }))
         : listed,
-    [listed, registered, surfaces]
+    [listed, surfaces]
   )
   const onSelect = useCallback(
     (surface: AgentLaunchSurface) => {

@@ -8,8 +8,11 @@ import type { AgentLaunchSurface } from '../../../../src/shared/agent-launch/con
 export type NewTabAgentSurfaces = {
   /** The switch's segment; none when the host's own choice differs between the listed agents. */
   selected: AgentLaunchSurface | undefined
-  /** Sent as agent.launch's nativeChatDefault, a preference: a chat that can't open here starts the CLI. */
-  startsAsChat: (agent: TuiAgent) => boolean
+  /** False once the host's agents list lacks the agent. */
+  canChat: (agent: TuiAgent) => boolean
+  /** Sent as agent.launch's nativeChatDefault, a preference, so a chat that can't open here starts
+   *  the CLI. Undefined leaves an unpicked launch to the host that owns that default. */
+  nativeChatDefaultFor: (agent: TuiAgent) => boolean | undefined
 }
 
 /**
@@ -39,5 +42,10 @@ export function resolveNewTabAgentSurfaces(args: {
       : hostDefaults === null || nativeChatPreferenceFor(hostDefaults, agent))
   const surfaces = new Set(listed.map((agent) => (startsAsChat(agent) ? 'chat' : 'terminal')))
   const [only] = surfaces
-  return { selected: surfaces.size === 1 ? only : undefined, startsAsChat }
+  return {
+    selected: surfaces.size === 1 ? only : undefined,
+    canChat,
+    nativeChatDefaultFor: (agent) =>
+      picked !== null || hostDefaults === null ? startsAsChat(agent) : undefined
+  }
 }

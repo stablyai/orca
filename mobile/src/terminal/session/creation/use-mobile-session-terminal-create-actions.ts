@@ -113,7 +113,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           worktreeId,
           agent,
           options,
-          ...(nativeChatDefault !== undefined ? { nativeChatDefault } : {}),
+          nativeChatDefault,
           lock: clientMutationId,
           activeSessionTabId,
           pendingSelectionRef,
