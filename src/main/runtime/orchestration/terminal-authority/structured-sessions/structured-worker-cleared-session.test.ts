@@ -679,18 +679,25 @@ describe('an abandoned structured worker whose start reservation stranded (#4303
     })
   })
 
-  it('settles released when the host cannot scan for the spawn token at all', async () => {
+  it('keeps the reservation stranded and the worker retained when the spawn-token scan fails', async () => {
     installStrandedReservation()
     restartProbe = { outcome: 'indeterminate', reason: 'host could not enumerate spawn tokens' }
     const { receipt, dispatchId } = await abandonStrandedWorker()
-    expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-    // No death evidence existed; the release settled on the adjudicated, nameless lease instead.
-    expect(records.get(MINTED)?.lease.deathEvidence).toBeNull()
-    expect(records.get(MINTED)?.lease.claimStatus).toBe('released')
+    expect(receipt).toMatchObject({
+      state: 'retained',
+      reason: 'identity_unproven',
+      processAction: 'none'
+    })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('retained')
+    // Without positive no-start proof the reservation survives for the next release to re-probe.
+    expect(records.get(MINTED)?.lease).toMatchObject({
+      claimStatus: 'reserved',
+      reservedSpawnToken: 'spawn-stranded',
+      unreconciled: true
+    })
   })
 
-  it('stays retained when the probe observed a live token-bearing process', async () => {
+  it('stays retained across repeated releases when the probe observed a live token-bearing process', async () => {
     installStrandedReservation()
     restartProbe = {
       outcome: 'indeterminate',
@@ -702,6 +709,49 @@ describe('an abandoned structured worker whose start reservation stranded (#4303
       reason: 'identity_unproven',
       processAction: 'none'
     })
+    // Reconciliation must not evict a reservation the probe just observed live.
+    expect(records.get(MINTED)?.lease).toMatchObject({
+      claimStatus: 'reserved',
+      reservedSpawnToken: 'spawn-stranded'
+    })
+    const second = await rpcRuntime(db).call('orchestration.workerRelease', {
+      dispatch: dispatchId
+    })
+    expect(second).toMatchObject({
+      state: 'retained',
+      reason: 'identity_unproven',
+      processAction: 'none'
+    })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('retained')
+  })
+
+  it('settles released for an already-released lease that restart reconciliation alone unstrands', async () => {
+    // A lease properly released before a restart loads unreconciled: no reservation to preserve.
+    installSessions(
+      [
+        located({
+          ...agentSessionRecordFixture(
+            agentSessionLeaseFixture({
+              sessionId: MINTED,
+              claimStatus: 'released',
+              ownerProcess: null,
+              reservedSpawnToken: null,
+              unreconciled: true,
+              deathEvidence: {
+                kind: 'exit-observed',
+                detail: 'user-close',
+                observedAt: 2,
+                ownerFence: 7
+              }
+            })
+          ),
+          providerHandleChain: []
+        })
+      ],
+      []
+    )
+    const { receipt, dispatchId } = await abandonStrandedWorker()
+    expect(receipt).toMatchObject({ state: 'released', processAction: 'none' })
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
   })
 })

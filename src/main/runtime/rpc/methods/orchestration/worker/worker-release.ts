@@ -22,13 +22,13 @@ import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredSessionReleaseSettled } from '../../../../orchestration/terminal-authority/structured-sessions/structured-session-release-settlement'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import { agentSessionReservationProbeObservedLife } from '../../../../agent-session/ownership/agent-session-process-identity-probe'
 import type { AgentSessionOwnerProbe } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 /** Reconcile a settled structured worker's session lease before release judges it: an abandoned
- *  start can strand a reservation that no chat flow ever re-adjudicates (#43039). Probe the
- *  stranded reservation first — eviction clears the spawn token its life evidence depends on. */
+ *  start can strand a reservation that no chat flow ever re-adjudicates (#43039). Eviction clears
+ *  the spawn token, so reconcile only when nothing is stranded or the probe proves it unused —
+ *  a live or unproven reservation stays stranded for the next release to re-probe. */
 async function reconcileStructuredSessionLease(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
   sessionId: string
@@ -45,7 +45,9 @@ async function reconcileStructuredSessionLease(
     record.lease.ownerProcess === null &&
     record.lease.claimStatus === 'reserved'
   const probe = stranded && record ? await host.deps.probeOwner?.(record) : undefined
-  await host.reconcileRestartLeases?.()
+  if (!stranded || probe?.outcome === 'reservation-unused') {
+    await host.reconcileRestartLeases?.()
+  }
   return probe ?? null
 }
 
@@ -98,12 +100,14 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
             )
           : null
         // A stopped/abandoned structured worker settles when its session is proven dead, or when
-        // its reconciled lease names nothing that could still run and the probe saw no life.
+        // its reconciled lease names nothing that could still run and a probed stranded
+        // reservation is positively unused; a null probe means nothing was stranded to prove.
         const settleDead =
           liveness === 'exited' ||
           (requested.reason === 'identity_unproven' &&
             structuredSessionId !== null &&
-            !agentSessionReservationProbeObservedLife(strandedReservationProbe) &&
+            (strandedReservationProbe === null ||
+              strandedReservationProbe.outcome === 'reservation-unused') &&
             structuredSessionReleaseSettled(structuredSessionId))
         if (resource?.process_incarnation && settleDead) {
           const reconciled = db.settleDeadWorkerTerminalRelease({
