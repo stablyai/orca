@@ -47,6 +47,7 @@ describeZsh('typing while an agent tab starts', () => {
     return { host, output: () => output }
   }
 
+  // A real login shell runs a slow rc before the agent command starts.
   it('delivers keystrokes typed during shell startup to the agent, not the shell', async () => {
     const tab = await start('sleep 0.6\n')
     tab.host.write(SESSION_ID, 'ademarkqz\r')
@@ -56,6 +57,7 @@ describeZsh('typing while an agent tab starts', () => {
     expect(tab.output()).not.toContain('command not found')
   }, 15_000)
 
+  // The no-line-editor fallback waits out the readiness timeout in a real shell.
   it('still starts the agent once when the shell never reaches a line editor', async () => {
     const tab = await start('unsetopt zle\n', 1_500)
     await vi.waitFor(() => expect(tab.output()).toContain(COMMAND), { timeout: 8_000 })
