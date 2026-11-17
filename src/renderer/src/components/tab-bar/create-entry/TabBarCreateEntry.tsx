@@ -86,6 +86,7 @@ function TabBarCreateEntrySession({
   const terminalQueryMode = rawQueryOversized || forcedSearch.forced
   const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
+    groupId,
     query,
     worktreeId,
     retainedResultId: pinnedOptionId

@@ -20,6 +20,7 @@ import {
 import { getPaletteOwnershipWorktreeIds } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Translate } from '@/i18n/use-translate'
+import { excludeActiveStripOpenTabEntries } from './open-tab-strip-exclusion'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -113,7 +114,6 @@ export type OpenTabSearchAgentState = Pick<
   | 'terminalLayoutsByTabId'
 >
 
-// Offer every workspace tab across groups, including the active one, to match Cmd+J.
 export function selectOpenTabSearchEntryState(
   state: AppState,
   worktreeId: string
@@ -200,47 +200,57 @@ export function buildOpenTabSearchBrowserPages(
   })
 }
 
+export type BuildOpenTabSearchEntriesOptions = {
+  clientHostedRowActive?: boolean
+  groupId?: string | null
+  t?: Translate
+}
+
 export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
   agentState: OpenTabSearchAgentState,
   chatNames: StructuredChatTabNames,
-  t?: Translate
+  options: BuildOpenTabSearchEntriesOptions = {}
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
 
-  return {
-    workspaceTabs: buildSearchableWorkspaceTabEntries({
-      ...scope,
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-      tabsByWorktree: state.tabsByWorktree,
-      openFiles: state.openFiles,
-      agentStatusByPaneKey: agentState.agentStatusByPaneKey,
-      sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
-      terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
-      paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,
-      activeGroupIdByWorktree: state.activeGroupIdByWorktree,
-      groupsByWorktree: state.groupsByWorktree,
-      activeWorktreeId: state.activeWorktreeId,
-      activeTabType: state.activeTabType,
-      activeTabId: state.activeTabId,
-      activeTabIdByWorktree: state.activeTabIdByWorktree,
-      activeFileId: state.activeFileId,
-      activeFileIdByWorktree: state.activeFileIdByWorktree,
-      activeTabTypeByWorktree: state.activeTabTypeByWorktree,
-      generatedTitlesEnabled: state.generatedTitlesEnabled,
-      chatNames
-    }),
-    browserPages: buildOpenTabSearchBrowserPages(state, scope),
-    simulatorTabs: buildSearchableSimulatorTabs(
-      {
+  return excludeActiveStripOpenTabEntries(
+    {
+      workspaceTabs: buildSearchableWorkspaceTabEntries({
         ...scope,
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+        tabsByWorktree: state.tabsByWorktree,
+        openFiles: state.openFiles,
+        agentStatusByPaneKey: agentState.agentStatusByPaneKey,
+        sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
+        terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
+        paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,
         activeGroupIdByWorktree: state.activeGroupIdByWorktree,
         groupsByWorktree: state.groupsByWorktree,
         activeWorktreeId: state.activeWorktreeId,
-        activeTabType: state.activeTabType
-      },
-      t
-    )
-  }
+        activeTabType: state.activeTabType,
+        activeTabId: state.activeTabId,
+        activeTabIdByWorktree: state.activeTabIdByWorktree,
+        activeFileId: state.activeFileId,
+        activeFileIdByWorktree: state.activeFileIdByWorktree,
+        activeTabTypeByWorktree: state.activeTabTypeByWorktree,
+        generatedTitlesEnabled: state.generatedTitlesEnabled,
+        chatNames
+      }),
+      browserPages: buildOpenTabSearchBrowserPages(state, scope),
+      simulatorTabs: buildSearchableSimulatorTabs(
+        {
+          ...scope,
+          unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+          activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+          groupsByWorktree: state.groupsByWorktree,
+          activeWorktreeId: state.activeWorktreeId,
+          activeTabType: state.activeTabType
+        },
+        options.t
+      )
+    },
+    state,
+    options
+  )
 }

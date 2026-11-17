@@ -14,6 +14,7 @@ import {
 } from './open-tab-search'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useWorktreeStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -21,6 +22,7 @@ const EMPTY_RESULTS: OpenTabSearchResult[] = []
 
 export type UseOpenTabSearchOptions = {
   enabled: boolean
+  groupId?: string
   query: string
   worktreeId: string
   /** Keyboard-selected result's `id`; keep it inside the display cap while it still matches. */
@@ -37,6 +39,7 @@ export type OpenTabSearchSnapshot = {
 
 export function useOpenTabSearch({
   enabled,
+  groupId,
   query,
   worktreeId,
   retainedResultId
@@ -47,6 +50,16 @@ export function useOpenTabSearch({
   const state = useAppStore(
     useShallow((store) => (enabled ? selectOpenTabSearchEntryState(store, worktreeId) : null))
   )
+  const resolvedGroupId = groupId ?? state?.activeGroupIdByWorktree[worktreeId] ?? worktreeId
+  const groupActiveTabId =
+    state?.groupsByWorktree[worktreeId]?.find((group) => group.id === resolvedGroupId)
+      ?.activeTabId ?? null
+  const activeClientHostedRowId = useActiveClientHostedBrowserRowId({
+    worktreeId: enabled ? worktreeId : '',
+    groupId: resolvedGroupId,
+    groupActiveTabId
+  })
+  const clientHostedRowActive = activeClientHostedRowId !== null
   // Snapshot noisy agent metadata on open and tab-set changes instead of rerendering search for every status event.
   const agentState = useMemo(
     () => (enabled ? selectOpenTabSearchAgentState(useAppStore.getState()) : null),
@@ -66,8 +79,14 @@ export function useOpenTabSearch({
     enabled
   )
   const entries = useMemo(
-    () => (state && agentState ? buildOpenTabSearchEntries(state, agentState, chatNames) : null),
-    [agentState, chatNames, state]
+    () =>
+      state && agentState
+        ? buildOpenTabSearchEntries(state, agentState, chatNames, {
+            clientHostedRowActive,
+            groupId
+          })
+        : null,
+    [agentState, chatNames, clientHostedRowActive, groupId, state]
   )
   const deferredQuery = useDeferredValue(query)
   const evaluationSnapshot = useMemo(
