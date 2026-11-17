@@ -134,6 +134,8 @@ function writeGithubCacheNow(runtime: GitHubCachePersistenceRuntime, barrier: bo
     runtime.githubCacheRetryDelayMs = delay
     armGithubCacheTimer(runtime, delay, 'retry')
     if (classifyRowCacheFailure(error) !== 'busy') {
+      // A replaced file or I/O error may live in this handle; the retry reopens.
+      closeGithubCacheRows(runtime)
       console.warn('[persistence] Failed to write github cache snapshot:', error)
     }
   } finally {
