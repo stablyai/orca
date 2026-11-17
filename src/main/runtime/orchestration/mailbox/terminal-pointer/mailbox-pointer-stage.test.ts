@@ -97,6 +97,7 @@ describe('mailbox pointer receiver commands', () => {
       const writePty = vi.fn<(ptyId: string, data: string) => WriteSettlement>(() =>
         writeRefused('provider_refused_write')
       )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies only the deps staging reads.
       stageOrchestrationMailboxPointer({
         ...args,
         mailboxHandle: input.mailboxHandle,
