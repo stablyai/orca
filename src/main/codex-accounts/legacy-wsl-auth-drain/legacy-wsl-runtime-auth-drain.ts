@@ -173,24 +173,11 @@ export async function drainLegacyWslRuntimeAuth(
     maxOutputBytes: 16 * 1024
   })
   if (result.code !== 0 || result.timedOut) {
-    if (result.timedOut || isWslHostFailureExitCode(result.code)) {
-      // Environmental failure says nothing about migration state; keep the diagnostic and retry (#42641).
-      console.warn(
-        `[codex-wsl-auth-drain] apply step could not reach WSL, will retry: ${describeWslProcessFailure(result)}`
-      )
-      return recoverAfterFailedApply(options.distro, paths)
-    }
-    const recovered = await recoverAfterFailedApply(options.distro, paths)
-    // Exits 37/38 are hash drift since inspection — the next drain re-reads the new state. Any
-    // other guest exit is deterministic: with migration state unchanged it would fail on every
-    // launch, so surface it instead of retrying silently.
-    if (recovered === 'pending' && result.code !== 37 && result.code !== 38) {
-      const detail = result.stderr.trim()
-      throw new Error(
-        `Legacy WSL auth drain apply failed (exit ${result.code})${detail ? `: ${detail}` : ''}`
-      )
-    }
-    return recovered
+    // Apply may have partly landed (or raced a newer login); re-inspect rather than block launch.
+    console.warn(
+      `[codex-wsl-auth-drain] apply step failed, re-inspecting: ${describeWslProcessFailure(result)}`
+    )
+    return recoverAfterFailedApply(options.distro, paths)
   }
   if (!deleteSource) {
     rememberPendingRoute(distroKey, sessionBridgeRoute)
@@ -221,7 +208,6 @@ async function recoverAfterFailedApply(
   ) {
     return 'pending'
   }
-  // Throws on guest-side defects; wsl.exe host failures here only delay the retry (#42641).
   assertSuccessfulDrainStep('recover', recovery)
   return 'pending'
 }
@@ -290,10 +276,8 @@ async function finalizeAbsentLegacyAuth(
 }
 
 /**
- * Throws for guest-side migration defects. Returns false when wsl.exe itself failed (exit
- * 4294967295, its diagnostic on stdout, per #42641) or timed out: an environment problem says
- * nothing about migration state, so the drain retries on the next launch instead of blocking
- * this one — a genuinely broken WSL surfaces through the launch spawn's own error.
+ * Throws on guest-side defects. A wsl.exe host failure (exit 0xFFFFFFFF, diagnostic on stdout) or
+ * timeout says nothing about migration state, so it returns false and the drain retries (#42641).
  */
 function assertSuccessfulDrainStep(
   step: string,
