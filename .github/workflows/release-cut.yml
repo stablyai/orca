@@ -1984,6 +1984,16 @@ jobs:
               }
             }
 
+            # Every shipped Windows binary, not only the staged list: Smart App Control refuses to load any unsigned one.
+            $payloadOutput = @(node config/scripts/desktop-distribution/windows/verify-windows-payload-signatures.mjs $root)
+            $payloadExitCode = $LASTEXITCODE
+            $payloadOutput | ForEach-Object { $report.Add($_); Write-Host $_ }
+            if ($payloadExitCode -eq 1) {
+              $failures.Add('the installer payload ships Windows binaries without a SignPath or Microsoft signature (listed above)')
+            } elseif ($payloadExitCode -ne 0) {
+              throw "The whole-payload signature check could not run (exit code $payloadExitCode)."
+            }
+
             Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
             if ($failures.Count -gt 0) {
               $failures | ForEach-Object { Write-Host "::warning::$_" }
