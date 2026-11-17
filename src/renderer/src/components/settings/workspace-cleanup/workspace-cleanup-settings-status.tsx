@@ -35,6 +35,18 @@ function formatLastRun(
     )
   }
   const removed = run.counts.removed + run.counts.archived
+  const chats = run.chatHistory?.deleted ?? 0
+  if (removed === 0 && chats > 0) {
+    return t(
+      'components.settings.workspaceCleanup.status.lastRunChats',
+      'Last run {{when}} deleted {{count}} chats from deleted workspaces.',
+      {
+        when,
+        count: chats,
+        defaultValue_one: 'Last run {{when}} deleted 1 chat from a deleted workspace.'
+      }
+    )
+  }
   if (removed === 0) {
     return t(
       'components.settings.workspaceCleanup.status.lastRunNothing',

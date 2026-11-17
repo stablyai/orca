@@ -23,6 +23,8 @@
   },
   "app": {
     "terminalSettings": {
+      "previewColumns_one": "{{count}} column",
+      "previewColumns_other": "{{count}} columns",
       "restoreAfterMinutes_one": "After {{count}} minute",
       "restoreAfterMinutes_other": "After {{count}} minutes",
       "restoreAfterSeconds_one": "After {{count}}s",

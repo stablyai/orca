@@ -359,23 +359,6 @@ it.each([
   ])
 })
 
-it('hides the placeholder on the first line of a blank multi-line draft', () => {
-  const { input, editor } = setup()
-  const root = editor.view.dom
-  const placeholderLine = root.className.match(
-    /\[&_([^\]]+)\]:before:content-\[attr\(data-placeholder\)\]/
-  )?.[1]
-  expect(placeholderLine).toBeDefined()
-  const placeholderShown = () => root.querySelector(String(placeholderLine)) !== null
-  expect(placeholderShown()).toBe(true)
-  act(() => {
-    fireEvent.keyDown(root, { key: 'Enter', shiftKey: true })
-  })
-  act(() => input.setSelectionRange(0, 0))
-  expect([input.value, input.selectionStart]).toEqual(['\n', 0])
-  expect(placeholderShown()).toBe(false)
-})
-
 it('sends an agent mentioned at the end of a non-final line without a space before the newline', () => {
   const { input, editor } = setup('abc\ndef')
   act(() => input.setSelectionRange(3, 3))

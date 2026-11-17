@@ -58,6 +58,11 @@ export const GitDiff = GitFilePath.extend({
   oldPath: z.string().optional()
 })
 
+// Hosts that predate knownHeadOid ignore it and resend the full blame.
+export const GitBlame = GitFilePath.extend({
+  knownHeadOid: z.string().optional()
+})
+
 export const GitBranchCompare = WorktreeSelector.extend({
   admissionTier: OptionalGitAdmissionTier,
   baseRef: z

@@ -122,6 +122,9 @@ export function nativeChatSessionChoiceShortLabel(
   say: NativeChatSessionOptionSay,
   optionId?: string
 ): string {
+  if (choice.shortLabel) {
+    return choice.shortLabel
+  }
   const id = levelId(SHORT_LEVEL_IDS, choice.value)
   return id ? say(id) : nativeChatSessionChoiceLabel(choice, say, optionId)
 }

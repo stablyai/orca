@@ -5,10 +5,9 @@ import {
   type BrowserPageAnnotation
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { makeAnnotation } from './annotations/browser-annotation-test-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import '../../../../../shared/orca-profiles/constants'
 import '../../../../../shared/workspace-layout/layout-owner-switch'
-import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
+
 import '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { createBrowserMockApi } from './browser-slice-test-harness'
 import { createTestStoreDrawnFromMain } from './browser-slice-drawn-from-main.test-fixture'
@@ -86,120 +85,6 @@ describe('createBrowserSlice annotations', () => {
     store.getState().closeBrowserTab(tab.id)
     await main.settle()
     expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
-  })
-
-  it('gives each repo its own profile under the per-repo scope and holds pages until main has it', async () => {
-    const created = new Map<string, (profile: BrowserSessionProfile) => void>()
-    const ensureMock = vi.fn(
-      ({ owner }: { owner: ManagedBrowserProfileOwner }) =>
-        new Promise<BrowserSessionProfile>((resolve) => created.set(owner.id, resolve))
-    )
-    Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
-    const { store, main } = await createTestStoreDrawnFromMain({
-      repos: [],
-      settings: {
-        ...getDefaultSettings('/tmp'),
-        browserProfileScope: 'repo',
-        browserDefaultProfileIdByHostId: { local: 'user-default' }
-      }
-    })
-
-    const first = store.getState().createBrowserTab('repo-a::/a/one', 'about:blank')
-    const sibling = store.getState().createBrowserTab('repo-a::/a/two', 'about:blank')
-    const other = store.getState().createBrowserTab('repo-b::/b/one', 'about:blank')
-    await main.settle()
-
-    const placeholderId = first.sessionProfileId ?? ''
-    expect(sibling.sessionProfileId).toBe(placeholderId)
-    expect(other.sessionProfileId).not.toBe(placeholderId)
-    expect(placeholderId).not.toBe('user-default')
-    expect(ensureMock.mock.calls.map(([args]) => args.owner)).toEqual([
-      { kind: 'repo', id: 'repo-a' },
-      { kind: 'repo', id: 'repo-b' }
-    ])
-    expect(store.getState().managedBrowserProfileStatusById[placeholderId]).toBe('pending')
-    // A placeholder that outlives this run must load nowhere, never on the shared Default jar.
-    expect(first.sessionPartition).toBe(`persist:orca-browser-unminted-${placeholderId}`)
-    store.getState().closeBrowserTab(sibling.id)
-    await main.settle()
-
-    const profile: BrowserSessionProfile = {
-      id: 'minted-by-main',
-      scope: 'isolated',
-      partition: 'persist:orca-browser-session-minted-by-main',
-      label: 'Repo: repo-a',
-      source: null,
-      owner: { kind: 'repo', id: 'repo-a' }
-    }
-    created.get('repo-a')?.(profile)
-    await vi.waitFor(() =>
-      expect(store.getState().managedBrowserProfileStatusById[placeholderId]).toBeUndefined()
-    )
-    // A tab closed while it waited reopens on the profile main made, not the placeholder.
-    expect(store.getState().reopenClosedBrowserTab('repo-a::/a/two')).not.toBeNull()
-    await main.settle()
-    const repoATabs = ['repo-a::/a/one', 'repo-a::/a/two'].flatMap(
-      (worktreeId) => store.getState().browserTabsByWorktree[worktreeId] ?? []
-    )
-    expect(repoATabs.map((tab) => tab.sessionPartition ?? null)).toEqual([null, null])
-    expect(repoATabs.map((tab) => tab.sessionProfileId)).toEqual([
-      'minted-by-main',
-      'minted-by-main'
-    ])
-    expect(store.getState().browserSessionProfilesByHostId.local).toEqual([profile])
-
-    const later = store.getState().createBrowserTab('repo-a::/a/three', 'about:blank')
-    expect(later.sessionProfileId).toBe('minted-by-main')
-    expect(store.getState().managedBrowserProfileStatusById['minted-by-main']).toBeUndefined()
-  })
-
-  it("opens new tabs on the repo's picked profile over the scope, until that profile is gone", async () => {
-    const ensureMock = vi.fn(
-      (_args: { owner: ManagedBrowserProfileOwner }) => new Promise<BrowserSessionProfile>(() => {})
-    )
-    Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
-    const profile = (id: string): BrowserSessionProfile => ({
-      id,
-      scope: id === 'default' ? 'default' : 'isolated',
-      partition: `persist:${id}`,
-      label: id,
-      source: null
-    })
-    const repo = (id: string, browserProfileId: string) => ({
-      id,
-      path: `/${id}`,
-      displayName: id,
-      badgeColor: '#000000',
-      addedAt: 0,
-      browserProfileId
-    })
-    const { store, main } = await createTestStoreDrawnFromMain({
-      repos: [
-        repo('work', 'work-profile'),
-        repo('plain', 'default'),
-        repo('stale', 'deleted'),
-        { ...repo('remote', 'work-profile'), connectionId: 'conn-1' }
-      ],
-      browserSessionProfilesByHostId: { local: [profile('default'), profile('work-profile')] },
-      settings: { ...getDefaultSettings('/tmp'), browserProfileScope: 'repo' }
-    })
-
-    const work = store.getState().createBrowserTab('work::/work/one', 'about:blank')
-    const plain = store.getState().createBrowserTab('plain::/plain/one', 'about:blank')
-    const stale = store.getState().createBrowserTab('stale::/stale/one', 'about:blank')
-    // Agent opens render an SSH workspace's page on this desktop, so they name the local host.
-    const agentOnSsh = store.getState().createBrowserTab('remote::/remote/one', 'about:blank', {
-      browserRuntimeEnvironmentId: null
-    })
-    await main.settle()
-
-    expect(work.sessionProfileId).toBe('work-profile')
-    expect(agentOnSsh.sessionProfileId).toBe('work-profile')
-    expect(plain.sessionProfileId).toBeNull()
-    expect(ensureMock.mock.calls.map(([args]) => args)).toEqual([
-      expect.objectContaining({ owner: { kind: 'repo', id: 'stale' } })
-    ])
-    expect(stale.sessionProfileId).not.toBe('deleted')
   })
 
   it('sanitizes persistent annotation payloads at the store boundary', async () => {

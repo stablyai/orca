@@ -2,7 +2,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'

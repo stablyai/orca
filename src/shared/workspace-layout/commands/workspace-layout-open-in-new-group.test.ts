@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import '../../execution-host'
+import '../../execution-host/execution-host'
 import '../tab-groups/tab-group-layout-tree'
 import { applyLayoutCommand } from '../workspace-layout-commands'
 import type { CommandOf, LayoutCommand, NewGroupSplit } from '../workspace-layout-command-types'

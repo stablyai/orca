@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { getVerifiedNativeChatCommands } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+import { getVerifiedNativeChatCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion

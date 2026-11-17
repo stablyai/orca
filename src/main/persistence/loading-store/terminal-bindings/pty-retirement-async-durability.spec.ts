@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { retirePersistedStablePaneOwner } from '../../../ipc/pty/pane/stable-owner'
 import { TEST_LEAF_1 } from '../../persistence-session-fixtures'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'

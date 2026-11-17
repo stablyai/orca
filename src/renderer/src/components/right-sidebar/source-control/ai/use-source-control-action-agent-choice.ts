@@ -12,7 +12,7 @@ import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import {
   sourceControlRepoAgentRows,
   sourceControlAgentPickerSelection,

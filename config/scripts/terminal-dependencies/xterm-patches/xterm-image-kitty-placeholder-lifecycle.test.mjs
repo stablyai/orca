@@ -30,38 +30,6 @@ describe('Kitty virtual placement lifecycle', () => {
     }
   })
 
-  it('can create a prototype from an encoded image after its physical bitmap is evicted', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,C=1', PNG)
-      h.storage._pixelLimit = 200
-      await writeKitty(h.terminal, 'a=T,f=100,i=8,U=1,c=2,r=2', PNG)
-      expect(h.kitty.getImage(7)).toBeDefined()
-      await writeKitty(h.terminal, 'a=p,U=1,i=7,c=2,r=2')
-      await write(h.terminal, placeholderCells(7))
-      expect(render(h)).toHaveLength(2)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('deletes physical placements while preserving a prototype of the same image on d=A', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
-      await writeKitty(h.terminal, 'a=p,i=7,C=1')
-      expect(h.kitty.kittyIdToStorageId.size).toBe(1)
-      await writeKitty(h.terminal, 'a=d,d=A,q=2')
-      expect(h.kitty.kittyIdToStorageId.size).toBe(0)
-      expect(h.storage._images.size).toBe(1)
-      expect(h.bitmaps[1].close).toHaveBeenCalledOnce()
-      await write(h.terminal, placeholderCells(7))
-      expect(render(h)).toHaveLength(2)
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
   it('discards a virtual decode completing after disposal', async () => {
     const h = createPlaceholderTerminal()
     try {

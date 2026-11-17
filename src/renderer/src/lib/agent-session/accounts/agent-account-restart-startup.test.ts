@@ -2,7 +2,7 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agen
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 
 import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'

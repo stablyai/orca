@@ -260,45 +260,6 @@
       ]
     },
     {
-      "id": "settings-bot-overrides-fulfilled",
-      "operation": "settings.bot-overrides",
-      "family": "settings.bot-overrides",
-      "sites": [
-        "mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts"
-      ],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "settings-workspace-context-fulfilled",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",
@@ -7050,8 +7011,8 @@
             "envelope": {
               "clientOperationId": "1767225600000-00000000000040008000000000000002",
               "expectedRuntimeFence": null,
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              "payloadFingerprint": "dba3b1f06130eabd87f981191b8806da21ead488b99966d5070a08b0f8dec8dc",
+              "sessionId": "00000000-0000-4000-8000-000000000001"
             },
             "worktree": "id:workspace-1"
           },
@@ -7067,8 +7028,8 @@
             "envelope": {
               "clientOperationId": "1767225600000-00000000000040008000000000000002",
               "expectedRuntimeFence": null,
-              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
-              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              "payloadFingerprint": "dba3b1f06130eabd87f981191b8806da21ead488b99966d5070a08b0f8dec8dc",
+              "sessionId": "00000000-0000-4000-8000-000000000001"
             },
             "worktree": "id:workspace-1"
           },
@@ -7077,7 +7038,7 @@
             "result": {
               "ok": true,
               "value": {
-                "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+                "sessionId": "00000000-0000-4000-8000-000000000001"
               }
             }
           }

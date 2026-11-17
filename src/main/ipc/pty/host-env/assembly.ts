@@ -13,6 +13,7 @@ import { wslHookRelayManager } from '../../../agent-hooks/wsl-relay/wsl-hook-rel
 import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
+import { resolveTerminalBrowserCommand } from './terminal-browser-command'
 import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/environment/windows-environment-path'
@@ -298,7 +299,7 @@ export function buildPtyHostEnv(
     }
     delete baseEnv.ORCA_CLI_COMMAND
   }
-  prependOrcaCliDirToChildPath(baseEnv, {
+  const cliLauncher = prependOrcaCliDirToChildPath(baseEnv, {
     isPackaged: opts.isPackaged,
     userDataPath: opts.userDataPath,
     resourcesPath: opts.resourcesPath
@@ -309,8 +310,9 @@ export function buildPtyHostEnv(
     baseEnv.BROWSER === undefined &&
     process.env.BROWSER === undefined
   ) {
-    const cliCommand = opts.isWsl ? getWslCliCommandName(opts.isPackaged) : 'orca'
-    baseEnv.BROWSER = `${cliCommand} open-url --url %s`
+    baseEnv.BROWSER = opts.isWsl
+      ? getWslCliCommandName(opts.isPackaged)
+      : resolveTerminalBrowserCommand(cliLauncher)
   }
   // Browser-relayed and SSH-managed headless hosts both have viewers on another machine.
   applyRemoteViewerClipboardEnv(baseEnv, {

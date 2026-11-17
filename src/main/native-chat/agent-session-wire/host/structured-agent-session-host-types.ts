@@ -42,7 +42,7 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
 import type { QueuedMessageOwed } from '../../agent-session-journal/queued-messages/queued-message-consume-error'
-import type { AgentMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionProviderChildPhase

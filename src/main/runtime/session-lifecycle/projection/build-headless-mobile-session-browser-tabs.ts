@@ -1,7 +1,7 @@
 import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
 import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
-import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
+import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-retirement/terminal-surface-retirements'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTerminalTab
@@ -12,7 +12,7 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
+import { holdAgentSessionInventory } from '../../session-tabs/inventory/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   captureTerminalCloseRequest,
@@ -27,7 +27,7 @@ import type {
 } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'

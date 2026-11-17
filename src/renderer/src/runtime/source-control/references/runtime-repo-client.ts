@@ -5,7 +5,7 @@ import { ipcOrRuntimeTargetForHostId } from '../../rpc/targets/runtime-client-ta
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from './runtime-repo-search-bounds'
 import { watchRefusedWslRead } from '../../hosts/wsl/wsl-refused-read-watch'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** The repo's own host: a server's runtime, or this app (with `hostId`) for local and SSH repos. */
 function repoHostTarget(hostId: ExecutionHostId): RuntimeClientTarget {

@@ -1,6 +1,6 @@
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as TransitionGraphReloadToTerminalStateMethods } from './session-graph-authority'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
-import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-title-publisher'
+import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/publication/session-title-publisher'
 import type { RuntimeRendererReloadFence } from './renderer-reload-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'

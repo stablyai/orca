@@ -1,4 +1,4 @@
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { StructuredMessageSteeringInputs } from '../../../shared/agent-session/options/codex-message-compiler'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type { JournalSqlFailure } from './journal-sql-failure'

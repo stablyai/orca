@@ -14,7 +14,7 @@ import {
 } from '../../../github/client/create/add-pr-review-comment'
 import { createIssue } from '../../../github/issues/issue-create'
 import { updateIssue } from '../../../github/issues/issue-update'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { GitHubAttachmentTarget } from '../../../../shared/rpc-contract/github/github-attachment-params'
 import { uploadGitHubImage } from '../../../github/attachments/image-attachment-upload'
 import {

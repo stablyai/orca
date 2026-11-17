@@ -2,14 +2,14 @@ import {
   type StructuredAttentionRead,
   type StructuredAttentionOrigin,
   isStructuredAttentionRead
-} from '../agent-session/agent-session-attention'
+} from '../agent-session/view/agent-session-attention'
 import {
   isAgentSessionExecutionLocation,
   type AgentSessionExecutionLocation
 } from '../agent-session/lifecycle/agent-session-record'
 import type { AgentStatusState, AgentType } from '../agent-status/contracts/agent-status-types'
 import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { NotificationSourceId } from './notification-source'
 
 export type NotificationSettings = {

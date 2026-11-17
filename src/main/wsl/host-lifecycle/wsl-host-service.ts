@@ -75,7 +75,8 @@ export class WslHostService {
     const current = () => this.connectionChanges.get(key) === change
     const record = await this.recordForDistro(distro)
     if (!record || !current()) {
-      return
+      // An Add's connect has no host yet; its dialog alone hears what the connect waits for.
+      return this.deps.publishAddProgress?.(distro, status)
     }
     await saveWslHostConnection(this.deps, record, { get: () => connection })
     if (!current()) {

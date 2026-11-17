@@ -36,7 +36,7 @@ vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-sto
 vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime', () => ({
   findWorkspaceEphemeralVmRuntime: () => state.record
 }))
-vi.mock('../ipc/ephemeral-vm-recipe-context', () => ({
+vi.mock('../ipc/ephemeral-vm/ephemeral-vm-recipe-context', () => ({
   getRuntimeRecipeContext: () => ({ repoPath: '/repo', recipe: state.recipe })
 }))
 vi.mock('../ipc/runtime-environments/runtime-environments', () => ({

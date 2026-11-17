@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
-import { TERMINAL_TEXT_SCALES } from '../terminal/preferences/terminal-text-scales'
+import { snapTerminalTextScale } from '../terminal/preferences/terminal-text-scales'
+import {
+  readTerminalFontStyle,
+  type TerminalFontStyle
+} from '../terminal/preferences/terminal-font-style'
 
 const PINS_PREFIX = 'orca:pins:'
 // Push-service consent is independent of legacy socket notifications.
@@ -67,29 +71,37 @@ export async function saveRemotePushHostRegistrations(
 }
 
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
+const FONT_STYLE_KEY = 'orca:terminalFontStyle'
 
-// Keep definitions in the bundled terminal document so it need not import storage.
-
-const DEFAULT_TEXT_SCALE = 1
-
-export async function loadTerminalTextScale(): Promise<number> {
+// Older builds stored 50–200% presets; snap those to the nearest whole point. The fallback is the device default.
+export async function loadTerminalTextScale(fallback: number): Promise<number> {
   try {
     const raw = await AsyncStorage.getItem(TEXT_SCALE_KEY)
-    if (raw === null) {
-      return DEFAULT_TEXT_SCALE
-    }
-    const parsed = Number(raw)
-    return (TERMINAL_TEXT_SCALES as readonly number[]).includes(parsed)
-      ? parsed
-      : DEFAULT_TEXT_SCALE
+    const parsed = raw === null ? Number.NaN : Number(raw)
+    return Number.isFinite(parsed) && parsed > 0 ? snapTerminalTextScale(parsed) : fallback
   } catch {
-    return DEFAULT_TEXT_SCALE
+    return fallback
   }
 }
 
 export async function saveTerminalTextScale(scale: number): Promise<void> {
   const value = String(scale)
   await persistMirrored(TEXT_SCALE_KEY, value)
+}
+
+export async function loadTerminalFontStyle(
+  fallback: TerminalFontStyle
+): Promise<TerminalFontStyle> {
+  try {
+    const raw = await AsyncStorage.getItem(FONT_STYLE_KEY)
+    return raw === null ? fallback : readTerminalFontStyle(JSON.parse(raw), fallback)
+  } catch {
+    return fallback
+  }
+}
+
+export async function saveTerminalFontStyle(style: TerminalFontStyle): Promise<void> {
+  await persistMirrored(FONT_STYLE_KEY, JSON.stringify(style))
 }
 
 const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'

@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import type { Project, ProjectHostSetup } from '../project-types'
 
 /** Normalize persisted/mixed-version Project/ProjectHostSetup rows at ingress; null/missing strings otherwise crash trim consumers

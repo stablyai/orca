@@ -1,6 +1,6 @@
 // Drafts stay on this desktop; commit retargets their host records and restore checks disk baselines.
 import type { OrcadMigrationManifest } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
