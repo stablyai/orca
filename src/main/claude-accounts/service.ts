@@ -23,6 +23,7 @@ export class ClaudeAccountService {
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
   private openWslSignInLink: ((signInLink: string) => void) | null = null
+  private selectionApplied: (() => void) | null = null
   private readonly selection: ClaudeAccountSelection
   private readonly registration: ClaudeAccountRegistration
 
@@ -101,9 +102,16 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.registration.cancel(signIn))
   }
 
+  /** The desktop moves running chats once a selection is in force; orcad leaves this unset. */
+  setSelectionAppliedListener(listener: (() => void) | null): void {
+    this.selectionApplied = listener
+  }
+
   removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.remove(accountId))
+    return this.serializeMutation(() =>
+      this.selection.remove(accountId, () => this.selectionApplied?.())
+    )
   }
 
   // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
@@ -129,16 +137,25 @@ export class ClaudeAccountService {
   }
 
   selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
-    this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.select(accountId))
+    return this.applySelection(() => this.selection.select(accountId))
   }
 
   selectAccountForTarget(
     accountId: string | null,
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
+    return this.applySelection(() => this.selection.select(accountId, target))
+  }
+
+  private applySelection(
+    change: () => Promise<ClaudeRateLimitAccountsState>
+  ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    return this.serializeMutation(() => this.selection.select(accountId, target))
+    return this.serializeMutation(async () => {
+      const state = await change()
+      this.selectionApplied?.()
+      return state
+    })
   }
 
   getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {

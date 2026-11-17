@@ -154,7 +154,7 @@ export class ClaudeAccountSelection {
     }
   }
 
-  async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {
+  async remove(accountId: string, onApplied: () => void): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
     const settings = this.store.getSettings()
     const target = getClaudeSelectionTargetForAccount(account)
@@ -170,6 +170,9 @@ export class ClaudeAccountSelection {
     })
     // Stop new launches from selecting the folder before deleting it.
     await this.runtimeAuth.syncForCurrentSelection(target)
+    if (wasSelected) {
+      onApplied()
+    }
     try {
       await this.runtimeAuth.removeAccountFolder(accountId, target)
     } catch (error) {

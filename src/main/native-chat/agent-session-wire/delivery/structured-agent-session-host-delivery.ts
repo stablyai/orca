@@ -32,6 +32,7 @@ import {
   retireOutgrownStructuredAgentSessionChild,
   structuredAgentSessionChildOwesWork
 } from '../recovery/structured-agent-session-outgrown-child'
+import * as accountSwitch from '../recovery/structured-agent-session-account-switch'
 import {
   structuredAgentSessionLaunchPermission,
   structuredAgentSessionInputCompilerPermission,
@@ -52,6 +53,7 @@ export type StructuredAgentSessionConversationDelivery = {
   /** Settle edges affect status/steer holds without rows or renewed idle activity. */
   afterSettleEdge: (sessionId: string, journal: AgentSessionJournal) => void
   dispose: () => void
+  retireForAccountSwitch: accountSwitch.StructuredAgentSessionAccountSwitchRetire
   adoptOpened: (
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
@@ -144,10 +146,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           deps.store.requireWritableRecord(sessionId)
           return input.stopOutgrownAgent(sessionId)
         },
-        launchAccountHome: async () => {
-          const record = deps.store.getRecord(sessionId)
-          return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
-        },
+        launchAccountHome: () => accountSwitch.launchAccountIdentity(deps, sessionId),
         logger: deps.logger
       })
     },
@@ -306,6 +305,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       loop.dispose()
       stopResettling()
     },
+    retireForAccountSwitch: accountSwitch.retireForAccountSwitch(input, retainedWork),
     open: (sessionId, options) =>
       openStructuredAgentSessionConversation({ deps, sessions, adoptOpened }, sessionId, options)
   }

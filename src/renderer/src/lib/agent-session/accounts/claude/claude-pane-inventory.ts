@@ -7,7 +7,10 @@ import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
 } from '../../../../../../shared/agent-status/process/agent-process-recognition'
-import { normalizeAgentProviderSession } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   isTerminalLeafId,
   makePaneKey
@@ -25,6 +28,8 @@ import {
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { ClaudePaneLookups } from './claude-queued-restart-records'
 
 export type ClaudeSessionMoveCandidate = {
   ptyId: string
@@ -72,10 +77,13 @@ export type LocalClaudePane = ClaudeSessionMoveCandidate & {
   inLane: boolean
   transcriptPath: string | undefined
   sessionId: string | undefined
-  /** False when neither a live row nor a saved record names the session, so no restart can resume it. */
+  /** False when neither a live row, a saved record nor the switch-time lookup names the session, so no restart can resume it. */
   resumable: boolean
   /** A live process read, since any Orca command shares Agent Teams' executable name. */
   agentTeams: boolean
+  entry: AgentStatusEntry | undefined
+  lookedUp: AgentProviderSessionMetadata | null | undefined
+  unnamed: boolean
 }
 
 function isClaudeAgent(agent: string | null | undefined): boolean {
@@ -96,7 +104,9 @@ function hasRowlessClaudeEvidence(
 export function* localClaudePanes(
   state: AppState,
   owner: RuntimeClientTarget,
-  target: CodexAccountSelectionTarget
+  target: CodexAccountSelectionTarget,
+  includeUnnamed = false,
+  lookups?: ClaudePaneLookups
 ): Generator<LocalClaudePane> {
   const isLaneInScope = getCodexAccountSwitchLaneMatcher({ owner, target })
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
@@ -122,13 +132,14 @@ export function* localClaudePanes(
         const record = state.sleepingAgentSessionsByPaneKey[paneKey]
         const saved = record?.agent === 'claude' ? record.providerSession : undefined
         const hasClaudeEvidence = hasRowlessClaudeEvidence(state, paneKey, launchAgent)
-        if (!entry && !saved && !hasClaudeEvidence) {
+        const unnamed = !entry && !saved && !hasClaudeEvidence
+        if (unnamed && !includeUnnamed) {
           continue
         }
         const { laneKey } = resolveCodexPaneSelectionLane({ state, tab, ptyId })
-        const providerSession =
-          normalizeAgentProviderSession(entry?.providerSession) ??
-          normalizeAgentProviderSession(saved)
+        const hooked = normalizeAgentProviderSession(entry?.providerSession)
+        const lookedUp = hooked ? undefined : lookups?.get(paneKey)
+        const providerSession = hooked ?? lookedUp ?? normalizeAgentProviderSession(saved)
         const foreground = state.paneForegroundAgentByPaneKey[paneKey]
         yield {
           ptyId,
@@ -144,7 +155,10 @@ export function* localClaudePanes(
           agentTeams:
             foreground?.agent === 'claude-agent-teams' &&
             foreground.agentEvidence === 'process-read' &&
-            !foreground.shellForeground
+            !foreground.shellForeground,
+          entry,
+          lookedUp,
+          unnamed
         }
       }
     }

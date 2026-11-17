@@ -5,6 +5,13 @@ import {
   onQueuedRestartPaneBound,
   selectReadyAccountRestartPtyIds
 } from './pane-account-restart-readiness'
+import {
+  lookUpDiscoveredClaudeRestart,
+  requeueRestart,
+  restartsOnLookedUpSession,
+  warnsLostClaudeRecord
+} from './discovered-claude-restart'
+import { takeQueuedClaudeRestart } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 import type { usePaneProcessRestart } from '../process-exit/use-pane-process-restart'
 import type { usePaneAccountRestartStartup } from './use-pane-account-restart-startup'
@@ -43,10 +50,36 @@ export function useReadyPaneAccountRestarts({
         continue
       }
       const agent = consumePendingPaneAccountRestart(ptyId)
-      const startup = agent ? buildAccountRestartStartup(agent, pane.leafId) : null
+      const queued = agent === 'claude' ? takeQueuedClaudeRestart(ptyId) : undefined
+      if (warnsLostClaudeRecord(agent, { tabId, leafId: pane.leafId }, queued)) {
+        continue
+      }
+      const startup =
+        agent && !restartsOnLookedUpSession({ tabId, leafId: pane.leafId }, queued)
+          ? buildAccountRestartStartup(
+              agent,
+              pane.leafId,
+              undefined,
+              queued?.restartAll,
+              !!queued?.restartAll && !queued.session
+            )
+          : null
       if (agent && startup) {
         // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
         handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
+      } else if (agent === 'claude') {
+        const { id, leafId } = pane
+        void lookUpDiscoveredClaudeRestart(agent, { ptyId, tabId, leafId }, queued, (session) =>
+          buildAccountRestartStartup(agent, leafId, session, queued?.restartAll)
+        ).then((found) => {
+          const bound =
+            useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+          if (found && paneTransportsRef.current.get(id)?.getPtyId() === ptyId) {
+            handleRestartPane(id, found, { focus: false })
+          } else if (found && bound) {
+            requeueRestart(bound, agent, queued)
+          }
+        })
       }
     }
   }, [

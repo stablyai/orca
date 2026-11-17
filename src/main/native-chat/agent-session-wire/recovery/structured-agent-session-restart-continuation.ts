@@ -23,10 +23,8 @@ import {
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import {
-  AGENT_SESSION_RESTART_CONTINUATION_NOTE,
-  AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
-  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
+  restartContinuationNote,
+  type AgentSessionContinuationSource
 } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
@@ -178,7 +176,7 @@ export type StartedStructuredAgentSessionContinuation =
 export async function startStructuredAgentSessionContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: AgentSessionContinuationSource,
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   let started: StartedStructuredAgentSessionContinuation
@@ -187,13 +185,13 @@ export async function startStructuredAgentSessionContinuation(
   } catch (error) {
     // Supersession is not failure and needs no chat note.
     if (!(error instanceof RestartContinuationSupersededError) && !deps.answerAtAcceptance) {
-      await noteNotContinued(deps, sessionId, 'refused')
+      await noteNotContinued(deps, sessionId, 'refused', marker)
     }
     throw error
   }
   if ('done' in started) {
     if (!(deps.answerAtAcceptance && started.done.outcome === 'refused')) {
-      await noteOutcome(deps, sessionId, started.done)
+      await noteOutcome(deps, sessionId, started.done, marker)
     }
     return started
   }
@@ -201,7 +199,7 @@ export async function startStructuredAgentSessionContinuation(
   return {
     verdict: async () => {
       const outcome = await verdict()
-      await noteOutcome(deps, sessionId, outcome)
+      await noteOutcome(deps, sessionId, outcome, marker)
       return outcome
     }
   }
@@ -210,7 +208,8 @@ export async function startStructuredAgentSessionContinuation(
 async function noteOutcome(
   deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'logger' | 'liftRestartHold'>,
   sessionId: string,
-  result: StructuredAgentSessionContinuationOutcome
+  result: StructuredAgentSessionContinuationOutcome,
+  marker: AgentSessionContinuationSource
 ): Promise<void> {
   if (result.outcome === 'continued') {
     try {
@@ -223,7 +222,7 @@ async function noteOutcome(
     }
     // Attribute only accepted dispatch; note failure must not turn delivered work into failure.
     try {
-      await deps.note(sessionId, AGENT_SESSION_RESTART_CONTINUATION_NOTE)
+      await deps.note(sessionId, restartContinuationNote(marker, 'continued'))
     } catch {
       reportNoteFailed(deps, sessionId)
     }
@@ -235,7 +234,8 @@ async function noteOutcome(
         ? 'unconfirmed'
         : OWNERSHIP_REFUSALS.has(result.reason ?? '')
           ? 'not-connected'
-          : 'refused'
+          : 'refused',
+      marker
     )
   }
 }
@@ -244,18 +244,15 @@ async function noteOutcome(
 async function noteNotContinued(
   deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'logger'>,
   sessionId: string,
-  outcome: 'refused' | 'not-connected' | 'unconfirmed'
+  outcome: 'refused' | 'not-connected' | 'unconfirmed',
+  marker: AgentSessionContinuationSource
 ): Promise<void> {
   try {
-    await (outcome === 'unconfirmed'
-      ? deps.note(sessionId, AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE, 'warning')
-      : deps.note(
-          sessionId,
-          outcome === 'refused'
-            ? AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE
-            : AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE,
-          'error'
-        ))
+    await deps.note(
+      sessionId,
+      restartContinuationNote(marker, outcome),
+      outcome === 'unconfirmed' ? 'warning' : 'error'
+    )
   } catch {
     reportNoteFailed(deps, sessionId)
   }
@@ -264,7 +261,7 @@ async function noteNotContinued(
 async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: AgentSessionContinuationSource,
   continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   const fence = deps.currentFence(sessionId)

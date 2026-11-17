@@ -187,6 +187,7 @@ export type PtyApi = {
     id: string,
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => Promise<boolean>
+  discoverClaudeSession: (id: string) => Promise<AgentProviderSessionMetadata | null>
   /** Checks saved Claude config for local host panes; false for other panes. */
   claudeDiffPanelMayAutoOpen: (
     id: string,

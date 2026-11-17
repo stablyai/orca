@@ -1,5 +1,5 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
@@ -11,6 +11,8 @@ import {
   findClaudeSwitchSessions,
   findQueuedClaudeRestartsOnAccount
 } from './claude-session-account-move'
+import type { ClaudePaneLookups } from './claude-queued-restart-records'
+import { settleQueuedClaudeRestarts } from './claude-pane-session-lookup'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { ClaudeManagedAccount } from '../../../../../../shared/agent-accounts/managed-account-types'
@@ -44,7 +46,7 @@ vi.mock('../codex-pane-selection-lane', async (importOriginal) => ({
 
 const LOCAL = { kind: 'local' } as const
 const HOST = { runtime: 'host' } as const
-const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
+const SESSION_ID = '00000000-0000-4000-8000-0000000000a1'
 const FOLDER_A = '/data/claude-accounts/acct-a'
 const FOLDER_B = '/data/claude-accounts/acct-b'
 
@@ -146,8 +148,21 @@ const scan = (
   fromAccountId: string | null = 'acct-a',
   target: { runtime: 'host' | 'wsl'; wslDistro?: string } = HOST,
   host?: ClaudeHostFolders,
-  toAccountId: string | null = 'acct-c'
-) => findClaudeSwitchSessions({ owner: LOCAL, target, fromAccountId, toAccountId, host })
+  toAccountId: string | null = 'acct-c',
+  discovered?: ClaudePaneLookups
+) =>
+  findClaudeSwitchSessions({
+    owner: LOCAL,
+    target,
+    fromAccountId,
+    toAccountId,
+    host,
+    restartAll: restartAllIsSet(),
+    discovered
+  })
+
+const restartAllIsSet = () =>
+  useAppStore.getState().settings?.claudeAccountSwitchRunningSessions === 'restart-all'
 
 const movable = async (...args: Parameters<typeof scan>) =>
   (await scan(...args)).onAccount.map((pane) => pane.ptyId)
@@ -371,6 +386,132 @@ describe('findMovableClaudeSessions', () => {
     expect(await movable('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu-24.04' })).toEqual([
       ptyId(1)
     ])
+  })
+})
+
+describe('panes no hook has named', () => {
+  const SYSTEM_HOME = '/home/dev/.claude'
+  const recorded = (configDir: string, n: number) => {
+    const id = `${SESSION_ID.slice(0, -1)}${n}`
+    const separator = configDir.includes('\\') ? '\\' : '/'
+    const transcriptPath = [configDir, 'projects', 'C--repo', `${id}.jsonl`].join(separator)
+    return { key: 'session_id' as const, id, transcriptPath }
+  }
+  const paneKeyOf = (n: number) => makePaneKey(tabId(n), leafId(n))
+  const lookedUp = (...entries: [number, string][]) =>
+    new Map(entries.map(([n, configDir]) => [paneKeyOf(n), recorded(configDir, n)]))
+  const discoverClaudeSession = vi.fn()
+  const settle = (accountId = 'acct-b') =>
+    settleQueuedClaudeRestarts({
+      owner: LOCAL,
+      target: HOST,
+      accountId,
+      accountLabel: accountId,
+      isCurrent: () => true,
+      restartAll: true
+    })
+
+  beforeEach(() => {
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true
+    })
+    discoverClaudeSession.mockReset()
+    discoverClaudeSession.mockImplementation(async (id: string) => ({
+      key: 'session_id',
+      id: `session-${id}`,
+      transcriptPath: `${FOLDER_A}/projects/-repo/session-${id}.jsonl`
+    }))
+    vi.stubGlobal('window', { api: { pty: { discoverClaudeSession } } })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('moves a pane no hook named by its looked-up session, and a named one by its hook', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_A },
+      { n: 2, agentType: 'claude', sessionId: null }
+    ])
+    const found = new Map([...lookedUp([2, FOLDER_A]), [paneKeyOf(1), recorded(FOLDER_B, 1)]])
+
+    expect(await movable('acct-a', HOST, undefined, 'acct-c', found)).toEqual([ptyId(1), ptyId(2)])
+  })
+
+  it('places a record from a Windows account folder on that account', async () => {
+    const windowsFolder = 'C:\\Users\\Dev\\AppData\\Roaming\\orca\\claude-profiles\\acct-a\\home'
+    seedPanes([{ n: 2, agentType: 'claude', sessionId: null }])
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, claudeManagedAccounts: [account('acct-a', windowsFolder)] }
+    }))
+
+    expect(
+      await movable('acct-a', HOST, undefined, 'acct-c', lookedUp([2, windowsFolder.toLowerCase()]))
+    ).toEqual([ptyId(2)])
+  })
+
+  it('groups a pane whose record sits in the System default folder with the other accounts', async () => {
+    seedPanes([{ n: 2, agentType: 'claude', sessionId: null }])
+    const host = { accounts: [], systemDefaultHome: SYSTEM_HOME }
+
+    const found = await scan('acct-a', HOST, host, 'acct-c', lookedUp([2, SYSTEM_HOME]))
+
+    expect(found.elsewhere).toEqual([expect.objectContaining({ ptyId: ptyId(2), accountId: null })])
+    expect(found.cantMove).toEqual([])
+  })
+
+  it('looks up only host panes in the lane with no status row, or whose row and saved record name no session', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', configDir: FOLDER_B },
+      { n: 2, agentType: 'claude', sessionId: null },
+      { n: 3, agentType: 'claude', sessionId: null },
+      { n: 4, agentType: 'claude', sessionId: null },
+      { n: 5, agentType: 'codex', sessionId: null },
+      { n: 6, sessionId: null }
+    ])
+    laneByPtyId[ptyId(3)] = 'wsl:Ubuntu'
+    const paneKey = makePaneKey(tabId(4), leafId(4))
+    const rowless = makePaneKey(tabId(6), leafId(6))
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: SESSION_ID },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        },
+        [rowless]: {
+          paneKey: rowless,
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: SESSION_ID },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    expect([...(await settle()).keys()]).toEqual([paneKeyOf(2), paneKeyOf(6)])
+  })
+
+  it('names no session for a pane whose lookup failed', async () => {
+    seedPanes([{ n: 2, agentType: 'claude', sessionId: null }])
+    discoverClaudeSession.mockRejectedValue(new Error('no handler'))
+
+    expect([...(await settle())]).toEqual([[paneKeyOf(2), null]])
+  })
+
+  it('cancels a queued restart of a pane no hook named once it is found on the account', async () => {
+    seedPanes([{ n: 2, agentType: 'claude', sessionId: null }])
+    useAppStore.setState({ pendingPaneAccountRestarts: { [ptyId(2)]: 'claude' } })
+
+    await settle('acct-a')
+
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
 })
 

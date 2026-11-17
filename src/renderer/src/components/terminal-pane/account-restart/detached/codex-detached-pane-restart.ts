@@ -1,5 +1,4 @@
 /** Execute accepted Codex/Claude account restarts for unmounted local panes so input cannot stay blocked until reveal. */
-import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
 import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
@@ -18,6 +17,17 @@ import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { buildPaneIdentityEnv, getWorkspacePath } from './detached-pane-restart-spawn-context'
 import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
+import { retryableClaudeSpawn } from './claude-detached-restart-hold'
+import {
+  lookUpDiscoveredClaudeRestart,
+  requeueRestart,
+  restartsOnLookedUpSession,
+  warnsLostClaudeRecord
+} from '../discovered-claude-restart'
+import {
+  takeQueuedClaudeRestart,
+  type QueuedClaudeRestart
+} from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import {
   hasFreeDetachedRestartSlot,
   holdDetachedRestartSlot,
@@ -29,7 +39,7 @@ import {
   releaseReplacedCodexPanePty
 } from './detached-pane-restart-pty-release'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { LocatedCodexPane } from './located-codex-pane'
+import { locateCodexPane, type LocatedCodexPane } from './located-codex-pane'
 import type { AppState } from '@/store/types'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 
@@ -82,6 +92,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     if (!agent) {
       return
     }
+    const queued = agent === 'claude' ? takeQueuedClaudeRestart(ptyId) : undefined
     inFlightPtyIds.add(ptyId)
     const claimedPane = located
     releaseSlot = holdDetachedRestartSlot(ptyId, () => {
@@ -90,7 +101,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
       reopenCurrentCodexRestartPrompt(claimedPane, ptyId)
       onSettled?.()
     })
-    await executeDetachedCodexPaneRestart(located, ptyId, agent)
+    await executeDetachedCodexPaneRestart(located, ptyId, agent, queued)
   } catch (err) {
     console.warn('[codex-restart] detached pane restart failed:', err)
     // Contain each bad claim so later panes still restart and this prompt cannot remain silently answered.
@@ -108,32 +119,12 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
   }
 }
 
-function locateCodexPane(state: AppState, ptyId: string): LocatedCodexPane | null {
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    for (const tab of tabs) {
-      if (tab.ptyId !== ptyId && !(state.ptyIdsByTabId[tab.id] ?? []).includes(ptyId)) {
-        continue
-      }
-      const leafId =
-        Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).find(
-          ([, boundPtyId]) => boundPtyId === ptyId
-        )?.[0] ?? null
-      // Reject legacy numeric leaves because pane-key environment and main binding require UUIDs.
-      return {
-        worktreeId,
-        tab,
-        leafId: leafId !== null && isTerminalLeafId(leafId) ? leafId : null,
-        generation: tab.generation ?? 0
-      }
-    }
-  }
-  return null
-}
-
 async function executeDetachedCodexPaneRestart(
   located: LocatedCodexPane,
   ptyId: string,
-  agent: AccountRestartAgent
+  agent: AccountRestartAgent,
+  queued: QueuedClaudeRestart | undefined,
+  rejectedSpawns = 0
 ): Promise<void> {
   const state = useAppStore.getState()
   if (!located.leafId) {
@@ -160,12 +151,20 @@ async function executeDetachedCodexPaneRestart(
     return
   }
   const { worktreeId, tab, leafId } = located
-  const startup = buildPaneAccountRestartStartup(agent, {
-    worktreeId,
-    tabId: tab.id,
-    leafId,
-    shellOverride: tab.shellOverride
-  })
+  const pane = { worktreeId, tabId: tab.id, leafId, shellOverride: tab.shellOverride }
+  if (warnsLostClaudeRecord(agent, pane, queued)) {
+    return
+  }
+  const continueWork = queued?.restartAll
+  const startup = restartsOnLookedUpSession(pane, queued)
+    ? await lookUpDiscoveredClaudeRestart(
+        agent,
+        { ptyId, ...pane },
+        queued,
+        (session) => buildPaneAccountRestartStartup(agent, pane, session, continueWork),
+        rejectedSpawns > 0
+      )
+    : buildPaneAccountRestartStartup(agent, pane, undefined, continueWork, continueWork)
   if (!startup) {
     return
   }
@@ -187,7 +186,7 @@ async function executeDetachedCodexPaneRestart(
     return
   }
   if (hasRegisteredRuntimeTerminalTab(tab.id, worktreeId) || ptyDataHandlers.has(ptyId)) {
-    currentState.queuePaneAccountRestarts([ptyId], agent)
+    requeueRestart(ptyId, agent, queued)
     return
   }
   const paneOwner = restartPaneOwner(currentState, worktreeId, tab.id, leafId)
@@ -198,7 +197,7 @@ async function executeDetachedCodexPaneRestart(
   }
 
   // Transfer hidden ownership without waiting for sizing; main labels replacement exits so parked/pre-attach handlers preserve the pane.
-  const spawned = await window.api.pty.spawn({
+  const spawning = window.api.pty.spawn({
     cols: 80,
     rows: 24,
     ...(cwd ? { cwd } : {}),
@@ -216,6 +215,13 @@ async function executeDetachedCodexPaneRestart(
     ...(projectRuntime ? { projectRuntime } : {}),
     initiallyHidden: true
   })
+  const spawned = await (agent === 'claude'
+    ? retryableClaudeSpawn(spawning, rejectedSpawns, queued)
+    : spawning)
+  if (spawned === null) {
+    // Why: the retry re-runs the checks above, so a closed or newly mounted pane is never spawned into.
+    return executeDetachedCodexPaneRestart(located, ptyId, agent, queued, rejectedSpawns + 1)
+  }
 
   // Adopt even after old-binding cleanup or mount races because main already stopped the old PTY and the replacement is the only process.
   const store = useAppStore.getState()

@@ -20,6 +20,7 @@ import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
 } from '../../../../../../shared/agent-accounts/managed-account-types'
+import type { ClaudePaneLookups } from './claude-queued-restart-records'
 
 export type { ClaudeSessionMoveCandidate } from './claude-pane-inventory'
 
@@ -42,12 +43,20 @@ export function findQueuedClaudeRestartsOnAccount(args: {
   target: CodexAccountSelectionTarget
   accountId: string | null
   host?: ClaudeHostFolders
+  restartAll?: boolean
+  discovered?: ClaudePaneLookups
 }): string[] {
   const state = useAppStore.getState()
   const saved = state.settings?.claudeManagedAccounts ?? []
   const host = isHostTarget(args.target) ? args.host : undefined
   const ptyIds: string[] = []
-  for (const pane of localClaudePanes(state, args.owner, args.target)) {
+  for (const pane of localClaudePanes(
+    state,
+    args.owner,
+    args.target,
+    args.restartAll,
+    args.discovered
+  )) {
     if (
       pane.inLane &&
       state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
@@ -94,6 +103,8 @@ type ScannedPane =
       stranded?: true
     }
 
+export type InspectedClaudePane = ScannedPane & { running: boolean | 'unchecked' }
+
 function scanPane(
   pane: LocalClaudePane,
   args: {
@@ -124,12 +135,16 @@ function scanPane(
   if (isClaudePaneOnAccount(folder, args.toAccountId, args.host)) {
     return null
   }
-  const resumable = resolveAgentAccountRestartResumeStartup('claude', {
-    tabId: pane.tabId,
-    leafId: pane.leafId,
-    worktreeId: pane.worktreeId,
-    shellOverride: pane.tab.shellOverride
-  })
+  const resumable = resolveAgentAccountRestartResumeStartup(
+    'claude',
+    {
+      tabId: pane.tabId,
+      leafId: pane.leafId,
+      worktreeId: pane.worktreeId,
+      shellOverride: pane.tab.shellOverride
+    },
+    pane.lookedUp ?? undefined
+  )
   if (!resumable) {
     return isClaudePaneOnAccount(folder, args.fromAccountId, args.host)
       ? { group: 'cantMove', pane, reason: 'no-session', stranded: true }
@@ -144,6 +159,12 @@ function scanPane(
       }
 }
 
+function unnamedPaneRow(state: AppState, pane: LocalClaudePane): ScannedPane | null {
+  return pane.inLane && state.pendingPaneAccountRestarts[pane.ptyId] !== 'claude'
+    ? { group: 'cantMove', pane, reason: 'no-session' }
+    : null
+}
+
 function toCandidate(pane: LocalClaudePane): ClaudeSessionMoveCandidate {
   return { ptyId: pane.ptyId, worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId }
 }
@@ -156,12 +177,17 @@ export async function findClaudeSwitchSessions(args: {
   fromAccountId: string | null
   toAccountId: string | null
   host?: ClaudeHostFolders
+  restartAll?: boolean
+  discovered?: ClaudePaneLookups
   /** Sessions that may be on the outgoing account, left out because their foreground could not be read. */
   onUnchecked?: (sessions: ClaudeSessionMoveCandidate[]) => void
+  /** Sessions on any other account left out because their foreground could not be read. */
+  onUncheckedOthers?: (sessions: ClaudeSessionMoveCandidate[]) => void
   /** Sessions on the outgoing account kept running because another pane holds their conversation. */
   onShared?: (sessions: ClaudeSessionMoveCandidate[]) => void
   /** Running Claude sessions no restart can move that may still be on the outgoing account. */
   onStranded?: (sessions: ClaudeSessionMoveCandidate[]) => void
+  onInspected?: (panes: LocalClaudePane[], inspected: InspectedClaudePane[]) => void
 }): Promise<ClaudeSwitchSessions> {
   const found: ClaudeSwitchSessions = { onAccount: [], elsewhere: [], cantMove: [] }
   if (args.owner.kind !== 'local') {
@@ -176,14 +202,20 @@ export async function findClaudeSwitchSessions(args: {
     fromAccountId: args.fromAccountId,
     toAccountId: args.toAccountId
   }
-  const scanned = [...localClaudePanes(state, args.owner, args.target)].flatMap((pane) => {
-    const row = scanPane(pane, scanArgs)
+  const panes = [
+    ...localClaudePanes(state, args.owner, args.target, args.restartAll, args.discovered)
+  ]
+  const scanned = panes.flatMap((pane) => {
+    const nameless = !pane.resumable && !pane.entry && (pane.unnamed || pane.lookedUp === null)
+    const row = nameless ? unnamedPaneRow(state, pane) : scanPane(pane, scanArgs)
     return row ? [row] : []
   })
-  const inspected = await Promise.all(
+  const inspected: InspectedClaudePane[] = await Promise.all(
     scanned.map(async (row) => ({ ...row, running: await isClaudeRunning(state, row.pane) }))
   )
+  args.onInspected?.(panes, inspected)
   const unchecked: ClaudeSessionMoveCandidate[] = []
+  const uncheckedOthers: ClaudeSessionMoveCandidate[] = []
   const shared: ClaudeSessionMoveCandidate[] = []
   const stranded: ClaudeSessionMoveCandidate[] = []
   for (const row of inspected) {
@@ -191,6 +223,8 @@ export async function findClaudeSwitchSessions(args: {
     const mayStayBehind = row.group === 'onAccount' || (row.group === 'cantMove' && row.stranded)
     if (row.running === 'unchecked' && mayStayBehind) {
       unchecked.push(candidate)
+    } else if (row.running === 'unchecked' && (!row.pane.unnamed || row.pane.resumable)) {
+      uncheckedOthers.push(candidate)
     }
     if (row.running === true && row.group === 'cantMove' && row.stranded) {
       stranded.push(candidate)
@@ -202,7 +236,7 @@ export async function findClaudeSwitchSessions(args: {
     if (
       row.group !== 'cantMove' &&
       row.pane.sessionId &&
-      isSessionHeldByAnotherPane(state, paneKey, row.pane.sessionId)
+      isSessionHeldByAnotherPane(state, paneKey, row.pane.sessionId, args.discovered)
     ) {
       found.cantMove.push({ ...candidate, reason: 'shared-session' })
       if (row.group === 'onAccount') {
@@ -221,6 +255,9 @@ export async function findClaudeSwitchSessions(args: {
   }
   if (unchecked.length > 0) {
     args.onUnchecked?.(unchecked)
+  }
+  if (uncheckedOthers.length > 0) {
+    args.onUncheckedOthers?.(uncheckedOthers)
   }
   if (stranded.length > 0) {
     args.onStranded?.(stranded)

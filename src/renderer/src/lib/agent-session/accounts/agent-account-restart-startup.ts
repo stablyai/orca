@@ -13,15 +13,23 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolv
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
+import { warnSessionsLeftBehind } from '@/lib/provider-accounts/claude-account-switch-notices'
+import { discoveredRestartAccountLabel } from '@/lib/agent-session/accounts/claude/claude-pane-session-lookup'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command'
-import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import {
+  resolveStartupShell,
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { findOptionOccurrence } from '../../../../../shared/cli/command-option-occurrence'
 import type { AppState } from '@/store/types'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
@@ -44,25 +52,56 @@ type AccountRestartPane = {
 
 type AccountRestartTarget = Pick<AccountRestartPane, 'worktreeId' | 'shellOverride'>
 
+const CLAUDE_LAUNCH_FLAGS = [
+  ['model', ['--model']],
+  ['effort', ['--effort']],
+  ['permissionMode', ['--permission-mode', '--dangerously-skip-permissions']]
+] as const
+
+function withoutFlagsNamedIn(
+  session: AgentProviderSessionMetadata,
+  texts: readonly (string | null | undefined)[],
+  shell: AgentStartupShell
+): AgentProviderSessionMetadata {
+  const tokens = texts.flatMap((text) => {
+    const parsed = text ? tokenizeStartupCommand(text, shell) : null
+    return parsed?.ok ? parsed.tokens : []
+  })
+  const kept = { ...session }
+  for (const [field, aliases] of CLAUDE_LAUNCH_FLAGS) {
+    if (findOptionOccurrence(tokens, aliases, true, [], 0, false)) {
+      delete kept[field]
+    }
+  }
+  return kept
+}
+
 /**
  * The resume startup for the pane's own session, or null when it has none to name.
  * Capture it before restart clears the old pane's status.
  */
 export function resolveAgentAccountRestartResumeStartup(
   agent: AccountRestartAgent,
-  args: AccountRestartPane
+  args: AccountRestartPane,
+  discovered?: AgentProviderSessionMetadata,
+  continueWork = false
 ): AgentAccountRestartStartup | null {
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const entry = state.agentStatusByPaneKey.get(paneKey)
   const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
-  const agentType = entry?.agentType ?? sleeping?.agent
+  const agentType =
+    entry?.agentType ?? sleeping?.agent ?? (agent === 'claude' && discovered ? agent : undefined)
   if (agentType !== agent) {
     return null
   }
-  const providerSession =
-    normalizeAgentProviderSession(entry?.providerSession) ??
-    normalizeAgentProviderSession(sleeping?.agent === agent ? sleeping.providerSession : undefined)
+  const sleepingSession = normalizeAgentProviderSession(
+    sleeping?.agent === agent ? sleeping.providerSession : undefined
+  )
+  const sleepingMatchingLookup =
+    discovered && sleepingSession?.id !== discovered.id ? null : sleepingSession
+  const recorded = normalizeAgentProviderSession(entry?.providerSession) ?? sleepingMatchingLookup
+  const providerSession = recorded ?? (agent === 'claude' ? discovered : undefined)
   if (!providerSession) {
     return null
   }
@@ -78,18 +117,30 @@ export function resolveAgentAccountRestartResumeStartup(
   // A live invocation takes the one decision's answer, none included.
   const launchConfig = entry
     ? state.getAgentLaunchConfigForStatusEntry(entry)
-    : sleeping?.agent === agent
+    : sleeping?.agent === agent && sleepingMatchingLookup !== null
       ? sleeping.launchConfig
       : undefined
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
+  const cmdOverrides = state.settings?.agentCmdOverrides ?? {}
+  const session = recorded
+    ? providerSession
+    : withoutFlagsNamedIn(
+        providerSession,
+        [launchConfig?.agentCommand?.trim() || cmdOverrides.claude, launchConfig?.agentArgs],
+        resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
+      )
   const startupPlan = buildAgentResumeStartupPlan({
     agent,
-    providerSession,
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
+    providerSession: session,
+    cmdOverrides,
+    ...resolveResumeLaunchRecipe(launchConfig, agent, session),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
+    prompt:
+      agent === 'claude' && continueWork
+        ? AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE
+        : null,
     // Both restart executors spawn in the tab's start folder.
     launchCwd:
       state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === args.tabId)?.startupCwd ??
@@ -108,17 +159,21 @@ export function resolveAgentAccountRestartResumeStartup(
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     // Main repins launch home only when the spawn names its resumed session; keep that identity with the account move.
-    resumeProviderSession: providerSession
+    // Why not a looked-up session: main would seed its old transcript path onto the restarted pane and decide the next switch by it.
+    ...(recorded ? { resumeProviderSession: recorded } : {})
   }
 }
 
 /** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
 export function buildPaneAccountRestartStartup(
   agent: AccountRestartAgent,
-  args: AccountRestartPane
+  args: AccountRestartPane,
+  discovered?: AgentProviderSessionMetadata,
+  continueWork = false,
+  warnsWhenHeld = false
 ): AgentAccountRestartStartup | null {
-  const resume = resolveAgentAccountRestartResumeStartup(agent, args)
-  const sessionId = resume?.resumeProviderSession?.id
+  const resume = resolveAgentAccountRestartResumeStartup(agent, args, discovered, continueWork)
+  const sessionId = resume && (resume.resumeProviderSession ?? discovered)?.id
   // Why here: another pane may have resumed the session since the restart was queued.
   if (
     agent === 'claude' &&
@@ -129,6 +184,9 @@ export function buildPaneAccountRestartStartup(
       sessionId
     )
   ) {
+    if (warnsWhenHeld) {
+      warnSessionsLeftBehind(1, discoveredRestartAccountLabel())
+    }
     return null
   }
   return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)

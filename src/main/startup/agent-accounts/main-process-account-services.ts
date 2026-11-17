@@ -11,6 +11,7 @@ import {
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { mainProcessState as state } from '../main-process-state'
+import { moveChatsAfterClaudeAccountSelection } from '../../claude-accounts/selection/claude-account-switch-chat-moves'
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
@@ -31,6 +32,9 @@ export function initializeMainProcessAccountServices(): void {
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
+  services.claudeAccounts.setSelectionAppliedListener(
+    () => void moveChatsAfterClaudeAccountSelection(() => store.getSettings())
+  )
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   installProviderAccountCatalogWarmup(store)

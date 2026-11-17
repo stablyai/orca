@@ -7,10 +7,17 @@ import type { SessionOptionValue } from '../../native-chat/input/native-chat-ses
 import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { resolveAgentLaunchCommand, withAgentTerminalInputArgs } from './tui-agent-launch-command'
 import type { AgentStartupPlan } from './tui-agent-startup'
-import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
+import {
+  resolveStartupShell,
+  tokenizeStartupCommand,
+  type AgentStartupShell
+} from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
-import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
+import {
+  buildAgentResumeLaunchCommand,
+  findClaudeExecutableIndex
+} from './agent-resume-launch-command'
 import { buildAiVaultResumeShellCommand } from '../../ai-vault/resume/ai-vault-resume-command'
 import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
@@ -37,6 +44,7 @@ export function buildAgentResumeStartupPlan(args: {
   fork?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
+  prompt?: string | null
 }): AgentStartupPlan | null {
   const resumeArgv = args.fork
     ? getAgentForkArgv(args.agent, args.providerSession)
@@ -88,7 +96,18 @@ export function buildAgentResumeStartupPlan(args: {
     agentArgs: recorded.agentArgs,
     ...baseCommand.resumeLaunch
   })
-  const resumeCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
+  const prompt =
+    args.prompt &&
+    TUI_AGENT_CONFIG[args.agent].promptInjectionMode === 'argv' &&
+    !passesTextAfterTerminator(baseCommand.command, shell)
+      ? args.prompt
+      : null
+  const resumeCommand = buildAgentResumeLaunchCommand(
+    args.agent,
+    baseCommand.command,
+    prompt ? [...argv, prompt] : argv,
+    shell
+  )
   const agentCwd = args.providerSession.cwd
   const launchCommand =
     agentCwd && args.launchCwd && !args.resumeInLaunchCwd && !isSameFolder(agentCwd, args.launchCwd)
@@ -110,6 +129,14 @@ export function buildAgentResumeStartupPlan(args: {
     ...(Object.keys(applied).length > 0 ? { sessionOptions: { ...applied } } : {}),
     ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
   }
+}
+
+function passesTextAfterTerminator(command: string, shell: AgentStartupShell): boolean {
+  const parsed = tokenizeStartupCommand(command, shell)
+  const terminator = parsed.ok
+    ? parsed.tokens.indexOf('--', findClaudeExecutableIndex(parsed.tokens, shell) + 1)
+    : -1
+  return parsed.ok && terminator !== -1 && terminator < parsed.tokens.length - 1
 }
 
 /** WSL panes start at a UNC path while the agent reports its Linux path. */

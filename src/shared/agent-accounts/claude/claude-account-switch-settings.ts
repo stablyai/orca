@@ -1,4 +1,4 @@
-export type ClaudeAccountSwitchRunningSessions = 'ask' | 'restart' | 'keep'
+export type ClaudeAccountSwitchRunningSessions = 'ask' | 'restart' | 'restart-all' | 'keep'
 
 export type ClaudeAccountSwitchSettings = {
   /** Absent means 'ask'. */

@@ -117,7 +117,7 @@ export class StructuredAgentSessionHost {
       trackOpen: (open) => this.tasks.trackAttach(open)
     })
     this.restartResume = resume.createStructuredAgentSessionRestartResume(deps, this.sessions, {
-      ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
+      ...structuredAgentSessionRestartResumeSurfaces(this, this.now, this.conversationDelivery),
       readChildWork: this.clientDelivery.readChildWork,
       childWorkOpen: this.clientDelivery.childWorkOpen,
       publishStatus: this.clientDelivery.publishStatusAndSettlement

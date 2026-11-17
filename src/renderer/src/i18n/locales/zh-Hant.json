@@ -21659,7 +21659,10 @@
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
         "strandedOne": "1 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。",
-        "strandedOther": "{{count}} 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。"
+        "strandedOther": "{{count}} 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。",
+        "settingRestartAll": "一律重新啟動所有工作階段",
+        "notMovedToOne": "1 個工作階段未移轉至 {{account}} 帳戶。",
+        "notMovedToOther": "{{count}} 個工作階段未移轉至 {{account}} 帳戶。"
       },
       "oauthUsage": {
         "title": "Claude 用量輪詢",

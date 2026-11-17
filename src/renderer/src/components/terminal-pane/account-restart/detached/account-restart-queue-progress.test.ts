@@ -3,6 +3,7 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../../../codex-restart-notice-state'
 import {
   installCodexDetachedPaneRestartExecutor,
@@ -150,6 +151,31 @@ describe('accepted account restart queue progress', () => {
       warn.mockRestore()
     }
     expectRestarted(1)
+  })
+  it('does not retry a rejected Codex spawn queued without a notice, under restart-all', async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      spawn.mockRejectedValueOnce(new Error('launch refused'))
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    seedPanes(1)
+    useAppStore.setState({
+      settings: {
+        ...getDefaultSettings('/home/dev'),
+        claudeAccountSwitchRunningSessions: 'restart-all'
+      }
+    })
+    useAppStore.getState().queuePaneAccountRestarts([pane(1).ptyId], 'codex')
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(spawn).toHaveBeenCalledTimes(1)
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      expect(useAppStore.getState().ptyIdsByTabId[pane(1).tabId]).toEqual([pane(1).ptyId])
+    } finally {
+      uninstall()
+      warn.mockRestore()
+    }
   })
   it('asks again and frees the slot when a spawn stalls, then adopts its late result', async () => {
     const stalled = Array.from({ length: 4 }, () => Promise.withResolvers<{ id: string }>())

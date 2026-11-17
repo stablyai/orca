@@ -1,4 +1,5 @@
 import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
+import type { StructuredAgentSessionAccountSwitchRetire } from './structured-agent-session-account-switch'
 import type { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-restart-resume-runner'
@@ -40,4 +41,6 @@ export type StructuredAgentSessionRestartResume = {
   onAgentStarted: (sessionId: string) => void
   /** Continue a cut reply with or without an offer. */
   continueInterrupted: ReturnType<typeof createInterruptedContinuation>
+  retireForAccountSwitch: StructuredAgentSessionAccountSwitchRetire
+  continueAfterAccountSwitch: (sessionId: string, continueAfter: number) => Promise<void>
 }

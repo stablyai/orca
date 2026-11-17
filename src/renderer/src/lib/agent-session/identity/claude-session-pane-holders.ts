@@ -1,5 +1,6 @@
 import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
 import type { AppState } from '@/store/types'
+import type { ClaudePaneLookups } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import {
   isTerminalLeafId,
   makePaneKey
@@ -9,7 +10,8 @@ import {
 export function isSessionHeldByAnotherPane(
   state: AppState,
   paneKey: string,
-  sessionId: string
+  sessionId: string,
+  lookups?: ClaudePaneLookups
 ): boolean {
   return Object.values(state.tabsByWorktree).some((tabs) =>
     tabs.some((tab) => {
@@ -22,7 +24,8 @@ export function isSessionHeldByAnotherPane(
           bound.includes(ptyId) &&
           isTerminalLeafId(leafId) &&
           leafPaneKey !== paneKey &&
-          resolvePaneAgentSessionId(state, leafPaneKey) === sessionId
+          (resolvePaneAgentSessionId(state, leafPaneKey) === sessionId ||
+            lookups?.get(leafPaneKey)?.id === sessionId)
         )
       })
     })

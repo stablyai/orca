@@ -8,6 +8,7 @@ import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/f
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { MAX_TIMER_DELAY_MS } from '../../../../shared/concurrency/timer-delay'
 import type { SendSettlementWaitOptions } from '../delivery/structured-agent-session-send-settlement'
+import type { StructuredAgentSessionAccountSwitchRetire } from './structured-agent-session-account-switch'
 
 export type StructuredAgentSessionRestartResumeSurfaces = {
   revealSession: (
@@ -29,6 +30,7 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   childWorkOpen: (sessionId: string) => boolean
   publishStatus?: (sessionId: string) => void
+  retireForAccountSwitch: StructuredAgentSessionAccountSwitchRetire
   now: () => number
 }
 
@@ -54,10 +56,12 @@ type RestartResumeHostBindings = {
 
 export function structuredAgentSessionRestartResumeSurfaces(
   host: RestartResumeHostBindings,
-  now: () => number
+  now: () => number,
+  delivery: Pick<StructuredAgentSessionRestartResumeSurfaces, 'retireForAccountSwitch'>
 ): Omit<StructuredAgentSessionRestartResumeSurfaces, 'readChildWork' | 'childWorkOpen'> {
   return {
     revealSession: host.revealSession,
+    retireForAccountSwitch: delivery.retireForAccountSwitch,
     send: (params) =>
       host.send({ callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER }, params),
     // Provider settlement decides delivery; cold startup may exceed ordinary client waits.

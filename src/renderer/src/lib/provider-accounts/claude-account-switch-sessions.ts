@@ -1,16 +1,31 @@
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { INLINE_ACTION_CLASS_NAMES } from '@/components/ui/sonner'
 import { getClaudeAccountLabel } from './claude-account-label'
+import {
+  announceRestart,
+  warnSessionsLeftBehind,
+  warnSharedSessions,
+  warnStrandedSessions,
+  warnUncheckedSessions
+} from './claude-account-switch-notices'
+import {
+  recordClaudeAccountSwitchBreadcrumb,
+  type ClaudeAccountSwitchRecord
+} from './claude-account-switch-breadcrumb'
+import {
+  recordQueuedClaudeRestarts,
+  type ClaudePaneLookups
+} from '../agent-session/accounts/claude/claude-queued-restart-records'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { normalizeAgentProviderSession } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { ClaudeHostFolders } from '../agent-session/accounts/claude/claude-pane-account-folder'
+import { settleQueuedClaudeRestarts } from '../agent-session/accounts/claude/claude-pane-session-lookup'
 import {
   claudeLaunchAccountId,
   findClaudeSwitchSessions,
-  findQueuedClaudeRestartsOnAccount,
   type ClaudeSessionMoveCandidate,
   type ClaudeSwitchSessions
 } from '../agent-session/accounts/claude/claude-session-account-move'
@@ -19,6 +34,7 @@ export type ClaudeAccountSwitchPromptSessions = {
   onAccount: ClaudeSessionMoveCandidate[]
   elsewhere: (ClaudeSessionMoveCandidate & { accountLabel: string })[]
   cantMove: ClaudeSwitchSessions['cantMove']
+  lookups: ClaudePaneLookups
 }
 
 export type ClaudeAccountSwitchPrompt = {
@@ -50,16 +66,37 @@ export function subscribeClaudeAccountSwitchPrompt(listener: () => void): () => 
   return () => promptListeners.delete(listener)
 }
 
-function queueClaudeRestarts(ptyIds: string[]): void {
+function queueClaudeRestarts(
+  ptyIds: string[],
+  restartAll: boolean,
+  lookups: ClaudePaneLookups
+): void {
+  const { terminalLayoutsByTabId: layouts, agentStatusByPaneKey } = useAppStore.getState()
+  const sessions = new Map(
+    Object.entries(layouts).flatMap(([tabId, layout]) =>
+      Object.entries(layout?.ptyIdsByLeafId ?? {}).flatMap(([leafId, ptyId]) => {
+        const paneKey = makePaneKey(tabId, leafId)
+        const session = lookups.get(paneKey)
+        const hooked = normalizeAgentProviderSession(
+          agentStatusByPaneKey.get(paneKey)?.providerSession
+        )
+        return ptyId && session && !hooked ? [[ptyId, session] as const] : []
+      })
+    )
+  )
+  recordQueuedClaudeRestarts(ptyIds, restartAll, sessions)
   useAppStore.getState().queuePaneAccountRestarts(ptyIds, 'claude')
 }
 
-/** Why now: a reattach can rebind a pane while the dialog is open, and a closed pane has none. */
-function currentPtyIds(sessions: readonly ClaudeSessionMoveCandidate[]): string[] {
-  const layouts = useAppStore.getState().terminalLayoutsByTabId
+/** Why now: a reattach can rebind a pane during the scan or while the dialog is open, and a closed pane has none. */
+function currentPtyIds(
+  sessions: readonly ClaudeSessionMoveCandidate[],
+  requireLive = false
+): string[] {
+  const { terminalLayoutsByTabId: layouts, ptyIdsByTabId } = useAppStore.getState()
   return sessions.flatMap((session) => {
     const ptyId = layouts[session.tabId]?.ptyIdsByLeafId?.[session.leafId]
-    return ptyId ? [ptyId] : []
+    return ptyId && (!requireLive || ptyIdsByTabId[session.tabId]?.includes(ptyId)) ? [ptyId] : []
   })
 }
 
@@ -82,7 +119,7 @@ export function answerClaudeAccountSwitchPrompt(
     // Why filtered: only sessions this question listed may restart.
     const listed = [...request.sessions.onAccount, ...request.sessions.elsewhere]
     const picked = chosen ? listed.filter((session) => chosen.includes(session.ptyId)) : listed
-    queueClaudeRestarts(currentPtyIds(picked))
+    queueClaudeRestarts(currentPtyIds(picked), false, request.sessions.lookups)
   }
   if (options.dontAskAgain) {
     void useAppStore.getState().updateSettings({ claudeAccountSwitchRunningSessions: 'restart' })
@@ -94,17 +131,38 @@ export type ClaudeAccountSnapshot = {
   accountId: string | null
 }
 
-/** After account selection applies, ask/restart/retain sessions on the outgoing account; show-confirmation leaves the caller’s toast. */
-export async function handleRunningClaudeSessionsAfterSwitch(args: {
+type ClaudeAccountSwitch = {
   owner: RuntimeClientTarget
   target: CodexAccountSelectionTarget
   before: ClaudeAccountSnapshot
   after: ClaudeAccountSnapshot
   /** Switched from a phone or the CLI, where no one can answer a dialog on this computer. */
   madeElsewhere?: true
-}): Promise<'show-confirmation' | 'handled'> {
-  const fromAccountId = claudeLaunchAccountId(args.before.state, args.before.accountId)
-  const toAccountId = claudeLaunchAccountId(args.after.state, args.after.accountId)
+}
+
+/** After account selection applies, ask/restart/retain sessions on the outgoing account; show-confirmation leaves the caller’s toast. */
+export async function handleRunningClaudeSessionsAfterSwitch(
+  args: ClaudeAccountSwitch
+): Promise<'show-confirmation' | 'handled'> {
+  const record: ClaudeAccountSwitchRecord = {
+    policy: readPolicy(args.madeElsewhere),
+    madeElsewhere: args.madeElsewhere,
+    fromAccountId: claudeLaunchAccountId(args.before.state, args.before.accountId),
+    toAccountId: claudeLaunchAccountId(args.after.state, args.after.accountId)
+  }
+  const result = await moveSessionsAfterSwitch(args, record)
+  recordClaudeAccountSwitchBreadcrumb(args.owner.kind === 'local', record, result)
+  return result
+}
+
+async function moveSessionsAfterSwitch(
+  args: ClaudeAccountSwitch,
+  record: ClaudeAccountSwitchRecord
+): Promise<'show-confirmation' | 'handled'> {
+  const { fromAccountId, toAccountId } = record
+  const scansAll = record.policy === 'restart-all'
+  // Why: a switch begun under restart-all finishes as one, since its scan and lookups were made for it.
+  const readSetting = () => (scansAll ? record.policy : readPolicy(args.madeElsewhere))
   // Why: a server's switch, or one between coinciding launch folders, moves nothing here.
   if (args.owner.kind !== 'local' || fromAccountId === toAccountId) {
     return 'show-confirmation'
@@ -113,20 +171,23 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   setPrompt(null)
   // Why the new list: main read its folders and logins as it applied the switch.
   const host = args.after.state
+  const nextAccountLabel = getClaudeAccountLabel(args.after.state, args.after.accountId)
   // Why: an accepted restart relaunches on whatever is selected when it runs, so it outlives switches.
-  const store = useAppStore.getState()
-  for (const ptyId of findQueuedClaudeRestartsOnAccount({
+  const discovered = await settleQueuedClaudeRestarts({
     owner: args.owner,
     target: args.target,
     accountId: toAccountId,
-    host
-  })) {
-    store.consumePendingPaneAccountRestart(ptyId)
-  }
-  if (readPolicy() === 'keep') {
+    host,
+    accountLabel: nextAccountLabel,
+    isCurrent: () => generation === switchGeneration,
+    restartAll: scansAll
+  })
+  record.lookups = discovered
+  if (readSetting() === 'keep') {
     return 'show-confirmation'
   }
   let uncheckedCount = 0
+  let uncheckedOthersCount = 0
   let sharedCount = 0
   let strandedPtyIds: ReadonlySet<string> = new Set()
   const found = await findClaudeSwitchSessions({
@@ -135,18 +196,27 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     fromAccountId,
     toAccountId,
     host,
+    restartAll: scansAll,
+    discovered,
     onUnchecked: (sessions) => {
       uncheckedCount = sessions.length
       console.warn(
         '[claude-account-switch] could not read the foreground of',
-        sessions.map((session) => session.ptyId)
+        sessions.map((session) => redactPtyIdForDiagnostics(session.ptyId))
       )
+    },
+    onUncheckedOthers: (sessions) => {
+      uncheckedOthersCount = sessions.length
     },
     onShared: (sessions) => {
       sharedCount = sessions.length
     },
     onStranded: (sessions) => {
       strandedPtyIds = new Set(sessions.map((session) => session.ptyId))
+    },
+    onInspected: (panes, inspected) => {
+      record.panes = panes
+      record.inspected = inspected
     }
   }).catch((error: unknown) => {
     console.warn('[claude-account-switch] session scan failed:', error)
@@ -156,7 +226,8 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'handled'
   }
   // Why re-read: the setting may change while the scan runs.
-  const policy = readPolicy(args.madeElsewhere)
+  const policy = readSetting()
+  record.policy = policy
   if (policy === 'keep') {
     return 'show-confirmation'
   }
@@ -166,19 +237,25 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
       getClaudeAccountLabel(args.before.state, args.before.accountId)
     )
   }
-  const nextAccountLabel = getClaudeAccountLabel(args.after.state, args.after.accountId)
+  const restartAll = policy === 'restart-all'
   const sessions: ClaudeAccountSwitchPromptSessions = {
     onAccount: found?.onAccount ?? [],
     elsewhere: (found?.elsewhere ?? []).map((session) => ({
       ...session,
       accountLabel: getClaudeAccountLabel(args.after.state, session.accountId)
     })),
-    cantMove: found?.cantMove ?? []
+    cantMove: found?.cantMove ?? [],
+    lookups: discovered
   }
   const labels = {
     previousAccountLabel: getClaudeAccountLabel(args.before.state, args.before.accountId),
     nextAccountLabel
   }
+  const queued = restartAll
+    ? currentPtyIds([...sessions.onAccount, ...sessions.elsewhere], true)
+    : currentPtyIds(sessions.onAccount)
+  record.found = found
+  record.queued = policy === 'ask' ? [] : queued
   const openReview = (reviewSessions = sessions): void => {
     if (generation === switchGeneration) {
       setPrompt({
@@ -190,122 +267,43 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     }
   }
   // Why: other sessions are listed only alongside a move, so parallel-account users get no prompt.
-  if (sessions.onAccount.length === 0) {
+  if ((policy === 'ask' ? sessions.onAccount : queued).length === 0) {
     if (sharedCount > 0) {
       warnSharedSessions(sharedCount, labels.previousAccountLabel)
     }
-    if (strandedPtyIds.size > 0) {
+    // Why less shared: the warning above already named the outgoing account's shared sessions.
+    const leftBehind = sessions.cantMove.length - sharedCount + uncheckedOthersCount
+    if (restartAll && leftBehind > 0) {
+      warnSessionsLeftBehind(leftBehind, nextAccountLabel)
+    } else if (!restartAll && strandedPtyIds.size > 0) {
       warnStrandedSessions(strandedPtyIds.size, labels.previousAccountLabel, () =>
         openReview({
           onAccount: [],
           elsewhere: [],
-          cantMove: sessions.cantMove.filter((session) => strandedPtyIds.has(session.ptyId))
+          cantMove: sessions.cantMove.filter((session) => strandedPtyIds.has(session.ptyId)),
+          lookups: discovered
         })
       )
     }
     return 'show-confirmation'
   }
+  if (restartAll) {
+    queueClaudeRestarts(queued, true, discovered)
+    announceRestart(
+      queued.length,
+      nextAccountLabel,
+      sessions.cantMove.length + uncheckedOthersCount
+    )
+    return 'handled'
+  }
   if (policy === 'restart') {
-    queueClaudeRestarts(sessions.onAccount.map((candidate) => candidate.ptyId))
+    queueClaudeRestarts(queued, false, discovered)
     const others = sessions.elsewhere.length + sessions.cantMove.length
-    announceRestart(sessions.onAccount.length, nextAccountLabel, others, () => openReview())
+    announceRestart(queued.length, nextAccountLabel, others, () => openReview())
     return 'handled'
   }
   setPrompt({ id: generation, sessions, ...labels })
   return 'handled'
-}
-
-/** Name the sessions left behind and offer the same list, without the ones already restarting. */
-function announceRestart(count: number, account: string, others: number, review: () => void): void {
-  const title =
-    count === 1
-      ? translate(
-          'accounts.claude.switchSessions.restartingOne',
-          'Restarting 1 Claude session on {{account}}',
-          { account }
-        )
-      : translate(
-          'accounts.claude.switchSessions.restartingOther',
-          'Restarting {{count}} Claude sessions on {{account}}',
-          { count, account }
-        )
-  if (others === 0) {
-    toast.success(title)
-    return
-  }
-  toast.success(title, {
-    description:
-      others === 1
-        ? translate('accounts.claude.switchSessions.notMovedOne', "1 other session wasn't moved.")
-        : translate(
-            'accounts.claude.switchSessions.notMovedOther',
-            "{{count}} other sessions weren't moved.",
-            { count: others }
-          ),
-    classNames: INLINE_ACTION_CLASS_NAMES,
-    action: {
-      label: translate('accounts.claude.switchSessions.review', 'Review'),
-      onClick: review
-    }
-  })
-}
-
-/** Why a toast: these sessions keep the previous account, and only a manual restart moves them. */
-function warnUncheckedSessions(count: number, previous: string): void {
-  toast.warning(
-    count === 1
-      ? translate(
-          'accounts.claude.switchSessions.uncheckedOne',
-          "Couldn't check 1 terminal for Claude. If Claude is running there, it stays on {{previous}} until restarted.",
-          { previous }
-        )
-      : translate(
-          'accounts.claude.switchSessions.uncheckedOther',
-          "Couldn't check {{count}} terminals for Claude. Any Claude running there stays on {{previous}} until restarted.",
-          { count, previous }
-        )
-  )
-}
-
-/** Why a toast: nothing else moved, so no dialog lists the Claude sessions Orca couldn't restart. */
-function warnStrandedSessions(count: number, previous: string, review: () => void): void {
-  toast.warning(
-    count === 1
-      ? translate(
-          'accounts.claude.switchSessions.strandedOne',
-          '1 Claude session may still be on {{previous}}. Restart it manually to switch.',
-          { previous }
-        )
-      : translate(
-          'accounts.claude.switchSessions.strandedOther',
-          '{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.',
-          { count, previous }
-        ),
-    {
-      classNames: INLINE_ACTION_CLASS_NAMES,
-      action: {
-        label: translate('accounts.claude.switchSessions.review', 'Review'),
-        onClick: review
-      }
-    }
-  )
-}
-
-/** Why a toast: with nothing else to move, no dialog says why these sessions stayed. */
-function warnSharedSessions(count: number, previous: string): void {
-  toast.warning(
-    count === 1
-      ? translate(
-          'accounts.claude.switchSessions.sharedOne',
-          "1 Claude session stays on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
-          { previous }
-        )
-      : translate(
-          'accounts.claude.switchSessions.sharedOther',
-          "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
-          { count, previous }
-        )
-  )
 }
 
 function readPolicy(madeElsewhere?: true): ClaudeAccountSwitchRunningSessions {

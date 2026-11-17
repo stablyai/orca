@@ -77,27 +77,31 @@ async function launchedUnderOtherAccount(
   return home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)
 }
 
-/** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
+type OutgrownChildRetirement = {
+  /** Read records only for child endings the lead has not answered. */
+  work: StructuredAgentSessionChildWorkReads & {
+    childWork: () => readonly AgentChildWorkView[] | undefined
+  }
+  launchPermission?: () => Promise<AgentChatPermissionChoice | null>
+  launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
+  /** The send about to be handed over; a new model pick may need the requested approval mode. */
+  next?: AgentJournalSubmission
+  requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
+  permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
+  evenOwingWork?: true
+  stopAgent: (sessionId: string) => Promise<void>
+  logger: StructuredAgentSessionLogger
+}
+
+/** Retire under serialization only when no work is owed, unless `evenOwingWork`; failed Stop leaves a
+ *  close for startup to join. True when the child stopped. */
 export async function retireOutgrownStructuredAgentSessionChild(
   sessionId: string,
   session: OutgrownChildReading | undefined,
-  deps: {
-    /** Read records only for child endings the lead has not answered. */
-    work: StructuredAgentSessionChildWorkReads & {
-      childWork: () => readonly AgentChildWorkView[] | undefined
-    }
-    launchPermission?: () => Promise<AgentChatPermissionChoice | null>
-    launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
-    /** The send about to be handed over; a new model pick may need the requested approval mode. */
-    next?: AgentJournalSubmission
-    requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
-    permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
-    stopAgent: (sessionId: string) => Promise<void>
-    logger: StructuredAgentSessionLogger
-  }
-): Promise<void> {
+  deps: OutgrownChildRetirement
+): Promise<boolean> {
   if (!session?.child) {
-    return
+    return false
   }
   const { child } = session
   const facts = await session.journal.reads.outgrownChild({
@@ -115,17 +119,22 @@ export async function retireOutgrownStructuredAgentSessionChild(
       )) ||
       (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
     ) ||
-    structuredAgentSessionChildHasOpenWork(deps.work, await deps.work.currentWork()) ||
-    owesWakeUp(facts.newestTurnCompletedAt, deps.work.childWork())
+    (!deps.evenOwingWork &&
+      (structuredAgentSessionChildHasOpenWork(deps.work, await deps.work.currentWork()) ||
+        owesWakeUp(facts.newestTurnCompletedAt, deps.work.childWork())))
   ) {
-    return
+    return false
   }
-  await deps.stopAgent(sessionId).catch((error: unknown) =>
-    deps.logger.warn('replacing an outgrown agent failed', {
-      scope: 'outgrown-child',
-      sessionId,
-      error
-    })
+  return deps.stopAgent(sessionId).then(
+    () => true,
+    (error: unknown) => {
+      deps.logger.warn('replacing an outgrown agent failed', {
+        scope: 'outgrown-child',
+        sessionId,
+        error
+      })
+      return false
+    }
   )
 }
 
