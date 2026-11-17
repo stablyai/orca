@@ -3,6 +3,7 @@ import {
   agentSessionContextClearOutstanding,
   latestAgentSessionContextClearSequence
 } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
+import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
@@ -19,6 +20,9 @@ import {
 const mobileStructuredTranscript = createStructuredQuestionProjection(
   projectStructuredAgentStartItem
 )
+
+const mobileTranscriptMessages = (items: readonly AgentJournalRenderItem[]) =>
+  omitNativeChatThreadGoalRows(mobileStructuredTranscript.messages(items))
 
 /** The chat's transcript rows, its messages with this phone's sends in flight, and the prompts they resolved.
  * From this phone's /clear press until its divider lands, the rows drawn at the press stay hidden:
@@ -65,14 +69,12 @@ export function useMobileStructuredTranscript(
     [agent, floor, state.items]
   )
   const projectMessages = useMemo(
-    () => createStructuredAgentSessionMessageProjection(mobileStructuredTranscript.messages),
+    () => createStructuredAgentSessionMessageProjection(mobileTranscriptMessages),
     []
   )
   const questionTranscript = useMemo(() => mobileStructuredTranscript.stream(), [])
   const messages = useMemo(
-    () =>
-      // The goal strip on the composer shows goal state, as on desktop.
-      omitNativeChatThreadGoalRows(projectMessages(transcriptItems, optimistic, state.submissions)),
+    () => projectMessages(transcriptItems, optimistic, state.submissions),
     [transcriptItems, optimistic, state.submissions, projectMessages]
   )
   return {

@@ -1,3 +1,4 @@
+import { noteAgentSessionTextAppendSource } from './agent-session-text-append-source'
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
@@ -69,4 +70,40 @@ describe('agent session text appends', () => {
       reply('Hello wor', 2)
     ])
   })
+})
+
+it('sizes and sends only a proven suffix, and falls back after replacement or reset', () => {
+  for (const length of [32_768, 327_680]) {
+    const send = sendingTextAppends((event: AgentSessionSubscribeEvent) => event, {})
+    const read = createAgentSessionTextAppendReader({})
+    const identity = {}
+    const source = (text: string, revision: number) => {
+      const item = reply(text, revision)
+      noteAgentSessionTextAppendSource(item, {
+        identity,
+        length: text.length,
+        suffix: (from) => text.slice(from)
+      })
+      return item
+    }
+    const initial = source('x'.repeat(length), 1)
+    read(send(snapshot))
+    read(send(batch(4, [initial])))
+    const next = source(`${'x'.repeat(length)}new text`, 1)
+    const wire = send.item(next)
+    expect(wire).toMatchObject({
+      textAppend: { from: length, text: 'new text' },
+      body: { blocks: [{ text: '' }] }
+    })
+    expect(JSON.stringify(wire).length).toBeLessThan(400)
+    const restored = read(send(batch(4, [wire])))
+    expect(sentItems(restored!)).toEqual([next])
+    // The stream's next preview uses the complete reconstructed base, not the wire's empty body.
+    expect(send.item(source(`${'x'.repeat(length)}new text!`, 1))).toMatchObject({
+      textAppend: { from: length + 8, text: '!' }
+    })
+    expect(send.item(reply('replaced', 2))).not.toHaveProperty('textAppend')
+    send(snapshot)
+    expect(send.item(next)).toBe(next)
+  }
 })
