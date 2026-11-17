@@ -227,8 +227,9 @@ export function attachAiVaultServiceChild(
   child.on('error', handlers.onFault)
   child.on('disconnect', () => handlers.onFault(new Error('AI Vault service disconnected.')))
   child.on('exit', (code) => handlers.onFault(new Error(`AI Vault service exited (${code}).`)))
-  child.stderr?.on('data', (chunk: Buffer) => {
-    const text = String(chunk)
+  // Decode across chunks so a multibyte character split between them survives into the exit trace.
+  child.stderr?.setEncoding('utf8')
+  child.stderr?.on('data', (text: string) => {
     trackAiVaultServiceStderr(child, text)
     handlers.onStderr?.(text)
   })

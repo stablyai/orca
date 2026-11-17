@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AiVaultScannerServiceClient } from './session-scanner-service-client'
 
 class ScannerChild extends EventEmitter {
-  readonly stderr = new EventEmitter()
+  readonly stderr = Object.assign(new EventEmitter(), { setEncoding: () => {} })
   readonly sent: Record<string, unknown>[] = []
   connected = true
   exitCode: number | null = null
@@ -35,9 +35,7 @@ class ScannerChild extends EventEmitter {
   abortOutOfMemory(): void {
     this.stderr.emit(
       'data',
-      Buffer.from(
-        'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\n'
-      )
+      'FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\n'
     )
     this.connected = false
     this.signalCode = 'SIGABRT'
