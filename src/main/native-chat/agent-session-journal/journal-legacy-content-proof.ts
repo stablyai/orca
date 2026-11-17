@@ -13,8 +13,6 @@ export type LegacySessionHold = {
   convert: boolean
   /** A name the person set, options or permission mode differ between the original and here. */
   diverged: boolean
-  /** Attachment claims only the original holds, taken into this store before it retires. */
-  claims: LegacyClaim[]
 }
 
 export type LegacyClaim = { uploadId: string; sessionId: string; claimedAt: number }
@@ -41,7 +39,7 @@ export function legacySessionHold(
     hasTable(source, 'agent_session_records') &&
     !!source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(sessionId)
   if (!recorded) {
-    return { convert: true, diverged: false, claims: missingClaims(source, store, sessionId) }
+    return { convert: true, diverged: false }
   }
   const revision = journalLegacyChatRevision(source, sessionId) ?? 'null'
   const shown = meta(store, journalLegacyChatRevisionKey(sessionId))
@@ -55,7 +53,7 @@ export function legacySessionHold(
   if (!here?.recorded && !here?.cataloged) {
     // Deleted here after reading this revision (its revision key stays): the person's choice.
     if (shown === revision || empty) {
-      return { convert: false, diverged: false, claims: [] }
+      return { convert: false, diverged: false }
     }
     throw new JournalLegacyRetentionError('an original chat is not in this store yet')
   }
@@ -69,8 +67,7 @@ export function legacySessionHold(
     convert: true,
     diverged:
       personEditsDiverged(source, store, sessionId) ||
-      (converted && hasQueue && !queueHeld(source, store, sessionId)),
-    claims: missingClaims(source, store, sessionId)
+      (converted && hasQueue && !queueHeld(source, store, sessionId))
   }
 }
 
@@ -89,40 +86,47 @@ export function legacyRecordOnlyHold(
   if (!recorded) {
     // Deleted here after reading it, or a draft an older Orca made that this store never showed.
     const read = meta(store, journalLegacyChatRevisionKey(sessionId)) !== undefined
-    return { convert: false, diverged: !read, claims: [] }
+    return { convert: false, diverged: !read }
   }
   return {
     convert: false,
-    diverged: personEditsDiverged(source, store, sessionId),
-    claims: missingClaims(source, store, sessionId)
+    diverged: personEditsDiverged(source, store, sessionId)
   }
 }
 
-/** Uploads the original claims for a chat this store keeps, which this store doesn't claim yet. */
-function missingClaims(
+/**
+ * One page of the original's attachment claims, in key order, returning those for chats this store
+ * keeps that it doesn't claim yet. One indexed pass over the table, however many chats there are.
+ */
+export function readLegacyClaimsPage(
   source: Database.Database,
   store: Database.Database,
-  sessionId: string
-): LegacyClaim[] {
+  after: [string, string] | null
+): { claims: LegacyClaim[]; last: [string, string] | null } {
+  const rows = source
+    .prepare(
+      `SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims
+      ${after === null ? '' : 'WHERE (upload_id,session_id)>(?,?)'}
+      ORDER BY upload_id,session_id LIMIT 128`
+    )
+    .all(...(after ?? []))
+  const kept = store.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
   const held = store.prepare(
     'SELECT 1 FROM agent_session_attachment_claims WHERE upload_id=? AND session_id=?'
   )
-  const missing: LegacyClaim[] = []
-  if (!hasTable(source, 'agent_session_attachment_claims')) {
-    return []
-  }
-  for (const row of source
-    .prepare('SELECT upload_id,claimed_at FROM agent_session_attachment_claims WHERE session_id=?')
-    .iterate(sessionId)) {
-    if (!held.get(String(row.upload_id), sessionId)) {
-      missing.push({
-        uploadId: String(row.upload_id),
-        sessionId,
-        claimedAt: Number(row.claimed_at)
-      })
+  const claims: LegacyClaim[] = []
+  for (const row of rows) {
+    const uploadId = String(row.upload_id)
+    const sessionId = String(row.session_id)
+    if (kept.get(sessionId) && !held.get(uploadId, sessionId)) {
+      claims.push({ uploadId, sessionId, claimedAt: Number(row.claimed_at) })
     }
   }
-  return missing
+  const tail = rows.at(-1)
+  return {
+    claims,
+    last: tail ? [String(tail.upload_id), String(tail.session_id)] : null
+  }
 }
 
 /** Every message still waiting to send in the original is held here by id with the same text. */

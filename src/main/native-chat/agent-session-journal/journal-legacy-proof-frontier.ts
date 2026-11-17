@@ -14,6 +14,10 @@ export type LegacyProofFrontier = {
   diverged: boolean
 }
 
+/** Why a proof keeps the original when a difference both sides could have made can't be settled. */
+export const DIVERGED =
+  "a chat's name, options, permission mode or queued text differ from the original"
+
 export function createLegacyProofFrontier(): LegacyProofFrontier {
   return { cursor: { table: 0, after: null }, session: 0, pending: false, diverged: false }
 }
@@ -25,7 +29,8 @@ export async function completeJournalLegacyProof(
   boundary: () => Promise<boolean>,
   signal: AbortSignal,
   rest: (started: number) => Promise<void>,
-  frontier = createLegacyProofFrontier()
+  frontier = createLegacyProofFrontier(),
+  stopOnDivergence = false
 ): Promise<void> {
   const admit = async () => {
     signal.throwIfAborted()
@@ -45,12 +50,16 @@ export async function completeJournalLegacyProof(
     if (page.retained) {
       throw new JournalLegacyRetentionError(page.retained, page.reason)
     }
+    // Decided as soon as it shows: nothing converts for a proof that can only end in keeping it.
+    if (stopOnDivergence && page.sessions.some((session) => session.diverged)) {
+      throw new JournalLegacyRetentionError(DIVERGED)
+    }
+    if (page.claims?.length) {
+      await writer.maintain({ kind: 'legacy-claims-absorb', claims: page.claims })
+    }
     while (frontier.session < page.sessions.length) {
       await admit()
       const source = page.sessions[frontier.session]!
-      if (source.claims.length > 0) {
-        await writer.maintain({ kind: 'legacy-claims-absorb', claims: source.claims })
-      }
       frontier.diverged ||= source.diverged
       // A chat deleted here, or one that never held anything, is not converted back.
       if (!source.convert) {

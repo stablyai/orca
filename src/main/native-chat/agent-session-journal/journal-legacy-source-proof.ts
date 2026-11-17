@@ -5,7 +5,12 @@ import {
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
-import { readLegacyProofSessions, type LegacySessionHold } from './journal-legacy-content-proof'
+import {
+  readLegacyClaimsPage,
+  readLegacyProofSessions,
+  type LegacyClaim,
+  type LegacySessionHold
+} from './journal-legacy-content-proof'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
@@ -45,6 +50,8 @@ export type LegacyProofPage = {
   sessions: LegacySourceSession[]
   retained?: string
   reason?: LegacySourceRefusalReason
+  /** Claims only the original holds, for chats kept here, taken in before it retires. */
+  claims?: LegacyClaim[]
 }
 
 /** Every saved content row must belong to the current catalog before any source file can retire. */
@@ -139,12 +146,27 @@ function readSourcePage(
       }
     }
   }
+  // After the content tables: the original's attachment claims, taken in for chats kept here.
+  if (cursor.table > CONTENT_TABLES.length) {
+    if (!tables.has('agent_session_attachment_claims')) {
+      return { next: null, sessions: [] }
+    }
+    const page = readLegacyClaimsPage(
+      db,
+      destination,
+      cursor.after === null ? null : [cursor.after, cursor.epoch!]
+    )
+    return {
+      next: page.last ? { table: cursor.table, after: page.last[0], epoch: page.last[1] } : null,
+      sessions: [],
+      claims: page.claims
+    }
+  }
   if (cursor.table > 0) {
     const table = CONTENT_TABLES[cursor.table - 1]!
     if (!tables.has(table)) {
       return {
-        next:
-          cursor.table < CONTENT_TABLES.length ? { table: cursor.table + 1, after: null } : null,
+        next: { table: cursor.table + 1, after: null },
         sessions: []
       }
     }
@@ -273,9 +295,7 @@ function readSourcePage(
             ),
             ...(table === 'journal_rows' ? { epoch: String(rows.at(-1)!.epoch) } : {})
           }
-        : cursor.table < CONTENT_TABLES.length
-          ? { table: cursor.table + 1, after: null }
-          : null,
+        : { table: cursor.table + 1, after: null },
       sessions: []
     }
   }

@@ -1,7 +1,8 @@
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import {
   completeJournalLegacyProof,
-  createLegacyProofFrontier
+  createLegacyProofFrontier,
+  DIVERGED
 } from './journal-legacy-proof-frontier'
 import {
   decodeLegacySourceRefusal,
@@ -75,14 +76,13 @@ export class JournalLegacyProof {
         this.boundary,
         this.signal,
         this.rest,
-        this.frontier
+        this.frontier,
+        !observation.unwrittenSinceCopy
       )
       // Both sides could have made a difference: only an original unwritten since the copy is stale.
       if (this.frontier.diverged && !observation.unwrittenSinceCopy) {
         // Not saved as a refusal: either side can still change, so a later launch weighs it again.
-        throw new JournalLegacyRetentionError(
-          "a chat's name, options, permission mode or queued text differ from the original"
-        )
+        throw new JournalLegacyRetentionError(DIVERGED)
       }
     } catch (error) {
       if (error instanceof JournalLegacyRetentionError && error.reason) {
