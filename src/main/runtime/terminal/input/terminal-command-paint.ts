@@ -55,6 +55,7 @@ const AGENT_PAINT_SIGNALS: readonly DraftPasteMarkerSignal[] = [
 /** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
 export class TerminalCommandPaint {
   private awaitingPaint = false
+  private repaintRequestable = false
   private markerEndInChunk = -1
   /** Armed at each command start; absent before the first marker, where no command is attributable. */
   private composers: Map<
@@ -106,6 +107,14 @@ export class TerminalCommandPaint {
   awaitReattachedPaint(): void {
     this.awaitingPaint = true
     this.composers = null
+    this.repaintRequestable = true
+  }
+
+  /** True once per reattach while nothing has painted: the one repaint request it allows. */
+  takeReattachedRepaintRequest(): boolean {
+    const take = this.repaintRequestable && this.awaitingPaint
+    this.repaintRequestable = false
+    return take
   }
 
   hasPainted(): boolean {
@@ -136,6 +145,10 @@ export function observeTerminalCommandPaint(
 export function awaitReattachedTerminalPaint(record: TerminalCommandPaintRecord): void {
   record.commandPaint ??= new TerminalCommandPaint()
   record.commandPaint.awaitReattachedPaint()
+}
+
+export function takeReattachedRepaintRequest(record: TerminalCommandPaintRecord): boolean {
+  return record.commandPaint?.takeReattachedRepaintRequest() ?? false
 }
 
 /** Without markers (older fish, relay zsh, unwrapped shells, cmd.exe /K startup args), any output is the only paint evidence. */

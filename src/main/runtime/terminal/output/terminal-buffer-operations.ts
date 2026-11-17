@@ -18,7 +18,8 @@ import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
 import {
   awaitReattachedTerminalPaint,
-  hasTerminalCommandPainted
+  hasTerminalCommandPainted,
+  takeReattachedRepaintRequest
 } from '../input/terminal-command-paint'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
@@ -291,12 +292,20 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           readScreen: () => this.readCaughtUpRuledScreen(ptyId),
           readOutputClockAt: () => this.readOutputClockAt(ptyId),
           hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
-          requestRepaint: () => this.ptyController?.requestRepaint?.(ptyId),
+          requestRepaint: () => this.requestReattachedRepaint(ptyId),
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })
       }
     })
+  }
+
+  /** One repaint per reattach, whether restored status or a queued wait asks first. */
+  protected requestReattachedRepaint(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (pty && takeReattachedRepaintRequest(pty)) {
+      this.ptyController?.requestRepaint?.(ptyId)
+    }
   }
 
   private applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {

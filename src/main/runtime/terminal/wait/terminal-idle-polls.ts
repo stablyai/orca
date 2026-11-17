@@ -45,6 +45,8 @@ type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
   readVisibleScreen(ptyId: string): Promise<string | null> | null
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
+  /** Asks a reattached pane's program to repaint, once per reattach and only before it painted. */
+  requestReattachedRepaint?(ptyId: string): void
 }
 
 type IdlePollEntry = {
@@ -174,8 +176,15 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       this.armRecheck(entry, verdict)
+      if (verdict.kind === 'working') {
+        return
+      }
+      // Why from the wait: a reattached pane's screen counts only once its program repaints it.
+      if (ptyId) {
+        this.deps.requestReattachedRepaint?.(ptyId)
+      }
       // Working output can quote dialog source; do not screen-probe it for startup blockers.
-      if (verdict.kind === 'working' || entry.screenReadInFlight) {
+      if (entry.screenReadInFlight) {
         return
       }
       const screenRead = this.readScreenBlockedReason(entry, ptyId)

@@ -3,6 +3,7 @@ import {
   awaitReattachedTerminalPaint,
   hasTerminalAgentPainted,
   observeTerminalCommandPaint,
+  takeReattachedRepaintRequest,
   type TerminalCommandPaintRecord
 } from './terminal-command-paint'
 
@@ -19,5 +20,17 @@ describe('terminal command paint after a reattach', () => {
     observeTerminalCommandPaint(record, '❯ Ask me anything…', '❯ Ask me anything…')
     expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
     expect(hasTerminalAgentPainted(record, 'claude')).toBe(true)
+  })
+
+  it('allows one repaint request per reattach, and none once the program painted', () => {
+    const quiet: TerminalCommandPaintRecord = {}
+    awaitReattachedTerminalPaint(quiet)
+    expect(takeReattachedRepaintRequest(quiet)).toBe(true)
+    expect(takeReattachedRepaintRequest(quiet)).toBe(false)
+
+    const painted: TerminalCommandPaintRecord = {}
+    awaitReattachedTerminalPaint(painted)
+    observeTerminalCommandPaint(painted, 'ready', 'ready')
+    expect(takeReattachedRepaintRequest(painted)).toBe(false)
   })
 })
