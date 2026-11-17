@@ -1,3 +1,4 @@
+import { generationArgumentText } from '../../../shared/source-control/ai/generation/generation-argument'
 import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
@@ -24,7 +25,6 @@ import {
 import type {
   InternalTextGenerationResult,
   LocalProcessExecution,
-  SpawnedSourceControlAgentProcess,
   LocalSourceControlPlanInput
 } from '../source-control-text-generation-types'
 
@@ -55,7 +55,7 @@ export function runLocalSourceControlPlan(
   const labelValue = { label: plan.label }
   const couldNotStart = textGenerationFailure('agentCouldNotStart', labelValue)
   const result = new Promise<InternalTextGenerationResult>((resolve) => {
-    let child: SpawnedSourceControlAgentProcess
+    let child: ReturnType<LocalSourceControlPlanInput['spawnAgent']>
     try {
       plan =
         guest?.plan ??
@@ -71,7 +71,10 @@ export function runLocalSourceControlPlan(
       }
       child = input.spawnAgent({
         binary: plan.binary,
-        args: plan.args,
+        args: plan.args.map(generationArgumentText),
+        literalArgIndices: plan.args.flatMap((arg, index) =>
+          typeof arg === 'string' ? [] : [index]
+        ),
         cwd,
         env: input.env,
         commandEnv: plan.env,

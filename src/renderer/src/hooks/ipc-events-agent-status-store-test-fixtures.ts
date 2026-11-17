@@ -1,12 +1,12 @@
 import {
   acceptedAgentStatuses,
   type AcceptedAgentStatuses
-} from '@/store/slices/agent-status/accepted-agent-statuses'
+} from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { expect, vi } from 'vitest'
 import type {
   AgentStatusBatchTransaction,
   AgentStatusBatchUpdate
-} from '../store/slices/agent-status/agent-status-contract'
+} from '../store/slices/agent-status/contracts/agent-status-contract'
 import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 

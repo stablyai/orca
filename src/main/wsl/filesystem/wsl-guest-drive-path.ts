@@ -27,17 +27,18 @@ function joinGuestDrivePath(root: string, tail: string): string {
 export type WslGuestShellPaths = { prelude: string; words: string[] }
 
 /**
- * `C:\src\app` becomes a word that expands to `<C: mount>/src/app` in the guest; other values are
- * quoted literally. The prelude exits with `failureExitCode` when a drive has no readable mount,
- * so a command never runs from a relative or wrong directory.
+ * `C:\src\app` becomes a word that expands to `<C: mount>/src/app` in the guest; other values, and
+ * every value at `literalIndices` (task text), are quoted literally. The prelude exits with
+ * `failureExitCode` when a drive has no readable mount, so a command never runs from a wrong directory.
  */
 export function wslGuestShellPaths(
   paths: readonly string[],
-  failureExitCode: number
+  failureExitCode: number,
+  literalIndices: ReadonlySet<number> = new Set()
 ): WslGuestShellPaths {
   const letters = new Set<string>()
-  const words = paths.map((path) => {
-    const drive = parseDrivePath(path)
+  const words = paths.map((path, index) => {
+    const drive = literalIndices.has(index) ? null : parseDrivePath(path)
     if (!drive) {
       return quotePosixShell(path)
     }

@@ -38,10 +38,17 @@ import {
 } from './agent-launch-setup-state'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
+  agentLaunchPickerPlacement,
+  type AgentLaunchPickerPlacement
+} from './agent-launch-picker-placement'
+import {
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+
+const AGENT_LAUNCH_PICKER_SIDE_OFFSET = 4
+const AGENT_LAUNCH_PICKER_COLLISION_PADDING = 8
 
 const portalOrInline = (node: ReactNode, container: HTMLElement | null | undefined) =>
   container ? createPortal(node, container) : container === undefined ? node : null
@@ -124,11 +131,20 @@ export const AgentLaunchPicker = memo(
     const [open, setOpenState] = useState(false)
     // Why: typing on the closed trigger opens the menu with that key already in the search field.
     const [initialQuery, setInitialQuery] = useState('')
+    const [placement, setPlacement] = useState<AgentLaunchPickerPlacement>()
     const setOpen = useCallback(
       (next: boolean) => {
         if (!next) {
           popupFocusReady.current = false
           setInitialQuery('')
+        } else if (trigger.current) {
+          setPlacement(
+            agentLaunchPickerPlacement(
+              trigger.current.getBoundingClientRect(),
+              window.innerHeight,
+              AGENT_LAUNCH_PICKER_SIDE_OFFSET + AGENT_LAUNCH_PICKER_COLLISION_PADDING
+            )
+          )
         }
         setOpenState(next)
         onOpenChange?.(next)
@@ -228,16 +244,14 @@ export const AgentLaunchPicker = memo(
           onSelect: onSelectBlankTerminal
         }
       : null
-    // A search result is a cmdk row, which does not close the menu as a menu item does.
-    const extraChoices = [...(blankTerminal ? [blankTerminal] : []), ...(choices ?? [])].map(
-      (choice) => ({
-        ...choice,
-        onSelect: () => {
-          choice.onSelect()
-          setOpen(false)
-        }
-      })
-    )
+    // A search result or rail tile does not close the menu as a menu item does.
+    const closing = (choice: AgentPickerChoice): AgentPickerChoice => ({
+      ...choice,
+      onSelect: () => {
+        choice.onSelect()
+        setOpen(false)
+      }
+    })
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -287,7 +301,17 @@ export const AgentLaunchPicker = memo(
           <DropdownMenuContent
             portalContainer={portalContainer}
             align="start"
-            collisionPadding={tabbed ? 8 : undefined}
+            sideOffset={AGENT_LAUNCH_PICKER_SIDE_OFFSET}
+            collisionPadding={tabbed ? AGENT_LAUNCH_PICKER_COLLISION_PADDING : undefined}
+            side={tabbed ? placement?.side : undefined}
+            // Why: capped to the chosen side's room, so Radix never flips on the content's height.
+            style={
+              tabbed && placement
+                ? {
+                    maxHeight: `min(${placement.maxHeight}px, var(--radix-dropdown-menu-content-available-height, ${placement.maxHeight}px))`
+                  }
+                : undefined
+            }
             variant={tabbed ? 'picker' : 'default'}
             onOpenAutoFocus={(event) => {
               popupFocusReady.current = true
@@ -299,7 +323,7 @@ export const AgentLaunchPicker = memo(
             className={
               tabbed
                 ? // Why 26rem: Codex's widest effort row plus Fast measures 404px; narrow windows cap it.
-                  'w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] overflow-hidden'
+                  'w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] flex flex-col overflow-hidden'
                 : 'min-w-64'
             }
           >
@@ -318,7 +342,8 @@ export const AgentLaunchPicker = memo(
                 onPaneChange={selectAgent}
                 onPick={pick}
                 onClose={close}
-                choices={extraChoices}
+                choices={choices?.map(closing)}
+                blankTerminal={blankTerminal ? closing(blankTerminal) : undefined}
               />
             ) : model.state === 'settled' ? (
               <AgentLaunchPickerMenu

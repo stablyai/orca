@@ -129,6 +129,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Agents:',
   '  agent launch              Start an agent in a worktree, as a chat or terminal per your settings',
+  '  agent installed           List agent CLIs installed on this host, with their --agent IDs',
   '  agent list                List open agents, chats and terminals, with their Orca session IDs',
   '  agent show                Show where an agent is open, by its Orca session ID',
   '  agent read                Read what an agent said, by its Orca session ID',

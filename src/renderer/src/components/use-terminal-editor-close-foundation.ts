@@ -3,7 +3,7 @@ import { CLOSE_DIALOG_DEBOUNCE_MS } from './terminal-workspace-model'
 import {
   assessWindowCloseRunningWork,
   type WindowCloseRunningWork
-} from './terminal/window-close-running-work'
+} from './terminal/tab-lifecycle/window-close-running-work'
 import type { TerminalWorkspaceProjectionController } from './use-terminal-workspace-projection'
 import { prepareWindowCloseCheckpoint } from './window-close-request-coordinator'
 import { showShutdownCheckpointFailureToast } from '@/app-shell/shutdown/shutdown-checkpoint-failure-toast'

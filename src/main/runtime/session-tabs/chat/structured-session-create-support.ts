@@ -139,9 +139,10 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
 
   /** Resolve catalog account home through the same host create-intent resolver when no session record exists. */
   async resolveStructuredAgentAccountHome(
-    agent: StructuredAgentId
+    agent: StructuredAgentId,
+    purpose: 'read' | 'catalog' = 'read'
   ): Promise<AgentSessionAccountHome> {
-    const resolveAccountHome = this.structuredAgentAccountHomeResolver(agent, '', 'read')
+    const resolveAccountHome = this.structuredAgentAccountHomeResolver(agent, '', purpose)
     if (!resolveAccountHome) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'

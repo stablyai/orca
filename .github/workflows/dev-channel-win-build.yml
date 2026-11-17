@@ -373,6 +373,17 @@ jobs:
             fi
           done
 
+      # Dev-channel builds are unsigned by design; list what Smart App Control machines will refuse to load, never fail.
+      - name: Report unsigned Windows binaries (advisory)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $script = 'config/scripts/desktop-distribution/windows/verify-windows-payload-signatures.mjs'
+          if ((Test-Path $script) -and (Test-Path 'dist/win-unpacked')) {
+            node $script dist/win-unpacked --mode advisory
+          }
+          exit 0
+
       - name: Stage Windows artifacts for gated publishing
         if: inputs.stage_only
         uses: actions/upload-artifact@v7
