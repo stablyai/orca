@@ -7,17 +7,22 @@ const lock: {
   createdAt: number
   stolen: boolean
   holderGoneAt: number | null
+  holderBackAt: number | null
   probes: number
 } = {
   createdAt: 0,
   stolen: false,
   holderGoneAt: null,
+  holderBackAt: null,
   probes: 0
 }
 vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
   execHostCommand: async (_conn: unknown, _host: unknown, command: string) => {
     const ageSec = Math.floor((Date.now() - lock.createdAt) / 1000)
-    const holderGone = lock.holderGoneAt !== null && Date.now() >= lock.holderGoneAt
+    const holderGone =
+      lock.holderGoneAt !== null &&
+      Date.now() >= lock.holderGoneAt &&
+      (lock.holderBackAt === null || Date.now() < lock.holderBackAt)
     if (command.includes('echo HOLDER_EXITED_OK')) {
       lock.stolen = holderGone
       return holderGone ? 'HOLDER_EXITED_OK' : 'BUSY'
@@ -65,6 +70,7 @@ describe('acquireInstallLock waiting on a held lock', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     lock.stolen = false
     lock.holderGoneAt = null
+    lock.holderBackAt = null
     lock.probes = 0
   })
   afterEach(() => {
@@ -114,7 +120,28 @@ describe('acquireInstallLock waiting on a held lock', () => {
     })
     expect(await settle(acquired, 3 * 60_000)).toBe('done')
     // While the holder runs, the age countdown stands; once it reads gone, seconds.
-    expect(waits[0]?.takeoverInMs).toBe(19 * 60_000)
-    expect(waits.at(-1)?.takeoverInMs).toBe(5_000)
+    expect(waits[0]).toEqual({ takeoverInMs: 19 * 60_000, givesUpInMs: 20 * 60_000 })
+    expect(waits.at(-1)).toMatchObject({ takeoverInMs: 5_000, holderGone: true })
+  })
+
+  it('returns to the age countdown at the next probe when a holder no longer reads gone', async () => {
+    lock.createdAt = Date.now() - 60_000
+    // One gone reading, never confirmed by a second.
+    lock.holderGoneAt = Date.now() + 10_000
+    lock.holderBackAt = Date.now() + 12_000
+    const waits: { wait: InstallLockWait; at: number }[] = []
+    const start = Date.now()
+    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
+      relayGcClaim: false,
+      waitThroughStaleTakeover: true,
+      owner: { fileName: '.orca-fence-owner', token: 't-next' },
+      probeExitedHolder: true,
+      onWait: (wait) => waits.push({ wait, at: Date.now() - start })
+    })
+    expect(await settle(acquired, 30_000)).toEqual(new Error('still waiting'))
+    expect(waits.map(({ wait }) => wait.holderGone === true)).toEqual([false, true, false])
+    // The flip back is reported at the next probe, not the next 60 s recheck.
+    expect(waits[2]?.at).toBeLessThan(20_000)
+    expect(waits[2]?.wait.takeoverInMs).toBeGreaterThan(18 * 60_000)
   })
 })

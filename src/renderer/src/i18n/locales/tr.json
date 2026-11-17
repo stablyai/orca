@@ -167,7 +167,8 @@
         "installLockWait_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
         "installLockWait_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
         "installLockWaitGivesUp_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
-        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır."
+        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
+        "installLockWaitHolderGone": "Bu dağıtımdaki diğer Orca kurulumu durdu. Orca birkaç saniye içinde devralır."
       }
     },
     "agentSummary": {

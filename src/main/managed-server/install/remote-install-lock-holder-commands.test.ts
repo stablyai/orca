@@ -79,7 +79,7 @@ function line(child: ChildProcessWithoutNullStreams, expected: string): Promise<
 }
 
 function exited(child: ChildProcessWithoutNullStreams): Promise<number | null> {
-  return child.exitCode !== null
+  return child.exitCode !== null || child.signalCode !== null
     ? Promise.resolve(child.exitCode)
     : new Promise((resolve) => child.once('exit', (code) => resolve(code)))
 }
@@ -258,6 +258,33 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(await exited(removal)).toBe(0)
     expect(existsSync(lock)).toBe(false)
   })
+
+  it('fails the gated removal and keeps the lock while a fenced command outlives the wait', async () => {
+    const lock = lockOwnedBy('t-first')
+    const holder = await holdLock(lock)
+    const straggler = start(`${installLockFenceStatement(lock, first)} echo STARTED; sleep 30`)
+    expect(await line(straggler, 'STARTED')).toBe(true)
+    holder.stdin.end()
+    const removal = start(
+      `${installLockReleaseGate(lock)} ${removeOwnedInstallLockCommand(host, lock, first)}`
+    )
+    expect(await exited(removal)).toBe(1)
+    expect(existsSync(lock)).toBe(true)
+  }, 30_000)
+
+  it('kills a holder that outlives the unmark wait, so it can never mark the lock late', async () => {
+    const lock = lockOwnedBy('t-first')
+    const holder = start(installLockHolderCommand(lock, first))
+    expect(await line(holder, 'HOLDER_READY')).toBe(true)
+    // Its stdin stays open, so only the kill can end it.
+    holder.stdin.write('mark\n')
+    expect(await line(holder, 'HOLDER_HELD')).toBe(true)
+    const unmark = start(installLockHolderUnmarkCommand(lock, first))
+    expect(await exited(unmark)).toBe(0)
+    expect(await exited(holder)).toBeNull()
+    expect(readFileSync(join(lock, INSTALL_LOCK_HOLDER_FILENAME), 'utf8')).toBe('')
+    expect(probe(lock)).toBe('')
+  }, 30_000)
 
   it('degrades to an unbacked lock where flock is missing', async () => {
     const lock = lockOwnedBy('t-first')

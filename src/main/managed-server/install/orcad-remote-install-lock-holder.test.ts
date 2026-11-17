@@ -7,6 +7,8 @@ type HolderInstallState = {
   holderAvailable: boolean
   holderFenceable: boolean
   uploadError: Error | null
+  abandonConfirmed: boolean
+  forgotten: string[]
   loseHolderDuringUpload: boolean
   loseHolder: () => void
   acquireOptions: { probeExitedHolder?: boolean } | null
@@ -18,6 +20,8 @@ const state = vi.hoisted((): HolderInstallState => ({
   holderAvailable: true,
   holderFenceable: false,
   uploadError: null,
+  abandonConfirmed: true,
+  forgotten: [],
   loseHolderDuringUpload: false,
   loseHolder: () => {},
   acquireOptions: null
@@ -34,7 +38,7 @@ vi.mock('./remote-versioned-install', () => ({
     gate?: string
   ) => {
     state.events.push(`abandon:${conn.fenced ? 'fenced' : 'plain'}${gate ? ':gated' : ''}`)
-    return true
+    return state.abandonConfirmed
   },
   finalizeInstall: async (conn: { fenced?: string }) => {
     state.events.push(`finalize:${conn.fenced ? 'fenced' : 'plain'}`)
@@ -55,7 +59,10 @@ vi.mock('./remote-install-transfers', () => ({
     if (state.loseHolderDuringUpload) {
       state.loseHolder()
       await Promise.resolve()
-      options.signal?.throwIfAborted()
+      // Transports drop the abort reason for a generic cancel.
+      if (options.signal?.aborted) {
+        throw createSshOperationAbortError()
+      }
     }
   },
   writeRemoteInstallFile: async () => {}
@@ -95,11 +102,12 @@ vi.mock('./remote-install-lock-holder', () => ({
 }))
 vi.mock('../activation/orcad-held-fence-tokens', () => ({
   rememberHeldOrcadFence: () => {},
-  forgetHeldOrcadFence: () => {}
+  forgetHeldOrcadFence: (token: string) => state.forgotten.push(token)
 }))
 
 const { installOrcadBundle, OrcadInstallTakenOverError } = await import('./orcad-remote-install')
 const { sshCommandExitError } = await import('../../ssh/remote-exec/remote-exec-command')
+const { createSshOperationAbortError } = await import('../../ssh/connection/ssh-exec-options')
 const { getRemoteHostPlatform } = await import('../../ssh/remote-host/ssh-remote-platform')
 
 function wslConn(): OrcadHostTransport {
@@ -131,6 +139,8 @@ describe('installOrcadBundle flock-backed install lock on WSL', () => {
     state.holderAvailable = true
     state.holderFenceable = false
     state.uploadError = null
+    state.abandonConfirmed = true
+    state.forgotten = []
     state.loseHolderDuringUpload = false
     state.acquireOptions = null
   })
@@ -144,8 +154,14 @@ describe('installOrcadBundle flock-backed install lock on WSL', () => {
 
   it('stops the install when its holder exits mid-install', async () => {
     state.loseHolderDuringUpload = true
-    await expect(install(wslConn())).rejects.toThrow('The install lock holder exited.')
+    await expect(install(wslConn())).rejects.toThrow(/The install lock holder exited/)
     expect(state.events).toEqual(['release', 'abandon:plain:gated'])
+  })
+
+  it('keeps its token when the gated removal gives up', async () => {
+    state.abandonConfirmed = false
+    await expect(install(wslConn())).resolves.toBe('uploaded')
+    expect(state.forgotten).toEqual([])
   })
 
   it('still fences an install whose holder never confirmed it held the lock', async () => {

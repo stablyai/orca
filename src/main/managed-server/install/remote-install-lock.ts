@@ -82,8 +82,13 @@ export async function isRelayInstallLockStale(
   return ageMs !== null && ageMs > INSTALL_LOCK_STALE_MS
 }
 
-/** A held lock's wait; `takeoverInMs` is null when no takeover is due before this attempt gives up. */
-export type InstallLockWait = { takeoverInMs: number | null; givesUpInMs: number }
+/** A held lock's wait; `takeoverInMs` is null when no takeover is due before this attempt gives up.
+ * `holderGone`: a flock-backed lock whose holder exited, taken over within seconds. */
+export type InstallLockWait = {
+  takeoverInMs: number | null
+  givesUpInMs: number
+  holderGone?: boolean
+}
 
 /** Exclusive host-native creation preserves lock markers older Windows clients recognize. */
 export async function acquireInstallLock(
@@ -142,9 +147,12 @@ export async function acquireInstallLock(
   const probedOwner =
     options?.probeExitedHolder && !isWindowsRemoteHost(host) ? options.owner : undefined
   let reportedHolderGone = false
+  // Age as last read, so a probe-driven report can still count down to the stale takeover.
+  let lastAge: { ms: number; at: number } | null = null
   // A holder read gone means takeover in seconds, not at the lock's stale age.
-  const reportWait = (ageMs: number | null): void => {
+  const reportWait = (): void => {
     reportedHolderGone = holderTakeover.gone !== null
+    const ageMs = lastAge === null ? null : lastAge.ms + (Date.now() - lastAge.at)
     const takeoverInMs = reportedHolderGone
       ? INSTALL_LOCK_HOLDER_PROBE_MS
       : ageMs === null
@@ -163,7 +171,8 @@ export async function acquireInstallLock(
     // Promise a takeover only if this attempt is still waiting when it comes due.
     options?.onWait?.({
       takeoverInMs: takeoverInMs !== null && now + takeoverInMs < deadline ? takeoverInMs : null,
-      givesUpInMs: Math.max(0, deadline - now)
+      givesUpInMs: Math.max(0, deadline - now),
+      ...(reportedHolderGone ? { holderGone: true } : {})
     })
   }
   while (true) {
@@ -209,14 +218,13 @@ export async function acquireInstallLock(
           return
         }
       }
-      // After the first age report, a holder first read gone is reported at once.
+      // After the first age report, every probe that flips the holder's state is reported at once.
       if (
-        holderTakeover.gone !== null &&
-        !reportedHolderGone &&
+        (holderTakeover.gone !== null) !== reportedHolderGone &&
         Number.isFinite(lastStaleCheckAt) &&
         (options?.onWait || options?.waitThroughStaleTakeover)
       ) {
-        reportWait(null)
+        reportWait()
       }
     }
     if (
@@ -252,7 +260,9 @@ export async function acquireInstallLock(
           return
         }
       } else if (options?.onWait || options?.waitThroughStaleTakeover) {
-        reportWait(await readInstallLockAgeMs(conn, lockDir, host, options.signal))
+        const ageMs = await readInstallLockAgeMs(conn, lockDir, host, options.signal)
+        lastAge = ageMs === null ? null : { ms: ageMs, at: Date.now() }
+        reportWait()
       }
     }
     if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {

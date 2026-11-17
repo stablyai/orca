@@ -167,7 +167,8 @@
         "installLockWait_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minute.",
         "installLockWait_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minuten.",
         "installLockWaitGivesUp_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minute auf zu warten.",
-        "installLockWaitGivesUp_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minuten auf zu warten."
+        "installLockWaitGivesUp_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minuten auf zu warten.",
+        "installLockWaitHolderGone": "Die andere Orca-Installation in dieser Distribution wurde beendet. Orca übernimmt in wenigen Sekunden."
       }
     },
     "agentSummary": {

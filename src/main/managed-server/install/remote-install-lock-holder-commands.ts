@@ -4,6 +4,8 @@ import type { InstallLockOwnerFile } from './remote-install-lock-commands'
 /** Inside the mkdir lock: shared-flocked by the owner's holder and every fenced command; its
  * content marks the lock flock-backed. Old builds never write it, so their locks keep today's rules. */
 export const INSTALL_LOCK_HOLDER_FILENAME = '.holder-flock'
+// The holder's pid, so an owner that gave up on it can stop it before it marks the lock late.
+const HOLDER_PID_FILENAME = '.holder-pid'
 const HOLDER_MARKER = 'held'
 /** Exit status of a fenced command whose lock another owner now holds. */
 export const INSTALL_LOCK_FENCE_EXIT_CODE = 75
@@ -12,6 +14,7 @@ export const INSTALL_LOCK_HOLDER_READY = 'HOLDER_READY'
 export const INSTALL_LOCK_HOLDER_MARK = 'mark'
 export const INSTALL_LOCK_HOLDER_HELD = 'HOLDER_HELD'
 const HOLDER_EXITED = 'HOLDER_EXITED'
+const INSTALL_LOCK_RELEASE_BUSY = 'INSTALL_LOCK_RELEASE_BUSY'
 // Busybox flock has no -w, so shared waits poll; a contender's exclusive probe is momentary.
 const SHARED_LOCK_ATTEMPTS = 10
 
@@ -54,6 +57,8 @@ export function installLockHolderCommand(lockDir: string, owner: InstallLockOwne
     // A filesystem that grants a second description an exclusive lock cannot prove anything.
     `if ( exec 8<${holder} && flock -x -n 8 ) 2>/dev/null; then exit 0; fi;`,
     `${ownsLock} || exit 0;`,
+    // `exec cat` below keeps this pid.
+    `printf '%s' "$$" > ${quotePosixShell(`./${HOLDER_PID_FILENAME}`)} 2>/dev/null || exit 0;`,
     `echo ${INSTALL_LOCK_HOLDER_READY};`,
     `IFS= read -r holder_go && [ "$holder_go" = ${INSTALL_LOCK_HOLDER_MARK} ] && ${ownsLock} || exit 0;`,
     `printf ${HOLDER_MARKER} >&9 || exit 0;`,
@@ -112,7 +117,8 @@ export function parseInstallLockHolderExit(output: string): InstallLockHolderExi
 }
 
 /** Run after giving up on an unconfirmed holder: once it exits, clear any mark it left so the
- * lock keeps the age rules. Leaves a still-held file alone; the fence still covers this owner. */
+ * lock keeps the age rules. A holder still running after the wait is killed first, so it can never
+ * mark the lock later. */
 export function installLockHolderUnmarkCommand(
   lockDir: string,
   owner: InstallLockOwnerFile
@@ -123,17 +129,22 @@ export function installLockHolderUnmarkCommand(
     `cd ${quotePosixShell(lockDir)} 2>/dev/null && ${ownsLock} || exit 0;`,
     'command -v flock >/dev/null 2>&1 || exit 0;',
     `{ command exec 9<${holder}; } 2>/dev/null || exit 0;`,
-    lockLoop(9, '-x', 'exit 0'),
+    'unmark_tries=0; until flock -x -n 9 2>/dev/null; do unmark_tries=$((unmark_tries + 1));',
+    `if [ "$unmark_tries" -eq ${SHARED_LOCK_ATTEMPTS} ]; then holder_pid=$(head -c 16 ${quotePosixShell(`./${HOLDER_PID_FILENAME}`)} 2>/dev/null);`,
+    `case "$holder_pid" in ''|*[!0-9]*) ;; *) kill -9 "$holder_pid" 2>/dev/null;; esac; fi;`,
+    // A killed holder can no longer write, so the mark is cleared even if the lock stays busy.
+    `[ "$unmark_tries" -ge ${SHARED_LOCK_ATTEMPTS + 5} ] && break; sleep 1; done;`,
     `${ownsLock} && : > ${holder}`
   ].join(' ')
 }
 
 /** Prefix for an owner's own lock removal: waits for its fenced commands to end, so a successor
- * never starts beside one. Still held after the bounded wait, the lock stays for a takeover. */
+ * never starts beside one. Still held after the bounded wait, it fails and leaves the lock, so the
+ * owner keeps its token. */
 export function installLockReleaseGate(lockDir: string): string {
   return [
     `if { command exec 7<${quotePosixShell(holderPath(lockDir))}; } 2>/dev/null && command -v flock >/dev/null 2>&1; then`,
-    lockLoop(7, '-x', 'exit 0'),
+    lockLoop(7, '-x', `{ echo ${INSTALL_LOCK_RELEASE_BUSY} >&2; exit 1; }`),
     'fi;'
   ].join(' ')
 }

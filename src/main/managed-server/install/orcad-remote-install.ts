@@ -119,11 +119,12 @@ export async function installOrcadBundle(
   let conn: OrcadHostTransport = options.conn
   let signal = options.signal
   let releaseGate: string | undefined
+  let holderLost: AbortSignal | undefined
   let takenOver = false
   try {
     const held = await holdInstallLock(options, remoteDir, owner)
     if (held) {
-      ;({ holder, conn, signal, releaseGate } = held)
+      ;({ holder, conn, signal, releaseGate, holderLost } = held)
     }
     // A sibling may have completed deployment while this client waited for the lock.
     if (
@@ -165,6 +166,10 @@ export async function installOrcadBundle(
       takenOver = true
       throw new OrcadInstallTakenOverError(error)
     }
+    // Transports replace an abort's reason with a generic cancel; name the real one.
+    if (holderLost?.aborted && !options.signal?.aborted) {
+      throw new OrcadInstallHolderLostError(error)
+    }
     throw error
   } finally {
     try {
@@ -198,6 +203,17 @@ export class OrcadInstallTakenOverError extends Error {
   }
 }
 
+/** The guest process holding this install's lock exited mid-install. */
+export class OrcadInstallHolderLostError extends Error {
+  constructor(cause: unknown) {
+    super(
+      'The install lock holder exited, so Orca stopped installing its server in this distro. Try connecting again.',
+      { cause }
+    )
+    this.name = 'OrcadInstallHolderLostError'
+  }
+}
+
 /** WSL: back the lock with a guest kernel lock so a contender can prove this install gone, and
  * fence every install command on it. Null keeps today's unbacked lock. */
 async function holdInstallLock(
@@ -214,6 +230,7 @@ async function holdInstallLock(
   conn: OrcadHostTransport
   signal: AbortSignal | undefined
   releaseGate: string
+  holderLost?: AbortSignal
 } | null> {
   const withFence = options.conn.withCommandFence
   if (!options.localWslHost || !withFence || options.host.os === 'win32') {
@@ -236,6 +253,7 @@ async function holdInstallLock(
   return {
     ...fenced,
     holder,
+    holderLost: lost.signal,
     signal: options.signal ? AbortSignal.any([options.signal, lost.signal]) : lost.signal
   }
 }
