@@ -12,7 +12,7 @@ import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 /**

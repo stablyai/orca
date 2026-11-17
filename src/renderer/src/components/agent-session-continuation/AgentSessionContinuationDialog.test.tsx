@@ -10,7 +10,7 @@ const observationState = vi.hoisted(() => ({ detecting: false }))
 vi.mock('@/hooks/useAgentDetectionTarget', () => ({
   useAgentDetectionTargetForWorktree: () => null
 }))
-vi.mock('@/components/tab-bar/use-new-tab-agent-menu-rows', () => ({
+vi.mock('@/components/agent/launch-menu/use-new-tab-agent-menu-rows', () => ({
   useAgentMenuObservation: () => ({
     detection: { detectedIds: observationState.detecting ? null : [], detectionFailed: false },
     model: { state: observationState.detecting ? 'pending' : 'settled', rows: [] },

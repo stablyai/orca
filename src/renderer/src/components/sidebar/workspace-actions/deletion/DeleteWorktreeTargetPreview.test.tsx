@@ -114,9 +114,12 @@ it.each([
             worktrees.map((item) => [
               getWorktreeHostIdentity(item),
               {
-                count: ignored ? 2 : 0,
-                samplePaths: ignored ? ['.env'] : [],
-                complete: !incomplete
+                status: 'complete',
+                files: {
+                  count: ignored ? 2 : 0,
+                  samplePaths: ignored ? ['.env'] : [],
+                  complete: !incomplete
+                }
               }
             ])
           )

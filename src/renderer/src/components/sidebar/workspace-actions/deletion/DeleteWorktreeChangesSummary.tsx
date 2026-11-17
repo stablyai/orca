@@ -8,7 +8,12 @@ import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-dec
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
+import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
+import {
+  DeleteWorktreeLocalFilesDetails,
+  DeleteWorktreeLocalFilesHint
+} from './DeleteWorktreeLocalFilesHint'
+import { DeleteWorktreeRelativePath } from './delete-worktree-relative-path'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
@@ -77,14 +82,16 @@ export function DeleteWorktreeChangesSummary({
     previews: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   }
   unsavedFiles: readonly UnsavedFile[]
-  atRiskLocalFilesByIdentity: ReadonlyMap<string, WorktreeAtRiskLocalFiles>
+  atRiskLocalFilesByIdentity: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
 }): JSX.Element | null {
   const t = useTranslate()
   const key = worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
   const changeCount = dirtyChanges.counts.get(key)
   const checkState = dirtyChanges.checkStates.get(key)
   const preview = dirtyChanges.previews.get(key)
-  const atRiskLocalFiles = atRiskLocalFilesByIdentity.get(getWorktreeHostIdentity(worktree))
+  const localFilesState = atRiskLocalFilesByIdentity.get(getWorktreeHostIdentity(worktree))
+  const atRiskLocalFiles =
+    localFilesState?.status === 'complete' ? localFilesState.files : undefined
   const loss = deleteWorktreeLossLine(
     changeCount,
     unsavedFiles.length,
@@ -97,33 +104,50 @@ export function DeleteWorktreeChangesSummary({
       : checkState === 'unavailable'
         ? t('components.workspace.delete.changes.unavailable', 'Changes could not be checked')
         : t('components.workspace.delete.changes.checking', 'Checking for changes…')
-  const ignoredNames = atRiskLocalFiles ? formatAtRiskLocalFileNames(atRiskLocalFiles, t) : null
-  const ignoredNote = atRiskLocalFiles
-    ? ignoredNames
-      ? t('components.workspace.delete.ignoredFilesLost', 'Ignored files will be lost: {{names}}', {
-          names: ignoredNames
-        })
-      : t(
-          'components.workspace.delete.ignoredFilesUnchecked',
-          'Ignored files could not be fully checked'
-        )
-    : null
+  const ignoredNames =
+    atRiskLocalFiles && (atRiskLocalFiles.count > 0 || !atRiskLocalFiles.complete)
+      ? formatAtRiskLocalFileNames(atRiskLocalFiles, t)
+      : null
+  const ignoredNote =
+    atRiskLocalFiles && (atRiskLocalFiles.count > 0 || !atRiskLocalFiles.complete)
+      ? ignoredNames
+        ? t(
+            'components.workspace.delete.ignoredFilesLost',
+            'Ignored files will be lost: {{names}}',
+            {
+              names: ignoredNames
+            }
+          )
+        : t(
+            'components.workspace.delete.ignoredFilesUnchecked',
+            'Ignored files could not be fully checked'
+          )
+      : null
   const changedFiles = preview?.files ?? []
-  const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0
-  if (!loss && !status && !atRiskLocalFiles) {
+  const hasIgnoredPaths =
+    (atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []).length > 0
+  const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || hasIgnoredPaths
+  if (!loss && !status && !localFilesState) {
     return null
   }
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {loss ? <DialogWarning>{loss}</DialogWarning> : null}
       {status ? <p className="text-[12.5px] text-muted-foreground">{status}</p> : null}
+      {localFilesState &&
+      (!atRiskLocalFiles || (atRiskLocalFiles.complete && atRiskLocalFiles.count === 0)) ? (
+        <DeleteWorktreeLocalFilesHint state={localFilesState} />
+      ) : null}
       {!hasDetails && ignoredNote ? (
         <p className="text-settings-detail text-muted-foreground">{ignoredNote}</p>
       ) : null}
       {hasDetails ? (
         <DialogDisclosure label={t('worktree.delete.showChanges', 'Show changes')} variant="code">
-          {ignoredNote ? (
+          {ignoredNote && !hasIgnoredPaths ? (
             <p className="mb-2 font-sans text-muted-foreground">{ignoredNote}</p>
+          ) : null}
+          {hasIgnoredPaths && atRiskLocalFiles ? (
+            <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
           ) : null}
           <ul className="min-w-0 space-y-0.5">
             {changedFiles.map((file) => (
@@ -136,7 +160,7 @@ export function DeleteWorktreeChangesSummary({
                   {STATUS_LABELS[file.status]}
                 </span>
                 <span className="min-w-0 break-all text-foreground">
-                  {file.path}
+                  <DeleteWorktreeRelativePath path={file.path} />
                   {file.hasUnresolvedConflict ? (
                     <span className="ml-2 font-sans text-destructive">
                       {t(

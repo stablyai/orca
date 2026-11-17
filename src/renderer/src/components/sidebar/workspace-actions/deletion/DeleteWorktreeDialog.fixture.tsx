@@ -2,6 +2,7 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
@@ -68,6 +69,48 @@ const dirtyEntries: GitStatusEntry[] = Array.from({ length: 13 }, (_, index) => 
   area: index % 3 === 0 ? 'untracked' : 'unstaged'
 }))
 
+const cleanLocalFiles: WorktreeAtRiskLocalFiles = {
+  count: 0,
+  samplePaths: [],
+  paths: [],
+  complete: true
+}
+
+const atRiskLocalFiles: WorktreeAtRiskLocalFiles = {
+  count: 5,
+  samplePaths: ['.anti-slop-plugin/', '.tmp/', 'tests/e2e/.cross-version-checkouts/'],
+  paths: [
+    '.anti-slop-plugin/',
+    '.tmp/',
+    'tests/e2e/.cross-version-checkouts/',
+    '.env.local',
+    'scratch/migration-dump.sql'
+  ],
+  complete: true
+}
+
+const manyAtRiskLocalFiles: WorktreeAtRiskLocalFiles = {
+  count: 14,
+  samplePaths: ['.env.local', '.anti-slop-plugin/', '.tmp/'],
+  paths: [
+    '.env.local',
+    '.env.development.local',
+    '.anti-slop-plugin/',
+    '.tmp/',
+    'local/',
+    'scratch/migration-dump.sql',
+    'scratch/perf-trace.json',
+    'tests/e2e/.cross-version-checkouts/',
+    'tests/fixtures/.local-snapshots/',
+    'packages/desktop/.orca-local/session-override.json',
+    'packages/cli/.local-config.yaml',
+    'scripts/private/bench-results.csv',
+    'docs/drafts/notes.md',
+    'tools/sandbox/state.db'
+  ],
+  complete: true
+}
+
 let defaultGitStatus: typeof window.api.git.status | undefined
 
 function dialogFixture(
@@ -78,6 +121,8 @@ function dialogFixture(
     unsaved?: boolean
     incomplete?: boolean
     ignored?: boolean
+    localFiles?: WorktreeAtRiskLocalFiles | 'pending'
+    heightClassName?: string
     deleteState?: WorktreeDeleteState
   } = {},
   interact?: (frame: HTMLElement) => void
@@ -109,15 +154,22 @@ function dialogFixture(
             throw new Error('Fixture: Git scan unavailable')
           }
         : defaultGitStatus
-      window.api.git.atRiskLocalFiles = async () => ({
-        count: options.ignored ? 2 : 0,
-        samplePaths: options.ignored ? ['.env', 'node_modules/'] : [],
-        complete: !options.incomplete
-      })
+      window.api.git.atRiskLocalFiles = () => {
+        if (options.localFiles === 'pending') {
+          return new Promise(() => {})
+        }
+        return Promise.resolve(
+          options.localFiles ?? {
+            count: options.ignored ? 2 : 0,
+            samplePaths: options.ignored ? ['.env', 'node_modules/'] : [],
+            complete: !options.incomplete
+          }
+        )
+      }
     },
     // The dialog portals to <body>; reserve room so the centered modal fits the frame.
     render: () => (
-      <div className="h-[440px] bg-background">
+      <div className={`${options.heightClassName ?? 'h-[440px]'} bg-background`}>
         <DeleteWorktreeDialog />
       </div>
     ),
@@ -191,3 +243,21 @@ export const forceDelete = dialogFixture({
     forceDeleteReason: 'dirty'
   }
 })
+
+export const checking = dialogFixture({ entries: [], localFiles: 'pending' })
+export const ignoredFiles = dialogFixture({ entries: [], localFiles: atRiskLocalFiles })
+export const ignoredFilesOpen = dialogFixture({ entries: [], localFiles: atRiskLocalFiles }, () => {
+  document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+})
+export const ignoredFilesScrolling = dialogFixture(
+  { entries: [], localFiles: manyAtRiskLocalFiles, heightClassName: 'h-[580px]' },
+  () => {
+    document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
+  }
+)
+export const alwaysDeleteMenu = dialogFixture(
+  { entries: dirtyEntries, localFiles: cleanLocalFiles },
+  () => {
+    document.querySelector<HTMLButtonElement>('[role="checkbox"]')?.click()
+  }
+)

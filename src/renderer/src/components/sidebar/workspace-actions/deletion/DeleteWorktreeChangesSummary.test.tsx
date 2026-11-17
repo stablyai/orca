@@ -30,7 +30,10 @@ it('keeps the dirty workspace warning to one line and puts the ignored-file unce
       unsavedFiles={[]}
       atRiskLocalFilesByIdentity={
         new Map([
-          [getWorktreeHostIdentity(worktree), { count: 0, samplePaths: [], complete: false }]
+          [
+            getWorktreeHostIdentity(worktree),
+            { status: 'complete', files: { count: 0, samplePaths: [], complete: false } }
+          ]
         ])
       }
     />

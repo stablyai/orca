@@ -5,7 +5,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
 import { DeleteWorktreeLocalFilesHint } from './DeleteWorktreeLocalFilesHint'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
+import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
@@ -70,7 +70,7 @@ export function DeleteWorktreeTargetPreview({
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
-  atRiskLocalFilesByIdentity?: ReadonlyMap<string, WorktreeAtRiskLocalFiles>
+  atRiskLocalFilesByIdentity?: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
 }): JSX.Element | null {
   const t = useTranslate()
   const targetIdPrefix = useId()
@@ -78,9 +78,11 @@ export function DeleteWorktreeTargetPreview({
   if (isBatchDelete) {
     const unknown =
       [...(changeCheckStatesByWorktreeId?.values() ?? [])].some((state) => state !== 'complete') ||
-      [...(atRiskLocalFilesByIdentity?.values() ?? [])].some((files) => !files.complete)
+      [...(atRiskLocalFilesByIdentity?.values() ?? [])].some(
+        (state) => state.status !== 'complete' || !state.files.complete
+      )
     const ignored = [...(atRiskLocalFilesByIdentity?.values() ?? [])].some(
-      (files) => files.count > 0
+      (state) => state.status === 'complete' && state.files.count > 0
     )
     const dirtyCounts = [...dirtyChangeCountsByWorktreeId.values()]
     const loss = deleteWorktreeLossLine(
@@ -192,7 +194,7 @@ export function DeleteWorktreeTargetPreview({
         )}
       />
       <DeleteWorktreeLocalFilesHint
-        files={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(worktree))}
+        state={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(worktree))}
       />
     </div>
   )

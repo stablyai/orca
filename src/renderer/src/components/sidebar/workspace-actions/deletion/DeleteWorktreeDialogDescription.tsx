@@ -2,7 +2,10 @@ import { Trans } from 'react-i18next'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { i18n } from '@/i18n/i18n'
 
 export function DeleteWorktreeDialogDescription({

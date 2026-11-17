@@ -25604,8 +25604,6 @@
   },
   "crashReport": {
     "freeze": {
-      "attach": "附加已保存的卡死报告和诊断日志",
-      "attachDescription": "随已保存的卡死报告发送经过脱敏且有大小限制的日志包",
       "attachmentsOmitted": "已保存的卡死报告和诊断日志未附加：{{value0}}",
       "description": "发送已保存的卡死报告，帮助我们了解发生了什么",
       "notSent": "卡死报告未发送",
