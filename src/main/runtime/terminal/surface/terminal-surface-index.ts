@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
@@ -27,7 +27,7 @@ import {
 import { projectRuntimeSurfaces } from '../records/runtime-leaf-record-projection'
 import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { loadChatTabLayout } from '../../agent-session/agent-session-tab-layout'
+import { loadChatTabLayout } from '../../session-tabs/chat/agent-session-tab-layout'
 
 type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
 

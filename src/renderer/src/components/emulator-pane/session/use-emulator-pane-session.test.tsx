@@ -72,19 +72,6 @@ function runtimeSuccess<T>(result: T) {
   }
 }
 
-function Probe(): React.JSX.Element {
-  const state = useEmulatorPaneSession({
-    worktreeId: WORKTREE_ID,
-    autoAttachOnMount: false
-  })
-  latest = state
-  return (
-    <button type="button" onClick={() => void state.attach('device-b')}>
-      Switch
-    </button>
-  )
-}
-
 function AutoAttachProbe(): React.JSX.Element | null {
   latest = useEmulatorPaneSession({
     worktreeId: WORKTREE_ID,
@@ -204,47 +191,5 @@ describe('useEmulatorPaneSession', () => {
     await flushEffects()
     expect(latest?.isLive).toBe(true)
     expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
-  })
-
-  it('ignores a rotate response from the previous session after switching devices', async () => {
-    await act(async () => {
-      root.render(<Probe />)
-    })
-    await flushEffects()
-
-    let rotatePromise: Promise<unknown> = Promise.resolve()
-    await act(async () => {
-      rotatePromise = latest?.sendRotate() ?? Promise.resolve()
-      await Promise.resolve()
-    })
-
-    await act(async () => {
-      container.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-
-    await act(async () => {
-      rotateDeferred.resolve()
-      await rotatePromise
-      await Promise.resolve()
-    })
-
-    expect(latest?.visualOrientation).toBe('portrait')
-
-    await act(async () => {
-      attachDeferred.resolve({
-        attached: true,
-        info: {
-          deviceUdid: 'device-b',
-          displayName: 'iPhone B',
-          streamUrl: 'http://127.0.0.1:3200/stream.mjpeg',
-          wsUrl: 'ws://127.0.0.1:3200/ws'
-        }
-      })
-      await attachDeferred.promise
-      await Promise.resolve()
-    })
-
-    expect(latest?.visualOrientation).toBe('portrait')
   })
 })

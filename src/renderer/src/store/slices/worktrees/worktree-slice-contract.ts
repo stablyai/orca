@@ -45,14 +45,14 @@ import type {
 } from '../../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../../shared/worktree/removal/removal'
 import type { TerminalGitHubPRLink } from '../../../../../shared/terminal/links/terminal-github-pr-link-detector'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TerminalPaneRecoveryOutcome } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
 } from '../../terminals/pty/terminal-tab-recovery-ledger'
 import type { RemoveWorktreeOptions } from './teardown/worktree-removal-options'
-import type { HostQualifiedDetectedWorktreeResult } from '../../../../../shared/detected-worktree-provider-contract'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 
 import type {
   PendingWorktreeCreation,

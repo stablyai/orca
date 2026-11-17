@@ -5,7 +5,7 @@
 import { posix } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { wslUncPathToLinux } from '../../../shared/file-access/wsl-paths'
 import { parseWindowsDriveMountInfo, type WindowsDriveMount } from './wsl-guest-drive-mountinfo'

@@ -1,5 +1,5 @@
 import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
-import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { getPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   withGitHubRepoExecution,
   type LocalGitExecOptions

@@ -8,7 +8,7 @@ import {
 import {
   isStructuredAgentSessionCommandTurn,
   isStructuredAgentSessionCommandEntry
-} from '../../../shared/agent-session/structured-agent-session-command-entry'
+} from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { journalDomainInputForItem, journalDomainSubmission } from './journal-domain-status-inputs'
 import {

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
-import type { RuntimeCapability } from '../../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 

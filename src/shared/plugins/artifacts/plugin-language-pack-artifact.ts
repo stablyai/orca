@@ -1,4 +1,4 @@
-import { isCatalogObject } from '../../i18n-catalog-object'
+import { isCatalogObject } from '../../i18n/i18n-catalog-object'
 import type { PluginArtifactStrictness } from './plugin-theme-artifact'
 import {
   translatablePluginChrome,
@@ -9,8 +9,6 @@ import {
   pluginTranslationStringProblem,
   type EnglishSourceLookup
 } from '../languages/plugin-translation-string-policy'
-
-export { isCatalogObject }
 
 // Why headroom: a complete pack already carries ~18k entries and the English catalog keeps growing.
 export const PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES = 50_000

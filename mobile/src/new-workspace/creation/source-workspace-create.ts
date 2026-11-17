@@ -22,6 +22,7 @@ import {
 import type { WorktreeCreateAgentLaunch } from '../../session/agent-launch/agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 import { getClientWorktreeCreateCandidate } from '../../../../src/shared/new-workspace/worktree-create-retry-policy'
+import type { SetupHooksCreateSource } from '../../../../src/shared/worktree/setup-hooks-create-source'
 
 // Host resolution applies agent permission flags and shell quoting.
 export type WorkspaceCreateAgentBundle = {
@@ -33,6 +34,7 @@ export type CreateWorkspaceFromComposerArgs = {
   selection: MobileComposerCreateSelection
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -55,6 +57,62 @@ export async function createWorkspaceFromComposerSource(
   return createWorkItemWorkspace({ ...args, selection: args.selection })
 }
 
+/** Reuse select-time PR/MR base resolution; resolve again only when a linked item lacks it. */
+export async function resolveComposerSelectionBase<Selection extends MobileComposerCreateSelection>(
+  client: RpcClient,
+  selection: Selection,
+  targetRepoId: string
+): Promise<Selection> {
+  if (selection.kind !== 'work-item' || selection.baseBranch) {
+    return selection
+  }
+  const item = selection.item
+  if (item.provider === 'linear' || (item.type !== 'pr' && item.type !== 'mr')) {
+    return selection
+  }
+  const repoId = item.repoId ?? targetRepoId
+  const resolved =
+    item.type === 'pr'
+      ? await resolveComposerPrBase({ client, repoId, prNumber: item.number }).catch(() => null)
+      : await resolveComposerMrBase({ client, repoId, mrIid: item.number }).catch(() => null)
+  return resolved
+    ? {
+        ...selection,
+        baseBranch: resolved.baseBranch,
+        compareBaseRef: resolved.compareBaseRef,
+        pushTarget: resolved.pushTarget,
+        branchNameOverride: resolved.branchNameOverride ?? selection.branchNameOverride
+      }
+    : selection
+}
+
+/** The repo the create lands in: a GitHub or GitLab item keeps its own repo when another is selected. */
+export function composerCreateRepoId(
+  selection: MobileComposerCreateSelection | null | undefined,
+  selectedRepoId: string
+): string {
+  return selection?.kind === 'work-item' &&
+    (selection.item.provider === 'github' || selection.item.provider === 'gitlab')
+    ? (selection.item.repoId ?? selectedRepoId)
+    : selectedRepoId
+}
+
+/** The ref the create checks out, so its setup prompt shows that ref's orca.yaml. */
+export function composerSetupHooksCreateSource(
+  selection: MobileComposerCreateSelection
+): SetupHooksCreateSource {
+  switch (selection.kind) {
+    case 'branch':
+      return selection.reuse
+        ? { kind: 'branch', ref: selection.localBranchName, baseBranch: selection.refName }
+        : { kind: 'base', baseBranch: selection.baseBranch }
+    case 'work-item':
+      return { kind: 'base', baseBranch: selection.baseBranch }
+    case 'new-branch':
+      return { kind: 'base' }
+  }
+}
+
 function resolveComposerAgentLaunch(
   agentId: TuiAgent | undefined,
   supported: WorktreeCreateAgentLaunch['supported']
@@ -67,6 +125,7 @@ async function createWorkItemWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -74,28 +133,11 @@ async function createWorkItemWorkspace(args: {
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   parent?: WorktreeCreateParent
 }): Promise<WorktreeCreateResult> {
+  // The caller resolved the start point before showing its setup; creating from another could run unseen setup.
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
   const taskItem = toTaskItem(item, targetRepoId)
-
-  // Reuse select-time PR/MR base resolution; resolve again only when a linked item lacks it.
-  let baseBranch = selection.baseBranch
-  let compareBaseRef = selection.compareBaseRef
-  let pushTarget = selection.pushTarget
-  let branchNameOverride = selection.branchNameOverride
-  if (!baseBranch && item.provider !== 'linear' && (item.type === 'pr' || item.type === 'mr')) {
-    const repoId = item.repoId ?? targetRepoId
-    const resolved =
-      item.type === 'pr'
-        ? await resolveComposerPrBase({ client, repoId, prNumber: item.number }).catch(() => null)
-        : await resolveComposerMrBase({ client, repoId, mrIid: item.number }).catch(() => null)
-    if (resolved) {
-      baseBranch = resolved.baseBranch
-      compareBaseRef = resolved.compareBaseRef
-      pushTarget = resolved.pushTarget
-      branchNameOverride = resolved.branchNameOverride ?? branchNameOverride
-    }
-  }
+  const { baseBranch, compareBaseRef, pushTarget, branchNameOverride } = selection
 
   const params = buildTaskWorkspaceCreateParams({
     item: taskItem,
@@ -115,6 +157,7 @@ async function createWorkItemWorkspace(args: {
   // Keep linked work items on terminals: structured sessions cannot hold their unsent URL draft and would submit it as a turn.
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    approvedSetupHash: args.approvedSetupHash,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -127,6 +170,7 @@ async function createBranchWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'branch' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -166,6 +210,7 @@ async function createBranchWorkspace(args: {
     })
     return createWorktreeWithNameRetry({
       parent: args.parent,
+      approvedSetupHash: args.approvedSetupHash,
       client,
       baseName,
       worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -193,6 +238,7 @@ async function createBranchWorkspace(args: {
   })
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    approvedSetupHash: args.approvedSetupHash,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -225,6 +271,7 @@ async function createNewBranchWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'new-branch' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -250,6 +297,7 @@ async function createNewBranchWorkspace(args: {
   // Preserve typed git branch names, including slashes; sanitize only the folder, and retry suffixes against the branch name.
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    approvedSetupHash: args.approvedSetupHash,
     client,
     baseName: selection.branchName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,

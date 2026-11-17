@@ -9,7 +9,7 @@ import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-la
 import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -173,6 +173,13 @@ export function createRepoUpdateActions(
           ) {
             return false
           }
+          // A host from before per-repo browser profiles drops the field and still answers with its row.
+          if (
+            sanitizedUpdates.browserProfileId !== undefined &&
+            (updatedRepo?.browserProfileId ?? null) !== sanitizedUpdates.browserProfileId
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -201,6 +208,7 @@ export function createRepoUpdateActions(
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
                 workspaceCleanupPolicy,
+                browserProfileId,
                 ...updatesWithoutClearSentinels
               } = sanitizedUpdates
               mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
@@ -251,6 +259,13 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutCleanupPolicy
               } else if (workspaceCleanupPolicy !== undefined) {
                 mergedRepo = { ...mergedRepo, workspaceCleanupPolicy }
+              }
+              if (browserProfileId === null) {
+                const { browserProfileId: _browserProfileId, ...repoWithoutBrowserProfile } =
+                  mergedRepo
+                mergedRepo = repoWithoutBrowserProfile
+              } else if (browserProfileId !== undefined) {
+                mergedRepo = { ...mergedRepo, browserProfileId }
               }
               return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })

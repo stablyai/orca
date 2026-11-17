@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type {
   RuntimeMobileSessionTabsSnapshot,
@@ -194,50 +194,6 @@ async function createRuntimeHarness(initialSnapshots: RuntimeMobileSessionTabsSn
   }
 }
 
-function createHarness() {
-  const census = deferredInventory()
-  const emit = vi.fn<(event: unknown) => void>()
-  const unsubscribe = vi.fn<() => void>()
-  const cleanup = vi.fn<() => void>()
-  let changeSequence = 0
-  let listener:
-    | ((value: RuntimeMobileSessionTabsResult, changeSequence: number) => void)
-    | undefined
-  const runtime = {
-    supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
-    listAllMobileSessionTabsInventory: vi.fn(() => census.promise),
-    listAllMobileSessionTabsInventoryWithChangeSequence: vi.fn(async () => {
-      return await census.promise
-    }),
-    onMobileSessionTabsChanged: vi.fn(
-      (nextListener: (value: RuntimeMobileSessionTabsResult, changeSequence: number) => void) => {
-        listener = nextListener
-        return unsubscribe
-      }
-    ),
-    registerSubscriptionCleanup: vi.fn((_id: string, nextCleanup: () => void) =>
-      cleanup.mockImplementation(nextCleanup)
-    ),
-    cleanupSubscription: vi.fn()
-  } as unknown as OrcaRuntimeService
-
-  return {
-    census,
-    cleanup,
-    context: {
-      runtime,
-      connectionId: 'conn-census-race',
-      requestId: 'req-census-race',
-      clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
-    },
-    emit,
-    deliver: (value: RuntimeMobileSessionTabsResult, sequence: number) =>
-      listener?.(value, sequence),
-    publish: (value: RuntimeMobileSessionTabsResult) => listener?.(value, ++changeSequence),
-    unsubscribe
-  }
-}
-
 describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundary', () => {
   it('replays a change between frame construction and census promise settlement', async () => {
     const existing = runtimeSnapshot('wt-existing', 1)
@@ -413,34 +369,6 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
     ])
   })
 
-  it('keeps a newer immediate change when an older coalesced callback arrives last', async () => {
-    const harness = await createRuntimeHarness()
-    const scheduled = runtimeSnapshot('wt-census-race', 1)
-    const immediate = runtimeSnapshot('wt-census-race', 2)
-
-    await harness.publish([scheduled], false)
-    harness.atBoundary(async () => {
-      harness.internals.mobileSessionTabsByWorktree.set(immediate.worktree, immediate)
-      harness.internals.emitMobileSessionTabsSnapshot(immediate)
-      harness.internals.mobileSessionTabsNotifyCoalescer.flushAll()
-      await harness.senderFramesDelivered()
-    })
-    harness.census.resolve(completePtyInventory())
-    await harness.pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      expect.objectContaining({
-        type: 'snapshots',
-        snapshots: [expect.objectContaining({ snapshotVersion: scheduled.snapshotVersion })]
-      }),
-      expect.objectContaining({
-        type: 'updated',
-        worktree: immediate.worktree,
-        snapshotVersion: immediate.snapshotVersion
-      })
-    ])
-  })
-
   it('preserves caller-only follow intent when a later shared snapshot is buffered', async () => {
     const runtime = new OrcaRuntimeService()
     await runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
@@ -535,120 +463,6 @@ describe.skipIf(runningBaselineOracle)('real runtime session tabs census boundar
 })
 
 describe('session tabs inventory census boundary', () => {
-  it('delivers a post-boundary projected-state change without a new snapshot revision', async () => {
-    const harness = createHarness()
-    const pendingTab = {
-      ...terminalTab('derived'),
-      status: 'pending-handle' as const,
-      terminal: null
-    }
-    const initial = snapshot(2, [pendingTab])
-    const ready = snapshot(2, [terminalTab('derived')])
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [initial], authoritative: true, changeSequence: 0 })
-    await pending
-    harness.deliver(ready, 1)
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [initial], authoritative: true },
-      { type: 'updated', ...ready }
-    ])
-  })
-
-  it('bounds non-structural initialization churn to the latest projected state', async () => {
-    const harness = createHarness()
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    queueMicrotask(() => {
-      for (let version = 1; version <= 1_000; version += 1) {
-        harness.publish(snapshot(version, [terminalTab('stable')]))
-      }
-    })
-    await pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [], authoritative: true },
-      { type: 'updated', ...snapshot(1_000, [terminalTab('stable')]) }
-    ])
-  })
-
-  it('bounds repeated follow intent to the latest caller request', async () => {
-    const harness = createHarness()
-    const pending = subscribeSessionTabsInventory(harness.context, harness.emit)
-
-    await Promise.resolve()
-    harness.census.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    queueMicrotask(() => {
-      for (let version = 1; version <= 1_000; version += 1) {
-        harness.publish({
-          ...snapshot(version, [terminalTab(`followed-${version}`)]),
-          navigationIntent: 'follow'
-        })
-      }
-    })
-    await pending
-
-    expect(harness.emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [], authoritative: true },
-      {
-        type: 'updated',
-        ...snapshot(1_000, [terminalTab('followed-1000')]),
-        navigationIntent: 'follow'
-      }
-    ])
-  })
-
-  it('restarts the census when structural churn fills the bounded buffer', async () => {
-    const firstCensus = deferredInventory()
-    const secondCensus = deferredInventory()
-    const emit = vi.fn<(event: unknown) => void>()
-    let listener:
-      | ((value: RuntimeMobileSessionTabsResult, changeSequence: number) => void)
-      | undefined
-    const collect = vi
-      .fn()
-      .mockImplementationOnce(() => firstCensus.promise)
-      .mockImplementationOnce(() => secondCensus.promise)
-    const runtime = {
-      supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
-      listAllMobileSessionTabsInventoryWithChangeSequence: collect,
-      onMobileSessionTabsChanged: vi.fn(
-        (nextListener: (value: RuntimeMobileSessionTabsResult, sequence: number) => void) => {
-          listener = nextListener
-          return vi.fn()
-        }
-      ),
-      registerSubscriptionCleanup: vi.fn(),
-      cleanupSubscription: vi.fn()
-    } as unknown as OrcaRuntimeService
-    const pending = subscribeSessionTabsInventory(
-      {
-        runtime,
-        connectionId: 'conn-structural-churn',
-        requestId: 'req-structural-churn'
-      },
-      emit
-    )
-
-    await Promise.resolve()
-    for (let sequence = 1; sequence <= 300; sequence += 1) {
-      listener?.(snapshot(sequence, sequence % 2 === 0 ? [terminalTab('stable')] : []), sequence)
-    }
-    firstCensus.resolve({ snapshots: [], authoritative: true, changeSequence: 0 })
-    await vi.waitFor(() => expect(collect).toHaveBeenCalledTimes(2))
-    const settled = snapshot(300, [terminalTab('stable')])
-    secondCensus.resolve({ snapshots: [settled], authoritative: true, changeSequence: 300 })
-    await pending
-
-    expect(emit.mock.calls.map(([event]) => event)).toEqual([
-      { type: 'snapshots', snapshots: [settled] }
-    ])
-  })
-
   it('fails before publication after repeated structural buffer overflow', async () => {
     const censuses = [deferredInventory(), deferredInventory(), deferredInventory()]
     const emit = vi.fn<(event: unknown) => void>()

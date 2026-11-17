@@ -2,7 +2,7 @@ import { materializeOmpFreshConfig } from '../../../shared/agent-launch/startup/
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { createHash } from 'node:crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
@@ -119,10 +119,8 @@ export class PiTitlebarExtensionService {
     return this.writeManagedExtension(fallbackPath, source) === 'written' ? fallbackPath : undefined
   }
 
-  private installManagedExtensions(
-    sourceAgentDir: string,
-    kind: PiAgentKind
-  ): PiManagedExtensionEnv {
+  /** Refreshes Orca-owned extension files in a Pi agent dir; user-owned files with these names stay. */
+  installManagedExtensions(sourceAgentDir: string, kind: PiAgentKind): PiManagedExtensionEnv {
     const extensionsDir = join(sourceAgentDir, 'extensions')
     try {
       mkdirSync(extensionsDir, { recursive: true })

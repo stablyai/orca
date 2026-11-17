@@ -1,4 +1,5 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import { getManagedAccountInlineLabel } from '../../../../../shared/agent-accounts/managed-account-display-names'
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type {
   AgentSessionAccountUsage,
   AgentSessionUsageAccount
-} from '../../../../../shared/agent-session/agent-session-account-usage'
+} from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
 import type { CodexRateLimitResetOutcome } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
@@ -51,7 +52,9 @@ function chatAccountLabel(account: AgentSessionUsageAccount, t: Translate = tran
     case 'system':
       return t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
     case 'managed':
-      return account.email || t('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
+      return account.email
+        ? getManagedAccountInlineLabel(account)
+        : t('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
     case 'shared':
       return (
         account.email || t('components.native-chat.usage.sharedAccount', 'Current shared account')

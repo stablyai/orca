@@ -1,7 +1,7 @@
 // Share headless group moves with the runtime. Create each split group with its tab atomically; empty groups never persist.
 
 import { canonicalTabGap } from '../client-views/workspace-layout-client-visibility'
-import type { TabGroupLayoutNode } from '../../tab-types'
+import type { TabGroupLayoutNode } from '../tab-groups/tab-types'
 import {
   buildHeadlessTabGroupMove,
   buildHeadlessTabGroupSplit

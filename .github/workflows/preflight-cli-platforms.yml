@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
-      - 'src/main/ipc/preflight*'
+      - 'src/main/ipc/preflight/**'
       - 'src/main/ipc/command-path/agent-detection-shell-path.ts'
       - 'src/main/ipc/command-path/command-path-resolver*'
       - 'src/main/preflight/**'
@@ -44,10 +44,8 @@ jobs:
       - name: Check native CLI execution and shell PATH discovery
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=2
-          src/main/ipc/preflight-runnable-local-cli.test.ts
-          src/main/ipc/preflight-wsl-agent-detection.test.ts
-          src/main/ipc/preflight-windows-path-refresh.repro.test.ts
-          src/main/startup/shell-environment/login-shell-environment.test.ts
+          src/main/ipc/preflight/preflight-runnable-local-cli.test.ts
+          src/main/ipc/preflight/preflight-wsl-agent-detection.test.ts
           src/packages/process-host/src/process-tree-termination.test.ts
           src/packages/process-host/src/run-process.test.ts
           src/packages/process-host/src/run-process-termination-failure.test.ts

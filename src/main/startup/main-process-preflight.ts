@@ -62,8 +62,8 @@ import {
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure
 } from './profile-startup/single-instance-lock'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
-import { setAppEnvironment } from '../../shared/app-environment'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secure-storage/secret-store'

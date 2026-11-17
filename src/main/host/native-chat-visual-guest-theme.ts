@@ -6,7 +6,7 @@ import {
   nativeChatVisualGuestTheme,
   type NativeChatVisualTheme,
   type NativeChatVisualGuestTheme
-} from '../../shared/native-chat/native-chat-visual-shell'
+} from '../../shared/native-chat/visuals/native-chat-visual-shell'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { nativeChatScratchRootFor } from '../native-chat/conversation-files/native-chat-scratch-folder'
 import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'

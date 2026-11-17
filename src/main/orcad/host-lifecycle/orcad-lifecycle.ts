@@ -18,7 +18,7 @@ import {
 } from './orcad-unexpected-exit'
 import { ORCAD_BUNDLED_LAUNCHER_ENV } from '../runtime-launch/orcad-bundled-runtime'
 import { resolveOrcadExitCode } from '../serve-startup/orcad-exit-code'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/single-instance-exit-code'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../../shared/app-lifecycle/launch/single-instance-exit-code'
 import { recordAgentSessionRuntimeEnd } from '../../runtime/agent-session/records/agent-session-runtime-end-record'
 import type { collectLocalSavedStructuredAgentSessionIds } from '../../runtime/agent-session/lifecycle/saved-structured-agent-session-restoration'
 import type { AgentSessionRecordStoreStartupOpen } from '../../runtime/agent-session/records/local-agent-session-record-store-startup-open'
@@ -136,7 +136,7 @@ export async function startOrcadAgentSessionRecordStoreOpen(
 
 export async function stopOrcadStructuredAgentSessions(): Promise<void> {
   const { stopStructuredAgentSessionRuntime } =
-    await import('../../runtime/agent-session/structured-agent-session-runtime')
+    await import('../../runtime/agent-session/installation/structured-agent-session-runtime')
   await stopStructuredAgentSessionRuntime({ trigger: 'quit' })
 }
 

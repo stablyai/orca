@@ -25,7 +25,7 @@ import {
 import {
   linkNativeChatFilePaths,
   type FileLinkExists
-} from '../../../../shared/native-chat/native-chat-file-link-tree'
+} from '../../../../shared/native-chat/file-access/native-chat-file-link-tree'
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
 import { htmlRendersAsText, remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'

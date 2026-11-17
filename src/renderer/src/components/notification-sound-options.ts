@@ -14,7 +14,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { basename } from '@/lib/path'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 

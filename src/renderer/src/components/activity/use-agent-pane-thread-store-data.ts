@@ -8,7 +8,7 @@ import type { AppState } from '@/store/types'
 import {
   getSettingsFocusedExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { projectActivityTabs, type ActivityTabProjection } from './activity-tab-projection'
 import {
   selectDetectedWorktreesByRepo,

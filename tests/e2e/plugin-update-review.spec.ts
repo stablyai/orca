@@ -19,7 +19,7 @@ const PLUGINS = ['orca-review-notes', 'orca-review-tasks'] as const
 // Why: install and update review fetch Git; on a loaded runner that alone outlasts the 10s default.
 const GIT_STEP = { timeout: 60_000 }
 const FULL_ACCESS =
-  'Full access: runs as a normal program and can read your files, use the network, run other programs and control Orca, including your terminals and agents.'
+  'Full access: runs as a normal program and can read your files, use your saved logins and SSH keys, use the network, run other programs and control Orca, including your terminals and agents.'
 
 /** Each fixture plugin's installed version and whether it waits on the page's review queue. */
 async function installedState(page: Page): Promise<{ version: string; review: boolean }[]> {
@@ -263,12 +263,10 @@ test('confirms card removal, reviews a lone access-growing update directly, and 
     const singleReview = single.locator(`[data-plugin-update-review="stablyai.${PLUGINS[0]}"]`)
     await expect(singleReview).toBeVisible(GIT_STEP)
     await expect(single.locator('[data-plugin-update]')).toHaveCount(0)
-    await expect(singleReview).toContainText(
-      'This update asks for more than the version you approved. It installs only if you approve it here.'
-    )
+    await expect(singleReview).toContainText('New in this version:')
+    await expect(singleReview).toContainText('Official · stablyai')
     await expect(singleReview.locator('[data-added]', { hasText: FULL_ACCESS })).toBeVisible()
     await expect(singleReview.getByRole('button', { name: 'See all access' })).toBeVisible()
-    await expect(single.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
     await single.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(single).toBeHidden()
     expect(await installedState(page)).toEqual(
@@ -277,49 +275,35 @@ test('confirms card removal, reviews a lone access-growing update directly, and 
 
     await page.getByRole('tab', { name: /^Updates/ }).click()
     await page.getByRole('button', { name: 'Update all…', exact: true }).click()
-    const list = page.getByRole('dialog', { name: 'Update 2 plugins', exact: true })
-    await expect(list.locator('[data-plugin-update]')).toHaveCount(2, GIT_STEP)
+    // Several updates that grow access are grouped into one review, each showing only what it adds.
+    const group = page.getByRole('dialog', { name: 'Review 2 updates', exact: true })
+    await expect(group.locator('[data-plugin-update-review]')).toHaveCount(2, GIT_STEP)
+    await expect(group.locator('[data-plugin-update]')).toHaveCount(0)
     for (const id of PLUGINS) {
-      const row = list.locator(`[data-plugin-update="stablyai.${id}"]`)
-      // Only what's new shows; the rest of its access waits behind "See all access".
-      await expect(row).toContainText(`New: ${FULL_ACCESS}`)
-      await expect(row.getByRole('button', { name: 'See all access' })).toBeVisible()
-      // Access-growing updates trade the bulk checkbox for their own Review.
-      await expect(row.getByRole('checkbox')).toHaveCount(0)
-      await expect(row.getByRole('button', { name: 'Review', exact: true })).toBeEnabled()
+      const review = group.locator(`[data-plugin-update-review="stablyai.${id}"]`)
+      await expect(review.locator('[data-added]', { hasText: FULL_ACCESS })).toBeVisible()
+      await expect(review.getByRole('checkbox')).toBeChecked()
     }
-    await expect(list.getByRole('button', { name: 'Update', exact: true })).toBeDisabled()
-
-    const notesRow = list.locator(`[data-plugin-update="stablyai.${PLUGINS[0]}"]`)
-    await notesRow.getByRole('button', { name: 'Review', exact: true }).click()
-    const notesReview = page.getByRole('dialog', { name: 'Review update to Review Notes' })
-    await expect(
-      notesReview.locator(`[data-plugin-update-review="stablyai.${PLUGINS[0]}"]`)
-    ).toBeVisible()
-    // Back from one review returns to the list without installing anything.
-    await notesReview.getByRole('button', { name: 'Back', exact: true }).click()
-    await expect(list.locator('[data-plugin-update]')).toHaveCount(2)
-    expect(await installedState(page)).toEqual(
-      PLUGINS.map(() => ({ version: '1.0.0', review: false }))
-    )
-
-    for (const [index, id] of PLUGINS.entries()) {
-      const name = index === 0 ? 'Review Notes' : 'Review Tasks'
-      const row = list.locator(`[data-plugin-update="stablyai.${id}"]`)
-      await row.getByRole('button', { name: 'Review', exact: true }).click()
-      const review = page.getByRole('dialog', { name: `Review update to ${name}`, exact: true })
-      await expect(review.locator(`[data-plugin-update-review="stablyai.${id}"]`)).toBeVisible()
-      await review.getByRole('button', { name: 'Approve & update', exact: true }).click()
-      // Approving one of several returns to the list, which keeps the rest pending.
-      await expect(row).toContainText('Updated', GIT_STEP)
-      await expect(row.getByRole('button', { name: 'Review', exact: true })).toBeDisabled()
-    }
-    // Why the footer: the dialog's corner X is also named Close; the footer one reflects progress.
-    await list
-      .locator('[data-slot="dialog-footer"]')
-      .getByRole('button', { name: 'Close', exact: true })
+    // Unticking one approves only the other.
+    await group
+      .locator(`[data-plugin-update-review="stablyai.${PLUGINS[1]}"]`)
+      .getByRole('checkbox')
       .click()
-    await expect(list).toBeHidden()
+    await group.getByRole('button', { name: 'Approve & update', exact: true }).click()
+    await expect(group).toBeHidden(GIT_STEP)
+    expect(await installedState(page)).toEqual([
+      { version: '2.0.0', review: false },
+      { version: '1.0.0', review: false }
+    ])
+
+    // The one left is a lone review again.
+    await page.getByRole('button', { name: 'Update all…', exact: true }).click()
+    const last = page.getByRole('dialog', { name: 'Review update to Review Tasks', exact: true })
+    await expect(last.locator(`[data-plugin-update-review="stablyai.${PLUGINS[1]}"]`)).toBeVisible(
+      GIT_STEP
+    )
+    await last.getByRole('button', { name: 'Approve & update', exact: true }).click()
+    await expect(last).toBeHidden(GIT_STEP)
     // Approval covered exactly the reviewed bytes, so nothing lands in the page's review queue.
     expect(await installedState(page)).toEqual(
       PLUGINS.map(() => ({ version: '2.0.0', review: false }))

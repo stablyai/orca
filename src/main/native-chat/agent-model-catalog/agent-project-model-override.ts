@@ -185,9 +185,9 @@ function ancestry(cwd: string): string[] {
   }
 }
 
-// Grok uses user, managed and environment config, not project model settings.
+// Grok and Antigravity pick models from user-level config, not project model settings.
 export function agentReadsProjectModelConfig(agent: string): boolean {
-  return agent !== 'grok'
+  return agent !== 'grok' && agent !== 'antigravity'
 }
 
 export async function workspaceMayOverrideDefaultModel(input: {

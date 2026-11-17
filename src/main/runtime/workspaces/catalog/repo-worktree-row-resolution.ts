@@ -5,8 +5,9 @@ import {
   splitWorktreeIdForFilesystem,
   worktreeIdentityKey
 } from '../../../../shared/worktree/id'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+// oxfmt-ignore
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost
@@ -16,7 +17,7 @@ import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
-} from '../../../../shared/resolved-worktree-lineage'
+} from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
@@ -27,7 +28,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
-import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import { getLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'

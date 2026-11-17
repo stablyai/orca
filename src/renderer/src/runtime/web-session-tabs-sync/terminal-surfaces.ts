@@ -8,7 +8,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/snapshots/remote-layout-scrollback-retention'
@@ -24,8 +24,8 @@ import type {
   ReadyTerminalSurface,
   MirroredAgentTab
 } from './state'
-import type { Tab } from '../../../../shared/tab-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { withPendingPaneTitleRenames } from './naming/pending-pane-title-renames'

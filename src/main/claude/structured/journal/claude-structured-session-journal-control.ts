@@ -9,7 +9,7 @@ import type {
 import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeInitProof } from '../claude-structured-init-proof'
+import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
   ClaudeAcquisitionAttempt,

@@ -5,7 +5,7 @@ import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/work
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
 import { useAddRepoNestedReviewState } from './useAddRepoNestedReviewState'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function useAddRepoNestedReviewController({
   activeRuntimeEnvironmentId,

@@ -1,4 +1,4 @@
-import { hasReachedAppVersion } from '../../../../../shared/app-version'
+import { hasReachedAppVersion } from '../../../../../shared/app-lifecycle/identity/app-version'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot
