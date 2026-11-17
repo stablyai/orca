@@ -11,6 +11,8 @@ import { objectHealth } from './health'
 import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
 import { fromTokenSource, readIngress, type Ingress } from './ingress'
 import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, VerifyBodySchema, verifyAdminRequest, type AdminOp } from './admin'
+import { dialledHostname, directorConfig } from './director-config'
+import { handleDirector, type DirectorContext } from './director'
 
 export { HostRelay, SpliceRelay }
 
@@ -19,6 +21,28 @@ const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-ed
 function reject(status: number, retryAfter?: number): Response {
   const headers = retryAfter === undefined ? undefined : { 'retry-after': String(retryAfter) }
   return new Response(null, { status, headers })
+}
+
+// Edge-native director endpoints (dark): only when DIRECTOR_HOSTNAME is set, valid, the backend is
+// the object one, and the client dialled that hostname. Otherwise null and routing is unchanged.
+function directorFor(env: Env, request: Request, ingress: Ingress | null): DirectorContext | null {
+  if (!env.DIRECTOR_HOSTNAME) { return null }
+  const config = directorConfig(env)
+  if (!config || edgeConfig(env).backend !== 'object' || dialledHostname(request, ingress) !== config.hostname) { return null }
+  const cf = (request as Request & { cf?: { country?: string } }).cf
+  return {
+    config,
+    host: (relayHostId, locationHint) => {
+      const id = env.HOST_RELAY.idFromName(relayHostId)
+      return locationHint ? env.HOST_RELAY.get(id, { locationHint }) : env.HOST_RELAY.get(id)
+    },
+    verifyToken: (token) => verifyRelayJwt(env, token),
+    admit: (kind) => admitPreAuth(env, request, kind, ingress),
+    // Behind an ingress hop only its report counts (request.cf describes the hop, not the client).
+    country: ingress ? ingress.country : cf?.country,
+    record: (label) => metric(env, 'director', 1, label, [], '', requestPlace(request, ingress)),
+    now: () => Date.now()
+  }
 }
 
 function forward(
@@ -123,6 +147,8 @@ export default {
       return reject(403)
     }
     if (!ingress && request.headers.has(INGRESS_HEADER)) { metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request)) }
+    const director = directorFor(env, request, ingress)
+    if (director) { return handleDirector(request, url.pathname, director) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {
