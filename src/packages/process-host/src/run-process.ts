@@ -286,14 +286,23 @@ export function runProcess(
       graceTimer.unref?.()
     }
 
-    const timer =
-      spec.timeoutMs === null
-        ? undefined
-        : setTimeout(() => {
-            timedOut = true
-            stopAndSettle()
-          }, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
-    timer?.unref?.()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const startTimeout = (): void => {
+      if (spec.timeoutMs === null || settled || timer) {
+        return
+      }
+      timer = setTimeout(() => {
+        timedOut = true
+        stopAndSettle()
+      }, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
+      timer.unref?.()
+    }
+    if (hosted) {
+      // A hosted launch waits behind others on the worker; like a native spawn, the deadline starts once the process exists.
+      child.once('spawn', startTimeout)
+    } else {
+      startTimeout()
+    }
 
     const onAbort = (): void => stopAndSettle()
     spec.signal?.addEventListener('abort', onAbort, { once: true })
