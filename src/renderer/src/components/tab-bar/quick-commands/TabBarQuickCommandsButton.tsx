@@ -22,7 +22,7 @@ import {
   flattenTerminalQuickCommandHosts,
   type HostedTerminalQuickCommand,
   useTerminalQuickCommandHosts
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId

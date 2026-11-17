@@ -5,7 +5,7 @@ import {
   normalizeAgentStatusEvent,
   normalizeAgentStatusMetadata,
   normalizeMainClaudeAccountId
-} from '../../hooks/ipc-events/normalize-agent-status-event'
+} from '../../hooks/ipc-events/agent-status/normalize-agent-status-event'
 import { claudeTabAccountLabel } from '@/lib/claude-tab-account-label'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeTab } from '../terminals/testing/terminal-tab.test-fixture'

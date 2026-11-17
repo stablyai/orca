@@ -1,9 +1,9 @@
 import { GROUP_HEADER_ROW_HEIGHT, HOST_STICKY_PINNED_HEIGHT } from '../viewport/virtual-rows'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 
 const WORKTREE_REVEAL_TOP_CLEARANCE = 6
 export const WORKTREE_SIDEBAR_REVEAL_TOP_INSET =

@@ -2,7 +2,7 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-owners
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'

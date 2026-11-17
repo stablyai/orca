@@ -15,7 +15,7 @@ import {
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { useTranslate } from '@/i18n/use-translate'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean

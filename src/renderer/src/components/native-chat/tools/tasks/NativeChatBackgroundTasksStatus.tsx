@@ -11,7 +11,7 @@ import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import {
   backgroundTasksHeaderText,
   NARROW_BACKGROUND_TASKS_STRIP_REM

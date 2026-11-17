@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import type { ChangelogData } from '../../../shared/updater/update-status-types'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useAppStore } from '../store/index'
 import { Card } from './ui/card'
 import { Button } from './ui/button'

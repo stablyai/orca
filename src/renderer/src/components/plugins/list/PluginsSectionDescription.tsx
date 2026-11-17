@@ -1,5 +1,5 @@
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function PluginsSectionDescription({ text }: { text: string }): React.JSX.Element {

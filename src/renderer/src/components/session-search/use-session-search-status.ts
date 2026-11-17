@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { useWindowStreamVisible } from '@/hooks/use-window-stream-visibility'
+import { useWindowStreamVisible } from '@/lib/window-activity/use-window-stream-visibility'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { isHostTooOldError, sessionSearchPollIntervalMs } from './session-search-status'
 

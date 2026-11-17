@@ -1,6 +1,10 @@
 import type { TaskPageJiraListProjectionModel } from '../../jira/listing/use-task-page-jira-list-projection'
 import { useState, useMemo, useEffect, useReducer, type SetStateAction } from 'react'
-import { useTeamMembers, useTeamLabels, useTeamStates } from '@/hooks/useIssueMetadata'
+import {
+  useTeamMembers,
+  useTeamLabels,
+  useTeamStates
+} from '@/lib/work-items/linear/useIssueMetadata'
 import {
   useTaskCreationDraftRetention,
   type LinearIssueForm,
