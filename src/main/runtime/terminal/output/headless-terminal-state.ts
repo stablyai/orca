@@ -269,7 +269,8 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
           return
         }
         // An unseeded model stays partial, so readers keep preferring the provider; a retry also dropped the bytes its predecessor held.
-        if (seeded || (retryLateSeed && !seedTimedOut)) {
+        // After a gap, a second timeout gives up rather than leave idle and screen readers blind until the next gap.
+        if (seeded || (retryLateSeed && !seedTimedOut) || (afterGap && !retryLateSeed)) {
           this.providerSnapshotPreferredPtys.delete(ptyId)
         }
       })

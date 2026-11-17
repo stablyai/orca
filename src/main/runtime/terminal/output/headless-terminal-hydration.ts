@@ -227,19 +227,26 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     data: string,
     outputSequence: number,
     rawChunk: boolean
-  ): { covered: string; uncovered: string | null } {
+  ): { covered: string; uncovered: string | null; startsAtSeed: boolean } {
     const seed = state.providerSeed
     if (seed === undefined) {
-      return { covered: '', uncovered: data }
+      return { covered: '', uncovered: data, startsAtSeed: false }
     }
     if (outputSequence <= seed.seq) {
-      return { covered: data, uncovered: null }
+      return { covered: data, uncovered: null, startsAtSeed: false }
     }
     // Why: the daemon merges emissions, so a chunk can straddle the snapshot; only an untransformed one maps to raw seq.
     const coveredChars = seed.seq - (outputSequence - data.length)
-    return rawChunk && coveredChars > 0
-      ? { covered: data.slice(0, coveredChars), uncovered: data.slice(coveredChars) }
-      : { covered: '', uncovered: data }
+    if (!rawChunk) {
+      return { covered: '', uncovered: data, startsAtSeed: false }
+    }
+    return coveredChars > 0
+      ? {
+          covered: data.slice(0, coveredChars),
+          uncovered: data.slice(coveredChars),
+          startsAtSeed: true
+        }
+      : { covered: '', uncovered: data, startsAtSeed: coveredChars === 0 }
   }
 
   /** The seed already painted covered bytes, but the program still waits on their queries, as with daemon-dropped ones. */
@@ -271,7 +278,11 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
     const completion = state.writeChain.then(async () => {
-      const { covered, uncovered: data } = this.splitAtProviderSeed(
+      const {
+        covered,
+        uncovered: data,
+        startsAtSeed
+      } = this.splitAtProviderSeed(
         state,
         chunkData,
         outputSequence,
@@ -283,7 +294,8 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       }
       const seedEscapeTail = state.providerSeed?.escapeTail
       state.providerSeed = undefined
-      if (seedEscapeTail) {
+      // A chunk that does not begin exactly at the seed already carries its own escape start.
+      if (seedEscapeTail && startsAtSeed) {
         await state.emulator.write(seedEscapeTail)
       }
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
