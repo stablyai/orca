@@ -265,7 +265,7 @@
     "@oxlint/plugins": "1.89.0",
     "@playwright/test": "^1.64.1",
     "@sanity/diff-match-patch": "^3.2.1",
-    "@shadcn/lint": "~0.1.5",
+    "@shadcn/lint": "~0.2.5",
     "@stablyai/playwright-test": "^2.1.16",
     "@tailwindcss/vite": "^4.3.5",
     "@tanstack/react-virtual": "^3.14.13",
