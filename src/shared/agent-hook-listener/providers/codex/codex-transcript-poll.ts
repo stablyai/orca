@@ -47,15 +47,21 @@ export async function readCodexTranscriptPoll(
       state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
       state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
   )
-  const transcriptReads = transcript?.parent.filePath
-    ? await readCodexSubagentTranscript(transcript, batch)
-    : undefined
-  return {
-    batch,
-    roster,
-    transcript,
-    transcriptReads,
-    identities: roster ? await readPendingCodexSubagentIdentities(roster, batch) : []
+  try {
+    const transcriptReads = transcript?.parent.filePath
+      ? await readCodexSubagentTranscript(transcript, batch)
+      : undefined
+    return {
+      batch,
+      roster,
+      transcript,
+      transcriptReads,
+      identities: roster ? await readPendingCodexSubagentIdentities(roster, batch) : []
+    }
+  } catch (error) {
+    // Callers release on success; a rejected read must not keep its share of the budget.
+    batch.release()
+    throw error
   }
 }
 

@@ -1,5 +1,5 @@
 import { readFirstString } from '../../interactive-tool'
-import { parseAgentHookJson } from '../../request-body'
+import { parseHookPayloadForPrefetch } from '../../hook-envelope'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
 import { record } from './codex-rollout-jsonl-format'
@@ -13,17 +13,14 @@ import { codexSubagentIdentityReadDue } from './codex-subagent-roster'
 import { normalizedTranscriptPath } from './codex-rollout-paths'
 import { prefetchCodexSubagentTranscript } from './codex-subagent-transcript-reads'
 
-// Mirrors parseHookEnvelope's reading so the prefetch keys match what normalization reads.
+// Mirrors parseHookEnvelope's reading so the prefetch keys match what normalization reads; the parse is handed to it.
 function hookPayload(body: unknown): Record<string, unknown> | undefined {
-  const raw = record(body)?.payload
-  if (typeof raw !== 'string') {
+  const envelope = record(body)
+  const raw = envelope?.payload
+  if (typeof raw !== 'string' || typeof body !== 'object' || body === null) {
     return record(raw)
   }
-  try {
-    return record(parseAgentHookJson(raw))
-  } catch {
-    return undefined
-  }
+  return record(parseHookPayloadForPrefetch(body, raw))
 }
 
 function hookPaneKey(body: unknown): string | undefined {
