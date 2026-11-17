@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
@@ -295,7 +297,6 @@ export const PR_E2E_SOURCE_ROUTES = [
     // Why: hand-kept routes missed #30130 and #30120; scoped to managed-host code to bound lane cost.
     id: 'ssh.orcad-remote-sources',
     specs: [
-      'tests/e2e/ssh-orcad-paired-phone-projects.spec.ts',
       'tests/e2e/ssh-orcad-pairing-repair.spec.ts',
       'tests/e2e/ssh-orcad-shared-home-machines.spec.ts',
       'tests/e2e/ssh-orcad-shared-login-migration.spec.ts',
@@ -496,7 +497,29 @@ export function hasWslSourceChange(changedPaths) {
   return changedPaths.some(route.matches)
 }
 
+/** A route naming a deleted spec fails every later PR that touches its sources, so refuse it here. */
+function missingRouteSpecs() {
+  const specs = [...new Set(PR_E2E_SOURCE_ROUTES.flatMap((route) => route.specs))]
+  // CI's sparse checkout omits tests/e2e/, so ask the index rather than the disk.
+  const tracked = new Set(
+    execFileSync('git', ['ls-files', '-z', '--', ...specs], {
+      cwd: resolve(import.meta.dirname, '../../../..'),
+      encoding: 'utf8'
+    }).split('\0')
+  )
+  return PR_E2E_SOURCE_ROUTES.flatMap((route) =>
+    route.specs.filter((spec) => !tracked.has(spec)).map((spec) => `${route.id}: ${spec}`)
+  )
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const missing = missingRouteSpecs()
+  if (missing.length > 0) {
+    console.error(
+      `E2E source routes name specs that are not tracked; remove each from its route along with the spec:\n${missing.join('\n')}`
+    )
+    process.exit(1)
+  }
   let input = ''
   process.stdin.setEncoding('utf8')
   for await (const chunk of process.stdin) {

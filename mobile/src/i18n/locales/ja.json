@@ -1002,7 +1002,6 @@
       "clearSearch": "検索をクリア"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "常に信頼して実行",
       "description": "このリポジトリの orca.yaml は、ワークスペースの起動前に実行されます。このリポジトリを信頼できる場合にのみ実行してください。",
       "dontRun": "実行しない",
       "newScriptLabel": "新しいセットアップスクリプト",
@@ -3902,27 +3901,19 @@
       "reconnecting": "再接続中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "常に信頼して実行",
       "creating": "作成中…",
       "directoriesLabel": "ディレクトリ",
       "directories_one": "{{count}} 個のディレクトリ",
       "directories_other": "{{count}} 個のディレクトリ",
-      "dontRun": "実行しない",
       "editSparsePreset": "スパースプリセットを編集",
       "nameLabel": "名前",
       "namePlaceholder": "レンダラー UI",
-      "newSetupScript": "新しいセットアップスクリプト",
       "newSparsePreset": "新しいスパースプリセット",
-      "runHooks": "フックを実行する",
       "runSetupAndCreate": "セットアップを実行して作成",
-      "runSetupTitle": "{{name}} のセットアップを実行しますか?",
-      "setupChangedTitle": "{{name}} のセットアップスクリプトが変更されました",
-      "setupScript": "セットアップスクリプト",
       "setupSubtitle": "{{name}} でこのワークスペースを作成する前に、セットアップの実行有無を選択してください。",
       "setupTitle": "セットアップスクリプトを実行しますか?",
       "skipSetupAndCreate": "セットアップをスキップして作成",
-      "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。",
-      "trustSubtitle": "このリポジトリの orca.yaml は、ワークスペースの起動前にコンピュータ上で実行されます。このリポジトリを信頼できる場合のみ実行してください。"
+      "trustFailed": "セットアップスクリプトの信頼設定に失敗しました。"
     },
     "worktreeCreateRetry": {
       "createFailed": "ワークスペースの作成に失敗しました"

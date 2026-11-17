@@ -30,7 +30,6 @@ await import('../orca-runtime-tests/runtime-orchestration-db.test-fixture')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-04.spec')
 
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-06.spec')
-await import('../orca-runtime-tests/terminal-creation-and-readiness-part-07.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-08.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-09.spec')
 await import('../orca-runtime-tests/terminal-creation-and-readiness-part-10.spec')

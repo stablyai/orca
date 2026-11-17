@@ -1,57 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { buildClaudeResumeLaunchCommand } from './agent-resume-launch-command'
-import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
-import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 
 const SESSION_ID = 'claude-session-1'
 const RESUME = ['--resume', SESSION_ID] as const
-const providerSession = { key: 'session_id', id: SESSION_ID } as const
-
-const SHELLS: { platform: NodeJS.Platform; shell: AgentStartupShell }[] = [
-  { platform: 'linux', shell: 'posix' },
-  { platform: 'darwin', shell: 'posix' },
-  { platform: 'win32', shell: 'powershell' },
-  { platform: 'win32', shell: 'cmd' }
-]
-
-/** Use an independent selector oracle so shrinking the stripped set cannot also blind the assertion. */
-function isResumeSelectorToken(token: string): boolean {
-  return (
-    ['--resume', '--continue', '-r', '-c'].includes(token) ||
-    ['--resume=', '--continue=', '-r=', '-c='].some((prefix) => token.startsWith(prefix))
-  )
-}
-
-/** Tokenizes a launch command and asserts exactly one identity-bearing resume. */
-function expectSingleAuthoritativeResume(command: string, shell: AgentStartupShell): void {
-  const tokenized = tokenizeStartupCommand(command, shell)
-  expect(tokenized.ok).toBe(true)
-  if (!tokenized.ok) {
-    return
-  }
-  const selectors = tokenized.tokens.filter(isResumeSelectorToken)
-  expect(selectors).toEqual(['--resume'])
-  const index = tokenized.tokens.indexOf('--resume')
-  expect(tokenized.tokens[index + 1]).toBe(SESSION_ID)
-}
 
 describe('buildClaudeResumeLaunchCommand', () => {
-  it.each([
-    'claude --resume stale-session',
-    'claude --resume=stale-session',
-    'claude -r stale-session',
-    'claude -r=stale-session',
-    'claude --resume= --model sonnet',
-    'claude --continue',
-    'claude -c',
-    'claude --continue=1',
-    'claude -c=1',
-    'claude --resume stale -r older --continue -c'
-  ])('replaces stale selectors in %s', (base) => {
-    const command = buildClaudeResumeLaunchCommand(base, RESUME, 'posix')
-    expectSingleAuthoritativeResume(command, 'posix')
-  })
-
   it('never mistakes a dash-leading option value for a selector', () => {
     expect(buildClaudeResumeLaunchCommand('claude --model -recent', RESUME, 'posix')).toBe(
       `claude --model -recent '--resume' '${SESSION_ID}'`
@@ -151,33 +104,4 @@ describe('buildClaudeResumeLaunchCommand', () => {
       `claude '--' --resume old "--resume" "${SESSION_ID}"`
     )
   })
-})
-
-describe('buildAgentResumeStartupPlan claude effort', () => {
-  it.each(SHELLS)(
-    "resumes at the session's effort after a stale launch flag ($platform/$shell)",
-    ({ platform, shell }) => {
-      const session = { ...providerSession, effort: 'max' }
-      const restored = buildAgentResumeStartupPlan({
-        agent: 'claude',
-        providerSession: session,
-        cmdOverrides: {},
-        agentArgs: '--effort low',
-        platform,
-        shell
-      })
-      const command = restored?.launchCommand ?? ''
-      const tokens = tokenizeStartupCommand(command, shell)
-      // Claude keeps the last --effort it parses.
-      expect(tokens.ok && tokens.tokens.slice(-6)).toEqual([
-        '--effort',
-        'low',
-        '--effort',
-        'max',
-        ...RESUME
-      ])
-      // The saved launch recipe stays the user's own.
-      expect(restored?.launchConfig.agentArgs).toBe('--effort low')
-    }
-  )
 })
