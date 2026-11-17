@@ -206,27 +206,26 @@ export function onSavedBrowserTabsWritten(listener: () => void): () => void {
 }
 
 /**
- * Whether the saved workspace session still holds a web page in this partition, freed or not
- * shown yet. A closed page leaves it with the renderer's next session write.
+ * Partitions the saved workspace session still holds a web page in, freed or not shown yet.
+ * A closed page leaves it with the renderer's next session write.
  */
-export function hasSavedBrowserTabInPartition(partition: string): boolean {
+export function savedBrowserTabPartitions(): Set<string> {
+  const partitions = new Set<string>()
   if (!source) {
-    return false
+    return partitions
   }
   for (const hostId of source.getWorkspaceSessionHostIds()) {
     const state = source.getWorkspaceSession(hostId)
     for (const tabs of Object.values(state.browserTabsByWorktree ?? {})) {
       for (const tab of tabs) {
-        if (
-          partitionFor(tab) === partition &&
-          (state.browserPagesByWorkspace?.[tab.id] ?? []).some(isLocalWebPage)
-        ) {
-          return true
+        const partition = partitionFor(tab)
+        if (partition && (state.browserPagesByWorkspace?.[tab.id] ?? []).some(isLocalWebPage)) {
+          partitions.add(partition)
         }
       }
     }
   }
-  return false
+  return partitions
 }
 
 /** Looks up one page without listing (and numbering) every other discarded tab. */

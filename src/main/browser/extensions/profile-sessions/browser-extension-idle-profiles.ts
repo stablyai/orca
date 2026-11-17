@@ -2,7 +2,7 @@ import { webContents } from 'electron'
 import { isHiddenHelperContents } from '../../hidden-helper-window'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
-  hasSavedBrowserTabInPartition,
+  savedBrowserTabPartitions,
   onSavedBrowserTabsWritten
 } from '../tabs-and-windows/browser-extension-discarded-tabs'
 import {
@@ -18,8 +18,8 @@ const IDLE_PROFILE_UNLOAD_DELAY_MS = 60_000
 const idleChecks = new Map<string, NodeJS.Timeout>()
 /** Observed pages alive per extension session, so a close never scans every WebContents. */
 const livePages = new WeakMap<Electron.Session, number>()
-/** Profiles with no live page that only saved tabs kept running: a session write may drop the last one. */
-const keptBySavedTabs = new Map<string, Electron.Session>()
+/** Profiles with no live page that only saved tabs kept running, by partition: a session write may drop the last one. */
+const keptBySavedTabs = new Map<string, { sess: Electron.Session; partition: string }>()
 let observePage: (contents: Electron.WebContents) => void = () => {}
 
 /** Tabs (webview guests and serve's offscreen pages) and extension windows: what keeps a profile running. */
@@ -37,10 +37,15 @@ export function setIdleBrowserExtensionPageObserver(
 ): void {
   observePage = observe
   onSavedBrowserTabsWritten(() => {
-    for (const [profileId, sess] of keptBySavedTabs) {
-      // A pending check already covers it; rescheduling on every write would postpone it forever.
-      if (!idleChecks.has(profileId)) {
-        scheduleIdleBrowserExtensionProfileCheck(profileId, sess)
+    if (keptBySavedTabs.size === 0) {
+      return
+    }
+    // One pass for every waiting profile; a profile is checked again only once its tabs are gone.
+    const saved = savedBrowserTabPartitions()
+    for (const [profileId, kept] of keptBySavedTabs) {
+      if (!saved.has(kept.partition)) {
+        keptBySavedTabs.delete(profileId)
+        scheduleIdleBrowserExtensionProfileCheck(profileId, kept.sess)
       }
     }
   })
@@ -72,8 +77,8 @@ function scheduleIdleBrowserExtensionProfileCheck(profileId: string, sess: Elect
       return
     }
     const partition = getBrowserExtensionProfile(profileId)?.partition
-    if (partition && hasSavedBrowserTabInPartition(partition)) {
-      keptBySavedTabs.set(profileId, sess)
+    if (partition && savedBrowserTabPartitions().has(partition)) {
+      keptBySavedTabs.set(profileId, { sess, partition })
       return
     }
     void unloadBrowserExtensionsFromIdleProfile(profileId, (reattachRequested) => {
