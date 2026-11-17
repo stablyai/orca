@@ -28,11 +28,9 @@ function noteFailure(walk: Walk, error: unknown): void {
 }
 
 function overBudget(walk: Walk): boolean {
+  // Every step counts, folders included, so empty or slow folders can't outrun the deadline.
   walk.entries += 1
-  if (
-    walk.entries > walk.maxEntries ||
-    (walk.entries % 1024 === 0 && Date.now() > walk.deadline)
-  ) {
+  if (walk.entries > walk.maxEntries || Date.now() > walk.deadline) {
     walk.usage.complete = false
     return true
   }
@@ -75,11 +73,17 @@ function walkFolder(
   seenFiles: Set<string>,
   platform: NodeJS.Platform
 ): boolean {
+  if (overBudget(walk)) {
+    return false
+  }
   // Queued paths are real paths: one that no longer resolves to itself (it or a parent became a
   // link since it was listed) is not walked through.
   if (!lstatSync(dir).isDirectory() || realpathSync(dir) !== dir) {
     return true
   }
+  // Counted only if the folder still resolves to itself afterwards: a parent swapped for a link
+  // mid-listing would otherwise send the stats below outside history.
+  const found: { key: string; bytes: number }[] = []
   const handle = opendirSync(dir)
   try {
     for (let child = handle.readSync(); child; child = handle.readSync()) {
@@ -104,20 +108,27 @@ function walkFolder(
       if (!stats.isFile()) {
         continue
       }
-      // Some filesystems report inode 0 for every file; those count per name.
-      const key = stats.ino === 0n ? `path:${path}` : `${stats.dev}:${stats.ino}`
-      if (seenFiles.has(key)) {
-        continue
-      }
-      seenFiles.add(key)
-      walk.usage.rollouts += 1
-      // Allocated blocks are what the disk gives back (APFS compresses many rollouts); Windows reports none.
-      walk.usage.bytes += Number(platform === 'win32' ? stats.size : stats.blocks * 512n)
+      found.push({
+        // Some filesystems report inode 0 for every file; those count per name.
+        key: stats.ino === 0n ? `path:${path}` : `${stats.dev}:${stats.ino}`,
+        // Allocated blocks are what the disk gives back (APFS compresses many rollouts); Windows reports none.
+        bytes: Number(platform === 'win32' ? stats.size : stats.blocks * 512n)
+      })
     }
-    return true
   } finally {
     handle.closeSync()
   }
+  if (realpathSync(dir) !== dir) {
+    return true
+  }
+  for (const { key, bytes } of found) {
+    if (!seenFiles.has(key)) {
+      seenFiles.add(key)
+      walk.usage.rollouts += 1
+      walk.usage.bytes += bytes
+    }
+  }
+  return true
 }
 
 /**
@@ -146,6 +157,9 @@ export function measureCodexHistoryDiskUsage(
     }
   }
   for (const folder of folders) {
+    if (overBudget(walk)) {
+      return walk.usage
+    }
     try {
       const real = realpathSync(folder)
       if (!seenFolders.has(real)) {
