@@ -15,6 +15,10 @@ import {
   paintCodeEditorColors,
   resolveCodeEditorTheme
 } from '../../lib/editor/appearance/code-editor-theme'
+import {
+  codeEditorSyntaxColors,
+  paintCodeEditorSyntaxColors
+} from '../../lib/editor/appearance/code-editor-syntax-colors'
 import { browserColorProbe } from './plugin-theme-tokens'
 import {
   TINTED_HOST_PILL_OUTLINE_MIX_TOKEN,
@@ -151,6 +155,7 @@ export function useDocumentAppearance(): void {
       probe: browserColorProbe
     })
     paintCodeEditorColors(codeEditorTheme.override)
+    paintCodeEditorSyntaxColors(codeEditorSyntaxColors(codeEditorTheme, dark ? 'dark' : 'light'))
     useCodeEditorThemeStore.setState(codeEditorTheme)
   }, [appTheme, appPainted, editorTheme, pluginThemesLoaded, theme, dark])
 

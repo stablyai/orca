@@ -26,3 +26,31 @@ export const PANEL_DESIGN_TOKEN_ALLOWLIST = [
   '--font-sans',
   '--font-mono'
 ] as const
+
+/** Code editor syntax colors, painted on the root as `--syntax-<name>` and given to frames as
+ *  `--orca-syntax-<name>`. Same growth rule as above. Apart from the allowlist because native
+ *  chat visuals can pin a scheme the editor theme does not follow. */
+export const PANEL_SYNTAX_COLORS = [
+  'comment',
+  'keyword',
+  'string',
+  'number',
+  'function',
+  'type',
+  'variable',
+  'constant',
+  'operator',
+  'tag',
+  'attribute'
+] as const
+
+export type PanelSyntaxColor = (typeof PANEL_SYNTAX_COLORS)[number]
+
+export const panelSyntaxToken = (name: PanelSyntaxColor): `--syntax-${PanelSyntaxColor}` =>
+  `--syntax-${name}`
+
+/** Every root token a panel or custom editor frame receives. */
+export const PANEL_FRAME_TOKENS: readonly string[] = [
+  ...PANEL_DESIGN_TOKEN_ALLOWLIST,
+  ...PANEL_SYNTAX_COLORS.map(panelSyntaxToken)
+]

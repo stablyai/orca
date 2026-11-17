@@ -4,7 +4,12 @@ import {
   PLUGIN_APP_THEME_TOKENS
 } from './plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from './plugin-theme-css-fallbacks'
-import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../frames/plugin-panel-design-tokens'
+import {
+  PANEL_DESIGN_TOKEN_ALLOWLIST,
+  PANEL_SYNTAX_COLORS,
+  panelSyntaxToken,
+  type PanelSyntaxColor
+} from '../frames/plugin-panel-design-tokens'
 
 const REQUIRED = new Set<string>(PLUGIN_APP_THEME_REQUIRED_TOKENS)
 
@@ -157,13 +162,37 @@ const FRAME_ONLY_ROLES: Record<string, string> = {
   '--font-mono': 'Monospace font stack for code'
 }
 
+// Why a full record: a syntax color added without saying what it paints fails typecheck.
+const SYNTAX_ROLES: Record<PanelSyntaxColor, string> = {
+  comment: 'Comments (`comment`)',
+  keyword: 'Keywords (`keyword`)',
+  string: 'Strings (`string`)',
+  number: 'Numbers (`constant.numeric`)',
+  function: 'Function names (`entity.name.function`)',
+  type: 'Type names (`entity.name.type`)',
+  variable: 'Variables (`variable`)',
+  constant: 'Constants (`constant`)',
+  operator: 'Operators (`keyword.operator`)',
+  tag: 'Markup tags (`entity.name.tag`)',
+  attribute: 'Markup attributes (`entity.other.attribute-name`)'
+}
+
+const SYNTAX_SOURCE = 'code editor theme'
+
 /** The `--orca-*` CSS variables panel and editor frames get, with what each paints. */
 export function pluginFrameThemeVariables(): { variable: string; token: string; paints: string }[] {
-  return PANEL_DESIGN_TOKEN_ALLOWLIST.map((token) => ({
-    variable: `--orca-${token.slice(2)}`,
-    token,
-    paints: isAppThemeToken(token) ? TOKEN_ROLES[token] : (FRAME_ONLY_ROLES[token] ?? '')
-  }))
+  return [
+    ...PANEL_DESIGN_TOKEN_ALLOWLIST.map((token) => ({
+      variable: `--orca-${token.slice(2)}`,
+      token,
+      paints: isAppThemeToken(token) ? TOKEN_ROLES[token] : (FRAME_ONLY_ROLES[token] ?? '')
+    })),
+    ...PANEL_SYNTAX_COLORS.map((name) => ({
+      variable: `--orca-${panelSyntaxToken(name).slice(2)}`,
+      token: SYNTAX_SOURCE,
+      paints: `${SYNTAX_ROLES[name]} in the code editor's theme`
+    }))
+  ]
 }
 
 /** Colour token list for theme authors, rendered from the public token set. */
@@ -188,9 +217,13 @@ export function renderPluginThemeTokenReference(): string {
     '',
     '| Variable | Orca token |',
     '| --- | --- |',
-    ...pluginFrameThemeVariables().map(
-      ({ variable, token }) => `| \`${variable}\` | \`${token}\` |`
-    )
+    ...pluginFrameThemeVariables().map(({ variable, token, paints }) =>
+      token === SYNTAX_SOURCE
+        ? `| \`${variable}\` | ${paints} |`
+        : `| \`${variable}\` | \`${token}\` |`
+    ),
+    '',
+    "The `--orca-syntax-*` colors are what Orca's code editor paints with: the editor theme chosen in Settings → Appearance, which can differ from the app theme and its light or dark mode. A theme's `tokenColors` reach them through the TextMate scope in parentheses; a scope the theme leaves unset is the editor's built-in color, or its text color where the editor has none."
   ]
   return `${lines.join('\n')}\n`
 }
