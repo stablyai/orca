@@ -108,7 +108,8 @@ export function nextJournalDomainQueueCard(
         continue
       }
       if (selection.mailOnly && !mail) {
-        continue
+        // A person's card that could go now holds every later card until earlier mail is taken in.
+        return { kind: 'selected', card: null }
       }
       if (pastUnavailableMail && mail) {
         continue

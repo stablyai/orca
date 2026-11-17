@@ -10,8 +10,8 @@ import {
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlQueueFacts } from './journal-sql-queued-messages'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { orchestrationMailNotice } from '../../../shared/agent-session/journal/agent-session-message-source'
+
+const MAX_OWED_MAIL_STEERS = 32
 
 /** Send, automatic claim and publication derive the same barriers from current SQL rows. */
 export function journalDomainInputEligibility(
@@ -31,10 +31,7 @@ export function journalDomainInputEligibility(
     work,
     prompts,
     pending: context.firstQueuedInput(),
-    handover: journalHandover(
-      context,
-      [...context.enteredSubmissions()].filter((send) => work.owesSend(send))
-    ),
+    handover: [...context.enteredSubmissions()].filter((send) => work.owesSend(send)),
     activeTurnId: work.activeTurn()?.turnId
   }
 }
@@ -67,26 +64,29 @@ export function journalDomainResolvedInputEligibility(
     context,
     prompts: work.actionablePrompts,
     pending: context.firstQueuedInput(),
-    handover: journalHandover(context, work.owedEnteredSubmissions),
+    handover: work.owedEnteredSubmissions,
     activeTurnId: work.activeTurn?.turnId
   }
 }
 
-/** Sends the agent has not taken in yet; other agents' mail alone never holds the next mail card,
- *  since a running turn takes every waiting message in at its next step. */
-function journalHandover(
-  context: JournalSqlStatusContext,
+/** Claude and Codex take every waiting message in at their next step, so other agents' mail the
+ *  agent has not taken in yet never holds the next mail card, up to a bound below the smallest
+ *  provider's limit on sends awaiting their echo. */
+function owedSendsAreMail(
+  scope: JournalSqlScope,
   owed: readonly AgentJournalSubmission[]
-): 'none' | 'mail' | 'input' {
-  if (owed.length === 0) {
-    return 'none'
+): boolean {
+  if (owed.length >= MAX_OWED_MAIL_STEERS) {
+    return false
   }
-  return owed.every((send) => {
-    const body = context.item(agentJournalSubmissionKey(send.clientMessageId))?.body
-    return body?.kind === 'message' && orchestrationMailNotice(body.from) !== null
-  })
-    ? 'mail'
-    : 'input'
+  const notice = scope.db
+    .prepare(`SELECT json_extract(payload_json,'$.body.from.orchestration.message')
+    AS notice FROM journal_queue_cards WHERE session_id=? AND epoch=? AND message_id=?`)
+  return owed.every(
+    (send) =>
+      send.queuedMessageId !== undefined &&
+      notice.get(scope.sessionId, scope.epoch, send.queuedMessageId)?.notice === 'mail-notice'
+  )
 }
 
 export function selectJournalEligibleQueueCard(
@@ -100,13 +100,11 @@ export function selectJournalEligibleQueueCard(
   const state = resolved ?? journalDomainInputEligibility(scope, authority)
   const none = { kind: 'selected' as const, card: null, steer: false, command: false }
   const steer = state.activeTurnId !== undefined
-  if (
-    state.blocked ||
-    state.prompts.length > 0 ||
-    state.pending ||
-    (state.handover !== 'none' && !(steer && state.handover === 'mail')) ||
-    (steer && !allowSteer)
-  ) {
+  if (state.blocked || state.prompts.length > 0 || state.pending || (steer && !allowSteer)) {
+    return none
+  }
+  const mailOnly = state.handover.length > 0
+  if (mailOnly && !(steer && owedSendsAreMail(scope, state.handover))) {
     return none
   }
   return {
@@ -119,7 +117,7 @@ export function selectJournalEligibleQueueCard(
         steer,
         automatic: true,
         mail: facts.mail,
-        mailOnly: state.handover === 'mail'
+        mailOnly
       },
       state.context.inputHead
     ),
