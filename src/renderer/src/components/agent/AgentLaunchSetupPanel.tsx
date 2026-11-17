@@ -151,7 +151,8 @@ export function AgentLaunchSetupPanel({
         ? setupRowKey(resultStart)
         : undefined
       : modelRows.start,
-    searching ? '' : modelQuery
+    searching ? '' : modelQuery,
+    models.length
   )
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
@@ -195,7 +196,8 @@ export function AgentLaunchSetupPanel({
       : []
   return (
     <div
-      className="flex w-full flex-col"
+      // Why min-h-0: in a height-capped picker only the model list gives up room.
+      className="flex min-h-0 w-full flex-col"
       data-agent-launch-setup=""
       onKeyDownCapture={(event) => {
         if (isScreenSubmitShortcut(event)) {
@@ -282,7 +284,7 @@ export function AgentLaunchSetupPanel({
         {!installed && !searching ? (
           <AgentLaunchInstallPrompt entry={entry} />
         ) : (
-          <CommandList className="max-h-56 scroll-py-0" data-focus-behavior="page">
+          <CommandList className="max-h-56 min-h-0 scroll-py-0" data-focus-behavior="page">
             {catalogMessage && !searching ? (
               <div
                 className="flex items-center gap-2 px-2.5 py-2 text-xs text-muted-foreground"
