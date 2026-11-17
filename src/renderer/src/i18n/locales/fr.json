@@ -7934,6 +7934,9 @@
             "modeAriaLabel": "Mode d'ouverture du tableau de bord des agents",
             "modeInWindow": "Dans la fenêtre",
             "modePopout": "Fenêtre indépendante"
+          },
+          "worktreeCardStyle": {
+            "title": "Style des cartes"
           }
         },
         "FloatingWorkspacePane": {
@@ -21375,6 +21378,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Essayez les nouvelles cartes",
+      "dismiss": "Pas maintenant",
+      "body": "Statut des agents, points non lus et résumés des enfants sur chaque carte.",
+      "switchBack": "Revenez en arrière à tout moment dans <path>Options des espaces de travail › Style des cartes</path>",
+      "switchLabel": "Style des cartes",
+      "classic": "Classique",
+      "new": "Nouveau",
+      "keep": "Garder le nouveau",
+      "useClassic": "Utiliser le classique",
+      "laterToast": "Essayez les nouvelles cartes à tout moment depuis Options des espaces de travail › Style des cartes",
+      "saveFailedToast": "Impossible d'enregistrer le style des cartes. Réessayez.",
+      "keptTitle": "Les nouvelles cartes sont activées",
+      "keptBody": "Modifiez-le ici, sous Style des cartes."
+    },
     "revealFiltered": {
       "title": "Révéler l'espace de travail caché ?",
       "description": "L'espace de travail actif est masqué dans la barre latérale. Le révéler ajustera uniquement les filtres qui le cachent.",

@@ -7992,6 +7992,9 @@
             "modeAriaLabel": "Agent ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
             "modePopout": "ポップアウト"
+          },
+          "worktreeCardStyle": {
+            "title": "カードのスタイル"
           }
         },
         "FloatingWorkspacePane": {
@@ -22048,6 +22051,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "新しいカードを試す",
+      "dismiss": "後で",
+      "body": "すべてのカードに Agent の状態、未読ドット、子の概要を表示します。",
+      "switchBack": "<path>ワークスペースのオプション › カードのスタイル</path> からいつでも元に戻せます",
+      "switchLabel": "カードのスタイル",
+      "classic": "クラシック",
+      "new": "新しい",
+      "keep": "新しいものを使う",
+      "useClassic": "クラシックを使う",
+      "laterToast": "ワークスペースのオプション › カードのスタイル からいつでも新しいカードを試せます",
+      "saveFailedToast": "カードのスタイルを保存できませんでした。もう一度お試しください。",
+      "keptTitle": "新しいカードを使用中です",
+      "keptBody": "ここの カードのスタイル で変更できます。"
+    },
     "revealFiltered": {
       "title": "隠されたワークスペースを明らかにしますか?",
       "description": "アクティブなワークスペースはサイドバーに表示されません。これを表示すると、それを非表示にしているフィルターのみが調整されます。",
