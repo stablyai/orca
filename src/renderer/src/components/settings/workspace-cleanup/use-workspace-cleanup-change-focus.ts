@@ -30,6 +30,7 @@ export function useWorkspaceCleanupChangeFocus(scopeKey: string) {
           ? document.querySelector<HTMLElement>(`[aria-label="${CSS.escape(label.current)}"]`)
           : null
       target?.focus()
+      return Boolean(target)
     }
   }
 }

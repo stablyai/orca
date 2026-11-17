@@ -223,6 +223,11 @@ export function RepositoryWorkspaceCleanupSection({
                 rules={policy.rules}
                 forceVisible
                 disabled={change.guarded}
+                pendingRule={
+                  change.checking === 'mode' || change.checking === 'keepIgnoredFiles'
+                    ? null
+                    : change.checking
+                }
                 error={
                   change.error &&
                   !change.pending &&
@@ -231,11 +236,6 @@ export function RepositoryWorkspaceCleanupSection({
                   change.errorSetting !== 'keepIgnoredFiles'
                     ? { key: change.errorSetting, message: change.error, retry: change.retry }
                     : undefined
-                }
-                pendingRule={
-                  change.checking === 'mode' || change.checking === 'keepIgnoredFiles'
-                    ? null
-                    : change.checking
                 }
                 onToggle={(key) =>
                   change.requestChange({

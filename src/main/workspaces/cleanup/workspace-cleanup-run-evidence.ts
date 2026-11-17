@@ -143,7 +143,8 @@ async function scanTargets(
   runtime: OrcaRuntimeService,
   worktreeIds: string[],
   signal: AbortSignal | undefined,
-  inventorySize?: number
+  inventorySize?: number,
+  requireComplete = false
 ): Promise<Map<string, WorkspaceCleanupCandidate>> {
   const candidates = new Map<string, WorkspaceCleanupCandidate>()
   if (worktreeIds.length === 0) {
@@ -160,11 +161,15 @@ async function scanTargets(
       getOrchestrationDb: () => runtime.getExistingOrchestrationDb()
     }
   )
-  if (result.errors.length) {
+  if (requireComplete && result.errors.length) {
     throw new Error(result.errors[0].message)
   }
+  const failedRepos = new Set(result.errors.map((error) => error.repoId))
   for (const candidate of result.candidates) {
-    if (normalizeExecutionHostId(candidate.executionHostId) === LOCAL_EXECUTION_HOST_ID) {
+    if (
+      !failedRepos.has(candidate.repoId) &&
+      normalizeExecutionHostId(candidate.executionHostId) === LOCAL_EXECUTION_HOST_ID
+    ) {
       candidates.set(candidate.worktreeId, candidate)
     }
   }
@@ -207,6 +212,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   /** The scan's read of paired servers, so a re-check never asks them again. */
   readPairedFolderChildren?: () => Promise<PairedFolderChildren>
   comparison?: { state: WorkspaceCleanupPolicyState; change: WorkspaceCleanupPolicyChange }
+  requireComplete?: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
@@ -279,7 +285,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     runtime,
     gitTargets,
     signal,
-    args.comparison ? ps.worktrees.length : undefined
+    args.comparison ? ps.worktrees.length : undefined,
+    args.requireComplete ?? Boolean(args.comparison)
   )
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)

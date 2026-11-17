@@ -6,6 +6,7 @@ import {
   WorkspaceCleanupChangeParams,
   WorkspaceCleanupSettleParams,
   WorkspaceCleanupInspectKeptParams,
+  WorkspaceCleanupPinBatchParams,
   WorkspaceCleanupPinParams
 } from '../../../../../shared/rpc-contract/workspace-cleanup/workspace-cleanup-change-params'
 import {
@@ -13,7 +14,10 @@ import {
   reserveWorkspaceCleanupPolicyWrite,
   recoverWorkspaceCleanupPolicyWrites
 } from '../../../../workspaces/cleanup/workspace-cleanup-policy-write'
-import { pinWorkspaceForCleanup } from '../../../../workspaces/cleanup/workspace-cleanup-pin'
+import {
+  pinWorkspaceForCleanup,
+  pinWorkspacesForCleanup
+} from '../../../../workspaces/cleanup/workspace-cleanup-pin'
 import {
   WorkspaceCleanupCodexHistoryDiskUsageParams,
   WorkspaceCleanupPreviewParams,
@@ -101,7 +105,11 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
     permission: 'workspace',
     params: WorkspaceCleanupChangeParams,
     handler: (params, { runtime }) =>
-      requireWorkspaceCleanupRunner(runtime).previewChange(params.change, params.expected)
+      requireWorkspaceCleanupRunner(runtime).previewChange(
+        params.change,
+        params.expected,
+        params.fresh
+      )
   }),
   defineMethod({
     name: 'workspaceCleanup.settlePolicyWrite',
@@ -134,6 +142,12 @@ export const WORKSPACE_CLEANUP_RUNNER_METHODS = [
         return { value: { deleted, pinned }, persist: 'if-dirty' }
       })
     }
+  }),
+  defineMethod({
+    name: 'workspaceCleanup.pinBatch',
+    permission: 'workspace',
+    params: WorkspaceCleanupPinBatchParams,
+    handler: (params, { runtime }) => pinWorkspacesForCleanup(runtime, params.rows)
   }),
   defineMethod({
     name: 'workspaceCleanup.pin',

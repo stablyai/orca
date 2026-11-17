@@ -1,3 +1,5 @@
+import type { WorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import type { WorkspaceCleanupPreview } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type { WorkspaceCleanupRunnerDeps } from './workspace-cleanup-runner'
 import {
   captureWorkspaceCleanupPolicyState,
@@ -85,5 +87,65 @@ export async function previewWorkspaceCleanupChange(
     read,
     current: { evaluatedAt, rows: pairs.map((row) => row.current) },
     next: { evaluatedAt, rows: pairs.map((row) => row.next) }
+  }
+}
+
+export class WorkspaceCleanupChangePreviews {
+  private readonly currentPreviews = new Map<string, Promise<WorkspaceCleanupPreview>>()
+  current(
+    rules: WorkspaceCleanupRules,
+    evaluate: () => Promise<WorkspaceCleanupPreview>
+  ): Promise<WorkspaceCleanupPreview> {
+    const key = JSON.stringify(rules)
+    const shared = this.currentPreviews.get(key)
+    if (shared) {
+      return shared
+    }
+    const evaluation = evaluate()
+    this.currentPreviews.set(key, evaluation)
+    void evaluation
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.currentPreviews.get(key) === evaluation) {
+          this.currentPreviews.delete(key)
+        }
+      })
+    return evaluation
+  }
+
+  private readonly pending = new Map<string, Promise<WorkspaceCleanupPolicyComparison>>()
+  constructor(
+    private readonly deps: WorkspaceCleanupRunnerDeps,
+    private readonly signal: AbortSignal
+  ) {}
+  preview(
+    change: WorkspaceCleanupPolicyChange,
+    expected: WorkspaceCleanupPolicyRead['state'],
+    fresh = false
+  ): Promise<WorkspaceCleanupPolicyComparison> {
+    const proposal = structuredClone(change)
+    const read = readWorkspaceCleanupPolicy(
+      this.deps.store,
+      proposal.scope === 'project' ? proposal.repoId : null
+    )
+    if (JSON.stringify(read.state) !== JSON.stringify(expected)) {
+      throw new Error('workspace_cleanup_policy_conflict')
+    }
+    const key = JSON.stringify([read.state, proposal])
+    const existing = fresh ? undefined : this.pending.get(key)
+    if (existing) {
+      return existing
+    }
+    const request = previewWorkspaceCleanupChange(this.deps, proposal, read, this.signal).finally(
+      () => {
+        if (this.pending.get(key) === request) {
+          this.pending.delete(key)
+        }
+      }
+    )
+    if (!fresh) {
+      this.pending.set(key, request)
+    }
+    return request
   }
 }

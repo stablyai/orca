@@ -23,6 +23,7 @@ import {
   readWorkspaceCleanupTerminalActivity
 } from './workspace-cleanup-terminal-activity'
 import { keptRunOutcome } from './workspace-cleanup-run-summary'
+import { admitWorkspaceCleanup } from './workspace-cleanup-admission'
 
 function selectorFor(workspace: WorkspaceCleanupWorkspace): string {
   return `id:${workspace.ref.worktreeId}`
@@ -135,20 +136,27 @@ export async function removeWorkspaceForCleanup(args: {
     // Only reachable once WORKSPACE_ARCHIVE_SUPPORTED is on; archive keeps the branch and the row.
     if (recheck.action === 'archive') {
       const hostId = workspace.ref.executionHostId
-      const archived = await queueWorkspaceArchive(runtime, selector, hostId, () =>
-        runtime.archiveManagedWorktree(selector, hostId ? { hostId } : {})
+      const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
+        queueWorkspaceArchive(runtime, selector, hostId, () =>
+          runtime.archiveManagedWorktree(selector, hostId ? { hostId } : {})
+        )
       )
+      if (!admission.admitted) {
+        return { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
+      }
+      const archived = await admission.completion
       return { outcome: 'archived', reason: recheck.reason, branchKept: archived.branch }
     }
     // Never forced: Git's own dirty-checkout refusal stays the last guard.
-    const result = await queueWorkspaceDelete(
-      runtime,
-      selector,
-      workspace.ref.executionHostId,
-      {},
-      (removal) =>
+    const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
+      queueWorkspaceDelete(runtime, selector, workspace.ref.executionHostId, {}, (removal) =>
         runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })
+      )
     )
+    if (!admission.admitted) {
+      return { outcome: 'kept', keepCause: admission.cause, keptOnRecheck: true }
+    }
+    const result = await admission.completion
     return {
       outcome: 'removed',
       reason: recheck.reason,

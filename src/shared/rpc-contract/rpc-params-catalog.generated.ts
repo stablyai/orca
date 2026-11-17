@@ -970,6 +970,7 @@ import {
   WorkspaceCleanupChangeParams,
   WorkspaceCleanupGuardParam,
   WorkspaceCleanupInspectKeptParams,
+  WorkspaceCleanupPinBatchParams,
   WorkspaceCleanupPinParams,
   WorkspaceCleanupPolicyReadParams,
   WorkspaceCleanupSettleParams
@@ -2141,6 +2142,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'workspaceCleanup.codexHistoryDiskUsage': WorkspaceCleanupCodexHistoryDiskUsageParams,
   'workspaceCleanup.inspectKept': WorkspaceCleanupInspectKeptParams,
   'workspaceCleanup.pin': WorkspaceCleanupPinParams,
+  'workspaceCleanup.pinBatch': WorkspaceCleanupPinBatchParams,
   'workspaceCleanup.policyState': WorkspaceCleanupPolicyReadParams,
   'workspaceCleanup.preview': WorkspaceCleanupPreviewParams,
   'workspaceCleanup.previewChange': WorkspaceCleanupChangeParams,

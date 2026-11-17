@@ -100,6 +100,7 @@ beforeEach(() => {
           params?: WorkspaceCleanupPolicyPreviewRequest & {
             workspaceCleanupPolicy?: WorkspaceCleanupRules
             worktreeId?: string
+            rows?: { worktreeId: string; instanceId: string }[]
           }
         }) => {
           const policyRead = () => ({
@@ -133,9 +134,9 @@ beforeEach(() => {
             }
           } else if (method === 'workspaceCleanup.reservePolicyWrite') {
             result = { reserved: true }
-          } else if (method === 'workspaceCleanup.pin') {
-            pinned.push(params!.worktreeId!)
-            result = { pinned: true }
+          } else if (method === 'workspaceCleanup.pinBatch') {
+            pinned.push(...params!.rows!.map((row) => row.worktreeId))
+            result = { pinned: params!.rows!.map((row) => row.worktreeId), deleted: [], failed: [] }
           } else if (method === 'settings.update') {
             useAppStore.setState((state) => ({
               settings: {

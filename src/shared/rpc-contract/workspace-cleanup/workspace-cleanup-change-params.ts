@@ -45,7 +45,8 @@ const WorkspaceCleanupProposalParam = z.discriminatedUnion('scope', [
 export const WorkspaceCleanupChangeParams = z
   .object({
     change: WorkspaceCleanupProposalParam,
-    expected: WorkspaceCleanupPolicyStateParam
+    expected: WorkspaceCleanupPolicyStateParam,
+    fresh: z.boolean().optional()
   })
   .strict()
 export const WorkspaceCleanupSettleParams = z
@@ -61,3 +62,7 @@ export const WorkspaceCleanupPinParams = z
 export const WorkspaceCleanupInspectKeptParams = z
   .object({ rows: z.array(WorkspaceCleanupPinParams).max(100_000) })
   .strict()
+
+export const WorkspaceCleanupPinBatchParams = WorkspaceCleanupInspectKeptParams.refine(
+  ({ rows }) => new Set(rows.map((row) => row.worktreeId)).size === rows.length
+)

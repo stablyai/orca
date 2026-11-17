@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../ui/dialog'
-import { VirtualizedList } from '../../virtualized-list'
+import { VirtualizedList } from '../../ui/virtualized-list'
 import { WorkspaceCleanupWorkspaceLine } from './workspace-cleanup-workspace-line'
 import { WorkspaceCleanupReasonChip } from './workspace-cleanup-reason-chip'
 import { cleanupChangeRowKey, cleanupExistingRuleNotice } from './workspace-cleanup-change-preview'
@@ -41,7 +41,8 @@ export function WorkspaceCleanupRuleChangeDialog({
   confirming = false,
   settling = false,
   error,
-  onRetry
+  onRetry,
+  onCloseAutoFocus
 }: {
   request: WorkspaceCleanupRuleChangeRequest | null
   onCancel: () => void
@@ -51,6 +52,7 @@ export function WorkspaceCleanupRuleChangeDialog({
   settling?: boolean
   error?: string | null
   onRetry?: () => void
+  onCloseAutoFocus?: (event: Event) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const status = useRef<HTMLDivElement>(null)
@@ -146,6 +148,7 @@ export function WorkspaceCleanupRuleChangeDialog({
       }}
     >
       <DialogContent
+        onCloseAutoFocus={onCloseAutoFocus}
         surface="security"
         {...(disablingProtection
           ? { 'aria-describedby': 'cleanup-protection-risk cleanup-protection-consequences' }

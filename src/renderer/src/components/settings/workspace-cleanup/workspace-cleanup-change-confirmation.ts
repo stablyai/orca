@@ -38,7 +38,8 @@ export function previewCleanupPolicyChange(
   owner: RuntimeClientTarget,
   change: WorkspaceCleanupPolicyChange,
   read: WorkspaceCleanupPolicyRead,
-  allowDisabled = false
+  allowDisabled = false,
+  fresh = false
 ) {
   if (allowDisabled && !cleanupPolicyHasEnabledRules(read, change)) {
     const empty = { evaluatedAt: 0, rows: [] }
@@ -47,7 +48,7 @@ export function previewCleanupPolicyChange(
   return callRuntimeRpc<WorkspaceCleanupPolicyComparison>(
     owner,
     'workspaceCleanup.previewChange',
-    { change, expected: read.state },
+    { change, expected: read.state, fresh },
     { timeoutMs: 10 * 60 * 1000 }
   ).then((comparison) => {
     if (JSON.stringify(comparison.read.state) !== JSON.stringify(read.state)) {
@@ -81,7 +82,8 @@ async function complete(
     owner,
     change,
     latest,
-    pending.kind === 'disable-ignored-files' && !pending.kept.size
+    pending.kind === 'disable-ignored-files' && !pending.kept.size,
+    true
   )
   if (!isCurrent()) {
     return { kind: 'cancelled' }
@@ -125,56 +127,60 @@ async function complete(
       }
     }
   }
-  for (const row of comparison.next.rows.filter((item) => kept.has(cleanupChangeRowKey(item)))) {
+
+  const keepRows = comparison.next.rows.filter((row) => kept.has(cleanupChangeRowKey(row)))
+  if (keepRows.length) {
+    const invalid = keepRows.find((row) => !row.instanceId)
+    if (invalid) {
+      return { kind: 'pin-failed', row: invalid }
+    }
+    const refs = {
+      rows: keepRows.map((row) => ({
+        worktreeId: row.worktreeId,
+        instanceId: row.instanceId!
+      }))
+    }
+    let proof: { pinned: string[]; deleted: string[] }
+    try {
+      const result = await callRuntimeRpc<{
+        pinned: string[]
+        deleted: string[]
+        failed: string[]
+      }>(owner, 'workspaceCleanup.pinBatch', refs, { timeoutMs: 10 * 60 * 1000 })
+      proof = result.failed.length
+        ? await callRuntimeRpc(owner, 'workspaceCleanup.inspectKept', refs)
+        : result
+    } catch {
+      try {
+        proof = await callRuntimeRpc(owner, 'workspaceCleanup.inspectKept', refs)
+      } catch {
+        return { kind: 'pin-failed', row: keepRows[0] }
+      }
+    }
     if (!isCurrent()) {
       return { kind: 'cancelled' }
     }
-    if (!row.instanceId) {
-      return { kind: 'pin-failed', row }
+    const gone = new Set(proof.deleted)
+    const removed = keepRows.filter((row) => gone.has(row.worktreeId))
+    if (removed.length) {
+      const removedKeys = new Set(removed.map(cleanupChangeRowKey))
+      return {
+        kind: 'refresh',
+        request: {
+          ...pending,
+          rows: rows.filter((row) => !removedKeys.has(cleanupChangeRowKey(row))),
+          newKeys: new Set(),
+          currentKeys,
+          kept: new Set([...kept].filter((key) => !removedKeys.has(key))),
+          keepRefs: new Map([...keepRefs].filter(([key]) => !removedKeys.has(key))),
+          status: { added: 0, deleted: removed.map((row) => row.displayName) }
+        }
+      }
     }
-    try {
-      await callRuntimeRpc(
-        owner,
-        'workspaceCleanup.pin',
-        { worktreeId: row.worktreeId, instanceId: row.instanceId },
-        { timeoutMs: 10 * 60 * 1000 }
-      )
-    } catch {
-      if (!isCurrent()) {
-        return { kind: 'cancelled' }
-      }
-      try {
-        const proof = await callRuntimeRpc<{ deleted: string[]; pinned: string[] }>(
-          owner,
-          'workspaceCleanup.inspectKept',
-          { rows: [{ worktreeId: row.worktreeId, instanceId: row.instanceId }] }
-        )
-        if (!isCurrent()) {
-          return { kind: 'cancelled' }
-        }
-        if (proof.deleted.includes(row.worktreeId)) {
-          kept.delete(cleanupChangeRowKey(row))
-          keepRefs.delete(cleanupChangeRowKey(row))
-          return {
-            kind: 'refresh',
-            request: {
-              ...pending,
-              rows: rows.filter((item) => cleanupChangeRowKey(item) !== cleanupChangeRowKey(row)),
-              newKeys: new Set(),
-              currentKeys,
-              kept,
-              keepRefs,
-              status: { added: 0, deleted: [row.displayName] }
-            }
-          }
-        }
-        if (proof.pinned.includes(row.worktreeId)) {
-          continue
-        }
-      } catch {
-        return { kind: 'pin-failed', row }
-      }
-      return { kind: 'pin-failed', row }
+    const pinned = new Set(proof.pinned)
+    const failed = keepRows.find((row) => !pinned.has(row.worktreeId))
+    if (failed) {
+      return { kind: 'pin-failed', row: failed }
     }
   }
   return {

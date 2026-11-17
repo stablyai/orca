@@ -48,6 +48,8 @@ export function useWorkspaceCleanupRuleChange({
   >(null)
   const [checking, setChecking] = useState<CleanupChangeIntent['setting'] | null>(null)
   const [saving, setSaving] = useState(false)
+  const [enabling, setEnabling] = useState(false)
+  const [failedCheck, setFailedCheck] = useState(false)
   const ownerWrite = useWorkspaceCleanupPolicyWrite(owner, scopeKey)
   const settling =
     ownerWrite.phase === 'checking' || recovering || (ownerWrite.phase === 'sending' && !saving)
@@ -134,6 +136,8 @@ export function useWorkspaceCleanupRuleChange({
     lastIntent.current = intent
     setErrorSetting(intent.setting)
     setError(null)
+    setEnabling(intent.kind === 'enable')
+    setFailedCheck(false)
     const token = generation.current
     if (capability !== 'ready') {
       if (intent.mode === 'off' && legacyOff) {
@@ -185,6 +189,7 @@ export function useWorkspaceCleanupRuleChange({
       setChecking(null)
     } catch {
       if (active(token)) {
+        setFailedCheck(intent.kind === 'enable')
         setError(workspaceCleanupChangeMessage('preview', t))
         finish(token, true)
       }
@@ -243,6 +248,8 @@ export function useWorkspaceCleanupRuleChange({
     checking,
     saving,
     settling,
+    enabling,
+    failedCheck,
     errorSetting,
     error: settling
       ? workspaceCleanupChangeMessage('checking', t)
@@ -255,6 +262,11 @@ export function useWorkspaceCleanupRuleChange({
       saving ||
       ownerWrite.phase !== 'idle',
     rememberControl: focus.remember,
+    returnFocus: (event: Event) => {
+      if (focus.restore()) {
+        event.preventDefault()
+      }
+    },
     requestChange: (intent: CleanupChangeIntent) => void requestChange(intent),
     cancel,
     confirm,

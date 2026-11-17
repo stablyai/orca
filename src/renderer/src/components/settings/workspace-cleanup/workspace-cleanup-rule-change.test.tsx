@@ -85,9 +85,16 @@ beforeEach(() => {
     if (method === 'workspaceCleanup.settlePolicyWrite') {
       return { ok: true, result: { outcome: 'applied' } }
     }
-    if (method === 'workspaceCleanup.pin') {
-      pin.push(params.worktreeId)
-      return { ok: true, result: { pinned: true } }
+    if (method === 'workspaceCleanup.pinBatch') {
+      pin.push(...params.rows.map((row: { worktreeId: string }) => row.worktreeId))
+      return {
+        ok: true,
+        result: {
+          pinned: params.rows.map((row: { worktreeId: string }) => row.worktreeId),
+          deleted: [],
+          failed: []
+        }
+      }
     }
     if (method === 'workspaceCleanup.inspectKept') {
       return {
@@ -336,7 +343,7 @@ it('routes the actual global switch through the same full-set confirmation', asy
 it('reads back a durable Keep after its reply is lost before activating the policy', async () => {
   const normal = runtime.getMockImplementation()!
   runtime.mockImplementation(async (request) => {
-    if (request.method === 'workspaceCleanup.pin') {
+    if (request.method === 'workspaceCleanup.pinBatch') {
       pin.push(request.params.worktreeId)
       throw new Error('Reply lost')
     }
@@ -707,4 +714,54 @@ it('releases the owner barrier after a fenced request target is removed', async 
   await waitFor(() => expect(trigger.getAttribute('aria-disabled')).toBe('false'))
   expect(read.state.rules.merged.enabled).toBe(false)
   await act(async () => late.resolve())
+})
+
+it('keeps two selected rows durable after a lost batch reply before saving the rule', async () => {
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) => {
+    if (request.method === 'workspaceCleanup.pinBatch') {
+      await normal(request)
+      throw new Error('Batch reply lost')
+    }
+    if (request.method === 'workspaceCleanup.inspectKept') {
+      return { ok: true, result: { deleted: [], pinned: [...pin] } }
+    }
+    return normal(request)
+  })
+  await open()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep existing' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep added' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(pin).toEqual(['project::/existing', 'project::/added'])
+  expect(read.state.projects[0].policy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: true } }
+  })
+})
+it('retains partial batch pins and leaves the policy unchanged until every Keep is proved', async () => {
+  const normal = runtime.getMockImplementation()!
+  runtime.mockImplementation(async (request) => {
+    if (request.method === 'workspaceCleanup.pinBatch') {
+      pin.push('project::/existing')
+      return {
+        ok: true,
+        result: { pinned: ['project::/existing'], deleted: [], failed: ['project::/added'] }
+      }
+    }
+    if (request.method === 'workspaceCleanup.inspectKept') {
+      return { ok: true, result: { pinned: ['project::/existing'], deleted: [] } }
+    }
+    return normal(request)
+  })
+  await open()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep existing' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep added' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Turn on' }))
+  await screen.findByRole('alert')
+  expect(pin).toEqual(['project::/existing'])
+  expect(read.state.projects[0].policy).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: false } }
+  })
 })
