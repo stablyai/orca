@@ -665,6 +665,10 @@
       "mark": "分岐 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分岐: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "選択したテキストを引用としてメッセージに追加します"
     }
   },
   "common": {

@@ -730,6 +730,10 @@
       "mark": "Fork ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Fork: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Citar",
+      "hint": "Adiciona o texto selecionado à mensagem como citação"
     }
   },
   "common": {

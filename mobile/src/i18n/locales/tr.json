@@ -669,6 +669,10 @@
       "mark": "Çatal ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Çatal: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Alıntıla",
+      "hint": "Seçili metni mesaja alıntı olarak ekler"
     }
   },
   "common": {

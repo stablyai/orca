@@ -704,6 +704,10 @@
       "mark": "Branche ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Branche : {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Citer",
+      "hint": "Ajoute le texte sélectionné au message sous forme de citation"
     }
   },
   "common": {

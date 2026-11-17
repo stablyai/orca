@@ -669,6 +669,10 @@
       "mark": "Zweig ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "Zweig: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Zitieren",
+      "hint": "Fügt den markierten Text als Zitat in die Nachricht ein"
     }
   },
   "common": {

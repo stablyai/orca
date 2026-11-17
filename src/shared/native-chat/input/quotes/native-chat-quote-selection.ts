@@ -1,24 +1,11 @@
-import { markdownMathSelectionText } from '../../../../../shared/markdown/markdown-math-selection'
+import { markdownMathSelectionText } from '../../../markdown/markdown-math-selection'
 
-/** Only agent-reply prose marked with this attribute may be quoted. */
+/** Only agent-reply prose marked with this attribute may be quoted, in desktop and phone chat. */
 export const NATIVE_CHAT_QUOTE_SOURCE_PROPS = { 'data-native-chat-quote-source': '' } as const
+/** The same attribute as react-native-web's `dataSet`, for the phone's chat page. */
+export const NATIVE_CHAT_QUOTE_SOURCE_DATASET = { nativeChatQuoteSource: '' } as const
 
 const QUOTE_SOURCE_SELECTOR = '[data-native-chat-quote-source]'
-const TRANSCRIPT_SELECTOR = '[data-native-chat-scroll]'
-
-export function readNativeChatTranscriptSelection(root: HTMLElement): string {
-  const selection = window.getSelection()
-  const transcript = root.querySelector(TRANSCRIPT_SELECTOR)
-  if (
-    !selection ||
-    selection.isCollapsed ||
-    !transcript?.contains(selection.anchorNode) ||
-    !transcript.contains(selection.focusNode)
-  ) {
-    return ''
-  }
-  return markdownMathSelectionText(selection, transcript) ?? selection.toString()
-}
 
 export function readNativeChatQuotableSelection(
   root: HTMLElement
@@ -33,11 +20,11 @@ export function readNativeChatQuotableSelection(
   }
   const edges = selectedTextEdges(range)
   const source = edges?.first.parentElement?.closest(QUOTE_SOURCE_SELECTOR)
-  const text = (markdownMathSelectionText(selection, root) ?? selection.toString()).trim()
-  if (!edges || !source || !source.contains(edges.last) || text === '') {
+  if (!edges || !source || !source.contains(edges.last)) {
     return null
   }
-  return { text, range }
+  const text = (markdownMathSelectionText(selection, root) ?? selection.toString()).trim()
+  return text === '' ? null : { text, range }
 }
 
 // Triple-click ranges can end outside the reply; check selected text edges instead of range endpoints.
@@ -71,4 +58,10 @@ function isSelectableText(node: Text): boolean {
 export function formatNativeChatQuote(text: string): string {
   const lines = text.trim().split(/\r?\n/)
   return `${lines.map((line) => (line.trim() ? `> ${line}` : '>')).join('\n')}\n\n`
+}
+
+/** The quote after what the draft holds, as typing it would: nothing is replaced or deduplicated. */
+export function appendNativeChatQuote(draft: string, quote: string): string {
+  const kept = draft.trimEnd()
+  return kept === '' ? quote : `${kept}\n\n${quote}`
 }

@@ -665,6 +665,10 @@
       "mark": "분기 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "분기: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "인용",
+      "hint": "선택한 텍스트를 메시지에 인용으로 추가합니다"
     }
   },
   "common": {

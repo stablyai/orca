@@ -30,10 +30,8 @@ import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/clipboard/primary-selection/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { NativeChatSelectionQuote } from '../../selection-quotes/NativeChatSelectionQuote'
-import {
-  formatNativeChatQuote,
-  readNativeChatTranscriptSelection
-} from '../../selection-quotes/native-chat-quote-selection'
+import { formatNativeChatQuote } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import { readNativeChatTranscriptSelection } from '../../selection-quotes/native-chat-transcript-selection'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
