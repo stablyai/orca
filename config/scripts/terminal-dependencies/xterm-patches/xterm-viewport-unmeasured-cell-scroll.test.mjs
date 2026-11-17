@@ -79,6 +79,11 @@ describe('xterm viewport with an unmeasured cell height', () => {
       expect(runaway).toBe(false)
       expect(Number.isFinite(terminal.buffer.active.viewportY)).toBe(true)
 
+      // Keyboard and API scrolling still move the view while cells are unmeasured.
+      terminal.scrollLines(-10)
+      expect(terminal.buffer.active.viewportY).toBe(76)
+      terminal.scrollToBottom()
+
       renderer.dimensions = renderDimensions(17)
       await write(terminal, lines(5, 'after'))
       await nextFrame()
