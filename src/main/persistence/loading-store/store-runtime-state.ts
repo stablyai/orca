@@ -95,7 +95,7 @@ export class StoreRuntimeState {
   githubCacheLegacyFileHash: string | null = null
   /** The saved cache or an older build's sidecar was unreadable at load: save nothing this session. */
   githubCachePersistenceDisabled = false
-  /** Open between routine saves only; suspend and barrier saves close it. */
+  /** Held between saves; suspend and saves while fenced (maintenance, quit) close it. */
   githubCacheRows: KeyedJsonRowCache | null = null
   readonly githubCacheWriteListeners = new Set<() => void>()
   readonly staleGithubCacheTempCleanup: Promise<void>

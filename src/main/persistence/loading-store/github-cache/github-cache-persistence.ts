@@ -46,7 +46,8 @@ export function persistGithubCache(
   mode: 'routine' | 'barrier'
 ): void {
   if (!runtime.githubCacheDirty || runtime.githubCachePersistenceDisabled) {
-    if (mode === 'barrier') {
+    // The final flush fences quit without suspending; it must not leave the routine handle open.
+    if (isFenced(runtime)) {
       closeGithubCacheRows(runtime)
     }
     return
@@ -139,7 +140,8 @@ function writeGithubCacheNow(runtime: GitHubCachePersistenceRuntime, barrier: bo
       console.warn('[persistence] Failed to write github cache snapshot:', error)
     }
   } finally {
-    if (barrier) {
+    // Fenced barriers (maintenance, quit) may move or remove the profile; others keep the handle.
+    if (isFenced(runtime)) {
       closeGithubCacheRows(runtime)
     }
   }
