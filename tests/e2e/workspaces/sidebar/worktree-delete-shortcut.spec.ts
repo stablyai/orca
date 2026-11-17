@@ -1,10 +1,15 @@
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
 import {
+  ensureTerminalVisible,
   getAllWorktreeIds,
   waitForActiveWorktree,
   waitForSessionReady
 } from '../../desktop/renderer-probes/store'
+import {
+  focusLastTerminalPane,
+  waitForActiveTerminalManager
+} from '../../terminal/layout/terminal-pane-operations'
 import { pressShortcut } from '../../desktop/renderer-probes/shortcuts'
 import { worktreeRow } from './worktree-row-locators'
 
@@ -91,6 +96,37 @@ test.describe('Worktree Delete Shortcut', () => {
       })
       .not.toContain(worktreeId)
     expect(await getAllWorktreeIds(orcaPage)).toContain(previousActiveId)
+    createdWorktreeId = null
+  })
+
+  test('deletes the open worktree from a focused terminal on a second press', async ({
+    orcaPage
+  }) => {
+    createdWorktreeId = await createIsolatedWorktree(orcaPage)
+    const worktreeId = createdWorktreeId
+    const row = worktreeRow(orcaPage, worktreeId)
+    await expect(row).toBeVisible()
+    await row.click()
+    await expect
+      .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId))
+      .toBe(worktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage)
+    await focusLastTerminalPane(orcaPage)
+    await expect(orcaPage.locator('.xterm-helper-textarea:focus')).toHaveCount(1)
+
+    // Default Orca-first policy: main captures the chord from the terminal and arms the open row.
+    await pressShortcut(orcaPage, 'Backspace', { shift: true })
+    await expect(row.locator('[data-workspace-delete-confirm]')).toBeVisible()
+    expect(await getAllWorktreeIds(orcaPage)).toContain(worktreeId)
+    await pressShortcut(orcaPage, 'Backspace', { shift: true })
+
+    await expect
+      .poll(async () => getAllWorktreeIds(orcaPage), {
+        timeout: 15_000,
+        message: 'open worktree was not removed by the terminal delete shortcut'
+      })
+      .not.toContain(worktreeId)
     createdWorktreeId = null
   })
 })
