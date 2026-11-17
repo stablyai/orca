@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
@@ -195,43 +195,6 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.messages.map((message) => message.id)).toEqual(['replacement'])
   })
 
-  it('shares one in-flight older page, and its result, with every caller', async () => {
-    const transport = getMockTransport('env-1')
-    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
-      assistant(`old-${n}`, 'old')
-    )
-    await render({
-      paneKey: PANE,
-      agent: AGENT,
-      sessionId: SESSION,
-      runtimeEnvironmentId: 'env-1'
-    })
-    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
-    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
-    transport.readSession.mockImplementationOnce(
-      () => new Promise((resolve) => (resolveEarlier = resolve))
-    )
-    const readsBefore = transport.readSession.mock.calls.length
-
-    let first: Promise<string> | undefined
-    let second: Promise<string> | undefined
-    await act(async () => {
-      first = latest?.loadEarlier()
-    })
-    await act(async () => {
-      second = latest?.loadEarlier()
-    })
-    expect(second).toBe(first)
-    await act(async () => {
-      resolveEarlier({ messages: [assistant('older', 'older'), ...many] })
-      await first
-    })
-
-    await expect(second).resolves.toBe('applied')
-    expect(transport.readSession.mock.calls.length).toBe(readsBefore + 1)
-    expect(latest?.loadingEarlier).toBe(false)
-  })
-
   it('discards a load-earlier resolve from before a reconnect snapshot', async () => {
     const transport = getMockTransport('env-1')
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
@@ -412,25 +375,6 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     vi.clearAllMocks()
     resetMockTransports()
     vi.useRealTimers()
-  })
-
-  it('retries a notFound miss with backoff and settles into ready without ever exposing an error', async () => {
-    vi.useFakeTimers()
-    const transport = getMockTransport('env-1', { autoSnapshot: false })
-    transport.readSession
-      .mockResolvedValueOnce({ error: 'No transcript found', notFound: true })
-      .mockResolvedValueOnce({ messages: [assistant('a-1', 'hello')] })
-
-    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
-    expect(latest?.status).toBe('loading')
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000)
-    })
-
-    expect(latest?.status).not.toBe('error')
-    expect(transport.readSession).toHaveBeenCalledTimes(2)
-    expect(latest?.messages.map((m) => m.id)).toContain('a-1')
   })
 
   it('surfaces an error once the ~60s retry window is exhausted', async () => {

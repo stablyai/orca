@@ -1,4 +1,4 @@
-import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { requestVirtualizedScrollAnchorRecord } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { getWorktreeOperationOwnerHostIds } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   parseExecutionHostId,

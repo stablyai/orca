@@ -257,6 +257,7 @@ export const UiUpdateFields = z
         rightFraction: z.number().finite()
       })
       .optional(),
+    browserExtensionSidePanelWidth: z.number().finite().optional(),
     windowBounds: z
       .object({
         x: z.number().finite(),

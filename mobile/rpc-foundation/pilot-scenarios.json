@@ -1108,6 +1108,25 @@
           "checkpoint": "pr-base-resolved"
         },
         {
+          "complete": "repo.hooks#1",
+          "params": {
+            "repo": "id:repo-1",
+            "createSource": {
+              "kind": "base",
+              "baseBranch": "main"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "hasHooksFile": false,
+              "hooks": null,
+              "setupRunPolicy": "run-by-default",
+              "source": null
+            }
+          }
+        },
+        {
           "complete": "worktree.create#1",
           "params": {
             "repo": "id:repo-1",
@@ -3376,8 +3395,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "setup": {
-                  "contentHash": "hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3535,8 +3553,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "archive": {
-                  "contentHash": "archive-hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3615,8 +3632,7 @@
               "ui": {
                 "trustedOrcaHooks": {
                   "repo-1": {
-                    "archive": {
-                      "contentHash": "archive-hash-1",
+                    "all": {
                       "approvedAt": 1767225600000
                     }
                   }

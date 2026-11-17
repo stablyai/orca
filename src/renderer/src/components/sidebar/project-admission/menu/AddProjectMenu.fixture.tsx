@@ -5,7 +5,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/rem
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
 import { NewWorkspaceComposerProjectSection } from '@/components/new-workspace/composer/NewWorkspaceComposerProjectSection'
-import { SidebarHeaderActions } from '../../sidebar-header-actions'
+import { SidebarHeaderActions } from '../../chrome/sidebar-header-actions'
 
 const ubuntuRuntime: PublicKnownRuntimeEnvironment = {
   id: 'wsl-ubuntu',

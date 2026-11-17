@@ -50,7 +50,7 @@ export class AgentSessionStoreTransactions {
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
-  readonly firstRecordListeners = new Set<() => void>()
+  readonly heldChangeListeners = new Set<() => void>()
   private published: AgentSessionStoreState
   /** Moves only when a commit changes what chat sender identity reads. */
   senderIdentityRevision = 0
@@ -311,11 +311,12 @@ export class AgentSessionStoreTransactions {
       for (const id of changes.deaths) {
         this.deathEvidenceListeners.forEach((listener) => listener(id))
       }
+      // Cleanup can delete the last chat, so held flips both ways.
       if (
-        !heldBefore &&
+        heldBefore !==
         (this.published.records.size > 0 || this.published.unreadableRecords.size > 0)
       ) {
-        this.firstRecordListeners.forEach((listener) => listener())
+        this.heldChangeListeners.forEach((listener) => listener())
       }
     }
   }

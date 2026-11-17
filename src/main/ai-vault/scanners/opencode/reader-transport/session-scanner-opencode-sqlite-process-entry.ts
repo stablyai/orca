@@ -99,7 +99,7 @@ if (!isMainThread) {
   })
 } else {
   // Keep stdin and the hard deadline responsive while SQLite blocks its worker.
-  const worker = spawnWorkerThread(__filename)
+  const worker = spawnWorkerThread(__filename, { name: 'orca-opencode-sqlite-reader' })
   let activeId: number | null = null
   let deadline: ReturnType<typeof setTimeout> | undefined
   const stop = (code: number): never => process.exit(code)

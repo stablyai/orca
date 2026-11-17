@@ -171,7 +171,7 @@ export async function startLocalWorker(args: {
       resolvedWorktree,
       mode,
       agent,
-      launchPreferences: launch.preferences,
+      launch,
       effects,
       onStage,
       followUp: args.followUp
@@ -261,7 +261,7 @@ export async function startLocalWorker(args: {
       agent: agent ?? null,
       launchedAgent: external || workerChat ? null : (agent ?? null),
       setupReceipt,
-      launchReceipt: launch.receipt,
+      launchReceipt: placed.launch,
       mode,
       timeoutMs: params.timeoutMs ?? 60_000,
       readinessDeadline,
@@ -280,7 +280,7 @@ export async function startLocalWorker(args: {
       failedStage,
       error,
       setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
-      launch: launch.receipt,
+      launch: placed?.launch ?? launch.receipt,
       mode
     })
   }

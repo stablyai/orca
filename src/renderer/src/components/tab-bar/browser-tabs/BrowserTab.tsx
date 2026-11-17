@@ -32,7 +32,7 @@ import { TabWorkspaceLayoutMenuSection } from '../pane-actions/TabWorkspaceLayou
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { cn } from '@/lib/class-names'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { AgentCursorGlyph } from '../../browser-pane/agent-cursor/agent-cursor-glyph'
 import {
   useBrowserAgentControllerHost,

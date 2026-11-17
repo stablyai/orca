@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { FileText } from 'lucide-react'
-import { ExpandableMarkdownImage } from '@/components/sidebar/MarkdownImageLightbox'
+import { ExpandableMarkdownImage } from '@/components/comment-markdown/MarkdownImageLightbox'
 import {
   GitHubUserAttachmentImage,
   isGitHubUserAttachmentUrl
-} from '@/components/sidebar/comment-markdown-github-attachment-media'
+} from '@/components/comment-markdown/comment-markdown-github-attachment-media'
 import {
   getLocalImageCacheKey,
   useLocalImageSrc

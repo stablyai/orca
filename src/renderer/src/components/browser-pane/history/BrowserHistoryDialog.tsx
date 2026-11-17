@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { FileText, Trash2 } from 'lucide-react'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { Button } from '@/components/ui/button'
 import {
   CommandDialog,
@@ -20,7 +20,7 @@ import {
 import { FooterKey } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store/index'
 import { requestBrowserFocus } from '../host-guest/input/browser-focus'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'

@@ -183,7 +183,6 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     existingWorktreePaths,
     retiredWorktreeNames,
     setupCommand: setupScript.setupCommand,
-    setupTrust: setupScript.setupTrust,
     setupRunPolicy: setupScript.setupRunPolicy,
     setupDecisionChoice: setupScript.setupDecisionChoice,
     runSetup: setupScript.runSetup,

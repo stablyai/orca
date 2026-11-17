@@ -21,8 +21,11 @@ function topLevelCwd(line: Buffer): string | null {
   }
 }
 
-/** The last top-level `cwd` a JSONL transcript recorded, reading whole records back from its end. */
-async function readLastRecordedCwd(filePath: string): Promise<string | null> {
+/** The last cwd a JSONL transcript recorded, reading whole records back from its end. */
+export async function readLastRecordedCwd(
+  filePath: string,
+  recordCwd: (line: Buffer) => string | null = topLevelCwd
+): Promise<string | null> {
   const handle = await open(filePath, 'r')
   try {
     const { size } = await handle.stat()
@@ -39,7 +42,7 @@ async function readLastRecordedCwd(filePath: string): Promise<string | null> {
           continue
         }
         const head = chunk.subarray(index + 1, lineEnd)
-        const cwd = topLevelCwd(pieces.length > 0 ? Buffer.concat([head, ...pieces]) : head)
+        const cwd = recordCwd(pieces.length > 0 ? Buffer.concat([head, ...pieces]) : head)
         if (cwd !== null) {
           return cwd
         }
@@ -48,7 +51,7 @@ async function readLastRecordedCwd(filePath: string): Promise<string | null> {
       }
       pieces.unshift(chunk.subarray(0, lineEnd))
       if (start === 0) {
-        return topLevelCwd(Buffer.concat(pieces))
+        return recordCwd(Buffer.concat(pieces))
       }
     }
     return null
@@ -64,14 +67,15 @@ async function readLastRecordedCwd(filePath: string): Promise<string | null> {
 export async function isStillIdleInGoneFolder(
   filePath: string,
   folderKey: string,
-  now: number
+  now: number,
+  readLastCwd: (filePath: string) => Promise<string | null> = readLastRecordedCwd
 ): Promise<boolean> {
   try {
     if (now - (await stat(filePath)).mtimeMs < WORKSPACE_CLEANUP_RULE_GRACE_MS) {
       return false
     }
     // No recorded location means no proof the chat stayed in the gone folder: keep it.
-    const lastCwd = await readLastRecordedCwd(filePath)
+    const lastCwd = await readLastCwd(filePath)
     if (lastCwd === null) {
       return false
     }

@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
+  ALargeSmall,
   Columns2,
   Folder,
   GitBranch,
@@ -15,7 +16,6 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import { getMobileNativeChatToggleActions } from './native-chat/conversation/mobile-native-chat-toggle-action'
 
 type Props = {
   controller: MobileSessionController
@@ -38,6 +38,9 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     canSplitTerminals,
     terminalSplitActive,
     setShowTerminalLayout,
+    setTextSizeSheet,
+    showNativeChat,
+    activeSessionTab,
     connState,
     createTabBusy,
     handleOpenNewTab,
@@ -103,14 +106,12 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       onPress: handleOpenQuickCommands
     }
   ]
+  const textSizeSheet = showNativeChat
+    ? 'chat'
+    : activeSessionTab?.type === 'terminal'
+      ? 'terminal'
+      : null
   const view: ActionSheetAction[] = [
-    ...getMobileNativeChatToggleActions({
-      tab: controller.activeSessionTab,
-      isTabChatView: controller.nativeChatController.isTabChatView,
-      nativeChatTranscriptIsLocalReadable: controller.nativeChatTranscriptIsLocalReadable,
-      onClose: () => setShowHeaderMoreActions(false),
-      onToggle: controller.toggleTabChatView
-    }),
     ...(canSplitTerminals || terminalSplitActive
       ? [
           {
@@ -119,6 +120,17 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             icon: Columns2,
             closeBeforePress: true,
             onPress: () => setShowTerminalLayout(true)
+          }
+        ]
+      : []),
+    ...(textSizeSheet
+      ? [
+          {
+            id: 'textSize',
+            label: t('session.header.textSize', 'Text size'),
+            icon: ALargeSmall,
+            closeBeforePress: true,
+            onPress: () => setTextSizeSheet(textSizeSheet)
           }
         ]
       : [])
