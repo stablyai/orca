@@ -29,7 +29,15 @@ import type { CodexManagedAccount } from '../../../../shared/agent-accounts/mana
 import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
-  private readonly accountHistoryPasses = new CodexAccountHistoryPasses()
+  private readonly accountHistoryPasses = new CodexAccountHistoryPasses((home) => {
+    const key = normalizeRuntimePathForComparison(home)
+    return (
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
+      this.getManagedHostAccountHomesForSessionDiscovery().some(
+        (candidate) => normalizeRuntimePathForComparison(candidate) === key
+      )
+    )
+  })
   private readonly wslAccountHistory = new WslCodexAccountHistoryLaunches()
 
   // Host accounts refresh auth in separate homes so concurrent accounts cannot race one auth.json.
