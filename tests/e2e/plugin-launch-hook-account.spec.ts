@@ -79,11 +79,16 @@ function savedAccount(id: string) {
   }
 }
 
-function spawnClaude(page: Page, command: string, worktreeId: string): Promise<string> {
-  return page.evaluate(
-    async ({ cwd, command, worktreeId }) =>
-      (
-        await window.api.pty.spawn({
+const UNKNOWN_ACCOUNT =
+  "A plugin chose a Claude account for this launch that is not one of Orca's saved accounts."
+
+/** The folder a launch's Claude ran on, or `refused: <reason>`; the stand-in is closed after. */
+async function launchOutcome(page: Page, command: string, worktreeId: string): Promise<string> {
+  rmSync(markerPath, { force: true })
+  const spawned = await page.evaluate(
+    async ({ cwd, command, worktreeId }) => {
+      try {
+        const { id } = await window.api.pty.spawn({
           cols: 120,
           rows: 40,
           cwd,
@@ -91,9 +96,21 @@ function spawnClaude(page: Page, command: string, worktreeId: string): Promise<s
           launchAgent: 'claude',
           worktreeId
         })
-      ).id,
+        return { id }
+      } catch (error) {
+        return { refused: error instanceof Error ? error.message : String(error) }
+      }
+    },
     { cwd: stage, command, worktreeId }
   )
+  const { id, refused } = spawned
+  if (id === undefined) {
+    const reason = refused ?? 'no terminal'
+    return reason.includes(UNKNOWN_ACCOUNT) ? 'refused: unknown account' : reason
+  }
+  await expect.poll(() => existsSync(markerPath), { timeout: 30_000 }).toBe(true)
+  await page.evaluate((ptyId) => window.api.pty.kill(ptyId), id)
+  return readFileSync(markerPath, 'utf8')
 }
 
 test('a launch plugin runs Claude on the saved account it chose', async ({
@@ -117,31 +134,16 @@ test('a launch plugin runs Claude on the saved account it chose', async ({
     [savedAccount('acct-a'), savedAccount('acct-b')]
   )
   await enableDevPlugins(orcaPage, [pluginDir])
-  await expect
-    .poll(() =>
-      orcaPage.evaluate(async () =>
-        (await window.api.plugins.list()).some(
-          (plugin) =>
-            plugin.pluginKey.endsWith('.e2e-launch-account') && plugin.status === 'running'
-        )
-      )
-    )
-    .toBe(true)
-
-  // Why: the settings change queues its own plugin refresh, and approval pauses while one runs.
-  await orcaPage.evaluate(() => window.api.plugins.refresh())
-
   try {
-    const chosen = await spawnClaude(orcaPage, 'claude', worktreeId)
-    await expect.poll(() => existsSync(markerPath), { timeout: 30_000 }).toBe(true)
-    expect(readFileSync(markerPath, 'utf8')).toBe(
-      join(userData, 'claude-profiles', 'acct-b', 'home')
-    )
-    await orcaPage.evaluate((id) => window.api.pty.kill(id), chosen)
-
-    await expect(spawnClaude(orcaPage, 'claude --unknown-account', worktreeId)).rejects.toThrow(
-      "A plugin chose a Claude account for this launch that is not one of Orca's saved accounts."
-    )
+    // Why poll: enabling plugins queues refreshes, and a launch during one skips or refuses the hook.
+    await expect
+      .poll(() => launchOutcome(orcaPage, 'claude', worktreeId), { timeout: 60_000 })
+      .toBe(join(userData, 'claude-profiles', 'acct-b', 'home'))
+    await expect
+      .poll(() => launchOutcome(orcaPage, 'claude --unknown-account', worktreeId), {
+        timeout: 60_000
+      })
+      .toBe('refused: unknown account')
   } finally {
     await disablePluginSystem(orcaPage)
   }
