@@ -472,8 +472,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalPluginIsolatedFrames?: boolean
   /** Experimental: per-workspace on-demand environment recipes and setup surface. */
   experimentalEphemeralVms?: boolean
-  /** Experimental (Windows): add WSL distros as hosts, each running its own Orca server. */
+  /** Windows: add WSL distros as hosts, each running its own Orca server. On by default; see wsl-hosts-setting.ts. */
   experimentalWslHosts?: boolean
+  /** One-shot guard: the pre-rollout false default flips on once; later explicit false sticks. */
+  experimentalWslHostsDefaultedOn?: boolean
   /** Declined the add-project offer to run a `\\wsl.localhost` project's distro as a host. */
   wslHostOfferDismissed?: boolean
   /** Compact worktree cards: hide the metadata row when title and branch say the same thing. */

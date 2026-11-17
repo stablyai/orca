@@ -3,6 +3,7 @@ import { getRepositoryGitHooksSearchEntries } from '@/components/settings/reposi
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced/advanced-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions/developer-permissions-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/advanced/experimental-search'
+import { getWslHostsSearchEntries } from '@/components/settings/wsl/hosts/wsl-hosts-search'
 import {
   getPluginsPaneSearchEntries,
   getPluginsSectionPresentation
@@ -67,7 +68,7 @@ export function buildRemoteSettingsSections(
         ? 'Connect this browser to a saved Orca server.'
         : 'Run Orca on another machine and work on it from here.',
       icon: Server,
-      searchEntries: [runtimeEnvironmentsSearchEntry],
+      searchEntries: [runtimeEnvironmentsSearchEntry, ...getWslHostsSearchEntries()],
       group: 'remote'
     },
     ...(showDesktopOnlySettings && isMac

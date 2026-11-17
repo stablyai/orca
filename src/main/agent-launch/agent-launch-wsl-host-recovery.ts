@@ -15,8 +15,9 @@ export type WslHostChatSettingsSource = { requireStore?: () => { getSettings(): 
 function readWslHostsSettingOn(source: WslHostChatSettingsSource): boolean {
   try {
     const settings = source.requireStore?.().getSettings()
+    // Same rule as isWslHostsSettingOn: on by default, only an explicit false turns it off.
     return (
-      !!settings && 'experimentalWslHosts' in settings && settings.experimentalWslHosts === true
+      !!settings && !('experimentalWslHosts' in settings && settings.experimentalWslHosts === false)
     )
   } catch {
     return false
@@ -48,7 +49,7 @@ export async function wslHostChatRecovery(
   }
   const move = `choose “Move to ${distro} host…” on the project in the sidebar, then launch the chat there.`
   const setup = [
-    ...(facts.settingOn ? [] : ['turn on Settings → Experimental → WSL hosts']),
+    ...(facts.settingOn ? [] : ['turn on Settings → Remote Orca servers → WSL distros as hosts']),
     ...(facts.hostAdded
       ? []
       : [`add ${distro} as a host (Add a project → Add remote host → Add WSL distro)`])

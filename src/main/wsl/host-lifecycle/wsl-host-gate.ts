@@ -14,6 +14,10 @@ import type {
   WslHostsMovedProjects,
   WslHostsPolicyState
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
+import {
+  isWslHostsSettingOn,
+  type WslHostsSetting
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 export const WSL_HOSTS_GATED_OFF_MESSAGE = 'WSL hosts are turned off for this launch of Orca.'
 
@@ -114,14 +118,12 @@ export function wslHostsWindowArguments(): string[] {
 }
 
 /**
- * Stage 1 is opt-in: work that changes behaviour for projects the user already has needs the
- * WSL hosts setting on as well as the gate, so turning the setting off (rollback layer 1) undoes it.
+ * Work that changes behaviour for projects the user already has needs the WSL hosts setting on
+ * as well as the gate, so turning the setting off (rollback layer 1) undoes it.
  * A block learned this run undoes it too, the moment it lands.
  */
-export function wslHostsOptedIn(
-  settings: { experimentalWslHosts?: boolean } | null | undefined
-): boolean {
-  return settings?.experimentalWslHosts === true && wslHostsAcceptNewWork()
+export function wslHostsOptedIn(settings: WslHostsSetting | null | undefined): boolean {
+  return isWslHostsSettingOn(settings) && wslHostsAcceptNewWork()
 }
 
 /** The internal gate itself, less a remote policy block: adding hosts and starting moves need it. */

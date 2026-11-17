@@ -31,6 +31,7 @@ import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import { dictationShortcutModeSettings } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
+import { normalizeWslHostsDefaultOn } from '../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 export function normalizeLoadedGlobalSettings(
   parsed: PersistedState,
@@ -118,6 +119,7 @@ export function normalizeLoadedGlobalSettings(
       primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
     ...migratedAutoRenameBranchFromWork,
     ...migratedPluginSystemEnabled,
+    ...normalizeWslHostsDefaultOn(parsed.settings),
     ...migratedNestedWorkerMaxDepth,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,

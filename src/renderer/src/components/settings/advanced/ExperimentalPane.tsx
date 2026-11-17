@@ -11,8 +11,6 @@ import { NumberField, SettingsSegmentedControl } from '../form-controls/Settings
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
-import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
-import { wslHostsAvailable } from '../../sidebar/use-wsl-hosts-enabled'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
   MIN_AGENT_HIBERNATION_IDLE_MS,
@@ -283,10 +281,6 @@ export function ExperimentalPane({
         ) : null}
 
         <EphemeralVmsExperimentalSetting settings={settings} updateSettings={updateSettings} />
-
-        {wslHostsAvailable() ? (
-          <WslHostsExperimentalSetting settings={settings} updateSettings={updateSettings} />
-        ) : null}
       </SettingsGroup>
 
       {hiddenExperimentalUnlocked ? <HiddenExperimentalGroup /> : null}

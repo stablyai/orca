@@ -6778,9 +6778,9 @@
           "addRemoteServerDetail": "Pair with Orca running on another computer.",
           "addRemoteHostDetail": "SSH host or Orca server",
           "addWslHost": "Add WSL distro",
-          "addWslHostDetail": "Run an Orca server inside a WSL 2 distro. Experimental.",
           "addRemoteHostDetailWithWsl": "SSH host, Orca server, or WSL distro",
-          "turnOnWslHosts": "Turn on"
+          "turnOnWslHosts": "Turn on",
+          "addWslHostDetailNative": "Run an Orca server inside a WSL 2 distro."
         },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
@@ -8126,13 +8126,13 @@
           "idle": "Idle",
           "failed": "Failed to start",
           "kind": "WSL distro",
-          "turnedOff": "WSL hosts are turned off in Settings → Experimental",
-          "turnedOffShort": "Turned off in Settings → Experimental",
           "serverFilesMissing": "This build of Orca can’t run WSL hosts (server files missing).",
           "serverFilesMissingShort": "This build can’t run WSL hosts",
           "removalPending": "Removal didn’t finish",
           "paused": "WSL hosts are paused in this build. Your saved hosts and their projects keep working; adding hosts and moving projects onto them is paused.",
-          "pausedShort": "Adding WSL distros is paused in this build."
+          "pausedShort": "Adding WSL distros is paused in this build.",
+          "turnedOffInServers": "WSL hosts are turned off in Settings → Remote Orca servers",
+          "turnedOffShortInServers": "Turned off in Settings → Remote Orca servers"
         },
         "wslHostRemoval": {
           "keptForOthers": "Removed from this Orca. The host keeps running for {{value0}}.",
@@ -13782,20 +13782,18 @@
         "wslHostsExperimental": {
           "toggleLabel": "Toggle WSL distros as hosts",
           "title": "WSL distros as hosts",
-          "description": "Add a WSL 2 distro as a host. Orca runs its server inside the distro, so git, files and terminals in new projects there run natively in Linux.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "distro"
         },
         "wslHosts": {
           "title": "WSL hosts",
-          "experimental": "Experimental",
           "description": "Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.",
           "add": "Add WSL distro",
           "connect": "Connect",
           "forceUpdate": "Force update",
-          "turnOn": "Turn on in Experimental",
-          "chip": "WSL"
+          "chip": "WSL",
+          "settingDescription": "Orca runs its server inside each WSL 2 distro you add, so git, files and terminals there run natively in Linux. Turn off to stop adding hosts and moving projects; saved hosts keep serving their projects."
         },
         "restartServer": {
           "action": "Restart Orca’s server…",

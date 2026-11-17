@@ -11,6 +11,7 @@ import {
 } from '@/lib/files/os-open/windows-path-access'
 import { wslHostsAvailable } from './use-wsl-hosts-enabled'
 import { routeSidebarProjectDrop } from './project-admission/drop/sidebar-project-drop'
+import { isWslHostsSettingOn } from '../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 export type WslHostOfferGate = {
   /** WSL hosts can take new work here: Windows (or its e2e fake), gate open, server files shipped. */
@@ -36,7 +37,7 @@ export function readWslHostOfferGate(
   return {
     gateOpen:
       wslHostsAvailable() && state.wslHostsAcceptNewWork && state.wslHostServerFiles !== 'missing',
-    settingOn: state.settings?.experimentalWslHosts === true,
+    settingOn: isWslHostsSettingOn(state.settings),
     dismissed: state.settings?.wslHostOfferDismissed === true
   }
 }
@@ -53,10 +54,7 @@ export function readExistingWslHosts(
   state: Pick<AppState, 'settings' | 'runtimeEnvironments'>
 ): WslHostWindowsPathAccess[] {
   return wslHostsAvailable()
-    ? listWslHostWindowsPathAccess(
-        state.runtimeEnvironments,
-        state.settings?.experimentalWslHosts === true
-      )
+    ? listWslHostWindowsPathAccess(state.runtimeEnvironments, isWslHostsSettingOn(state.settings))
     : []
 }
 

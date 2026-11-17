@@ -21,6 +21,7 @@ import {
   wslMoveProjectOfWorkspace
 } from '@/components/wsl-move/wsl-move-scope-rows'
 import type { WslMoveRowRef } from '../../../../../shared/wsl-move/wsl-move-driver-types'
+import { isWslHostsSettingOn } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 /** Flat so a shallow-compared selector can return it. */
 export type WslHostChatOffer = {
@@ -64,7 +65,7 @@ export function readWslHostChatOffer(
     projectKind: project.ref.kind,
     projectId: project.ref.id,
     hostReady:
-      state.settings?.experimentalWslHosts === true &&
+      isWslHostsSettingOn(state.settings) &&
       findWslHostForDistro(state.runtimeEnvironments, project.distro) !== null
   }
 }
@@ -145,7 +146,7 @@ async function setUpWslHostForChat(distro: string): Promise<boolean> {
   )
   try {
     const refusal = await runWslDistroAsHost(distro, {
-      readWslHostsSetting: () => useAppStore.getState().settings?.experimentalWslHosts === true,
+      readWslHostsSetting: () => isWslHostsSettingOn(useAppStore.getState().settings),
       updateSettings: (updates) => useAppStore.getState().updateSettingsOrThrow(updates),
       addWslHost: addWslHostDistro
     })

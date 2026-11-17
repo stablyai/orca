@@ -20,11 +20,12 @@ import { listWslHostWindowsPathAccess } from '@/lib/files/os-open/windows-path-a
 import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import type { AppState } from '@/store/types'
 import { resolveWslMappedDrivePath } from '../../wsl-mapped-drive-path'
+import { isWslHostsSettingOn } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {
   return listWslHostWindowsPathAccess(
     state.runtimeEnvironments,
-    state.settings?.experimentalWslHosts === true
+    isWslHostsSettingOn(state.settings)
   )
 }
 

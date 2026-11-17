@@ -53,6 +53,7 @@ import {
 } from './wsl-host-desktop-settings-push'
 import { wslHostConnectOptions } from '../../wsl/host-lifecycle/wsl-host-connect-request'
 import { wireWslNodeRuntimePrefetch } from '../../wsl/execution/wsl-node-runtime-prefetch'
+import { isWslHostsSettingOn } from '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-setting'
 
 function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
   return {
@@ -107,7 +108,7 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
   }
   let automationWake: WslHostAutomationWake | null = null
   const runGate = {
-    isEnabled: () => args.store.getSettings().experimentalWslHosts === true,
+    isEnabled: () => isWslHostsSettingOn(args.store.getSettings()),
     hasServerFiles: fake ? () => fake.serverFiles !== 'missing' : hasOrcadTemplate
   }
   const created = new WslHostService({
@@ -185,7 +186,7 @@ async function startService(args: WslHostHandlerArgs): Promise<WslHostService | 
       }
     }
     if ('experimentalWslHosts' in updates) {
-      void created.enabledChanged(settings.experimentalWslHosts === true).catch((error) => {
+      void created.enabledChanged(isWslHostsSettingOn(settings)).catch((error) => {
         console.warn('[wsl-hosts] Could not apply the WSL hosts setting:', error)
       })
     }
