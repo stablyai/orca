@@ -64,6 +64,7 @@ export type RepoUpdate = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
+    | 'isPinned'
   >
 > & {
   projectGroupOrder?: number | null
@@ -238,8 +239,12 @@ export type RepoSlice = {
     runtimeEnvironmentId: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  /** `hostId` is the host of the project that seeds the group. */
-  createProjectGroup: (name: string, hostId: ExecutionHostId) => Promise<ProjectGroup | null>
+  /** `hostId` is the host that owns the new group (or its parent group). */
+  createProjectGroup: (
+    name: string,
+    hostId: ExecutionHostId,
+    options?: { parentGroupId?: string | null; onParentMoveRejected?: () => void }
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: FolderWorkspaceCreateInput,
     options: FolderWorkspacePathStatusRouteOptions & { signal?: AbortSignal }
@@ -283,7 +288,8 @@ export type RepoSlice = {
   moveProjectToGroup: (
     project: RepoHostTarget,
     groupId: string | null,
-    order?: number
+    order?: number,
+    options?: { isPinned?: boolean }
   ) => Promise<boolean>
   // options.hostId is required: a bare id can resolve to another host's row (#13071). Removes nothing when that host has no row.
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.

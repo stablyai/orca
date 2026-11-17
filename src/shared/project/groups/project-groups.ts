@@ -1,6 +1,10 @@
 import { getDefaultRepoHookSettings } from '../../orca-profiles/constants'
-import { normalizeExecutionHostId } from '../../execution-host/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../execution-host/execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
+import { getLogicalRepoOrderRankById } from '../../sidebar-list/sections/project-section-order'
 import type { Repo } from '../../repository/repo-types'
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 
@@ -30,6 +34,7 @@ export function createProjectGroup(input: {
     createdFrom: input.createdFrom,
     tabOrder: input.tabOrder,
     isCollapsed: false,
+    isPinned: false,
     color: null,
     createdAt: now,
     updatedAt: now
@@ -85,6 +90,7 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
         ? { rootProjectOrder: raw.rootProjectOrder }
         : {}),
       isCollapsed: raw.isCollapsed === true,
+      isPinned: raw.isPinned === true,
       color: typeof raw.color === 'string' ? raw.color : null,
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
@@ -109,7 +115,7 @@ export function clearMissingProjectGroupMemberships(repos: Repo[], groups: Proje
   const groupIds = new Set(groups.map((group) => group.id))
   return repos.map((repo) =>
     repo.projectGroupId && !groupIds.has(repo.projectGroupId)
-      ? { ...repo, projectGroupId: null }
+      ? { ...repo, projectGroupId: null, isPinned: false }
       : repo
   )
 }
@@ -182,15 +188,39 @@ export function getEffectiveProjectGroupManualRank(
   return Number.POSITIVE_INFINITY
 }
 
-export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string | null): number {
+export function getNextProjectGroupOrder(
+  repos: readonly Repo[],
+  groupId: string | null,
+  projectGroups?: readonly (Pick<ProjectGroup, 'parentGroupId' | 'tabOrder'> &
+    Partial<Pick<ProjectGroup, 'connectionId' | 'executionHostId'>>)[],
+  options?: { excludeRepo?: Repo }
+): number {
+  const ownerHostId = options?.excludeRepo ? getRepoExecutionHostId(options.excludeRepo) : null
+  const repoOrderRankById = getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   let max = -1
   for (const repo of repos) {
-    if ((repo.projectGroupId ?? null) !== groupId) {
+    if (repo === options?.excludeRepo || (repo.projectGroupId ?? null) !== groupId) {
       continue
     }
-    const order = repo.projectGroupOrder
-    if (typeof order === 'number' && Number.isFinite(order)) {
-      max = Math.max(max, order)
+    if (ownerHostId && getRepoExecutionHostId(repo) !== ownerHostId) {
+      continue
+    }
+    const rank = getEffectiveProjectGroupManualRank(repo, repoOrderRankById)
+    if (Number.isFinite(rank)) {
+      max = Math.max(max, rank)
+    }
+  }
+  if (groupId !== null && projectGroups) {
+    for (const group of projectGroups) {
+      if ((group.parentGroupId ?? null) !== groupId) {
+        continue
+      }
+      if (ownerHostId && getRepoExecutionHostId(group) !== ownerHostId) {
+        continue
+      }
+      if (Number.isFinite(group.tabOrder)) {
+        max = Math.max(max, group.tabOrder)
+      }
     }
   }
   return max + 1

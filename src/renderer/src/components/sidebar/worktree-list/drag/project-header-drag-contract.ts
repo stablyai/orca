@@ -1,46 +1,86 @@
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 import type { PointerEvent } from 'react'
 
-import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { HostHeaderRect } from './host-header-drag-dom'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
+import type { ProjectGroupHeaderUpdatePatch } from './project-group-header-drag-contract'
+import type { ProjectGroupHeaderDragRect } from './project-group-header-drop'
+import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
+
+export const ROOT_INTERLEAVED_PROJECT_BUCKET_KEY = 'root-interleaved'
 
 export type RepoDragState = {
   draggingRepoId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  dropTargetGroupId: string | null
+  dropTargetCatalogHostId?: ExecutionHostId | null
 }
 
 export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
   draggingRepoId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  dropTargetGroupId: null,
+  dropTargetCatalogHostId: null
 }
 
 export type UseRepoHeaderDragArgs = RootProjectHeaderDrag & {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+  pinnedRepoHeaderIds?: ReadonlySet<string>
   repoById: ReadonlyMap<string, Repo>
+  projectGroups: readonly ProjectGroup[]
+  projectGroupById?: ReadonlyMap<string, ProjectGroup>
   getLiveRepos: () => readonly Repo[]
+  getLiveProjectGroups?: () => readonly ProjectGroup[]
+  allowSlotReorder: boolean
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (
+    project: Repo,
+    projectGroupId: string | null,
+    order: number | null,
+    options?: { isPinned?: boolean }
+  ) => Promise<boolean> | boolean | void
+  onCommitProjectGroupUpdate?: (
+    groupId: string,
+    updates: ProjectGroupHeaderUpdatePatch
+  ) => Promise<boolean> | boolean | void
+  onReconcileHostProjectGroups?: (ownerHostId: ExecutionHostId) => Promise<void> | void
+  onDropFailed?: () => void
+  onMoveToGroupHeader: (project: Repo, groupId: string) => void
   getScrollContainer: () => HTMLElement | null
 }
 
 export type RepoHeaderDragController = {
   state: RepoDragState
-  onHandlePointerDown: (event: PointerEvent<HTMLElement>, repo: Repo) => void
+  onHandlePointerDown: (
+    event: PointerEvent<HTMLElement>,
+    repo: Repo,
+    groupRepo?: Repo | null
+  ) => void
 }
 
 export type ProjectHeaderDragSession = {
   // Why the row, not its id: a twin on another host shares the id.
   repo: Repo
+  /** Host-localized registration for group membership; null when a merged header spans multiple hosts. */
+  groupRepo?: Repo | null
   bucketKey: ProjectHeaderDragBucketKey
   sidebarRepoHeaderIds: readonly string[]
   rootProjectHeaderKeys?: readonly string[]
   rootProjectHeaderHostId?: string
+  rootHeaderRects?: ProjectHeaderDragRect[]
+  joinableGroupIds: ReadonlySet<string>
+  hostHeaderRects?: HostHeaderRect[]
   pointerId: number
   headerRects: ProjectHeaderDragRect[]
+  groupHeaderRects: ProjectGroupHeaderDragRect[]
   handleEl: HTMLElement
   startX: number
   startY: number

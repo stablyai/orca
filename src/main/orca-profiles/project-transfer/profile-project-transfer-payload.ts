@@ -57,6 +57,7 @@ export function createTargetRepo(
     ...sourceRepo,
     id: targetRepoId,
     projectGroupId: null,
+    ...(sourceRepo.projectGroupId ? { isPinned: false } : {}),
     addedAt: copy ? Date.now() : sourceRepo.addedAt
   }
   delete repo.projectGroupOrder

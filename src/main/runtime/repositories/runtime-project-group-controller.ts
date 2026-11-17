@@ -147,7 +147,8 @@ export class RuntimeProjectGroupController {
     repoSelector: string,
     groupId: string | null,
     order?: number,
-    connectionId?: string | null
+    connectionId?: string | null,
+    options?: { isPinned?: boolean }
   ): Promise<Repo> {
     const store = this.deps.getStore()
     if (!store?.moveProjectToGroup) {
@@ -155,7 +156,10 @@ export class RuntimeProjectGroupController {
     }
     const repo = await this.deps.resolveRepo(repoSelector, connectionId)
     assertWslMoveRepoWritable(store, repo)
-    const moved = store.moveProjectToGroup(repo, groupId, order)
+    const moved =
+      typeof options?.isPinned === 'boolean'
+        ? store.moveProjectToGroup(repo, groupId, order, options)
+        : store.moveProjectToGroup(repo, groupId, order)
     if (!moved) {
       throw new Error('repo_not_found')
     }

@@ -8,7 +8,7 @@ import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../worktree/visibility/visibility-sources'
-import { OptionalFiniteNumber, OptionalString } from '../rpc-param-primitives'
+import { OptionalBoolean, OptionalFiniteNumber, OptionalString } from '../rpc-param-primitives'
 import { editorFormatterSchema } from '../../editor/formatting/editor-formatter'
 import { normalizeDictationTerms } from '../../speech/dictation/dictation-dictionary'
 import { RepoWorkspaceCleanupPolicyParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
@@ -95,6 +95,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       projectGroupId: OptionalString.nullable().optional(),
       browserProfileId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
+      isPinned: OptionalBoolean,
       sourceControlAi: RepoSourceControlAiOverrides,
       workspaceCleanupPolicy: RepoWorkspaceCleanupPolicyParam.optional()
     })

@@ -43,6 +43,7 @@ const repoSchema = z.object({
   projectGroupOrder: salvagedOptional('projectGroupOrder', z.number()),
   // Older desktops omit it; the project then stays listed, as it did.
   hiddenAt: salvagedOptional('hiddenAt', z.number()),
+  isPinned: salvagedOptional('isPinned', z.boolean()),
   // Decoded where drawn (readMobileRepoIcon), so an arm this build lacks still keeps the row.
   repoIcon: z.unknown().optional()
 })
@@ -78,6 +79,7 @@ export const ProjectGroupSchema = z.object({
   tabOrder: z.number(),
   rootProjectOrder: salvagedOptional('rootProjectOrder', z.number().finite()),
   isCollapsed: z.boolean(),
+  isPinned: salvagedOptional('isPinned', z.boolean()),
   color: z.string().nullable(),
   createdAt: z.number(),
   updatedAt: z.number()

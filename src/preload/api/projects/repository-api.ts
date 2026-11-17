@@ -75,6 +75,7 @@ export type RepositoryApi = {
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
+        | 'isPinned'
         | 'forkSyncMode'
         | 'agentWorkspaceTrust'
       >
@@ -153,6 +154,7 @@ export type ProjectGroupsApi = {
     groupId: string | null
     order?: number
     hostId?: string
+    isPinned?: boolean
   }) => Promise<Repo | null>
   scanNested: (args: {
     path: string

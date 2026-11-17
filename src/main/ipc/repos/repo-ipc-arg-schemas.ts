@@ -27,9 +27,11 @@ export const ProjectGroupUpdateArgs = z.object({
     hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
+    isPinned: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
     rootProjectOrder: z.number().finite().nullable().optional(),
-    color: z.string().nullable().optional()
+    color: z.string().nullable().optional(),
+    parentGroupId: z.string().nullable().optional()
   })
 })
 
@@ -92,7 +94,8 @@ export const ProjectGroupMoveProjectArgs = z.object({
   projectId: z.string().min(1),
   groupId: z.string().nullable(),
   order: z.number().finite().optional(),
-  hostId: IpcExecutionHostId.optional()
+  hostId: IpcExecutionHostId.optional(),
+  isPinned: z.boolean().optional()
 })
 
 export const ProjectHostSetupCreateIpcArgs = z.object({

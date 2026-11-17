@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ProfileSaveDomains } from '../profile-save-domains'
 import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -6,14 +7,64 @@ import type {
   ProjectGroupMutation,
   ProjectGroupUpdate
 } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
 import {
   createProjectGroup,
+  getNextProjectGroupOrder,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project/groups/project-groups'
+import { assignMoveProjectGroupOrder } from '../../../shared/project/groups/legacy-group-child-order'
 import { getNextRootProjectOrder } from '../../../shared/sidebar-list/sections/root-project-order'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
+import { findRepoRowForHostScopedWrite } from './repo-update-operations'
+
+export function moveProjectToGroupInState(
+  operations: {
+    state: PersistedState
+    scheduleSave: (domains: ProfileSaveDomains) => void
+    hydrateRepo: (repo: Repo) => Repo
+  },
+  target: RepoHostTarget,
+  groupId: string | null,
+  order?: number,
+  options?: { isPinned?: boolean }
+): Repo | null {
+  const repo = findRepoRowForHostScopedWrite(
+    operations.state.repos,
+    target.id,
+    getRepoExecutionHostId(target)
+  )
+  if (!repo) {
+    return null
+  }
+  const isValidGroup = Boolean(
+    groupId &&
+    (operations.state.projectGroups ?? []).some(
+      (group) =>
+        group.id === groupId && getRepoExecutionHostId(group) === getRepoExecutionHostId(repo)
+    )
+  )
+  const normalizedGroupId = isValidGroup ? groupId : null
+  if ((repo.projectGroupId ?? null) !== normalizedGroupId) {
+    repo.isPinned = false
+  }
+  if (typeof options?.isPinned === 'boolean' && (groupId === null || isValidGroup)) {
+    repo.isPinned = options.isPinned
+  }
+  repo.projectGroupId = normalizedGroupId
+  const initializedLegacySubgroups = assignMoveProjectGroupOrder(
+    operations.state.repos,
+    operations.state.projectGroups,
+    repo,
+    normalizedGroupId,
+    order
+  )
+  operations.scheduleSave(initializedLegacySubgroups ? ['repos', 'projectGroups'] : ['repos'])
+  return operations.hydrateRepo(repo)
+}
 
 export type ProjectGroupMutationOperations = {
   state: PersistedState
@@ -54,15 +105,46 @@ export class ProjectGroupPersistenceOperations {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
+    const normalizedParentGroupId = input.parentGroupId?.trim() || null
+    const parentGroup =
+      normalizedParentGroupId !== null
+        ? (this.state.projectGroups ?? []).find((entry) => entry.id === normalizedParentGroupId)
+        : undefined
+    if (normalizedParentGroupId !== null && !parentGroup) {
+      throw new Error('project_group_parent_not_found')
+    }
+    if (
+      parentGroup &&
+      input.connectionId !== undefined &&
+      input.connectionId !== null &&
+      (parentGroup.connectionId ?? null) !== input.connectionId
+    ) {
+      throw new Error('project_group_parent_host_mismatch')
+    }
     let maxOrder = -1
     // Large persisted lists can exceed spread argument limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
       maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
     }
+    if (normalizedParentGroupId) {
+      maxOrder = Math.max(
+        maxOrder,
+        getNextProjectGroupOrder(
+          this.state.repos,
+          normalizedParentGroupId,
+          this.state.projectGroups
+        ) - 1
+      )
+    }
     const group = createProjectGroup({
       ...input,
+      connectionId: input.connectionId ?? parentGroup?.connectionId ?? null,
+      parentGroupId: normalizedParentGroupId,
       tabOrder: maxOrder + 1
     })
+    if (parentGroup?.executionHostId) {
+      group.executionHostId = parentGroup.executionHostId
+    }
     const rootProjectOrder = !group.parentGroupId
       ? getNextRootProjectOrder(this.state.repos, this.state.projectGroups ?? [])
       : undefined
@@ -75,23 +157,42 @@ export class ProjectGroupPersistenceOperations {
   }
 
   updateProjectGroup(groupId: string, updates: ProjectGroupUpdate): ProjectGroup | null {
-    const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
+    const allGroups = this.state.projectGroups ?? []
+    const group = allGroups.find((entry) => entry.id === groupId)
     if (!group) {
       return null
     }
-    this.applyGroupUpdate(group, updates)
+    const parentResult = this.resolveValidatedParentGroupId(allGroups, groupId, updates)
+    if (!parentResult.ok) {
+      return null
+    }
+    this.applyGroupUpdate(group, updates, parentResult.parentGroupId)
     this.scheduleSave(['projectGroups'])
     return group
   }
 
   updateProjectGroups(mutations: readonly ProjectGroupMutation[]): ProjectGroup[] | null {
-    const byId = new Map((this.state.projectGroups ?? []).map((group) => [group.id, group]))
+    const allGroups = this.state.projectGroups ?? []
+    const byId = new Map(allGroups.map((group) => [group.id, group]))
     if (mutations.some(({ groupId }) => !byId.has(groupId))) {
       return null
     }
-    const updated = mutations.map(({ groupId, updates }) => {
+    const simulatedGroups = allGroups.map((group) => ({ ...group }))
+    const simulatedById = new Map(simulatedGroups.map((group) => [group.id, group]))
+    const normalizedParents: (string | null | undefined)[] = []
+    for (const { groupId, updates } of mutations) {
+      const parentResult = this.resolveValidatedParentGroupId(simulatedGroups, groupId, updates)
+      if (!parentResult.ok) {
+        return null
+      }
+      if (parentResult.parentGroupId !== undefined) {
+        simulatedById.get(groupId)!.parentGroupId = parentResult.parentGroupId
+      }
+      normalizedParents.push(parentResult.parentGroupId)
+    }
+    const updated = mutations.map(({ groupId, updates }, index) => {
       const group = byId.get(groupId)!
-      this.applyGroupUpdate(group, updates)
+      this.applyGroupUpdate(group, updates, normalizedParents[index])
       return group
     })
     if (updated.length > 0) {
@@ -100,7 +201,35 @@ export class ProjectGroupPersistenceOperations {
     return updated
   }
 
-  private applyGroupUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): void {
+  private resolveValidatedParentGroupId(
+    allGroups: readonly ProjectGroup[],
+    groupId: string,
+    updates: ProjectGroupUpdate
+  ): { ok: true; parentGroupId: string | null | undefined } | { ok: false } {
+    if (updates.parentGroupId === undefined) {
+      return { ok: true, parentGroupId: undefined }
+    }
+    const normalizedParentGroupId = updates.parentGroupId?.trim() || null
+    if (normalizedParentGroupId !== null) {
+      const movingGroup = allGroups.find((entry) => entry.id === groupId)
+      const parentGroup = allGroups.find((entry) => entry.id === normalizedParentGroupId)
+      if (
+        !movingGroup ||
+        !parentGroup ||
+        getRepoExecutionHostId(movingGroup) !== getRepoExecutionHostId(parentGroup) ||
+        getProjectGroupSubtreeIds(allGroups, groupId).has(normalizedParentGroupId)
+      ) {
+        return { ok: false }
+      }
+    }
+    return { ok: true, parentGroupId: normalizedParentGroupId }
+  }
+
+  private applyGroupUpdate(
+    group: ProjectGroup,
+    updates: ProjectGroupUpdate,
+    normalizedParentGroupId: string | null | undefined
+  ): void {
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
     }
@@ -124,6 +253,21 @@ export class ProjectGroupPersistenceOperations {
     if (updates.hookSettings !== undefined) {
       group.hookSettings = updates.hookSettings
     }
+    if (normalizedParentGroupId !== undefined) {
+      if (
+        normalizedParentGroupId !== (group.parentGroupId ?? null) &&
+        updates.isPinned === undefined
+      ) {
+        group.isPinned = false
+      }
+      if (normalizedParentGroupId !== null && updates.rootProjectOrder === undefined) {
+        delete group.rootProjectOrder
+      }
+      group.parentGroupId = normalizedParentGroupId
+    }
+    if (typeof updates.isPinned === 'boolean') {
+      group.isPinned = updates.isPinned
+    }
     group.updatedAt = Date.now()
   }
 
@@ -139,7 +283,7 @@ export class ProjectGroupPersistenceOperations {
     // Sidebar grouping does not own repos; ungroup them rather than delete them.
     this.state.repos = this.state.repos.map((repo) =>
       repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
-        ? { ...repo, projectGroupId: null }
+        ? { ...repo, projectGroupId: null, isPinned: false }
         : repo
     )
     const removedFolderWorkspaceKeys = new Set<string>()

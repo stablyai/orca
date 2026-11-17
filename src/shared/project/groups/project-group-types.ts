@@ -15,13 +15,17 @@ export type ProjectGroup = {
   tabOrder: number
   rootProjectOrder?: number
   isCollapsed: boolean
+  isPinned?: boolean
   color: string | null
   createdAt: number
   updatedAt: number
 }
 
 export type ProjectGroupUpdate = Partial<
-  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings'>
+  Pick<
+    ProjectGroup,
+    'name' | 'isCollapsed' | 'isPinned' | 'tabOrder' | 'color' | 'hookSettings' | 'parentGroupId'
+  >
 > & { rootProjectOrder?: number | null }
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }

@@ -183,8 +183,13 @@ export class ProjectCollectionOperations {
     return removed
   }
 
-  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
-    return getFolderWorkspaceOperations(this).moveProjectToGroup(target, groupId, order)
+  moveProjectToGroup(
+    target: RepoHostTarget,
+    groupId: string | null,
+    order?: number,
+    options?: { isPinned?: boolean }
+  ): Repo | null {
+    return getFolderWorkspaceOperations(this).moveProjectToGroup(target, groupId, order, options)
   }
 
   /** The WSL mover's retention pass only; returns how many rows changed. */

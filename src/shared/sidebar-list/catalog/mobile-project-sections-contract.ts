@@ -22,6 +22,7 @@ export type MobileProjectSectionRepo = Pick<Repo, 'id' | 'displayName' | 'path' 
       | 'projectGroupId'
       | 'projectGroupOrder'
       | 'hiddenAt'
+      | 'isPinned'
     >
   > & { repoIcon?: RepoIcon }
 
@@ -54,6 +55,7 @@ function sectionRepo(repo: Repo): MobileProjectSectionRepo {
       : {}),
     // Why: a reader must drop a hidden project's header and rows, as the sidebar does.
     ...(typeof repo.hiddenAt === 'number' ? { hiddenAt: repo.hiddenAt } : {}),
+    ...(repo.isPinned ? { isPinned: true } : {}),
     // Exclude uploaded data URLs: each repo icon can add hundreds of KB to every read.
     ...(repo.repoIcon && !(repo.repoIcon.type === 'image' && repo.repoIcon.src.startsWith('data:'))
       ? { repoIcon: repo.repoIcon }

@@ -1,8 +1,13 @@
-import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
 import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
+import {
+  getHeaderVirtualRowInfo,
+  getOptionalNumberAttribute,
+  indexMountedVirtualRowBounds,
+  resolveMeasuredSectionBottom
+} from './header-drag-dom-measurement'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 
@@ -90,13 +95,19 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   sidebarDropIndex: number
   projectGroupById: ReadonlyMap<string, ProjectGroup>
 }): ProjectGroupTabOrderUpdate[] {
-  const sourceIndex = args.sidebarProjectGroupHeaderIds.indexOf(args.draggedGroupId)
+  const draggedPinned = args.projectGroupById.get(args.draggedGroupId)?.isPinned === true
+  const pinnedIds = args.sidebarProjectGroupHeaderIds.filter(
+    (groupId) => args.projectGroupById.get(groupId)?.isPinned === true
+  )
+  const unpinnedIds = args.sidebarProjectGroupHeaderIds.filter(
+    (groupId) => args.projectGroupById.get(groupId)?.isPinned !== true
+  )
+  const tierIds = draggedPinned ? pinnedIds : unpinnedIds
+  const sourceIndex = tierIds.indexOf(args.draggedGroupId)
   if (sourceIndex === -1) {
     return []
   }
-  const siblingIds = args.sidebarProjectGroupHeaderIds.filter(
-    (groupId) => groupId !== args.draggedGroupId
-  )
+  const siblingIds = tierIds.filter((groupId) => groupId !== args.draggedGroupId)
   const siblingDropIndex = mapSidebarProjectGroupDropIndexToSiblingInsertIndex({
     sidebarDropIndex: args.sidebarDropIndex,
     sourceIndex,
@@ -107,8 +118,11 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
     return []
   }
 
-  const orderedIds = siblingIds.slice()
-  orderedIds.splice(siblingDropIndex, 0, args.draggedGroupId)
+  const reorderedTierIds = siblingIds.slice()
+  reorderedTierIds.splice(siblingDropIndex, 0, args.draggedGroupId)
+  const orderedIds = draggedPinned
+    ? [...reorderedTierIds, ...unpinnedIds]
+    : [...pinnedIds, ...reorderedTierIds]
 
   const updates: ProjectGroupTabOrderUpdate[] = []
   for (const [index, groupId] of orderedIds.entries()) {
@@ -128,7 +142,8 @@ export function measureProjectGroupHeaderDragRects(
   container: HTMLElement,
   bucketKey?: ProjectGroupHeaderDragBucketKey
 ): ProjectGroupHeaderDragRect[] {
-  const containerRect = container.getBoundingClientRect()
+  const containerTop = container.getBoundingClientRect().top
+  const mountedRows = indexMountedVirtualRowBounds(container)
   const rects: ProjectGroupHeaderDragRect[] = []
   container.querySelectorAll<HTMLElement>('[data-project-group-header-id]').forEach((element) => {
     const groupId = element.getAttribute('data-project-group-header-id')
@@ -141,16 +156,27 @@ export function measureProjectGroupHeaderDragRects(
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
+    const { top, height, rowIndex } = getHeaderVirtualRowInfo(element, container, containerTop)
+    const bottom = top + height
     rects.push({
       groupId,
       bucketKey: elementBucketKey,
       headerIndex,
-      ...measureSidebarHeaderDragRect(
-        element,
-        container,
-        containerRect,
-        'data-project-group-header-section-end'
-      )
+      top,
+      bottom,
+      sectionBottom: resolveMeasuredSectionBottom({
+        headerRowIndex: rowIndex,
+        headerBottom: bottom,
+        sectionEndIndex: getOptionalNumberAttribute(
+          element,
+          'data-project-group-header-section-end-index'
+        ),
+        estimatedSectionBottom: getOptionalNumberAttribute(
+          element,
+          'data-project-group-header-section-end'
+        ),
+        mountedRows
+      })
     })
   })
   rects.sort((left, right) => left.top - right.top)

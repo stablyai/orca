@@ -5,11 +5,22 @@ import { getLogicalRepoOrderRankById } from './project-section-order'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 
 export type RootProjectEntry =
-  | { kind: 'group'; group: ProjectGroup }
-  | { kind: 'repo'; repo: Pick<Repo, 'id' | 'projectGroupOrder'> }
+  | { kind: 'group'; group: ProjectGroup; isPinned?: boolean }
+  | {
+      kind: 'repo'
+      repo: { id: string } & Partial<Pick<Repo, 'projectGroupOrder' | 'isPinned'>>
+      isPinned?: boolean
+    }
 
 export function getRootProjectEntryKey(entry: RootProjectEntry): string {
   return entry.kind === 'group' ? `group:${entry.group.id}` : `repo:${entry.repo.id}`
+}
+
+export function isRootProjectEntryPinned(entry: RootProjectEntry): boolean {
+  if (entry.isPinned !== undefined) {
+    return entry.isPinned
+  }
+  return entry.kind === 'group' ? entry.group.isPinned === true : entry.repo.isPinned === true
 }
 
 export function getRootProjectEntryRank(
@@ -26,8 +37,25 @@ export function compareRootProjectEntries(
   right: RootProjectEntry,
   repoOrder?: ReadonlyMap<string, number>
 ): number {
+  const byPin = (isRootProjectEntryPinned(right) ? 1 : 0) - (isRootProjectEntryPinned(left) ? 1 : 0)
+  if (byPin !== 0) {
+    return byPin
+  }
   const leftRank = getRootProjectEntryRank(left, repoOrder)
   const rightRank = getRootProjectEntryRank(right, repoOrder)
+  const leftLegacyGroup = leftRank === Number.NEGATIVE_INFINITY
+  const rightLegacyGroup = rightRank === Number.NEGATIVE_INFINITY
+  if (leftLegacyGroup || rightLegacyGroup) {
+    if (leftLegacyGroup !== rightLegacyGroup) {
+      return leftLegacyGroup ? -1 : 1
+    }
+    return left.kind === 'group' && right.kind === 'group'
+      ? left.group.tabOrder - right.group.tabOrder ||
+          compareSidebarText(left.group.name, right.group.name) ||
+          compareCodePoints(left.group.executionHostId ?? '', right.group.executionHostId ?? '') ||
+          compareCodePoints(left.group.id, right.group.id)
+      : 0
+  }
   if (leftRank === rightRank) {
     return left.kind === 'group' && right.kind === 'group'
       ? left.group.tabOrder - right.group.tabOrder ||

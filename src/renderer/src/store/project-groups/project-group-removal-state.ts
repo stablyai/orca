@@ -49,7 +49,7 @@ export function applyProjectGroupDeleteCascade(
       repo.projectGroupId &&
       deletedGroupIds.has(repo.projectGroupId) &&
       ownsRowHost(getRepoExecutionHostId(repo))
-        ? { ...repo, projectGroupId: null }
+        ? { ...repo, projectGroupId: null, isPinned: false }
         : repo
     ),
     folderWorkspacePathStatuses: {}
