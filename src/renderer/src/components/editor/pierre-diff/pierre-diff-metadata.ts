@@ -1,5 +1,6 @@
 import { parseDiffFromFile, type FileContents, type FileDiffMetadata } from '@pierre/diffs'
 import type { CreatePatchOptionsNonabortable } from 'diff'
+import { buildPierreLinePatch } from './pierre-diff-line-patch'
 import { getPierreDiffCacheIdentity } from './pierre-diff-cache-identity'
 
 /** Statuses whose old side does not exist, so Pierre should render an add. */
@@ -58,5 +59,15 @@ export function buildPierreFileDiff(
     : toFileContents(oldPath ?? path, originalContent, `${identity}:old`, lang)
   const newFile = isDeleted ? null : toFileContents(path, modifiedContent, `${identity}:new`, lang)
 
-  return { ...parseDiffFromFile(oldFile, newFile, { ...parseDiffOptions }), cacheKey: identity }
+  const patch = buildPierreLinePatch(
+    oldFile?.name ?? '/dev/null',
+    newFile?.name ?? '/dev/null',
+    oldFile?.contents ?? '',
+    newFile?.contents ?? '',
+    Boolean(parseDiffOptions.ignoreWhitespace)
+  )
+  return {
+    ...parseDiffFromFile(oldFile, newFile, { ...parseDiffOptions }, false, patch),
+    cacheKey: identity
+  }
 }

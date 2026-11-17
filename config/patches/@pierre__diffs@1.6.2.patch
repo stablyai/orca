@@ -781,3 +781,70 @@ diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
  	}
  	setHydratedState(files) {
  		this.deletionFile = files.oldFile;
+diff --git a/dist/utils/editSessionHunks.js b/dist/utils/editSessionHunks.js
+--- a/dist/utils/editSessionHunks.js
++++ b/dist/utils/editSessionHunks.js
+@@ -230,7 +230,7 @@
+ 		name: diff.name,
+ 		contents: diff.additionLines.slice(start, additionEnd).join(""),
+ 		lang: diff.lang
+-	}, parseDiffOptions);
++	}, { ...parseDiffOptions, maxEditLength: 2048 });
+ 	parsed.deletionLines = diff.deletionLines;
+ 	parsed.additionLines = diff.additionLines;
+ 	for (const hunk of parsed.hunks) {
+diff --git a/dist/utils/parseDiffFromFile.d.ts b/dist/utils/parseDiffFromFile.d.ts
+--- a/dist/utils/parseDiffFromFile.d.ts
++++ b/dist/utils/parseDiffFromFile.d.ts
+@@ -7,7 +7,7 @@
+  * If both `oldFile` and `newFile` have a `cacheKey`, the resulting diff gets a
+  * collision-safe key derived from both values.
+  */
+-declare function parseDiffFromFile(oldFile: FileContents | null, newFile: FileContents | null, options?: CreatePatchOptionsNonabortable, throwOnError?: boolean): FileDiffMetadata;
++declare function parseDiffFromFile(oldFile: FileContents | null, newFile: FileContents | null, options?: CreatePatchOptionsNonabortable, throwOnError?: boolean, precomputedPatch?: string): FileDiffMetadata;
+ //#endregion
+ export { parseDiffFromFile };
+ //# sourceMappingURL=parseDiffFromFile.d.ts.map
+\ No newline at end of file
+diff --git a/dist/utils/parseDiffFromFile.js b/dist/utils/parseDiffFromFile.js
+--- a/dist/utils/parseDiffFromFile.js
++++ b/dist/utils/parseDiffFromFile.js
+@@ -10,15 +10,14 @@
+ * If both `oldFile` and `newFile` have a `cacheKey`, the resulting diff gets a
+ * collision-safe key derived from both values.
+ */
+-function parseDiffFromFile(oldFile, newFile, options, throwOnError = false) {
++function parseDiffFromFile(oldFile, newFile, options, throwOnError = false, precomputedPatch) {
+ 	if (oldFile === null && newFile === null) throw new Error("parseDiffFromFile: You must pass oldFile, newFile, or both");
+ 	const resolvedOldFile = oldFile ?? createMissingFile();
+ 	const resolvedNewFile = newFile ?? createMissingFile();
+-	const patch = createTwoFilesPatch(resolvedOldFile.name, resolvedNewFile.name, resolvedOldFile.contents, resolvedNewFile.contents, resolvedOldFile.header, resolvedNewFile.header, {
++	const patch = precomputedPatch ?? createTwoFilesPatch(resolvedOldFile.name, resolvedNewFile.name, resolvedOldFile.contents, resolvedNewFile.contents, resolvedOldFile.header, resolvedNewFile.header, {
+ 		...options,
+-		maxEditLength: Math.min(options?.maxEditLength ?? 2048, 2048),
+-		timeout: Math.min(options?.timeout ?? 50, 50)
+-	}) ?? replacementPatch(resolvedOldFile, resolvedNewFile);
++		maxEditLength: options?.maxEditLength ?? 2048
++	}) ?? replacementPatch(resolvedOldFile, resolvedNewFile, options);
+ 	const fileData = processFile(patch, {
+ 		cacheKey: (() => {
+ 			const oldCacheKey = oldFile?.cacheKey;
+@@ -42,14 +41,15 @@
+ 	return fileData;
+ }
+ // Bound both worker parses and synchronous edit recomputes with the same fallback.
+-function replacementPatch(oldFile, newFile) {
++function replacementPatch(oldFile, newFile, options) {
++    const equal = options?.ignoreWhitespace ? (a, b) => a.trim() === b.trim() : (a, b) => a === b;
+ 	const oldLines = splitFileContents(oldFile.contents);
+ 	const newLines = splitFileContents(newFile.contents);
+ 	let start = 0;
+-	while (start < oldLines.length && start < newLines.length && oldLines[start] === newLines[start]) start++;
++	while (start < oldLines.length && start < newLines.length && equal(oldLines[start], newLines[start])) start++;
+ 	let oldEnd = oldLines.length;
+ 	let newEnd = newLines.length;
+-	while (oldEnd > start && newEnd > start && oldLines[oldEnd - 1] === newLines[newEnd - 1]) {
++	while (oldEnd > start && newEnd > start && equal(oldLines[oldEnd - 1], newLines[newEnd - 1])) {
+ 		oldEnd--;
+ 		newEnd--;
+ 	}

@@ -12,27 +12,22 @@ const input = {
 }
 
 describe('Pierre diff content identity and navigation', () => {
-  it('falls back to one trimmed replacement when a large diff exceeds the line-diff budget', () => {
-    const oldBlock = 'old\n'.repeat(1_100)
-    const newBlock = 'new\n'.repeat(1_100)
+  it('keeps separate change hunks in an ordinary 2,000-line replacement diff', () => {
+    const original = Array.from({ length: 24_000 }, (_, index) => `line ${index}\n`)
+    const modified = original.map((line, index) => (index % 12 === 0 ? `changed ${index}\n` : line))
     const diff = buildPierreFileDiff({
       ...input,
-      originalContent: `prefix\n${oldBlock}inside\n${oldBlock}suffix`,
-      modifiedContent: `prefix\n${newBlock}inside\n${newBlock}suffix`
+      originalContent: original.join(''),
+      modifiedContent: modified.join('')
     })
-    expect(diff.hunks).toHaveLength(1)
-    expect(diff.hunks[0].hunkContent).toEqual([
-      {
-        type: 'change',
-        additions: 2_201,
-        deletions: 2_201,
-        additionLineIndex: 1,
-        deletionLineIndex: 1
-      }
-    ])
-    expect(diff.additionLines[0]).toBe('prefix\n')
-    expect(diff.additionLines.at(-1)).toBe('suffix')
-    expect(diff.additionLines[1_101]).toBe('inside\n')
+    expect(diff.hunks).toHaveLength(2_000)
+    expect(diff.hunks[1].hunkContent.find((content) => content.type === 'change')).toEqual({
+      type: 'change',
+      additions: 1,
+      deletions: 1,
+      additionLineIndex: 12,
+      deletionLineIndex: 12
+    })
   })
 
   it('reuses unchanged content but invalidates edits, external updates, and whitespace options', () => {
