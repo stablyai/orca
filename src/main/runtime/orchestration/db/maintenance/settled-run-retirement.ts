@@ -9,30 +9,61 @@ const LEGACY_PRINCIPAL_IDS = 'SELECT id FROM legacy_compatibility_principals WHE
 
 // Dispatch-keyed rows go first, while each Dispatch still names its Run for removed-work capture.
 // Each is deleted a page at a time and the Run row goes last, so the next pass finishes an interrupted one.
-const RUN_CHILD_DELETES: readonly { table: string; where: string; pageRows?: number }[] = [
+// `stamps` are the columns the retention rule reads as activity. A page holding a fresh one keeps the
+// Run, so a write in place between pages, such as a corrected Task result, is never deleted.
+const RUN_CHILD_DELETES: readonly {
+  table: string
+  where: string
+  pageRows?: number
+  stamps?: readonly string[]
+}[] = [
   // Saved output copies run to 256 KB each.
   { table: 'worker_terminal_archives', where: `dispatch_id IN (${DISPATCH_IDS})`, pageRows: 8 },
-  { table: 'federation_relay_items', where: `dispatch_id IN (${DISPATCH_IDS})` },
+  {
+    table: 'federation_relay_items',
+    where: `dispatch_id IN (${DISPATCH_IDS})`,
+    stamps: ['acked_at']
+  },
   { table: 'federation_relay_sequences', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'remote_questions', where: `dispatch_id IN (${DISPATCH_IDS})` },
-  { table: 'remote_dispatch_attachments', where: `dispatch_id IN (${DISPATCH_IDS})` },
+  {
+    table: 'remote_dispatch_attachments',
+    where: `dispatch_id IN (${DISPATCH_IDS})`,
+    stamps: ['updated_at']
+  },
   { table: 'attempt_observation_facts', where: `dispatch_id IN (${DISPATCH_IDS})` },
-  { table: 'federated_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})` },
-  { table: 'worker_terminal_resources', where: `owner_dispatch_id IN (${DISPATCH_IDS})` },
-  { table: 'worker_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})` },
+  {
+    table: 'federated_dispatches',
+    where: `dispatch_id IN (${DISPATCH_IDS})`,
+    stamps: ['updated_at']
+  },
+  {
+    table: 'worker_terminal_resources',
+    where: `owner_dispatch_id IN (${DISPATCH_IDS})`,
+    stamps: ['updated_at']
+  },
+  { table: 'worker_dispatches', where: `dispatch_id IN (${DISPATCH_IDS})`, stamps: ['updated_at'] },
   { table: 'message_dispatch_provenance', where: `dispatch_id IN (${DISPATCH_IDS})` },
   { table: 'message_dispatch_provenance', where: `message_id IN (${MESSAGE_IDS})` },
   { table: 'structured_mail_sends', where: `message_id IN (${MESSAGE_IDS})` },
   { table: 'legacy_operation_receipts', where: `principal_id IN (${LEGACY_PRINCIPAL_IDS})` },
   { table: 'legacy_mail_receipts', where: `principal_id IN (${LEGACY_PRINCIPAL_IDS})` },
   { table: 'legacy_compatibility_principals', where: 'run_id = ?1' },
-  { table: 'question_threads', where: 'run_id = ?1' },
-  { table: 'decision_gates', where: 'run_id = ?1' },
-  { table: 'deliveries', where: 'run_id = ?1' },
-  { table: 'dispatch_contexts', where: 'run_id = ?1' },
+  {
+    table: 'question_threads',
+    where: 'run_id = ?1',
+    stamps: ['created_at', 'answered_at', 'closed_at']
+  },
+  { table: 'decision_gates', where: 'run_id = ?1', stamps: ['created_at', 'resolved_at'] },
+  { table: 'deliveries', where: 'run_id = ?1', stamps: ['created_at', 'acknowledged_at'] },
+  {
+    table: 'dispatch_contexts',
+    where: 'run_id = ?1',
+    stamps: ['created_at', 'dispatched_at', 'completed_at', 'last_heartbeat_at']
+  },
   // Each message row updates about 17 indexes.
-  { table: 'messages', where: 'run_id = ?1', pageRows: 64 },
-  { table: 'tasks', where: 'run_id = ?1' },
+  { table: 'messages', where: 'run_id = ?1', pageRows: 64, stamps: ['created_at'] },
+  { table: 'tasks', where: 'run_id = ?1', stamps: ['created_at', 'completed_at'] },
   { table: 'structured_pointer_operations', where: "mailbox_handle = 'run:' || ?1" },
   // The deletes above record each Task, Dispatch and worker row; the Run's own delete would drop all.
   { table: 'removed_orchestration_work', where: 'run_id = ?1' }
@@ -41,10 +72,16 @@ const RUN_CHILD_DELETES: readonly { table: string; where: string; pageRows?: num
 /** Rows one retention step deletes from one table, as bb's thread purge pages them. */
 const RUN_CHILD_PAGE_ROWS = 128
 
-const RUN_CHILD_PAGES = RUN_CHILD_DELETES.map(({ table, where, pageRows }) => ({
-  rows: pageRows ?? RUN_CHILD_PAGE_ROWS,
-  sql: `DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE ${where} LIMIT ?2)`
-}))
+const RUN_CHILD_PAGES = RUN_CHILD_DELETES.map(({ table, where, pageRows, stamps }) => {
+  const page = `SELECT rowid FROM ${table} WHERE ${where} LIMIT ?2`
+  const fresh = stamps?.map((column) => `julianday(${column}) > julianday('now', ?3)`).join(' OR ')
+  return {
+    rows: pageRows ?? RUN_CHILD_PAGE_ROWS,
+    // Reads only the page it would delete, the same rows in the same transaction.
+    fresh: fresh && `SELECT 1 FROM ${table} WHERE rowid IN (${page}) AND (${fresh}) LIMIT 1`,
+    sql: `DELETE FROM ${table} WHERE rowid IN (${page})`
+  }
+})
 
 const RUN_DELETES = [
   ...RUN_CHILD_DELETES.map(({ table, where }) => `DELETE FROM ${table} WHERE ${where}`),
@@ -105,20 +142,18 @@ function isLiveRunParty(party: string, liveness: RunPartyLiveness): boolean {
     : liveness.isLiveHandle(party.slice('handle:'.length))
 }
 
-// A pane's liveness is a lookup and so is a blocked reader's; a handle's full liveness reads the database.
+// A pane's liveness is a lookup, as is a blocked reader's; a handle's full liveness reads the database.
 function isRunPartySeenInMemory(party: string, liveness: RunPartyLiveness): boolean {
   return party.startsWith('pane:')
     ? liveness.isLivePane(party.slice('pane:'.length))
     : liveness.isWaitingForMail(party.slice('handle:'.length))
 }
 
-// A write to the Run leaves a newer updated_at, a newer row, a newer in-place stamp or reopened work;
-// the full check costs ~9 probes per Dispatch. Reopened work, a Task result corrected in place and a
-// Delivery acknowledged in place count because the pages would delete them before the final check.
+// A write to the Run leaves a newer updated_at, a newer row or reopened work, and a write in place
+// leaves a fresh stamp on its page; the full check costs ~9 probes per Dispatch. Reopened work counts
+// because the pages would delete it before the final check.
 const RUN_TOUCH_MARK = `SELECT
     (SELECT updated_at FROM runs WHERE id = ?1) AS updated,
-    (SELECT max(julianday(completed_at)) FROM tasks WHERE run_id = ?1) AS settled,
-    (SELECT max(julianday(acknowledged_at)) FROM deliveries WHERE run_id = ?1) AS acknowledged,
     (SELECT max(sequence) FROM messages WHERE run_id = ?1) AS message,
     (SELECT max(rowid) FROM tasks WHERE run_id = ?1) AS task,
     (SELECT max(rowid) FROM dispatch_contexts WHERE run_id = ?1) AS dispatch,
@@ -135,7 +170,7 @@ function runTouchMark(db: OrchestrationDb['db'], runId: string): unknown[] {
   return Object.values(db.prepare(RUN_TOUCH_MARK).get(runId) ?? {})
 }
 
-// Deleting rows only lowers each newest value and never reopens work, so anything above the first mark is new.
+// Deleting rows only lowers each newest row and never reopens work, so anything above the first mark is new.
 function isTouchedSince(db: OrchestrationDb['db'], runId: string, mark: unknown[]): boolean {
   const [updated, ...newest] = runTouchMark(db, runId)
   return (
@@ -158,8 +193,8 @@ function isRetiredRun(db: OrchestrationDb['db'], runId: string): boolean {
  * the Run when a coordinator it bound, a reader of its unread mail or its worker terminal is live,
  * read first and again before the Run row (panes and blocked readers, read in memory, on every page),
  * or once the Run is touched: fully checked first and before the Run row, and on every page by a newer
- * `updated_at`, Task settlement, Delivery acknowledgment or row. A step interrupted by a quit or
- * crash leaves only fewer settled rows.
+ * `updated_at`, a newer row or a fresh stamp on the page it would delete. A step interrupted by a
+ * quit or crash leaves only fewer settled rows.
  */
 export function* retireSettledRun(
   orchestrationDb: OrchestrationDb,
@@ -206,6 +241,9 @@ export function* retireSettledRun(
       let index = from
       for (; index < RUN_CHILD_PAGES.length; index++) {
         const page = RUN_CHILD_PAGES[index]!
+        if (page.fresh && db.prepare(page.fresh).get(runId, page.rows, RETENTION_AGE)) {
+          return undefined
+        }
         const deleted = db.prepare(page.sql).run(runId, page.rows).changes
         if (deleted > 0) {
           index = deleted < page.rows ? index + 1 : index
