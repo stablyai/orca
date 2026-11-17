@@ -31,7 +31,6 @@ import {
 import { assertOpenCodeCopyUsesLocalStore } from '../../agent-launch/startup/opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../agent-session/view/structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from '../../settings/global-settings-types'
-import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { managedDataAccountResumeEnv } from '../../agent-launch/environment/managed-data-account-resume'
 
 export type AiVaultResumeCommandSession = Pick<
@@ -71,17 +70,6 @@ type AiVaultResumeStartupArgs = {
   commandOverride?: string | null
 }
 
-export function getAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  // Translate WSL UNC Codex homes to POSIX only for Linux targets.
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
-}
-
 export function getAiVaultAgentProviderSession(
   session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
 ): AgentProviderSessionMetadata | null {
@@ -98,6 +86,10 @@ export function getAiVaultAgentProviderSession(
     return session.filePath
       ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
       : null
+  }
+  // A Hermes row's `<store>#<id>` names the profile every resume, restore and host rebuild must pin.
+  if (session.agent === 'hermes' && session.filePath?.includes('#')) {
+    return { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
   }
   return { key: 'session_id', id: session.sessionId }
 }

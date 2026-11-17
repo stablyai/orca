@@ -16,6 +16,8 @@ export type AcpStructuredTurnsDeps = {
   withdrawRequests: () => void
   lane: AcpStructuredLane
   agentName: string
+  /** The agent's own command for /compact. */
+  compactCommand?: string
   now: () => number
   settle: (settlement: AcpDispatchSettlement) => void
   /** Replace the child so the next send reopens the session. */

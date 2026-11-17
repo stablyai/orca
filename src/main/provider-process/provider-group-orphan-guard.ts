@@ -20,15 +20,18 @@ export type ProviderGroupGuardDeps = {
   signalGroup?: (pgid: number, signal: NodeJS.Signals | 0) => void
 }
 
+/** `absent`: the reader saw no row. `changed`: a reread saw another process or parent. */
+export type ProviderProcessIdentityRead = ProviderProcessRow | 'absent' | 'changed' | 'unverifiable'
+
 /** Second-resolution identities are admissible only after a matching reread beyond their start second. */
-export async function proveProviderProcessIdentity(
+export async function readProviderProcessIdentity(
   pid: number,
   readRow = readPosixProcessRow
-): Promise<ProviderProcessRow | null> {
+): Promise<ProviderProcessIdentityRead> {
   const capturedAt = Date.now()
   const first = await readRow(pid)
   if (!first || first === 'unverifiable') {
-    return null
+    return first ?? 'absent'
   }
   if (first.startResolution !== 'second' || hasUnambiguousStartTime(first.startedAt, capturedAt)) {
     return first
@@ -36,13 +39,21 @@ export async function proveProviderProcessIdentity(
   await delay(1_050 - (Date.now() % 1_000))
   const rereadAt = Date.now()
   const second = await readRow(pid, first.startResolution)
-  return second &&
-    second !== 'unverifiable' &&
-    sameProviderProcess(first, second) &&
-    second.ppid === first.ppid &&
-    hasUnambiguousStartTime(second.startedAt, rereadAt)
-    ? second
-    : null
+  if (!second || second === 'unverifiable') {
+    return second ?? 'absent'
+  }
+  if (!sameProviderProcess(first, second) || second.ppid !== first.ppid) {
+    return 'changed'
+  }
+  return hasUnambiguousStartTime(second.startedAt, rereadAt) ? second : 'unverifiable'
+}
+
+export async function proveProviderProcessIdentity(
+  pid: number,
+  readRow = readPosixProcessRow
+): Promise<ProviderProcessRow | null> {
+  const identity = await readProviderProcessIdentity(pid, readRow)
+  return typeof identity === 'object' ? identity : null
 }
 
 export function sameProviderProcess(

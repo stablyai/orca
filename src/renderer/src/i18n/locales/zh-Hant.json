@@ -19258,6 +19258,7 @@
         "availableAfterSessionStarts": "工作階段開始後可用。",
         "optionUpdateFailed": "無法更新選項",
         "optionValue": {
+          "none": "無",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
