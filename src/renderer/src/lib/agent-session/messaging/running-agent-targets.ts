@@ -189,9 +189,7 @@ function deriveStatuslessTerminalAgentSendTargets(
     const parsed = parsePaneKey(row.paneKey)
     const ptyId = parsed ? liveLeafPtyId(state, parsed.tabId, parsed.leafId) : null
     const title =
-      parsed && !borrowsSplitTabTitle(state, parsed.tabId)
-        ? (row.entry.terminalTitle ?? null)
-        : null
+      parsed && !borrowsSplitTabTitle(state, parsed.tabId) ? (row.paneTitle ?? null) : null
     const titleStatus = detectAgentSendTitleStatus(title)
     // A launch or shell command title names the agent before its TUI takes input; wait for its own state title.
     if (!parsed || !ptyId || !titleStatus) {

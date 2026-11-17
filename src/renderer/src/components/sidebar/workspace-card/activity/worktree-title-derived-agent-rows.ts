@@ -227,6 +227,7 @@ function buildTitleDerivedAgentRow(args: {
     agentType,
     rowSource: 'live',
     state: rowState,
+    paneTitle: args.title,
     // Zero marks title-derived prompts; unread uses store turn records, and freshness-keyed dashboard buckets must not consume synthetic now stamps.
     startedAt: 0
   }
