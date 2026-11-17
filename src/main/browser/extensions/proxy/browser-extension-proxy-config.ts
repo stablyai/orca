@@ -94,13 +94,18 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
   if (!config.proxyRules) {
     return { mode: 'direct' }
   }
+  let hasDirectRule = false
   const server = (list: string, defaultScheme = 'http') => {
     // Chrome's ProxyRules expose one server per scheme, not the native failover list.
     const uri = list
       .split(',')
       .map((entry) => entry.trim())
       .find(Boolean)
-    if (!uri || /^direct:\/\/$/i.test(uri)) {
+    if (!uri) {
+      return undefined
+    }
+    if (/^direct:\/\/$/i.test(uri)) {
+      hasDirectRule = true
       return undefined
     }
     const url = new URL(uri.includes('://') ? uri : `${defaultScheme}://${uri}`)
@@ -116,7 +121,7 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
     .split(';')
     .map((rule) => rule.trim())
     .filter(Boolean)) {
-    const match = /^(http|https|ftp|socks)=(.*)$/.exec(entry)
+    const match = /^(http|https|ftp|socks)\s*=(.*)$/s.exec(entry)
     if (!match) {
       rules.singleProxy = server(entry)
     } else {
@@ -135,6 +140,14 @@ export function fromElectronProxyConfig(config: ProxyConfig): BrowserExtensionPr
         rules[key] = server(match[2], key === 'fallbackProxy' ? 'socks4' : 'http')
       }
     }
+  }
+  if (hasDirectRule) {
+    if (Object.values(rules).some(Boolean)) {
+      throw new Error(
+        'Native DIRECT and proxy routes cannot be represented by chrome.proxy fixed_servers'
+      )
+    }
+    return { mode: 'direct' }
   }
   if (config.proxyBypassRules) {
     rules.bypassList = config.proxyBypassRules

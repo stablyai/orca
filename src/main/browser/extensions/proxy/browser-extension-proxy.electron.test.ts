@@ -9,3 +9,11 @@ it('routes extension proxy settings and PAC rules, isolates profiles, and restor
   )
   expect(result.code, result.stdout + result.stderr).toBe(0)
 }, 60_000)
+
+// Bundling and launching the separate Electron fixture can exceed the default test timeout.
+it('reads native proxy whitespace and rejects unrepresentable mixed direct routes', async () => {
+  const result = await runElectronFixture(
+    join(import.meta.dirname, 'browser-extension-proxy-readback-electron-fixture.ts')
+  )
+  expect(result.code, result.stdout + result.stderr).toBe(0)
+}, 60_000)
