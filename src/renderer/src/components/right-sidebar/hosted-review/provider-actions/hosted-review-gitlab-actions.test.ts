@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { GITLAB_MR_APPROVAL_UPDATE_REQUIRED_MESSAGE } from '../../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 
 const runtimeRpcMocks = vi.hoisted(() => ({
