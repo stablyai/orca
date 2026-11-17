@@ -101,7 +101,7 @@ export async function profile(
   const readers = {
     legacyProof: async (cursor) => readJournalLegacyProofPage(source(), cursor, db),
     importState: async (id) => journalDomainImportState(db, id),
-    recycleSourceReaders: async () => {
+    recycleSourceReaders: async (): Promise<AbortController | null> => {
       original?.close()
       original = undefined
       return new AbortController()
