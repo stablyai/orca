@@ -29,7 +29,8 @@ import {
 import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
 import {
   isBrowserExtensionPageContents,
-  scheduleIdleBrowserExtensionProfileCheck
+  scheduleIdleBrowserExtensionProfileCheck,
+  setIdleBrowserExtensionPageObserver
 } from './profile-sessions/browser-extension-idle-profiles'
 import { isBrowserExtensionSidePanelGuest } from './side-panel/browser-extension-side-panel-guests'
 import {
@@ -115,6 +116,7 @@ function installBrowserExtensionSupport(): void {
     }
   })
   startBrowserExtensionUpdateChecks()
+  setIdleBrowserExtensionPageObserver(observeExtensionContents)
   // Why synchronous: loadURL right after construction emits did-start-loading before a microtask runs.
   app.on('web-contents-created', (_event, contents) => observeExtensionContents(contents))
 }
@@ -129,9 +131,7 @@ function observeExtensionContents(contents: Electron.WebContents): void {
   }
   observedContents.add(contents)
   const sess = contents.session
-  contents.once('destroyed', () =>
-    scheduleIdleBrowserExtensionProfileCheck(profileId, sess, observeExtensionContents)
-  )
+  contents.once('destroyed', () => scheduleIdleBrowserExtensionProfileCheck(profileId, sess))
   // Side panels are extension views, not tabs: no tab or webNavigation events, but DNR and commands.
   if (!isBrowserExtensionSidePanelGuest(contents)) {
     observeBrowserExtensionWebNavigation(contents)

@@ -163,6 +163,8 @@ async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
 export async function detachBrowserExtensionsFromProfileSession(
   profile: BrowserSessionProfile
 ): Promise<void> {
+  // An idle unload still removing extensions must finish before storage is retired.
+  await unloadingByProfileId.get(profile.id)
   const state = stateByProfileId.get(profile.id)
   const sess = state?.session ?? session.fromPartition(profile.partition)
   if (state) {
@@ -214,10 +216,19 @@ export async function unloadBrowserExtensionsFromIdleProfile(
     })
     .then(() => {
       unloadingByProfileId.delete(profileId)
-      afterUnload(reattachRequestedProfileIds.delete(profileId))
+      try {
+        afterUnload(reattachRequestedProfileIds.delete(profileId))
+      } catch (error) {
+        console.warn('[browser-extensions] Could not restart a profile\'s extensions:', error)
+      }
     })
   unloadingByProfileId.set(profileId, unloading)
   await unloading
+}
+
+/** Resolves once an idle unload of this profile, and the reattach it may run, are done. */
+export function whenBrowserExtensionProfileUnloaded(profileId: string): Promise<void> {
+  return unloadingByProfileId.get(profileId) ?? Promise.resolve()
 }
 
 /** One profile session's attach-time loads, restore hooks included. */

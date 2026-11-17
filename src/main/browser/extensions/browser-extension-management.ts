@@ -1,4 +1,5 @@
 import { recordBrowserExtensionInstalled } from '../../telemetry/browser-extensions-banner'
+import { startBrowserExtensionsForSettings } from './profile-sessions/browser-extension-idle-profiles'
 import { isAbsolute } from 'node:path'
 import type {
   BrowserExtensionActionResult,
@@ -110,7 +111,7 @@ export function setBrowserExtensionEnabled(
       if (!installed) {
         throw new Error('Extension is not installed')
       }
-      browserSessionRegistry.attachExtensions(browserProfileId)
+      await startBrowserExtensionsForSettings(browserProfileId)
       await loadBrowserExtensionIntoProfile(browserProfileId, installed)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, extensionId, true)
@@ -232,7 +233,7 @@ export function addUnpackedBrowserExtension(
       }
       let loaded: Electron.Extension
       try {
-        browserSessionRegistry.attachExtensions(browserProfileId)
+        await startBrowserExtensionsForSettings(browserProfileId)
         loaded = await loadBrowserExtensionFolderIntoProfile(
           browserProfileId,
           extensionId,

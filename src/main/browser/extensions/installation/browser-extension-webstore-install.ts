@@ -1,4 +1,5 @@
 import { recordBrowserExtensionInstalled } from '../../../telemetry/browser-extensions-banner'
+import { startBrowserExtensionsForSettings } from '../profile-sessions/browser-extension-idle-profiles'
 import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -158,7 +159,7 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(record)
     }
     if (enableInProfileId) {
-      browserSessionRegistry.attachExtensions(enableInProfileId)
+      await startBrowserExtensionsForSettings(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
