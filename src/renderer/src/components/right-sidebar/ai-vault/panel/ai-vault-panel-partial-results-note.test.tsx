@@ -1,0 +1,138 @@
+// @vitest-environment happy-dom
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultScanProgress,
+  AiVaultScanProgressUpdate
+} from '../../../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import { useAppStore } from '@/store/index'
+import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
+import { resetAiVaultForcedRescanThrottleForTest } from '../scanning/ai-vault-session-refresh'
+import AiVaultPanel from './AiVaultPanel'
+
+const confirm = async (): Promise<boolean> => true
+function renderPanel(): void {
+  render(
+    <ConfirmationDialogContext.Provider value={confirm}>
+      <AiVaultPanel initialQuery="demo" />
+    </ConfirmationDialogContext.Provider>
+  )
+}
+
+const NOTE = 'Session list loading; results may be incomplete.'
+const initialAppState = useAppStore.getInitialState()
+
+function demoSession(): AiVaultSession {
+  const at = '2026-07-01T00:00:00.000Z'
+  return {
+    id: 'demo-1',
+    executionHostId: 'local',
+    agent: 'codex',
+    sessionId: 'demo-1',
+    title: 'Plan a demo garden',
+    cwd: '/repo',
+    branch: null,
+    model: null,
+    filePath: '/sessions/demo-1.jsonl',
+    codexHome: null,
+    createdAt: at,
+    updatedAt: at,
+    modifiedAt: at,
+    messageCount: 1,
+    totalTokens: 0,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: 'demo-1',
+    subagent: null
+  }
+}
+
+const listed: AiVaultListResult = {
+  sessions: [demoSession()],
+  issues: [],
+  scannedAt: '2026-07-01T00:00:00.000Z'
+}
+
+function deferred(): { promise: Promise<AiVaultListResult>; resolve: () => void } {
+  let resolve = (): void => {}
+  const promise = new Promise<AiVaultListResult>((done) => (resolve = () => done(listed)))
+  return { promise, resolve }
+}
+
+const listSessions = vi.fn<() => Promise<AiVaultListResult>>()
+let pushProgress: (update: AiVaultScanProgressUpdate) => void = () => {}
+// The progress store requests each scan key once per module, so keep the last one across tests.
+let lastScanKey = ''
+
+beforeEach(() => {
+  listSessions.mockReset()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only window.api shim
+  ;(window as any).api = {
+    aiVault: {
+      listSessions,
+      cancelListSessions: async () => {},
+      onWindowFocused: () => () => {},
+      onScanProgress: (listener: (update: AiVaultScanProgressUpdate) => void) => {
+        pushProgress = listener
+        return () => {}
+      },
+      getScanProgress: async (scanKey: string) => {
+        lastScanKey = scanKey
+        return null
+      }
+    }
+  }
+  resetAiVaultForcedRescanThrottleForTest()
+  useAppStore.setState(initialAppState, true)
+})
+
+afterEach(() => {
+  cleanup()
+  useAppStore.setState(initialAppState, true)
+  vi.unstubAllGlobals()
+})
+
+function activeScan(): AiVaultScanProgress {
+  return {
+    scanId: 'scan-1',
+    stage: 'reading',
+    startedAt: Date.now(),
+    settledAt: null,
+    agents: [{ agent: 'codex', files: 10, databases: 0, walking: false }],
+    read: { done: 3, total: 10 }
+  }
+}
+
+it('shows the partial-results note while the panel’s own refresh loads the list', async () => {
+  const scan = deferred()
+  listSessions.mockReturnValueOnce(scan.promise)
+  renderPanel()
+  await screen.findByText(NOTE)
+
+  await act(async () => scan.resolve())
+  await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+})
+
+it('keeps the note hidden during a background scan, while the strip still shows it', async () => {
+  listSessions.mockResolvedValueOnce(listed)
+  renderPanel()
+  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+
+  const background = deferred()
+  listSessions.mockReturnValueOnce(background.promise)
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'))
+    pushProgress({ scanKey: lastScanKey, progress: activeScan() })
+  })
+  expect(await screen.findByText(/Loading sessions/)).not.toBeNull()
+  expect(listSessions).toHaveBeenCalledTimes(2)
+  expect(screen.queryByText(NOTE)).toBeNull()
+
+  await act(async () => background.resolve())
+})
