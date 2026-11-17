@@ -149,20 +149,26 @@ export function parseAntigravityModelList(stdout: string): ParsedAntigravityMode
     bucket.entries.push({ row, effort })
   }
 
+  const multiEffortFamilies = new Set(
+    [...families.values()]
+      .filter((bucket) => new Set(bucket.entries.map((entry) => entry.effort)).size >= 2)
+      .map((bucket) => bucket.familyId)
+  )
+
   const parsed: ParsedAntigravityModel[] = []
   const seen = new Set<string>()
   for (const item of items) {
     if (item.kind === 'single') {
-      if (!seen.has(item.row.id)) {
+      if (!multiEffortFamilies.has(item.row.id) && !seen.has(item.row.id)) {
         seen.add(item.row.id)
         parsed.push({ id: item.row.id, label: item.row.label, efforts: [] })
       }
       continue
     }
-    const distinctEfforts = new Set(item.bucket.entries.map((entry) => entry.effort))
-    if (distinctEfforts.size >= 2) {
+    if (multiEffortFamilies.has(item.bucket.familyId)) {
       if (!seen.has(item.bucket.familyId)) {
         seen.add(item.bucket.familyId)
+        const distinctEfforts = new Set(item.bucket.entries.map((entry) => entry.effort))
         const efforts = ANTIGRAVITY_EFFORT_ORDER.filter((effort) => distinctEfforts.has(effort))
         parsed.push({
           id: item.bucket.familyId,

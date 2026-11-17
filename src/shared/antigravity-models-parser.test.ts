@@ -159,4 +159,30 @@ describe('antigravity models parser', () => {
       }
     ])
   })
+
+  it('keeps family efforts when a bare row shares the family ID regardless of row order', () => {
+    const bareFirst = [
+      'gemini-test\tGemini Test',
+      'gemini-test-low\tGemini Test (Low)',
+      'gemini-test-high\tGemini Test (High)'
+    ].join('\n')
+    const variantsFirst = [
+      'gemini-test-low\tGemini Test (Low)',
+      'gemini-test-high\tGemini Test (High)',
+      'gemini-test\tGemini Test'
+    ].join('\n')
+    const expected = [
+      {
+        id: 'gemini-test',
+        label: 'Gemini Test',
+        isDefault: false,
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' }
+        ]
+      }
+    ]
+    expect(parseAntigravityAcpModels(bareFirst)).toEqual(expected)
+    expect(parseAntigravityAcpModels(variantsFirst)).toEqual(expected)
+  })
 })
