@@ -227,9 +227,14 @@ export function getRepoExecutionHostId(repo: {
 
 /** True only for catalog-local files; unknown hosts or a stale connectionId beside local cannot prove locality. */
 export function isRepoOnCatalogHost(repo: {
-  connectionId?: string | null
-  executionHostId?: string | null
+  connectionId?: unknown
+  executionHostId?: unknown
 }): boolean {
+  // A non-string stored id has unknown ownership, so it cannot prove the repo is local.
+  const ids = [repo.executionHostId, repo.connectionId]
+  if (ids.some((id) => id != null && typeof id !== 'string')) {
+    return false
+  }
   const executionHostId = normalizeHostPart(repo.executionHostId)
   return (
     (executionHostId === null || executionHostId === LOCAL_EXECUTION_HOST_ID) &&
