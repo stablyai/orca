@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode, Ref, RefObject } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { isKeyboardOrVirtualFocus } from '@/lib/keyboard/keyboard-input-modality'
 
 /** A 24px icon tool whose tooltip and accessible name are the same words. */
 export function UsageLimitToolButton({
@@ -32,7 +33,7 @@ export function UsageLimitToolButton({
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="chat-tool"
           size="icon-xs"
           aria-label={label}
           // Why aria-disabled: a natively disabled button drops focus and can't show its tooltip.
@@ -131,15 +132,18 @@ export function UsageLimitMoreMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const label = t('components.native-chat.usageLimitActions.more', 'More actions')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [tooltipOpen, setTooltipOpen] = useState(false)
   return (
-    <DropdownMenu modal={false}>
-      <Tooltip>
+    <DropdownMenu modal={false} open={menuOpen} onOpenChange={setMenuOpen}>
+      {/* The label would sit over the open menu it names. */}
+      <Tooltip open={tooltipOpen && !menuOpen} onOpenChange={setTooltipOpen}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
               ref={triggerRef}
               type="button"
-              variant="ghost"
+              variant="chat-tool"
               size="icon-xs"
               aria-label={label}
             >
@@ -151,7 +155,15 @@ export function UsageLimitMoreMenu({
           {label}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        // A pointer close leaves no keyboard ring on More; keyboard closes still return focus.
+        onCloseAutoFocus={(event) => {
+          if (!isKeyboardOrVirtualFocus()) {
+            event.preventDefault()
+          }
+        }}
+      >
         {items.map((item) => (
           <DropdownMenuItem key={item.key} disabled={item.disabled} onSelect={item.onSelect}>
             {item.label}

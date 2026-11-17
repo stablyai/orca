@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Check, Clock, Gauge, MessageSquarePlus } from 'lucide-react'
+import { Check, Clock, Gauge, Loader2, MessageSquarePlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { validResetAt } from '@/components/status-bar/usage/usage-reset-caption'
 import type { NativeChatTextBlock } from '../../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
@@ -27,6 +28,21 @@ import {
   type UsageLimitMoreItem,
   type UsageLimitPendingFocus
 } from './NativeChatUsageLimitRowControls'
+
+// Narrow rows stack: words on top at full width, tools on a right-aligned line below. Continue is
+// wider than the icon tools, so its rows stack sooner.
+const STACK = {
+  tools: {
+    row: '@max-[280px]:flex-wrap',
+    lead: '@max-[280px]:basis-full',
+    tools: '@max-[280px]:ml-auto'
+  },
+  continue: {
+    row: '@max-[340px]:flex-wrap',
+    lead: '@max-[340px]:basis-full',
+    tools: '@max-[340px]:ml-auto'
+  }
+} as const
 
 type ScheduledAutoContinue = Extract<NativeChatUsageLimitAutoContinueState, { kind: 'scheduled' }>
 
@@ -93,7 +109,7 @@ function AutoContinueTool({
         disabled={auto.cancelDisabled}
         onClick={auto.cancel}
       >
-        <Clock className="size-3.5 text-primary" />
+        <Clock className="size-3.5" />
       </UsageLimitToolButton>
     )
   }
@@ -234,36 +250,43 @@ export function NativeChatUsageLimitRow({
       : [])
   ]
 
+  const stack = slotKey === 'continue' ? STACK.continue : STACK.tools
   return (
     <div className="@container rounded-md border border-border bg-muted/20 text-sm">
-      {/* Below ~190px (a 200px pane) the tools take a second line rather than squeezing the title to a sliver. */}
-      <div className="flex min-h-10 items-center gap-x-2 gap-y-1 py-1.5 pl-2.5 pr-1.5 @max-[190px]:flex-wrap">
-        {phase === 'ready' ? (
-          <Check
+      <div
+        className={cn('flex min-h-10 items-center gap-x-2 gap-y-1 py-1.5 pl-2.5 pr-1.5', stack.row)}
+      >
+        <div className={cn('flex min-w-0 flex-1 items-center gap-2', stack.lead)}>
+          {phase === 'ready' ? (
+            <Check
+              aria-hidden="true"
+              className="size-4 shrink-0 text-status-success @max-[260px]:hidden"
+            />
+          ) : (
+            <Gauge
+              aria-hidden="true"
+              className="size-4 shrink-0 text-chat-warning @max-[260px]:hidden"
+            />
+          )}
+          <div
             aria-hidden="true"
-            className="size-4 shrink-0 text-status-success @max-[260px]:hidden"
-          />
-        ) : (
-          <Gauge
-            aria-hidden="true"
-            className="size-4 shrink-0 text-chat-warning @max-[260px]:hidden"
-          />
-        )}
-        <div aria-hidden="true" className="min-w-0 flex-1 leading-tight @max-[190px]:basis-full">
-          <span className="font-semibold text-chat-foreground [overflow-wrap:anywhere]">
-            {words.title}
-          </span>
-          {words.subline ? (
-            <span
-              title={words.subline.title}
-              className="block truncate text-xs text-chat-foreground-faint tabular-nums @min-[400px]:ml-1.5 @min-[400px]:inline"
-            >
-              {words.subline.text}
+            className="min-w-0 flex-1 leading-tight @min-[400px]:flex @min-[400px]:items-baseline @min-[400px]:gap-1.5"
+          >
+            <span className="block truncate font-semibold text-chat-foreground @min-[400px]:shrink-0">
+              {words.title}
             </span>
-          ) : null}
+            {words.subline ? (
+              <span
+                title={words.subline.title}
+                className="block min-w-0 truncate text-xs text-chat-foreground-faint tabular-nums"
+              >
+                {words.subline.text}
+              </span>
+            ) : null}
+          </div>
         </div>
         <p className="sr-only">{words.summary}</p>
-        <div ref={slotRef} className="flex shrink-0 items-center gap-0.5 @max-[190px]:ml-auto">
+        <div ref={slotRef} className={cn('flex shrink-0 items-center gap-0.5', stack.tools)}>
           {slotKey === 'none' ? null : (
             <UsageLimitFocusSlot key={slotKey} pendingFocus={pendingFocus}>
               {slotKey === 'tools' ? (
@@ -279,7 +302,11 @@ export function NativeChatUsageLimitRow({
                       busy={actions.preparing}
                       onClick={actions.handOff}
                     >
-                      <MessageSquarePlus className="size-3.5" />
+                      {actions.preparing ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <MessageSquarePlus className="size-3.5" />
+                      )}
                     </UsageLimitToolButton>
                   ) : null}
                   {phase === 'waiting' && auto ? (
@@ -307,6 +334,7 @@ export function NativeChatUsageLimitRow({
             block={block}
             detail={detail}
             summary={t('components.native-chat.notices.details', 'Details')}
+            bodyClassName="[overflow-wrap:anywhere]"
             open
             onOpenChange={(open, details) => {
               if (open) {

@@ -7,12 +7,14 @@ export function ProviderFrameRow({
   block,
   summary,
   detail,
+  bodyClassName,
   open,
   onOpenChange
 }: {
   block: NativeChatBlock
   summary?: string
   detail?: string
+  bodyClassName?: string
 } & DisclosureOpenProps): React.JSX.Element | null {
   const t = useTranslate()
   if (block.type !== 'text' || (!block.providerFrame && !detail)) {
@@ -23,6 +25,7 @@ export function ProviderFrameRow({
     <NativeChatDetailsDisclosure
       open={open}
       onOpenChange={onOpenChange}
+      bodyClassName={bodyClassName}
       lead={
         frame ? (
           <span className="font-medium text-chat-foreground-strong">{frame.provider}</span>

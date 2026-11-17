@@ -230,7 +230,8 @@ export const allToolsExtremes = fixture(
   { widths: [200, 800] }
 )
 
-// Opens More, then "Show details", in each pane.
+// Opens More, then "Show details", in each pane. Synthetic clicks read as keyboard input, so the
+// restored focus is dropped to keep the shot free of a keyboard focus ring.
 export const detailsExpanded = fixture(
   { agent: 'Codex', window: 'session', resetIn: 134, frame: true },
   {
@@ -242,6 +243,10 @@ export const detailsExpanded = fixture(
         await new Promise((resolve) => setTimeout(resolve, 50))
         document.querySelector<HTMLElement>('[role="menuitem"]')?.click()
         await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement) {
+        focused.blur()
       }
     }
   }

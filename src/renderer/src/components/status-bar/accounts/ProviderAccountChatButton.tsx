@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ComponentProps } from 'react'
 import { ArrowLeftRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -53,14 +54,17 @@ export function ProviderAccountChatButton({
             }
           : onClick
       }
+  // The slotted menu marks itself open; its label would sit over the open menu.
+  const [tooltipOpen, setTooltipOpen] = useState(false)
+  const menuOpen = buttonProps['aria-expanded'] === true || buttonProps['aria-expanded'] === 'true'
   return (
-    <Tooltip>
+    <Tooltip open={tooltipOpen && !menuOpen} onOpenChange={setTooltipOpen}>
       <TooltipTrigger asChild>
         <Button
           {...buttonProps}
           {...activation}
           type="button"
-          variant="ghost"
+          variant="chat-tool"
           size="icon-xs"
           aria-label={label}
           aria-disabled={disabled || undefined}
