@@ -1,3 +1,4 @@
+import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
 import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
 import { useProviderAccountList } from './use-provider-account-list'
@@ -56,6 +57,8 @@ export function ClaudeSwitcherForOwner({
   owner
 }: ClaudeSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element | null {
   const t = useTranslate()
+  const hostClaude = useAppStore((state) => state.rateLimits.claude)
+  const workspaceAccountId = claude?.usageMetadata?.contextAccountId
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
   const [signingInId, setSigningInId] = useState<string | null>(null)
@@ -251,7 +254,7 @@ export function ClaudeSwitcherForOwner({
     'Updates when Claude runs'
   )
   // Why: rows follow this desktop's Claude target, so a remote owner's usage could land on the wrong row.
-  const liveActiveUsage = !hasActiveRuntimeEnvironment && !chatAction ? claude : null
+  const liveActiveUsage = !hasActiveRuntimeEnvironment && !chatAction ? hostClaude : null
   const rowUsage = (
     target: (typeof rows)[number]['target'],
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
@@ -342,10 +345,12 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountLabel={
-        !hasActiveRuntimeEnvironment
-          ? (selectedGroup?.targets.find((target) => target.active)?.label ??
-            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
-          : undefined
+        workspaceAccountId
+          ? getClaudeAccountLabel(accountState, workspaceAccountId)
+          : !hasActiveRuntimeEnvironment
+            ? (selectedGroup?.targets.find((target) => target.active)?.label ??
+              t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+            : undefined
       }
       topContent={
         chatAction ? undefined : (
@@ -361,9 +366,13 @@ export function ClaudeSwitcherForOwner({
       onOpenChange={handleOpenChange}
     >
       <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+        heading={
+          workspaceAccountId
+            ? t('usage.codex.hostDefaultAccount', 'Host default account')
+            : t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')
+        }
         targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
+        panelShowsActiveAccount={!hasActiveRuntimeEnvironment && !workspaceAccountId}
         onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',

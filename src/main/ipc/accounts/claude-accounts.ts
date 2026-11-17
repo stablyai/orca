@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { ImportClaudeHomeParams } from '../../../shared/rpc-contract/accounts/accounts-params'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
@@ -6,6 +7,10 @@ import { openAccountSignInLink } from './account-sign-in-link-opener'
 export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountService): void {
   claudeAccounts.setWslSignInLinkOpener((signInLink) => openAccountSignInLink('claude', signInLink))
   ipcMain.handle('claudeAccounts:list', () => claudeAccounts.listAccounts())
+  ipcMain.handle('claudeAccounts:importHome', (_event, input: unknown) => {
+    const args = ImportClaudeHomeParams.parse(input)
+    return claudeAccounts.importHome(args.sourceHome, args.importHistory)
+  })
   ipcMain.handle(
     'claudeAccounts:add',
     (_event, args?: ClaudeAccountSelectionTarget & { copyLink?: boolean }) =>

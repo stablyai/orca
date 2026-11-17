@@ -72,6 +72,7 @@ export type CodexManagedAccountRuntimeSelection = {
 }
 
 export type ClaudeManagedAccount = {
+  privateHistory?: boolean
   id: string
   email: string
   managedAuthPath: string

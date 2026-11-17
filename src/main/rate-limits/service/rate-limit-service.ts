@@ -208,6 +208,9 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   setCodexWorkspaceAccountsResolver(resolver: () => Record<string, string>): void {
     this.codexWorkspaceAccountsResolver = resolver
   }
+  setClaudeWorkspaceAccountsResolver(resolver: () => Record<string, string>): void {
+    this.claudeWorkspaceAccountsResolver = resolver
+  }
 
   getState(): RateLimitState {
     this.pruneInactiveClaudeState()
@@ -224,6 +227,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       codexWorkspaceAccounts: this.codexWorkspaceAccountsResolver?.() ?? {},
+      claudeWorkspaceAccounts: this.claudeWorkspaceAccountsResolver?.() ?? {},
       inactiveClaudeAccounts: this.buildInactiveArray(
         this.inactiveClaudeCache,
         this.inactiveClaudeFetching

@@ -61,6 +61,7 @@ import {
   HostAccountSignInFlowParams,
   HostAccountSignInStartParams,
   HostAccountSignInWaitParams,
+  ImportClaudeHomeParams,
   ListAccountsParams,
   RemoveAccountParams,
   RemoveDataAccountParams,
@@ -823,6 +824,7 @@ import {
 // schema client-side runs the coercing transforms and rewrites the wire bytes.
 export const RPC_PARAMS_BY_METHOD = {
   'accounts.addClaudeFromConfigDir': AddClaudeFromConfigDirParams,
+  'accounts.addClaudeFromHome': ImportClaudeHomeParams,
   'accounts.addCodexFromHome': AddCodexFromHomeParams,
   'accounts.addDataFromHome': AddDataAccountParams,
   'accounts.antigravityAddCurrent': AntigravityAccountTargetParams,

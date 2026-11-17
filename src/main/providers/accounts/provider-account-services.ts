@@ -43,6 +43,9 @@ export function createProviderAccountServices(
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
+  rateLimits.setClaudeWorkspaceAccountsResolver(
+    () => store.getSettings().claudeWorkspaceAccounts ?? {}
+  )
   rateLimits.setCodexWorkspaceAccountsResolver(
     () => store.getSettings().codexWorkspaceAccounts ?? {}
   )
@@ -178,7 +181,11 @@ export function createProviderAccountServices(
       ].filter(Boolean)
     )
     return settings.claudeManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
+      .filter(
+        (account) =>
+          !activeIds.has(account.id) ||
+          Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(account.id)
+      )
       .map((account) => ({
         id: account.id,
         managedAuthRuntime: account.managedAuthRuntime,

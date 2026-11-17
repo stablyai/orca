@@ -56,6 +56,10 @@ export type CodexAccountsApi = {
 }
 
 export type ClaudeAccountsApi = {
+  importHome: (args: {
+    sourceHome: string
+    importHistory?: boolean
+  }) => Promise<ClaudeRateLimitAccountsState>
   list: () => Promise<ClaudeRateLimitAccountsState>
   add: (args?: {
     runtime?: 'host' | 'wsl'

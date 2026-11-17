@@ -224,6 +224,7 @@ export type RateLimitState = {
   inactiveCodexAccounts: InactiveAccountUsage[]
   /** Workspace bindings on the host that owns this snapshot. Older hosts omit them. */
   codexWorkspaceAccounts?: Record<string, string>
+  claudeWorkspaceAccounts?: Record<string, string>
   /** Saved Antigravity accounts; agy has one shared login, so only the active one is ever read. */
   antigravityAccounts: AntigravityAccountUsage[]
 }

@@ -84,6 +84,10 @@ export const AddClaudeFromConfigDirParams = z.object({
     .optional()
 })
 
+export const ImportClaudeHomeParams = z
+  .object({ sourceHome: z.string().min(1), importHistory: z.boolean().optional() })
+  .strict()
+
 export const AddCodexFromHomeParams = z.object({
   sourceHome: z.string().min(1, 'Missing sourceHome'),
   importHistory: z.boolean().optional(),

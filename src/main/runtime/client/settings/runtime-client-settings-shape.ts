@@ -1,6 +1,6 @@
 // What a paired client reads and may write of this host's settings.
 
-import type { CodexWorkspaceAccountAssignment } from '../../../../shared/agent-accounts/codex/codex-workspace-account'
+import type { WorkspaceAccountAssignment } from '../../../../shared/agent-accounts/workspace-account-binding'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -18,6 +18,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentStatusHooksEnabled'
   | 'codexShareHistoryAcrossAccounts'
   | 'codexWorkspaceAccounts'
+  | 'claudeWorkspaceAccounts'
   | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
@@ -70,6 +71,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
   | 'codexWorkspaceAccounts'
+  | 'claudeWorkspaceAccounts'
   | 'claudeSubagentNavigationEnabled'
   | 'experimentalConnectors'
   | 'defaultTuiAgent'
@@ -98,4 +100,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'prAutoRefresh'
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
-> & { codexWorkspaceAccount?: CodexWorkspaceAccountAssignment }
+> & {
+  codexWorkspaceAccount?: WorkspaceAccountAssignment
+  claudeWorkspaceAccount?: WorkspaceAccountAssignment
+}

@@ -4,6 +4,7 @@ import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/ru
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CODEX_HISTORY_IMPORT_RUNTIME_CAPABILITY,
+  CLAUDE_HOME_IMPORT_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
 } from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
 
@@ -14,7 +15,9 @@ export async function assertAccountImportSupported(
   const status = await client.call<RuntimeStatus>('status.get')
   const capability =
     agent === 'claude'
-      ? CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
+      ? flags.has('home')
+        ? CLAUDE_HOME_IMPORT_RUNTIME_CAPABILITY
+        : CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
       : flags.has('import-history')
         ? CODEX_HISTORY_IMPORT_RUNTIME_CAPABILITY
         : ACCOUNT_IMPORT_RUNTIME_CAPABILITY

@@ -308,6 +308,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   codexManagedAccounts: CodexManagedAccount[]
   /** Workspace IDs on this host mapped to saved Codex accounts; absent IDs inherit. */
   codexWorkspaceAccounts?: Record<string, string>
+  claudeWorkspaceAccounts?: Record<string, string>
   activeCodexManagedAccountId: string | null
   activeCodexManagedAccountIdsByRuntime?: CodexManagedAccountRuntimeSelection
   /** Why: persist only per-account auth (not a CLAUDE_CONFIG_DIR swap) so switching accounts doesn't fork Claude's shared chat/session context. */

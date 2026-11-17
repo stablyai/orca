@@ -1,3 +1,4 @@
+import { ACCOUNT_HOME_IMPORT_METHODS } from './account-home-import-methods'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import { ACCOUNT_RENAME_METHODS } from './account-rename-methods'
 import type { OrcadFeature } from '../../startup/orcad-readiness'
@@ -12,7 +13,6 @@ import {
   BeginClaudeSignInParams,
   FinishClaudeSignInParams,
   AddClaudeFromConfigDirParams,
-  AddCodexFromHomeParams,
   ConsumeCodexResetCreditParams,
   ListAccountsParams,
   RemoveAccountParams,
@@ -205,21 +205,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
       )
     }
   }),
-  defineMethod({
-    name: 'accounts.addCodexFromHome',
-    permission: 'accounts-admin',
-    params: AddCodexFromHomeParams,
-    handler: async (params, { runtime, clientKind }) => {
-      if (clientKind !== undefined) {
-        throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
-      }
-      return runtime.addCodexAccountFromHome(params.sourceHome, {
-        importHistory: params.importHistory,
-        runtime: params.runtime,
-        wslDistro: params.wslDistro ?? null
-      })
-    }
-  }),
+  ...ACCOUNT_HOME_IMPORT_METHODS,
   // Credentials stay on this host; the caller opens the page and relays its code (#20009).
   defineMethod({
     name: 'accounts.hostSignInStart',

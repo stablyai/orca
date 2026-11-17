@@ -26,7 +26,7 @@ import type { CodexResetCreditExpectedScope } from '../../../../shared/agent-acc
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   getClaudeSelectionTargetForAccount,
-  getSelectedClaudeAccountIdForTarget,
+  selectedClaudeAccountId,
   type ClaudeAccountSelectionTarget
 } from '../../../claude-accounts/selection/runtime-selection'
 import {
@@ -302,6 +302,13 @@ export class RuntimeAccountController {
     return (provider === 'claude' ? claudeAccounts : codexAccounts).renameAccount(id, name)
   }
 
+  importClaudeHome(
+    sourceHome: string,
+    importHistory = false
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.requireServices().claudeAccounts.importHome(sourceHome, importHistory)
+  }
+
   addCodexFromHome(
     sourceHome: string,
     target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null; importHistory?: boolean }
@@ -330,17 +337,4 @@ export class RuntimeAccountController {
     }
     return this.services
   }
-}
-
-function selectedClaudeAccountId(
-  state: ClaudeRateLimitAccountsState,
-  target: ClaudeAccountSelectionTarget
-): string | null {
-  return getSelectedClaudeAccountIdForTarget(
-    {
-      activeClaudeManagedAccountId: state.activeAccountId,
-      activeClaudeManagedAccountIdsByRuntime: state.activeAccountIdsByRuntime
-    },
-    target
-  )
 }

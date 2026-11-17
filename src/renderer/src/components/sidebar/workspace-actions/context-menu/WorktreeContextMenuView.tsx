@@ -1,4 +1,5 @@
-import { WorkspaceCodexAccountSubMenu } from './WorkspaceCodexAccountSubMenu'
+import { WorkspaceAgentAccountsSubMenu } from './WorkspaceAgentAccountsSubMenu'
+import { WorkspaceProviderAccountSubMenu } from './WorkspaceProviderAccountSubMenu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -209,7 +210,21 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 disabled={isDeleting}
               />
               {menuOpen && (
-                <WorkspaceCodexAccountSubMenu worktree={worktree} disabled={isDeleting} />
+                <WorkspaceAgentAccountsSubMenu disabled={isDeleting}>
+                  <WorkspaceProviderAccountSubMenu
+                    provider="codex"
+                    worktree={worktree}
+                    disabled={isDeleting}
+                    asSection
+                  />
+                  <DropdownMenuSeparator />
+                  <WorkspaceProviderAccountSubMenu
+                    provider="claude"
+                    worktree={worktree}
+                    disabled={isDeleting}
+                    asSection
+                  />
+                </WorkspaceAgentAccountsSubMenu>
               )}
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />

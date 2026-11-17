@@ -5,12 +5,24 @@ import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeWslProfileRouter } from '../wsl/claude-profile-wsl-router'
 import type { ClaudeAccountSelectionTarget } from '../../selection/runtime-selection'
 import type { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
+import type { ClaudeWorkspaceProfiles } from './claude-workspace-profile'
+
+let workspaceProfiles: ClaudeWorkspaceProfiles | undefined
+export function installClaudeWorkspaceProfiles(profiles: ClaudeWorkspaceProfiles): void {
+  workspaceProfiles = profiles
+}
+export function getClaudeWorkspaceProfiles(): ClaudeWorkspaceProfiles | undefined {
+  return workspaceProfiles
+}
 
 let installed: ClaudeProfileRouter | undefined
 
 /** Installed only in the desktop process. */
 export function installClaudeProfileRouter(router: ClaudeProfileRouter | undefined): void {
   installed = router
+  if (!router) {
+    workspaceProfiles = undefined
+  }
 }
 
 export function getClaudeProfileRouter(): ClaudeProfileRouter | undefined {

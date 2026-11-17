@@ -1,10 +1,11 @@
 import { spawnProcess } from '@orca/process-host'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join, resolve } from 'node:path'
+import { delimiter, join } from 'node:path'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { importAccountHome } from './account-home-import'
 import { assertAccountImportSupported } from './account-import-capability'
 import { stripElectronRunAsNode } from '../runtime/orca-app-executable'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
@@ -242,24 +243,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     }
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
     rejectOpenCodeLoginFlagsForAgent(ctx, agent)
-    const sourceHome = ctx.flags.get('home')
-    if (sourceHome !== undefined || ctx.flags.has('import-history')) {
-      if (agent !== 'codex' || typeof sourceHome !== 'string' || !sourceHome.trim()) {
-        throw new RuntimeClientError(
-          'invalid_argument',
-          '--home requires a directory path and --agent codex.'
-        )
-      }
-      await assertAccountImportSupported(ctx, 'codex')
-      const result = await ctx.client.call<CodexRateLimitAccountsState>(
-        'accounts.addCodexFromHome',
-        {
-          sourceHome: resolve(ctx.cwd, sourceHome.trim()),
-          importHistory: ctx.flags.get('import-history') === true,
-          ...getWslAccountTarget(ctx.cwd)
-        }
-      )
-      printResult(result, ctx.json, (state) => formatAccountsBlock('Codex', state))
+    if (await importAccountHome(ctx, agent)) {
       return
     }
     if (agent === 'opencode' || agent === 'devin') {

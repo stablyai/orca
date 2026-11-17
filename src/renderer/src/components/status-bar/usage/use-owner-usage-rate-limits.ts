@@ -1,3 +1,4 @@
+import { useWorkspaceAccountUsage } from './use-workspace-account-usage'
 import { useWorkspaceCodexUsage } from './use-workspace-codex-usage'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -203,9 +204,15 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
     ownerId !== null,
     ownerId ? refreshRemote : null
   )
+  const claudeContextual = useWorkspaceAccountUsage(
+    contextual.rateLimits,
+    'claude',
+    ownerId !== null,
+    contextual.refresh
+  )
   return {
-    rateLimits: contextual.rateLimits,
+    rateLimits: claudeContextual.rateLimits,
     remoteOwner,
-    refreshRemote: contextual.refresh
+    refreshRemote: claudeContextual.refresh
   }
 }
