@@ -2881,7 +2881,6 @@
       "src/main/workspaces/creation/worktree-create-base-prefetch.test.ts": 284,
       "src/main/workspaces/creation/worktree-create-candidates.test.ts": 47,
       "src/main/workspaces/creation/worktree-create-in-flight.test.ts": 252,
-      "src/main/workspaces/creation/preparation/worktree-create-preparation-cancellation.test.ts": 407,
       "src/main/workspaces/creation/preparation/worktree-create-preparation-wsl-root.test.ts": 402,
       "src/main/workspaces/creation/preparation/worktree-create-preparation.test.ts": 393,
       "src/main/workspaces/catalog/worktree-identity-persistence.test.ts": 1994,
