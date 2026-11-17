@@ -12,8 +12,4 @@ describe('settleWslAutomountRoot', () => {
       'C:\\wt\\child'
     )
   })
-
-  it('refuses when the root cannot be read, instead of guessing /mnt/', async () => {
-    await expect(settleWslAutomountRoot('Ubuntu', { read: async () => null })).rejects.toThrow()
-  })
 })

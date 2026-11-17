@@ -554,7 +554,8 @@
         "installLockWait_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca assume em cerca de {{count}} minutos.",
         "installLockWaitGivesUp_one": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minuto.",
         "installLockWaitGivesUp_many": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos.",
-        "installLockWaitGivesUp_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos."
+        "installLockWaitGivesUp_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos.",
+        "installLockWaitHolderGone": "A outra instalação do Orca nesta distribuição parou. O Orca assume em alguns segundos."
       }
     },
     "agentSummary": {
@@ -20690,6 +20691,7 @@
         "availableAfterSessionStarts": "Disponível após a sessão começar.",
         "optionUpdateFailed": "Não foi possível atualizar a opção",
         "optionValue": {
+          "none": "Nenhum",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Baixo",
@@ -21221,6 +21223,7 @@
         "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
         "historyUnusable": "Não foi possível carregar este chat.",
         "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+        "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
         "savedByNewerOrca": "Os chats foram salvos por uma versão mais recente do Orca.",
         "updateOrcaToKeepUsing": "Atualize o Orca para continuar usando-os.",
         "chatSavedByNewerOrca": "Este chat foi salvo por uma versão mais recente do Orca.",
@@ -21685,18 +21688,13 @@
         "unavailable": "Nenhuma visualização para esta página."
       },
       "usageLimitActions": {
-        "continueNow": "Continuar agora",
-        "leadIn": "Continue este bate-papo sem esperar:",
         "switchAccount": "Trocar de conta",
         "addAccount": "Adicionar conta…",
         "accountUnavailable": "Este chat não pode ser transferido para outra conta. Passe-o para outro agente."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Não foi possível cancelar a continuação automática. Tente novamente.",
-        "openSetting": "Continuar automaticamente quando os limites forem redefinidos",
-        "cancelled": "Orca não continuará este bate-papo automaticamente.",
-        "scheduled": "Orca continuará este bate-papo às {{time}}.",
-        "cancel": "Não continue"
+        "scheduled": "Orca continuará este bate-papo às {{time}}."
       },
       "creationChatNotOpened": "O worktree está pronto, mas o chat não pôde ser aberto. Tente abri-lo novamente com sua mensagem.",
       "usage": {
@@ -22177,7 +22175,11 @@
         "usageLimitContinueSearchLimit": "limite de uso",
         "usageLimitContinueSearchReset": "reiniciar",
         "usageLimitContinueToggleLabel": "Alternar a continuação dos bate-papos quando um limite de uso for redefinido",
-        "openedPullRequestsSearchPr": "PR"
+        "openedPullRequestsSearchPr": "PR",
+        "promptSuggestionsTitle": "Prompts sugeridos",
+        "promptSuggestionsCopy": "Depois que o Claude responde, o palpite dele para a sua próxima mensagem aparece na caixa de mensagem vazia. Pressione Tab para usá-lo. Cada palpite é uma solicitação extra que conta para o seu uso do Claude.",
+        "promptSuggestionsSearchNext": "próximo prompt",
+        "promptSuggestionsSearchGhost": "texto fantasma"
       },
       "voice": {
         "dictationLanguage": {
@@ -24116,10 +24118,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
-    "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
-    "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
-    "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",
-    "catalogUnresolved": "Os modelos de {{agent}} não foram carregados. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
     "search": "Pesquisar, por exemplo, Opus 5.5…",
     "configure": "Configurar {{agent}}",

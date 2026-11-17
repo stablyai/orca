@@ -46,7 +46,7 @@ ORCA orchestration send --on <server> --to <term_…|orca_session_id:…> --subj
 ```
 
 Your own Orca carries the mail and keeps the conversation. Replies come back to
-your own `check`, and they wake you like local mail. The other agent answers
+your own mailbox and wake you like local mail. The other agent answers
 with a plain `reply --id <msg_id> --body <text>`; no flag is needed on either
 side. Mail from another server names its sender as `<sender> on <server name>`.
 

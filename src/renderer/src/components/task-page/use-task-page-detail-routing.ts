@@ -1,4 +1,4 @@
-import { useLinearCommittedState } from '@/hooks/linear-issue-committed-state'
+import { useLinearCommittedState } from '@/lib/work-items/linear/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import {
   projectLinearIssue,

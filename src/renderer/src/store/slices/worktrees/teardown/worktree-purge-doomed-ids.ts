@@ -2,7 +2,7 @@ import type { AppState } from '../../../types'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { forgetForegroundTerminalTabs } from '@/components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-session/launch/startup/agent-startup-delivery-guards'
-import { forgetAgentPaneAuthorityAliasesByTabIds } from '../../agent-status/agent-pane-authority'
+import { forgetAgentPaneAuthorityAliasesByTabIds } from '../../agent-status/pane-authority/agent-pane-authority'
 import { forgetDetachedHeadAutoDerivedDisplayName } from '../metadata/detached-head-display-name'
 
 export type WorktreePurgeDoomedIds = {

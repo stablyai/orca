@@ -11,10 +11,16 @@ const ROOTS = new Map([
     `${RENDERER}components/terminal/provider-snapshots/terminal-provider-snapshot-bound-pty-ids.ts`,
     ['createTerminalProviderSnapshotBoundPtyIdsSelector']
   ],
-  [`${RENDERER}components/use-terminal-watcher-effects.ts`, ['useTerminalWatcherEffects']],
-  [`${RENDERER}components/use-terminal-parking-pass.ts`, ['useTerminalParkingPass']],
   [
-    `${RENDERER}components/terminal-parking-pass-candidates.ts`,
+    `${RENDERER}components/terminal/workbench/use-terminal-watcher-effects.ts`,
+    ['useTerminalWatcherEffects']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/use-terminal-parking-pass.ts`,
+    ['useTerminalParkingPass']
+  ],
+  [
+    `${RENDERER}components/terminal/workspace-mounting/terminal-parking-pass-candidates.ts`,
     ['collectTerminalParkingPassCandidates']
   ],
   [
@@ -155,11 +161,11 @@ const ORDINARY_WRITERS = [
   'store/terminals/tabs/presentation/terminal-tab-presentation.ts',
   'store/terminals/sleep/terminal-shutdown-state.ts',
   'store/terminals/tabs/creation/window-tab-start-in-main.ts',
-  'store/slices/agent-status/agent-status-live-reducer.ts',
-  'store/slices/agent-status/agent-status-launch-actions.ts',
-  'store/slices/agent-status/agent-status-provider-session-actions.ts',
-  'store/slices/agent-status/agent-status-recovery-actions.ts',
-  'store/slices/agent-status/agent-status-authority-actions.ts'
+  'store/slices/agent-status/live-status/agent-status-live-reducer.ts',
+  'store/slices/agent-status/launch-config/agent-status-launch-actions.ts',
+  'store/slices/agent-status/live-status/agent-status-provider-session-actions.ts',
+  'store/slices/agent-status/sleep-recovery/agent-status-recovery-actions.ts',
+  'store/slices/agent-status/pane-authority/agent-status-authority-actions.ts'
 ].map((rel) => RENDERER + rel)
 const RECORD_TRANSITIONS = new Set([
   'replaceRecordEntries',

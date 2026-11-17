@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { RecordDraft } from '../../keyed-record-transitions'
+import type { RecordDraft } from '../../record-transitions/keyed-record-transitions'
 import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 
 export type GroupLayoutDrafts = {

@@ -230,6 +230,8 @@ export function journalClaudeMessage(
     // Output can open the send's turn before its echo confirms delivery.
     if (!clientMessageId || ctx.turn.userItemId !== agentJournalSubmissionKey(clientMessageId)) {
       ctx.turn.open(sendEchoTurn, observedAt)
+    } else {
+      ctx.turn.confirmProviderCycle()
     }
   }
   if (changed) {

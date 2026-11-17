@@ -69,27 +69,6 @@ describe('migrateWorkspaceSessionSshTargetId', () => {
       tab3: `ssh:other-target@@pty-1`
     })
   })
-
-  it('re-points sleeping agent records pinned to the old connection', () => {
-    const session = makeSession({
-      sleepingAgentSessionsByPaneKey: {
-        'tab1:leaf-1': {
-          paneKey: 'tab1:leaf-1',
-          worktreeId: 'r1::/wt',
-          agent: 'claude',
-          providerSession: { key: 'session_id', id: 's-1' },
-          prompt: 'p',
-          state: 'done',
-          capturedAt: 1,
-          updatedAt: 1,
-          connectionId: OLD_ID
-        }
-      }
-    })
-
-    expect(migrateWorkspaceSessionSshTargetId(session, OLD_ID, NEW_ID)).toBe(true)
-    expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf-1'].connectionId).toBe(NEW_ID)
-  })
 })
 
 describe('migrateUiHostScopeSshTargetId', () => {

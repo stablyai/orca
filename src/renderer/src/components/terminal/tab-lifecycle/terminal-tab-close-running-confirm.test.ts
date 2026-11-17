@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 /** Verify which closeTerminalTab callers reach running-process confirmation (#10142). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

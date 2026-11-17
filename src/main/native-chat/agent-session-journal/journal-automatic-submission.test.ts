@@ -181,3 +181,56 @@ it('requires a ready accepting child only while steering and rolls failed conver
     holdReason: 'send_failed'
   })
 })
+
+it("steers the next agent's mail into a running turn while earlier mail is still on its way, but never past a person's card", async () => {
+  type Fixture = ReturnType<typeof automaticSubmissionFixture>
+  const fixture = async () => {
+    const f = automaticSubmissionFixture(cleanups)
+    await f.turn()
+    return f
+  }
+  const mail = (f: Fixture, id: string) =>
+    f.enqueue(id, {
+      body: { ...automaticBody(id), from: automaticMail },
+      options: { model: 'active' },
+      deliveryMode: 'queue'
+    })
+  const claim = async (f: Fixture, id: string) => (await f.claim(id, f.prepare(100, 'owed'))).value
+  // Handed to the agent, which has not taken it in yet.
+  const handOver = (f: Fixture, id: string) =>
+    f.run({
+      kind: 'dispatch',
+      input: { clientMessageId: id, fence: 1, state: 'pending', turnScope: { kind: 'thread' } }
+    })
+
+  const agents = await fixture()
+  await mail(agents, 'first')
+  await mail(agents, 'second')
+  await agents.enqueue('person', { options: { model: 'active' } })
+  expect(await claim(agents, 'send-first')).toMatchObject({ kind: 'claimed', messageId: 'first' })
+  await handOver(agents, 'send-first')
+  expect(await claim(agents, 'send-second')).toMatchObject({ kind: 'claimed', messageId: 'second' })
+  await handOver(agents, 'send-second')
+  expect(await claim(agents, 'send-person')).toEqual({ kind: 'waiting' })
+
+  const ordered = await fixture()
+  await mail(ordered, 'before')
+  await ordered.enqueue('person', { options: { model: 'active' } })
+  await mail(ordered, 'after')
+  expect(await claim(ordered, 'send-before')).toMatchObject({
+    kind: 'claimed',
+    messageId: 'before'
+  })
+  await handOver(ordered, 'send-before')
+  expect(await claim(ordered, 'send-after')).toEqual({ kind: 'waiting' })
+
+  const burst = await fixture()
+  for (let index = 0; index < 33; index++) {
+    await mail(burst, `report-${index}`)
+  }
+  for (let index = 0; index < 32; index++) {
+    expect(await claim(burst, `send-${index}`)).toMatchObject({ kind: 'claimed' })
+    await handOver(burst, `send-${index}`)
+  }
+  expect(await claim(burst, 'send-32')).toEqual({ kind: 'waiting' })
+})

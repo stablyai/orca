@@ -55,7 +55,7 @@ export async function readChildren(
           return raw.data?.issue?.children ?? null
         })
       },
-      childrenPageSize(remainingDepth)
+      { pageSize: childrenPageSize(remainingDepth) }
     )
     if (response.hasMore || response.nodes.length > remaining) {
       capReached = true

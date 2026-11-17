@@ -13,7 +13,8 @@ import {
   findJiraIssueWorkspaceAttachmentsInIndex
 } from '@/lib/work-items/jira/jira-issue-workspace-attachment'
 import { filterLinkedJiraIssues } from './task-page-jira-linked-issues'
-import { sortJiraIssues } from '../../../jira-issue-sorter'
+import { sortJiraIssues } from './jira-issue-sorter'
+import { useTaskPageJiraProjectScope } from '../filters/use-task-page-jira-project-scope'
 export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const {
     accountBackedTaskSourceHostId,
@@ -31,6 +32,15 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     jiraOrderDirection,
     jiraPrioritiesBySite
   } = model
+  const jiraProjectScope = useTaskPageJiraProjectScope(
+    model.repos,
+    model.selectedRepos,
+    model.pageData.preselectedRepoId,
+    accountBackedTaskSourceHostId,
+    selectedJiraSiteId,
+    model.availableJiraProjects,
+    model.jiraProjectsLoading
+  )
   const jiraIssueAttachmentIndex = useMemo(
     () => buildJiraIssueWorkspaceAttachmentIndex(linearAttachmentWorkspaces),
     [linearAttachmentWorkspaces]
@@ -102,6 +112,7 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     )
   }, [displayedJiraIssues, jiraOrderBy, jiraOrderDirection, jiraPrioritiesBySite])
   return Object.assign(model, {
+    ...jiraProjectScope,
     displayedJiraIssues,
     displayedJiraProjectScope,
     displayedJiraStatusOrderScopeKey,
