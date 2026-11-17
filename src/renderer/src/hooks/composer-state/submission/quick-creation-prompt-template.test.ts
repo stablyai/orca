@@ -2,9 +2,9 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-import { getDefaultSettings } from '../../../../shared/constants'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
+import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { PreparedQuickSubmit } from './composer-submit-model'
 import { useQuickCreationExecution } from './quick-creation-execution'
 

@@ -17,35 +17,8 @@ import type { Translate } from '@/i18n/use-translate'
 import { getProjectPromptTemplateOwner } from '../../../../../shared/project-prompt-template-owner'
 import type { SettingsRenderContext } from './settings-render-context'
 
-export type ProjectSettingsRenderContext = {
-  model: Pick<
-    SettingsRenderContext['model'],
-    | 'settingsProjectList'
-    | 'settingsProjectHostSelection'
-    | 'settingsProjectSetupSelection'
-    | 'repos'
-    | 'projectHostSetups'
-    | 'repoHooksMap'
-    | 'updateRepo'
-    | 'removeProjectAllHosts'
-    | 'updateProject'
-  >
-  navigation: Pick<
-    SettingsRenderContext['navigation'],
-    'projectByRepoId' | 'getSectionSearchEntries'
-  >
-  terminal: Pick<SettingsRenderContext['terminal'], 'isWindowsTerminalHost'> & {
-    windowsTerminalCapabilities: Pick<
-      SettingsRenderContext['terminal']['windowsTerminalCapabilities'],
-      'wslAvailable' | 'wslDistros' | 'isLoading'
-    >
-  }
-  interactions: Pick<SettingsRenderContext['interactions'], 'writeSourceControlAiSettings'>
-  view: Pick<SettingsRenderContext['view'], 'isSectionMounted'>
-}
-
 export function renderProjectSettingsSections(
-  context: ProjectSettingsRenderContext,
+  context: SettingsRenderContext,
   t: Translate = translate
 ): React.ReactNode {
   const { model, navigation, terminal, view, interactions } = context
@@ -141,7 +114,9 @@ export function renderProjectSettingsSections(
                     'linkedWorkItemPromptTemplate' in updates
                       ? getProjectPromptTemplateOwner(project, model.projectHostSetups, model.repos)
                       : getRepoExecutionHostId(repo)
-                  return hostId === undefined ? false : model.updateProject(projectId, updates, hostId)
+                  return hostId === undefined
+                    ? false
+                    : model.updateProject(projectId, updates, hostId)
                 }}
                 writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
               />

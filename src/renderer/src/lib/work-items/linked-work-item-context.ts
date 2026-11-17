@@ -3,9 +3,9 @@ import {
   getLinkedWorkItemPromptTemplate,
   renderLinkedWorkItemPromptTemplate
 } from '../../../../shared/linked-work-item-prompt-settings'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 export { getLinkedWorkItemPromptTemplate } from '../../../../shared/linked-work-item-prompt-settings'
 
 export function getDesktopLinkedWorkItemPromptTemplate(
