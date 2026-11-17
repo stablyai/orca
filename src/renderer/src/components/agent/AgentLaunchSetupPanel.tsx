@@ -120,7 +120,9 @@ export function AgentLaunchSetupPanel({
       : []
   const choices = search?.choices ?? []
   const choiceResults = searching
-    ? choices.filter((choice) => choiceMatches(choice, modelQuery))
+    ? [...(search?.searchChoices ?? []), ...choices].filter((choice) =>
+        choiceMatches(choice, modelQuery)
+      )
     : []
   const choiceList = useRef<HTMLDivElement>(null)
   const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
