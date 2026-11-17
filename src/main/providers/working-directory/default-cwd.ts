@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 
+import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
 import { isRootLikePath } from './path-safety'
 
 function homeDrivePath(env: NodeJS.ProcessEnv): string | null {
@@ -29,6 +30,16 @@ export function resolveSafePtyDefaultCwd(env: NodeJS.ProcessEnv = process.env): 
     throw new Error('No safe default working directory is available for terminal launch.')
   }
   return selected
+}
+
+/** A recognized agent started at a filesystem root walks the whole disk (#7403). */
+export function isUnsafeAgentStartupCwd(
+  cwd: string | undefined,
+  command: string | undefined
+): boolean {
+  return (
+    !isSafeImplicitPtyCwd(cwd) && Boolean(command && recognizeAgentProcessFromCommandLine(command))
+  )
 }
 
 export function assertSafeAgentStartupCwd(cwd: string | undefined, command: string): void {
