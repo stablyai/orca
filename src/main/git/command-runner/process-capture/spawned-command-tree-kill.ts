@@ -9,8 +9,6 @@ import {
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
-// A taskkill queued behind slow launches on the worker still ends, after this much extra time.
-const WORKER_TASKKILL_LAUNCH_ALLOWANCE_MS = 30_000
 // One tree kill per worker child: a second could walk a reused PID after the first ended the tree.
 const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<void>>()
 // Tree kills a dying worker leaves in one turn share one taskkill per host, so main pays at most one launch.
@@ -66,6 +64,8 @@ export function killSpawnedCommandTree(
   if (!(child instanceof WorkerThreadChildProcess)) {
     return startTreeKill(child)
   }
+  // Nothing reads a child being stopped; its remaining output stays on the worker.
+  child.discardOutput()
   let kill = workerTreeKills.get(child)
   if (!kill) {
     kill = startTreeKill(child)
@@ -115,6 +115,7 @@ function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promi
         // Process creation blocks its thread on Windows; keep cleanup off main like the Git it ends.
         killer = spawnProcessOnWorkerThread({ program: 'taskkill', args })
         killer.stdin.end()
+        killer.discardOutput()
       } else {
         const native = spawn('taskkill', args, { stdio: 'ignore', windowsHide: true })
         if (!native || typeof native.unref !== 'function') {
@@ -165,9 +166,9 @@ function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promi
       }, ms)
     }
     if (onWorker) {
-      // As with a native launch, the wait starts once taskkill exists, not while it queues on the worker.
+      // As with a native launch, the wait starts once taskkill exists. A queued taskkill is never given up
+      // for a root-only kill: the live worker reaches it, and a dead one reruns it from main.
       killer.once('spawn', () => waitFor(WINDOWS_TREE_KILL_WAIT_MS))
-      waitFor(WINDOWS_TREE_KILL_WAIT_MS + WORKER_TASKKILL_LAUNCH_ALLOWANCE_MS)
     } else {
       waitFor(WINDOWS_TREE_KILL_WAIT_MS)
     }
