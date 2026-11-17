@@ -81,7 +81,11 @@ describe('settings file sync', () => {
 
   async function startSync(
     initial: Partial<GlobalSettings> = {},
-    options: { debounceMs?: number; watchFile?: WatchSettingsFile } = {}
+    options: {
+      debounceMs?: number
+      watchFile?: WatchSettingsFile
+      refreshIntervalMs?: number
+    } = {}
   ): Promise<{ sync: SettingsFileSync; store: SettingsFileStore }> {
     const store = createFakeStore(initial, defaults)
     const sync = createSettingsFileSync({
@@ -90,7 +94,8 @@ describe('settings file sync', () => {
       defaults,
       watchFile: options.watchFile ?? idleWatch,
       log: { info: () => {}, warn: () => {} },
-      debounceMs: options.debounceMs ?? 5
+      debounceMs: options.debounceMs ?? 5,
+      refreshIntervalMs: options.refreshIntervalMs
     })
     active.push(sync)
     await sync.start()
@@ -285,5 +290,149 @@ describe('settings file sync', () => {
     await writeSettingsText(JSON.stringify({ theme: 'light' }))
 
     await vi.waitFor(() => expect(store.getSettings().theme).toBe('light'), { timeout: 8_000 })
+  })
+
+  it('keeps the in-app value and read-only status across refreshes until the file content changes', async (context) => {
+    if (process.platform === 'win32' || process.getuid?.() === 0) {
+      context.skip()
+    }
+    await writeSettingsText(JSON.stringify({ theme: 'dark' }))
+    const { sync, store } = await startSync()
+    await chmod(filePath, 0o444)
+    await chmod(join(home, '.orca'), 0o555)
+
+    store.updateSettings({ terminalFontSize: 26 })
+    await sync.flush()
+    expect(sync.getStatus().state).toBe('read-only')
+
+    await sync.refresh()
+    expect(store.getSettings().terminalFontSize).toBe(26)
+    expect(sync.getStatus().state).toBe('read-only')
+
+    await chmod(join(home, '.orca'), 0o755)
+    await chmod(filePath, 0o644)
+    await writeSettingsText(JSON.stringify({ theme: 'dark', terminalFontSize: 18 }))
+    await chmod(filePath, 0o444)
+    await sync.refresh()
+
+    expect(store.getSettings().terminalFontSize).toBe(18)
+  })
+
+  it('applies a file that appeared before the create action instead of overwriting it', async () => {
+    const { sync, store } = await startSync()
+    expect(sync.getStatus().state).toBe('absent')
+
+    await writeSettingsText(JSON.stringify({ terminalFontSize: 31 }))
+    const status = await sync.createFromCurrentSettings()
+
+    expect(status).toMatchObject({ state: 'active', appliedKeyCount: 1 })
+    expect(store.getSettings().terminalFontSize).toBe(31)
+    expect(await readJson()).toEqual({ terminalFontSize: 31 })
+  })
+
+  it('reports a dangling symlink as invalid with the link message', async (context) => {
+    await mkdir(join(home, '.orca'), { recursive: true })
+    try {
+      await symlink(join(home, 'nowhere', 'settings.json'), filePath)
+    } catch {
+      context.skip()
+    }
+    const { sync } = await startSync()
+
+    expect(sync.getStatus()).toMatchObject({
+      state: 'invalid',
+      message: 'The settings file link points to a missing file'
+    })
+  })
+
+  it('reads a file with a byte order mark and keeps the mark when writing back', async () => {
+    await writeSettingsText(`\uFEFF${JSON.stringify({ theme: 'dark' })}\n`)
+    const { sync, store } = await startSync()
+    expect(store.getSettings().theme).toBe('dark')
+    expect(sync.getStatus().state).toBe('active')
+
+    store.updateSettings({ terminalFontSize: 29 })
+    await sync.flush()
+
+    const text = await readFile(filePath, 'utf-8')
+    expect(text.startsWith('\uFEFF')).toBe(true)
+    expect(JSON.parse(text.slice(1))).toEqual({ theme: 'dark', terminalFontSize: 29 })
+  })
+
+  it('resets a key to its default after an invalid value is followed by removing the key', async () => {
+    await writeSettingsText(JSON.stringify({ terminalFontSize: 22 }))
+    const { sync, store } = await startSync()
+    expect(store.getSettings().terminalFontSize).toBe(22)
+
+    await writeSettingsText(JSON.stringify({ terminalFontSize: 'big' }))
+    await sync.refresh()
+    expect(store.getSettings().terminalFontSize).toBe(22)
+
+    await writeSettingsText('{}')
+    await sync.refresh()
+
+    expect(store.getSettings().terminalFontSize).toBe(defaults.terminalFontSize)
+  })
+
+  it('keeps tab indentation and the missing trailing newline when writing back', async () => {
+    await writeSettingsText('{\n\t"theme": "dark"\n}')
+    const { sync, store } = await startSync()
+
+    store.updateSettings({ terminalFontSize: 33 })
+    await sync.flush()
+
+    expect(await readFile(filePath, 'utf-8')).toBe(
+      '{\n\t"theme": "dark",\n\t"terminalFontSize": 33\n}'
+    )
+  })
+
+  it('keeps four-space indentation when writing back', async () => {
+    await writeSettingsText('{\n    "theme": "dark"\n}\n')
+    const { sync, store } = await startSync()
+
+    store.updateSettings({ terminalFontSize: 34 })
+    await sync.flush()
+
+    expect(await readFile(filePath, 'utf-8')).toBe(
+      '{\n    "theme": "dark",\n    "terminalFontSize": 34\n}\n'
+    )
+  })
+
+  it('reports an unknown uiLanguage as invalid and does not apply it', async () => {
+    await writeSettingsText(JSON.stringify({ uiLanguage: 'xx' }))
+    const { sync, store } = await startSync()
+
+    expect(store.getSettings().uiLanguage).toBe(defaults.uiLanguage)
+    expect(sync.getStatus().ignored).toEqual([{ key: 'uiLanguage', reason: 'invalid-value' }])
+  })
+
+  it('applies a known uiLanguage', async () => {
+    await writeSettingsText(JSON.stringify({ uiLanguage: 'ko' }))
+    const { store } = await startSync()
+
+    expect(store.getSettings().uiLanguage).toBe('ko')
+  })
+
+  it('picks up a file created after start through the periodic refresh', async () => {
+    const { sync, store } = await startSync({}, { refreshIntervalMs: 20 })
+    expect(sync.getStatus().state).toBe('absent')
+
+    await writeSettingsText(JSON.stringify({ theme: 'dark' }))
+
+    await vi.waitFor(() => expect(store.getSettings().theme).toBe('dark'))
+    expect(sync.getStatus().state).toBe('active')
+  })
+
+  it('reports absent and ignores calls after disposal', async () => {
+    await writeSettingsText(JSON.stringify({ theme: 'dark' }))
+    const { sync, store } = await startSync()
+    await sync.dispose()
+
+    store.updateSettings({ terminalFontSize: 35 })
+    await sync.flush()
+    await sync.refresh()
+
+    expect(sync.getStatus().state).toBe('absent')
+    expect(await readJson()).toEqual({ theme: 'dark' })
   })
 })

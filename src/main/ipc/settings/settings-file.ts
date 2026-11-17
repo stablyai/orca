@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain, shell } from 'electron'
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import type { SettingsFileStatus } from '../../../shared/settings/settings-file/settings-file-status-types'
 import { getUserSettingsFilePath } from '../../settings-file/settings-file-path'
 import type { SettingsFileSync } from '../../settings-file/settings-file-sync-types'
@@ -33,6 +33,10 @@ export function registerSettingsFileHandlers(
 
   ipcMain.handle('settings-file:open', async () => {
     const { path } = sync?.getStatus() ?? disabledStatus()
-    return existsSync(path) ? await shell.openPath(path) : ''
+    const exists = await access(path).then(
+      () => true,
+      () => false
+    )
+    return exists ? await shell.openPath(path) : ''
   })
 }

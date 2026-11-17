@@ -1,4 +1,10 @@
+import { normalizeUiLanguage, type UiLanguage } from '../../i18n/ui-language'
 import { oneOf, type PortableNullableKey, type PortableSpecTable } from './portable-setting-spec'
+
+// Valid only when normalizing leaves it unchanged, since unknown values fall back to 'system'.
+function isKnownUiLanguage(value: unknown): value is UiLanguage {
+  return typeof value === 'string' && normalizeUiLanguage(value) === value
+}
 
 // Why: each spec is type-checked against the key's GlobalSettings type, so a new union member breaks the build.
 export const PORTABLE_KEY_SPECS = {
@@ -32,7 +38,7 @@ export const PORTABLE_KEY_SPECS = {
   editorEndOfLine: oneOf('editorEndOfLine')('auto', 'lf', 'crlf'),
   terminalShortcutPolicy: oneOf('terminalShortcutPolicy')('orca-first', 'terminal-first'),
   prAutoRefresh: oneOf('prAutoRefresh')('default', 'off', 'reduced', 'minimal'),
-  uiLanguage: 'string',
+  uiLanguage: isKnownUiLanguage,
   refreshLocalBaseRefOnWorktreeCreate: 'boolean',
   autoRenameBranchFromWork: 'boolean',
   branchPrefix: oneOf('branchPrefix')('custom', 'git-username', 'none'),

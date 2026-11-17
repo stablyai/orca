@@ -1,19 +1,16 @@
 import { createHash } from 'node:crypto'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { PORTABLE_SETTINGS_KEYS } from '../../shared/settings/settings-file/settings-key-portability'
-import {
-  extractPortableSettings,
-  parseSettingsFileText,
-  serializeWithUpdates,
-  type SettingsFileValues
-} from './settings-file-document'
+import { parseSettingsFileText, serializeWithUpdates } from './settings-file-document'
 import {
   createSettingsFile,
   readSettingsFile,
   writeSettingsFile,
   type SettingsFileRead
 } from './settings-file-io'
-import { reconcileSettingsFile } from './settings-file-reconcile'
+import { collectNonDefaultPortableSettings } from './settings-file-reconcile'
+import { createStoreReconciler } from './settings-file-store-reconciler'
+import { startRefreshSweep, type RefreshSweep } from './settings-file-refresh-sweep'
 import { createSettingsFileStatusTracker } from './settings-file-status'
 import type {
   SettingsFileStatus,
@@ -23,13 +20,12 @@ import type {
 import { createSettingsFileWatching, type SettingsFileWatching } from './settings-file-watching'
 
 const DEFAULT_DEBOUNCE_MS = 400
+const BUSY_RETRY_BASE_MS = 500
+const BUSY_RETRY_MAX_MS = 8_000
+const BUSY_MAX_RETRIES = 5
 
 function hashText(text: string): string {
   return createHash('sha256').update(text).digest('hex')
-}
-
-function sameList(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index])
 }
 
 export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFileSync {
@@ -38,10 +34,14 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
   const status = createSettingsFileStatusTracker(filePath, log)
   // Portable keys the UI changed that the file has not received yet; latest value wins.
   const dirty = new Map<string, unknown>()
-  let lastWrittenHash: string | null = null
+  // Hash of the file text we last wrote or last read and reconciled; an identical read has nothing new to apply.
+  let lastHandledTextHash: string | null = null
+  let busyRetries = 0
   let flushTimer: ReturnType<typeof setTimeout> | undefined
+  let refreshSweep: RefreshSweep | null = null
   let unsubscribe: (() => void) | null = null
   let watching: SettingsFileWatching | null = null
+  let closing = false
   let disposed = false
   let queue: Promise<void> = Promise.resolve()
 
@@ -60,49 +60,36 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
     try {
       return await readSettingsFile(filePath)
     } catch (error) {
+      lastHandledTextHash = null
       status.markInvalid(error instanceof Error ? error.message : String(error))
       return null
     }
   }
 
-  const recordSeenKeys = (values: SettingsFileValues): void => {
-    const seen = Object.keys(extractPortableSettings(values).valid)
-    if (!sameList(store.getSettings().settingsFileLastSeenKeys ?? [], seen)) {
-      store.updateSettings({ settingsFileLastSeenKeys: seen }, { origin: 'settings-file' })
-    }
-  }
-
-  const reconcile = (values: SettingsFileValues): void => {
-    const { updates, presentKeys } = reconcileSettingsFile({
-      values,
-      current: store.getSettings(),
-      defaults,
-      dirtyKeys: new Set(dirty.keys())
-    })
-    const hasUpdates = Object.keys(updates).length > 0
-    if (!hasUpdates && sameList(store.getSettings().settingsFileLastSeenKeys ?? [], presentKeys)) {
-      return
-    }
-    store.updateSettings(
-      { ...updates, settingsFileLastSeenKeys: presentKeys },
-      { notifyListeners: hasUpdates, origin: 'settings-file' }
-    )
-  }
+  const { reconcile, recordSeenKeys } = createStoreReconciler({
+    store,
+    defaults,
+    getDirtyKeys: () => new Set(dirty.keys())
+  })
 
   const applyFile = async (): Promise<void> => {
+    if (disposed) {
+      return
+    }
     const read = await readFileOrFail()
     if (!read) {
       return
     }
     if (read.kind === 'missing') {
+      lastHandledTextHash = null
       status.markAbsent()
       return
     }
-    if (hashText(read.text) === lastWrittenHash) {
+    const textHash = hashText(read.text)
+    if (textHash === lastHandledTextHash) {
       return
     }
-    // An external edit can restore our last written text; it must not be mistaken for an echo later.
-    lastWrittenHash = null
+    lastHandledTextHash = textHash
     const parsed = parseSettingsFileText(read.text)
     if (parsed.kind === 'invalid') {
       status.markInvalid(parsed.message)
@@ -112,8 +99,19 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
     status.markActive(parsed.values)
   }
 
-  const flushDirty = async (): Promise<void> => {
-    if (dirty.size === 0) {
+  const scheduleBusyRetry = (): void => {
+    busyRetries += 1
+    const delay = Math.min(BUSY_RETRY_BASE_MS * 2 ** (busyRetries - 1), BUSY_RETRY_MAX_MS)
+    clearTimeout(flushTimer)
+    flushTimer = setTimeout(() => {
+      flushTimer = undefined
+      void enqueue(flushDirty)
+    }, delay)
+    flushTimer.unref?.()
+  }
+
+  async function flushDirty(): Promise<void> {
+    if (disposed || dirty.size === 0) {
       return
     }
     const snapshot = new Map(dirty)
@@ -129,20 +127,24 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
       return
     }
     if (read.kind === 'missing') {
+      lastHandledTextHash = null
       clearSnapshot()
       status.markAbsent()
       return
     }
+    const readHash = hashText(read.text)
     const parsed = parseSettingsFileText(read.text)
     if (parsed.kind === 'invalid') {
+      lastHandledTextHash = readHash
       status.markInvalid(parsed.message)
       return
     }
     // Reconcile first so an external removal still resets its key before the seen-keys list is rewritten.
-    if (hashText(read.text) !== lastWrittenHash) {
+    if (readHash !== lastHandledTextHash) {
+      lastHandledTextHash = readHash
       reconcile(parsed.values)
     }
-    const text = serializeWithUpdates(parsed.values, Object.fromEntries(snapshot))
+    const text = serializeWithUpdates(parsed.values, Object.fromEntries(snapshot), parsed.format)
     const finalValues = parseSettingsFileText(text)
     if (finalValues.kind !== 'ok') {
       return
@@ -150,17 +152,33 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
     if (text !== read.text) {
       const result = await writeSettingsFile(filePath, text)
       if (result.kind === 'missing') {
+        lastHandledTextHash = null
+        busyRetries = 0
         clearSnapshot()
         status.markAbsent()
         return
       }
-      if (result.kind === 'read-only') {
+      if (result.kind === 'busy') {
+        if (busyRetries < BUSY_MAX_RETRIES) {
+          if (!closing) {
+            scheduleBusyRetry()
+          }
+          return
+        }
+        busyRetries = 0
         clearSnapshot()
         status.markReadOnly()
         return
       }
-      lastWrittenHash = hashText(text)
+      if (result.kind === 'read-only') {
+        busyRetries = 0
+        clearSnapshot()
+        status.markReadOnly()
+        return
+      }
+      lastHandledTextHash = hashText(text)
     }
+    busyRetries = 0
     clearSnapshot()
     recordSeenKeys(finalValues.values)
     status.markActive(finalValues.values)
@@ -213,16 +231,18 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
 
   const createFromCurrentSettings = (): Promise<SettingsFileStatus> =>
     enqueue(async () => {
-      if ((await readFileOrFail())?.kind !== 'missing') {
+      if (disposed) {
         return
       }
-      const current = store.getSettings()
-      const document: Record<string, unknown> = {}
-      for (const key of PORTABLE_SETTINGS_KEYS) {
-        if (current[key] !== undefined && !Object.is(current[key], defaults[key])) {
-          document[key] = current[key]
-        }
+      const probe = await readFileOrFail()
+      if (!probe) {
+        return
       }
+      if (probe.kind !== 'missing') {
+        await handleFileEvent()
+        return
+      }
+      const document = collectNonDefaultPortableSettings(store.getSettings(), defaults)
       const text = serializeWithUpdates({}, document)
       const result = await createSettingsFile(filePath, text)
       if (result.kind === 'read-only') {
@@ -230,42 +250,67 @@ export function createSettingsFileSync(deps: SettingsFileSyncDeps): SettingsFile
         return
       }
       if (result.kind === 'exists') {
+        await handleFileEvent()
         return
       }
-      lastWrittenHash = hashText(text)
+      lastHandledTextHash = hashText(text)
       recordSeenKeys(document)
       status.markActive(document)
       await watching?.refreshLink()
       await watching?.rebindTarget()
     }).then(status.get)
 
+  const refresh = async (): Promise<void> => {
+    try {
+      await enqueue(handleFileEvent)
+      await watching?.refreshLink()
+    } catch (error) {
+      log.warn(
+        `settings file refresh failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
   return {
     start: async () => {
       await enqueue(applyFile)
+      if (closing) {
+        return
+      }
       unsubscribe = store.onSettingsPersisted(onSettingsPersisted)
-      watching = createSettingsFileWatching({
+      const created = createSettingsFileWatching({
         filePath,
         watchFile: deps.watchFile,
         onChange: () => void enqueue(handleFileEvent),
         onError: (error) => log.warn(`settings file watch error: ${error.message}`)
       })
-      await watching.rebindTarget()
+      watching = created
+      await created.rebindTarget()
+      if (closing) {
+        return
+      }
+      refreshSweep = startRefreshSweep(async () => {
+        const before = lastHandledTextHash
+        await refresh()
+        return { changed: lastHandledTextHash !== before }
+      }, deps.refreshIntervalMs)
     },
-    refresh: async () => {
-      await enqueue(handleFileEvent)
-      await watching?.refreshLink()
-    },
+    refresh,
     flush,
     getStatus: status.get,
     onStatusChanged: status.subscribe,
     createFromCurrentSettings,
     dispose: async () => {
+      closing = true
+      refreshSweep?.stop()
+      refreshSweep = null
       unsubscribe?.()
       unsubscribe = null
       await flush()
       disposed = true
       await watching?.close()
       watching = null
+      status.markAbsent()
       status.clearListeners()
     }
   }

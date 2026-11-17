@@ -3,6 +3,9 @@ import type { GlobalSettings } from '../global-settings-types'
 declare const exhaustiveBrand: unique symbol
 type ExhaustiveValues<T> = readonly T[] & { readonly [exhaustiveBrand]: true }
 
+// Checks a value no list can enumerate, such as a plugin-provided language id.
+export type PortableValueGuard<T> = (value: unknown) => value is NonNullable<T>
+
 // A string-pattern member (e.g. `plugin:${string}`) cannot be listed, so it falls back to 'string'.
 type HasPatternMember<T extends string> = true extends (
   T extends string ? ({} extends Record<T, 1> ? true : false) : never
@@ -18,11 +21,16 @@ type ValueSpecFor<T> = [NonNullable<T>] extends [boolean]
       ? string extends NonNullable<T>
         ? 'string'
         : HasPatternMember<NonNullable<T>> extends true
-          ? 'string'
+          ? 'string' | PortableValueGuard<T>
           : ExhaustiveValues<NonNullable<T>>
       : never
 
-export type PortableValueSpec = 'boolean' | 'number' | 'string' | readonly string[]
+export type PortableValueSpec =
+  | 'boolean'
+  | 'number'
+  | 'string'
+  | readonly string[]
+  | ((value: unknown) => boolean)
 
 export type PortableSpecTable = {
   readonly [K in keyof GlobalSettings]?: ValueSpecFor<GlobalSettings[K]>

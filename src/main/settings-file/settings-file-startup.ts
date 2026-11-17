@@ -12,11 +12,17 @@ const consoleLog: SettingsFileLog = {
   warn: (message) => console.warn(`[settings-file] ${message}`)
 }
 
+const DEFAULT_START_WAIT_MS = 2000
+
+type StartOutcome = 'started' | 'failed' | 'slow'
+
 // Resolves once file values are in the store, so nothing reads settings before they land.
-// A broken settings file or watcher must never block startup, so failures disable the feature.
+// A broken or slow settings file or watcher must never block startup, so failures disable the feature
+// and a start that outlasts the wait keeps finishing in the background.
 export async function startUserSettingsFileSync(
   store: SettingsFileStore,
-  homePath: string
+  homePath: string,
+  options: { startWaitMs?: number } = {}
 ): Promise<SettingsFileSync | null> {
   const sync = createSettingsFileSync({
     filePath: getUserSettingsFilePath(homePath),
@@ -24,12 +30,26 @@ export async function startUserSettingsFileSync(
     defaults: getDefaultSettings(homePath),
     log: consoleLog
   })
-  try {
-    await sync.start()
-    return sync
-  } catch (error) {
-    consoleLog.warn(`disabled: ${error instanceof Error ? error.message : String(error)}`)
-    await sync.dispose().catch(() => undefined)
+  const starting = sync.start().then(
+    (): StartOutcome => 'started',
+    async (error): Promise<StartOutcome> => {
+      consoleLog.warn(`disabled: ${error instanceof Error ? error.message : String(error)}`)
+      // A disposed instance reports 'absent' and ignores calls, so a late failure leaves no half-started service behind.
+      await sync.dispose().catch(() => undefined)
+      return 'failed'
+    }
+  )
+  let waitTimer: ReturnType<typeof setTimeout> | undefined
+  const slow = new Promise<StartOutcome>((resolve) => {
+    waitTimer = setTimeout(() => resolve('slow'), options.startWaitMs ?? DEFAULT_START_WAIT_MS)
+  })
+  const outcome = await Promise.race([starting, slow])
+  clearTimeout(waitTimer)
+  if (outcome === 'failed') {
     return null
   }
+  if (outcome === 'slow') {
+    consoleLog.warn('settings file start is slow; continuing in background')
+  }
+  return sync
 }

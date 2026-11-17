@@ -83,7 +83,10 @@ describe('settings key portability', () => {
     expect(isValidPortableSettingValue('terminalFontFamily', 3)).toBe(false)
     expect(isValidPortableSettingValue('theme', 'dark')).toBe(true)
     expect(isValidPortableSettingValue('theme', 'neon')).toBe(false)
-    expect(isValidPortableSettingValue('uiLanguage', 'plugin:acme.fr')).toBe(true)
+    expect(isValidPortableSettingValue('uiLanguage', 'plugin:acme.pack/fr')).toBe(true)
+    expect(isValidPortableSettingValue('uiLanguage', 'ko')).toBe(true)
+    expect(isValidPortableSettingValue('uiLanguage', 'xx')).toBe(false)
+    expect(isValidPortableSettingValue('uiLanguage', 'plugin:acme.fr')).toBe(false)
   })
 
   it('accepts null only for keys whose type includes null and never accepts undefined', () => {

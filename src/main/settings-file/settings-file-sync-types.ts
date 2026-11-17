@@ -37,6 +37,7 @@ export type SettingsFileSyncDeps = {
   watchFile?: WatchSettingsFile
   log: SettingsFileLog
   debounceMs?: number
+  refreshIntervalMs?: number
 }
 
 export type SettingsFileSync = {

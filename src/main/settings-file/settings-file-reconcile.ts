@@ -1,12 +1,16 @@
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { isPortableSettingsKey } from '../../shared/settings/settings-file/portable-setting-validation'
 import { PORTABLE_SETTINGS_KEYS } from '../../shared/settings/settings-file/settings-key-portability'
-import { extractPortableSettings, type SettingsFileValues } from './settings-file-document'
+import {
+  extractPortableSettings,
+  listPresentPortableKeys,
+  type SettingsFileValues
+} from './settings-file-document'
 
 export type SettingsFileReconciliation = {
   /** Store changes implied by the file; empty when the store already agrees. */
   updates: Partial<GlobalSettings>
-  /** Portable keys the file holds with valid values, to remember for the next removal check. */
+  /** Portable keys the file holds, to remember for the next removal check. */
   presentKeys: string[]
 }
 
@@ -46,5 +50,19 @@ export function reconcileSettingsFile(args: {
     }
     assignSetting(updates, key, defaults[key])
   }
-  return { updates, presentKeys: Object.keys(valid) }
+  return { updates, presentKeys: listPresentPortableKeys(values) }
+}
+
+// What "create from current settings" writes: only values that differ from the defaults.
+export function collectNonDefaultPortableSettings(
+  current: GlobalSettings,
+  defaults: GlobalSettings
+): Record<string, unknown> {
+  const document: Record<string, unknown> = {}
+  for (const key of PORTABLE_SETTINGS_KEYS) {
+    if (current[key] !== undefined && !Object.is(current[key], defaults[key])) {
+      document[key] = current[key]
+    }
+  }
+  return document
 }

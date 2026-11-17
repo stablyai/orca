@@ -9,6 +9,9 @@ export function isPortableSettingsKey(key: string): key is PortableSettingsKey {
 }
 
 function matchesSpec(spec: PortableValueSpec, value: unknown): boolean {
+  if (typeof spec === 'function') {
+    return spec(value)
+  }
   if (spec === 'boolean') {
     return typeof value === 'boolean'
   }

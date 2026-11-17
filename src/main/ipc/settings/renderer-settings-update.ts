@@ -6,6 +6,7 @@ import {
 
 // Plugin consent and enablement require main's reviewed-fingerprint handlers.
 // Account configuration must stop old writers and commit through the host account operation.
+// The settings file sync alone owns its removal-tracking key list.
 // The server preference is owned by Advanced controls; only the main-process directory picker may grant trusted floating-workspace paths.
 export const RENDERER_DENIED_SETTINGS_KEYS = [
   'antigravityChatAuth',
@@ -13,7 +14,8 @@ export const RENDERER_DENIED_SETTINGS_KEYS = [
   'disabledPlugins',
   'pluginExternalHostGrants',
   'activeRuntimeEnvironmentId',
-  'floatingTerminalTrustedCwds'
+  'floatingTerminalTrustedCwds',
+  'settingsFileLastSeenKeys'
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
 type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {

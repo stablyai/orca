@@ -1,16 +1,24 @@
 import { constants } from 'node:fs'
-import { access, mkdir, open, realpath, readFile, stat } from 'node:fs/promises'
+import { access, lstat, mkdir, open, realpath, readFile, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { durableWriteTempPath, writeFileDurable } from '../filesystem/durable-file-write'
 
 export type SettingsFileRead =
   | { kind: 'missing' }
   | { kind: 'read'; text: string; realPath: string }
-export type SettingsFileWrite = { kind: 'written' } | { kind: 'missing' } | { kind: 'read-only' }
+export type SettingsFileWrite =
+  | { kind: 'written' }
+  | { kind: 'missing' }
+  | { kind: 'read-only' }
+  | { kind: 'busy' }
 export type SettingsFileCreate = { kind: 'created' } | { kind: 'exists' } | { kind: 'read-only' }
 
 const READ_ONLY_CODES = new Set(['EACCES', 'EROFS', 'EPERM', 'EBUSY', 'EXDEV'])
 const MISSING_CODES = new Set(['ENOENT', 'ENOTDIR'])
+// Windows reports a file briefly held by an editor or antivirus scan as EPERM/EBUSY.
+const WINDOWS_TRANSIENT_WRITE_CODES = new Set(['EPERM', 'EBUSY'])
+
+export const DANGLING_LINK_MESSAGE = 'The settings file link points to a missing file'
 
 function errorCode(error: unknown): string | undefined {
   return error instanceof Error && 'code' in error && typeof error.code === 'string'
@@ -23,12 +31,30 @@ function hasCode(error: unknown, codes: ReadonlySet<string>): boolean {
   return code !== undefined && codes.has(code)
 }
 
+export function isTransientWriteFailure(
+  error: unknown,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return platform === 'win32' && hasCode(error, WINDOWS_TRANSIENT_WRITE_CODES)
+}
+
+async function pathIsDanglingLink(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
 export async function readSettingsFile(path: string): Promise<SettingsFileRead> {
   try {
     const realPath = await realpath(path)
     return { kind: 'read', text: await readFile(realPath, 'utf-8'), realPath }
   } catch (error) {
     if (hasCode(error, MISSING_CODES)) {
+      if (await pathIsDanglingLink(path)) {
+        throw new Error(DANGLING_LINK_MESSAGE)
+      }
       return { kind: 'missing' }
     }
     throw error
@@ -47,6 +73,9 @@ export async function writeSettingsFile(path: string, text: string): Promise<Set
   } catch (error) {
     if (hasCode(error, MISSING_CODES)) {
       return { kind: 'missing' }
+    }
+    if (isTransientWriteFailure(error)) {
+      return { kind: 'busy' }
     }
     if (hasCode(error, READ_ONLY_CODES)) {
       return { kind: 'read-only' }

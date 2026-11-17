@@ -163,10 +163,9 @@ export function SettingsFileSetting(): React.JSX.Element | null {
           'Could not create the settings file.'
         )
       )
-    } finally {
-      if (mountedRef.current) {
-        setPending(false)
-      }
+    }
+    if (mountedRef.current) {
+      setPending(false)
     }
   }, [mountedRef, t])
 

@@ -115,7 +115,8 @@ const store: Record<string, Mock> = {
   updateSettingsAndFlush: vi.fn(),
   getGitHubCache: vi.fn(),
   setGitHubCache: vi.fn(),
-  onSettingsChanged: vi.fn(() => () => {})
+  onSettingsChanged: vi.fn(() => () => {}),
+  onSettingsPersisted: vi.fn(() => () => {})
 }
 
 export {
