@@ -55,6 +55,10 @@ function olderOrcaChat(original: Database.Database, sessionId: string, history: 
     original
       .prepare('INSERT INTO agent_session_tabs VALUES(?,?,?)')
       .run(`tab-${sessionId}`, sessionId, 0)
+    // An older Orca writes tab rows only with this marker.
+    original
+      .prepare("INSERT OR REPLACE INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
+      .run()
   })
 }
 
@@ -314,19 +318,23 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     .all(...known)
     .map((row) => String(row.session_id))
   expect(items(later.db, copy!)).toContain('older-turn')
-  // Closed in the older Orca: the copy joins chat history without a tab.
-  expect(tabbedChats(later.db)).toEqual(['open', 'started-older'])
+  expect(tabbedChats(later.db)).toEqual(['open', copy, 'started-older'])
   expect(later.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 1
   })
 
   // Baselines now exist, so a later write by the older Orca is still kept, and nothing else moves.
+  // A chat it continued while closed there joins its own history row without reopening.
   insertJournalRow(original, 'idle', turn('older-idle-turn', tip + 1))
+  insertJournalRow(original, 'closed', turn('older-closed-turn', tip + 1))
   await later.close()
   cleanup.pop()
   const again = await upgrade(root)
   cleanup.push(again.close)
-  expect(tabbedChats(again.db)).toEqual(['open', 'started-older'])
+  expect(tabbedChats(again.db)).toHaveLength(4)
+  expect(tabbedChats(again.db)).not.toContain('closed')
+  expect(await again.convert('closed')).toBe('epoch')
+  expect(items(again.db, 'closed')).toContain('older-closed-turn')
   expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 2
   })

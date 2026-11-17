@@ -207,7 +207,7 @@ function absorbChat(
   })
 }
 
-/** The original's record, its tab if open there, and a catalog row; history converts lazily. */
+/** The original's record, a tab when needed and a catalog row; history converts lazily. */
 function adoptChat(
   source: Database.Database,
   db: Database.Database,
@@ -224,9 +224,10 @@ function adoptChat(
     CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
       '$.conversationCommand') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
-  // Only a chat the older build had open gets a tab; the rest join chat history with tabs untouched.
+  // A chat joining as itself keeps its own history row, so it opens only if the older build had it
+  // open. A copy shares its original's provider history, so only a tab reaches it.
   const saved = adoption.savedTabs.get(id)
-  if (saved !== undefined) {
+  if (as !== id || saved !== undefined) {
     if (!adoption.tabsRecorded) {
       recordTabIndex(db, adoption)
     }
@@ -234,7 +235,9 @@ function adoptChat(
       db,
       adoption,
       as,
-      as === id && !adoption.takenTabs.has(saved) ? saved : structuredAgentSessionTabId(as)
+      as === id && saved !== undefined && !adoption.takenTabs.has(saved)
+        ? saved
+        : structuredAgentSessionTabId(as)
     )
   }
   const session = source
