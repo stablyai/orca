@@ -22,7 +22,21 @@ export function mergeSystemCodexConfigIntoRuntime(
   mirroredMcpServerNames: ReadonlySet<string> = new Set(),
   mirroredMcpServerRoot = false
 ): string {
-  const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
+  const systemSections = deduplicateProjectTomlSections(getTomlSections(systemConfig))
+  // Another spelling in ~/.codex (a [tui] key or inline table) would define the table twice.
+  const countTuiBookkeeping = (text: string): number =>
+    text.split('model_availability_nux').length - 1
+  const keepsTuiBookkeeping =
+    countTuiBookkeeping(systemConfig) ===
+    countTuiBookkeeping(
+      systemSections
+        .filter((section) => isCodexTuiBookkeepingTomlSection(section))
+        .map((section) => section.block)
+        .join('\n')
+    )
+  const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig)).filter(
+    (section) => keepsTuiBookkeeping || !isCodexTuiBookkeepingTomlSection(section)
+  )
   const runtimeOwnedHeaders = new Set(
     runtimeSections
       .filter(
@@ -31,9 +45,9 @@ export function mergeSystemCodexConfigIntoRuntime(
       )
       .map((section) => getTomlSectionHeaderKey(section))
   )
-  const systemProjectSections = deduplicateProjectTomlSections(
-    getTomlSections(systemConfig)
-  ).filter((section) => isRuntimeProjectTomlSection(section))
+  const systemProjectSections = systemSections.filter((section) =>
+    isRuntimeProjectTomlSection(section)
+  )
   const systemUntrustedProjectHeaders = new Set(
     systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'untrusted')
