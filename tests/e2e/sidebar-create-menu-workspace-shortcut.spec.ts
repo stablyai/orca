@@ -1,4 +1,5 @@
-import { test, expect } from './desktop/electron-fixtures/orca-app'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { expect } from '@stablyai/playwright-test'
 import { worktreeRow } from './workspaces/sidebar/worktree-row-locators'
 
 test('a workspace shortcut releases focus restored to a sidebar create trigger', async ({

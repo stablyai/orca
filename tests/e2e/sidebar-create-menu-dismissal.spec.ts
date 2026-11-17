@@ -1,7 +1,8 @@
 import { tabCreateMenuTrigger } from './terminal/layout/terminal-tab-menu'
 import { rm } from 'node:fs/promises'
 import { worktreeRow } from './workspaces/sidebar/worktree-row-locators'
-import { test, expect } from './desktop/electron-fixtures/orca-app'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { expect } from '@stablyai/playwright-test'
 
 test('dismissing the sidebar create menu restores an empty workspace', async ({ orcaPage }) => {
   const worktreeId = await orcaPage.evaluate(() => {

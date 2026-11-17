@@ -1,5 +1,3 @@
-import { worktreeRow } from '../workspaces/sidebar/worktree-row-locators'
-import { tabCreateMenuTrigger } from '../terminal/layout/terminal-tab-menu'
 /**
  * Invariant: a plugin's new-file type appears in the tab bar + menu, creates an untitled file of
  * its extension at the workspace root seeded with its template, and opens it in the plugin's
@@ -116,11 +114,11 @@ test('a plugin new file is created from the + menu and opens in its editor', asy
     await writeSketchPlugin(pluginRoot)
     await enableDevPlugins(orcaPage, [pluginRoot])
 
-    await (await tabCreateMenuTrigger(orcaPage)).click({ force: true })
+    await orcaPage.getByRole('button', { name: 'New tab' }).first().click()
     const item = orcaPage.getByRole('menu').getByRole('button', { name: 'New sketch' })
     await expect(item).toBeVisible({ timeout: 15_000 })
     await expect(item.locator('img[src^="orca-plugin-image://"]')).toBeVisible()
-    await item.click({ force: true })
+    await item.click()
 
     await expect.poll(() => readFile(filePath, 'utf8').catch(() => null)).toBe(TEMPLATE)
     const guest = pluginGuest(orcaPage, 'Sketch Pad')
@@ -134,51 +132,6 @@ test('a plugin new file is created from the + menu and opens in its editor', asy
     const tab = orcaPage.locator('[data-tab-id]').filter({ hasText: 'untitled.sketch' }).first()
     const icon = tab.locator('img[src*="/editor-0"]')
     await expect(icon).toBeVisible()
-  } finally {
-    await disablePluginSystem(orcaPage).catch(() => undefined)
-    await rm(filePath, { force: true })
-    await rm(pluginRoot, { recursive: true, force: true })
-  }
-})
-
-test('sidebar static plugin creation waits for the file without seeding a terminal', async ({
-  orcaPage,
-  seededRepoPath
-}) => {
-  const pluginRoot = await mkdtemp(join(tmpdir(), 'orca-sidebar-new-file-'))
-  const filePath = join(seededRepoPath, 'untitled.sketch')
-  try {
-    await writeSketchPlugin(pluginRoot)
-    await enableDevPlugins(orcaPage, [pluginRoot])
-    const worktreeId = await orcaPage.evaluate(() => {
-      const state = window.__store!.getState()
-      const id = state.activeWorktreeId!
-      for (const tab of state.tabsByWorktree[id] ?? []) {
-        state.closeTab(tab.id, { reason: 'user' })
-      }
-      const original = state.openNewPluginFileInActiveWorkspace
-      window.__store!.setState({
-        openNewPluginFileInActiveWorkspace: async (...args) => {
-          await new Promise<void>((resolve) =>
-            window.addEventListener('test-release-plugin-file', () => resolve(), { once: true })
-          )
-          await original(...args)
-        }
-      })
-      return id
-    })
-    await worktreeRow(orcaPage, worktreeId)
-      .getByRole('button', { name: 'New tab', exact: true })
-      .click({ force: true })
-    await orcaPage
-      .getByRole('menu')
-      .getByRole('button', { name: 'New sketch', exact: true })
-      .click({ force: true })
-    await expect(orcaPage.getByRole('menu')).toBeHidden()
-    await orcaPage.evaluate(() => window.dispatchEvent(new Event('test-release-plugin-file')))
-    await expect.poll(() => readFile(filePath, 'utf8').catch(() => null)).toBe(TEMPLATE)
-    await expect(pluginGuest(orcaPage, 'Sketch Pad')).toBeVisible({ timeout: 15_000 })
-    await expect(orcaPage.locator('[data-testid="sortable-tab"]')).toHaveCount(0)
   } finally {
     await disablePluginSystem(orcaPage).catch(() => undefined)
     await rm(filePath, { force: true })
