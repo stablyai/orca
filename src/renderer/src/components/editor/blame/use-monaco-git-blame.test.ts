@@ -14,7 +14,7 @@ type FakeState = {
   statusBarItems: string[]
 }
 
-const store = vi.hoisted(() => ({ current: null as unknown }))
+const store = vi.hoisted((): { current: unknown } => ({ current: null }))
 const blame = vi.hoisted(() => vi.fn())
 
 vi.mock('@/store/index', () => ({
@@ -41,6 +41,7 @@ afterEach(() => {
 
 function fakeEditor(id: string): editor.IStandaloneCodeEditor {
   const disposable = { dispose: () => {} }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only these members.
   return {
     getId: () => id,
     hasTextFocus: () => false,
