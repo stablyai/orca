@@ -8,7 +8,7 @@ type Contexts = AppState['runtimeAgentOrchestrationByPaneKey']
 let applied: { revision: number; contexts: Contexts } | null = null
 
 export function appliedOrchestrationRevision(state: AppState): number | undefined {
-  return applied?.contexts === state.runtimeAgentOrchestrationByPaneKey
+  return applied && applied.contexts === state.runtimeAgentOrchestrationByPaneKey
     ? applied.revision
     : undefined
 }

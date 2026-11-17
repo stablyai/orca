@@ -7,6 +7,7 @@ import {
 import type { AppState } from '../../store/types'
 import { acceptedAgentStatuses } from '../../store/slices/agent-status/accepted-agent-statuses'
 import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 function leafIdFor(index: number): string {
   return `${String(index).padStart(8, '0')}-1111-4111-8111-111111111111`
@@ -176,16 +177,16 @@ describe('saved browser inventory publication scope', () => {
 
 describe('orchestration graph reply', () => {
   it('keeps the applied projection when main answers unchanged, and restores it after a local edit', async () => {
-    const context = { taskId: 'task-1', dispatchId: 'dispatch-1', dispatchStatus: 'dispatched' }
-    let current = makeState('orchestration', 1)
-    const setRuntimeAgentOrchestrationByPaneKey = vi.fn((next: Record<string, unknown>) => {
-      current = { ...current, runtimeAgentOrchestrationByPaneKey: next } as AppState
-    })
-    current = {
-      ...current,
-      runtimeAgentOrchestrationByPaneKey: {},
-      setRuntimeAgentOrchestrationByPaneKey
-    } as unknown as AppState
+    const context: AgentStatusOrchestrationContext = {
+      taskId: 'task-1',
+      dispatchId: 'dispatch-1',
+      dispatchStatus: 'dispatched'
+    }
+    const current = makeState('orchestration', 1)
+    current.runtimeAgentOrchestrationByPaneKey = {}
+    current.setRuntimeAgentOrchestrationByPaneKey = (next) => {
+      current.runtimeAgentOrchestrationByPaneKey = next
+    }
     const syncWindowGraph = vi
       .fn()
       .mockResolvedValueOnce({
@@ -208,7 +209,7 @@ describe('orchestration graph reply', () => {
     expect(graphOf(syncWindowGraph.mock.calls[1]).agentOrchestrationBase).toBe(4)
     expect(current.runtimeAgentOrchestrationByPaneKey).toEqual({ 'tab:leaf': context })
 
-    current = { ...current, runtimeAgentOrchestrationByPaneKey: {} }
+    current.runtimeAgentOrchestrationByPaneKey = {}
     scheduleRuntimeGraphSync()
     await flushSync()
     expect(graphOf(syncWindowGraph.mock.calls[2]).agentOrchestrationBase).toBeUndefined()
