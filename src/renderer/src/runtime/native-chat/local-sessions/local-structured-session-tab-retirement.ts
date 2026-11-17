@@ -2,6 +2,11 @@ import type { WorktreeRuntimeOwnerState } from '../../../lib/workspace/ownership
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { WebSessionTabsSyncState } from '../../web-session-tabs-sync/state'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../store/workspaces/catalog/workspace-record-fields'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export type StructuredSessionTabPublicationVersion = {
@@ -19,22 +24,25 @@ let catalogCensus: { inputs: unknown[]; ids: Set<string> } | null = null
 
 // Chat frames arrive far more often than the workspace catalog changes, so its census is rebuilt only on catalog change.
 function catalogWorkspaceIds(state: WorkspaceCatalog): Set<string> {
-  const inputs = [state.worktreesByRepo, state.detectedWorktreesByRepo, state.folderWorkspaces]
+  const worktreesByRepo = selectWorktreesByRepo(state)
+  const detectedWorktreesByRepo = selectDetectedWorktreesByRepo(state)
+  const folderWorkspaces = selectFolderWorkspaces(state)
+  const inputs = [worktreesByRepo, detectedWorktreesByRepo, folderWorkspaces]
   if (catalogCensus?.inputs.every((input, index) => input === inputs[index])) {
     return catalogCensus.ids
   }
   const ids = new Set<string>([FLOATING_TERMINAL_WORKTREE_ID])
-  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
+  for (const worktrees of Object.values(worktreesByRepo ?? {})) {
     for (const worktree of worktrees) {
       ids.add(worktree.id)
     }
   }
-  for (const detected of Object.values(state.detectedWorktreesByRepo ?? {})) {
+  for (const detected of Object.values(detectedWorktreesByRepo ?? {})) {
     for (const worktree of detected.worktrees) {
       ids.add(worktree.id)
     }
   }
-  for (const workspace of state.folderWorkspaces ?? []) {
+  for (const workspace of folderWorkspaces ?? []) {
     ids.add(folderWorkspaceKey(workspace.id))
   }
   catalogCensus = { inputs, ids }

@@ -17,6 +17,11 @@ import {
 import { isKnownStructuredSessionWorktree } from '../native-chat/local-sessions/local-structured-session-tab-retirement'
 import { structuralValuesEqual } from '../../../../shared/collections/structural-value-equality'
 import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../store/workspaces/catalog/workspace-record-fields'
+import {
   localStructuredSessionEpochHistoryByWorktree,
   localStructuredSessionVersionByWorktree
 } from './inventory-generation-fence'
@@ -267,9 +272,9 @@ function releaseCursorsOfRemovedWorktrees(
 ): void {
   const membership = [
     state.unifiedTabsByWorktree,
-    state.worktreesByRepo,
-    state.detectedWorktreesByRepo,
-    state.folderWorkspaces
+    selectWorktreesByRepo(state),
+    selectDetectedWorktreesByRepo(state),
+    selectFolderWorkspaces(state)
   ]
   if (!registriesGrew && membership.every((input, index) => input === sweptMembership[index])) {
     return
