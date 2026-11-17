@@ -5,7 +5,7 @@ import {
   type IpcMainInvokeEvent,
   type MessagePortMain
 } from 'electron'
-import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
 import { dictationTermsFor } from '../../shared/speech/dictation/dictation-dictionary'
 import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictation-cleanup'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'

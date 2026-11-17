@@ -2,12 +2,12 @@ import type { ComposerTargetState } from './composer-target-state-contract'
 import type { ComposerExternalSyncState } from './composer-external-sync-contract'
 import type { ComposerSourceState } from './composer-source-state-contract'
 import type { ComposerSubmitState } from './composer-submit-state-contract'
-import { useFolderSubmitOrchestration } from './folder-submit-orchestration'
-import { useMultipleCreateReset } from './multiple-create-reset'
-import { useQuickSubmitSourcePreparation } from './quick-submit-source-preparation'
-import { useQuickSubmitPreparation } from './quick-submit-preparation'
-import { useQuickCreationExecution } from './quick-creation-execution'
-import { useQuickSubmitAction } from './quick-submit-action'
+import { useFolderSubmitOrchestration } from './submission/folder-submit-orchestration'
+import { useMultipleCreateReset } from './submission/multiple-create-reset'
+import { useQuickSubmitSourcePreparation } from './submission/quick-submit-source-preparation'
+import { useQuickSubmitPreparation } from './submission/quick-submit-preparation'
+import { useQuickCreationExecution } from './submission/quick-creation-execution'
+import { useQuickSubmitAction } from './submission/quick-submit-action'
 
 export function useComposerSubmitOrchestration(
   target: ComposerTargetState,

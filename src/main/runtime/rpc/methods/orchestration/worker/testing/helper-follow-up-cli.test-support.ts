@@ -249,6 +249,7 @@ export function useHelperFollowUpCli() {
     })
     vi.spyOn(placement, 'placeWorkerAgent').mockImplementationOnce(async (args) => ({
       mode: args.mode,
+      launch: args.launch.receipt,
       worktree: { id: 'repo::worktree', repoId: 'repo' },
       terminalHandle: identity.handle,
       setupReceipt: placement.EXISTING_WORKTREE_SETUP,

@@ -1,3 +1,4 @@
+import type { TerminalFontStyle } from '../preferences/terminal-font-style'
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
 import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TerminalOscLinkRange } from '../../../../src/shared/terminal/links/terminal-osc-link-ranges'
@@ -90,6 +91,8 @@ export type TerminalWebViewProps = {
   terminalTheme?: RuntimeMobileTerminalTheme
   // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
+  // Font, line spacing and weight; a change keeps the grid and reports a new cell box for native to refit.
+  fontStyle?: TerminalFontStyle
   // Only initially shown views build pre-ready engines, limiting WebGL context use.
   shownAtMount?: boolean
   interactionActive?: boolean

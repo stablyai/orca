@@ -1,4 +1,4 @@
-import { agentSessionCurrentContextRows } from '../agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../conversation-context/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../agent-session-wire'
 import type { AgentSessionCurrentRequestsMarker } from './agent-session-current-requests-wire'

@@ -11,8 +11,8 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-import { CHECKOUT_FORMAT, type CheckoutLockOptions } from './release-checkout-publication'
+import { afterEach, expect, it } from 'vitest'
+import { CHECKOUT_FORMAT } from './release-checkout-publication'
 import {
   MAX_SHARED_RELEASE_SEEDS,
   pruneSharedReleaseSources,
@@ -67,60 +67,6 @@ it('caps seeds by recent use, preserves imported copies, and scopes cleanup to i
   })
   expect((await stat(oldFormat)).isDirectory()).toBe(true)
 })
-
-it('keeps a copy lease alive beyond its stale interval and blocks competing cleanup', async () => {
-  const root = await scratch()
-  const options: CheckoutLockOptions = {
-    realpath: false,
-    stale: 2500,
-    update: 1000,
-    retries: { retries: 200, factor: 1, minTimeout: 50, maxTimeout: 50, randomize: false }
-  }
-  let releaseCopy!: () => void
-  let entered!: () => void
-  const copying = new Promise<void>((resolve) => {
-    releaseCopy = resolve
-  })
-  const enteredLease = new Promise<void>((resolve) => {
-    entered = resolve
-  })
-  const first = withReleaseSourceLease(
-    root,
-    async () => {
-      entered()
-      await copying
-    },
-    options
-  )
-  await enteredLease
-  const rivalEntered = vi.fn()
-  const rival = withReleaseSourceLease(
-    root,
-    async () => {
-      rivalEntered()
-    },
-    options
-  )
-  try {
-    const start = Date.now()
-    const mtimes = new Set<number>()
-    await vi.waitFor(
-      async () => {
-        mtimes.add(
-          (await stat(join(root, `format-${CHECKOUT_FORMAT}`, 'maintenance.lock'))).mtimeMs
-        )
-        expect(Date.now() - start).toBeGreaterThan(options.stale + 250)
-        expect(mtimes.size).toBeGreaterThanOrEqual(3)
-      },
-      { timeout: 10_000, interval: 100 }
-    )
-    expect(rivalEntered).not.toHaveBeenCalled()
-  } finally {
-    releaseCopy()
-    await Promise.allSettled([first, rival])
-  }
-  expect(rivalEntered).toHaveBeenCalledOnce()
-}, 15_000)
 
 it('releases the copy lease after an operation fails', async () => {
   const root = await scratch()

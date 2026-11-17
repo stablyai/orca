@@ -1,7 +1,7 @@
 import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../source-control/runtime/git-graph-capabilities'
-import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../agent-session/structured-agent-session-renderer-client-capabilities'
-import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from '../../agent-session/agent-session-runtime-capabilities'
+import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../agent-session/capabilities/structured-agent-session-renderer-client-capabilities'
+import { AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY } from '../../agent-session/capabilities/agent-session-runtime-capabilities'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
+import { resolveGroupTabFromVisibleId } from '@/components/tab-group/workspace-model/tab-group-visible-id'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { ensureClientCreationActionAllowed } from '@/lib/workspace/creation/surface-policy/client-creation-action-error'

@@ -143,7 +143,7 @@ export class StructuredAgentSessionHost {
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
   loadedSessionIds = this.sessions.loadedSessionIds
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
-  private readonly reads = createStructuredAgentSessionConversationReads(() => ({
+  readonly reads = createStructuredAgentSessionConversationReads(() => ({
     ...this.lifetimeContext(),
     serialize: this.serialize,
     seal: (id) => this.runtimeState.sealEventSink(id),
@@ -219,7 +219,8 @@ export class StructuredAgentSessionHost {
 
   revealSession = this.reads.revealSession
 
-  private serialize = this.tasks.serialize.bind(this.tasks)
+  /** The chat's conversation lane: opens, attaches and creates hold it, so open-or-absent is exact. */
+  serialize = this.tasks.serialize.bind(this.tasks)
   withForkSourceAdmission = this.serialize
 
   private readonly entry = structuredAgentSessionEntryDelegates(() => this.attachContext())
@@ -252,7 +253,6 @@ export class StructuredAgentSessionHost {
     mutationWiring.createStructuredAgentSessionHostMutationContext({
       deps: this.deps,
       sessions: this.sessions,
-      subscribers: this.clientDelivery.subscribers,
       lifetime: this.lifetime,
       clientDelivery: this.clientDelivery,
       conversationDelivery: this.conversationDelivery,
@@ -281,6 +281,7 @@ export class StructuredAgentSessionHost {
   )
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
+  approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal
   readOptions = this.mutations.readOptions

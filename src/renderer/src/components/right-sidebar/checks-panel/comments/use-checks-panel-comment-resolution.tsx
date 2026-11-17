@@ -1,4 +1,4 @@
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'

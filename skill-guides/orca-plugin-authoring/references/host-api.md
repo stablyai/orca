@@ -44,7 +44,7 @@ Host API 1.10 (`"pluginApi": 1`). Call `host.call(method, params, { signal })`; 
 
 ## Theme variables in frames
 
-HTML panels and custom editors get these CSS variables from Orca's active theme, plus a `light` or `dark` class on `<html>`. A theme change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.
+HTML panels and custom editors get these CSS variables from Orca's active theme and fonts, plus a `light` or `dark` class on `<html>`. A theme or font change updates them in place and emits `theme` (`orca.on('theme', ...)`); the frame is not reloaded. Style from them, not fixed colours.
 
 - `--orca-background`: App canvas
 - `--orca-foreground`: Body text
@@ -66,6 +66,8 @@ HTML panels and custom editors get these CSS variables from Orca's active theme,
 - `--orca-input`: Input borders
 - `--orca-ring`: Focus rings
 - `--orca-radius`: Corner radius of cards and controls
+- `--orca-font-sans`: Interface font stack. Fonts Orca loads itself (the default Geist, plugin fonts) are not in frames, so the next installed font in the stack is used
+- `--orca-font-mono`: Monospace font stack for code
 
 ## Methods
 

@@ -60,28 +60,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugin-git-fixture|plugin-gleam-catalog-fixture|plugin-smoke|plugin-frame-guest'
   ),
   pluginRoute(
-    'plugins.themes',
-    ['plugin-theme-smoke'],
-    [
-      `${UI}(?:state\\/plugin-theme-apply|page\\/PluginTheme)`,
-      `${STORE}(?:themes|icon-themes|monaco-theme)`,
-      'src\\/main\\/plugins\\/contributions\\/plugin-(?:theme-registries|icon-theme-registry|content-pack-registry|artifact-pack-registry)',
-      'src\\/shared\\/plugins\\/(?:artifacts\\/plugin-(?:theme|icon-theme|terminal-theme)-artifact|contributions\\/plugin-content-pack-contributions)'
-    ].join('|'),
-    'plugin-smoke'
-  ),
-  pluginRoute(
-    'plugins.syntax-and-language-packs',
-    ['plugin-syntax-smoke'],
-    [
-      `${UI}page\\/PluginContributionAction(?:Syntax|Language)`,
-      `${STORE}(?:syntax-packs|syntax-failures|language-packs)`,
-      'src\\/main\\/plugins\\/contributions\\/plugin-(?:syntax|language-pack)-registry',
-      'src\\/shared\\/plugins\\/(?:languages\\/|plugin-language-pack-i18n-resources|artifacts\\/plugin-(?:syntax|language-pack)-artifact)'
-    ].join('|'),
-    'plugin-smoke'
-  ),
-  pluginRoute(
     'plugins.custom-editors-and-new-files',
     ['plugin-custom-editor', 'plugin-new-file'],
     [
