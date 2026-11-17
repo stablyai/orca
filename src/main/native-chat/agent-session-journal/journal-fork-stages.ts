@@ -2,6 +2,7 @@ import { applyJournalForkStagePage } from './journal-fork-stage-page'
 import { registerJournalForkStages, type Stage } from './journal-fork-stage-state'
 import { randomUUID } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
+import { enqueueJournalRetirePending } from './database/journal-retire-pending'
 import type { JournalWriterTarget, JournalWriterCommand } from './journal-writer-command'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
 import type { NativeCopyOrigin } from './context-epochs/journal-history-origin'
@@ -255,6 +256,8 @@ export class JournalForkStages {
       derived: null,
       lastActivity: 0
     }
+    // Rows staged under the private epoch outlive an abort or crash; the retired sweep reclaims them.
+    enqueueJournalRetirePending(this.db, input.target.sessionId)
     this.live.set(stage.token, stage)
     return { token: stage.token }
   }

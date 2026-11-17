@@ -20,7 +20,6 @@ export class JournalSqlBackgroundMaintenance {
   private periodic = false
   private reclaim = 0
   private retiredAfter: string | null = null
-  private retiredThrough: string | null = null
   private work = 0
   private wake = new AbortController()
   private timer: NodeJS.Timeout | undefined
@@ -195,17 +194,14 @@ export class JournalSqlBackgroundMaintenance {
       const started = performance.now()
       const page = await this.readers.database({
         kind: 'retired-heads',
-        after: this.retiredAfter,
-        through: this.retiredThrough
+        after: this.retiredAfter
       })
       await this.rest(started)
       if (page.kind !== 'retired-heads') {
         throw new Error('journal reader returned no retired heads')
       }
-      this.retiredThrough = page.through
       if (page.heads.length === 0) {
         this.retiredAfter = null
-        this.retiredThrough = null
         return
       }
       for (const target of page.heads) {

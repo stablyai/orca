@@ -5,6 +5,8 @@ import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journa
 import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import { JournalSqlActivity } from './journal-sql-activity'
+import { registerJournalForkStages } from './journal-fork-stage-state'
+import type { JournalForkStages } from './journal-fork-stages'
 
 const databases: Database.Database[] = []
 const maintainers: JournalSqlBackgroundMaintenance[] = []
@@ -82,7 +84,8 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
   applyJournalSqlMaintenance(db, {
     kind: 'domain-retired-prune',
     sessionId: 'chat',
-    epoch: 'epoch'
+    epoch: 'epoch',
+    generation: 1
   })
   applyJournalSqlMaintenance(db, { kind: 'compaction-complete', now: 200 })
   db.exec('ROLLBACK')
@@ -97,7 +100,12 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
   })
   let more = true
   while (more) {
-    const result = maintain(db, { kind: 'domain-retired-prune', sessionId: 'chat', epoch: 'epoch' })
+    const result = maintain(db, {
+      kind: 'domain-retired-prune',
+      sessionId: 'chat',
+      epoch: 'epoch',
+      generation: 1
+    })
     if (!result || typeof result !== 'object' || !('more' in result)) {
       throw new Error('expected page')
     }
@@ -147,7 +155,30 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
   })
 })
 
-it('bounds a ready-head pass at its captured high key and skips changed or removed heads', () => {
+function retiredPass(db: Database.Database): string[] {
+  const visited: string[] = []
+  let after: string | null = null
+  for (;;) {
+    const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after })
+    if (page.kind !== 'retired-heads') {
+      throw new Error('expected retired heads')
+    }
+    if (page.heads.length === 0) {
+      return visited
+    }
+    for (const head of page.heads) {
+      visited.push(head.sessionId)
+      let more = true
+      while (more) {
+        const result = maintain(db, { kind: 'domain-retired-prune', ...head })
+        more = typeof result === 'object' && result !== null && 'more' in result && result.more
+      }
+      after = head.sessionId
+    }
+  }
+}
+
+it('visits only chats whose head epoch changed since their last completed pass', () => {
   const db = fixture()
   const insert =
     db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
@@ -157,75 +188,34 @@ it('bounds a ready-head pass at its captured high key and skips changed or remov
   }
   db.exec(`INSERT INTO journal_item_tombstones VALUES('chat','before','old',1),
     ('chat','epoch','current',1),('session-00','before','old',1)`)
-  const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after: null, through: null })
-  expect(page).toMatchObject({ kind: 'retired-heads', through: 'session-19' })
-  if (page.kind !== 'retired-heads') {
-    throw new Error('expected ready heads')
-  }
-  expect(page.heads.map((head) => head.sessionId)).toEqual([
-    'chat',
-    'session-00',
-    'session-01',
-    'session-02',
-    'session-03',
-    'session-04',
-    'session-05',
-    'session-06',
-    'session-07',
-    'session-08',
-    'session-09',
-    'session-10',
-    'session-11',
-    'session-12',
-    'session-13',
-    'session-14'
+  expect(retiredPass(db)).toHaveLength(21)
+  expect(db.prepare('SELECT session_id,epoch FROM journal_item_tombstones').all()).toEqual([
+    { session_id: 'chat', epoch: 'epoch' }
   ])
-  expect(db.isTransaction).toBe(false)
-  insert.run('session-20')
-  db.exec(`UPDATE journal_chat_state SET epoch='replacement' WHERE session_id='chat';
-    DELETE FROM journal_chat_state WHERE session_id IN ('session-00','session-19')`)
-  for (const target of page.heads.slice(0, 2)) {
-    expect(maintain(db, { kind: 'domain-retired-prune', ...target })).toEqual({
-      kind: 'domain-retired',
-      deleted: 0,
-      more: false
-    })
-  }
+  expect(retiredPass(db)).toEqual([])
+
+  db.exec(`UPDATE journal_chat_state SET epoch='replacement' WHERE session_id='session-03'`)
+  const [moved] = (() => {
+    const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after: null })
+    return page.kind === 'retired-heads' ? page.heads : []
+  })()
+  expect(moved).toEqual({ sessionId: 'session-03', epoch: 'replacement', generation: 1 })
+  db.exec(`UPDATE journal_chat_state SET epoch='newer' WHERE session_id='session-03'`)
+  maintain(db, { kind: 'domain-retired-prune', ...moved! })
+  expect(retiredPass(db)).toEqual(['session-03'])
+
+  registerJournalForkStages(db, {
+    epochs: (sessionId: string) => (sessionId === 'session-04' ? ['staged'] : []),
+    holds: () => false,
+    holdsAttachments: () => false
+  } as unknown as JournalForkStages)
+  db.exec(`INSERT INTO journal_retire_pending VALUES('session-04',1),('forgotten',1);
+    INSERT INTO journal_item_tombstones VALUES('session-04','staged','staged',1)`)
+  expect(retiredPass(db)).toEqual(['forgotten', 'session-04'])
+  expect(retiredPass(db)).toEqual(['session-04'])
   expect(
-    db
-      .prepare('SELECT session_id,epoch FROM journal_item_tombstones ORDER BY session_id,epoch')
-      .all()
-  ).toEqual([
-    { session_id: 'chat', epoch: 'before' },
-    { session_id: 'chat', epoch: 'epoch' },
-    { session_id: 'session-00', epoch: 'before' }
-  ])
-  expect(
-    readJournalSqlDatabase(db, {
-      kind: 'retired-heads',
-      after: 'session-14',
-      through: page.through
-    })
-  ).toEqual({
-    kind: 'retired-heads',
-    through: 'session-19',
-    heads: [
-      { sessionId: 'session-15', epoch: 'epoch' },
-      { sessionId: 'session-16', epoch: 'epoch' },
-      { sessionId: 'session-17', epoch: 'epoch' },
-      { sessionId: 'session-18', epoch: 'epoch' }
-    ]
-  })
-  expect(
-    readJournalSqlDatabase(db, {
-      kind: 'retired-heads',
-      after: 'session-18',
-      through: page.through
-    })
-  ).toEqual({ kind: 'retired-heads', through: 'session-19', heads: [] })
-  expect(
-    readJournalSqlDatabase(db, { kind: 'retired-heads', after: null, through: null })
-  ).toMatchObject({ kind: 'retired-heads', through: 'session-20' })
+    db.prepare("SELECT epoch FROM journal_item_tombstones WHERE session_id='session-04'").all()
+  ).toEqual([{ epoch: 'staged' }])
 })
 
 it('finishes a retired pass during activity while an already-started conversion is paused on idle', async () => {

@@ -1,6 +1,7 @@
 import type Database from '../../../sqlite/sync-database'
 import { runJournalTransaction } from './journal-database'
 import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
+import { ensureJournalRetirePending } from './journal-retire-pending'
 
 export const JOURNAL_DOMAIN_SCHEMA_VERSION = 2
 
@@ -21,6 +22,7 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
     })
   }
   ensureJournalStoredOutputColumn(db)
+  runJournalTransaction(db, () => ensureJournalRetirePending(db))
 }
 
 /** Added without a user_version change: released builds name their columns and never read it. */

@@ -447,12 +447,9 @@ it('imports history from the separate original after interruption, taking the cu
       kind: 'sessions',
       sessionIds: ['session']
     })
-    expect(
-      readJournalSqlDatabase(db, { kind: 'retired-heads', after: null, through: null })
-    ).toEqual({
+    expect(readJournalSqlDatabase(db, { kind: 'retired-heads', after: null })).toEqual({
       kind: 'retired-heads',
-      heads: [],
-      through: null
+      heads: []
     })
     expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
     await expect(conversions.ensure('session')).rejects.toThrow('interrupted before ready')

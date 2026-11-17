@@ -14,13 +14,16 @@ export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'
   sessionTabs: [tabId: string, sessionId: string][] | null
 }
 
+/** A pending chat; epoch is null once its head is gone, generation settles exactly this entry. */
+export type JournalRetiredHead = { sessionId: string; epoch: string | null; generation: number }
+
 export type JournalSqlDatabaseRead =
   | { kind: 'pr-watch'; operation: PRWatchRead }
   | { kind: 'records'; unreconciled?: true }
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
-  | { kind: 'retired-heads'; after: string | null; through: string | null }
+  | { kind: 'retired-heads'; after: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'forgotten-chats'; after: string | null }
@@ -31,11 +34,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
-  | {
-      kind: 'retired-heads'
-      heads: { sessionId: string; epoch: string }[]
-      through: string | null
-    }
+  | { kind: 'retired-heads'; heads: JournalRetiredHead[] }
   | {
       kind: 'attachment-claims'
       claims: { rowid: number; uploadId: string; sessionId: string }[]
@@ -102,30 +101,18 @@ function read(
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
     }
     case 'retired-heads': {
-      const through =
-        operation.through ??
-        db
-          .prepare(
-            'SELECT session_id FROM journal_chat_state WHERE epoch IS NOT NULL ORDER BY session_id DESC LIMIT 1'
-          )
-          .get()?.session_id
-      if (through === undefined) {
-        return { kind: 'retired-heads', heads: [], through: null }
-      }
-      const rows =
-        operation.after === null
-          ? db
-              .prepare(`SELECT session_id,epoch FROM journal_chat_state
-                WHERE epoch IS NOT NULL AND session_id<=? ORDER BY session_id LIMIT 16`)
-              .all(through)
-          : db
-              .prepare(`SELECT session_id,epoch FROM journal_chat_state
-                WHERE epoch IS NOT NULL AND session_id>? AND session_id<=? ORDER BY session_id LIMIT 16`)
-              .all(operation.after, through)
+      const rows = db
+        .prepare(`SELECT pending.session_id,pending.generation,head.epoch FROM journal_retire_pending AS pending
+          LEFT JOIN journal_chat_state AS head ON head.session_id=pending.session_id
+          WHERE pending.session_id>? ORDER BY pending.session_id LIMIT 16`)
+        .all(operation.after ?? '')
       return {
         kind: 'retired-heads',
-        heads: rows.map((row) => ({ sessionId: String(row.session_id), epoch: String(row.epoch) })),
-        through: String(through)
+        heads: rows.map((row) => ({
+          sessionId: String(row.session_id),
+          epoch: row.epoch === null || row.epoch === undefined ? null : String(row.epoch),
+          generation: Number(row.generation)
+        }))
       }
     }
     case 'attachment-claims':
