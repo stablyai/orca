@@ -5,7 +5,11 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { message, messageFixture, target } from './journal-sql-message.test-fixture'
-import { readJournalDomainClientForms } from './journal-domain-item-presentation'
+import {
+  readJournalDomainClientForms,
+  readJournalDomainItemDetail
+} from './journal-domain-item-presentation'
+import { hydrateJournalTextTail } from './journal-text-tail'
 
 const switches = vi.hoisted(() => ({ writes: true }))
 vi.mock('./journal-text-tail-writes', () => ({
@@ -88,9 +92,14 @@ it.runIf(process.env.ORCA_TEXT_TAIL_WAL_BENCH === '1')(
     for (let run = 0; run < 20; run++) {
       readJournalDomainClientForms(db, target, page)
     }
-    console.log(
-      JSON.stringify({ historyPageItems: 1000, msPerPage: (performance.now() - started) / 20 })
-    )
+    const msPerPage = (performance.now() - started) / 20
+    const items = page.map((id) => readJournalDomainItemDetail(db, target, id)!)
+    const probed = performance.now()
+    for (let run = 0; run < 20; run++) {
+      items.forEach((item) => hydrateJournalTextTail(db, [target.sessionId, target.epoch], item))
+    }
+    const msProbesPerPage = (performance.now() - probed) / 20
+    console.log(JSON.stringify({ historyPageItems: 1000, msPerPage, msProbesPerPage }))
     db.close()
   },
   3_600_000
