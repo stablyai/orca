@@ -76,6 +76,9 @@ export async function deliverStartupFollowupPrompt(
         )
         return false
       }
+      if (signal?.aborted || host.getPtyId(handle) !== ptyId) {
+        return false
+      }
       // WSL and SSH-to-Windows cannot prove a lone shell either: keep their typed follow-up; agent.launch refused there.
       if (!options.agentLaunch && runtime.launchedAgentHostProvesShellAlone?.(ptyId) !== true) {
         host.write(ptyId, `${prompt}\r`, 'launch')

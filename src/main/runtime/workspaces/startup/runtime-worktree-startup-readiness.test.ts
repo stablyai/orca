@@ -72,6 +72,30 @@ describe('startup follow-up prompt', () => {
     warn.mockRestore()
   })
 
+  it('does not send a startup follow-up to a process replacing its terminal during foreground inspection', async () => {
+    const f = fixture('kimi', false, false)
+    const inspecting = Promise.withResolvers<void>()
+    const foreground = Promise.withResolvers<string>()
+    let replaced = false
+    f.host.getPtyId = () => (replaced ? null : 'pty-1')
+    f.host.getForegroundProcess = () => {
+      inspecting.resolve()
+      return foreground.promise
+    }
+
+    const delivered = deliverStartupFollowupPrompt(f.runtime, f.host, 'term-1', {
+      agent: 'kimi',
+      prompt: 'Repair the linked issue'
+    })
+    await inspecting.promise
+    replaced = true
+    foreground.resolve('kimi')
+
+    await expect(delivered).resolves.toBe(false)
+    expect(f.write).not.toHaveBeenCalled()
+    expect(f.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
   it('writes nothing on a Windows host while the shell stays in front', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
