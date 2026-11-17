@@ -140,21 +140,28 @@ function WorkspaceCleanupDialogContent({
     listInteractedRef.current = true
   }, [])
   useEffect(() => {
-    // Only the user's own input counts: wheel, touch, scrollbar drag, keys, focus, pointerdown.
+    // Only the user's own input counts, including pointer entering or moving over rows (hover).
     // Programmatic scrolls (virtualizer restore, scrollIntoView) must not suppress the settle sort.
+    const controller = new AbortController()
     const target = rowsScrollElement?.parentElement ?? rowsScrollElement
-    if (!target) {
-      return
-    }
-    const events = ['wheel', 'touchmove', 'pointerdown', 'keydown', 'focusin'] as const
-    for (const name of events) {
-      target.addEventListener(name, markListInteracted, { passive: true, capture: true })
-    }
-    return () => {
-      for (const name of events) {
-        target.removeEventListener(name, markListInteracted, { capture: true })
+    if (target) {
+      for (const name of [
+        'wheel',
+        'touchmove',
+        'pointerdown',
+        'pointermove',
+        'pointerover',
+        'keydown',
+        'focusin'
+      ] as const) {
+        target.addEventListener(name, markListInteracted, {
+          passive: true,
+          capture: true,
+          signal: controller.signal
+        })
       }
     }
+    return () => controller.abort()
   }, [markListInteracted, rowsScrollElement])
   const liveRowByIdentity = useMemo(
     () => new Map(facetRows.allRows.map((row) => [row.identity, row])),
@@ -220,17 +227,18 @@ function WorkspaceCleanupDialogContent({
     if (!open || removal.confirming) {
       return
     }
-    const next = new Set(
-      [...selectedIds].filter(
-        (identity) =>
-          facetRows.facetMatchedIdentities.has(identity) && !deletingIdentities.has(identity)
-      )
-    )
-    if (next.size === selectedIds.size) {
+    const keep = (identity: string): boolean =>
+      facetRows.facetMatchedIdentities.has(identity) && !deletingIdentities.has(identity)
+    const withheldCount = [...selectedIds].filter((identity) => !keep(identity)).length
+    if (withheldCount === 0) {
       return
     }
-    setSelectedIds(next)
-    toast.info(formatWithheldSelectionNotice(selectedIds.size - next.size))
+    // Apply to the latest selection so a concurrent prune's removals are never restored.
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter(keep))
+      return next.size === current.size ? current : next
+    })
+    toast.info(formatWithheldSelectionNotice(withheldCount))
   })
 
   useEffect(() => {

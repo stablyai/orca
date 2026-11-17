@@ -114,6 +114,7 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
     [fullKey, held, liveRowByIdentity, liveRows]
   )
 
+  const [releaseCount, setReleaseCount] = useState(0)
   const resetOrder = useCallback(() => setEpoch((current) => current + 1), [])
   const releaseRows = useCallback((identities: readonly string[]) => {
     setHeld((current) => {
@@ -126,6 +127,7 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
       }
       return { ...current, positions }
     })
+    setReleaseCount((current) => current + 1)
   }, [])
   const readSettlePolicy = useEffectEvent(() => shouldResortAtSettle())
   useEffect(() => {
@@ -149,9 +151,10 @@ export function useWorkspaceCleanupHeldRows<Row extends HeldRow>({
         : createWorkspaceCleanupHeldRowOrder(liveRows, fullKey)
     )
   })
+  // Released rows that still match take their end slot now, not at the next live-row change.
   useEffect(() => {
     captureOrder()
-  }, [fullKey, liveRows])
+  }, [fullKey, liveRows, releaseCount])
 
   return { rows, resetOrder, releaseRows }
 }

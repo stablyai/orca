@@ -15,6 +15,8 @@ import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/work
 import type { WorkspaceCleanupFacets } from '../query/workspace-cleanup-facets'
 import { formatVanishedSelectionNotice } from './workspace-cleanup-selection-model'
 
+type BulkSelectionRow = Pick<WorkspaceCleanupFacets, 'candidate' | 'identity' | 'isSelectable'>
+
 function countSelected(identities: readonly string[], selectedIds: ReadonlySet<string>): number {
   let count = 0
   for (const identity of identities) {
@@ -42,7 +44,7 @@ export function useWorkspaceCleanupBulkSelection({
   candidateIdentities,
   loading
 }: {
-  rows: readonly WorkspaceCleanupFacets[]
+  rows: readonly BulkSelectionRow[]
   selectedIds: ReadonlySet<string>
   setSelectedIds: Dispatch<SetStateAction<Set<string>>>
   deletingIdentities: ReadonlySet<string>
@@ -69,21 +71,20 @@ export function useWorkspaceCleanupBulkSelection({
   const pruneStaleSelections = useEffectEvent(() => {
     const isDeleting = (identity: string): boolean => deletingIdentities.has(identity)
     // While a scan streams, an absent identity may simply not have arrived yet.
-    const kept = [...selectedIds].filter(
-      (identity) =>
-        (loading || candidateIdentities.has(identity)) &&
-        !isDeleting(identity) &&
-        !unselectableIdentities.has(identity)
-    )
-    if (kept.length === selectedIds.size) {
-      return
-    }
+    const keep = (identity: string): boolean =>
+      (loading || candidateIdentities.has(identity)) &&
+      !isDeleting(identity) &&
+      !unselectableIdentities.has(identity)
     const vanishedCount = loading
       ? 0
       : [...selectedIds].filter(
           (identity) => !candidateIdentities.has(identity) && !isDeleting(identity)
         ).length
-    setSelectedIds(new Set(kept))
+    // Apply to the latest selection so a concurrent prune's removals are never restored.
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter(keep))
+      return next.size === current.size ? current : next
+    })
     if (vanishedCount > 0) {
       toast.info(formatVanishedSelectionNotice(vanishedCount))
     }
