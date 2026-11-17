@@ -81,10 +81,15 @@ export class ZcodeAcquisitions {
       // An in-flight retirement still holds the old session row; waiting keeps the ownership
       // check honest instead of failing a re-acquire that arrives a moment too early.
       await Promise.all(Array.from(this.retiring))
-      // A retained failed-start child whose exit is still unproven counts as owned: the
-      // ownership check must refuse a second child, not silently double-start.
-      if (this.sessions.has(sessionId) || this.failedStarts.has(sessionId)) {
+      if (this.sessions.has(sessionId)) {
         throw new AgentSessionPreSpawnError(new Error('zcode session already owns a child'))
+      }
+      // A retained failed-start child whose exit is still unproven reads as unproven exit —
+      // the same verdict as the stop-failed branch — so release keeps its claim on the child.
+      if (this.failedStarts.has(sessionId)) {
+        throw new AgentSessionAcquisitionExitUnprovenError(
+          new Error('the previous zcode start has not exited')
+        )
       }
       const generation = mintZcodeAcquisitionGeneration(this.deps)
       this.endings.admit(sessionId, generation)
