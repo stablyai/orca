@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -118,10 +118,12 @@ function revokeSession({ profileId, userDataPath }: Signin): void {
   signOutCloudSession(profileId, userDataPath)
 }
 
-// The wait is scheduled after the 429 body is read; act only once it exists.
+// The wait is scheduled after the 429 body is read, which follows the create intent's awaited
+// fsync; each turn also round-trips the file system so that write can finish first.
 async function untilRetryScheduled(): Promise<void> {
   for (let turn = 0; turn < 1000 && vi.getTimerCount() === 0; turn++) {
     await new Promise((resolve) => setImmediate(resolve))
+    await stat(tmpdir())
   }
   expect(vi.getTimerCount()).toBe(1)
 }
