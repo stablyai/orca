@@ -2,6 +2,7 @@ import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty
 import type { RuntimeTerminalClose } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimePtyTabCloseAuthority } from '../../terminal/records/runtime-terminal-state-records'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -113,8 +114,12 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         incarnationId: pty.pty.incarnationId,
         worktreeId: pty.pty.worktreeId
       }
-      const ptyCloseAuthority = this.resolvePtyTabCloseSurfaceAuthority(closeAuthority)
+      const publishedAuthority = this.resolvePtyTabCloseSurfaceAuthority(closeAuthority)
       const recorded = this.paneOfPty(pty.pty)
+      const savedTabAuthority = publishedAuthority
+        ? null
+        : this.resolveSavedTabPtyCloseAuthority(closeAuthority, recorded.paneKey)
+      const ptyCloseAuthority = publishedAuthority ?? savedTabAuthority
       const spawnSurface = recorded.tabId
         ? this.findMobileTerminalSurface(pty.pty.worktreeId, recorded.tabId)
         : null
@@ -154,7 +159,8 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
             expectedPtyCloseAuthority: closeAuthority
           })
         } catch (error) {
-          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+          // A stop without the committed close would leave the saved tab to restore a dead process.
+          if (savedTabAuthority || errorMessage(error) !== 'workspace_session_unavailable') {
             throw error
           }
           const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
