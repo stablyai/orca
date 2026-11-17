@@ -5,7 +5,7 @@ import {
   unpinLocalImageCacheKey
 } from './local-image-cache-pinning'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from '@/hooks/worktree-file-change-event'
-import { IMAGE_FILE_MIME_TYPES } from '../../../../../shared/file-preview/image-mime-types'
+import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../../../shared/file-preview/file-preview-kind'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 // Bound retained encoded image payload separately from the reusable entry target.
@@ -142,7 +142,8 @@ function isImageFilePath(filePath: string): boolean {
   if (dotIndex === -1) {
     return false
   }
-  return filePath.slice(dotIndex).toLowerCase() in IMAGE_FILE_MIME_TYPES
+  const mime = IMAGE_AND_PDF_PREVIEW_MIME_TYPES[filePath.slice(dotIndex).toLowerCase()]
+  return mime !== undefined && mime !== 'application/pdf'
 }
 
 export function invalidateLocalImageCache(targetPath?: string): void {

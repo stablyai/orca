@@ -66,6 +66,28 @@ describe('local-image-src-cache', () => {
     expect(getLocalImageCacheGeneration()).toBe(genBefore + 1)
   })
 
+  it('invalidates avif image files when worktree file change fires', () => {
+    const key = 'client\0\0local\0\0\0\0\0\0roots\0\0/worktree/fig.avif'
+    cacheLocalImageBlob(key, 'blob:fig-avif-1', 100)
+
+    const genBefore = getLocalImageCacheGeneration()
+
+    window.dispatchEvent(
+      new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+        detail: {
+          runtimeEnvironmentId: 'client',
+          payload: {
+            worktreePath: '/worktree',
+            events: [{ kind: 'update', absolutePath: '/worktree/fig.avif' }]
+          }
+        }
+      })
+    )
+
+    expect(blobUrlCache.has(key)).toBe(false)
+    expect(getLocalImageCacheGeneration()).toBe(genBefore + 1)
+  })
+
   it('ignores non-image file changes in ORCA_WORKTREE_FILE_CHANGE_EVENT', () => {
     const key = 'client\0\0local\0\0\0\0\0\0roots\0\0/worktree/fig.png'
     cacheLocalImageBlob(key, 'blob:fig-1', 100)
