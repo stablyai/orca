@@ -103,13 +103,11 @@ export function createClaudeJournalTranslator(
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
-    persist: (identity, text, options, ended) => {
-      const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, {
-        ...options,
-        turnScope: turnScope(),
-        ...(ended ? { lifecycle: true } : {})
-      })
+    sink: deps.sink,
+    liveBody: (text) => claudeStreamingMessageBody(text),
+    persist: (identity, text, options, ended, onCommitted) => {
+      const scoped = { ...options, turnScope: turnScope(), ...(ended ? { lifecycle: true } : {}) }
+      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), scoped, onCommitted)
       deps.sink.publish()
     }
   })

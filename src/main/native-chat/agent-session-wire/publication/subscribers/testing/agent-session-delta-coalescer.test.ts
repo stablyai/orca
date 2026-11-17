@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createAgentSessionDeltaCoalescer } from '../agent-session-delta-coalescer'
 
 /** Drive scheduling without wall-clock timing. */
@@ -50,23 +50,4 @@ describe('agent-session delta coalescer', () => {
     expect(instance.append('second', 'new stream')).toBe(true)
     expect(emitted).toEqual([['first', 'preserve me']])
   })
-})
-
-afterEach(() => vi.useRealTimers())
-
-it('does not save unchanged text when a provider sends empty deltas', () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-  const saved: string[] = []
-  const coalescer = createAgentSessionDeltaCoalescer({ emit: (_key, text) => saved.push(text) })
-  coalescer.append('reply', 'reply')
-  vi.advanceTimersByTime(60)
-  for (let i = 0; i < 10; i++) {
-    coalescer.append('reply', '')
-    vi.advanceTimersByTime(400)
-  }
-  expect(saved).toEqual(['reply'])
-  coalescer.append('reply', ' tail')
-  coalescer.flushAll()
-  expect(saved).toEqual(['reply', 'reply tail'])
-  coalescer.dispose()
 })

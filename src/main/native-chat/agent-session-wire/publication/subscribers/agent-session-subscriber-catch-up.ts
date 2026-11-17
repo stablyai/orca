@@ -32,6 +32,8 @@ import {
 } from './agent-session-subscriber-frame-fields'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { withSubscriberLiveText } from './agent-session-live-publications'
 
 export type SubscriberDeliveryPort = {
   hooks: SubscriberFieldHooks & {
@@ -41,6 +43,7 @@ export type SubscriberDeliveryPort = {
       journal: AgentSessionJournal
     ) => Promise<StructuredAgentSessionObservedWork | null>
     readWorkFrame?: StructuredAgentSessionWorkFrameReader
+    readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
     /** In-lane queue for a captured frame; never admits the lane itself. */
     captureQueuePublication?: (
       sessionId: string,
@@ -131,8 +134,13 @@ async function deliver(
       return frame
     }
     const result = withPublishedWorkResult(frame.value, work)
+    const live = () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
     if (!result.ok) {
-      const page = { ...result.page, fence: subscriber.fence }
+      const page = {
+        ...result.page,
+        items: withSubscriberLiveText(result.page.items, live),
+        fence: subscriber.fence
+      }
       await delivery.emit(subscriber, {
         type: 'reset',
         sessionId: subscriber.sessionId,
@@ -166,7 +174,7 @@ async function deliver(
         sessionId: subscriber.sessionId,
         batch: {
           cursor: page.window.nextCursor,
-          items: page.items,
+          items: withSubscriberLiveText(page.items, live),
           removedItemIds: page.removedItemIds,
           submissions: page.submissions
         },
@@ -282,7 +290,14 @@ async function publishSnapshotFrame(
     return undefined
   }
   const delivery = capturedPort(port, journal, frame)
-  const page = withPublishedWork(frame.value, frame.work)
+  const durable = withPublishedWork(frame.value, frame.work)
+  const page = {
+    ...durable,
+    items: withSubscriberLiveText(
+      durable.items,
+      () => port.hooks.readLiveText?.(subscriber.sessionId) ?? []
+    )
+  }
   await delivery.emit(subscriber, {
     type: 'snapshot',
     sessionId: subscriber.sessionId,

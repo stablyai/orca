@@ -1,3 +1,5 @@
+// Byte-bounded streamed text: appends in place, or truncates at a UTF-8 boundary with a marker.
+
 export const AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER = '\n[Orca: streamed output truncated]'
 
 export function appendWithinUtf8ByteLimit(

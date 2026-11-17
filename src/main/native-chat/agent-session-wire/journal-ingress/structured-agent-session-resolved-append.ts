@@ -1,3 +1,4 @@
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
@@ -74,5 +75,37 @@ export function createStructuredAgentSessionResolvedAppend(
         options,
         true
       )
+  }
+}
+
+/** One provider item; `onCommitted` receives the row as written. */
+export function createStructuredAgentSessionItemAppend(
+  queue: StructuredAgentSessionSinkQueue
+): NonNullable<StructuredAgentSessionEventSink['tryAppendItem']> {
+  return (identity, body, options, onCommitted) => {
+    const reservedBytes = estimateStructuredAgentSessionItemBytes(identity, body)
+    const itemId = onCommitted && agentJournalItemKey(identity)
+    return queue.submit({
+      bytes: reservedBytes,
+      steps: (bound) => [
+        {
+          kind: 'item',
+          identity,
+          body,
+          reservedBytes,
+          options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
+        }
+      ],
+      ...(onCommitted
+        ? {
+            onResolved: (result) => {
+              const item = result.items?.find((each) => each.itemId === itemId)
+              if (item && result.cursor) {
+                onCommitted(item, result.cursor.epoch)
+              }
+            }
+          }
+        : {})
+    })
   }
 }

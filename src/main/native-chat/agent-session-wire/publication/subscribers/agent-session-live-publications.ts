@@ -5,6 +5,29 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import { backgroundTaskFingerprint } from './agent-session-subscriber-frame-fields'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 
+/** A durable frame takes newer live text for rows at the revision that text was placed on, so a
+ *  save or a fresh view never shows less than the stream already did. */
+export function withSubscriberLiveText(
+  items: AgentJournalRenderItem[],
+  readLive: () => readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem[] {
+  const live = items.length > 0 ? readLive() : []
+  if (live.length === 0) {
+    return items
+  }
+  const newer = new Map(live.map((item) => [item.itemId, item]))
+  let changed = false
+  const next = items.map((item) => {
+    const shown = newer.get(item.itemId)
+    if (!shown || shown.revision !== item.revision) {
+      return item
+    }
+    changed = true
+    return { ...item, body: shown.body }
+  })
+  return changed ? next : items
+}
+
 /** Ordinary equal-cursor items preserve the existing desktop and phone merge contract. */
 export async function publishSubscriberLiveText(
   port: SubscriberDeliveryPort,

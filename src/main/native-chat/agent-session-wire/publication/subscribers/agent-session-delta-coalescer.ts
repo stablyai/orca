@@ -4,13 +4,8 @@ import { appendWithinUtf8ByteLimit } from './agent-session-delta-prefix'
 // Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
 
 export const AGENT_SESSION_DELTA_COALESCE_MS = 60
-export const AGENT_SESSION_TEXT_CHECKPOINT_MS = 400
-
-export function agentSessionTextCheckpointDueIn(savedAt: number | undefined): number {
-  return savedAt === undefined
-    ? 0
-    : Math.max(0, AGENT_SESSION_TEXT_CHECKPOINT_MS - (performance.now() - savedAt))
-}
+/** Quiet time after the last delta before a stream's unsaved text is saved. */
+export const AGENT_SESSION_TEXT_IDLE_SAVE_MS = 1000
 
 /** Bound accumulated legal deltas independently of input record admission. */
 export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024
@@ -29,8 +24,8 @@ export type AgentSessionDeltaCoalescerDeps = {
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
   /** False skips an accepted snapshot; emit reports actual sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
-  /** Delay timed saves without delaying lifecycle barriers or joining buffered text. */
-  dueIn?: (key: string) => number
+  /** Runs once a stream has received no text for `ms`; false retries after another quiet period. */
+  idle?: { ms: number; run: (key: string, text: string) => boolean }
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -45,7 +40,7 @@ export type AgentSessionDeltaCoalescer = {
   append: (key: string, delta: string) => boolean
   flush: (key: string) => boolean
   /** Lifecycle barriers flush every stream first. */
-  flushAll: (only?: (key: string) => boolean) => boolean
+  flushAll: () => boolean
   /** Authoritative bodies supersede buffered text; drop it without emission. */
   forget: (key: string) => void
   dispose: () => void
@@ -79,22 +74,19 @@ export function createAgentSessionDeltaCoalescer(
       observedBytes: number
       truncated: boolean
       dirty: boolean
-      cancelTimer: (() => void) | null
+      appendedAt: number
+      cancelIdle: (() => void) | null
     }
   >()
   let totalRetainedBytes = 0
+  let cancelTimer: (() => void) | null = null
   const evictable = new Set<string>()
-  const batched = new Set<string>()
-  let cancelBatch: (() => void) | null = null
 
   const flushKey = (key: string): boolean => {
     const stream = streams.get(key)
     if (!stream?.dirty) {
       return true
     }
-    stream.cancelTimer?.()
-    stream.cancelTimer = null
-    batched.delete(key)
     if (deps.shouldEmit?.(key, stream.textLength) === false) {
       stream.dirty = false
       return true
@@ -106,53 +98,49 @@ export function createAgentSessionDeltaCoalescer(
       truncated: stream.truncated
     })
     if (emitted === false) {
-      scheduleFlush(key)
       return false
     }
     stream.dirty = false
     return true
   }
 
-  const scheduleFlush = (key: string, minimumMs = windowMs): void => {
-    const stream = streams.get(key)
-    if (!stream?.dirty || stream.cancelTimer) {
-      return
-    }
-    if (!deps.dueIn) {
-      batched.add(key)
-      cancelBatch ??= schedule(() => {
-        cancelBatch = null
-        const pending = [...batched]
-        batched.clear()
-        for (const id of pending) {
-          flushKey(id)
-        }
-      }, windowMs)
-      return
-    }
-    stream.cancelTimer = schedule(
-      () => {
-        stream.cancelTimer = null
-        if (streams.get(key) !== stream || !stream.dirty) {
-          return
-        }
-        if ((deps.dueIn?.(key) ?? 0) > 0) {
-          scheduleFlush(key, 1)
-        } else if (!flushKey(key)) {
-          scheduleFlush(key)
-        }
-      },
-      Math.max(minimumMs, deps.dueIn?.(key) ?? 0)
-    )
+  const scheduleFlush = (): void => {
+    cancelTimer ??= schedule(() => {
+      cancelTimer = null
+      flushAll()
+    }, windowMs)
   }
 
-  const flushAll = (only?: (key: string) => boolean): boolean => {
+  type Stream = NonNullable<ReturnType<typeof streams.get>>
+  // Measured from the last delta, never the last save, so continuous streaming saves nothing extra.
+  const armIdle = (key: string, stream: Stream, ms: number): void => {
+    const idle = deps.idle
+    if (!idle) {
+      return
+    }
+    stream.cancelIdle = schedule(() => {
+      stream.cancelIdle = null
+      if (streams.get(key) !== stream) {
+        return
+      }
+      const quiet = performance.now() - stream.appendedAt
+      if (quiet < idle.ms) {
+        armIdle(key, stream, idle.ms - quiet)
+      } else if (!idle.run(key, stream.chunks.join(''))) {
+        armIdle(key, stream, idle.ms)
+      }
+    }, ms)
+  }
+
+  const flushAll = (): boolean => {
+    cancelTimer?.()
+    cancelTimer = null
     let emitted = true
     for (const key of streams.keys()) {
-      if ((!only || only(key)) && !flushKey(key)) {
-        scheduleFlush(key)
-        emitted = false
-      }
+      emitted = flushKey(key) && emitted
+    }
+    if (!emitted) {
+      scheduleFlush()
     }
     return emitted
   }
@@ -179,6 +167,7 @@ export function createAgentSessionDeltaCoalescer(
             const evicted = streams.get(oldest)
             if (evicted) {
               totalRetainedBytes -= evicted.retainedBytes
+              evicted.cancelIdle?.()
             }
             streams.delete(oldest)
             evictable.delete(oldest)
@@ -192,7 +181,8 @@ export function createAgentSessionDeltaCoalescer(
           observedBytes: 0,
           truncated: false,
           dirty: false,
-          cancelTimer: null
+          appendedAt: 0,
+          cancelIdle: null
         }
         if (!deps.isProtected?.(key)) {
           evictable.add(key)
@@ -222,8 +212,12 @@ export function createAgentSessionDeltaCoalescer(
         stream.dirty = true
       }
       streams.set(key, stream)
-      // Each dirty stream owns its deadline; a wake never scans unrelated streams.
-      scheduleFlush(key)
+      stream.appendedAt = performance.now()
+      if (!stream.cancelIdle) {
+        armIdle(key, stream, deps.idle?.ms ?? 0)
+      }
+      // Share one timer across streams to bound wakeups per window.
+      scheduleFlush()
       return true
     },
     flush: flushKey,
@@ -231,20 +225,18 @@ export function createAgentSessionDeltaCoalescer(
     forget: (key) => {
       const stream = streams.get(key)
       if (stream) {
-        stream.cancelTimer?.()
-        batched.delete(key)
+        stream.cancelIdle?.()
         totalRetainedBytes -= stream.retainedBytes
         streams.delete(key)
         evictable.delete(key)
       }
     },
     dispose: () => {
+      cancelTimer?.()
+      cancelTimer = null
       for (const stream of streams.values()) {
-        stream.cancelTimer?.()
+        stream.cancelIdle?.()
       }
-      cancelBatch?.()
-      cancelBatch = null
-      batched.clear()
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0
@@ -277,9 +269,6 @@ export function createAgentSessionDeltaCoalescer(
     markFlushed: (key) => {
       const stream = streams.get(key)
       if (stream) {
-        stream.cancelTimer?.()
-        stream.cancelTimer = null
-        batched.delete(key)
         stream.dirty = false
       }
     }

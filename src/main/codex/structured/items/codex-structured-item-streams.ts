@@ -3,13 +3,14 @@ import {
   type AgentJournalRowAttribution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
-  agentSessionTextCheckpointDueIn,
+  AGENT_SESSION_TEXT_IDLE_SAVE_MS,
   createAgentSessionDeltaCoalescer
 } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import { StructuredAgentSessionLiveTextRows } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-live-text-rows'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
-import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
-import { withJournalReasoningLifecycle } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
+import { codexJournalItem } from './codex-structured-item-translation'
+import { codexRunningStreamBody, codexShowsLiveText } from './codex-streamed-item-body'
 import {
   codexStructuredItemKey,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
@@ -40,7 +41,6 @@ export function createCodexStructuredItemStreams(
 ): CodexStructuredItemStreams {
   const states = new CodexItemStreamRetention()
   const checkpointLengths = new Map<string, number>()
-  const checkpointTimes = new Map<string, number>()
   const pendingCheckpoints = new Set<string>()
   // Resolve attribution on each append so later-discovered parents reach existing rows.
   const producers = new Map<string, { threadId: string; turnId: string | null }>()
@@ -55,10 +55,10 @@ export function createCodexStructuredItemStreams(
   let retainedPatchBytes = 0
 
   const forgetState = (key: string): void => {
+    live.forget(key)
     coalescer.forget(key)
     states.forget(key)
     checkpointLengths.delete(key)
-    checkpointTimes.delete(key)
     pendingCheckpoints.delete(key)
     producers.delete(key)
     const pending = pendingPatches.get(key)
@@ -98,26 +98,18 @@ export function createCodexStructuredItemStreams(
   }
 
   const append = (key: string, state: CodexItemStreamState, text: string): boolean => {
-    const translated = codexStreamingJournalItem(state.item, text)
-    if (!translated.body) {
-      return true
-    }
-    const body = withJournalReasoningLifecycle(translated.body, { state: 'running' })
-    return appendCodexItemAndPublish(deps.sink, state.identity, body, {
-      ...attributionOf(key),
-      ...(state.startedAt === undefined ? {} : { observedAt: state.startedAt })
-    }).accepted
+    const body = codexRunningStreamBody(state.item, text)
+    const observed = state.startedAt === undefined ? {} : { observedAt: state.startedAt }
+    const committed = codexShowsLiveText(state.item) ? live.committed(key) : undefined
+    const options = { ...attributionOf(key), ...observed }
+    return (
+      !body ||
+      appendCodexItemAndPublish(deps.sink, state.identity, body, options, committed).accepted
+    )
   }
-
-  const isText = (key: string): boolean => {
-    const type = states.get(key)?.item.type
-    return type === 'agentMessage' || type === 'reasoning' || type === 'plan'
-  }
+  const isText = (key: string): boolean => codexShowsLiveText(states.get(key)?.item)
 
   const shouldPersist = (key: string, textLength: number): boolean => {
-    if (isText(key)) {
-      return true
-    }
     const checkpointLength = checkpointLengths.get(key) ?? 0
     const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
     return !(checkpointLength > 0 && textLength < nextLength)
@@ -125,12 +117,12 @@ export function createCodexStructuredItemStreams(
 
   const persist = (key: string, text: string, force: boolean): boolean => {
     if (!force && !shouldPersist(key, text.length)) {
+      live.publish()
       return true
     }
     const state = states.get(key)
     if (state && append(key, state, text)) {
       checkpointLengths.set(key, text.length)
-      checkpointTimes.set(key, performance.now())
       pendingCheckpoints.delete(key)
       return true
     }
@@ -143,12 +135,26 @@ export function createCodexStructuredItemStreams(
     maxTotalRetainedBytes: deps.maxTotalRetainedBytes,
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
-    shouldEmit: shouldPersist,
-    dueIn: (key) => (isText(key) ? agentSessionTextCheckpointDueIn(checkpointTimes.get(key)) : 0),
-    emit: (key, text) => {
-      return persist(key, text, false)
+    shouldEmit: (key, textLength) => isText(key) || shouldPersist(key, textLength),
+    emit: (key, text) => persist(key, text, false),
+    idle: {
+      ms: AGENT_SESSION_TEXT_IDLE_SAVE_MS,
+      run: (key, text) =>
+        !isText(key) || checkpointLengths.get(key) === text.length || persist(key, text, true)
     }
   })
+
+  const live = new StructuredAgentSessionLiveTextRows(
+    deps.sink,
+    (key) => {
+      const state = states.get(key)
+      const text = coalescer.snapshot(key)?.text
+      return state && text !== undefined && isText(key)
+        ? codexRunningStreamBody(state.item, text)
+        : null
+    },
+    () => flush()
+  )
 
   const ensureState = (
     threadId: string,
@@ -171,11 +177,9 @@ export function createCodexStructuredItemStreams(
   }
 
   const flush = (threadId?: string): boolean => {
-    let flushed = coalescer.flushAll(
-      threadId === undefined ? undefined : (key) => producers.get(key)?.threadId === threadId
-    )
+    let flushed = coalescer.flushAll()
     for (const key of pendingCheckpoints) {
-      // A thread barrier leaves other threads on their own save deadlines.
+      // flushAll already placed every stream's first row; re-saving other threads would bypass their cadence.
       if (threadId !== undefined && producers.get(key)?.threadId !== threadId) {
         continue
       }
@@ -292,10 +296,10 @@ export function createCodexStructuredItemStreams(
     },
     flush,
     dispose: () => {
+      live.dispose()
       coalescer.dispose()
       states.clear()
       checkpointLengths.clear()
-      checkpointTimes.clear()
       pendingCheckpoints.clear()
       producers.clear()
       pendingPatches.clear()

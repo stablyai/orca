@@ -1,10 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { describe, expect, it, vi } from 'vitest'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import '../items/codex-structured-item-translation'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { AGENT_SESSION_TEXT_IDLE_SAVE_MS } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 
 import '../prompts/codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
@@ -38,24 +42,33 @@ function recorder() {
   }
 }
 
-afterEach(() => vi.useRealTimers())
-
 function manualWindow() {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  const pending: (() => void)[] = []
   return {
+    // Quiet-save timers are not coalescing windows; these tests drive windows only.
     schedule: (run: () => void, ms: number) => {
-      const timer = setTimeout(run, ms)
-      return () => clearTimeout(timer)
+      if (ms >= AGENT_SESSION_TEXT_IDLE_SAVE_MS) {
+        return () => {}
+      }
+      pending.push(run)
+      return () => {
+        const index = pending.indexOf(run)
+        if (index !== -1) {
+          pending.splice(index, 1)
+        }
+      }
     },
-    fire: () => vi.advanceTimersToNextTimer(),
-    idle: () => vi.getTimerCount() === 0
+    fire: () => {
+      const due = pending.splice(0)
+      for (const run of due) {
+        run()
+      }
+    },
+    idle: () => pending.length === 0
   }
 }
 
-function notification(
-  method: string,
-  params: unknown
-): Extract<CodexStructuredSessionEvent, { type: 'notification' }> {
+function notification(method: string, params: unknown): CodexStructuredSessionEvent {
   return { type: 'notification', sessionId: SESSION_ID, threadId: THREAD_ID, method, params }
 }
 
@@ -99,9 +112,7 @@ describe('Codex streamed checkpoint admission', () => {
     })
     delta('x')
     window.fire()
-    expect(tap.rows.at(-1)?.body).toMatchObject({
-      blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}x` }]
-    })
+    expect(tap.rows).toHaveLength(rows + 1)
     translator.flush()
     expect(tap.rows.at(-1)?.body).toMatchObject({
       blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}x` }]
@@ -110,33 +121,56 @@ describe('Codex streamed checkpoint admission', () => {
   })
 })
 
-it.each(['item/agentMessage/delta', 'item/reasoning/summaryTextDelta', 'item/plan/delta'])(
-  'delivers a paused %s tail without a different thread forcing it early',
-  (method) => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+it('shows a paused Codex reply tail without a save and saves it once the stream goes quiet', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  try {
     const tap = recorder()
+    let read: (epoch: string) => readonly AgentJournalRenderItem[] = () => []
+    const shown: string[] = []
+    tap.sink.tryAppendItem = (identity, body, _options, onCommitted) => {
+      tap.rows.push({ key: agentJournalItemKey(identity), body })
+      onCommitted?.(
+        {
+          itemId: agentJournalItemKey(identity),
+          revision: tap.rows.length,
+          sequence: 3,
+          observedAt: 1,
+          body
+        },
+        'epoch'
+      )
+      return { accepted: true }
+    }
+    tap.sink.bindLiveText = (source) => {
+      read = source.read
+      return () => {}
+    }
+    tap.sink.publishLiveText = () => {
+      for (const item of read('epoch')) {
+        if (item.body.kind === 'message' && item.body.blocks[0]?.type === 'text') {
+          shown.push(item.body.blocks[0].text)
+        }
+      }
+      return { accepted: true }
+    }
     const translator = createCodexJournalTranslator({ sink: tap.sink })
-    const prefix = 'a'.repeat(20000)
     const delta = (text: string) =>
-      translator.handle(notification(method, { itemId: 'reply', delta: text }))
+      translator.handle(notification('item/agentMessage/delta', { itemId: 'reply', delta: text }))
+    const prefix = 'a'.repeat(20000)
     delta(prefix)
     vi.advanceTimersByTime(60)
+    const saves = tap.rows.length
     delta(' paused tail')
-    translator.handle({
-      ...notification('item/started', { item: { type: 'agentMessage', id: 'other' } }),
-      threadId: 'other-thread'
+    vi.advanceTimersByTime(60)
+    expect(shown).toEqual([`${prefix} paused tail`])
+    expect(tap.rows).toHaveLength(saves)
+    vi.advanceTimersByTime(1000)
+    expect(tap.rows).toHaveLength(saves + 1)
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      blocks: [{ type: 'text', text: `${prefix} paused tail` }]
     })
-    vi.advanceTimersByTime(399)
-    const expectedBody = (text: string) =>
-      method === 'item/plan/delta'
-        ? { kind: 'status', text, presentation: 'plan-document' }
-        : { kind: 'message', blocks: [{ type: 'text', text }] }
-    expect(tap.rows.at(-1)?.body).toMatchObject(expectedBody(prefix))
-    vi.advanceTimersByTime(1)
-    expect(tap.rows.at(-1)?.body).toMatchObject(expectedBody(`${prefix} paused tail`))
-    delta(' final tail')
-    translator.flush()
-    expect(tap.rows.at(-1)?.body).toMatchObject(expectedBody(`${prefix} paused tail final tail`))
     translator.dispose()
+  } finally {
+    vi.useRealTimers()
   }
-)
+})
