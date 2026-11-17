@@ -215,9 +215,17 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     query: string,
     limit = DEFAULT_REPO_SEARCH_REFS_LIMIT,
     selectorForm: RepoSearchRefSelectorForm = 'canonical',
-    namespace?: 'remote'
+    namespace?: 'remote',
+    signal?: AbortSignal
   ): Promise<RuntimeRepoSearchRefs> {
-    return this.repositoryRefQueries.search(repoSelector, query, limit, selectorForm, namespace)
+    return this.repositoryRefQueries.search(
+      repoSelector,
+      query,
+      limit,
+      selectorForm,
+      namespace,
+      signal
+    )
   }
 
   protected async resolveHostedReviewTarget(args: {

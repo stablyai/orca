@@ -1,6 +1,6 @@
 import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
+import { gitExecOptions } from './repo-default-base-ref'
 import { resolveBaseRefSearchSelector } from './base-ref-search-selector'
 
 /** canonical: full refs; git-short: Git's short name, qualified only when ambiguous; unqualified: ambiguous refs omitted. */
@@ -16,17 +16,16 @@ const QUOTE_CHARACTER = /['"]/
 export async function toGitShortRefSelectors(
   path: string,
   refDetails: BaseRefSearchResult[],
-  git: LocalGitExecOptions = {}
+  signal?: AbortSignal
 ): Promise<BaseRefSearchResult[]> {
   const shortByRef = new Map<string, string>()
-  const lookups = refDetails
-    .map(({ refName }) => refName)
-    .filter((ref) => !QUOTE_CHARACTER.test(ref))
-  for (const patterns of chunkByLength(lookups)) {
+  const patterns = refDetails.flatMap(({ refName }) => exactRefPattern(refName) ?? [])
+  for (const chunk of chunkByLength(patterns)) {
+    signal?.throwIfAborted()
     try {
       const { stdout } = await gitExecFileAsync(
-        ['for-each-ref', '--format=%(refname)%00%(refname:short)', ...patterns],
-        gitExecOptions(path, git)
+        ['for-each-ref', '--format=%(refname)%00%(refname:short)', ...chunk],
+        { ...gitExecOptions(path), signal }
       )
       for (const line of stdout.split('\n')) {
         const [full, short] = line.replace(/\r$/, '').split('\0')
@@ -35,6 +34,7 @@ export async function toGitShortRefSelectors(
         }
       }
     } catch (err) {
+      signal?.throwIfAborted()
       console.warn('[searchBaseRefs] short ref selectors failed', { path, err })
     }
   }
@@ -46,18 +46,28 @@ export async function toGitShortRefSelectors(
   })
 }
 
-function chunkByLength(refNames: string[]): string[][] {
+/** A plain pattern also matches every ref below it; refs can't hold glob characters, so a bracketed last one is exact. */
+function exactRefPattern(refName: string): string | null {
+  const last = refName.at(-1)
+  // `[!]` would start a negated class.
+  if (!last || last === '!' || QUOTE_CHARACTER.test(refName)) {
+    return null
+  }
+  return `${refName.slice(0, -1)}[${last}]`
+}
+
+function chunkByLength(patterns: string[]): string[][] {
   const chunks: string[][] = []
   let chunk: string[] = []
   let length = 0
-  for (const refName of refNames) {
-    const quotedLength = refName.length + PATTERN_QUOTING_CHARS
+  for (const pattern of patterns) {
+    const quotedLength = pattern.length + PATTERN_QUOTING_CHARS
     if (chunk.length > 0 && length + quotedLength > MAX_PATTERN_CHARS_PER_CALL) {
       chunks.push(chunk)
       chunk = []
       length = 0
     }
-    chunk.push(refName)
+    chunk.push(pattern)
     length += quotedLength
   }
   if (chunk.length > 0) {

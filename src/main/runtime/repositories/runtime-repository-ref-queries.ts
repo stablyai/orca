@@ -33,7 +33,9 @@ export class RuntimeRepositoryRefQueries {
     query: string,
     limit: number,
     selectorForm: RepoSearchRefSelectorForm = 'canonical',
-    namespace?: 'remote'
+    namespace?: 'remote',
+    // Cancels only this caller's short-name lookups; the shared snapshot read still completes for others.
+    signal?: AbortSignal
   ): Promise<RuntimeRepoSearchRefs> {
     if (!isRepoSearchRefsRequestLimit(limit)) {
       throw new Error('invalid_limit')
@@ -46,7 +48,7 @@ export class RuntimeRepositoryRefQueries {
     }
     const includeQualifiedRefs = selectorForm !== 'unqualified'
     const forClient = async (rows: BaseRefSearchResult[]): Promise<BaseRefSearchResult[]> =>
-      selectorForm === 'git-short' ? toGitShortRefSelectors(repo.path, rows) : rows
+      selectorForm === 'git-short' ? toGitShortRefSelectors(repo.path, rows, signal) : rows
     if (namespace === 'remote') {
       if (getRepoRoutingConnectionId(repo)) {
         throw new Error('This project is not served by this host.')

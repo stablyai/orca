@@ -207,21 +207,18 @@ export const REPO_METHODS = [
     name: 'repo.searchRefs',
     permission: 'workspace',
     params: RepoSearchRefs,
-    handler: async (params, { runtime, clientCapabilities }) => {
-      const searchArgs: Parameters<typeof runtime.searchRepoRefs> = [
-        params.repo,
-        params.query,
-        params.limit,
-        repoSearchRefSelectorForm(clientCapabilities)
-      ]
-      if (params.namespace !== undefined) {
-        searchArgs.push(params.namespace)
-      }
-      return projectRepoSearchRefsForClient(
-        await runtime.searchRepoRefs(...searchArgs),
+    handler: async (params, { runtime, clientCapabilities, signal }) =>
+      projectRepoSearchRefsForClient(
+        await runtime.searchRepoRefs(
+          params.repo,
+          params.query,
+          params.limit,
+          repoSearchRefSelectorForm(clientCapabilities),
+          params.namespace,
+          signal
+        ),
         clientCapabilities
       )
-    }
   }),
   defineMethod({
     name: 'repo.hooks',
