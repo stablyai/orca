@@ -419,7 +419,10 @@ async function main() {
   process.exitCode = passed ? 0 : 1
 }
 
-main().catch((error) => {
-  console.error(`[fleet-gate] ${error.stack ?? error}`)
-  process.exitCode = 2
-})
+// Exit explicitly: a launched copy's driver handles otherwise keep the process (and its qa-gate slot) alive.
+main()
+  .catch((error) => {
+    console.error(`[fleet-gate] ${error.stack ?? error}`)
+    process.exitCode = 2
+  })
+  .finally(() => process.exit())
