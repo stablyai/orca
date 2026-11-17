@@ -4,14 +4,14 @@ import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-sessio
 import { getAgentSessionOptionCatalog } from '../../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionOptionCatalog } from '../../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionDescriptor,
   SessionOptionValue,
   SessionOptionsSurface
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
-import { useNativeChatTurnNotedOptionPicks } from '../../../../../../src/shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
+import { createNativeChatTurnNotedOptionPicksHook } from '../../../../../../src/shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
 import { mobileNativeChatScopeKey } from '../../conversation/mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
@@ -19,6 +19,12 @@ import {
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
 } from './use-mobile-native-chat-session-options'
+
+const useNativeChatTurnNotedOptionPicks = createNativeChatTurnNotedOptionPicksHook({
+  useCallback,
+  useMemo,
+  useState
+})
 
 function isAuthoritativeListing(catalog: AgentSessionOptionCatalog | null): boolean {
   return catalog?.listModels !== undefined && catalog.discoveredModelsAreAuthoritative === true

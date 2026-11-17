@@ -4,12 +4,18 @@ import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
-import { useNativeChatTurnNotedOptionPicks } from '../../../../../../shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
+import { createNativeChatTurnNotedOptionPicksHook } from '../../../../../../shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
+
+const useNativeChatTurnNotedOptionPicks = createNativeChatTurnNotedOptionPicksHook({
+  useCallback,
+  useMemo,
+  useState
+})
 
 const NO_STRUCTURED_SNAPSHOT: SessionOptionDescriptor[] = []
 const refuseStructuredOption = (): Promise<never> =>
