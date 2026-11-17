@@ -89,6 +89,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
         eventName === 'userPromptSubmit' ||
         eventName === 'UserPromptSubmit'
       )
+    case 'trae':
+      // Why: Trae hook installer is a follow-up; treat no event as a new-turn boundary until the schema is known.
+      return false
   }
 }
 
@@ -136,6 +139,9 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'omp':
     case 'prime-agent':
       // Why: their done events are status snapshots or milestones that can repeat within one turn.
+      return false
+    case 'trae':
+      // Why: no Trae turn-end schema yet; the done placeholder is not a turn boundary.
       return false
   }
 }
@@ -262,5 +268,8 @@ export function extractToolFields(
       return extractJcodeToolFields(eventName, hookPayload)
     case 'kiro':
       return extractKiroToolFields(eventName, hookPayload)
+    case 'trae':
+      // Why: no Trae tool schema yet; empty snapshot keeps exhaustive routing safe.
+      return {}
   }
 }
