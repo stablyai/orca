@@ -1,9 +1,8 @@
 import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
+import { _electron as electron, expect, type ElectronApplication } from '@stablyai/playwright-test'
 import { test, forwardElectronProcessLogs } from '../electron-fixtures/orca-app'
-import { expect } from '@stablyai/playwright-test'
 import { getOrcaElectronLaunchArgs } from '../electron-fixtures/electron-launch-args'
 import {
   cleanupE2EDaemons,
