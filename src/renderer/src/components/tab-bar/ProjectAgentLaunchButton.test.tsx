@@ -11,7 +11,7 @@ const boundary = vi.hoisted(() => ({
   launch: vi.fn((..._args: unknown[]) => true),
   activate: vi.fn(() => true)
 }))
-vi.mock('./QuickLaunchButton', () => ({
+vi.mock('../agent/launch-menu/AgentMenuItems', () => ({
   useTabAgentMenuLaunch:
     (target: unknown) =>
     (...args: unknown[]) =>
