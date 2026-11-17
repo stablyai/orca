@@ -1,5 +1,7 @@
+import { isFocusKeepingPress } from '@/lib/overlay-interaction/focus-keeping-press'
 import {
   isDocumentBodyOrNull,
+  isTerminalImeInputContextRefocusPending,
   refreshTerminalImeInputContext,
   scheduleNextFrame,
   type TerminalImeInputContextRefocusScheduler
@@ -17,6 +19,27 @@ export function setRegularTerminalInputFocusAttribute(focused: boolean): void {
     return
   }
   document.documentElement.toggleAttribute(REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE, focused)
+}
+
+// Why: returning from a browser guest gives the helper no text-field relatedTarget, yet macOS keeps
+// the guest's input context (#23864); a page focus loss marks the next helper arrival for a rebuild.
+let pageFocusLostSinceHelperArrival = false
+let pageFocusLossTracked = false
+
+export function trackPageFocusLossForTerminalIme(): void {
+  if (pageFocusLossTracked || typeof window === 'undefined') {
+    return
+  }
+  pageFocusLossTracked = true
+  window.addEventListener('blur', () => {
+    pageFocusLostSinceHelperArrival = true
+  })
+}
+
+export function consumePageFocusLossForTerminalIme(): boolean {
+  const lost = pageFocusLostSinceHelperArrival
+  pageFocusLostSinceHelperArrival = false
+  return lost
 }
 
 export function getPaneOwnedActiveHelperTextarea(
@@ -40,7 +63,10 @@ export function releaseTerminalFocusForOutsidePointerDown(args: {
     return false
   }
 
-  if (isNode(args.pointerTarget) && args.container.contains(args.pointerTarget)) {
+  if (
+    (isNode(args.pointerTarget) && args.container.contains(args.pointerTarget)) ||
+    isFocusKeepingPress(args.pointerTarget)
+  ) {
     return false
   }
 
@@ -111,7 +137,11 @@ export function resyncTerminalFocusForWindowFocus(args: {
         isDocumentBodyOrNull(active, reclaimedHelper.ownerDocument)
       ) {
         reclaimedHelper.focus()
-        if (reclaimedHelper.ownerDocument.activeElement === reclaimedHelper) {
+        // The reclaim's focusin may start an input-context refresh, which blurs until next frame.
+        if (
+          reclaimedHelper.ownerDocument.activeElement === reclaimedHelper ||
+          isTerminalImeInputContextRefocusPending(reclaimedHelper)
+        ) {
           args.syncFocused(true)
         } else {
           syncFocusAfterFailedReclaim(reclaimedHelper.ownerDocument.activeElement, args.syncFocused)
@@ -127,17 +157,21 @@ export function resyncTerminalFocusForWindowFocus(args: {
 
   // Why: macOS app reactivation leaves a stale NSTextInputContext on the
   // still-focused helper (electron#32307/#34952); non-mac returns false inside.
-  refreshTerminalImeInputContext(reclaimedHelper, {
+  const refreshed = refreshTerminalImeInputContext(reclaimedHelper, {
     isMac: args.isMac,
     // If another control wins during refresh, update the terminal ownership mirror accordingly.
     onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, args.syncFocused),
     scheduleRefocus: args.scheduleRefocus
   })
+  if (refreshed) {
+    // This refresh covers the page focus loss; its refocus must not start a second one.
+    consumePageFocusLossForTerminalIme()
+  }
 
   return true
 }
 
-function syncFocusAfterFailedReclaim(
+export function syncFocusAfterFailedReclaim(
   activeElement: Element | null,
   syncFocused: TerminalInputFocusSync
 ): void {

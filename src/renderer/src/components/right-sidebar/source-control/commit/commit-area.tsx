@@ -5,8 +5,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import {
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
@@ -173,41 +173,44 @@ export function CommitArea({
     'More commit and remote actions'
   )
   const dropdownMenuContent = (
-    <DropdownMenuContent align="end" className="min-w-[14rem]">
+    <DropdownMenuContent align="end" className="w-58 max-w-[calc(100vw-1rem)]">
       {dropdownItems.map((entry) =>
         entry.kind === 'separator' ? (
           <DropdownMenuSeparator key={entry.id} />
         ) : (
-          <Tooltip key={entry.kind}>
-            <TooltipTrigger asChild>
-              <div className="block">
-                <DropdownMenuItem
-                  disabled={entry.disabled}
-                  variant={entry.variant}
-                  className="w-full"
-                  onSelect={(event) => {
-                    if (entry.disabled) {
-                      event.preventDefault()
-                      return
-                    }
-                    onDropdownAction(entry.kind)
-                  }}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{entry.label}</span>
-                    {entry.hint ? (
-                      <span className="truncate text-[10px] text-muted-foreground">
-                        {entry.hint}
-                      </span>
-                    ) : null}
-                  </span>
-                </DropdownMenuItem>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8} className="max-w-72">
-              {entry.title}
-            </TooltipContent>
-          </Tooltip>
+          <DropdownMenuItem
+            key={entry.kind}
+            className="min-h-7"
+            aria-disabled={entry.disabled || undefined}
+            aria-description={entry.title}
+            variant={entry.variant}
+            textValue={entry.label}
+            onSelect={(event) => {
+              if (entry.disabled) {
+                event.preventDefault()
+                return
+              }
+              onDropdownAction(entry.kind)
+            }}
+          >
+            <span className={cn('min-w-0 truncate', entry.idle && 'text-muted-foreground')}>
+              {entry.label}
+            </span>
+            {entry.status && (
+              <span
+                className={cn(
+                  'ml-auto shrink-0 pl-3 text-2xs whitespace-nowrap tabular-nums',
+                  entry.statusTone === 'warning'
+                    ? 'text-status-warning-text'
+                    : entry.statusTone === 'active'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
+                )}
+              >
+                {entry.status}
+              </span>
+            )}
+          </DropdownMenuItem>
         )
       )}
     </DropdownMenuContent>

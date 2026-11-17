@@ -2,10 +2,10 @@
 
 import {
   commonPropsSchema,
-  eventSchemas,
   type EventName,
   type EventProps
-} from '../../shared/telemetry-events'
+} from '../../shared/telemetry/telemetry-event-classification'
+import { eventSchemas } from '../../shared/telemetry/telemetry-event-registry'
 
 export type ValidationResult<N extends EventName> =
   | { ok: true; props: EventProps<N> }
@@ -64,14 +64,6 @@ export function validate<N extends EventName>(name: N, props: unknown): Validati
   }
 
   return { ok: true, props: parsed.data as EventProps<N> }
-}
-
-export function _resetValidatorWarnCacheForTests(): void {
-  lastWarnAt.clear()
-}
-
-export function _getValidatorWarnCacheSizeForTests(): number {
-  return lastWarnAt.size
 }
 
 // Keep outgoing common-property revalidation behind the same validator surface.

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { Button } from '../../../ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { getRepositoryHookScriptTextareaRows } from '@/lib/script-textarea-rows'
+import { getRepositoryHookScriptTextareaRows } from '@/components/script-editor/rows/script-textarea-rows'
 import type {
   LocalCommandSourcePolicyNotice,
   LocalHookField
@@ -36,37 +35,26 @@ function getEnvVars(t: Translate = translate): { name: string; description: stri
   ]
 }
 
-function EnvVarChips(): React.JSX.Element {
+function EnvironmentVariableReference(): React.JSX.Element {
   const t = useTranslate()
   const envVars = getEnvVars(t)
   return (
-    <div className="space-y-1.5">
-      <p className="text-[11px] text-muted-foreground">
+    <details className="space-y-1.5 text-xs text-muted-foreground">
+      <summary className="cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {t(
-          'auto.components.settings.RepositoryHooksSection.b2b06c7ce8',
-          'Available environment variables (hover for details):'
+          'components.settings.repositoryHooks.availableEnvVars',
+          'Available environment variables'
         )}
-      </p>
-      <TooltipProvider delayDuration={150}>
-        <div className="flex flex-wrap gap-1.5">
-          {envVars.map(({ name, description }) => (
-            <Tooltip key={name}>
-              <TooltipTrigger asChild>
-                <code
-                  tabIndex={0}
-                  className="cursor-help rounded-md border border-border/50 bg-muted/35 px-2 py-1 font-mono text-[11px] text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {name}
-                </code>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} className="max-w-80 text-left text-wrap">
-                {description}
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </div>
-      </TooltipProvider>
-    </div>
+      </summary>
+      <dl className="space-y-2">
+        {envVars.map(({ name, description }) => (
+          <div key={name} className="space-y-0.5">
+            <dt className="font-mono text-foreground">{name}</dt>
+            <dd>{description}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   )
 }
 
@@ -139,15 +127,12 @@ export function RepositoryHookScriptSetting({
 
   const showLocalEditor = showLocal || value.length > 0 || !hasShared
   return (
-    <div
-      className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm"
-      id={sectionId}
-    >
+    <div className="space-y-3" id={sectionId}>
       <div className="space-y-1">
         <h5 className="text-sm font-semibold">{field.label}</h5>
         <p className="text-xs text-muted-foreground">{field.description}</p>
       </div>
-      <EnvVarChips />
+      <EnvironmentVariableReference />
       {hasShared ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">

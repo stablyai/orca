@@ -11,11 +11,21 @@ export const EXECUTION_HOST_METHODS = [
   'ui.mutateJiraSavedFilters',
   'agent.launch',
   'agent.launchReplay',
+  // Agent ids, chat records and transcripts live on the host that runs the agent.
+  'agent.list',
+  'agent.read',
+  'agent.show',
   // Read state lives with the host whose worktree.ps reports it.
   'agentActivity.clear',
   'agentActivity.setRead',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  // Transcripts live on the host that ran the agent, which is also where resume launches it.
+  'aiVault.listSessions',
+  'aiVault.prepareSessionResume',
+  'aiVault.resolveSessionTitles',
+  'aiVault.searchSessions',
+  'aiVault.searchStatus',
   'automation.list',
   'automation.show',
   'automation.create',
@@ -242,6 +252,7 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.resolveMrBase',
   'worktree.resolvePrBase',
   'worktree.rm',
+  'worktree.runApprovedSetup',
   'worktree.set',
   'worktree.show',
   'worktree.sleep'

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { View, Text, Pressable } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import { loadHosts } from '../src/transport/hosts/host-store'
+import { loadHosts } from '../src/host-catalog/host-store'
 import { connectionLogStore } from '../src/diagnostics/connection/persisted-connection-log-store'
 import { useRpcClientContext } from '../src/transport/connection/client-context'
 import { useHostClient } from '../src/transport/connection/host-client-hooks'
@@ -22,7 +22,7 @@ import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
 import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
-import type { HostProfile } from '../src/transport/hosts/host-profile'
+import type { HostProfile } from '../src/host-catalog/host-profile'
 import { pressedStyle } from '../src/theme/mobile-theme'
 
 // Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.

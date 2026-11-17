@@ -3,7 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/resolved-worktree-lineage'
+import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeDeleteIdentity } from './worktree-delete-request'
@@ -159,7 +159,8 @@ export function useDetachWorktreeDeleteChildren({
   }
 
   return {
-    preserveChildren,
+    preserveChildren: preserveChildren && canPreserveChildren,
+    preserveChildrenSelected: preserveChildren,
     setPreserveChildren: (preserve: boolean) => {
       setPreserve(preserve)
       setDetachError(null)

@@ -1,22 +1,21 @@
 import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/claude-model-fallback'
-import { NativeChatUsageLimitAutoContinue } from '../../usage/NativeChatUsageLimitAutoContinue'
-import { NativeChatUsageLimitActions } from '../../usage/NativeChatUsageLimitActions'
+} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
+import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useContext, useSyncExternalStore } from 'react'
-import { NativeChatForkedFromContext } from '../actions/native-chat-fork-context'
-import { NativeChatPullRequestEventLine } from '../../NativeChatPullRequestEventLine'
-import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
+import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
+import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
+import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
   type AgentSessionHostStatusPresentation
@@ -24,23 +23,24 @@ import {
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
-  nativeChatNoticeLook
-} from '../../../../../../shared/native-chat/native-chat-notice'
+  nativeChatNoticeLook,
+  type NativeChatNoticeTone
+} from '../../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
-import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/native-chat-orca-stop-words'
+import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
+import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
 } from '../diagnostics/NativeChatProviderDetails'
-import { NativeChatSignInButton } from '../../host-access/NativeChatSignInButton'
+import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
-import { formatUsageLimitResetClock } from '../../../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -65,6 +65,14 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
     )
 }
 
+function toneClass(tone: NativeChatNoticeTone): string {
+  return tone === 'warning'
+    ? 'text-chat-warning'
+    : tone === 'error'
+      ? 'text-destructive'
+      : 'text-chat-foreground-faint'
+}
+
 export function NativeChatNoticeRow({
   block,
   messageId,
@@ -78,35 +86,13 @@ export function NativeChatNoticeRow({
   const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
-  const openForkSource = useContext(NativeChatForkedFromContext)
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
     return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
-    const label = t('components.native-chat.notices.forkedFrom', NATIVE_CHAT_NOTICE_COPY.forkedFrom)
-    return (
-      // Plain text with decorative rules: a separator role would hide the source button from screen readers.
-      <div className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint">
-        <span aria-hidden className="h-px flex-1 bg-border" />
-        <span>
-          {label}{' '}
-          {openForkSource ? (
-            <button
-              type="button"
-              className="rounded-sm underline underline-offset-2 hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => openForkSource(look.sourceSessionId)}
-            >
-              {look.sourceName}
-            </button>
-          ) : (
-            look.sourceName
-          )}
-        </span>
-        <span aria-hidden className="h-px flex-1 bg-border" />
-      </div>
-    )
+    return <NativeChatForkedFromRow look={look} />
   }
   if (look.kind === 'divider') {
     const label =
@@ -173,26 +159,38 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
+  if (look.kind === 'auto-review-denied') {
+    return (
+      <NativeChatAutoReviewDenialRow
+        denial={look.denial}
+        agent={agentName ?? look.agent}
+        itemId={messageId}
+      />
+    )
+  }
   if (look.kind === 'settled-permission') {
     const agent = agentName ?? look.agent
     const summary =
-      look.decision === 'denied'
+      look.decision === 'approved'
         ? t(
-            'components.native-chat.notices.permissionDenied',
-            '{{agent}} denied permission. View details.',
+            'components.native-chat.notices.safetyReviewApproved',
+            '{{agent}} approved this action. View details.',
             { agent }
           )
-        : t(
-            'components.native-chat.notices.safetyReview',
-            '{{agent}} reported a safety review warning. View details.',
-            { agent }
-          )
+        : look.decision === 'denied'
+          ? t(
+              'components.native-chat.notices.permissionDenied',
+              '{{agent}} denied permission. View details.',
+              { agent }
+            )
+          : t(
+              'components.native-chat.notices.safetyReview',
+              '{{agent}} reported a safety review warning. View details.',
+              { agent }
+            )
     const payload = block.providerFrame?.payload
     return (
-      <NativeChatDetailsDisclosure
-        summary={summary}
-        bodyClassName={look.tone === 'error' ? 'text-destructive' : 'text-chat-warning'}
-      >
+      <NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
         {block.text}
         {payload ? '\n\n' : ''}
         {payload?.truncated
@@ -222,14 +220,18 @@ export function NativeChatNoticeRow({
     failure?.account,
     t
   )
-  const usageLimitContinue =
-    block.usageLimitTurnItemId !== undefined &&
-    block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
   // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
-    failure?.kind === 'notSignedIn' ||
-    failure?.kind === 'savedConversationMissing' ||
-    failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'notSignedIn',
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -248,32 +250,36 @@ export function NativeChatNoticeRow({
         { continueAvailable, remoteHost },
         sayNativeChatOrcaStopTranslated
       )
-    : failure?.kind === 'usageLimitReached'
+    : failure && factSurface
       ? agentSessionFailureSentence(
           failure,
-          'row',
-          {
-            agentName,
-            usageLimitReset: formatUsageLimitResetClock
-          },
+          factSurface,
+          { agentName },
           sayAgentSessionFailureTranslated
         )
-      : failure && factSurface
+      : failure && wslMissingSurface && wslDistro
         ? agentSessionFailureSentence(
             failure,
-            factSurface,
-            { agentName },
+            wslMissingSurface,
+            { agentName, wslDistro },
             sayAgentSessionFailureTranslated
           )
-        : failure && wslMissingSurface && wslDistro
-          ? agentSessionFailureSentence(
-              failure,
-              wslMissingSurface,
-              { agentName, wslDistro },
-              sayAgentSessionFailureTranslated
-            )
-          : agentSessionGoalControlWords(block.text)
+        : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
+  if (block.orcaStop === undefined && failure?.kind === 'usageLimitReached') {
+    return (
+      <NativeChatUsageLimitRow
+        block={block}
+        failure={failure}
+        agentName={agentName}
+        detail={failureDetail?.trim() ? failureDetail : undefined}
+        active={
+          block.usageLimitTurnItemId !== undefined &&
+          block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
+        }
+      />
+    )
+  }
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
   const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null
   const Icon =
@@ -289,9 +295,7 @@ export function NativeChatNoticeRow({
       className={cn(
         'space-y-2 text-sm text-chat-foreground',
         Icon && 'rounded-md border border-border bg-muted/20 p-3',
-        tone === 'warning' && 'text-chat-warning',
-        tone === 'error' && 'text-destructive',
-        tone === 'notice' && 'text-chat-foreground-faint'
+        tone && toneClass(tone)
       )}
     >
       <div className="flex items-start gap-2">
@@ -301,19 +305,9 @@ export function NativeChatNoticeRow({
         </p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
-        ) : usageLimitContinue ? (
-          <UsageLimitContinueNow
-            resetsAt={
-              failure?.kind === 'usageLimitReached' ? failure.usageLimit?.resetsAt : undefined
-            }
-          />
         ) : null}
       </div>
-      {usageLimitContinue ? <NativeChatUsageLimitActions /> : null}
-      {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
-        <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
-      ) : null}
-      <NativeChatSignInButton failureKind={block.failure?.kind} />
+      <NativeChatSetupButton failureKind={block.failure?.kind} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}
@@ -322,52 +316,5 @@ export function NativeChatNoticeRow({
         />
       ) : null}
     </div>
-  )
-}
-
-// The clock subscription only invalidates the view; fresh wall time owns reset eligibility.
-function UsageLimitContinueNow({
-  resetsAt
-}: {
-  resetsAt: number | undefined
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const orcaStopView = useNativeChatOrcaStopView()
-  const resetPassed = useSyncExternalStore(
-    (invalidate) => {
-      if (resetsAt === undefined) {
-        return () => {}
-      }
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const refresh = (): void => {
-        clearTimeout(timer)
-        const delay = resetsAt - Date.now()
-        timer = delay > 0 ? setTimeout(refresh, Math.min(delay, 2_147_483_647)) : undefined
-        invalidate()
-      }
-      refresh()
-      window.addEventListener('focus', refresh)
-      document.addEventListener('visibilitychange', refresh)
-      return () => {
-        clearTimeout(timer)
-        window.removeEventListener('focus', refresh)
-        document.removeEventListener('visibilitychange', refresh)
-      }
-    },
-    () => resetsAt !== undefined && Date.now() >= resetsAt
-  )
-  if (!resetPassed) {
-    return null
-  }
-  return (
-    <NativeChatInterruptedContinueButton
-      label={t('components.native-chat.usageLimitActions.continueNow', 'Continue Now')}
-      onContinue={orcaStopView.continueUsageLimit}
-      disabled={orcaStopView.usageLimitContinueDisabled}
-      explanation={t(
-        'components.native-chat.interruptedContinue.usageLimitExplanation',
-        'Asks the agent to continue where it left off. Use it once the limit resets.'
-      )}
-    />
   )
 }

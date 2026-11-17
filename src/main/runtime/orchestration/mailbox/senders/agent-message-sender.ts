@@ -4,14 +4,16 @@ import {
   orchestrationSenderAgent,
   type SenderNamingSources
 } from './orchestration-sender-name'
-import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import {
   agentMessageSenderName,
   type AgentMessageSender
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { resolveOrchestrationParty } from '../../addressing/orchestration-party'
+import { runCoordinatorKey } from '../../addressing/orchestration-caller-identity'
+import { exposeUtcTimestamp } from '../../db/utc-timestamp'
 
 /** What a sender is now: its recorded name, never an agent-painted title, and its agent. */
 export type SenderSnapshot = { name: string | null; agent: AgentType | null }
@@ -34,23 +36,32 @@ export type SenderSnapshotResolver = (
   reportedDispatchId?: string
 ) => SenderSnapshot
 
-/** Snapshot the sender's name and agent before its party disappears. */
+/** Snapshot the sender's name and agent before its party disappears. `sentAt`: the message's
+ *  `created_at`; omitted when it is being sent now. */
 export function agentMessageSender(
   address: string,
   db: OrchestrationDb | null,
   senderSnapshot: SenderSnapshotResolver,
-  reportedDispatchId?: string
+  reportedDispatchId?: string,
+  sentAt?: string
 ): AgentMessageSender {
-  const party = senderParty(address, db)
+  const party = senderParty(address, db, sentAt)
   const snapshot = snapshotSender(senderSnapshot, party, reportedDispatchId)
+  // Mail from another server is named by its label: "term_9f3c on Jinwoo's Mac".
+  const peerLabel = !snapshot.name && db?.isPeerMailSenderLabel(address) ? address : null
   return {
-    party,
-    name: agentMessageSenderName(snapshot.name),
+    // A coordinator's terminal can later host another agent; only its session identifies it.
+    party: address.startsWith('run:') ? { ...party, terminalHandle: null } : party,
+    name: agentMessageSenderName(snapshot.name ?? peerLabel),
     ...(snapshot.agent ? { agent: snapshot.agent } : {})
   }
 }
 
-function senderParty(address: string, db: OrchestrationDb | null): AgentMessageSender['party'] {
+function senderParty(
+  address: string,
+  db: OrchestrationDb | null,
+  sentAt: string | undefined
+): AgentMessageSender['party'] {
   if (address.startsWith('dispatch:')) {
     const id = address.slice(9)
     return {
@@ -62,7 +73,15 @@ function senderParty(address: string, db: OrchestrationDb | null): AgentMessageS
     }
   }
   if (address.startsWith('run:')) {
-    return { address, terminalHandle: null, orcaSessionId: null }
+    // A run speaks as its coordinator, but only under the binding it was sent from.
+    const run = db?.getRun(address.slice(4))
+    const sent = sentAt ? exposeUtcTimestamp(sentAt) : null
+    const coordinator = run && (!sent || sent >= run.updated_at) ? runCoordinatorKey(run) : null
+    return {
+      address,
+      terminalHandle: coordinator?.terminalHandle ?? null,
+      orcaSessionId: coordinator?.orcaSessionId ?? null
+    }
   }
   try {
     const { paneKey: _credential, ...party } = resolveOrchestrationParty(address, db)

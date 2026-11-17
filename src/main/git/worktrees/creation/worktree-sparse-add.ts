@@ -1,10 +1,11 @@
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
-import { addWorktree, unsetWorktreeCreationBase } from './worktree-add'
+import { addWorktreeDeferringLocalBaseUpdate } from './worktree-add'
 import type {
   AddWorktreeOptions,
   AddWorktreeResult,
+  GitWorktreeExecOptions,
   SparseWorktreeCreateError
 } from '../worktree-operation-options'
 import { gitExecOptions } from '../worktree-operation-options'
@@ -22,7 +23,7 @@ export async function addSparseWorktree(
   let created = false
   let addResult: AddWorktreeResult = {}
   try {
-    addResult = await addWorktree(
+    const added = await addWorktreeDeferringLocalBaseUpdate(
       repoPath,
       worktreePath,
       branch,
@@ -31,6 +32,7 @@ export async function addSparseWorktree(
       true,
       options
     )
+    addResult = added.result
     created = true
     // --no-checkout wrote no files; these materialization steps need Windows long-path support.
     const longPathArgs = windowsLongPathGitArgs(worktreePath)
@@ -38,14 +40,15 @@ export async function addSparseWorktree(
       checkoutWorkersGitArgs(worktreePath, options),
       gitExecFileAsync(['sparse-checkout', 'init', '--cone'], gitExecOptions(worktreePath, options))
     ])
-    await gitExecFileAsync(
-      [...longPathArgs, 'sparse-checkout', 'set', '--', ...directories],
-      gitExecOptions(worktreePath, options)
-    )
-    await gitExecFileAsync(
-      [...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch],
-      gitExecOptions(worktreePath, options)
-    )
+    await gitExecFileAsync([...longPathArgs, 'sparse-checkout', 'set', '--', ...directories], {
+      ...gitExecOptions(worktreePath, options),
+      admissionClass: 'checkout'
+    })
+    await gitExecFileAsync([...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch], {
+      ...gitExecOptions(worktreePath, options),
+      admissionClass: 'checkout'
+    })
+    added.updateCheckedOutLocalBase?.()
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
@@ -75,4 +78,16 @@ export async function addSparseWorktree(
     }
     throw wrapped
   }
+}
+
+async function unsetWorktreeCreationBase(
+  worktreePath: string,
+  branch: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<void> {
+  try {
+    await gitExecFileAsync(['config', '--local', '--unset-all', `branch.${branch}.base`], {
+      ...gitExecOptions(worktreePath, options)
+    })
+  } catch {}
 }

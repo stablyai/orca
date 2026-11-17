@@ -1,9 +1,12 @@
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Project } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { getWslFilesystemBoundaryDistro } from '../../../../shared/wsl-paths'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { Project } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
+import { getWslFilesystemBoundaryDistro } from '../../../../shared/file-access/wsl-paths'
 import { resolveProjectExecutionRuntime } from '../../../../shared/execution-host/project-execution-runtime'
 import { translate } from '@/i18n/i18n'
 

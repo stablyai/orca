@@ -1,14 +1,14 @@
 import type { RefObject } from 'react'
-import '@/lib/new-workspace'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import '@/lib/workspace/creation/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { QuickSubmitOptions } from './composer-state/quick-creation-request'
+import type { QuickSubmitOptions } from './composer-state/submission/quick-creation-request'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace/creation/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
-import { buildComposerCardProps } from './composer-state/composer-card-props'
+import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
+import { buildComposerCardProps } from './composer-state/card-projection/composer-card-props'
 import {
   canResolveFolderSmartGitHubSubmit,
   getInitialAutoManagedWorkspaceName,
@@ -28,19 +28,7 @@ import { assembleComposerModel } from './composer-state/assemble-composer-model'
 import type {
   ComposerCardActionProps,
   ComposerCardSourceProps
-} from './composer-state/composer-card-contract'
-
-export {
-  canResolveFolderSmartGitHubSubmit,
-  getInitialAutoManagedWorkspaceName,
-  getInitialGitHubPrStartPointSelection,
-  getMatchingLinkedTaskSourceContext,
-  isExplicitWorkspaceNameInput,
-  resolveInitialWorkspaceRunSeed,
-  resolveSmartGitHubCreateNames,
-  retargetGitHubPrStartPointSelection
-} from './composer-state/composer-decisions'
-export type { InitialWorkspaceRunSeedInput } from './composer-state/composer-decisions'
+} from './composer-state/card-projection/composer-card-contract'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string

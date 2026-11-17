@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import type { BrowserPasswordFieldFocusEvent } from '../../shared/browser-passwords-types'
+import type { BrowserPasswordFieldFocusEvent } from '../../shared/browser/passwords/browser-passwords-types'
 import { isAgentInjectingInput } from '../browser/cdp/input/agent-input-injection'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { browserPasswordVaultForGuest as vaultForGuest } from './browser-password-vault-access'

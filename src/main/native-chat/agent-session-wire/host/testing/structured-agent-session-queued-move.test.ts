@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -6,7 +7,10 @@ import {
 
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data.test-fixture'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 
 let rig: QueuedMessageTestRig
@@ -37,9 +41,8 @@ async function queue(text: string, mail = false) {
   }
   return result.value.queued.messageId
 }
-function order() {
-  return journal()
-    .queuedMessages.list()
+async function order() {
+  return (await journal().queuedMessages.list())
     .filter((card) => card.state === 'waiting' || card.state === 'returned')
     .map((card) => card.messageId)
 }
@@ -61,17 +64,17 @@ describe('authoritative queue ordering', () => {
     const mail = await queue('mail', true)
     const b = await queue('b')
     const c = await queue('c')
-    const facts = journal().queuedMessages.list()
+    const facts = await journal().queuedMessages.list()
     const op = hostTestOperationId()
     expect(await move(c, { beforeMessageId: a }, op)).toMatchObject({
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([c, a, mail, b])
+    expect(await order()).toEqual([c, a, mail, b])
     for (const card of facts) {
-      expect(journal().queuedMessages.get(card.messageId)).toEqual({
+      expect(await journal().queuedMessages.get(card.messageId)).toEqual({
         ...card,
-        position: journal().queuedMessages.get(card.messageId)!.position
+        position: (await journal().queuedMessages.get(card.messageId))!.position
       })
     }
     expect(await move(c, { afterMessageId: b })).toMatchObject({
@@ -82,7 +85,7 @@ describe('authoritative queue ordering', () => {
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([a, mail, b, c])
+    expect(await order()).toEqual([a, mail, b, c])
     expect(await move(mail, { beforeMessageId: a })).toMatchObject({
       ok: true,
       value: { status: 'moved' }
@@ -100,7 +103,7 @@ describe('authoritative queue ordering', () => {
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([mail, a, c, b])
+    expect(await order()).toEqual([mail, a, c, b])
     await rig.host.close(HOST_TEST_SESSION, 'evict')
     await rig.restartHostProcess()
     const reopened = await rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
@@ -114,9 +117,9 @@ describe('authoritative queue ordering', () => {
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([mail, a, c, b])
-    expect(journal().queuedMessages.get(mail)?.body).toEqual(facts[1]!.body)
-    expect(journal().queuedMessages.list()).toHaveLength(4)
+    expect(await order()).toEqual([mail, a, c, b])
+    expect((await journal().queuedMessages.get(mail))?.body).toEqual(facts[1]!.body)
+    expect(await journal().queuedMessages.list()).toHaveLength(4)
     expect(await rig.deleteQueued(c)).toMatchObject({ ok: true })
     expect(await move(c, { beforeMessageId: null })).toMatchObject({
       ok: true,
@@ -131,15 +134,15 @@ describe('authoritative queue ordering', () => {
     const held = await queue('held mail', true)
     const b = await queue('b')
     await journal().queuedMessages.hold({ messageIds: [held], reason: 'send_failed' })
-    const facts = journal().queuedMessages.list()
+    const facts = await journal().queuedMessages.list()
     await move(held, { beforeMessageId: a })
     const op = hostTestOperationId()
     await move(mail, { beforeMessageId: a }, op)
-    expect(order()).toEqual([held, mail, a, b])
+    expect(await order()).toEqual([held, mail, a, b])
     for (const card of facts) {
-      expect(journal().queuedMessages.get(card.messageId)).toEqual({
+      expect(await journal().queuedMessages.get(card.messageId)).toEqual({
         ...card,
-        position: journal().queuedMessages.get(card.messageId)!.position
+        position: (await journal().queuedMessages.get(card.messageId))!.position
       })
     }
     await rig.settleAccepted(working, 'work')
@@ -164,14 +167,14 @@ describe('authoritative queue ordering', () => {
       await eventually(async () => expect(await rig.handoff(id)).toBeDefined())
       await rig.settleAccepted(await rig.handoffId(id), turn)
     }
-    const snapshot = await rig.host.journalSnapshot(HOST_TEST_SESSION)
+    const snapshot = await readTestHostJournal(rig.host, HOST_TEST_SESSION)
     expect(snapshot.submissions.flatMap((entry) => entry.queuedMessageId ?? [])).toEqual([
       mail,
       a,
       b
     ])
-    expect(order()).toEqual([held])
-    expect(journal().queuedMessages.get(held)).toEqual({
+    expect(await order()).toEqual([held])
+    expect(await journal().queuedMessages.get(held)).toEqual({
       ...facts.find((card) => card.messageId === held)!,
       position: facts[0]!.position
     })

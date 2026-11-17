@@ -1,12 +1,12 @@
 import React from 'react'
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 
 export function ProjectsCollapseAllButton({
   allCollapsed,

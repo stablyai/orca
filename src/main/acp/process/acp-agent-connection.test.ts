@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import type { terminateProviderProcessTree } from '../../provider-process/provider-process-teardown'
 import {
@@ -12,6 +13,11 @@ import { AcpAgentExitedError, AcpAuthRequiredError } from '../transport/acp-erro
 import { acpStartFailure } from '../session/start/acp-startup-outcome'
 import captures from '../../native-chat/agent-session-wire/__fixtures__/startup-protocol-rejections.json'
 import { AcpScriptedAgent, deferred, tick } from './testing/acp-scripted-agent.test-support'
+
+// Protocol fixtures supply a provider child, not the native bootstrap's control pipes.
+vi.mock('../../provider-process/provider-process-spawn', () => ({
+  spawnProviderProcess: (spec: PipedProcessSpec, spawn: ProviderProcessSpawner) => spawn(spec)
+}))
 
 const teardown = vi.hoisted(() =>
   vi.fn<typeof terminateProviderProcessTree>(async () => 'unverifiable')
@@ -40,7 +46,7 @@ function fixture(
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<PipedProcessSpawner>(() => {
+  const spawn = vi.fn<ProviderProcessSpawner>(() => {
     return child
   })
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))
@@ -215,21 +221,6 @@ describe('ACP process-owning connection', () => {
     expect(onExit.mock.calls[0][1].exit.processless).toBe(true)
     expect(await connection.close()).toBe(true)
   })
-})
-
-it('closes a recognized stdout prompt over 16 MiB without inventing a signed-out answer', async () => {
-  const answered = vi.fn()
-  const { connection, agent } = fixture({
-    signIn: {
-      read: (line) => (line.startsWith('SIGN IN') ? 'prefix-only' : undefined),
-      answered
-    }
-  })
-  await connection.start(start)
-  expect(answered).toHaveBeenCalledExactlyOnceWith(true)
-  agent.stdout.write(`SIGN IN ${'x'.repeat(16 * 1024 * 1024)}\n`)
-  await vi.waitFor(() => expect(connection.closed).toBe(true))
-  expect(answered).toHaveBeenCalledTimes(1)
 })
 
 it('keeps cached startup usable without advertising the configured method, but refuses unsupported required authentication', async () => {

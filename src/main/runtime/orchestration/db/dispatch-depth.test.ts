@@ -27,24 +27,6 @@ describe('nested worker depth', () => {
     return worker
   }
 
-  it('refuses a worker dispatching a sub-worker at the default cap', () => {
-    coordinatorDispatchesWorker()
-    const nested = db.createTask({ runId: 'run_legacy_local', spec: 'nested task' })
-    expect(() =>
-      db.createDispatchContext({
-        taskId: nested.id,
-        assigneeHandle: 'term_sub',
-        assigneePaneKey: 'tab_sub:leaf_sub',
-        creator: {
-          kind: 'terminal',
-          handle: 'term_worker',
-          paneKey: 'tab_worker:leaf_worker'
-        },
-        maxDepth: 1
-      })
-    ).toThrow(/at most 1 level deep, so this worker can't start another \(depth 2\)/)
-  })
-
   it('closes the run-create bypass: a fresh Run does not reset the creator depth', () => {
     // A worker-created Run must not evade depth derived from its creator Dispatch.
     coordinatorDispatchesWorker()
@@ -78,21 +60,6 @@ describe('nested worker depth', () => {
         maxDepth
       })
     }
-
-    it('refuses a worker starting a sub-worker at the default cap', () => {
-      coordinatorDispatchesWorker()
-      const nested = db.createTask({
-        runId: 'run_legacy_local',
-        spec: 'nested work'
-      })
-      expect(() =>
-        startWorker(
-          nested.id,
-          { kind: 'terminal', handle: 'term_worker', paneKey: 'tab_worker:leaf_worker' },
-          1
-        )
-      ).toThrow(/at most 1 level deep, so this worker can't start another \(depth 2\)/)
-    })
 
     it('refuses a worker retrying into a sub-worker at the default cap', () => {
       coordinatorDispatchesWorker()

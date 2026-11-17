@@ -1,9 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
   startBackgroundWorktreeRemoval,
+  loadWorktreeRemovalRecords,
+  waitForWorktreeRemovalAcceptance,
   waitForPendingWorktreeRemoval
 } from './worktree-background-removal'
 
@@ -11,7 +16,7 @@ import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals
 } from './worktree-removal-listing'
-import { assertNoPendingWorktreeRemovalConflict } from './worktree-removal-table'
+import './worktree-removal-table'
 
 const removal = {
   worktreeId: 'repo-1::/work/feature',
@@ -33,35 +38,20 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('background worktree removal', () => {
-  afterEach(() => {
+  let directory = ''
+  beforeEach(async () => {
     _resetPendingWorktreeRemovalsForTests()
+    directory = await mkdtemp(join(tmpdir(), 'orca-background-removal-'))
+    await loadWorktreeRemovalRecords(directory)
+  })
+  afterEach(async () => {
+    _resetPendingWorktreeRemovalsForTests()
+    await rm(directory, { recursive: true, force: true })
   })
 
-  it('resolves with the delete result once Git finishes, after the row has left the table', async () => {
-    const git = deferred<{ preservedBranch: { branchName: string; head: string } }>()
-    const pendingAtPublish: boolean[] = []
-    const result = startBackgroundWorktreeRemoval({
-      removal,
-      run: () => git.promise,
-      publish: () => pendingAtPublish.push(isPending())
-    })
-
-    expect(isPending()).toBe(true)
-    expect(pendingAtPublish).toEqual([true])
-
-    git.resolve({ preservedBranch: { branchName: 'feature', head: 'abc' } })
-    await expect(result).resolves.toEqual({
-      preservedBranch: { branchName: 'feature', head: 'abc' }
-    })
-    await _settlePendingWorktreeRemovalsForTests()
-    expect(isPending()).toBe(false)
-    expect(pendingAtPublish).toEqual([true, false])
-  })
-
-  it('answers a request whose delete a concurrent removal of the same worktree replaced', async () => {
+  it('joins concurrent requests to the one recorded deletion', async () => {
     // The desktop IPC and runtime RPC removal paths coalesce separately, so both can be accepted.
     const first = deferred<Record<string, never>>()
-    const second = deferred<{ preservedBranch: { branchName: string; head: string } }>()
     const firstResult = startBackgroundWorktreeRemoval({
       removal,
       run: () => first.promise,
@@ -69,18 +59,13 @@ describe('background worktree removal', () => {
     })
     const secondResult = startBackgroundWorktreeRemoval({
       removal,
-      run: () => second.promise,
+      run: () => new Promise(() => {}),
       publish: () => {}
     })
 
     first.resolve({})
     await expect(firstResult).resolves.toEqual({})
-    expect(isPending()).toBe(true)
-
-    second.resolve({ preservedBranch: { branchName: 'feature', head: 'abc' } })
-    await expect(secondResult).resolves.toEqual({
-      preservedBranch: { branchName: 'feature', head: 'abc' }
-    })
+    await expect(secondResult).resolves.toEqual({})
     await _settlePendingWorktreeRemovalsForTests()
     expect(isPending()).toBe(false)
   })
@@ -98,43 +83,13 @@ describe('background worktree removal', () => {
     expect(isPending()).toBe(false)
   })
 
-  it('refuses a create at the same path or branch while Git deletes', async () => {
-    const git = deferred<Record<string, never>>()
-    void startBackgroundWorktreeRemoval({
-      removal,
-      run: () => git.promise,
-      publish: () => {}
-    })
-
-    expect(() =>
-      assertNoPendingWorktreeRemovalConflict('/work/repo', { worktreePath: '/work/feature' })
-    ).toThrow('Cleanup is pending; try again shortly.')
-    expect(() =>
-      assertNoPendingWorktreeRemovalConflict('/work/repo', { branch: 'refs/heads/feature' })
-    ).toThrow('Cleanup is pending; try again shortly.')
-    expect(() =>
-      assertNoPendingWorktreeRemovalConflict('/work/other-repo', { branch: 'feature' })
-    ).not.toThrow()
-    expect(() =>
-      assertNoPendingWorktreeRemovalConflict('/work/repo', {
-        worktreePath: '/work/feature-2',
-        branch: 'feature-2'
-      })
-    ).not.toThrow()
-
-    git.resolve({})
-    await _settlePendingWorktreeRemovalsForTests()
-    expect(() =>
-      assertNoPendingWorktreeRemovalConflict('/work/repo', { worktreePath: '/work/feature' })
-    ).not.toThrow()
-  })
-
-  it('marks rows for clients that read the marker and omits them for clients that do not', () => {
+  it('marks rows for clients that read the marker and omits them for clients that do not', async () => {
     void startBackgroundWorktreeRemoval({
       removal,
       run: () => new Promise(() => {}),
       publish: () => {}
     })
+    await waitForWorktreeRemovalAcceptance(removal.worktreeId)
     const rows = [
       { id: removal.worktreeId, hostId: 'local' as const },
       { id: 'repo-1::/work/other' },
@@ -144,7 +99,7 @@ describe('background worktree removal', () => {
     expect(
       projectPendingWorktreeRemovals(rows, (row) => row.id, true, snapshotPendingWorktreeRemovals())
     ).toEqual([
-      { id: removal.worktreeId, hostId: 'local', removing: true },
+      { id: removal.worktreeId, hostId: 'local', removing: true, removalRecorded: true },
       { id: 'repo-1::/work/other' },
       { id: removal.worktreeId, hostId: 'ssh:box' }
     ])
@@ -185,10 +140,10 @@ describe('background worktree removal', () => {
     for (const clientReadsMarker of [true, false]) {
       expect(
         projectPendingWorktreeRemovals(rows, (row) => row.id, clientReadsMarker, pendingAtScan)
-      ).toEqual([{ id: other.worktreeId }])
+      ).toEqual([{ id: other.worktreeId, removalError: 'git failed' }])
     }
     expect(
       projectPendingWorktreeRemovals(rows, (row) => row.id, true, snapshotPendingWorktreeRemovals())
-    ).toBe(rows)
+    ).toEqual([{ id: removal.worktreeId }, { id: other.worktreeId, removalError: 'git failed' }])
   })
 })

@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -11,7 +11,7 @@ export function getRepositoryMcpConfigSearchEntries(
   const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: t('auto.components.settings.repository.search.31bd0a2420', 'MCP Configs'),
+      title: t('auto.components.settings.repository.search.b1b5a4139d', 'MCP configs'),
       description: t(
         'auto.components.settings.repository.search.3c31801626',
         'Inspect project-level MCP server config files.'

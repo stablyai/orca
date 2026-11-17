@@ -1,10 +1,10 @@
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
-} from '@/lib/unified-tab-host-ownership'
+} from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { editorPlacementIndex } from './workspace-editor-files'
 import { isEditorTabContentType } from './editor-tab-content-type'
 

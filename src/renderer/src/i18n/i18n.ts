@@ -17,12 +17,12 @@ import {
   getTranslationResourceVersion
 } from './translation-resource-version'
 import { resolveUiLocale } from './supported-languages'
-import type { SupportedUiLocale } from '../../../shared/ui-locale'
-import type { UiLanguage } from '../../../shared/ui-language'
+import type { SupportedUiLocale } from '../../../shared/i18n/ui-locale'
+import type { UiLanguage } from '../../../shared/i18n/ui-language'
 import type { PluginLanguagePackRegistration } from '../../../shared/plugins/artifacts/plugin-language-pack-artifact'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { supportedIntlLocale } from './intl-locale-support'
-import { createOrcaI18n } from '../../../shared/orca-i18n-instance'
+import { createOrcaI18n } from '../../../shared/i18n/orca-i18n-instance'
 
 // Fetch catalogs as data: Chromium caches rejected module imports for the document's lifetime.
 const NON_DEFAULT_LOCALE_URLS: Record<Exclude<SupportedUiLocale, 'en'>, string> = {
@@ -142,26 +142,43 @@ export function translate(key: string, fallback: string, options?: TOptions): st
   return value
 }
 
+export class RendererLanguageLoadError extends Error {
+  constructor(readonly completion: Promise<string>) {
+    super('Language catalog unavailable')
+  }
+}
+
 export async function loadRendererUiLanguage(language: UiLanguage): Promise<string> {
   const locale = orcaI18n.resolveResourceLanguage(resolveUiLocale(language))
   const request = i18n.hasResourceBundle(locale, 'translation')
     ? undefined
     : loadLocaleCatalog(locale)
   if (request) {
-    const catalog = await withTimeout(request, 5000, null)
-    if (catalog === null) {
+    const completion = request.then((catalog) => {
+      if (!i18n.hasResourceBundle(locale, 'translation')) {
+        // Freshly parsed and never mutated, so skip i18next's defensive deep copy.
+        i18n.addResourceBundle(locale, 'translation', catalog, false, false, { skipCopy: true })
+      }
+      return locale
+    })
+    const loadedLocale = await withTimeout<string | null>(completion, 5000, null)
+    if (loadedLocale === null) {
       // A retry after a timeout must start a fresh request instead of joining the stalled one.
       if (catalogRequests.get(locale) === request) {
         catalogRequests.delete(locale)
       }
-      throw new Error('Language catalog unavailable')
-    }
-    if (!i18n.hasResourceBundle(locale, 'translation')) {
-      // Freshly parsed and never mutated, so skip i18next's defensive deep copy.
-      i18n.addResourceBundle(locale, 'translation', catalog, false, false, { skipCopy: true })
+      throw new RendererLanguageLoadError(completion)
     }
   }
   return locale
+}
+
+/** Test entry point: load the locale catalog, then switch the renderer language. */
+export async function setRendererUiLanguage(language: UiLanguage): Promise<void> {
+  const locale = await loadRendererUiLanguage(language)
+  if (i18n.language !== locale) {
+    await i18n.changeLanguage(locale)
+  }
 }
 
 /** Resolve an Intl-compatible BCP-47 tag: plugin pack resources use the pack’s declared tag, then the default locale. */

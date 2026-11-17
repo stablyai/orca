@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/constants'
-import { getWorktreeCardDetails } from '../../../../../../shared/worktree/card-properties'
+import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { getWorktreeCardDetails } from '../../../../../../shared/worktree/row-display/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
@@ -20,6 +20,7 @@ import {
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 export function useWorktreeCardFoundation({
   worktree,
@@ -43,7 +44,7 @@ export function useWorktreeCardFoundation({
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   const compactWorktreeCards = settings?.compactWorktreeCards === true
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),

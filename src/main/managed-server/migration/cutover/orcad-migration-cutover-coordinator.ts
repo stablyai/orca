@@ -24,7 +24,7 @@ import { orcadMigrationRequestFits } from '../catalog/orcad-migration-request-bu
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import type { OrcadMigrationSourceCutoverPort } from './orcad-migration-source'
 import {
   transferOrcadMigrationSnapshots,
@@ -34,7 +34,7 @@ import {
   exportedOrcadMigrationBlobSource,
   transferOrcadMigrationBlobs
 } from '../transfers/orcad-migration-blob-coordinator'
-import type { OrcadMigrationExportedBlob } from '../../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+import type { OrcadMigrationExportedBlob } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import type { OrcadMigrationPreflightStore } from '../../../ssh/targets/ssh-target-orcad-preflight'
 import { sshRelayMigrationCutoverPort } from '../../../ssh/migration-source/orcad-migration-ssh-relay-source'
 import type { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'

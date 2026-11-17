@@ -3,10 +3,10 @@ import type {
   ChangelogData,
   LinuxPackageInstallRecovery,
   UpdateStatus
-} from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
-import { UpdateErrorCardContent, type UpdateErrorCardModel } from '../../UpdateErrorCardContent'
-import { LinuxPackageInstallRecoveryCard } from '../../LinuxPackageInstallRecoveryCard'
+} from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
+import { UpdateErrorCardContent, type UpdateErrorCardModel } from './UpdateErrorCardContent'
+import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
 import { useTranslate } from '@/i18n/use-translate'
 import { UpdateCheckFeedback } from './UpdateCheckFeedback'
 import {

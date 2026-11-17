@@ -4,7 +4,14 @@ import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
 const mobileRoot = path.resolve(import.meta.dirname, '..')
-const outputPath = path.join(mobileRoot, 'src', 'components', 'katex-page-style.generated.ts')
+const outputPath = path.join(
+  mobileRoot,
+  'src',
+  'components',
+  'markdown',
+  'math',
+  'katex-page-style.generated.ts'
+)
 
 // KaTeX's stylesheet for the page, woff2 only: every shell WebView reads it, and the bundle
 // emits each imported font as a same-origin asset, which the shell's font-src allows.

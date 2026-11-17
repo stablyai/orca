@@ -2,15 +2,15 @@ import {
   hasAgentSenderPublication,
   selectAgentSenderAssociation
 } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
-import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/agent-message-presentation'
+import { useMemo } from 'react'
+import { agentMessageSenderLabel } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
 import {
   structuredChatTabBySessionId,
   structuredChatWorkspacesBySessionId
-} from '@/lib/structured-chat-tab-index'
+} from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useStructuredConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 import {
   structuredAgentSessionOwnerForTab,
@@ -18,10 +18,15 @@ import {
   resolveStructuredAgentSessionOwner,
   executionHostIdForStructuredTarget
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
-import type { Tab } from '../../../../../../shared/tab-types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { AppState } from '@/store/types'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  useLeasedSenderSelector,
+  useStableSenderTarget
+} from './native-chat-agent-message-sender-source'
 
 export function unnamedSenderLabel(t: Translate = translate): string {
   return t('components.native-chat.agentMessage.unnamedSender', 'an agent')
@@ -98,6 +103,47 @@ export function agentMessageSenderOwner(
       : null
 }
 
+type LabelSource = { host: string | null; tab?: Tab; sessionId?: string }
+const NO_ROWS: readonly [] = []
+
+/** The chat a label names its sender by; the same object until its host, tab or session moves. */
+function labelSourceSelector(
+  party: AgentMessageSender['party'],
+  chatWorktreeId: string | null,
+  target: RuntimeClientTarget | undefined,
+  dispatchId: string | undefined
+): (state: AppState) => LabelSource {
+  const identity: AgentMessageSender = { party, name: null }
+  const { address, orcaSessionId } = party
+  let previous: LabelSource = { host: null }
+  return (state) => {
+    const owner = agentMessageSenderOwner(state, chatWorktreeId, target)
+    const association = owner
+      ? selectAgentSenderAssociation(state, owner, identity, dispatchId)
+      : undefined
+    const legacyTab =
+      owner &&
+      orcaSessionId &&
+      !address.startsWith('dispatch:') &&
+      !hasAgentSenderPublication(state, owner)
+        ? findAgentMessageSenderChatTab(state, orcaSessionId, owner)
+        : undefined
+    const next = {
+      host: association?.host ?? owner,
+      tab: association?.tab ?? legacyTab,
+      sessionId: association?.sessionId ?? legacyTab?.entityId
+    }
+    if (
+      next.host !== previous.host ||
+      next.tab !== previous.tab ||
+      next.sessionId !== previous.sessionId
+    ) {
+      previous = next
+    }
+    return previous
+  }
+}
+
 /** Live chat names follow the sender's chat on the receiving chat's host; CLI names stay as recorded. */
 export function useAgentMessageSenderLabel(
   sender: AgentMessageSender,
@@ -106,29 +152,26 @@ export function useAgentMessageSenderLabel(
   dispatchId?: string
 ): string {
   const t = useTranslate()
-  const { address, orcaSessionId } = sender.party
-  const local = !address.startsWith('dispatch:')
-  const owner = useAppStore((state) => agentMessageSenderOwner(state, chatWorktreeId, target))
-  const association = useAppStore((state) =>
-    owner ? selectAgentSenderAssociation(state, owner, sender, dispatchId) : undefined
+  const { address, orcaSessionId, terminalHandle } = sender.party
+  const stableTarget = useStableSenderTarget(target)
+  const select = useMemo(
+    () =>
+      labelSourceSelector(
+        { address, orcaSessionId, terminalHandle },
+        chatWorktreeId,
+        stableTarget,
+        dispatchId
+      ),
+    [address, orcaSessionId, terminalHandle, chatWorktreeId, stableTarget, dispatchId]
   )
-  const authoritative = useAppStore((state) =>
-    owner ? hasAgentSenderPublication(state, owner) : false
-  )
-  const legacyTab = useAppStore((state) =>
-    !authoritative && local && owner && orcaSessionId
-      ? findAgentMessageSenderChatTab(state, orcaSessionId, owner)
-      : undefined
-  )
-  const chatTab = association?.tab ?? legacyTab
-  const sessionId = association?.sessionId ?? legacyTab?.entityId
-  const conversationName = useStructuredConversationName(association?.host ?? owner, sessionId)
+  const { host, tab, sessionId } = useLeasedSenderSelector(NO_ROWS, select)
+  const conversationName = useStructuredConversationName(host, sessionId)
   return agentMessageSenderLabel({
     localChat: Boolean(sessionId),
-    customLabel: chatTab?.customLabel,
+    customLabel: tab?.customLabel,
     conversationName,
     snapshotName: sender.name,
-    tabLabel: chatTab?.label,
+    tabLabel: tab?.label,
     fallback: unnamedSenderLabel(t)
   })
 }

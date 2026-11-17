@@ -12,7 +12,6 @@ import { removeBrowserExtension } from '../browser-extension-management'
 import { readBrowserExtensionIconDataUrl } from '../installation/browser-extension-manifest'
 import { samePermissionSummary } from '../permissions/browser-extension-permission-summary'
 import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
-import { getBrowserExtensionSessionForProfile } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   downloadWebStoreCrx,
@@ -131,7 +130,10 @@ export async function installBrowserExtensionFromWebStore(
   renderer: Electron.WebContents
 ): Promise<BrowserExtensionWebStoreInstallResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { status: 'failed', error: 'Turn on browser extensions in Settings › Experimental' }
+    return {
+      status: 'failed',
+      error: 'Turn on browser extensions in Settings › Browser › Extensions'
+    }
   }
   const extensionId = parseChromeWebStoreExtensionInput(input)
   if (!extensionId) {
@@ -140,7 +142,7 @@ export async function installBrowserExtensionFromWebStore(
       error: 'Paste a Chrome Web Store link or a 32-letter extension ID'
     }
   }
-  if (!getBrowserExtensionSessionForProfile(profileId)) {
+  if (!browserSessionRegistry.getProfile(profileId)) {
     return { status: 'failed', error: 'Browser profile is not available for extensions' }
   }
   const existing = getBrowserExtensionInstallStore().get(extensionId)

@@ -1,12 +1,12 @@
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
-} from '../../../../../../../shared/agent-session/agent-session-conversation-command'
+} from '../../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 import { sayAgentSessionFailureTranslated } from '../../../messages/notices/agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { agentSessionVisibleFailureFacts } from '../../../../../../../shared/agent-session/failures/agent-session-visible-failures'
-import { pendingPromptsAllUnanswerableHere } from '../../../../../../../shared/agent-session/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import type { StructuredPromptItem } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
@@ -22,8 +22,9 @@ import {
   heldConversationCommandParts,
   structuredConversationCommandHold,
   type StructuredConversationCommandHold
-} from '../../../../../../../shared/structured-conversation-command-hold'
+} from '../../../../../../../shared/native-chat/input/commands/structured-conversation-command-hold'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
+import { structuredAgentSessionCommandWriteRefusalCause } from '../../../../../../../shared/agent-session/failures/structured-agent-session-command-refusal-cause'
 
 type CommandOutcome = Omit<StructuredAgentSessionCommandOutcome, 'handled'>
 
@@ -45,6 +46,8 @@ export async function sendStructuredConversationCommand(input: {
   send: (
     command: AgentSessionConversationCommand
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
+  /** The command passed every local hold and is on its way to the host. */
+  onSent?: () => void
 }): Promise<CommandOutcome> {
   const refused = (
     error: string | null,
@@ -75,9 +78,14 @@ export async function sendStructuredConversationCommand(input: {
   const restoreClear = input.command === 'clear' ? input.onClearSent?.() : undefined
   let accepted = false
   try {
-    const outcome = await input.send(input.command)
+    const sending = input.send(input.command)
+    input.onSent?.()
+    const outcome = await sending
     if (outcome.kind === 'not-done') {
-      return { accepted: false, error: outcome.notice }
+      return refused(
+        outcome.notice,
+        structuredAgentSessionCommandWriteRefusalCause(outcome.failure)
+      )
     }
     // The pane stopped waiting on this reply (closed, left the chat, or sent a newer command).
     if (outcome.kind === 'dropped') {
@@ -126,7 +134,8 @@ export function structuredConversationCommandRunner(args: {
 }): {
   runConversationCommand: (
     command: AgentSessionConversationCommand,
-    instructions?: string
+    instructions?: string,
+    onSent?: () => void
   ) => Promise<CommandOutcome>
   commandRefusalCauses: StructuredConversationCommandCauses
 } {
@@ -141,7 +150,11 @@ export function structuredConversationCommandRunner(args: {
     sending: sendPending,
     retry: false
   }
-  const run = (command: AgentSessionConversationCommand, instructions?: string) => {
+  const run = (
+    command: AgentSessionConversationCommand,
+    instructions?: string,
+    onSent?: () => void
+  ) => {
     const waitsInLine =
       command === 'compact' &&
       args.commandsWait &&
@@ -151,17 +164,18 @@ export function structuredConversationCommandRunner(args: {
       agentName: args.agentName,
       pending: args.pending,
       hold: structuredConversationCommandHold({
+        command,
         waitsInLine,
         agentWorking,
         promptPending,
-        // A rewind on its way holds a command as background work does, in the same words.
-        backgroundTasksRunning:
-          args.chat.backgroundTasks.isMonitoring || args.rewindInFlight.current,
+        backgroundTasksRunning: args.chat.backgroundTasks.isMonitoring,
+        rewindInFlight: args.rewindInFlight.current,
         sendPending
       }),
       causes,
       startFailures: () => agentSessionVisibleFailureFacts(args.items()),
       onClearSent: args.onClearSent,
+      onSent,
       send: (command) =>
         args.send(
           command,

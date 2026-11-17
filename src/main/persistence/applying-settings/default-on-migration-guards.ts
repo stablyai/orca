@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 
 // Each setting whose default flipped once, paired with its one-shot migration guard.
 const DEFAULT_ON_MIGRATION_GUARDS = [

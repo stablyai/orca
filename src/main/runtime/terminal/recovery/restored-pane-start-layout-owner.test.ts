@@ -1,22 +1,24 @@
 // Restored panes share main's starter across first-view, CLI and orchestration triggers.
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   deferred,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
-const { committingSpawn } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
+} = await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('../layout/bind-first-pane.test-fixture')
 
-function windowlessRuntime() {
+async function windowlessRuntime() {
   const { runtimeStore, getSession, setSession } = makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal()
   )
@@ -33,13 +35,13 @@ function windowlessRuntime() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, spawn, started, getSession, setSession }
 }
 
 describe('a restored pane with no live terminal, on a host with no window (layout-owner build)', () => {
   it("refuses a client's first view of a pane main dropped after the client listed it", async () => {
-    const { runtime, spawn, getSession, setSession } = windowlessRuntime()
+    const { runtime, spawn, getSession, setSession } = await windowlessRuntime()
     await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const session = getSession()
     setSession({

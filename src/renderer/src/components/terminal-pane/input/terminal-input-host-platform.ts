@@ -1,7 +1,7 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
-import '@/lib/connection-context'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin

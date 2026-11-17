@@ -19,8 +19,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { cn } from '@/lib/class-names'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
@@ -113,7 +113,7 @@ export function queuedMessageCardSendNow(
     label: t('components.native-chat.queuedMessages.steer', 'Steer'),
     hint: t(
       'components.native-chat.queuedMessages.steerHint',
-      'Submit without interrupting the model'
+      'Send now, while the agent keeps working'
     )
   }
 }
@@ -268,7 +268,7 @@ export function NativeChatQueuedMessageCard({
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                     size="xs"
                     onClick={onSteer}
                     disabled={steerHeld || busy}

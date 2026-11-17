@@ -7,7 +7,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
-import { getQuickCommandPreview } from '../quick-commands'
+import { getQuickCommandPreview } from './quick-commands'
 import { terminalQuickCommandMatchesRepo as quickCommandMatchesRepo } from '../../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
@@ -117,13 +117,14 @@ export function QuickCommandsSheet({
     // Why: quick commands sync with desktop, so an accidental one-tap delete
     // removes shared data rather than only dismissing a local row.
     Alert.alert(
-      t('session.quickCommandsSheet.deleteConfirmTitle', 'Delete "{{label}}"?', {
-        label: command.label || t('session.quickCommandsSheet.untitled', 'Untitled')
-      }),
-      t(
-        'session.quickCommandsSheet.deleteConfirmMessage',
-        'This quick command will be removed from your saved list.'
-      ),
+      t('common.delete', 'Delete'),
+      [
+        command.label || t('session.quickCommandsSheet.untitled', 'Untitled'),
+        t(
+          'session.quickCommandsSheet.deleteConfirmMessage',
+          'This quick command will be removed from your saved list.'
+        )
+      ].join('\n'),
       [
         { text: t('common.cancel', 'Cancel'), style: 'cancel' },
         {

@@ -114,11 +114,7 @@
       "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
-      "defaultText": "Standard (100 %)",
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "largeText": "Groß (125 %)",
-      "largerText": "Größer (150 %)",
-      "largestText": "Am größten (200 %)",
       "leaveAppDescription": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ im Desktop-Banner lässt sich die Größe jederzeit manuell anpassen.",
       "leaveAppHeading": "BEIM VERLASSEN DER APP",
       "noPairedDesktops": "Noch keine Desktops gekoppelt. Einen Desktop koppeln, um das Terminalverhalten festzulegen.",
@@ -127,13 +123,34 @@
       "restoreAfterSeconds_one": "Nach {{count}} s",
       "restoreAfterSeconds_other": "Nach {{count}} s",
       "restoreHost": "{{name}} wiederherstellen",
-      "smallerText": "Kleiner (75 %)",
-      "smallestText": "Am kleinsten (50 %)",
-      "textSize": "Textgröße",
-      "textSizeDescription": "Die Textgröße im Terminal anpassen. Bei kleinerer Schrift passen mehr Spalten mit Seitenrändern auf den Bildschirm; größere Schrift zeigt weniger Spalten – zum Verschieben seitlich ziehen. Die Größe lässt sich auch direkt im Terminal durch Zusammenziehen oder Spreizen zweier Finger ändern; dabei wird diese Einstellung aktualisiert. Gilt nur für die Anzeige auf diesem Gerät und ändert das Desktop-Terminal nicht.",
-      "textSizeHeading": "TEXTGRÖSSE",
-      "textSizePickerTitle": "Textgröße im Terminal",
       "title": "Terminal"
+    }
+  },
+  "appMove": {
+    "play": {
+      "title": "Orca ist jetzt bei Google Play",
+      "description": "Diese App funktioniert weiterhin, aber Updates kommen jetzt über Google Play. Der Wechsel dauert nur ein paar Minuten.",
+      "installTitle": "Orca über Google Play installieren",
+      "installDescription": "Das geht sofort, egal wo du gerade bist.",
+      "openGooglePlay": "Google Play öffnen",
+      "cantUseGooglePlay": "Ich kann Google Play nicht nutzen"
+    },
+    "download": {
+      "title": "Die neue Orca-App holen",
+      "description": "Diese App funktioniert weiterhin, aber Updates und Sicherheitskorrekturen kommen jetzt über die neue App. Der Wechsel dauert nur ein paar Minuten.",
+      "installTitle": "Die neue App herunterladen",
+      "installDescription": "Wenn dein Smartphone fragt, erlaube deinem Browser, Apps zu installieren.",
+      "download": "Herunterladen",
+      "keepThisVersion": "Diese Version weiter nutzen",
+      "keepThisVersionNote": "Dir entgehen Sicherheitskorrekturen. Wir erinnern dich in einer Woche."
+    },
+    "pairTitle": "Mit dem Computer koppeln",
+    "pairDescription": "In Orca auf dem Computer Einstellungen → Mobil öffnen und den Code scannen.",
+    "deleteTitle": "Diese App löschen",
+    "deleteDescription": "Sobald die neue App deine Agenten zeigt. Bis dahin diese App weiter nutzen.",
+    "dataKept": "Deine Agenten, Chats und Workspaces sind auf deinem Computer gespeichert, du findest also alles in der neuen App wieder.",
+    "banner": {
+      "seeHowToSwitch": "So funktioniert der Wechsel"
     }
   },
   "browser": {
@@ -222,6 +239,7 @@
     "message": {
       "copyMessage": "Nachricht kopieren",
       "forkFromResponse": "Ab dieser Antwort abzweigen",
+      "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",
       "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
     },
     "messageActionsSheet": {
@@ -300,6 +318,7 @@
       "plan": "Plan",
       "stoppedManually": "Manuell gestoppt",
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+      "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
       "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
       "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
@@ -355,8 +374,7 @@
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
       "resume": "Fortsetzen",
-      "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen",
-      "title": "Nachrichten in der Warteschlange"
+      "resumeSending": "Senden der Nachrichten in der Warteschlange fortsetzen"
     },
     "offlineQueue": {
       "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
@@ -602,6 +620,7 @@
       "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} ist offline · Stand {{time}}",
       "reconnecting": "{{hostName}} verbindet sich erneut…",
       "stopped": "{{hostName}} ist gestoppt. Starte es auf deinem Computer.",
       "server": "Der Server",
@@ -646,7 +665,14 @@
       "busy": "Ein anderer Chat oder ein Terminal wird geöffnet. Warte und zweige dann den {{agent}}-Chat erneut ab.",
       "unconfirmed": "{{agent}} konnte das Abzweigen nicht bestätigen. Der Chat wurde möglicherweise dennoch geöffnet; prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
       "failed": "{{agent}} konnte diesen Chat nicht abzweigen. {{detail}}",
-      "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut."
+      "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
+      "mark": "Zweig ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Zweig: {{name}}"
+    },
+    "selectionQuote": {
+      "action": "Zitieren",
+      "hint": "Fügt den markierten Text als Zitat in die Nachricht ein"
     }
   },
   "common": {
@@ -880,7 +906,8 @@
       "copyCode": "Code kopieren",
       "openImage": "Bild öffnen",
       "wrapLines": "Zeilen umbrechen",
-      "disableLineWrap": "Zeilenumbruch deaktivieren"
+      "disableLineWrap": "Zeilenumbruch deaktivieren",
+      "codeLabel": "Code"
     },
     "markdownCallout": {
       "note": "Hinweis",
@@ -942,8 +969,10 @@
       "desktopTooOldBody": "Die gekoppelte Desktop-App ist für die aktuelle Version von Orca Mobile zu alt. Orca auf dem Computer aktualisieren und dann erneut mit diesem Host verbinden.",
       "getVersion": "Orca {{version}} herunterladen",
       "mobileTooOldAppStore": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
+      "mobileTooOldGooglePlay": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
       "mobileTooOldGitHubReleases": "Diese Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden.",
       "openAppStore": "App Store öffnen",
+      "openGooglePlay": "Google Play öffnen",
       "openGitHubReleases": "GitHub Releases öffnen",
       "refreshRecoveryNote": "Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln.",
       "refreshWorkspaceBody": "Der für diesen Host zwischengespeicherte Arbeitsbereich ist älter als von der Desktop-App erwartet. Erneut mit diesem Host verbinden, um die aktuelle Version herunterzuladen.",
@@ -952,6 +981,7 @@
       "updateMobileTitle": "Orca Mobile aktualisieren",
       "updateRecoveryNote": "Bereits aktualisiert? Zu „Hosts“ zurückkehren und die Verbindung erneuern. Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln.",
       "workspaceNeedsUpdateAppStore": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über den App Store aktualisieren und dann erneut mit diesem Host verbinden.",
+      "workspaceNeedsUpdateGooglePlay": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über Google Play aktualisieren und dann erneut mit diesem Host verbinden.",
       "workspaceNeedsUpdateGitHubReleases": "Der mobile Arbeitsbereich dieser Desktop-App benötigt eine neuere Version von Orca Mobile. Orca Mobile über GitHub Releases aktualisieren und dann erneut mit diesem Host verbinden."
     },
     "richMarkdownEditor": {
@@ -980,7 +1010,6 @@
       "clearSearch": "Suche leeren"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "description": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs ausgeführt. Nur ausführen, wenn das Repository vertrauenswürdig ist.",
       "dontRun": "Nicht ausführen",
       "newScriptLabel": "Neues Einrichtungsskript",
@@ -1302,6 +1331,62 @@
       "sessionLimit": "Auf diesem Computer diktieren zu viele Geräte. Erneut versuchen, sobald eines fertig ist.",
       "sessionLost": "Die Verbindung zum Computer wurde beim Diktat unterbrochen. Erneut versuchen.",
       "updateFailed": "Diktateinstellungen konnten nicht aktualisiert werden"
+    },
+    "controls": {
+      "start": "Diktieren",
+      "starting": "Diktat wird gestartet",
+      "stop": "Stoppen und einfügen",
+      "finishing": "Diktat wird abgeschlossen",
+      "cancel": "Diktat abbrechen",
+      "meterOnPhone": "Aufnahme, {{duration}}, auf diesem Telefon",
+      "meterOn": "Aufnahme, {{duration}}, auf {{computer}}",
+      "meterOnComputer": "Aufnahme, {{duration}}, auf dem Computer",
+      "meter": "Aufnahme, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} Sekunde",
+      "durationSeconds_other": "{{count}} Sekunden",
+      "durationMinutes_one": "{{count}} Minute",
+      "durationMinutes_other": "{{count}} Minuten",
+      "discard": "Aufnahme verwerfen",
+      "retry": "Diktat wiederholen",
+      "retryShort": "Wiederholen"
+    },
+    "status": {
+      "finishingOn": "Wird auf {{computer}} abgeschlossen",
+      "finishingOnComputer": "Wird auf dem Computer abgeschlossen",
+      "movedTo": "Zu {{computer}} gewechselt",
+      "movedToComputer": "Zum Computer gewechselt"
+    },
+    "failure": {
+      "connectionLost": "Verbindung unterbrochen",
+      "connectionSlow": "Verbindung zu langsam",
+      "phoneStopped": "Auf diesem Telefon gestoppt",
+      "stopped": "Diktat gestoppt",
+      "recordingKept": "Aufnahme behalten"
+    },
+    "announce": {
+      "typedInto": "Eingetippt in {{target}}",
+      "insertedIn": "Eingefügt in {{target}}",
+      "listeningOnPhone": "Hört zu. Transkription auf diesem Telefon.",
+      "listeningOn": "Hört zu. Transkription auf {{computer}}.",
+      "listeningOnComputer": "Hört zu. Transkription auf dem Computer.",
+      "finishing": "Wird abgeschlossen.",
+      "inserted": "Eingefügt.",
+      "cancelled": "Diktat abgebrochen.",
+      "movedTo": "Dieses Telefon hat die Transkription beendet. Weiter auf {{computer}}.",
+      "movedToComputer": "Dieses Telefon hat die Transkription beendet. Weiter auf dem Computer.",
+      "stoppedKept": "Diktat gestoppt. {{reason}}. Deine Aufnahme bleibt erhalten.",
+      "stoppedKeptGeneric": "Diktat gestoppt. Deine Aufnahme bleibt erhalten.",
+      "stillListening": "Hört weiter zu."
+    },
+    "pill": {
+      "open": "Öffnen",
+      "listening": "Hört zu",
+      "starting": "Startet",
+      "finishing": "Wird abgeschlossen",
+      "stopped": "Diktat gestoppt",
+      "label": "Diktat in {{target}}, {{duration}}",
+      "hint": "Doppeltippen, um zurückzukehren"
     }
   },
   "files": {
@@ -1534,7 +1619,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
-      "deleteWorktree": "Worktree löschen",
+      "deleteDestroysEnvironment": "Dadurch wird auch die Umgebung „{{environment}}“ gelöscht, die Orca dafür erstellt hat, samt nicht committeter Änderungen und laufender Terminals.",
+      "deleteKeepsEnvironment": "Die Umgebung „{{environment}}“, die Orca dafür erstellt hat, läuft weiter: Ihr Rezept hat keinen Löschschritt.",
       "pin": "Anheften",
       "primaryWorktreeDeleteHint": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",
       "removeHost": "Host entfernen",
@@ -1706,7 +1792,6 @@
       "daysAgo_one": "vor {{count}} Tag",
       "daysAgo_other": "vor {{count}} Tagen",
       "deleteConfirmMessage": "Dadurch wird der Kommentar auf GitHub dauerhaft gelöscht.",
-      "deleteConfirmTitle": "Kommentar löschen?",
       "editPlaceholder": "Kommentar bearbeiten…",
       "hoursAgo_one": "vor {{count}} Std.",
       "hoursAgo_other": "vor {{count}} Std.",
@@ -2104,6 +2189,10 @@
       "providerExitedRejection": "{{agent}} wurde gestoppt, bevor diese Nachricht gesendet wurde.",
       "providerExitedRow": "{{agent}} wurde während dieser Antwort gestoppt. Die Unterhaltung kann fortgesetzt werden.",
       "providerRateLimited": "{{agent}} hat das Ratenlimit erreicht und versucht es erneut.",
+      "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
+      "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
+      "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+      "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
       "providerRetryLastError": "Letzter Fehler: {{detail}}.",
@@ -2257,20 +2346,16 @@
       "loadFailed": "Pull Request konnte nicht geladen werden"
     },
     "queuedCardText": {
-      "showLess": "Weniger anzeigen",
       "showLessHint": "Zeigt weniger von der Nachricht an",
-      "showMore": "Mehr anzeigen",
       "showMoreHint": "Zeigt die ganze Nachricht an"
     },
     "queuedMessageCardRow": {
-      "deleteHint": "Diese Nachricht aus der Warteschlange löschen",
       "images_one": "{{count}} Bild",
       "images_other": "{{count}} Bilder",
       "moreActions": "Weitere Aktionen",
       "send": "Senden",
       "sendAgainHint": "Diese Nachricht erneut senden",
       "sendHint": "Diese Nachricht senden",
-      "showLessHint": "Zeigt weniger von der Nachricht an",
       "steer": "Steuern",
       "steerHint": "Ohne Unterbrechung des Modells übermitteln"
     },
@@ -2327,7 +2412,6 @@
       "addTitle": "Schnellbefehl hinzufügen",
       "chooseAgentTitle": "Agenten auswählen",
       "deleteConfirmMessage": "Dieser Schnellbefehl wird aus der Liste gespeicherter Befehle entfernt.",
-      "deleteConfirmTitle": "„{{label}}“ löschen?",
       "editTitle": "Schnellbefehl bearbeiten",
       "editorDescription": "Terminal-Befehle oder Agenten-Prompts für den Schnellzugriff speichern.",
       "title": "Schnellbefehle",
@@ -2346,7 +2430,6 @@
     },
     "sheets": {
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop-Update für mobiles Browser-Streaming erforderlich",
       "chat": "Chat",
       "copyAllAndLeave": "Alles kopieren und verlassen",
       "copyDraftsFailed": "Entwürfe konnten nicht kopiert werden",
@@ -2390,8 +2473,7 @@
     "tabStrip": {
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
-      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -2402,11 +2484,7 @@
     "terminalInputActions": {
       "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
       "attachPhoto": "Foto anhängen",
-      "sendingImage": "Bild wird gesendet",
-      "startDictation": "Diktat starten",
-      "startingDictation": "Diktat wird gestartet",
-      "stopDictation": "Diktat beenden",
-      "transcribingDictation": "Diktat wird transkribiert"
+      "sendingImage": "Bild wird gesendet"
     },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
@@ -2415,8 +2493,6 @@
       "processing": "Wird verarbeitet",
       "releaseMicHint": "Zum Stoppen Mikrofon loslassen",
       "startingMic": "Mikrofon wird gestartet",
-      "stopHint": "Zum Stoppen Mikrofon antippen",
-      "transcribing": "Transkription auf dem Desktop",
       "uploadingImage": "Bild wird auf den Host hochgeladen",
       "uploadingImageTitle": "Bild wird hochgeladen"
     },
@@ -2441,11 +2517,14 @@
     "useAttachmentInputLeaseGate": {
       "reconnecting": "Anhängen fehlgeschlagen (erneuter Verbindungsaufbau)"
     },
+    "useCloseActions": {
+      "closeFailed": "Der Tab konnte nicht geschlossen werden. Versuche es erneut.",
+      "closeFailedDesktopNotReady": "Der Tab konnte nicht geschlossen werden. Orca wird auf deinem Computer noch geladen. Versuche es gleich noch einmal."
+    },
     "useContentCreateActions": {
       "browserCommandFailed": "Browser-Befehl fehlgeschlagen",
       "browserCreateFailed": "Browser konnte nicht erstellt werden",
       "browserUnavailable": "Browserseite ist noch nicht verfügbar.",
-      "browserUpdateRequired": "Desktop-Update für Browser-Streaming auf Mobilgeräten erforderlich",
       "invalidUrl": "Gültige URL eingeben",
       "noteCreateFailed": "Markdown-Notiz konnte nicht erstellt werden",
       "untitledNoteCreateFailed": "Markdown-Notiz ohne Titel konnte nicht erstellt werden"
@@ -2510,7 +2589,8 @@
       "insertFailed": "Diktat konnte nicht eingefügt werden",
       "insertFailedCopied": "Diktat konnte nicht eingefügt werden und wurde daher in die Zwischenablage kopiert",
       "inserted": "Diktat eingefügt",
-      "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
     },
     "useNativeChatStop": {
       "stopNotSent": "Stoppbefehl nicht gesendet",
@@ -2597,6 +2677,7 @@
       "conversationCleared": "Diese Unterhaltung wurde geleert.",
       "goalsUnsupported": "Dieser Agent unterstützt keine Ziele.",
       "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+      "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
       "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
       "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
       "hostReconciling": "Orca prüft diesen Chat nach dem Neustart noch.",
@@ -2741,12 +2822,14 @@
       "title": "Darstellung"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Jedes Mal fragen",
+      "askEachTimeDescription": "Jedes Mal zwischen Orca-Browser, Smartphone-Browser und Link kopieren wählen.",
       "desktopBrowser": "Orca-Browser auf dem Desktop",
       "desktopBrowserDescription": "Im gestreamten Browser des gekoppelten Desktops öffnen.",
-      "linksDescription": "Auswählen, wo HTTP(S)-Links aus der Terminalausgabe beim Antippen geöffnet werden.",
+      "terminalAndChatLinksDescription": "Auswählen, wo Weblinks aus der Terminalausgabe und dem Chat beim Antippen geöffnet werden.",
       "linksHeading": "LINKS",
       "loadFailed": "Browser-Einstellungen konnten nicht geladen werden. Erneut versuchen.",
-      "openTerminalLinks": "Terminal-Links öffnen",
+      "openLinks": "Links öffnen",
       "phoneBrowser": "Browser auf dem Smartphone",
       "phoneBrowserDescription": "In Safari, Chrome oder einem anderen Browser auf diesem Smartphone öffnen.",
       "saveFailed": "Browser-Einstellungen konnten nicht gespeichert werden. Erneut versuchen.",
@@ -2831,6 +2914,8 @@
       "dictationHeading": "DIKTAT",
       "dictationMode": "Diktatmodus",
       "dictationModeDescription": "Umschalten: einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: währenddessen diktieren.",
+      "dictationModeWithAutoDescription": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
+      "autoMode": "Automatisch",
       "downloadFailed": "Download fehlgeschlagen",
       "enableDictation": "Diktat aktivieren",
       "holdMode": "Gedrückt halten",
@@ -3303,6 +3388,27 @@
     }
   },
   "tasks": {
+    "hostedMerge": {
+      "confirmGitHubMerge": "PR #{{number}} zusammenführen?",
+      "confirmGitHubSquash": "PR #{{number}} mit Squash zusammenführen?",
+      "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
+      "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
+      "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
+      "merged": "Zusammengeführt",
+      "closed": "Geschlossen",
+      "conflicts": "Konflikte",
+      "behind": "Nicht aktuell",
+      "blocked": "Blockiert",
+      "checksPending": "Prüfungen ausstehend",
+      "ableToMerge": "Zusammenführen möglich",
+      "unknown": "Unbekannt"
+    },
+    "pagination": {
+      "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
+      "loadPageFailed": "Seite {{page}} konnte nicht von GitHub geladen werden.",
+      "noMoreResults": "Keine weiteren Ergebnisse auf Seite {{page}}."
+    },
     "composerSource": {
       "baseFailed": "Der Basis-Branch konnte nicht ermittelt werden.",
       "forkPushWarning": "Bei diesem PR ist „Allow edits from maintainers“ deaktiviert; GitHub könnte einen Push zum Fork ablehnen."
@@ -3802,27 +3908,19 @@
       "reconnecting": "Wird erneut verbunden"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "creating": "Wird erstellt…",
       "directoriesLabel": "Verzeichnisse",
       "directories_one": "{{count}} Verzeichnis",
       "directories_other": "{{count}} Verzeichnisse",
-      "dontRun": "Nicht ausführen",
       "editSparsePreset": "Voreinstellung für partiellen Checkout bearbeiten",
       "nameLabel": "Name",
       "namePlaceholder": "Renderer-Oberfläche",
-      "newSetupScript": "Neues Einrichtungsskript",
       "newSparsePreset": "Neue Voreinstellung für partiellen Checkout",
-      "runHooks": "Hooks ausführen",
       "runSetupAndCreate": "Einrichten und erstellen",
-      "runSetupTitle": "Einrichtung von {{name}} ausführen?",
-      "setupChangedTitle": "Einrichtungsskript von {{name}} geändert",
-      "setupScript": "Einrichtungsskript",
       "setupSubtitle": "Für {{name}} muss vor dem Erstellen dieses Arbeitsbereichs eine Einrichtungsoption gewählt werden.",
       "setupTitle": "Einrichtungsskript ausführen?",
       "skipSetupAndCreate": "Ohne Einrichtung erstellen",
-      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden.",
-      "trustSubtitle": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs auf deinem Rechner ausgeführt. Nur ausführen, wenn du diesem Repository vertraust."
+      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden."
     },
     "worktreeCreateRetry": {
       "createFailed": "Arbeitsbereich konnte nicht erstellt werden."
@@ -4029,7 +4127,6 @@
       "outcome": "Ergebnis",
       "allOutcomes": "Alle Ergebnisse",
       "couldNotStart": "Start nicht möglich",
-      "deleteAutomationTitle": "Automatisierung löschen?",
       "deleteRetained": "„{{name}}“ und die gespeicherten Ausführungen löschen?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Das ursprüngliche Agentenfenster konnte nicht überprüft werden. Verbinde dich erneut und versuche es noch einmal.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Das ursprüngliche Agentenfenster kann nicht mehr geöffnet werden. Gespeicherte Ausgaben bleiben hier.",

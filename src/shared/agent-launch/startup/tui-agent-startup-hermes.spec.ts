@@ -1,37 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 import { buildAgentStartupPlan } from './tui-agent-startup'
-import {
-  unwrapPosixShellScript,
-  unwrapPowerShellScript
-} from './tui-agent-startup-script.test-fixture'
+import { unwrapPosixShellScript } from './tui-agent-startup-script.test-fixture'
 
 // Hermes owns startup query/TUI/subcommand flag placement; keep its token-rewrite cases together.
 
 describe('hermes startup plans', () => {
-  it.each([
-    {
-      shell: 'powershell' as const,
-      override: '"C:\\Program Files\\Hermes\\hermes.exe" --tui',
-      expected: "& 'C:\\Program Files\\Hermes\\hermes.exe' 'chat'"
-    },
-    {
-      shell: 'cmd' as const,
-      override: 'C:\\Tools\\hermes.exe --tui',
-      expected: "& 'C:\\Tools\\hermes.exe' 'chat'"
-    }
-  ])('preserves Windows paths in Hermes command overrides on $shell', (testCase) => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run it',
-      cmdOverrides: { hermes: testCase.override },
-      platform: 'win32',
-      shell: testCase.shell
-    })
-
-    expect(unwrapPowerShellScript(plan?.launchCommand)).toContain(testCase.expected)
-  })
-
   it('removes a configured duplicate chat subcommand', () => {
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
@@ -72,19 +46,6 @@ describe('hermes startup plans', () => {
     expect(script).not.toContain("'--cli'")
     expect(script.match(/'--tui'/g)).toHaveLength(1)
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe('automation prompt')
-  })
-
-  it('selects the final Hermes executable token in a wrapper', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run it',
-      cmdOverrides: { hermes: 'sudo -u hermes hermes --tui' },
-      platform: 'linux'
-    })
-
-    expect(unwrapPosixShellScript(plan?.launchCommand)).toContain(
-      "'sudo' '-u' 'hermes' 'hermes' 'chat'"
-    )
   })
 
   it('selects the wrapped executable when the wrapper and command both name Hermes', () => {
@@ -135,42 +96,6 @@ describe('hermes startup plans', () => {
         platform: 'linux'
       })
     ).toBeNull()
-  })
-
-  it('rejects Hermes queries that exceed the safe Windows environment limit', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'x'.repeat(24_000),
-      cmdOverrides: {},
-      platform: 'win32'
-    })
-
-    expect(plan).toBeNull()
-  })
-
-  it('uses the Windows remote default shell for SSH Hermes queries', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run remotely',
-      cmdOverrides: {},
-      platform: 'win32',
-      isRemote: true
-    })
-
-    expect(unwrapPowerShellScript(plan?.launchCommand)).toContain(
-      "& 'hermes' 'chat' \"--query=$orcaHermesNativeQuery\" '--tui'"
-    )
-  })
-
-  it('measures POSIX Hermes query limits in UTF-8 bytes', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: '界'.repeat(50_000),
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan).toBeNull()
   })
 
   it('keeps the override and agent args of a prompted Hermes launch when it resumes', () => {

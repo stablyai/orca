@@ -4,22 +4,22 @@ import {
   ORCAD_HOST_NEWER_DEFERRAL_CODE,
   type WslHostConnectIntent,
   type WslHostStatus
-} from '../../../../../../shared/wsl-host-types'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { toast } from 'sonner'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { LoadingSpinner } from '../../../LoadingSpinner'
+import { LoadingSpinner } from '../../../ui/LoadingSpinner'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
 } from '../../../sidebar/host-admission/ssh/AddRemoteHostDialog'
-import { HostRemoveDialog } from '../../../sidebar/HostRemoveDialog'
+import { HostRemoveDialog } from '../../../sidebar/host-lifecycle/HostRemoveDialog'
 import {
   openWslHostsExperimentalSetting,
   useWslHostsAcceptNewWork,
@@ -27,15 +27,15 @@ import {
   useWslHostsEnabled,
   useWslHostServerFilesMissing,
   wslHostsAvailable
-} from '../../../sidebar/use-wsl-hosts-enabled'
+} from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import {
   getWslHostRowDetail,
   getWslHostStatusLabel,
   getWslHostServerFilesMissingLabel,
   getWslHostsPausedLabel,
   getWslHostsTurnedOffLabel
-} from '../../../sidebar/wsl-host-row-status'
-import { wslHostStatusDetailMessage } from '../../../sidebar/wsl-host-failure-text'
+} from '../../../sidebar/host-admission/wsl/wsl-host-row-status'
+import { wslHostStatusDetailMessage } from '../../../sidebar/host-admission/wsl/wsl-host-failure-text'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
@@ -49,7 +49,7 @@ import {
 } from '../../../wsl-move/wsl-move-orchestrator-status'
 import { openWslMoveDialogFor } from '../../../wsl-move/wsl-move-entry'
 import { WslMoveUnfinishedNotice } from '../../../wsl-move/WslMoveUnfinishedNotice'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,

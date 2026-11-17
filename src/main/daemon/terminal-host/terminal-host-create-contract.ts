@@ -1,3 +1,4 @@
+import type { DaemonLaunchNote } from '../protocol/daemon-launch-note-protocol'
 import type { StartupCommandDelivery } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ShellReadyState } from '../protocol/daemon-rpc-contract'
@@ -7,7 +8,7 @@ import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from '../../../shared/agent-session/agent-session-host-authority'
+} from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
@@ -52,6 +53,7 @@ export type CreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
+  launchNote?: DaemonLaunchNote | null
   wslDistro: string | null
   attachToken: symbol
   incarnationId: PtyIncarnationId

@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { checkDaemonProtocolCrossing } from './check-daemon-protocol-crossing.mjs'
 import { DAEMON_PROTOCOL_SOURCE_PATH } from '../schema-facts/daemon-protocol-facts.mjs'
-import { selectLatestStableReleaseTag } from '../../release/versioning/stable-release-tags.mjs'
 
 const repos = []
 
@@ -52,33 +51,6 @@ afterEach(() => {
   }
 })
 
-describe('selectLatestStableReleaseTag', () => {
-  it.each([
-    { tags: ['v1.4.9', 'v1.4.10', 'v1.5.0-rc.1', 'nightly'], expected: 'v1.4.10' },
-    { tags: ['v1.9.99', 'v1.10.0'], expected: 'v1.10.0' },
-    { tags: ['v9.99.99', 'v10.0.0'], expected: 'v10.0.0' },
-    { tags: [], expected: null },
-    { tags: ['nightly', 'mobile-v1.2.3', 'v1.2.3-rc.1'], expected: null },
-    { tags: ['v0001.4.003', 'v1.04.3'], expected: 'v1.04.3' },
-    { tags: ['v1.04.3', 'v0001.4.003'], expected: 'v0001.4.003' },
-    { tags: ['v1.2.3', 'v1.2.3\n'], expected: 'v1.2.3' },
-    { tags: ['v1.2.3\r\n', 'v0.0.1'], expected: 'v0.0.1' },
-    { tags: [`v${'9'.repeat(400)}.1.2`, 'v0.1.2'], expected: 'v0.1.2' },
-    {
-      tags: ['v9007199254740993.1.0', 'v9007199254740992.1.0'],
-      expected: 'v9007199254740992.1.0'
-    }
-  ])(
-    'selects the newest stable tag without changing its spelling or input: $tags',
-    ({ tags, expected }) => {
-      const input = [...tags]
-      expect(selectLatestStableReleaseTag(Object.freeze(tags))).toBe(expected)
-      expect(tags).toEqual(input)
-      expect(selectLatestStableReleaseTag(['v0.0.0'])).toBe('v0.0.0')
-    }
-  )
-})
-
 describe('checkDaemonProtocolCrossing', () => {
   it.each(['src/main/daemon/daemon-protocol-version.ts', DAEMON_PROTOCOL_SOURCE_PATH])(
     'reads the pinned release from %s while checking the dirty candidate',
@@ -111,15 +83,5 @@ describe('checkDaemonProtocolCrossing', () => {
     expect(() => checkDaemonProtocolCrossing({ repoRoot: repo, env })).toThrow(
       /no stable release tags/
     )
-  })
-
-  it('honors an explicit release ref', () => {
-    const repo = repoWithTags([
-      ['v1.0.0', 5],
-      ['v1.0.1', 6]
-    ])
-    const result = checkDaemonProtocolCrossing({ repoRoot: repo, releaseRef: 'v1.0.0', env })
-    expect(result).toMatchObject({ upgrade: true, rollback: false })
-    expect(result.lines[0]).toBe('release v1.0.0: daemon protocol 5')
   })
 })

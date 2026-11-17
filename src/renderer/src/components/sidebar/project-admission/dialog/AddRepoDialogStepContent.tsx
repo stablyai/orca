@@ -7,9 +7,13 @@ import { AddRepoLocalStartStep } from './AddRepoStartSteps'
 import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from '../nested-import/AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
-import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
-import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
+import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
+import type {
+  SshConnectionState,
+  SshTarget
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { GitAvailability } from '../create/create-project-defaults'
+import type { CloneFolderOverride } from '../clone-folder/use-clone-folder-override'
 
 type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
@@ -23,10 +27,12 @@ type AddRepoDialogStepContentProps = {
   serverPath: string
   /** The path came from Windows' picker or an Explorer drop, so the host's browser is skipped. */
   serverPathPrefilled?: boolean
+  directEntry?: boolean
   isAddingServerPath: boolean
   cloneUrl: string
   cloneDestination: string
   cloneError: string | null
+  cloneFolder: CloneFolderOverride | null
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
@@ -65,6 +71,7 @@ type AddRepoDialogStepContentProps = {
   onConnectTarget: (id: string) => Promise<void>
   onCloneUrlChange: (url: string) => void
   onCloneDestinationChange: (destination: string) => void
+  onCloneFolderNameChange: (name: string) => void
   onPickCloneDestination: () => void
   onClone: () => void
   onNestedGroupNameChange: (name: string) => void
@@ -88,10 +95,12 @@ export function AddRepoDialogStepContent({
   nestedScanId,
   serverPath,
   serverPathPrefilled = false,
+  directEntry = false,
   isAddingServerPath,
   cloneUrl,
   cloneDestination,
   cloneError,
+  cloneFolder,
   cloneProgress,
   isCloning,
   sshTargets,
@@ -129,6 +138,7 @@ export function AddRepoDialogStepContent({
   onConnectTarget,
   onCloneUrlChange,
   onCloneDestinationChange,
+  onCloneFolderNameChange,
   onPickCloneDestination,
   onClone,
   onNestedGroupNameChange,
@@ -179,6 +189,7 @@ export function AddRepoDialogStepContent({
         addProjectBusyLabel={addProjectBusyLabel}
         hostSelector={hostSelector}
         initialBrowsing={!(serverPathPrefilled && serverPath.trim())}
+        directEntry={directEntry}
         onServerPathChange={onServerPathChange}
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}
@@ -210,6 +221,7 @@ export function AddRepoDialogStepContent({
         cloneUrl={cloneUrl}
         cloneDestination={cloneDestination}
         cloneError={cloneError}
+        cloneFolder={cloneFolder}
         cloneProgress={cloneProgress}
         isCloning={isCloning}
         disableDestinationPicker={isRuntimeEnvironmentActive}
@@ -217,6 +229,7 @@ export function AddRepoDialogStepContent({
         cloneTargetLabel={isRuntimeEnvironmentActive ? selectedHostLabel : null}
         onUrlChange={onCloneUrlChange}
         onDestChange={onCloneDestinationChange}
+        onFolderNameChange={onCloneFolderNameChange}
         onPickDestination={onPickCloneDestination}
         onClone={onClone}
         submitDisabled={actionsDisabled}

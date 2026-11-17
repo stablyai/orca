@@ -6,17 +6,14 @@ import {
   type AdoptedTranscriptSource
 } from './adopted-transcript-source'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type {
-  AgentJournalCursor,
-  AgentJournalItemIdentity
-} from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type * as ids from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../../session-file-resolver'
 import { readLegacyImportTranscript, TRANSCRIPT_DECODERS } from './journal-legacy-transcript-stream'
-import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-opencode'
-import { mayBeClaudeConversationRecord } from '../../transcript-line-decoders-claude'
+import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-history/opencode/transcript-opencode'
+import { mayBeClaudeConversationRecord } from '../../transcript-decoding/transcript-line-decoders-claude'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
@@ -56,7 +53,7 @@ export type LegacyImportResult =
   | {
       ok: true
       epoch: string
-      cursor: AgentJournalCursor
+      cursor: ids.AgentJournalCursor
       imported: number
       replaced: boolean
     }
@@ -64,7 +61,8 @@ export type LegacyImportResult =
 
 type PreparedLegacyImport =
   | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds?: string[] }
-  | { ok: false; error: string }
+  // cause keeps a typed adoption refusal for the caller.
+  | { ok: false; error: string; cause?: unknown }
 
 export async function importLegacyTranscriptIntoJournal(input: {
   journal: AgentSessionJournal
@@ -81,7 +79,12 @@ export async function importLegacyTranscriptIntoJournal(input: {
     const current = input.journal.cursor()
     return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
   }
-  const cursor = await input.journal.replaceEpochItems('legacy_import', input.fence, prepared.items)
+  const { cursor } = await input.journal.write({
+    kind: 'epoch-replace',
+    reason: 'legacy_import',
+    fence: input.fence,
+    items: prepared.items
+  })
   return { ok: true, epoch: cursor.epoch, cursor, imported: prepared.items.length, replaced: true }
 }
 
@@ -123,7 +126,7 @@ export async function prepareLegacyTranscriptImport(input: {
     })
     return { ok: true, items, sourceEmpty, forkTipItemIds }
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
   }
 }
 
@@ -141,8 +144,8 @@ async function prepareOpenCodeImport(input: {
     }
     try {
       await validateAdoptedOpenCodeSource(dbPath, input.options.source, input.options.signal)
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
     }
   }
   const read = await readOpenCodeNativeChatTranscriptFull(
@@ -152,7 +155,7 @@ async function prepareOpenCodeImport(input: {
   if ('error' in read) {
     return { ok: false, error: read.error }
   }
-  const identities = read.messages.map((message): AgentJournalItemIdentity => ({
+  const identities = read.messages.map((message): ids.AgentJournalItemIdentity => ({
     provider: 'legacy',
     agent: input.agent,
     sessionId: input.sessionId,
@@ -176,7 +179,7 @@ async function prepareOpenCodeImport(input: {
 
 function replacementItems(
   messages: readonly NativeChatMessage[],
-  identities: readonly AgentJournalItemIdentity[],
+  identities: readonly ids.AgentJournalItemIdentity[],
   limits: JournalPayloadLimits
 ): JournalReplacementItem[] {
   const replacement: JournalReplacementItem[] = []
@@ -191,7 +194,7 @@ function replacementItems(
 
 function replacementItem(
   message: NativeChatMessage,
-  identity: AgentJournalItemIdentity,
+  identity: ids.AgentJournalItemIdentity,
   limits: JournalPayloadLimits
 ): JournalReplacementItem {
   return {
@@ -229,7 +232,7 @@ async function decodeReplacementItems(input: {
     agent: input.agent,
     sessionId: input.sessionId
   })
-  const toItem = (message: NativeChatMessage, identity: AgentJournalItemIdentity) =>
+  const toItem = (message: NativeChatMessage, identity: ids.AgentJournalItemIdentity) =>
     replacementItem(message, identity, input.limits)
   const retained =
     input.transcriptAgent === 'codex'

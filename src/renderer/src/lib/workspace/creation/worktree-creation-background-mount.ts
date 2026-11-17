@@ -2,10 +2,10 @@ import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/laun
 import type { StructuredLaunchTerminal } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import { useAppStore } from '@/store/index'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 
 /** Mount startup-owing tabs without activating: hidden workspaces otherwise never run renderer agent/setup/issue startup despite announcing readiness. */
 export function mountCreatedWorktreeStartupTabsInBackground(worktreeId: string): void {

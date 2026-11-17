@@ -1,7 +1,7 @@
 import {
   MAX_SUBAGENT_FIELD_CHARS,
   normalizeSubagentState
-} from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import { fitInteractivePrompt } from '../../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { parseAskFromToolInput } from '../../../../../shared/native-chat/input/native-chat-ask'
 import type {

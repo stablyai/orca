@@ -1,7 +1,9 @@
 import type { ComponentType } from 'react'
+import { CloneFolderNameField } from '../../../sidebar/project-admission/clone-folder/CloneFolderNameField'
+import type { CloneFolderOverride } from '../../../sidebar/project-admission/clone-folder/use-clone-folder-override'
 import { ArrowLeft, Download, FolderOpen, Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
@@ -146,6 +148,8 @@ export function HostSetupCloneStep({
   onBack,
   onCloneUrlChange,
   onCloneDestinationChange,
+  cloneFolder,
+  onCloneFolderNameChange,
   onSubmit
 }: {
   cloneUrl: string
@@ -155,6 +159,8 @@ export function HostSetupCloneStep({
   onBack: () => void
   onCloneUrlChange: (value: string) => void
   onCloneDestinationChange: (value: string) => void
+  cloneFolder: CloneFolderOverride | null
+  onCloneFolderNameChange: (name: string) => void
   onSubmit: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -184,11 +190,24 @@ export function HostSetupCloneStep({
           className="h-9 min-w-0"
         />
       </div>
+      {cloneFolder ? (
+        <CloneFolderNameField
+          cloneFolder={cloneFolder}
+          disabled={isCloning}
+          onChange={onCloneFolderNameChange}
+        />
+      ) : null}
       <div className="flex justify-end">
         <Button
           type="button"
           size="sm"
-          disabled={disabled || !cloneUrl.trim() || !cloneDestination.trim() || isCloning}
+          disabled={
+            disabled ||
+            !cloneUrl.trim() ||
+            !cloneDestination.trim() ||
+            cloneFolder?.name.trim() === '' ||
+            isCloning
+          }
           onClick={onSubmit}
         >
           {isCloning

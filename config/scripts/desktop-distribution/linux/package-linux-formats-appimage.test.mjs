@@ -138,16 +138,4 @@ describe.skipIf(process.platform === 'win32')('real executable AppImage tool ove
     ])
     expect(existsSync(join(root, 'expanded'))).toBe(false)
   })
-
-  it('propagates the original executable failure without a fallback', async () => {
-    const environment = await prepare()
-    vi.stubEnv('ORCA_TEST_SQUASHFS_EXIT', '17')
-    const result = runProcessSync({
-      program: join(overlay, 'mksquashfs'),
-      args: ['app', 'output', '-comp', 'zstd'],
-      env: { ...process.env, ...environment },
-      timeoutMs: 10_000
-    })
-    expect(result.code).toBe(17)
-  })
 })

@@ -4,17 +4,17 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { EMPTY_FORM, type EditingTarget } from '../../../ssh-host-form/ssh-target-draft'
-import type { SshConfigHostSummary } from '../../../../../../shared/ssh-types'
+import type { SshConfigHostSummary } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { parseHostAccessLink } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   translateHostAccessLinkError,
   translateRemotePairingFailureDescription
-} from '@/lib/remote-pairing-copy'
+} from '@/lib/remote-pairing/remote-pairing-copy'
 import { AddRemoteHostSshConfigPicker } from './AddRemoteHostSshConfigPicker'
 import { AddRemoteHostSshFormPanel } from './AddRemoteHostSshFormPanel'
 import { AddRemoteHostServerFormPanel } from './AddRemoteHostServerFormPanel'
 import { AddWslHostDialogBody } from '../wsl/AddWslHostDialogBody'
-import { remoteServerPairingFailureMessage } from '@/lib/remote-server-pairing-error-copy'
+import { remoteServerPairingFailureMessage } from '@/lib/remote-pairing/remote-server-pairing-error-copy'
 import {
   addAllSshConfigHostsToOrca,
   loadSshConfigHostsForPicker,

@@ -1,7 +1,7 @@
-import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { toast } from 'sonner'
 import {
   clearRuntimeCompatibilityCache,
@@ -9,18 +9,18 @@ import {
 } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { assertRuntimeStatusCompatible } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { normalizeTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeTaskProviderSettings } from '../../../../../shared/work-items/task-providers'
-import { normalizeOpenInApplications } from '../../../../../shared/open-in-applications'
+import { normalizeOpenInApplications } from '../../../../../shared/editor/launch/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from '../runtime-status/runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
-import { normalizeUiLanguage } from '../../../../../shared/ui-language'
+import { bumpProviderRuntimeSessionGeneration } from '@/runtime/hosts/observations/provider-runtime-context'
+import { normalizeUiLanguage } from '../../../../../shared/i18n/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'
 import {
@@ -33,8 +33,8 @@ import {
 } from './worktree-visibility-owner-settings'
 import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
-import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { getSettingsFocusedExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null

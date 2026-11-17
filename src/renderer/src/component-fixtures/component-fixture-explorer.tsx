@@ -1,9 +1,9 @@
 import '../assets/main.css'
 
 import ReactDOM from 'react-dom/client'
-import { getDefaultSettings } from '../../../shared/constants'
-import { applyDocumentTheme } from '../lib/document-theme'
-import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
+import { applyDocumentTheme } from '../app-shell/appearance/document-theme'
+import { installBodyOverlayAttributes } from '../lib/overlay-interaction/body-overlay-attributes'
 import { useAppStore } from '../store/index'
 import { installWebPreloadApi } from '../web/web-preload-api'
 import type { ComponentFixtureTheme } from './component-fixture'

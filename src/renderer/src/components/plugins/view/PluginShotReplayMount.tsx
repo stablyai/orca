@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { usePluginShotReplayStore } from '@/store/plugins/capture/plugin-shot-replay'
 
 // Lazy: the declarative view is only needed while a `shot --scenario` capture runs.

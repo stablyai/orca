@@ -5,7 +5,7 @@ import type {
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-lifecycle-refs'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 
@@ -23,7 +23,10 @@ import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
 import { readTerminalClipboardSelection } from '../clipboard/terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from '../clipboard/terminal-native-copy-gutter'
 import { installMouseHideWhileTyping } from '../input/pointer/mouse-hide-while-typing'
-import { isPrimarySelectionEnabled, setPrimarySelectionText } from '@/lib/primary-selection'
+import {
+  isPrimarySelectionEnabled,
+  setPrimarySelectionText
+} from '@/lib/clipboard/primary-selection/primary-selection'
 import { formatTerminalUrlTooltip } from './terminal-url-tooltip'
 import { terminalSelectionExceedsPrimaryLimit } from '../input/selection/terminal-primary-selection-limit'
 import { seedStartupSessionRestoredBanner } from '../session-restore/session-restored-banner-pane-state'

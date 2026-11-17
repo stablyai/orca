@@ -1,42 +1,41 @@
 import '../memory/host-malloc-tunables-claim'
 import process from 'node:process'
-import { main } from './orcad-command-startup'
-import { resolveOrcadExitCode } from './orcad-exit-code'
+import { main } from './serve-startup/orcad-command-startup'
+import { resolveOrcadExitCode } from './serve-startup/orcad-exit-code'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
-import { runOrcadNativePreflightVerdict } from './orcad-native-preflight'
+import { runOrcadNativePreflightVerdict } from './native-runtime/orcad-native-preflight'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   ORCAD_STARTUP_PREFLIGHT_FLAG
-} from '../../shared/orcad-profile-preflight'
-import { onNodePtyLoadFailure } from '../providers/node-pty-load-failure'
+} from '../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
+import { onNodePtyLoadFailure } from '../providers/pty/node-pty-load-failure'
 import {
   confirmBundledOrcadStartupQualified,
   discardBundledOrcadStartupQualification,
   forgetBundledOrcadStartupQualification,
   preflightBundledOrcadStartup,
   runOrcadProfilePreflight
-} from './orcad-profile-preflight'
-import { assertOrcadServerRuntime } from './orcad-bundled-runtime'
+} from './runtime-launch/orcad-profile-preflight'
+import { assertOrcadServerRuntime } from './runtime-launch/orcad-bundled-runtime'
 import {
   formatOrcadNativePreflightReport,
   ORCAD_NATIVE_PREFLIGHT_FLAG
-} from '../../shared/orcad-native-preflight-report'
+} from '../../shared/remote-runtime/orcad-distribution/orcad-native-preflight-report'
 import {
   ORCAD_CANCEL_MANAGED_STOP_FLAG,
   ORCAD_COMPLETE_MANAGED_STOP_FLAG
-} from '../../shared/orcad-stop-request'
+} from '../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   ORCAD_WINDOWS_BREAKAWAY_CONTRACT,
   WINDOWS_BREAKAWAY_LAUNCH_FLAG
-} from '../../shared/windows-breakaway-launch'
-import { runWindowsBreakawayLaunchIfRequested } from '../../shared/windows-breakaway-launcher'
-import { parseArgs } from './orcad-command-arguments'
-import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/orcad-stale-lock-reclaim'
+} from '../../shared/remote-runtime/orcad-lifecycle/windows-breakaway-launch'
+import { runWindowsBreakawayLaunchIfRequested } from './runtime-launch/windows-breakaway-launcher'
+import { parseArgs } from './serve-startup/orcad-command-arguments'
+import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
+import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 
-// A resolved plain-Node module graph proves the build guard; skip probes, ports and data-root locks.
-if (process.argv.includes('--orcad-smoke-load-check')) {
-  process.exit(0)
-}
+// A fatal V8 trap must crash, never spin on a JS fault-signal listener.
+installFatalSignalListenerGuard()
 
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
@@ -44,9 +43,13 @@ function failStartup(error: unknown): void {
   process.exit(resolveOrcadExitCode(error))
 }
 
-// One-shot launch and stop commands must skip server startup and preflights.
-if (process.argv[2] === '--orcad-structured-provider-load-check') {
-  void import('./orcad-structured-provider-smoke')
+// A resolved plain-Node module graph proves the build guard; skip probes, ports and data-root locks.
+if (process.argv.includes('--orcad-smoke-load-check')) {
+  // Activation loads lazily at startup; load it here so the guard still covers its graph.
+  void import('../backend/core-runtime-activation').then(() => process.exit(0), failStartup)
+} else if (process.argv[2] === '--orcad-structured-provider-load-check') {
+  // One-shot launch and stop commands must skip server startup and preflights.
+  void import('./native-runtime/orcad-structured-provider-smoke')
     .then(({ smokeLoadOrcadStructuredProviders }) => smokeLoadOrcadStructuredProviders())
     .then(() => process.exit(0))
     .catch(failStartup)
@@ -56,12 +59,14 @@ if (process.argv[2] === '--orcad-structured-provider-load-check') {
   process.argv[2] === ORCAD_COMPLETE_MANAGED_STOP_FLAG ||
   process.argv[2] === ORCAD_CANCEL_MANAGED_STOP_FLAG
 ) {
-  void import('./orcad-managed-stop-command').then(({ runOrcadManagedStopCommandAndExit }) =>
-    runOrcadManagedStopCommandAndExit(process.argv.slice(2))
+  void import('./host-lifecycle/managed-stop/orcad-managed-stop-command').then(
+    ({ runOrcadManagedStopCommandAndExit }) =>
+      runOrcadManagedStopCommandAndExit(process.argv.slice(2))
   )
 } else if (process.argv[2] === ORCAD_RECLAIM_STALE_LOCK_FLAG) {
-  void import('./orcad-stale-lock-reclaim').then(({ runOrcadStaleLockReclaimCommandAndExit }) =>
-    runOrcadStaleLockReclaimCommandAndExit(process.argv.slice(2))
+  void import('./instance-lock/orcad-stale-lock-reclaim').then(
+    ({ runOrcadStaleLockReclaimCommandAndExit }) =>
+      runOrcadStaleLockReclaimCommandAndExit(process.argv.slice(2))
   )
 } else {
   startOrcadProcess()
@@ -77,7 +82,7 @@ function startOrcadProcess(): void {
     assertOrcadServerRuntime()
     const flag = process.argv[2]
     if (flag === ORCAD_NATIVE_PREFLIGHT_FLAG && process.argv.length === 3) {
-      void import('./node-pty-precondition').then(({ checkNodePtyPrecondition }) => {
+      void import('./native-runtime/node-pty-precondition').then(({ checkNodePtyPrecondition }) => {
         const verdict = checkNodePtyPrecondition()
         const report = formatOrcadNativePreflightReport(verdict.status, verdict.reason ?? null)
         process.stdout.write(`${report}\n`, () => process.exit(0))

@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
-import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
+import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty/process-inspection'
 import { clientOnlyUnverifiableInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getProviderForPty,
@@ -10,9 +10,9 @@ import {
   tryGetProviderForPty,
   type ResolvedPtyHost
 } from '../provider/registry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { installPtySessionListingIpcHandler } from './session-listing'
 import { ptySizes } from '../delivery/visibility-state'
 import { isValidPaneKey } from '../pane/key-state'

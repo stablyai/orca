@@ -1,9 +1,9 @@
-import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
-import { prepareClaudeLaunchAccount } from '../../claude-launch-account'
-import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/structured-agent-command-resolution'
-import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
-import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
+import { prepareClaudeLaunchAccount } from './claude-launch-account'
+import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
+import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   Options as ClaudeAgentSdkOptions,
   PermissionMode
@@ -16,8 +16,8 @@ import {
   agentSessionProviderHandleKey,
   agentSessionProviderHandleRoot,
   claudeProviderHandleLeafUuid
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/claude-structured-auth-policy'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { ClaudeStructuredAuthPolicy } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
 import {
   claudeChildEnv,
   claudeProbeEnv,
@@ -26,16 +26,21 @@ import {
   type ClaudeEnvDeps
 } from './claude-structured-child-env'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
-import type { ClaudeCliFlagCheck, ClaudeCliFlagSupport } from '../../claude-cli-flag-support'
+import { claudeInChromeDefaultArgs } from '../../configuration/claude-in-chrome-default'
+import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
+import type {
+  ClaudeCliFlagCheck,
+  ClaudeCliFlagSupport
+} from '../../cli-capabilities/claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
-import { withNativeChatVisualsEnv } from '../../../native-chat/native-chat-visuals-delivery'
+import { withNativeChatVisualsEnv } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../lifecycle/claude-structured-session-id'
 import {
   pendingAgentSessionRewindFork,
   type AgentSessionRewindFork
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+} from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 
 export const CLAUDE_DEFAULT_SETTING_SOURCES = ['user', 'project', 'local'] as const
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
@@ -74,7 +79,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'resumeSessionAt'
   | 'forkSession'
 > &
-  ClaudePermissionOptions
+  ClaudePermissionOptions & { promptSuggestions?: boolean }
 
 /** Replay acknowledgements require an explicit flag; the SDK supplies the other transport flags. */
 export const CLAUDE_STRUCTURED_BASE_OPTIONS: ClaudeStructuredSdkOptions = {
@@ -139,6 +144,8 @@ export type ClaudeStructuredLaunchPartDeps = {
   attachmentDirectory?: string
   /** Omit version-gated flags when support cannot be checked. */
   cliFlags?: Pick<ClaudeCliFlagSupport, 'check'>
+  /** This host's setting for suggested next prompts, read at each spawn; absent means off. */
+  promptSuggestions?: () => boolean
   /** Whether Claude wrote a transcript for this id; defaults to the transcript resolver. */
   hasTranscript?: (input: {
     providerSessionId: string
@@ -221,12 +228,13 @@ export function claudeStructuredLaunchPart(
       env: claudeProbeEnv(sources)
     }
     const launchFlags = resolveClaudeLaunchFlags(
-      { ...(deps.cliFlags ? { cliFlags: deps.cliFlags } : {}), prepareVisuals: basis.visuals },
+      { ...deps, prepareVisuals: basis.visuals },
       record.sessionId,
       probeLaunch
     )
-    const configured = claudeStructuredLaunchArgs(await deps.resolveLaunchArgs())
-    const { thinkingDisplayArgs, visuals } = await launchFlags
+    const launchArgs = await deps.resolveLaunchArgs()
+    const configured = claudeStructuredLaunchArgs(launchArgs)
+    const { thinkingDisplayArgs, visuals, promptSuggestions } = await launchFlags
     const additionalDirectories = [
       ...configured.additionalDirectories,
       ...(deps.attachmentDirectory ? [deps.attachmentDirectory] : []),
@@ -265,6 +273,11 @@ export function claudeStructuredLaunchPart(
     )
     const accountRecipe = await prepareClaudeLaunchAccount(router, env, accountHome.path)
     const launchHome = accountRecipe.home
+    // Read the config of the account directory the spawn pins, as session acquisition does.
+    const chromeArgs = await claudeInChromeDefaultArgs(
+      { ...env, ...claudeConfigDirEnvPatch(launchHome, { env }) },
+      [...prefixArgs, ...launchArgs]
+    )
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     if (fork?.throughEntryId && !resumesTranscript) {
       // Fork sources must pass the same account-history check as resumes.
@@ -289,11 +302,13 @@ export function claudeStructuredLaunchPart(
           ...permission,
           ...(additionalDirectories.length ? { additionalDirectories } : {}),
           ...(visuals?.pluginDir ? { plugins: [{ type: 'local', path: visuals.pluginDir }] } : {}),
+          ...(promptSuggestions ? { promptSuggestions } : {}),
           extraArgs: {
             ...configured.extraArgs,
             ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
             ...permission.extraArgs,
-            ...thinkingDisplayArgs
+            ...thinkingDisplayArgs,
+            ...chromeArgs
           },
           // Claude owns where a resumed conversation continues; the stored leaf is Orca's bookkeeping.
           ...(resumesTranscript

@@ -1,10 +1,10 @@
-import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
-import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
-import { readNativeNotificationData } from '../src/notifications/native-notification-data'
+import { startAndroidForegroundPushPresentation } from '../src/notifications/foreground-delivery/android-foreground-push'
+import { registerPushDismissalTask } from '../src/notifications/dismissal/push-background-dismissal'
+import { readNativeNotificationData } from '../src/notifications/payload-identity/native-notification-data'
 import {
   notificationViewingOfRoute,
   setNotificationViewingWorkspace
-} from '../src/notifications/notification-viewing-policy'
+} from '../src/notifications/delivery-policy/notification-viewing-policy'
 import { useCallback, useEffect } from 'react'
 import { View } from 'react-native'
 import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
@@ -15,23 +15,25 @@ import { colors } from '../src/theme/mobile-theme'
 import { startMobileAppearance } from '../src/theme/mobile-appearance'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
-import { OrcaLogo } from '../src/components/OrcaLogo'
+import { OrcaLogo } from '../src/components/icons/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/connection/client-context'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider'
-import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
-import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
+import { getNotificationNavigationTarget } from '../src/notifications/navigation/notification-routing'
+import { useOpenNotificationRoute } from '../src/notifications/navigation/use-open-notification-route'
 import {
   isRemotePushTrigger,
   pushNotificationRouteData,
   foregroundNotificationBehavior
-} from '../src/notifications/push-receive'
+} from '../src/notifications/foreground-delivery/push-receive'
 import { startPushTokenSync } from '../src/notifications/push-registration'
-import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
-import { loadHostCatalog } from '../src/transport/hosts/host-store'
+import { ensureDesktopNotificationChannel } from '../src/notifications/foreground-delivery/desktop-notification-channel'
+import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
+import { readWorkspaceRouteExecutionHost } from '../src/navigation/route-param-reader'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
 import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-recovery'
-import { appUpdateChecker } from '../src/app-update/app-update-runtime'
+import { appUpdateChecker, isRetiredGithubAndroidApp } from '../src/app-update/app-update-runtime'
+import { AppMoveScreen } from '../src/app-move/AppMoveScreen'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
@@ -39,7 +41,7 @@ import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { startDeviceStore } from '../src/device-store/device-store'
 
-export { NativeScreenRecovery as ErrorBoundary } from '../src/components/NativeScreenRecovery'
+export { NativeScreenRecovery as ErrorBoundary } from '../src/components/feedback/NativeScreenRecovery'
 
 // Keep splash visible until React content is ready to avoid a blank frame.
 SplashScreen.preventAutoHideAsync()
@@ -68,11 +70,16 @@ export default function RootLayout() {
   const colorScheme = useMobileColorScheme()
   useFollowDeviceUiLocale()
   const pathname = usePathname()
-  const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
+  const {
+    hostId,
+    worktreeId,
+    executionHost: routeExecutionHost
+  } = useGlobalSearchParams<{
     hostId?: string
     worktreeId?: string
     executionHost?: string
   }>()
+  const executionHost = readWorkspaceRouteExecutionHost(routeExecutionHost)
   useEffect(() => {
     setNotificationViewingWorkspace(
       notificationViewingOfRoute(pathname, { hostId, worktreeId, executionHost })
@@ -239,6 +246,7 @@ export default function RootLayout() {
               </Stack>
             </SideSafeArea>
           </SideRailProvider>
+          {isRetiredGithubAndroidApp ? <AppMoveScreen /> : null}
         </View>
       </OrcaQueryProvider>
     </RpcClientProvider>

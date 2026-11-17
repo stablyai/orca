@@ -1,6 +1,6 @@
 import { webContents } from 'electron'
 import { BrowserManagerDownloadLifecycle } from '../downloads/browser-manager-download-lifecycle'
-import type { BrowserDevToolsDockBounds } from '../../../../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockBounds } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 
 export abstract class BrowserManagerDevTools extends BrowserManagerDownloadLifecycle {
   async openDevTools(

@@ -1,11 +1,11 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { LeftSidebarAppearanceMode } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { LeftSidebarAppearanceMode } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
   MAX_LEFT_SIDEBAR_TINT_OPACITY
-} from '../../../../../shared/left-sidebar-appearance'
+} from '../../../../../shared/sidebar-list/appearance/left-sidebar-appearance'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ColorField,
@@ -29,8 +29,8 @@ export function LeftSidebarAppearanceSetting({
       <SettingsRow
         alignTop
         label={t(
-          'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-          'Left Sidebar Appearance'
+          'auto.components.settings.AppearancePane.leftSidebarAppearance.fcc653abee',
+          'Left sidebar appearance'
         )}
         description={t(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.tintDescription',
@@ -42,8 +42,8 @@ export function LeftSidebarAppearanceSetting({
             value={settings.leftSidebarAppearanceMode === 'tinted' ? 'tinted' : 'default'}
             onChange={(leftSidebarAppearanceMode) => updateSettings({ leftSidebarAppearanceMode })}
             ariaLabel={t(
-              'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-              'Left Sidebar Appearance'
+              'auto.components.settings.AppearancePane.leftSidebarAppearance.fcc653abee',
+              'Left sidebar appearance'
             )}
             options={[
               {
@@ -68,8 +68,8 @@ export function LeftSidebarAppearanceSetting({
         <div className="space-y-2">
           <ColorField
             label={t(
-              'auto.components.settings.AppearancePane.leftSidebarAppearance.tintColor',
-              'Sidebar Tint'
+              'auto.components.settings.AppearancePane.leftSidebarAppearance.ba1d9a0607',
+              'Sidebar tint'
             )}
             description={t(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintColorDescription',
@@ -81,8 +81,8 @@ export function LeftSidebarAppearanceSetting({
           />
           <NumberField
             label={t(
-              'auto.components.settings.AppearancePane.leftSidebarAppearance.tintOpacity',
-              'Tint Strength'
+              'auto.components.settings.AppearancePane.leftSidebarAppearance.df205a675e',
+              'Tint strength'
             )}
             description={t(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintOpacityDescription',

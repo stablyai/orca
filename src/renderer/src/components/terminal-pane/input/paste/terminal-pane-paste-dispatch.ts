@@ -1,3 +1,4 @@
+import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { executeTerminalPastePlan } from './terminal-paste-executor'
 import { planTerminalPasteWithYield } from './terminal-paste-coordinator'
@@ -15,7 +16,7 @@ type PasteTextIntoTerminalPaneArgs = {
   source: TerminalPasteSource
   ptyId: string | null
   runtime: TerminalPasteRuntime
-  transport: Parameters<typeof writeTerminalPastePtyInput>[0]
+  transport: Pick<PtyTransport, 'sendInput' | 'sendInputAccepted' | 'isHoldingInput'> | undefined
   inputKind: 'driving' | 'launch'
   isTargetCurrent: () => boolean
   canContinue: () => boolean
@@ -46,11 +47,16 @@ export async function pasteTextIntoTerminalPane({
     windowsInputRecordNewline: planOptions?.windowsInputRecordNewline,
     terminalBracketedPasteMode: pane.terminal.modes?.bracketedPasteMode === true
   })
+  // Why: a held terminal takes a paste only as one entry, like a typed key; chunks need a bound, live PTY.
+  const isHolding = (): boolean => transport?.isHoldingInput?.() === true
   return executeTerminalPastePlan(plan, {
     pasteText: (pasteText, pasteOptions) =>
       pasteTerminalText(pane.terminal, pasteText, pasteOptions),
-    writePty: (data, signal) => writeTerminalPastePtyInput(transport, data, inputKind, signal),
+    writePty:
+      ptyId !== null && !isHolding()
+        ? (data, signal) => writeTerminalPastePtyInput(transport, data, inputKind, signal)
+        : undefined,
     isTargetCurrent,
-    canContinue
+    canContinue: () => canContinue() && !isHolding()
   })
 }

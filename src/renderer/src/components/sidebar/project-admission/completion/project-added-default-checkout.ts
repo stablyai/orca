@@ -1,15 +1,16 @@
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { track } from '@/lib/telemetry'
-import type {
-  AddRepoDefaultCheckoutHandoffSource,
-  EventProps
-} from '../../../../../../shared/telemetry-events'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import type { AddRepoDefaultCheckoutHandoffSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { EventProps } from '../../../../../../shared/telemetry/telemetry-event-classification'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
