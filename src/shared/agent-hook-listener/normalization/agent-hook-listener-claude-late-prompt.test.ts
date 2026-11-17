@@ -52,4 +52,28 @@ describe('Claude prompt event arriving after its turn', () => {
     ).toBe('working')
     expect(claude({ hook_event_name: 'Stop', prompt_id: FIRST })?.state).toBe('done')
   })
+
+  // Recorded from Claude 2.1.325: a prompt typed mid-turn joins the running turn under its prompt_id,
+  // and a background-task wakeup opens a turn under a new one.
+  it('keeps a mid-turn prompt in its turn and opens a wakeup turn', () => {
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'start the task' })
+    claude({
+      hook_event_name: 'PreToolUse',
+      prompt_id: FIRST,
+      tool_name: 'Bash',
+      tool_use_id: 't1'
+    })
+    expect(
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'also this' })
+    ).toMatchObject({ state: 'working', prompt: 'also this' })
+    expect(claude({ hook_event_name: 'Stop', prompt_id: FIRST })?.state).toBe('done')
+
+    expect(
+      claude({
+        hook_event_name: 'UserPromptSubmit',
+        prompt_id: SECOND,
+        prompt: '<task-notification>\n<task-id>bg-1</task-id>\n</task-notification>'
+      })?.state
+    ).toBe('working')
+  })
 })

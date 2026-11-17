@@ -8,7 +8,7 @@ import { readClaudeBackgroundAgentTasks } from '../background-tasks/claude-backg
 import { trackClaudeTaskNotificationDelivery } from '../background-tasks/claude-task-notification-delivery'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'
 
-/** A UserPromptSubmit that arrived after a later event of its own turn; it never opens a turn. */
+/** A UserPromptSubmit whose turn already began: it landed late, or was typed into the running turn. */
 export const CLAUDE_LATE_PROMPT_SUBMIT_EVENT = 'UserPromptSubmit:late'
 
 // Why 4: a prompt event can trail its own turn, and in theory the next one; older turns are long settled.
@@ -18,6 +18,7 @@ const SEEN_PROMPT_IDS_PER_PANE = 4
  * Claude does not wait for Orca's UserPromptSubmit hook, so its post can land after a later event of
  * the same turn (a fast Stop). Every main-agent event records its prompt_id, newest last; a UserPromptSubmit
  * whose prompt was already seen is renamed before any normalization, so nothing treats it as a turn start.
+ * A prompt typed mid-turn shares the running turn's prompt_id, so it lands here too and only relabels the turn.
  */
 export function orderClaudeHook(
   state: HookListenerState,
