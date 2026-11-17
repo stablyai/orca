@@ -6,17 +6,17 @@ import {
   normalizeExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
-import { stableJson } from '../../shared/workspace-layout/workspace-layout-load-report'
-import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+} from '../../shared/execution-host/execution-host'
+import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/persistence/workspace-layout-load'
+import { stableJson } from '../../shared/workspace-layout/persistence/workspace-layout-load-report'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type {
   WorkspaceLayout,
   WorkspaceLayoutModel
 } from '../../shared/workspace-layout/workspace-layout-model'
-import type { TabGroupLayoutNode } from '../../shared/tab-types'
-import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { TabGroupLayoutNode } from '../../shared/workspace-layout/tab-groups/tab-types'
+import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { droppedTabBarEntries, terminalTabBarEntries } from './window-save-raw-session-divergence'
 import { compactFieldChanges, type FieldChange } from './window-save-divergence-values'
 

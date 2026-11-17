@@ -1,0 +1,90 @@
+import React from 'react'
+import { LoaderCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { SwitchIndicator } from '@/components/ui/switch'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { ButtonKeyHint } from '@/components/ButtonKeyHint'
+import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
+
+type NewWorkspaceComposerFooterProps = Pick<
+  NewWorkspaceComposerCardProps,
+  | 'createError'
+  | 'showCreateMultiple'
+  | 'createMultiple'
+  | 'onCreateMultipleChange'
+  | 'onCreate'
+  | 'createDisabled'
+  | 'creating'
+  | 'primaryActionLabel'
+> & {
+  submitShortcutModifierLabel: string
+}
+
+export function NewWorkspaceComposerFooter({
+  createError,
+  showCreateMultiple = false,
+  createMultiple = false,
+  onCreateMultipleChange,
+  onCreate,
+  createDisabled,
+  creating,
+  primaryActionLabel,
+  submitShortcutModifierLabel
+}: NewWorkspaceComposerFooterProps): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <>
+      {createError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {createError.help ? (
+            <div className="space-y-1">
+              <p className="font-medium">{createError.title}</p>
+              <p>{createError.message}</p>
+              <p className="text-destructive/85">{createError.help}</p>
+            </div>
+          ) : (
+            createError.message
+          )}
+        </div>
+      ) : null}
+
+      <div
+        className={cn(
+          'flex items-center gap-3',
+          showCreateMultiple ? 'justify-between' : 'justify-end'
+        )}
+      >
+        {showCreateMultiple ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={createMultiple}
+            onClick={() => onCreateMultipleChange?.(!createMultiple)}
+            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <SwitchIndicator checked={createMultiple} />
+            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+              {t('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
+            </span>
+          </button>
+        ) : null}
+        <Button
+          onClick={() => void onCreate()}
+          disabled={createDisabled}
+          size="sm"
+          className="text-xs"
+          // Why: the title already says what is created; the button keeps the full name for AT.
+          aria-label={primaryActionLabel}
+        >
+          {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+          {t('auto.components.NewWorkspaceComposerFooter.create', 'Create')}
+          <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
+        </Button>
+      </div>
+    </>
+  )
+}

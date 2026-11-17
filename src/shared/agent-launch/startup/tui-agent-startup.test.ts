@@ -1,0 +1,7 @@
+import './agent-resume-argv-drop.spec'
+import './agent-resume-launch-command.spec'
+import './agent-startup-plan-inputs.spec'
+import './opencode-startup-prompt.spec'
+import './tui-agent-fork-startup.spec'
+import './tui-agent-startup-hermes.spec'
+import './tui-agent-startup-shell.spec'

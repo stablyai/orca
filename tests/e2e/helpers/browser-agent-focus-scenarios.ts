@@ -95,7 +95,7 @@ export async function startProbeServer(): Promise<{ url: string; close: () => Pr
   }
 }
 
-function readProperty(value: unknown, key: string): unknown {
+export function readProperty(value: unknown, key: string): unknown {
   return value !== null && typeof value === 'object' && key in value
     ? Object.getOwnPropertyDescriptor(value, key)?.value
     : undefined
@@ -216,8 +216,8 @@ export async function runAgentKeysScenario(
           `JSON.stringify({ submits: window.__submits, keys: window.__keys })`
         )
       )
-      // Why: `type` inserts text without key events, so only the keypresses log keydowns.
-      .toBe(JSON.stringify({ submits: 1, keys: ['Z', 'Enter'] }))
+      // Why: `type` presses real keys, so its characters log keydowns like the keypresses.
+      .toBe(JSON.stringify({ submits: 1, keys: ['Z', 'q', 'r', 'Enter'] }))
     await afterAgentInput?.(pageId)
   } finally {
     await server.close()
@@ -257,7 +257,7 @@ export async function runAgentClicksScenario(
       .toBe(JSON.stringify({ active: 'probe', focused: true, blurs: 0 }))
     expect((await readHost(page)).terminalFocused).toBe(true)
 
-    // Why: text with a newline cannot be typed as key events; CDP delivers it with focus borrowed.
+    // Why: fill writes multiline values straight into the field, never through the user's focus.
     await rpc(page, 'browser.fill', { page: pageId, element: '#notes', value: 'a\nb' })
     await expect
       .poll(() => evalInPage(page, pageId, `document.getElementById('notes').value`))

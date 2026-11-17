@@ -1,7 +1,5 @@
-import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
-import { createRequire } from 'node:module'
+import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -11,42 +9,19 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSnapshot,
   CodexUsageSummary
-} from '../../shared/codex-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+} from '../../shared/agent-usage/analytics/codex-usage-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { CodexUsagePersistedState } from './types'
 import type { AutomationUsageLookupInput } from './codex-automation-run-attribution'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
 import { resolveCodexAutomationRunUsage } from './codex-automation-run-attribution'
 import { buildRecentSessions } from './codex-usage-session-rows'
 import { buildBreakdown, buildDaily, buildSummary } from './codex-usage-rollup-projections'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
-
-let _codexUsageFile: string | null = null
-
-const require = createRequire(import.meta.url)
-
-function defaultUserDataPath(): string {
-  if (hasAppEnvironment()) {
-    return getAppEnvironment().getPath('userData')
-  }
-  const electron: unknown = require('electron')
-  if (
-    typeof electron === 'object' &&
-    electron !== null &&
-    'app' in electron &&
-    typeof electron.app === 'object' &&
-    electron.app !== null &&
-    'getPath' in electron.app &&
-    typeof electron.app.getPath === 'function'
-  ) {
-    return electron.app.getPath('userData')
-  }
-  throw new Error('Electron app environment is unavailable')
-}
 
 function getDefaultState(): CodexUsagePersistedState {
   return {
@@ -85,38 +60,19 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
   }
 }
 
-export function initCodexUsagePath(userDataPath?: string): void {
-  _codexUsageFile = join(userDataPath ?? defaultUserDataPath(), 'orca-codex-usage.json')
-}
-
-function getCodexUsageFile(): string {
-  const file = _codexUsageFile
-  if (file) {
-    return file
-  }
-  initCodexUsagePath()
-  if (!_codexUsageFile) {
-    throw new Error('Codex usage path is unavailable')
-  }
-  return _codexUsageFile
-}
-
 export class CodexUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   CodexUsagePersistedState,
   'hasAnyCodexData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>, userDataPath?: string) {
-    const cacheFile = userDataPath
-      ? join(userDataPath, 'orca-codex-usage.json')
-      : getCodexUsageFile()
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'codex',
         selectSessions: (state) => codexOpenCodeTokenSessions(state.sessions)
       },
       logTag: '[codex-usage]',
-      resolveCacheFile: () => cacheFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-codex-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       sourceKey: 'processedFiles',

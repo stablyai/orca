@@ -1,0 +1,65 @@
+# Renderer text follows the UI language; undefined/omitted locales fall back to the OS locale.
+# The TSX document below mirrors the TypeScript one; keep them in sync.
+id: renderer-intl-ui-locale
+language: typescript
+severity: error
+message: Format for the UI language, not the OS locale - pass getIntlLocale() (or use the ui-intl-formatters helpers for shared formatters). Machine-facing values (logs, filenames, protocol) should use a fixed locale instead.
+files:
+  - src/renderer/**
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+rule:
+  # Reading the runtime's own settings (timeZone) is not formatting.
+  not:
+    inside:
+      kind: member_expression
+      has: { field: property, regex: '^resolvedOptions$' }
+  any:
+    - pattern: new Intl.$F(undefined, $$$A)
+    - pattern: new Intl.$F(undefined)
+    - pattern: new Intl.$F()
+    - pattern: Intl.$F(undefined, $$$A)
+    - pattern: Intl.$F(undefined)
+    - pattern: Intl.$F()
+    - pattern: $V.toLocaleString()
+    - pattern: $V.toLocaleDateString()
+    - pattern: $V.toLocaleTimeString()
+    - pattern: $V.toLocaleString(undefined, $$$A)
+    - pattern: $V.toLocaleDateString(undefined, $$$A)
+    - pattern: $V.toLocaleTimeString(undefined, $$$A)
+    - pattern: $V.toLocaleString(undefined)
+    - pattern: $V.toLocaleDateString(undefined)
+    - pattern: $V.toLocaleTimeString(undefined)
+---
+id: renderer-intl-ui-locale-tsx
+language: tsx
+severity: error
+message: Format for the UI language, not the OS locale - pass getIntlLocale() (or use the ui-intl-formatters helpers for shared formatters). Machine-facing values (logs, filenames, protocol) should use a fixed locale instead.
+files:
+  - src/renderer/**
+ignores:
+  - '**/*.test.*'
+  - '**/*.spec.*'
+rule:
+  # Reading the runtime's own settings (timeZone) is not formatting.
+  not:
+    inside:
+      kind: member_expression
+      has: { field: property, regex: '^resolvedOptions$' }
+  any:
+    - pattern: new Intl.$F(undefined, $$$A)
+    - pattern: new Intl.$F(undefined)
+    - pattern: new Intl.$F()
+    - pattern: Intl.$F(undefined, $$$A)
+    - pattern: Intl.$F(undefined)
+    - pattern: Intl.$F()
+    - pattern: $V.toLocaleString()
+    - pattern: $V.toLocaleDateString()
+    - pattern: $V.toLocaleTimeString()
+    - pattern: $V.toLocaleString(undefined, $$$A)
+    - pattern: $V.toLocaleDateString(undefined, $$$A)
+    - pattern: $V.toLocaleTimeString(undefined, $$$A)
+    - pattern: $V.toLocaleString(undefined)
+    - pattern: $V.toLocaleDateString(undefined)
+    - pattern: $V.toLocaleTimeString(undefined)

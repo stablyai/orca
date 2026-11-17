@@ -1,4 +1,4 @@
-import type { AiVaultHandoffPackArgs, AiVaultHandoffPackResult } from '../../shared/ai-vault-types'
+import type { AiVaultHandoffPackArgs, AiVaultHandoffPackResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { readAiVaultHandoffPack } from './session-handoff-pack-read'
 
 export function handleAiVaultBuildHandoffPack(

@@ -1,9 +1,9 @@
-import { hasClosedTerminalTabRecord } from '../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import {
   closeTerminalTabInWorkspaceSession,
   workspaceSessionListsTerminalTab
-} from '../../shared/workspace-session-terminal-tab-close'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-terminal-tab-close'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 /** Suppress recorded closes across all writers until TTL expiry; failed-close rollback bypasses the fence. */
 export function dropClosedTerminalTabs(

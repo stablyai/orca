@@ -1,14 +1,14 @@
 import { MessageSquarePlus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { BrowserNavigationControlRow } from '../assemble-chrome/browser-navigation-control-row'
-import BrowserAddressBar from '../assemble-chrome/BrowserAddressBar'
-import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/use-browser-address-bar-edit-session'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
-import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-indicator'
-import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
+import { useTranslate } from '@/i18n/use-translate'
+import { BrowserNavigationControlRow } from '../assemble-chrome/toolbar/browser-navigation-control-row'
+import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
+import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/feedback/browser-egress-indicator'
+import { MarkupDrawButton } from '../annotate/markup-tools/MarkupDrawButton'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 
 export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId,
@@ -48,6 +48,7 @@ export function RemoteBrowserPageToolbar({
   onForward: () => void
   onReload: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <BrowserNavigationControlRow
       controls={{
@@ -84,20 +85,16 @@ export function RemoteBrowserPageToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              aria-label={translate(
-                'auto.components.browser.pane.BrowserPane.0e080d820e',
-                'Reload'
-              )}
+              size="icon-xs"
+              variant="muted-field-icon"
+              aria-label={t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
               onClick={onReload}
             >
-              <RefreshCw className="size-4" />
+              <RefreshCw className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+            {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
           </TooltipContent>
         </Tooltip>
       }
@@ -105,11 +102,10 @@ export function RemoteBrowserPageToolbar({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 opacity-50"
+            size="icon-xs"
+            variant="muted-field-icon"
             aria-disabled="true"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.browser.pane.BrowserPane.deb5293610',
               'Browser annotations unavailable in remote runtime'
             )}
@@ -117,11 +113,11 @@ export function RemoteBrowserPageToolbar({
               event.preventDefault()
             }}
           >
-            <MessageSquarePlus className="size-4" />
+            <MessageSquarePlus className="size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate(
+          {t(
             'auto.components.browser.pane.BrowserPane.8b7e6d1f5a',
             'Browser annotations are only available in local browser tabs.'
           )}
@@ -132,7 +128,6 @@ export function RemoteBrowserPageToolbar({
         disabled={!frameUrl}
         active={markup.isActive}
         surfaceActive={isActive}
-        className="h-7 w-7"
       />
     </BrowserNavigationControlRow>
   )

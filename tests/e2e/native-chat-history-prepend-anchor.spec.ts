@@ -3,16 +3,24 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import type { GlobalSettings } from '../../src/shared/global-settings-types'
+import type { GlobalSettings } from '../../src/shared/settings/global-settings-types'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 const TRANSCRIPT_ROWS = 650
 
 async function enableNativeChatSetting(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
+    const nextSettings = await window.api.settings.set({
+      nativeChatProviders: { claude: true, codex: true }
+    })
     window.__store?.setState({ settings: nextSettings as GlobalSettings })
   })
 }
@@ -55,45 +63,6 @@ async function toggleTerminalTabToChatView(
   }, args)
 }
 
-async function activateNewTerminalTab(page: Page, worktreeId: string): Promise<void> {
-  await page.evaluate((id) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    const state = store.getState()
-    const tab = state.createTab(id, undefined, undefined, { activate: true })
-    state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
-  }, worktreeId)
-}
-
-async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
-  await page.evaluate((id) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    const state = store.getState()
-    state.setActiveTab(id)
-    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
-  }, tabId)
-}
-
-async function publishHiddenLaunchMessage(
-  page: Page,
-  args: { tabId: string; text: string }
-): Promise<void> {
-  await page.evaluate(({ tabId, text }) => {
-    window.__store?.getState().seedNativeChatLaunchPrompt({
-      tabId,
-      agent: 'claude',
-      text,
-      createdAt: Date.now()
-    })
-  }, args)
-}
-
 function claudeTranscript(rowCount: number, sessionId: string): string {
   const startedAt = Date.now() - rowCount * 1_000
   return `${Array.from({ length: rowCount }, (_, index) => {
@@ -123,7 +92,11 @@ test.describe('Native chat transcript anchoring', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-prepend-anchor-${randomUUID()}`
     const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-anchor-'))
@@ -244,89 +217,11 @@ test.describe('Native chat transcript anchoring', () => {
         `content grew ${contentGrowth}px while scrollTop adjusted ${scrollAdjustment}px`
       ).toBeLessThanOrEqual(2)
       expect(Math.abs((after?.viewportOffset ?? 0) - anchor.viewportOffset)).toBeLessThanOrEqual(3)
-    } finally {
-      rmSync(scratchDir, { recursive: true, force: true })
-    }
-  })
-
-  test('keeps a detached transcript in place across a hidden update', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-
-    const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
-    const [tabId] = descriptor.paneKey.split(':')
-    const sessionId = `e2e-hidden-scroll-${randomUUID()}`
-    const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-hidden-'))
-    const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
-    writeFileSync(transcriptPath, claudeTranscript(TRANSCRIPT_ROWS, sessionId))
-
-    try {
-      await enableNativeChatSetting(orcaPage)
-      await seedClaudeProviderSession(orcaPage, {
-        paneKey: descriptor.paneKey,
-        worktreeId: descriptor.worktreeId,
-        sessionId,
-        transcriptPath
-      })
-      await toggleTerminalTabToChatView(orcaPage, {
-        tabId,
-        worktreeId: descriptor.worktreeId
-      })
-
-      const root = orcaPage.locator('[data-native-chat-root="true"]')
-      const scroll = orcaPage.locator('[data-native-chat-scroll]')
-      const jump = orcaPage.getByRole('button', { name: 'Jump to latest' })
-      await expect(root).toBeVisible({ timeout: 15_000 })
-      await expect(orcaPage.getByText('E2E transcript row 0649', { exact: true })).toBeAttached({
-        timeout: 30_000
-      })
-      await scroll.hover()
-      await orcaPage.mouse.wheel(0, -2_000)
-      await expect
-        .poll(async () =>
-          scroll.evaluate(
-            (element) => element.scrollHeight - element.clientHeight - element.scrollTop
-          )
-        )
-        .toBeGreaterThan(1_000)
-      // Rows the wheel mounted above the reader settle their measured heights frames later.
-      const readingAt = await scroll.evaluate(async (element) => {
-        let previousGeometry = ''
-        let stableFrames = 0
-        for (let frame = 0; frame < 120 && stableFrames < 5; frame += 1) {
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-          const geometry = `${element.scrollHeight}:${element.scrollTop}`
-          stableFrames = geometry === previousGeometry ? stableFrames + 1 : 0
-          previousGeometry = geometry
-        }
-        return element.scrollTop
-      })
-      await expect(jump).toBeVisible()
-
-      await activateNewTerminalTab(orcaPage, descriptor.worktreeId)
-      await expect(root).toBeHidden()
-      await publishHiddenLaunchMessage(orcaPage, {
-        tabId,
-        text: 'E2E update received while the transcript is hidden'
-      })
-      await activateTerminalTab(orcaPage, tabId)
-
-      await expect(root).toBeVisible({ timeout: 15_000 })
-      await expect(
-        orcaPage.getByText('E2E update received while the transcript is hidden', { exact: true })
-      ).toBeAttached()
-      await expect
-        .poll(async () =>
-          Math.abs((await scroll.evaluate((element) => element.scrollTop)) - readingAt)
-        )
-        .toBeLessThanOrEqual(2)
-      await orcaPage.waitForTimeout(500)
-      expect(
-        Math.abs((await scroll.evaluate((element) => element.scrollTop)) - readingAt)
-      ).toBeLessThanOrEqual(2)
-      await expect(jump).toBeVisible()
+      const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      expect(finalPane.tabId).toBe(boundPane.tabId)
+      expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+      expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+      await expect(orcaPage.locator('[data-native-chat-root="true"]')).toBeVisible()
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })
     }

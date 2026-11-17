@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import * as z from 'zod'
+import { salvagedOptional } from '../../../src/shared/validation/zod-salvage'
 
 // Schemas cover history/status and resume metadata from runtime RPC status, ai-vault, repo, folder-workspace and worktree-catalog methods; rows use shared AiVault types.
 

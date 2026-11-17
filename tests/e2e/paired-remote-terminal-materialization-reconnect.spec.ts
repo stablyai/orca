@@ -2,13 +2,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeMobileSessionTabsResult,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalShow
-} from '../../src/shared/runtime-types'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import {
@@ -17,7 +17,7 @@ import {
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-materialize-'))
 const fixturePath = path.join(scratch, 'materialize-terminal.mjs')

@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
+import { requireGitOwnerTarget } from './worktree-git-owner-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import { getRuntimeGitHistory } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { GitHistoryPanelState } from './git-history-panel'
-import type { GitHistoryResult, GitHistoryScope } from '../../../../../../shared/git-history'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
+
+/** `wakeWslDistro`: the user opening Commits or its Refresh, a user act that may start a stopped WSL distro. */
+type HistoryRefresh = { wakeWslDistro?: boolean }
+const SHOWN_HISTORY_LOAD: HistoryRefresh = { wakeWslDistro: true }
 
 /** Cache/prune history per worktree and reject superseded requests; refreshGitHistoryRef lets effects refresh without callback resubscription. */
 export function useSourceControlGitHistory({
   activeRepoTarget,
   activeWorktreeId,
   worktreePath,
+  branchName,
   compareBaseRef,
   isFolder,
   isBranchVisible,
@@ -23,6 +28,7 @@ export function useSourceControlGitHistory({
   activeRepoTarget: RuntimeClientTarget | null
   activeWorktreeId: string | null
   worktreePath: string | null
+  branchName: string
   compareBaseRef: string | null
   isFolder: boolean
   isBranchVisible: boolean
@@ -31,23 +37,15 @@ export function useSourceControlGitHistory({
   worktreeMap: ReadonlyMap<string, unknown>
 }): {
   gitHistoryState: GitHistoryPanelState
-  refreshGitHistory: () => Promise<void>
-  loadMoreGitHistory: () => Promise<void>
+  refreshGitHistory: (options?: HistoryRefresh) => Promise<void>
   refreshGitHistoryRef: RefObject<() => Promise<void>>
-  gitHistoryScope: GitHistoryScope
-  setGitHistoryScope: (scope: GitHistoryScope) => void
-  gitHistoryExhaustive: boolean
-  setGitHistoryExhaustive: (exhaustive: boolean) => void
 } {
-  const [gitHistoryScope, setGitHistoryScope] = useState<GitHistoryScope>('all')
-  const [gitHistoryExhaustive, setGitHistoryExhaustive] = useState(false)
+  const scope = useSourceControlScope()
   const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
     Record<string, GitHistoryPanelState>
   >({})
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
-  const pageRequestsRef = useRef<Record<string, number>>({})
-  const loadedResultsRef = useRef<Record<string, GitHistoryResult>>({})
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
@@ -71,196 +69,116 @@ export function useSourceControlGitHistory({
     for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
       if (!worktreeMap.has(key)) {
         delete gitHistoryRequestByWorktreeRef.current[key]
-        delete pageRequestsRef.current[key]
-        delete loadedResultsRef.current[key]
       }
     }
   }, [worktreeMap])
 
-  const refreshGitHistory = useCallback(async (): Promise<void> => {
-    if (
-      !activeWorktreeId ||
-      !worktreePath ||
-      isFolder ||
-      !isBranchVisible ||
-      !isGitHistoryExpanded ||
-      !isGitHistoryVisible
-    ) {
-      return
-    }
-    const worktreeId = activeWorktreeId
-    const requestId = gitHistoryRequestSeqRef.current + 1
-    gitHistoryRequestSeqRef.current = requestId
-    gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
-    delete loadedResultsRef.current[worktreeId]
-    delete pageRequestsRef.current[worktreeId]
-    setGitHistoryByWorktree((prev) => {
-      const previous = prev[worktreeId]
-      return {
-        ...prev,
-        [worktreeId]: previous?.result
-          ? { status: 'refreshing', result: previous.result }
-          : { status: 'loading' }
-      }
-    })
-    try {
-      const connectionId = getConnectionId(worktreeId) ?? undefined
-      const result = await getRuntimeGitHistory(
-        {
-          // Read history on the repo owner, which may differ from the focused host.
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId,
-          worktreePath,
-          connectionId
-        },
-        {
-          limit: 50,
-          baseRef: compareBaseRef,
-          includeRelatedRefs: gitHistoryScope === 'all',
-          scope: gitHistoryScope,
-          ...(gitHistoryScope === 'all' && gitHistoryExhaustive ? { forceAllRefs: true } : {})
-        }
-      )
-      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+  const refreshGitHistory = useCallback(
+    async (options?: HistoryRefresh): Promise<void> => {
+      if (
+        !activeWorktreeId ||
+        !worktreePath ||
+        isFolder ||
+        !isBranchVisible ||
+        !isGitHistoryExpanded ||
+        !isGitHistoryVisible
+      ) {
         return
       }
-      loadedResultsRef.current[worktreeId] = result
-      setGitHistoryByWorktree((prev) => ({
-        ...prev,
-        [worktreeId]: { status: 'ready', result }
-      }))
-    } catch (error) {
-      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
-        return
-      }
-      const message = error instanceof Error ? error.message : 'Failed to load commits'
+      const worktreeId = activeWorktreeId
+      const requestId = gitHistoryRequestSeqRef.current + 1
+      gitHistoryRequestSeqRef.current = requestId
+      gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
       setGitHistoryByWorktree((prev) => {
         const previous = prev[worktreeId]
         return {
           ...prev,
           [worktreeId]: previous?.result
-            ? { status: 'error', result: previous.result, error: message }
-            : { status: 'error', error: message }
+            ? { status: 'refreshing', result: previous.result }
+            : { status: 'loading' }
         }
       })
-    }
-  }, [
-    activeRepoTarget,
-    activeWorktreeId,
-    compareBaseRef,
-    gitHistoryScope,
-    gitHistoryExhaustive,
-    isBranchVisible,
-    isFolder,
-    isGitHistoryExpanded,
-    isGitHistoryVisible,
-    worktreePath
-  ])
-  const loadMoreGitHistory = useCallback(async (): Promise<void> => {
-    const result = gitHistoryState.result
-    if (
-      !activeWorktreeId ||
-      !worktreePath ||
-      isFolder ||
-      !isBranchVisible ||
-      !isGitHistoryExpanded ||
-      !isGitHistoryVisible ||
-      gitHistoryState.status !== 'ready' ||
-      !result?.hasMore ||
-      !result.nextCursor ||
-      loadedResultsRef.current[activeWorktreeId] !== result ||
-      pageRequestsRef.current[activeWorktreeId] !== undefined
-    ) {
-      return
-    }
-    const worktreeId = activeWorktreeId
-    const requestId = ++gitHistoryRequestSeqRef.current
-    gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
-    pageRequestsRef.current[worktreeId] = requestId
-    setGitHistoryByWorktree((prev) => ({
-      ...prev,
-      [worktreeId]: { status: 'ready', result, isLoadingMore: true }
-    }))
-    try {
-      const page = await getRuntimeGitHistory(
-        {
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId,
-          worktreePath,
-          connectionId: getConnectionId(worktreeId) ?? undefined
-        },
-        { limit: 50, cursor: result.nextCursor }
-      )
-      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
-        return
-      }
-      const ids = new Set(result.items.map((item) => item.id))
-      const additions = page.items.filter((item) => !ids.has(item.id))
-      if (
-        (!additions.length && page.hasMore) ||
-        (page.nextCursor && page.nextCursor.offset <= result.nextCursor.offset)
-      ) {
-        throw new Error('History did not advance. Refresh commits to try again.')
-      }
-      const mergedResult = {
-        ...result,
-        items: [...result.items, ...additions],
-        hasMore: page.hasMore,
-        nextCursor: page.nextCursor
-      }
-      loadedResultsRef.current[worktreeId] = mergedResult
-      setGitHistoryByWorktree((prev) => ({
-        ...prev,
-        [worktreeId]: {
-          status: 'ready',
-          result: mergedResult
+      try {
+        const connectionId = sourceControlConnectionId(scope, worktreeId)
+        const result = await getRuntimeGitHistory(
+          {
+            // Read history on the repo owner, which may differ from the focused host.
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId,
+            worktreePath,
+            connectionId
+          },
+          {
+            limit: 50,
+            baseRef: compareBaseRef,
+            ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+          }
+        )
+        if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+          return
         }
-      }))
-    } catch (error) {
-      if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
-        return
-      }
-      setGitHistoryByWorktree((prev) => ({
-        ...prev,
-        [worktreeId]: {
-          status: 'ready',
-          result,
-          loadMoreError: error instanceof Error ? error.message : 'Failed to load more commits'
+        setGitHistoryByWorktree((prev) => ({
+          ...prev,
+          [worktreeId]: { status: 'ready', result }
+        }))
+      } catch (error) {
+        if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
+          return
         }
-      }))
-    } finally {
-      if (pageRequestsRef.current[worktreeId] === requestId) {
-        delete pageRequestsRef.current[worktreeId]
+        const message = error instanceof Error ? error.message : 'Failed to load commits'
+        setGitHistoryByWorktree((prev) => {
+          const previous = prev[worktreeId]
+          return {
+            ...prev,
+            [worktreeId]: previous?.result
+              ? { status: 'error', result: previous.result, error: message }
+              : { status: 'error', error: message }
+          }
+        })
       }
-    }
-  }, [
-    activeRepoTarget,
-    activeWorktreeId,
-    worktreePath,
-    isFolder,
-    isBranchVisible,
-    isGitHistoryExpanded,
-    isGitHistoryVisible,
-    gitHistoryState
-  ])
+    },
+    [
+      scope,
+      activeRepoTarget,
+      activeWorktreeId,
+      compareBaseRef,
+      isBranchVisible,
+      isFolder,
+      isGitHistoryExpanded,
+      isGitHistoryVisible,
+      worktreePath
+    ]
+  )
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   // Publish before consumer effects, never during render where discarded renders could install callbacks.
   useEffect(() => {
     refreshGitHistoryRef.current = refreshGitHistory
   }, [refreshGitHistory])
 
+  // Expanded at mount, or restored with another worktree's view, is not a click: only an expand
+  // within the same worktree counts as the user opening Commits.
+  const lastExpandedRef = useRef({ worktreeId: activeWorktreeId, expanded: isGitHistoryExpanded })
   useEffect(() => {
+    const last = lastExpandedRef.current
+    const userExpanded =
+      isGitHistoryExpanded && !last.expanded && last.worktreeId === activeWorktreeId
+    lastExpandedRef.current = { worktreeId: activeWorktreeId, expanded: isGitHistoryExpanded }
     // Defer Git subprocesses until Commits is expanded and visible, especially for large/remote repos.
     if (!isBranchVisible || !isGitHistoryExpanded || !isGitHistoryVisible) {
       return
     }
-    void refreshGitHistoryRef.current()
+    // Only the user's own act may start a stopped WSL distro: opening Commits, or switching to this
+    // workspace (once per switch). A remount, restore or Orca's own re-show stays background (E9).
+    const userAct =
+      userExpanded ||
+      (activeWorktreeId !== null && takeRecentWorkspaceSwitchWake(activeWorktreeId, 'git-history'))
+    void refreshGitHistoryRef.current(userAct ? SHOWN_HISTORY_LOAD : undefined)
   }, [
     // History uses compareBaseRef, which can move independently of effectiveBaseRef.
     activeWorktreeId,
+    // A branch switch keeps the workspace and path; the open list must follow the new branch.
+    branchName,
     compareBaseRef,
-    gitHistoryScope,
-    gitHistoryExhaustive,
     isBranchVisible,
     isFolder,
     isGitHistoryExpanded,
@@ -270,14 +188,5 @@ export function useSourceControlGitHistory({
     worktreePath
   ])
 
-  return {
-    gitHistoryState,
-    refreshGitHistory,
-    refreshGitHistoryRef,
-    loadMoreGitHistory,
-    gitHistoryScope,
-    setGitHistoryScope,
-    gitHistoryExhaustive,
-    setGitHistoryExhaustive
-  }
+  return { gitHistoryState, refreshGitHistory, refreshGitHistoryRef }
 }

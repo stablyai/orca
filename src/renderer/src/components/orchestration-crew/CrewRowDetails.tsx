@@ -1,0 +1,71 @@
+import { Badge } from '@/components/ui/badge'
+import { recomputeOn } from '@/lib/recompute-on'
+import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
+import { cn } from '@/lib/class-names'
+import { useNow } from '@/hooks/use-now'
+import { useTranslate } from '@/i18n/use-translate'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
+
+export function CrewRowTime({ at, className }: { at?: string; className?: string }) {
+  // Re-render on the sidebar's shared coarse tick so "2m ago" keeps advancing while the panel is open.
+  const now = useNow(30_000)
+  if (!at) {
+    return null
+  }
+  // Orchestration rows store SQLite UTC text ("YYYY-MM-DD HH:MM:SS") without a zone.
+  const date = new Date(at.includes('T') ? at : `${at.replace(' ', 'T')}Z`)
+  return Number.isFinite(date.getTime()) ? (
+    <time
+      dateTime={date.toISOString()}
+      className={cn('shrink-0 text-2xs text-muted-foreground', className)}
+    >
+      {recomputeOn([now], () => formatTimeAgo(date.getTime()))}
+    </time>
+  ) : null
+}
+
+export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
+  const t = useTranslate()
+  return (
+    <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs [overflow-wrap:anywhere]">
+      <dt className="text-muted-foreground">{t('components.orchestrationCrew.task', 'Task')}</dt>
+      <dd className="min-w-0">
+        {row.task ? (
+          <>
+            <Badge variant="outline" className="mr-1">
+              {row.task.state}
+            </Badge>
+            {row.task.title}
+          </>
+        ) : (
+          t('components.orchestrationCrew.noTask', 'No shared task')
+        )}
+      </dd>
+      {row.pendingQuestion ? (
+        <>
+          <dt className="text-status-warning">
+            {t('components.orchestrationCrew.asksYou', 'Asks you')}
+          </dt>
+          <dd className="min-w-0 whitespace-pre-wrap">{row.pendingQuestion.preview}</dd>
+        </>
+      ) : row.latest ? (
+        <>
+          <dt className="text-muted-foreground">
+            {t('components.orchestrationCrew.latest', 'Latest')}
+          </dt>
+          <dd className="min-w-0">
+            <span className="text-2xs text-muted-foreground">
+              {row.latest.direction === 'to'
+                ? t('components.orchestrationCrew.to', 'To')
+                : t('components.orchestrationCrew.from', 'From')}{' '}
+              {row.label} · <CrewRowTime at={row.latest.at} />
+            </span>
+            <blockquote className="mt-1 whitespace-pre-wrap border-l border-border pl-2">
+              {row.latest.preview}
+            </blockquote>
+          </dd>
+        </>
+      ) : null}
+    </dl>
+  )
+}

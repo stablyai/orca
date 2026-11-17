@@ -5,7 +5,12 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
-import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
+import {
+  ignoreIneffectiveDynamicImport,
+  RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
+} from './config/build-plugins/rollup-warning-filter'
+import { reactPluginOptions } from './config/build-plugins/react-compiler'
+import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 
 export default defineConfig({
   root: resolve('src/renderer'),
@@ -13,7 +18,7 @@ export default defineConfig({
   // Resolve assets relatively for reverse-proxy pairing prefixes such as /orca/web-index.html.
   base: './',
   plugins: [
-    react(),
+    react(reactPluginOptions()),
     tailwindcss(),
     createPdfjsViewerAssetsPlugin(),
     createViteCacheRetentionPlugin()
@@ -33,11 +38,13 @@ export default defineConfig({
     outDir: resolve('out/web'),
     emptyOutDir: true,
     reportCompressedSize: false,
+    chunkSizeWarningLimit: RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB,
     rollupOptions: {
       input: {
         'web-index': resolve('src/renderer/web-index.html'),
         space: resolve('src/renderer/space.html')
-      }
+      },
+      onwarn: ignoreIneffectiveDynamicImport
     }
   },
   worker: {

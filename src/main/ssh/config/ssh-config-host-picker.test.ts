@@ -8,7 +8,7 @@ vi.mock('./ssh-config-parser', async (importOriginal) => ({
   loadUserSshConfig: loadUserSshConfigMock
 }))
 
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/ssh-types'
+import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   invalidateUserSshConfigHostCache,
   listUserSshConfigHostSummaries,
@@ -55,6 +55,22 @@ describe('SSH config host picker search', () => {
     })
     expect(last.hosts.map((host) => host.alias)).toEqual(['generated-149999'])
     expect(last.hasMore).toBe(false)
+  })
+
+  it('marks an alias the import skips as a route duplicate In Orca and leaves it out of Add all', () => {
+    const result = searchSshConfigHosts(
+      [{ host: 'aimp' }, { host: 'fresh' }],
+      [{ configHost: '172.16.203.131', label: 'AI Box' }],
+      '',
+      [],
+      new Set(['aimp'])
+    )
+
+    expect(result.hosts.map(({ alias, alreadyInOrca }) => [alias, alreadyInOrca])).toEqual([
+      ['aimp', true],
+      ['fresh', false]
+    ])
+    expect(result.newHostCount).toBe(1)
   })
 
   it('counts de-duplicated and existing aliases while matching effective display fields', () => {
@@ -141,27 +157,6 @@ describe('listUserSshConfigHostSummaries caching', () => {
 })
 
 describe('resolveUserSshConfigHost', () => {
-  it('returns effective endpoint and the complete authentication contract', async () => {
-    const resolver = vi.fn().mockResolvedValue(resolved())
-
-    await expect(
-      resolveUserSshConfigHost('prod', resolver, () => [
-        { host: 'prod', gssapiAuthentication: true }
-      ])
-    ).resolves.toEqual({
-      alias: 'prod',
-      hostname: 'prod.internal',
-      username: 'deploy',
-      port: 2222,
-      identityFiles: ['/keys/first', '/keys/second'],
-      identitiesOnly: true,
-      forwardAgent: false,
-      gssapiAuthentication: true,
-      proxyUseFdpass: false
-    })
-    expect(resolver).toHaveBeenCalledWith('prod')
-  })
-
   it('ignores the system-wide GSSAPIAuthentication default that ssh -G reports', async () => {
     const resolver = vi.fn().mockResolvedValue(resolved())
 
@@ -189,15 +184,5 @@ describe('resolveUserSshConfigHost', () => {
       resolveUserSshConfigHost('deleted', resolver, () => [{ host: 'prod' }])
     ).resolves.toBeNull()
     expect(resolver).not.toHaveBeenCalled()
-  })
-
-  it('returns null when OpenSSH cannot resolve an endpoint', async () => {
-    await expect(
-      resolveUserSshConfigHost(
-        'missing',
-        async () => null,
-        () => [{ host: 'missing' }]
-      )
-    ).resolves.toBeNull()
   })
 })

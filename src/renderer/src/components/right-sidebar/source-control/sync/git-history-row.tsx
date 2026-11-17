@@ -1,13 +1,15 @@
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
-import { cn } from '@/lib/utils'
-import type { GitHistoryItem, GitHistoryItemRef } from '../../../../../../shared/git-history'
-import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
+import { cn } from '@/lib/class-names'
+import type {
+  GitHistoryItem,
+  GitHistoryItemRef
+} from '../../../../../../shared/git/history/git-history-types'
+import type { GitHistoryItemViewModel } from '../../../../../../shared/git/history/git-history-graph'
 import { GitHistoryGraphSvg, graphColor } from './git-history-graph-svg'
-import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git-history-ref-display'
-import { translate } from '@/i18n/i18n'
+import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git/history/git-history-ref-display'
+import { useTranslate } from '@/i18n/use-translate'
 
 function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.JSX.Element {
   const refLabel = itemRef.category ? `${itemRef.name} (${itemRef.category})` : itemRef.name
@@ -25,7 +27,7 @@ function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.
           {itemRef.name}
         </span>
       </TooltipTrigger>
-      <TooltipContent variant="surface" side="bottom" sideOffset={6} className="max-w-72">
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
         {refLabel}
       </TooltipContent>
     </Tooltip>
@@ -34,7 +36,6 @@ function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.
 
 type GitHistoryRowProps = React.HTMLAttributes<HTMLElement> & {
   viewModel: GitHistoryItemViewModel
-  graphLaneCount?: number
   expanded?: boolean
   preserveRefIds?: readonly string[]
   onOpenCommit?: (item: GitHistoryItem) => void
@@ -45,7 +46,6 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
   function GitHistoryRow(
     {
       viewModel,
-      graphLaneCount,
       expanded = false,
       preserveRefIds,
       onOpenCommit,
@@ -55,6 +55,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     },
     ref
   ): React.JSX.Element {
+    const t = useTranslate()
     const item = viewModel.historyItem
     const isBoundaryNode =
       viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
@@ -65,9 +66,9 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const refs = dedupeRemoteTrackingRefs(item.references ?? [], { preserveRefIds })
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)
-    const commitMessage = item.message || item.subject
+    const rowTooltip = item.message || item.subject
     const rowClassName = cn(
-      'grid min-h-6 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 px-3 text-left text-xs transition-colors',
+      'grid min-h-[26px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
       isInteractive && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
       !isInteractive && 'cursor-default',
       isBoundaryNode && 'text-muted-foreground',
@@ -75,7 +76,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     )
     const rowContent = (
       <>
-        <GitHistoryGraphSvg viewModel={viewModel} laneCount={graphLaneCount} />
+        <GitHistoryGraphSvg viewModel={viewModel} />
         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
           {canExpand && (
             <ChevronDown
@@ -86,20 +87,19 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
               )}
             />
           )}
-          <HoverCard openDelay={400} closeDelay={100}>
-            <HoverCardTrigger asChild>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <span className="block min-w-0 flex-1 truncate text-foreground">{item.subject}</span>
-            </HoverCardTrigger>
-            <HoverCardContent
-              variant="commit-details"
+            </TooltipTrigger>
+            <TooltipContent
               side="bottom"
               sideOffset={6}
               collisionPadding={8}
-              onClick={(event) => event.stopPropagation()}
+              className="max-w-[min(76ch,var(--radix-tooltip-content-available-width))] break-words text-wrap whitespace-pre-wrap"
             >
-              {commitMessage}
-            </HoverCardContent>
-          </HoverCard>
+              {rowTooltip}
+            </TooltipContent>
+          </Tooltip>
         </div>
         {refs.length > 0 && (
           <div className="flex shrink-0 items-center gap-1 overflow-hidden">
@@ -113,7 +113,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
                     +{hiddenRefs.length}
                   </span>
                 </TooltipTrigger>
-                <TooltipContent variant="surface" side="bottom" sideOffset={6} className="max-w-72">
+                <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
                   {hiddenRefs.map((ref) => ref.name).join(', ')}
                 </TooltipContent>
               </Tooltip>
@@ -154,17 +154,17 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
         aria-label={
           canExpand
             ? expanded
-              ? translate(
+              ? t(
                   'auto.components.right.sidebar.GitHistoryRow.4a8d9e0c1f',
                   'Hide files in commit {{value0}}: {{value1}}',
                   { value0: item.displayId ?? item.id, value1: item.subject }
                 )
-              : translate(
+              : t(
                   'auto.components.right.sidebar.GitHistoryRow.2f9c41ab07',
                   'Show files in commit {{value0}}: {{value1}}',
                   { value0: item.displayId ?? item.id, value1: item.subject }
                 )
-            : translate(
+            : t(
                 'auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2',
                 'Open commit {{value0}}: {{value1}}',
                 { value0: item.displayId ?? item.id, value1: item.subject }

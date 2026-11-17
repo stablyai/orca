@@ -1,23 +1,24 @@
-import { beginEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
-import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
+import { beginEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   dropRuntimeHostedCatalogRows,
-  dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
-} from '../../stale-runtime-host-rows'
+} from '../../../host-catalog/removed-runtime-host-rows'
+import { dropWorktreeRowsForRemovedRuntimeEnvironments } from './stale-runtime-worktree-rows'
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
-import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
+import { removeWorktreeVisitEntriesForTargets } from '@/lib/workspace/activation/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
 
@@ -38,7 +39,7 @@ export function createPurgeStaleRuntimeHostState(
       set,
       get,
       () =>
-        set((s) => {
+        get().updateAgentStatusState((s, changedPaneKeys) => {
           const repoIdsWithRemovedOwners = new Set<string>()
           const survivingRepoIds = new Set<string>()
           const repoIdsWithSurvivingOwners = new Set<string>()
@@ -56,7 +57,7 @@ export function createPurgeStaleRuntimeHostState(
 
           // Why: a repoId-less setup on the removed host can still split a surviving project group, so drop every setup it owns.
           const survivingSetups: ProjectHostSetup[] = []
-          for (const setup of s.endpointProjectHostSetups) {
+          for (const setup of s.projectHostSetups) {
             if (isRemovedRuntimeHostId(setup.hostId, removed)) {
               if (setup.repoId) {
                 repoIdsWithRemovedOwners.add(setup.repoId)
@@ -68,7 +69,7 @@ export function createPurgeStaleRuntimeHostState(
               }
             }
           }
-          const setupsChanged = survivingSetups.length !== s.endpointProjectHostSetups.length
+          const setupsChanged = survivingSetups.length !== s.projectHostSetups.length
           const projectGroups = dropRuntimeHostedCatalogRows(s.projectGroups, removed)
           const folderWorkspaces = dropRuntimeHostedCatalogRows(s.folderWorkspaces, removed)
           const groupsChanged =
@@ -215,7 +216,9 @@ export function createPurgeStaleRuntimeHostState(
           })
           // Why full: survivor ids were dropped above unless the session partition proves the bare-id state is the removed host's.
           const purgeState =
-            purgeTargets.length > 0 ? buildFullWorktreePurgeState(s, purgeTargets) : {}
+            purgeTargets.length > 0
+              ? buildFullWorktreePurgeState(s, purgeTargets, changedPaneKeys)
+              : {}
           const visitPurgeTargets = [
             ...removedWorktreeTargets,
             ...purgeTargets.filter(
@@ -278,7 +281,7 @@ export function createPurgeStaleRuntimeHostState(
           return {
             ...purgeState,
             ...(reposChanged ? { repos: survivingRepos } : {}),
-            ...(setupsChanged ? { endpointProjectHostSetups: survivingSetups } : {}),
+            ...(setupsChanged ? { projectHostSetups: survivingSetups } : {}),
             ...(groupsChanged ? { projectGroups, folderWorkspaces } : {}),
             ...(worktreesChanged ? { worktreesByRepo: worktreeDrop.rowsByRepo } : {}),
             ...(detectedChanged ? { detectedWorktreesByRepo } : {}),

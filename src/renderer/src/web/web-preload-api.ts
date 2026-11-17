@@ -1,7 +1,6 @@
 import type { PreloadApi } from '../../../preload/api-types'
-import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
-import { createWebE2EApi } from './preload-api/web-e2e-api'
-import { createWebFolderWorkspacesApi } from './preload-api/web-folder-workspaces-api'
+import type { StatsSummary } from '../../../shared/diagnostics/process-stats-types'
+import { createWebE2EApi } from './preload-api/app/web-e2e-api'
 import {
   createClaudeAccountsApi,
   createCodexAccountsApi,
@@ -10,173 +9,94 @@ import {
   createZcodePlanCredentialsApi,
   createOpenCodeGoCredentialsApi,
   createMiniMaxCredentialsApi
-} from './preload-api/web-agent-accounts-api'
-import { createWebAgentStatusApi } from './preload-api/web-agent-status-api'
-import { createLegacyRelayBridgeApi } from './preload-api/web-legacy-relay-bridge-api'
-import { createWebAiVaultApi } from './preload-api/web-ai-vault-api'
-import { createWebAppApi } from './preload-api/web-app-api'
-import { createBrowserApi, createEmulatorApi } from './preload-api/web-browser-api'
-import { createCliApi } from './preload-api/web-cli-api'
-import { createWebDiagnosticsApi } from './preload-api/web-diagnostics-api'
+} from './preload-api/agents/web-agent-accounts-api'
+import { createWebAgentStatusApi } from './preload-api/agents/web-agent-status-api'
+import { createWebAiVaultApi } from './preload-api/agents/web-ai-vault-api'
+import { createWebAppApi } from './preload-api/app/web-app-api'
+import { createBrowserApi, createEmulatorApi } from './preload-api/browser/web-browser-api'
+import { createCliApi } from './preload-api/host-capabilities/web-cli-api'
+import { createWebDiagnosticsApi } from './preload-api/diagnostics/web-diagnostics-api'
 import { withFallback } from './preload-api/web-fallback-api'
-import { createFileApi } from './preload-api/web-filesystem-api'
-import { createGitApi } from './preload-api/web-git-api'
-import { createWebGithubCacheApi } from './preload-api/web-github-cache-api'
-import { createGitHubApi } from './preload-api/web-github-api'
-import { createGitLabApi } from './preload-api/web-gitlab-api'
+import { createFileApi } from './preload-api/filesystem/web-filesystem-api'
+import { createGitApi } from './preload-api/git/web-git-api'
+import { createWebGithubCacheApi } from './preload-api/github/web-github-cache-api'
+import { createGitHubApi } from './preload-api/github/web-github-api'
+import { createGitLabApi } from './preload-api/gitlab/web-gitlab-api'
 import {
   createComputerUsePermissionsApi,
   createDeveloperPermissionsApi,
   createPreflightApi,
   createSkillsApi
-} from './preload-api/web-host-capability-api'
-import { createWebKeybindingsApi } from './preload-api/web-keybindings-api'
-import { createMacosTccPromptsApi } from './preload-api/web-macos-tcc-api'
-import { createEmptyMemorySnapshot } from './preload-api/web-memory-api'
-import { createWebMobileApi } from './preload-api/web-mobile-api'
-import { createWebNativeChatApi } from './preload-api/web-native-chat-api'
-import { createNotificationsApi } from './preload-api/web-notifications-api'
-import { createWebOnboardingApi } from './preload-api/web-onboarding-api'
-import { createWebOrcaProfilesApi } from './preload-api/web-orca-profiles-api'
-import { createWebPlatformApi } from './preload-api/web-platform-api'
-import { createWebPluginsApi } from './preload-api/web-plugins-api'
-import { createWebProjectGroupsApi } from './preload-api/web-project-groups-api'
-import { createWebProjectsApi } from './preload-api/web-projects-api'
-import { createRateLimitsApi } from './preload-api/web-rate-limits-api'
-import { createReposApi } from './preload-api/web-repositories-api'
+} from './preload-api/host-capabilities/web-host-capability-api'
+import { createWebKeybindingsApi } from './preload-api/keybindings/web-keybindings-api'
+import { createMacosTccPromptsApi } from './preload-api/host-capabilities/web-macos-tcc-api'
+import { createEmptyMemorySnapshot } from './preload-api/diagnostics/web-memory-api'
+import { createWebMobileApi } from './preload-api/host-capabilities/web-mobile-api'
+import { createWebNativeChatApi } from './preload-api/agents/web-native-chat-api'
+import { createNotificationsApi } from './preload-api/app/web-notifications-api'
+import { createWebOnboardingApi } from './preload-api/app/web-onboarding-api'
+import { createWebOrcaProfilesApi } from './preload-api/app/web-orca-profiles-api'
+import { createWebPlatformApi } from './preload-api/host-capabilities/web-platform-api'
+import { createWebPluginsApi } from './preload-api/host-capabilities/web-plugins-api'
+import { createRateLimitsApi } from './preload-api/agents/web-rate-limits-api'
+import { createReposApi } from './preload-api/workspaces/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
-import { createWebJiraApi } from './preload-api/web-jira-api'
-import { callRuntimeResult } from './preload-api/web-runtime-calls'
-import { createWebRuntimeApi } from './preload-api/web-runtime-api'
-import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environments-api'
-import { webRuntimeState } from './preload-api/web-runtime-session'
-import { createWebSettingsApi } from './preload-api/web-settings-api'
-import { createTauriNativeSettingsApi } from './tauri-native-settings-api'
-import { invokeNative } from './tauri-native-host'
-import { createWebSpeechApi } from './preload-api/web-speech-api'
-import { createShellApi } from './preload-api/web-shell-api'
-import { createWebStarNagApi } from './preload-api/web-star-nag-api'
-import { createWebTelemetryApi } from './preload-api/web-telemetry-api'
-import {
-  createClaudeUsageApi,
-  createCodexUsageApi,
-  createMuseUsageApi,
-  createOpenCodeUsageApi
-} from './preload-api/web-usage-api'
-import { createPtyApi, createSshApi } from './preload-api/web-terminal-api'
-import { createWebUiApi } from './preload-api/web-ui-api'
-import { createUpdaterApi } from './preload-api/web-updater-api'
-import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-api'
-import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
-import { createWebSparsePresetsApi } from './preload-api/web-sparse-presets-api'
-import {
-  createWebAutomationsApi,
-  createWebDocPreviewApi,
-  createWebWorkspaceSpaceApi
-} from './preload-api/web-desktop-compat-api'
-import { createWorktreesApi } from './preload-api/web-worktrees-api'
-import {
-  createTauriNativeAppNamespaceApi,
-  createTauriNativeBrowserApi,
-  createTauriNativeFilesystemDropApi,
-  createTauriNativeFilesystemApi,
-  createTauriNativePreloadApi,
-  createTauriNativePlatformNamespaceApi,
-  createTauriNativeUiApi,
-  installTauriBrowserGuestCtrlTabCommit,
-  installTauriBrowserGuestShortcutForwarding,
-  installTauriWindowDragBridge,
-  isTauriNativeHost
-} from './tauri-native-bridge'
-import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { createWebJiraApi } from './preload-api/jira/web-jira-api'
+import { callRuntimeResult } from './runtime/client/web-runtime-calls'
+import { createWebRuntimeApi } from './preload-api/runtime/web-runtime-api'
+import { createRuntimeEnvironmentsApi } from './preload-api/runtime/web-runtime-environments-api'
+import { webRuntimeState } from './runtime/client/web-runtime-session'
+import { createWebSettingsApi } from './preload-api/preferences/web-settings-api'
+import { createShellApi } from './preload-api/browser/web-shell-api'
+import { createWebSpeechApi } from './preload-api/agents/web-speech-api'
+import { createWebStarNagApi } from './preload-api/app/web-star-nag-api'
+import { createWebTelemetryApi } from './preload-api/diagnostics/web-telemetry-api'
+import { createPtyApi, createSshApi } from './preload-api/host-capabilities/web-terminal-api'
+import { createWebUiApi } from './preload-api/preferences/web-ui-api'
+import { createUpdaterApi } from './preload-api/app/web-updater-api'
+import { createWebWorkspacePortsApi } from './preload-api/host-capabilities/web-workspace-ports-api'
+import { createWebLinkPreviewApi } from './preload-api/browser/web-link-preview-api'
+import { createWebWorkspaceSessionApi } from './preload-api/workspaces/web-workspace-session-api'
+import { createWorktreesApi } from './preload-api/workspaces/web-worktrees-api'
+import { readStoredWebRuntimeEnvironment } from './pairing/web-runtime-environment'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
   const webWindow = window as unknown as { __ORCA_WEB_CLIENT__?: boolean }
   webWindow.__ORCA_WEB_CLIENT__ = true
-  installTauriWindowDragBridge()
-  installTauriBrowserGuestShortcutForwarding()
-  installTauriBrowserGuestCtrlTabCommit()
-  const api = createWebPreloadApi()
-  if (isTauriNativeHost()) {
-    const nativeApi = createTauriNativePreloadApi()
-    if (nativeApi.shell) {
-      api.shell = nativeApi.shell
-    }
-    Object.assign(api, nativeApi)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: withFallback preserves the PreloadApi shape while filling omitted optional namespaces at runtime.
-  window.api = withFallback(api, []) as PreloadApi
+  window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-type TauriShellAvailability = {
-  gitBash: boolean
-  pwsh: boolean
-  wslAvailable: boolean
-  wslDistros: string[]
-  hostPlatform: string
-}
-
-// Local shell probes are host-owned; on the Tauri shell Rust answers them
-// directly, so a local run does not wait on (or require) a paired runtime.
-let tauriShellAvailabilityPromise: Promise<TauriShellAvailability | null> | undefined
-function tauriShellAvailability(): Promise<TauriShellAvailability | null> {
-  if (!isTauriNativeHost()) {
-    return Promise.resolve(null)
-  }
-  tauriShellAvailabilityPromise ??= invokeNative<TauriShellAvailability>(
-    'poc_shell_availability'
-  ).catch(() => null)
-  return tauriShellAvailabilityPromise
-}
-
-function createWebPreloadApi(): Partial<PreloadApi> {
-  const fileApi = createFileApi()
-  const webSettingsApi = createWebSettingsApi()
-  const nativeSettingsApi = createTauriNativeSettingsApi()
+function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
+  settings: Partial<PreloadApi['settings']>
+  plugins: Partial<PreloadApi['plugins']>
+  speech: Partial<PreloadApi['speech']>
+} {
   return {
     ...createWebAppApi(),
     ...createWebStarNagApi(),
     ...createWebPlatformApi(),
     ...createWebWorkspacePortsApi(),
-    workspaceSpace: createWebWorkspaceSpaceApi(),
+    linkPreview: createWebLinkPreviewApi(),
     ...createWebOrcaProfilesApi(),
     ...createWebE2EApi(),
-    ...createTauriNativePlatformNamespaceApi(),
-    ...createTauriNativeAppNamespaceApi(),
-    ...webSettingsApi,
-    ...(webSettingsApi.settings
-      ? { settings: { ...webSettingsApi.settings, ...nativeSettingsApi } }
-      : {}),
+    ...createWebSettingsApi(),
     keybindings: createWebKeybindingsApi(),
-    ui: {
-      ...createWebUiApi(),
-      ...createTauriNativeUiApi()
-    },
+    ui: createWebUiApi(),
+    plugins: createWebPluginsApi(),
     ...createWebDiagnosticsApi(),
     ...createWebWorkspaceSessionApi(),
     ...createWebOnboardingApi(),
     ...createWebGithubCacheApi(),
     runtime: createWebRuntimeApi(),
     nativeChat: createWebNativeChatApi(),
-    docPreview: createWebDocPreviewApi(),
+    speech: createWebSpeechApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
-    projects: createWebProjectsApi(),
-    projectGroups: createWebProjectGroupsApi(),
-    sparsePresets: createWebSparsePresetsApi(),
-    folderWorkspaces: createWebFolderWorkspacesApi(),
     worktrees: createWorktreesApi(),
-    fs: {
-      ...fileApi,
-      ...createTauriNativeFilesystemDropApi(),
-      ...createTauriNativeFilesystemApi()
-    },
+    fs: createFileApi(),
     git: createGitApi(),
-    browser: {
-      ...createBrowserApi(),
-      ...(isTauriNativeHost() ? createTauriNativeBrowserApi() : {})
-    },
+    browser: createBrowserApi(),
     emulator: createEmulatorApi(),
     gh: createGitHubApi(),
     gl: createGitLabApi(),
@@ -194,24 +114,15 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }))
     },
     memory: {
-      getSnapshot: () =>
-        isTauriNativeHost()
-          ? callRuntimeResult<MemorySnapshot>('diagnostics.memory')
-          : Promise.resolve(createEmptyMemorySnapshot()),
+      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot()),
       // Browser pages have no native-window veto; document visibility owns admission.
       resourceWindowVisible: () => Promise.resolve(true),
       onResourceWindowVisibility: () => () => {}
     },
     aiVault: createWebAiVaultApi(),
     preflight: createPreflightApi(),
-    notifications: {
-      ...createNotificationsApi()
-    },
+    notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
-    claudeUsage: createClaudeUsageApi(),
-    codexUsage: createCodexUsageApi(),
-    openCodeUsage: createOpenCodeUsageApi(),
-    museUsage: createMuseUsageApi(),
     opencodeGoCredentials: createOpenCodeGoCredentialsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
     zcodePlanCredentials: createZcodePlanCredentialsApi(),
@@ -228,47 +139,45 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     developerPermissions: createDeveloperPermissionsApi(),
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
-    speech: createWebSpeechApi(),
     shell: createShellApi(),
     skills: createSkillsApi(),
-    plugins: createWebPluginsApi(),
-    automations: createWebAutomationsApi(),
     pty: createPtyApi(),
     ssh: createSshApi(),
-    legacyRelayBridge: createLegacyRelayBridgeApi(),
     wsl: {
-      isAvailable: () =>
-        tauriShellAvailability().then(
-          (native) =>
-            native?.wslAvailable ??
-            callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false)
-        ),
-      listDistros: () =>
-        tauriShellAvailability().then(
-          (native) =>
-            native?.wslDistros ??
-            callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
-        )
+      isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
+      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => []),
+      // A web client picks no local Windows folders.
+      resolveMappedDrivePath: () => Promise.resolve(null)
     },
     // Desktop-only: a web client never owns a WSL move's desktop stores.
     wslMove: {
       listPendingRendererRewrites: () => Promise.resolve([]),
+      recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' }),
+      preview: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      start: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      cancel: () => Promise.resolve(false),
+      listUnfinished: () => Promise.resolve([]),
+      isRunning: () => Promise.resolve(false),
+      useProjectHereAgain: () => Promise.resolve({ released: false, reason: 'gated-off' }),
+      onProgress: () => () => {},
+      listOrchestrator: () => Promise.resolve([]),
+      orchestratorUserAction: () => Promise.resolve(null),
+      orchestratorProjectOpened: () => Promise.resolve(),
+      onOrchestratorStatus: () => () => {},
+      onOrchestratorSleptPanesRequest: () => () => {},
+      answerOrchestratorSleptPanes: () => Promise.resolve()
+    },
+    // Desktop-only: a web client never converts this computer's projects.
+    wslDriveUnc: {
+      convert: () => Promise.resolve({ outcome: 'refused', blockers: [] }),
+      listPendingRendererRewrites: () => Promise.resolve([]),
       recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' })
     },
     pwsh: {
-      isAvailable: () =>
-        tauriShellAvailability().then(
-          (native) =>
-            native?.pwsh ?? callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
-        )
+      isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
     },
     gitBash: {
-      isAvailable: () =>
-        tauriShellAvailability().then(
-          (native) =>
-            native?.gitBash ??
-            callRuntimeResult<boolean>('host.gitBash.isAvailable').catch(() => false)
-        )
+      isAvailable: () => callRuntimeResult<boolean>('host.gitBash.isAvailable').catch(() => false)
     },
     ...createWebAgentStatusApi(),
     ...createWebMobileApi(),

@@ -1,13 +1,26 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
-import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
-import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
+} from '../../../shared/execution-host/execution-host'
+import '../../../shared/workspace-session/workspace-session-partition-owner'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
+import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import {
+  cloneWorkspaceSessionState,
+  deleteOwnerKeyedSessionFields,
+  type RemovedOwnerFileIds
+} from './session-owner-fields'
+import { sessionFieldsRemovedWithWorkspace } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
+import { markdownFileIdCandidates } from '../../orca-profiles/project-transfer/profile-session-markdown-transfer'
+
+const OWNER_PANE_KEYED_FIELDS = sessionFieldsRemovedWithWorkspace('ownerPaneKey')
+const OWNER_ROW_FIELDS = sessionFieldsRemovedWithWorkspace('ownerRow')
 
 /** Frozen WSL sessions must survive pruning for downgrade. */
 export function withoutWslMoveFrozenOwners(ownerKeys: ReadonlySet<string>): ReadonlySet<string> {
@@ -19,43 +32,55 @@ export function withoutWslMoveFrozenOwners(ownerKeys: ReadonlySet<string>): Read
 export function deleteScannedSessionFieldsForOwners(
   next: WorkspaceSessionState,
   removedTabIds: ReadonlySet<string>,
-  isRemovedOwner: (worktreeId: string) => boolean
+  isRemovedOwner: (worktreeId: string) => boolean,
+  removedFileIds: RemovedOwnerFileIds = new Set()
 ): void {
-  if (next.terminalPtyIncarnationsByPaneKey) {
-    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
-      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+  if (removedTabIds.size > 0) {
+    for (const field of OWNER_PANE_KEYED_FIELDS) {
+      const record = next[field] as Record<string, unknown> | undefined
+      for (const paneKey of Object.keys(record ?? {})) {
         const separator = paneKey.lastIndexOf(':')
-        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
-      })
-    )
-  }
-  if (next.terminalSurfaceTombstonesByPaneKey) {
-    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
-      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
-        ([, tombstone]) => !isRemovedOwner(tombstone.worktreeId)
-      )
-    )
-  }
-  if (next.sleepingAgentSessionsByPaneKey) {
-    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
-      if (isRemovedOwner(record.worktreeId)) {
-        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+        if (separator > 0 && removedTabIds.has(paneKey.slice(0, separator))) {
+          delete record![paneKey]
+        }
       }
     }
   }
-  // Close evidence expires with the workspace it governs.
-  if (next.closedTerminalTabTombstonesByTabId) {
-    for (const [tabId, record] of Object.entries(next.closedTerminalTabTombstonesByTabId)) {
-      if (isRemovedOwner(record.worktreeId)) {
-        delete next.closedTerminalTabTombstonesByTabId[tabId]
+  // Close evidence and resume records expire with the workspace they govern.
+  for (const field of OWNER_ROW_FIELDS) {
+    const record = next[field]
+    if (!isSessionRecord(record)) {
+      continue
+    }
+    for (const [key, row] of Object.entries(record)) {
+      const worktreeId = sessionRowWorktreeId(row)
+      if (worktreeId && isRemovedOwner(worktreeId)) {
+        delete record[key]
       }
     }
   }
-  if (next.closedTerminalPanesByPaneKey) {
-    for (const [paneKey, record] of Object.entries(next.closedTerminalPanesByPaneKey)) {
-      if (isRemovedOwner(record.worktreeId)) {
-        delete next.closedTerminalPanesByPaneKey[paneKey]
+  if (removedFileIds.size > 0 && next.markdownFrontmatterVisible) {
+    // A surviving workspace may open the same path; its file keeps the shared ID.
+    for (const [ownerKey, files] of Object.entries(next.openFilesByWorktree ?? {})) {
+      for (const file of files) {
+        for (const id of markdownFileIdCandidates(
+          file.filePath,
+          ownerKey,
+          file.runtimeEnvironmentId
+        )) {
+          removedFileIds.delete(id)
+        }
       }
+    }
+    for (const id of removedFileIds) {
+      delete next.markdownFrontmatterVisible[id]
+    }
+  }
+  // One scan for all owners; keys may be host-qualified executionHostId|worktreeId.
+  for (const key of Object.keys(next.lastVisitedAtByWorktreeId ?? {})) {
+    const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+    if (isRemovedOwner(key) || isRemovedOwner(rawId)) {
+      delete next.lastVisitedAtByWorktreeId![key]
     }
   }
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
@@ -72,8 +97,6 @@ export function workspaceSessionPartitionIdsForHost(
     ? [LOCAL_EXECUTION_HOST_ID, parsed.id]
     : [LOCAL_EXECUTION_HOST_ID]
 }
-
-export const workspaceSessionOwnerPartitionForHost = workspaceSessionPartitionHostId
 
 /** Delete every partition copy or load may resurrect the workspace; folder host ownership can be inferred. */
 export function removeWorkspaceSessionOwnerEverywhere(
@@ -108,8 +131,14 @@ export function removeWorkspaceSessionOwner(
   }
   const next = cloneWorkspaceSessionState(session)
   const removedTabIds = new Set<string>()
-  deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds, options)
-  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) => worktreeId === ownerKey)
+  const removedFileIds: RemovedOwnerFileIds = new Set()
+  deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds, options, removedFileIds)
+  deleteScannedSessionFieldsForOwners(
+    next,
+    removedTabIds,
+    (worktreeId) => worktreeId === ownerKey,
+    removedFileIds
+  )
   return next
 }
 
@@ -123,11 +152,15 @@ export function removeWorkspaceSessionOwners(
   }
   const next = cloneWorkspaceSessionState(session)
   const removedTabIds = new Set<string>()
+  const removedFileIds: RemovedOwnerFileIds = new Set()
   for (const ownerKey of ownerKeys) {
-    deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds)
+    deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds, {}, removedFileIds)
   }
-  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) =>
-    ownerKeys.has(worktreeId)
+  deleteScannedSessionFieldsForOwners(
+    next,
+    removedTabIds,
+    (worktreeId) => ownerKeys.has(worktreeId),
+    removedFileIds
   )
   return next
 }
@@ -152,4 +185,18 @@ export function removeWorkspaceSessionOwnersEverywhere(
     }
   }
   state.workspaceSessionsByHostId = next
+}
+
+/** The workspace a session record row names, if it names one. */
+export function sessionRowWorktreeId(row: unknown): string | undefined {
+  return typeof row === 'object' &&
+    row !== null &&
+    'worktreeId' in row &&
+    typeof row.worktreeId === 'string'
+    ? row.worktreeId
+    : undefined
+}
+
+function isSessionRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

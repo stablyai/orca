@@ -3,10 +3,10 @@
 Orca learns what each agent is doing through two channels. Both write into the hook server's
 status store.
 
-| Channel                                                                                                    | How                                                                                                                                                                                       | What it carries                                                                                                     |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Managed integrations** (this folder)                                                                     | Per-agent hooks, plugins and extensions that POST to the loopback hook server. Installers are listed in `managed-agent-hook-registry.ts`; each agent's code lives in `src/main/<agent>/`. | State, prompt, tool name and input, assistant reply, provider session id (resume and native chat), model, subagents |
-| **OSC 7501** (Program Status Protocol, [spec](https://www.superlogical.com/rex/docs/build/program-status)) | The agent writes its own status into the terminal stream. Orca reads it from PTY output and answers the protocol's `?` probe.                                                             | State, blocked `kind`, one free-text line (`msg`), child records                                                    |
+| Channel                                                                                                    | How                                                                                                                                                                                                    | What it carries                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **Managed integrations** (this folder)                                                                     | Per-agent hooks, plugins and extensions that POST to the loopback hook server. Installers are listed in `installation/managed-agent-hook-registry.ts`; each agent's code lives in `src/main/<agent>/`. | State, prompt, tool name and input, assistant reply, provider session id (resume and native chat), model, subagents |
+| **OSC 7501** (Program Status Protocol, [spec](https://www.superlogical.com/rex/docs/build/program-status)) | The agent writes its own status into the terminal stream. Orca reads it from PTY output and answers the protocol's `?` probe.                                                                          | State, blocked `kind`, one free-text line (`msg`), child records                                                    |
 
 **Precedence:** hooks win, and OSC 7501 fills in wherever they don't speak. That covers:
 
@@ -47,6 +47,7 @@ terminal answered queries the way Orca does.
 | pi (`pi`)              | ✅ live, 1.3.0                            | required (`PI_PROGRAM_STATUS=1` forces it) | all five | all three            | session name, dialog title, first line of an error             | —            | extension        | Fallback                                                                      |
 | oh-my-pi (`omp`)       | ✅ live, 18.10.3                          | sends without asking                       | all five | permission, question | on `blocked`/`error` only                                      | —            | extension        | Fallback                                                                      |
 | Codex (`codex`)        | ✅ live, 0.163.0                          | sends without asking                       | all five | none sent (0.163)    | none                                                           | —            | hooks            | Fallback; state only                                                          |
+| Kiro (`kiro`)          | reported on 3.1.0 (#40567), not run live  | —                                          | —        | —                    | —                                                              | —            | hooks            | Fallback; reports as `app=kiro-cli`                                           |
 
 ### Agents that don't send OSC 7501 yet
 
@@ -55,7 +56,7 @@ terminal answered queries the way Orca does.
 | OpenCode (`opencode`, `opencode2`)                                                     | installed binary v2.0.16 and source | plugin                     |
 | Kilocode (`kilo`)                                                                      | installed package and source        | —                          |
 | Cursor (`cursor`)                                                                      | installed binary 2026.06.02         | hooks                      |
-| Amp, Droid, Hermes, Muse, Devin, Kiro                                                  | installed binaries                  | hooks                      |
+| Amp, Droid, Hermes, Muse, Devin                                                        | installed binaries                  | hooks                      |
 | Qoder (`qoder`)                                                                        | installed binary 1.1.65             | hooks                      |
 | CodeBuddy (`codebuddy`)                                                                | installed package                   | hooks                      |
 | Jcode (`jcode`)                                                                        | installed binary 0.95.0             | hooks                      |
@@ -84,5 +85,27 @@ When an agent ships OSC 7501 support, or changes what it reports:
 1. Run it in a PTY whose terminal answers `OSC 7501 ; ?` and record the reports.
 2. If its `app` id differs from Orca's agent id, add the mapping to `APP_TO_AGENT_TYPE` in
    `src/shared/program-status/agent-status-projector.ts` (examples: `claude-code` → `claude`,
-   `grok-build` → `grok`). Otherwise hook precedence can't match its rows.
+   `grok-build` → `grok`, `kiro-cli` → `kiro`). Otherwise hook precedence can't match its rows.
 3. Update the row and the date above.
+
+## Plugin tool hooks (`agent.tool.before` / `.after`)
+
+The hook server runs plugins' `agent.tool.before` and `.after` on each tool event it receives, after
+it records status (`tool-events/agent-tool-plugin-hooks.ts`). Only Claude Code's POSIX script waits for the
+answer: it sends `X-Orca-Hook-Decision: claude-pre-tool-use-v1` on PreToolUse, waits at most 8 s
+(Orca answers within 6 s), and prints Orca's `hookSpecificOutput` (a `deny`, or `updatedInput`
+without an approval) or `{}`. A timeout, an error or Orca being down prints `{}`, so the call
+proceeds as if Orca were not there. Every other script discards the reply, so for those agents
+`agent.tool.before` only observes.
+
+| Agent                                                                                                                         | Tool events Orca receives        | Blocks?                                             |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------- |
+| Claude Code (POSIX)                                                                                                           | PreToolUse, PostToolUse(Failure) | yes                                                 |
+| Claude Code (Windows `.cmd`)                                                                                                  | same                             | no: prints `{}` first; follow-up                    |
+| OpenClaude, Qoder, Qwen Code, CodeBuddy                                                                                       | same, via Claude's script        | no: their honoring of Claude's output is unverified |
+| Codex, Droid, Devin, Kimi, Muse, ZCode, DSH, Command Code, Copilot, Grok, Antigravity                                         | PreToolUse/PostToolUse           | no: reply discarded                                 |
+| Gemini (BeforeTool/AfterTool), Cursor (preToolUse, beforeShellExecution, …), Kiro, Jcode (pre_tool, posted in the background) | their own names                  | no                                                  |
+| Amp, Hermes (plugins)                                                                                                         | tool.call / pre_tool_call        | no: posts are not awaited for a decision            |
+
+SSH and WSL agents post to a relay on their host, which answers locally and forwards status
+only, so their tool calls are not hooked yet.

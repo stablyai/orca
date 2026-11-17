@@ -24,6 +24,9 @@ export class WorkItemSearchApi {
       throw new Error(`Unexpected fixture search ${query}`)
     }
     const repo = /repo:([^\s]+)/.exec(query)?.[1] ?? 'unknown/repo'
+    if (!this.specialNodes && /(?:^|\s)type:pr(?:\s|$)/.test(query)) {
+      return []
+    }
     return (
       this.specialNodes ??
       Array.from({ length: this.rowsPerRepo }, (_, index) => ({
@@ -135,7 +138,7 @@ export class WorkItemSearchApi {
     const query = args.find((arg) => arg.startsWith('query='))?.slice(6) ?? ''
     const fields = [
       ...query.matchAll(
-        /(r\d+): search\(type: ISSUE, query: ("(?:[^"\\]|\\.)*"), first: (\d+)(?:, after: ("(?:[^"\\]|\\.)*"))?\)/g
+        /(r\d+): search\(type: (ISSUE|ISSUE_ADVANCED), query: ("(?:[^"\\]|\\.)*"), first: (\d+)(?:, after: ("(?:[^"\\]|\\.)*"))?\)/g
       )
     ]
     if (!fields.length) {
@@ -146,24 +149,24 @@ export class WorkItemSearchApi {
     for (let index = 0; index < fields.length; index++) {
       const field = fields[index]
       this.graphqlFields++
-      const search = z.string().parse(JSON.parse(field[2]))
+      const search = z.string().parse(JSON.parse(field[3]))
       if (this.aliasErrorRepo && search.includes(`repo:${this.aliasErrorRepo} `)) {
         data[field[1]] = null
         errors.push({ message: 'fixture repository search unavailable', path: [field[1]] })
         continue
       }
-      const first = Number(field[3])
-      const cursor = field[4] ? z.string().parse(JSON.parse(field[4])) : undefined
+      const first = Number(field[4])
+      const cursor = field[5] ? z.string().parse(JSON.parse(field[5])) : undefined
       const saved = cursor ? this.cursors.get(cursor) : undefined
-      if (cursor && (!saved || saved.query !== search)) {
+      if (cursor && (!saved || saved.query !== `${field[2]}:${search}`)) {
         throw new Error('Unknown or cross-query opaque cursor')
       }
       const offset = saved?.offset ?? 0
-      const rows = this.rows(search)
+      const rows = field[2] === 'ISSUE' && search.startsWith('( ') ? [] : this.rows(search)
       const page = rows.slice(offset, offset + first)
       const next = offset + page.length
       const endCursor = `opaque:${++this.nextCursor}:cursor`
-      this.cursors.set(endCursor, { query: search, offset: next })
+      this.cursors.set(endCursor, { query: `${field[2]}:${search}`, offset: next })
       const selection = query.slice(field.index, fields[index + 1]?.index ?? query.length)
       data[field[1]] = {
         issueCount: this.reportedCount ?? rows.length,

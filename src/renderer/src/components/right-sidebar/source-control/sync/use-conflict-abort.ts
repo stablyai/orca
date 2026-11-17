@@ -1,11 +1,14 @@
 import { useCallback } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import { getConnectionId } from '@/lib/connection-context'
-import { abortRuntimeGitMerge, abortRuntimeGitRebase } from '@/runtime/runtime-git-sync-client'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import {
+  abortRuntimeGitMerge,
+  abortRuntimeGitRebase
+} from '@/runtime/source-control/git/runtime-git-sync-client'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -16,25 +19,22 @@ export function useSourceControlConflictAbort({
   activeRepoTarget,
   activeWorktreeId,
   conflictOperation,
-  isAbortingOperation,
+  operationStore,
   refreshActiveGitStatusAfterMutation,
   refreshBranchCompareRef,
   refreshGitHistoryRef,
-  setAbortOperationInFlightByWorktree,
-  setRemoteActionErrors,
   worktreePath
 }: {
   activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   conflictOperation: GitConflictOperation
-  isAbortingOperation: boolean
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
   refreshBranchCompareRef: React.RefObject<() => Promise<void>>
   refreshGitHistoryRef: React.RefObject<() => Promise<void>>
-  setAbortOperationInFlightByWorktree: SourceControlWorktreeOperationState['setAbortOperationInFlightByWorktree']
-  setRemoteActionErrors: SourceControlWorktreeOperationState['setRemoteActionErrors']
   worktreePath: string | null
 }) {
+  const scope = useSourceControlScope()
   const confirmAction = useConfirmationDialog()
 
   const handleAbortOperation = useCallback(
@@ -43,30 +43,44 @@ export function useSourceControlConflictAbort({
         !activeWorktreeId ||
         !worktreePath ||
         conflictOperation !== requestedOperation ||
-        isAbortingOperation
+        operationStore.getState().isAbortingOperation
       ) {
         return
       }
 
       const isRebase = requestedOperation === 'rebase'
-      const label = isRebase ? 'rebase' : 'merge'
-      const title = isRebase ? 'Abort rebase?' : 'Abort merge?'
+      const title = isRebase
+        ? translate(
+            'auto.components.right.sidebar.SourceControl.abortRebaseConfirmTitle',
+            'Abort rebase?'
+          )
+        : translate(
+            'auto.components.right.sidebar.SourceControl.abortMergeConfirmTitle',
+            'Abort merge?'
+          )
       const description = isRebase
-        ? 'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
-        : 'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+        ? translate(
+            'auto.components.right.sidebar.SourceControl.abortRebaseConfirmDescription',
+            'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
+          )
+        : translate(
+            'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
+            'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+          )
       const confirmed = await confirmAction({
         title,
         description,
-        confirmLabel: `Abort ${label}`,
+        confirmLabel: isRebase
+          ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+          : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge'),
         confirmVariant: 'destructive'
       })
-      if (!confirmed) {
+      if (!confirmed || operationStore.getState().isAbortingOperation) {
         return
       }
 
-      const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
-      setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+      const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+      operationStore.setState({ isAbortingOperation: true, remoteActionError: null })
       try {
         const context = {
           // Abort on the repo owner, which may differ from the focused host.
@@ -78,26 +92,41 @@ export function useSourceControlConflictAbort({
         const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
         await abortGitOperation(context)
       } catch (error) {
-        const message = error instanceof Error ? error.message : `Failed to abort ${label}`
+        const message =
+          error instanceof Error
+            ? error.message
+            : isRebase
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
+                  'Failed to abort rebase'
+                )
+              : translate(
+                  'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
+                  'Failed to abort merge'
+                )
         toast.error(
-          translate(
-            'auto.components.right.sidebar.SourceControl.f99560ab29',
-            'Abort {{value0}} failed',
-            { value0: label }
-          ),
+          isRebase
+            ? translate(
+                'auto.components.right.sidebar.SourceControl.abortRebaseFailed',
+                'Abort rebase failed'
+              )
+            : translate(
+                'auto.components.right.sidebar.SourceControl.abortMergeFailed',
+                'Abort merge failed'
+              ),
           { description: message }
         )
-        setRemoteActionErrors((prev) => ({
-          ...prev,
-          [activeWorktreeId]: {
+        operationStore.setState({
+          remoteActionError: {
             kind: isRebase ? 'abort_rebase' : 'abort_merge',
             message,
             rawError: message
           }
-        }))
+        })
       } finally {
-        setAbortOperationInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+        operationStore.setState({ isAbortingOperation: false })
         refreshSourceControlAfterRemoteAction({
+          worktreeId: activeWorktreeId,
           refreshGitStatus: refreshActiveGitStatusAfterMutation,
           refreshBranchCompare: refreshBranchCompareRef.current,
           refreshGitHistory: refreshGitHistoryRef.current
@@ -105,16 +134,15 @@ export function useSourceControlConflictAbort({
       }
     },
     [
+      scope,
       activeRepoTarget,
       activeWorktreeId,
       confirmAction,
       conflictOperation,
-      isAbortingOperation,
+      operationStore,
       refreshActiveGitStatusAfterMutation,
       refreshBranchCompareRef,
       refreshGitHistoryRef,
-      setAbortOperationInFlightByWorktree,
-      setRemoteActionErrors,
       worktreePath
     ]
   )

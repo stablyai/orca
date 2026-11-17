@@ -1,4 +1,4 @@
-import { MAX_TIMER_DELAY_MS } from '../../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../../../shared/concurrency/timer-delay'
 
 export type RuntimeMobileFilePathInventory = {
   paths: string[]
@@ -112,35 +112,4 @@ export class RuntimeMobileFilePathSearchCache {
       this.scheduleExpiry(key, entry.expiresAt)
     }
   }
-}
-
-/** Keep composer prefix-before-substring ranking while returning a bounded slice. */
-export function rankRuntimeMobileFilePaths(
-  paths: readonly string[],
-  query: string,
-  limit: number
-): { paths: string[]; totalCount: number } {
-  const normalizedQuery = query.trim().toLowerCase()
-  if (!normalizedQuery) {
-    return { paths: paths.slice(0, limit), totalCount: paths.length }
-  }
-  const prefix: string[] = []
-  const substring: string[] = []
-  let totalCount = 0
-  for (const path of paths) {
-    const lower = path.toLowerCase()
-    const basename = lower.slice(lower.lastIndexOf('/') + 1)
-    if (lower.startsWith(normalizedQuery) || basename.startsWith(normalizedQuery)) {
-      totalCount++
-      if (prefix.length < limit) {
-        prefix.push(path)
-      }
-    } else if (lower.includes(normalizedQuery)) {
-      totalCount++
-      if (substring.length < limit) {
-        substring.push(path)
-      }
-    }
-  }
-  return { paths: [...prefix, ...substring].slice(0, limit), totalCount }
 }

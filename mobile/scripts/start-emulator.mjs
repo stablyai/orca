@@ -563,7 +563,7 @@ async function main() {
     const device = await findBestDevice(options.device)
     logInfo(`Using device: ${device.name} (${device.runtime})`)
 
-    // Attach idempotently to active worktree; global emulator list cannot prove worktree-scoped ownership.
+    // Attach idempotently; attach reuses the worktree's active session.
     await attachEmulator(worktree, device, pairingRuntime)
 
     const metro = await startMetro(worktree)

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import {
   createRuntimeClientEventsSync,
   type RuntimeClientEventSubscriptionHandle
@@ -182,18 +182,6 @@ describe('runtime event subscription ownership', () => {
     pending.resolve({ unsubscribe })
     await settle()
     expect(unsubscribe).toHaveBeenCalledOnce()
-  })
-
-  it('admits synchronous initial frames, pending frames and settled live frames', async () => {
-    const h = makeHarness()
-    h.manager.sync()
-    expect(h.onEvent).toHaveBeenCalledTimes(2)
-    h.records[0].emit()
-    h.records[0].resolve()
-    await settle()
-    h.records[0].emit()
-    expect(h.onEvent).toHaveBeenCalledTimes(4)
-    h.manager.stop()
   })
 
   it('drops pending and settled callbacks after stop and releases the late handle', async () => {

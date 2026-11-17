@@ -1,12 +1,12 @@
-import { DOC_PREVIEW_PARTITION } from '../../../../../shared/doc-preview-scheme'
-import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { DOC_PREVIEW_PARTITION } from '../../../../../shared/document-preview/doc-preview-scheme'
+import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import {
   moveFocusToRendererBeforeWebviewDetach,
   registerPersistentWebview,
   unregisterPersistentWebview,
   webviewRegistry
 } from '@/components/browser-pane/host-guest/webview-registry'
-import { createTauriNativeBrowserWebview, isTauriNativeHost } from '@/web/tauri-native-bridge'
 
 export function attachDocPreviewWebview({
   previewId,
@@ -31,22 +31,11 @@ export function attachDocPreviewWebview({
   onTitleUpdated: (event: Electron.PageTitleUpdatedEvent) => void
   onViewportMessage: (event: { message?: string }) => void
 }): { webview: Electron.WebviewTag; detach: () => void; reload: () => void } {
-  const webview = isTauriNativeHost()
-    ? createTauriNativeBrowserWebview({
-        browserPageId: previewId,
-        container,
-        partition: DOC_PREVIEW_PARTITION,
-        visible: true
-      })
-    : // SAFETY: Electron upgrades this custom element to WebviewTag at attach time.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Electron custom element exposes WebviewTag methods after insertion.
-      (document.createElement('webview') as Electron.WebviewTag)
-  if (!isTauriNativeHost()) {
-    // Why no allowpopups: the guest's preload intercepts a trusted click on a link before Chromium
-    // considers a popup at all, so target="_blank" needs no popup path and every one stays denied.
-    webview.setAttribute('partition', DOC_PREVIEW_PARTITION)
-    webview.setAttribute('webpreferences', ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE)
-  }
+  const webview = document.createElement('webview') as Electron.WebviewTag
+  // Trusted link clicks are intercepted by preload; target=_blank needs no popup permission.
+  webview.setAttribute('partition', DOC_PREVIEW_PARTITION)
+  // Why opaque: Chromium paints its dark canvas for dark-scheme documents (JSON, text) only then.
+  webview.setAttribute('webpreferences', ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.setAttribute('aria-label', ariaLabel)
   webview.style.display = 'flex'
   webview.style.width = '100%'
@@ -63,9 +52,8 @@ export function attachDocPreviewWebview({
   webview.addEventListener('console-message', onViewportMessage)
   // Register before append so a guest attached mid-drag cannot swallow the pointer stream.
   registerPersistentWebview(previewId, webview)
-  if (!isTauriNativeHost()) {
-    container.appendChild(webview)
-  }
+  publishNativeChatVisualGuestTheme()
+  container.appendChild(webview)
   webview.setAttribute('src', url)
 
   return {

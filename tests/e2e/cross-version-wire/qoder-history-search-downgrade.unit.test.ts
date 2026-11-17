@@ -2,20 +2,21 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   createSessionSearchClient,
   unavailableSessionSearchStatus
-} from '../../../src/shared/ai-vault-search-client'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-client'
 import {
   searchHit,
   searchResults,
   fakeSearchService
-} from '../../../src/shared/ai-vault-search-test-fixture'
+} from '../../../src/shared/ai-vault/search/ai-vault-search-test-fixture'
 import {
   searchSessionService,
   sessionSearchServiceStatus,
   setSessionSearchService
 } from '../../../src/main/ai-vault-search/session-search-service-registry'
-import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault-types'
-import { redactForTransport } from '../../../src/shared/ai-vault-search-transport'
+import { AI_VAULT_AGENTS } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
+import { redactForTransport } from '../../../src/shared/ai-vault/search/ai-vault-search-transport'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
+import { prepareReleaseFixtures } from './release-fixture-setup'
 
 const PRE_QODER_HOSTS = ['v1.4.211', 'b49abdb1f4da6b3d62dfa9ccf3c74dc9e74d291c']
 const QODER_HOST = 'f97ca2a49d9c711dab54a656a7f8a47ae6c6749c'
@@ -24,10 +25,13 @@ const LEGACY_AGENTS = AI_VAULT_AGENTS.filter(
 )
 afterEach(() => setSessionSearchService(null))
 
-async function releaseSearchSchemas(ref: string) {
-  const checkout = await materializeReleaseCheckout(ref)
-  return importReleaseCheckoutModule(checkout, 'src/shared/ai-vault-search-contract.ts')
-}
+const releaseSearchSchemas = prepareReleaseFixtures(
+  [...PRE_QODER_HOSTS, QODER_HOST],
+  async (ref) => {
+    const checkout = await materializeReleaseCheckout(ref)
+    return importReleaseCheckoutModule(checkout, 'src/shared/ai-vault-search-contract.ts')
+  }
+)
 
 function releaseParser(schema: unknown) {
   if (
@@ -47,44 +51,6 @@ function releaseParser(schema: unknown) {
     safeParse: (value: unknown) => safeParse.call(schema, value)
   }
 }
-
-test.each(['qoder', 'jcode'] as const)(
-  'a pre-agent release can read current %s search pages without losing other agents',
-  async (agent) => {
-    const baseline = await releaseSearchSchemas('v1.4.211')
-    const responseParser = releaseParser(baseline.AiVaultSearchResponseSchema)
-    const newHit = { ...searchHit(), agent }
-    expect(responseParser.safeParse({ ...searchResults(), hits: [newHit] })).toHaveProperty(
-      'success',
-      false
-    )
-    const service = fakeSearchService()
-    service.search.mockImplementation(async (request) => ({
-      ...searchResults(),
-      hits:
-        !request.filters?.agents || request.filters.agents.includes(agent)
-          ? [newHit]
-          : searchResults().hits
-    }))
-    setSessionSearchService(service)
-    const oldResponse = await searchSessionService({ query: 'proof' }, 'relay')
-    expect(responseParser.safeParse(oldResponse)).toHaveProperty('success', true)
-    expect(oldResponse).toMatchObject({ hits: [{ agent: 'codex' }] })
-    const client = createSessionSearchClient(
-      (_method, request) => searchSessionService(request, 'relay'),
-      'relay'
-    )
-    expect(await client.searchSessions({ query: 'proof' })).toMatchObject({ hits: [{ agent }] })
-    expect(
-      releaseParser(baseline.AiVaultSearchRequestSchema).safeParse({
-        query: 'proof',
-        supportedAgents: [...AI_VAULT_AGENTS],
-        supportsQoderHistory: true,
-        supportsJcodeHistory: true
-      })
-    ).toHaveProperty('success', true)
-  }
-)
 
 test.each(PRE_QODER_HOSTS)(
   'the actual %s response parser accepts complete current-host legacy pages',

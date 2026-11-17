@@ -1,8 +1,9 @@
-import React from 'react'
-import { CircleX, Inbox, SearchX } from 'lucide-react'
+import React, { useMemo } from 'react'
+import { CircleX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,
@@ -11,10 +12,10 @@ export function SidebarWorktreeListEmptyState({
   hasFilters: boolean
   onClearFilters: () => void
 }): React.JSX.Element {
-  // Why: dsh names an empty list with a centered glyph over the text, so a
-  // filtered-to-nothing list reads differently from having no workspaces.
-  const Glyph = hasFilters ? SearchX : Inbox
+  const t = useTranslate()
   const discoveryCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
+  const repos = useAppStore((s) => s.repos)
+  const everyProjectHidden = useMemo(() => repos.length > 0 && repos.every(isRepoHidden), [repos])
   return (
     <div
       data-worktree-sidebar-container
@@ -24,14 +25,17 @@ export function SidebarWorktreeListEmptyState({
       <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek pt-px">
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
           {discoveryCompleted && (
-            <>
-              <span data-testid="sidebar-empty-state-glyph" className="text-muted-foreground/60">
-                <Glyph className="size-6" strokeWidth={1.75} />
-              </span>
-              <span>
-                {translate('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
-              </span>
-            </>
+            <span>
+              {t('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
+            </span>
+          )}
+          {everyProjectHidden && (
+            <span>
+              {t(
+                'sidebar.hiddenProjects.allHidden',
+                'Every project is hidden. Show one from Hidden projects below.'
+              )}
+            </span>
           )}
           {hasFilters && (
             <Button
@@ -41,7 +45,7 @@ export function SidebarWorktreeListEmptyState({
               className="gap-1.5 border border-border/80 text-[11px]"
             >
               <CircleX className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeList.370c6a55dd', 'Clear Filters')}
+              {t('auto.components.sidebar.WorktreeList.370c6a55dd', 'Clear Filters')}
             </Button>
           )}
         </div>

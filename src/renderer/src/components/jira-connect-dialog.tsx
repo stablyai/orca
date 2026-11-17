@@ -1,6 +1,11 @@
-import { useId, useLayoutEffect, useState } from 'react'
+import { jiraCredentialStorageCopy } from './jira-credential-storage-copy'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
+import { useId, useState } from 'react'
 import { LoaderCircle, Lock } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,13 +19,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
-import { translate } from '@/i18n/i18n'
+} from '@/runtime/hosts/observations/provider-runtime-context'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
+import { useTranslate } from '@/i18n/use-translate'
 import { JiraConnectCredentialGuide } from './jira-connect-credential-guide'
 
 type JiraConnectDialogProps = {
@@ -43,6 +48,7 @@ export function JiraConnectDialog({
   overlayClassName,
   contentClassName
 }: JiraConnectDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const connectJira = useAppStore((s) => s.connectJira)
   const settings = useAppStore((s) => s.settings)
   const hostSupportsScopedTokens = useAppStore((s) => s.jiraStatus?.supportsScopedTokens === true)
@@ -67,18 +73,19 @@ export function JiraConnectDialog({
   const [connectError, setConnectError] = useState<string | null>(null)
 
   // Clear secrets, modes and errors before paint on each open so prior credentials cannot flash or persist.
-  useLayoutEffect(() => {
-    if (!open) {
-      return
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
+    if (open) {
+      setInstanceType('cloud')
+      setServerAuthMethod('pat')
+      setSiteUrl('')
+      setEmail('')
+      setApiToken('')
+      setConnectState('idle')
+      setConnectError(null)
     }
-    setInstanceType('cloud')
-    setServerAuthMethod('pat')
-    setSiteUrl('')
-    setEmail('')
-    setApiToken('')
-    setConnectState('idle')
-    setConnectError(null)
-  }, [open])
+  }
 
   const isServer = instanceType === 'server'
   // Cloud email and Server Basic username share the identity slot; PAT auth has no identity.
@@ -90,9 +97,7 @@ export function JiraConnectDialog({
     (!requiresIdentity || Boolean(email.trim())) &&
     Boolean(apiToken.trim()) &&
     connectState !== 'connecting'
-  const credentialStorageCopy = remoteRuntime
-    ? 'Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
-    : 'Your token is stored locally and encrypted when local runtime storage supports it.'
+  const credentialStorageCopy = jiraCredentialStorageCopy(remoteRuntime, t)
 
   const clearErrorOnEdit = (): void => {
     if (connectState === 'error') {
@@ -155,11 +160,15 @@ export function JiraConnectDialog({
         return
       }
       setConnectState('error')
-      setConnectError(result.error)
+      setConnectError(taskProviderErrorMessage(result))
     } catch (error) {
       if (mountedRef.current) {
         setConnectState('error')
-        setConnectError(error instanceof Error ? error.message : 'Connection failed')
+        setConnectError(
+          error instanceof Error
+            ? taskProviderErrorText(error.message)
+            : t('taskProviders.jira.connectionFailed', 'Connection failed')
+        )
       }
     }
   }
@@ -174,25 +183,25 @@ export function JiraConnectDialog({
       >
         <DialogHeader className="gap-3">
           <DialogTitle className="leading-tight">
-            {translate('auto.components.jira.connect.dialog.8388bdea2b', 'Connect Jira site')}
+            {t('auto.components.jira.connect.dialog.8388bdea2b', 'Connect Jira site')}
           </DialogTitle>
           <DialogDescription>
             {!isServer
               ? supportsScopedTokens
-                ? translate(
+                ? t(
                     'jira.connect.scopedDescription',
                     'Use a Jira Cloud site URL and API token to browse issues. Scoped tokens can omit the email.'
                   )
-                : translate(
+                : t(
                     'auto.components.jira.connect.dialog.d785c42b8b',
                     'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
                   )
               : isServerBasic
-                ? translate(
+                ? t(
                     'auto.components.jira.connect.dialog.1d947a07ab',
                     'Use a self-hosted Jira base URL, username, and password to browse issues.'
                   )
-                : translate(
+                : t(
                     'auto.components.jira.connect.dialog.2e2b69e48e',
                     'Use a self-hosted Jira base URL and a personal access token to browse issues.'
                   )}
@@ -219,16 +228,13 @@ export function JiraConnectDialog({
                 setInstanceType(value as JiraInstanceType)
                 clearCredentialsOnModeSwitch()
               }}
-              aria-label={translate(
-                'auto.components.jira.connect.dialog.b67e919bd5',
-                'Jira instance type'
-              )}
+              aria-label={t('auto.components.jira.connect.dialog.b67e919bd5', 'Jira instance type')}
             >
               <ToggleGroupItem value="cloud" className="h-8 px-3 text-xs">
-                {translate('auto.components.jira.connect.dialog.17787d6e4b', 'Atlassian Cloud')}
+                {t('auto.components.jira.connect.dialog.17787d6e4b', 'Atlassian Cloud')}
               </ToggleGroupItem>
               <ToggleGroupItem value="server" className="h-8 px-3 text-xs">
-                {translate('auto.components.jira.connect.dialog.bc7a831773', 'Self-hosted')}
+                {t('auto.components.jira.connect.dialog.bc7a831773', 'Self-hosted')}
               </ToggleGroupItem>
             </ToggleGroup>
             {isServer ? (
@@ -244,44 +250,35 @@ export function JiraConnectDialog({
                   setServerAuthMethod(value as ServerAuthMethod)
                   clearCredentialsOnModeSwitch()
                 }}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.jira.connect.dialog.f49708c369',
                   'Jira authentication method'
                 )}
               >
                 <ToggleGroupItem value="pat" className="h-8 px-3 text-xs">
-                  {translate(
-                    'auto.components.jira.connect.dialog.730d973bae',
-                    'Personal access token'
-                  )}
+                  {t('auto.components.jira.connect.dialog.730d973bae', 'Personal access token')}
                 </ToggleGroupItem>
                 <ToggleGroupItem value="basic" className="h-8 px-3 text-xs">
-                  {translate(
-                    'auto.components.jira.connect.dialog.84a810dd0e',
-                    'Username & password'
-                  )}
+                  {t('auto.components.jira.connect.dialog.84a810dd0e', 'Username & password')}
                 </ToggleGroupItem>
               </ToggleGroup>
             ) : null}
             <div className="space-y-2">
               <Label htmlFor={siteUrlId} className="text-xs">
                 {isServer
-                  ? translate('auto.components.jira.connect.dialog.3489e186d6', 'Jira site URL')
-                  : translate(
-                      'auto.components.jira.connect.dialog.e176f9d0c5',
-                      'Jira Cloud site URL'
-                    )}
+                  ? t('auto.components.jira.connect.dialog.3489e186d6', 'Jira site URL')
+                  : t('auto.components.jira.connect.dialog.e176f9d0c5', 'Jira Cloud site URL')}
               </Label>
               <Input
                 id={siteUrlId}
                 autoFocus
                 placeholder={
                   isServer
-                    ? translate(
+                    ? t(
                         'auto.components.jira.connect.dialog.cbc27fa599',
                         'https://jira.example.com'
                       )
-                    : translate(
+                    : t(
                         'auto.components.jira.connect.dialog.70fcd360c4',
                         'https://example.atlassian.net'
                       )
@@ -298,27 +295,21 @@ export function JiraConnectDialog({
               <div className="space-y-2">
                 <Label htmlFor={emailId} className="text-xs">
                   {isServerBasic
-                    ? translate('auto.components.jira.connect.dialog.8d1223fa5c', 'Username')
+                    ? t('auto.components.jira.connect.dialog.8d1223fa5c', 'Username')
                     : supportsScopedTokens
-                      ? translate(
+                      ? t(
                           'jira.connect.optionalEmail',
                           'Atlassian email (optional for scoped tokens)'
                         )
-                      : translate(
-                          'auto.components.jira.connect.dialog.2849ddb295',
-                          'Atlassian email'
-                        )}
+                      : t('auto.components.jira.connect.dialog.2849ddb295', 'Atlassian email')}
                 </Label>
                 <Input
                   id={emailId}
                   type={isServerBasic ? 'text' : 'email'}
                   placeholder={
                     isServerBasic
-                      ? translate('auto.components.jira.connect.dialog.be9eba0a1b', 'username')
-                      : translate(
-                          'auto.components.jira.connect.dialog.e91b9a4073',
-                          'you@example.com'
-                        )
+                      ? t('auto.components.jira.connect.dialog.be9eba0a1b', 'username')
+                      : t('auto.components.jira.connect.dialog.e91b9a4073', 'you@example.com')
                   }
                   value={email}
                   onChange={(event) => {
@@ -332,32 +323,23 @@ export function JiraConnectDialog({
             <div className="space-y-2">
               <Label htmlFor={tokenId} className="text-xs">
                 {isServerBasic
-                  ? translate('auto.components.jira.connect.dialog.70035652d7', 'Password')
+                  ? t('auto.components.jira.connect.dialog.70035652d7', 'Password')
                   : isServer
-                    ? translate(
-                        'auto.components.jira.connect.dialog.730d973bae',
-                        'Personal access token'
-                      )
-                    : translate('auto.components.jira.connect.dialog.3d81bf3ab3', 'API token')}
+                    ? t('auto.components.jira.connect.dialog.730d973bae', 'Personal access token')
+                    : t('auto.components.jira.connect.dialog.3d81bf3ab3', 'API token')}
               </Label>
               <Input
                 id={tokenId}
                 type="password"
                 placeholder={
                   isServerBasic
-                    ? translate(
-                        'auto.components.jira.connect.dialog.c50abbf340',
-                        'Jira account password'
-                      )
+                    ? t('auto.components.jira.connect.dialog.c50abbf340', 'Jira account password')
                     : isServer
-                      ? translate(
+                      ? t(
                           'auto.components.jira.connect.dialog.8b9c7b9e7b',
                           'Jira personal access token'
                         )
-                      : translate(
-                          'auto.components.jira.connect.dialog.7b3967c12f',
-                          'Atlassian API token'
-                        )
+                      : t('auto.components.jira.connect.dialog.7b3967c12f', 'Atlassian API token')
                 }
                 value={apiToken}
                 onChange={(event) => {
@@ -390,16 +372,16 @@ export function JiraConnectDialog({
               onClick={() => onOpenChange(false)}
               disabled={connectState === 'connecting'}
             >
-              {translate('auto.components.jira.connect.dialog.79e7aaed39', 'Cancel')}
+              {t('auto.components.jira.connect.dialog.79e7aaed39', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {connectState === 'connecting' ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  {translate('auto.components.jira.connect.dialog.4a2ab52781', 'Verifying…')}
+                  {t('auto.components.jira.connect.dialog.4a2ab52781', 'Verifying…')}
                 </>
               ) : (
-                translate('auto.components.jira.connect.dialog.63ce735809', 'Connect')
+                t('auto.components.jira.connect.dialog.63ce735809', 'Connect')
               )}
             </Button>
           </DialogFooter>

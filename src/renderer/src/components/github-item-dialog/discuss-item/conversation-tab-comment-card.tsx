@@ -3,26 +3,31 @@ import { ExternalLink, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   PR_COMMENT_OPEN_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_CONTAINER_CLASS
-} from '@/lib/pr-comment-resolution-classes'
+} from '@/lib/source-control/review/comments/pr-comment-resolution-classes'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { CommentCodeContext } from '@/components/github/CommentCodeContext'
 import { CommentReactions } from '@/components/github/CommentReactions'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { loadPRFileContents } from '../load-item-details/pr-file-content-cache'
 import { CommentReplyForm } from './comment-reply-form'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type ConversationCommentCardContext = {
   repoPath: string | null
   repoId: string | undefined
   sourceContext?: TaskSourceContext | null
+  itemType: 'issue' | 'pr'
   prNumber: number
   prRepo: GitHubOwnerRepo | null
   files: GitHubPRFile[]
@@ -37,7 +42,9 @@ export type ConversationCommentCardContext = {
 export function renderCommentCard(
   comment: PRComment,
   isReply = false,
-  ctx: ConversationCommentCardContext
+  ctx: ConversationCommentCardContext,
+  t: Translate = translate,
+  intlLocale?: string
 ): React.JSX.Element {
   return (
     <div
@@ -67,13 +74,13 @@ export function renderCommentCard(
           {comment.author}
         </span>
         <span className="shrink-0 text-[12px] text-muted-foreground">
-          · {formatRelativeTime(comment.createdAt)}
+          · {formatRelativeTime(comment.createdAt, intlLocale)}
         </span>
         {comment.path && (
           <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
             {comment.path.split('/').pop()}
             {comment.line
-              ? translate('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
+              ? t('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
                   value0: comment.line
                 })
               : ''}
@@ -81,7 +88,7 @@ export function renderCommentCard(
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            {translate('auto.components.GitHubItemDialog.68cb993d61', 'resolved')}
+            {t('auto.components.GitHubItemDialog.68cb993d61', 'resolved')}
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -94,16 +101,13 @@ export function renderCommentCard(
                 onClick={() =>
                   ctx.setReplyingTo((current) => (current === comment.id ? null : comment.id))
                 }
-                aria-label={translate(
-                  'auto.components.GitHubItemDialog.bca8eb39ac',
-                  'Reply to comment'
-                )}
+                aria-label={t('auto.components.GitHubItemDialog.bca8eb39ac', 'Reply to comment')}
               >
                 <MessageSquarePlus className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.GitHubItemDialog.bca8eb39ac', 'Reply to comment')}
+              {t('auto.components.GitHubItemDialog.bca8eb39ac', 'Reply to comment')}
             </TooltipContent>
           </Tooltip>
           {comment.url && (
@@ -114,8 +118,8 @@ export function renderCommentCard(
                   variant="ghost"
                   size="icon-xs"
                   className="size-7"
-                  onClick={() => window.api.shell.openUrl(comment.url)}
-                  aria-label={translate(
+                  onClick={(event) => openAppHttpLink(comment.url, { event })}
+                  aria-label={t(
                     'auto.components.GitHubItemDialog.a154ec5224',
                     'Open comment on GitHub'
                   )}
@@ -124,7 +128,7 @@ export function renderCommentCard(
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {translate('auto.components.GitHubItemDialog.a154ec5224', 'Open comment on GitHub')}
+                {t('auto.components.GitHubItemDialog.a154ec5224', 'Open comment on GitHub')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -145,6 +149,7 @@ export function renderCommentCard(
         />
         <CommentMarkdown
           content={comment.body}
+          bodyImageUrls={comment.bodyImageUrls}
           variant="document"
           githubRepo={ctx.markdownGitHubRepo}
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
@@ -152,14 +157,18 @@ export function renderCommentCard(
         <CommentReactions reactions={comment.reactions} />
         {ctx.resolvedReplyingTo === comment.id && (
           <CommentReplyForm
+            imageUploadAddress={githubCommentImageUploadAddress({
+              repoPath: ctx.repoPath ?? '',
+              repoId: ctx.repoId,
+              sourceContext: ctx.sourceContext,
+              type: ctx.itemType,
+              prRepo: ctx.prRepo
+            })}
             className="mt-3"
             placeholder={
               comment.path
-                ? translate(
-                    'auto.components.GitHubItemDialog.86f809e2ce',
-                    'Reply in this review thread'
-                  )
-                : translate('auto.components.GitHubItemDialog.080d071d48', 'Reply to @{{value0}}', {
+                ? t('auto.components.GitHubItemDialog.86f809e2ce', 'Reply in this review thread')
+                : t('auto.components.GitHubItemDialog.080d071d48', 'Reply to @{{value0}}', {
                     value0: comment.author
                   })
             }
@@ -178,6 +187,7 @@ export type ConversationTabCommentCardProps = {
   repoPath: string | null
   repoId: string
   sourceContext?: TaskSourceContext | null
+  itemType: 'issue' | 'pr'
   prNumber: number
   prRepo: GitHubOwnerRepo | null
   files: GitHubPRFile[]
@@ -198,17 +208,25 @@ export function ConversationTabCommentCard({
   onCancelReply,
   ...rest
 }: ConversationTabCommentCardProps): React.JSX.Element {
-  return renderCommentCard(comment, isReply, {
-    ...rest,
-    handleReply: onReply,
-    setReplyingTo: (next) => {
-      if (typeof next === 'function') {
-        onToggleReply(comment.id)
-        return
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  return renderCommentCard(
+    comment,
+    isReply,
+    {
+      ...rest,
+      handleReply: onReply,
+      setReplyingTo: (next) => {
+        if (typeof next === 'function') {
+          onToggleReply(comment.id)
+          return
+        }
+        if (next === null) {
+          onCancelReply()
+        }
       }
-      if (next === null) {
-        onCancelReply()
-      }
-    }
-  })
+    },
+    t,
+    intlLocale
+  )
 }

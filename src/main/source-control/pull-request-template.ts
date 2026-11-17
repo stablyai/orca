@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { HostedReviewProvider } from '../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 
 const PULL_REQUEST_TEMPLATE_CANDIDATES = [
   '.github/pull_request_template.md',

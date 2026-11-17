@@ -1,7 +1,5 @@
-import { claudeTokenSessions } from '../usage/agent-token-usage'
-import { createRequire } from 'node:module'
+import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
-import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
@@ -11,48 +9,28 @@ import type {
   ClaudeUsageSessionRow,
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
-} from '../../shared/claude-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+} from '../../shared/agent-usage/analytics/claude-usage-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { ClaudeUsagePersistedState } from './types'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
-} from '../usage/usage-scan-worker-spawn'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+} from '../usage/scan-worker/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
-import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-usage-report'
+import {
+  parseClaudeUsageReport,
+  readClaudeUsageReportFile,
+  serializeClaudeUsageReport
+} from './persisted-usage-report'
 
 // Pre-v6 totals lack stable fork ownership or the 1-hour cache-write split and must be rescanned.
 // v7 stores protected column checkpoints on the worker and a separately protected report.
 const SCHEMA_VERSION = 7
-
-// Capture after configureDevUserDataPath(), before app.setName() changes the derived userData path.
-let _claudeUsageFile: string | null = null
-
-const require = createRequire(import.meta.url)
-
-function defaultUserDataPath(): string {
-  if (hasAppEnvironment()) {
-    return getAppEnvironment().getPath('userData')
-  }
-  const electron: unknown = require('electron')
-  if (
-    typeof electron === 'object' &&
-    electron !== null &&
-    'app' in electron &&
-    typeof electron.app === 'object' &&
-    electron.app !== null &&
-    'getPath' in electron.app &&
-    typeof electron.app.getPath === 'function'
-  ) {
-    return electron.app.getPath('userData')
-  }
-  throw new Error('Electron app environment is unavailable')
-}
 
 function getDefaultState(): ClaudeUsagePersistedState {
   return {
@@ -85,46 +63,32 @@ function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsageP
   }
 }
 
-export function initClaudeUsagePath(userDataPath?: string): void {
-  _claudeUsageFile = join(userDataPath ?? defaultUserDataPath(), 'orca-claude-usage.json')
-}
-
-function getClaudeUsageFile(): string {
-  const file = _claudeUsageFile
-  if (file) {
-    return file
-  }
-  initClaudeUsagePath()
-  if (!_claudeUsageFile) {
-    throw new Error('Claude usage path is unavailable')
-  }
-  return _claudeUsageFile
-}
-
 export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   ClaudeUsagePersistedState,
   'hasAnyClaudeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>, userDataPath?: string) {
-    const cacheFile = userDataPath
-      ? join(userDataPath, 'orca-claude-usage.json')
-      : getClaudeUsageFile()
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'claude',
         selectSessions: (state) => claudeTokenSessions(state.sessions)
       },
       logTag: '[claude-usage]',
-      resolveCacheFile: () => cacheFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-claude-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       parseReport: parseClaudeUsageReport,
+      readFallbackCache: readClaudeUsageReportFile,
       serializeReport: serializeClaudeUsageReport,
       providerId: 'claude',
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
-      scan: scanClaudeUsageFilesViaWorker,
+      scan: async (worktrees, sourceCache) => {
+        const profileDirs = await host.claudeProfileDirs()
+        host.signal.throwIfAborted()
+        return scanClaudeUsageFilesViaWorker(worktrees, sourceCache, profileDirs)
+      },
       splitCacheFile: splitUsageCacheFileViaWorker
     })
   }

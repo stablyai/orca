@@ -1,18 +1,18 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/rpc/targets/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { getEnvironmentSshStateGeneration } from '../../ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
-import type { RuntimeWorktreeListResult } from '../../../../../../shared/runtime-types'
+import type { RuntimeWorktreeListResult } from '../../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { REMOTE_WORKTREE_LIST_PARITY_LIMIT } from './worktree-slice-constants'
 import type {
   BackgroundRuntimeRefreshOptions,
@@ -20,7 +20,7 @@ import type {
 } from './worktree-slice-types'
 import { isRuntimeMethodNotFoundError } from './runtime-worktree-rpc-errors'
 import { toLegacyDetectedWorktreeResult } from './worktree-host-ownership'
-import { isWorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
+import { isWorktreeScanFailureKind } from '../../../../../../shared/worktree/catalog/worktree-scan-failure'
 
 /** The listing host is the one the caller asked about, never the focused one. */
 export function detectedWorktreeTarget(executionHostId: ExecutionHostId): RuntimeClientTarget {

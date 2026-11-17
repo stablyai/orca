@@ -1,30 +1,27 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { parse } from 'yaml'
-import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace-source-exports.mjs'
+import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace/source-exports/workspace-source-exports.mjs'
 import {
   collectPackageImports,
   installMissingPackageStandIns,
   type PackageImports
 } from './release-missing-packages.ts'
 
-const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
-const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
+import { CHECKOUT_PROCESS_TIMEOUT_MS, runCheckoutProcess } from './release-checkout-process.ts'
+import { prepareReleaseSnapshotSource } from './release-checkout-prefetch.ts'
 
 // Extract runtime, renderer, codecs and the phone row reader; omit CLI to bound cold-CI extraction.
 // Add source workspace packages from each release’s own policy.
-const ARCHIVE_PATHS = [
-  'src/main',
-  'src/shared',
-  'src/preload',
-  'src/renderer',
-  'src/types',
-  'mobile/src/worktree/agent-row-display.ts'
-]
+const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
 // Why optional: a release may have either or both, and `git archive` refuses a missing pathspec.
 const OPTIONAL_ARCHIVE_PATHS = [
   'src/relay',
   'src/wsl-guest',
+  // The phone row reader, before and after its move under agent-lineage/.
+  'mobile/src/worktree/agent-row-display.ts',
+  'mobile/src/worktree/agent-lineage/agent-row-display.ts',
+  'mobile/src/i18n',
   // Released phone read operations and their runtime decoding dependencies.
   'mobile/src/agent-history/agent-history-reply-schema.ts',
   'mobile/src/agent-history/mobile-agent-history-operations.ts',
@@ -115,7 +112,8 @@ async function rewriteWorkspaceImports(
 async function prepareExtractedTree(
   root: string,
   workspacePaths: string[],
-  packageImports: PackageImports
+  packageImports: PackageImports,
+  hasMobileSource: boolean
 ): Promise<void> {
   const resolver = workspacePaths.length > 0 ? createWorkspaceSourceResolver(root) : null
   const rendererRoot = join(root, 'src', 'renderer', 'src')
@@ -144,6 +142,9 @@ async function prepareExtractedTree(
     }
   }
   await walk(join(root, 'src'))
+  if (hasMobileSource) {
+    await walk(join(root, 'mobile', 'src'))
+  }
   // Source packages outside src/ load from here too; native ones keep the current install.
   for (const path of workspacePaths) {
     if (path !== WORKSPACE_POLICY && !path.startsWith('src/') && !path.startsWith('native/')) {
@@ -158,31 +159,6 @@ function checkoutTarProgram(): string {
   }
   const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows'
   return join(systemRoot, 'System32', 'tar.exe')
-}
-
-async function runCheckoutProcess(
-  repoRoot: string,
-  program: string,
-  args: string[],
-  deadline: number
-): Promise<string> {
-  // Kept lazy so plain Node 24 contention children never load Vite's TS graph.
-  const { runProcess } = await import('@orca/process-host')
-  const result = await runProcess({
-    program,
-    args,
-    cwd: repoRoot,
-    timeoutMs: Math.max(1, deadline - Date.now()),
-    maxOutputBytes: CHECKOUT_MAX_OUTPUT_BYTES,
-    terminationBarrier: true
-  })
-  if (result.code === 0 && !result.timedOut) {
-    return result.stdout
-  }
-  const detail = result.timedOut
-    ? `timed out after ${CHECKOUT_PROCESS_TIMEOUT_MS}ms`
-    : result.stderr.trim() || `exited with ${result.code}`
-  throw new Error(`${program} ${args[0] ?? ''} ${detail}`)
 }
 
 function workspacePatternRoot(pattern: string): string {
@@ -254,23 +230,16 @@ export async function extractReleaseCheckoutTree(
   sourceOnly = false
 ): Promise<PackageImports> {
   const archive = join(staging, '.release-checkout.tar')
+  await prepareReleaseSnapshotSource(repoRoot, commit)
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
   const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)
+  const paths = [...ARCHIVE_PATHS, ...optionalPaths, ...workspacePaths]
   try {
     await runCheckoutProcess(
       repoRoot,
       'git',
-      [
-        'archive',
-        '--format=tar',
-        `--output=${archive}`,
-        commit,
-        '--',
-        ...ARCHIVE_PATHS,
-        ...optionalPaths,
-        ...workspacePaths
-      ],
+      ['archive', '--format=tar', `--output=${archive}`, commit, '--', ...paths],
       deadline
     )
     await runCheckoutProcess(
@@ -283,7 +252,12 @@ export async function extractReleaseCheckoutTree(
     await rm(archive, { force: true })
   }
   const packageImports: PackageImports = new Map()
-  await prepareExtractedTree(staging, workspacePaths, packageImports)
+  await prepareExtractedTree(
+    staging,
+    workspacePaths,
+    packageImports,
+    optionalPaths.some((path) => path.startsWith('mobile/src/'))
+  )
   if (!sourceOnly) {
     await installMissingPackageStandIns(
       staging,

@@ -5,9 +5,12 @@ import path from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import Database from '../../src/main/sqlite/sync-database'
-import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import type {
+  RuntimeTerminalListResult,
+  RuntimeTerminalRead
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
@@ -245,7 +248,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   expect(completed.status).toBe(0)
   expect.soft(JSON.parse(completed.stdout)).toMatchObject({
     ok: true,
-    result: { lifecycle: { action: 'completed' } }
+    result: { lifecycle: 'completed' }
   })
   await expect
     .poll(async () => {

@@ -1,36 +1,39 @@
-import { selectCanonicalProjects } from '@/store/project-host-setup-selector'
+import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
+import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleDashed } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
   toggleGitHubChecksTabExpandedKey,
   type GitHubChecksContextOwner
 } from '@/components/github-checks-tab-state'
+
 import { getCheckDetailsKey } from '@/components/github/pr-check-presentation'
-import { getCheckCounts, getChecksSummaryLabel } from '@/components/pr-check-counts'
-import { getBrokenChecks } from '../../../../../shared/pr-checks-fix-prompt'
-import { sortChecksBySeverity } from '../../../../../shared/pr-check-severity-order'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import {
+  getCheckCounts,
+  getOverallCheckCounts,
+  getChecksSummaryLabel
+} from '@/components/pr-check-counts'
+import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
+import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../../shared/work-items/task-source-context'
+
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
   canUseGitHubRepoContext,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
-import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { resolveRepoExecutionHostPlatform } from '@/lib/execution-host-facts'
-import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
-import type {
-  GitHubWorkItem,
-  GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { refreshPullRequestChecks } from './refresh'
 import { rerunPullRequestChecks } from './rerun'
 import { requestPullRequestCheckDetails } from './details-request'
@@ -39,6 +42,12 @@ import { ChecksCompactHeader, buildChecksToolbar } from './toolbar'
 import { CheckRow } from './row'
 import { ChecksFixDialog } from './fix-dialog'
 import { ChecksTabLayouts } from './layouts'
+import { useTranslate } from '@/i18n/use-translate'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 
 export function ChecksTab({
   item,
@@ -61,6 +70,7 @@ export function ChecksTab({
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const targetRepoId = repoId ?? item.repoId
   const settings = useAppStore((s) => s.settings)
   const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
@@ -69,7 +79,8 @@ export function ChecksTab({
     targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
   )
   const repos = useAppStore((s) => s.repos)
-  const projects = useAppStore((s) => selectCanonicalProjects(s))
+  const projects = useAppStore((s) => s.projects)
+  const { checkOwner, onOwnerUpdated } = usePRCheckRefreshOwner(item, sourceContext)
   const [fixingChecks, setFixingChecks] = useState(false)
   const [fixChecksComposerPrompt, setFixChecksComposerPrompt] = useState<string | null>(null)
   const mountedRef = useMountedRef()
@@ -137,7 +148,7 @@ export function ChecksTab({
           {
             activeRepoId: null,
             activeWorktreeId: null,
-            projectHostSetupProjection: { projects, setups: [] },
+            projects,
             repos,
             settings,
             worktreesByRepo: {}
@@ -162,28 +173,18 @@ export function ChecksTab({
   const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
-  const summaryLabel = getChecksSummaryLabel(list)
-  // All-neutral checks remain unresolved; list length alone cannot justify a green tick.
-  const SummaryIcon =
-    counts.failing > 0
-      ? CHECK_ICON.failure
-      : counts.needsAction > 0
-        ? CHECK_ICON.action_required
-        : counts.pending > 0
-          ? CHECK_ICON.pending
-          : counts.passing > 0
-            ? CHECK_ICON.success
-            : CircleDashed
-  const summaryColor =
-    counts.failing > 0
-      ? CHECK_COLOR.failure
-      : counts.needsAction > 0
-        ? CHECK_COLOR.action_required
-        : counts.pending > 0
-          ? CHECK_COLOR.pending
-          : counts.passing > 0
-            ? CHECK_COLOR.success
-            : 'text-muted-foreground'
+  const overallCounts = getOverallCheckCounts(
+    list,
+    checkOwner,
+    resolvedChecksState.checkObservationOwner
+  )
+  const summaryLabel = getChecksSummaryLabel(
+    list,
+    checkOwner,
+    resolvedChecksState.checkObservationOwner,
+    t
+  )
+  const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(
@@ -200,18 +201,19 @@ export function ChecksTab({
         sourceContext,
         repoId,
         repoPath,
-        item,
-        headSha,
+        item: checkOwner,
+        headSha: checkOwner.headSha,
         prRepo,
         mountedRef,
+        onOwnerUpdated,
         onChecksUpdated
       }),
     [
       canUseChecksRepoContext,
-      headSha,
-      item,
+      checkOwner,
       mountedRef,
       onChecksUpdated,
+      onOwnerUpdated,
       runtimeHost,
       prRepo,
       repoId,
@@ -231,8 +233,8 @@ export function ChecksTab({
         sourceContext,
         repoId,
         repoPath,
-        item,
-        headSha,
+        item: checkOwner,
+        headSha: checkOwner.headSha,
         prRepo,
         failedOnly,
         mountedRef,
@@ -241,8 +243,7 @@ export function ChecksTab({
     [
       canUseChecksRepoContext,
       handleRefresh,
-      headSha,
-      item,
+      checkOwner,
       mountedRef,
       prRepo,
       runtimeHost,
@@ -294,40 +295,44 @@ export function ChecksTab({
     [detailsByCheckKey, requestCheckDetails]
   )
 
-  const { refreshAction, rerunAction, secondaryActions, actions } = buildChecksToolbar({
-    variant,
-    canUseChecksRepoContext,
-    refreshing,
-    rerunning,
-    fixingChecks,
-    canFixBrokenChecks,
-    failedChecksCount: failedChecks.length,
-    listLength: list.length,
-    onRefresh: () => {
-      void handleRefresh()
+  const { refreshAction, rerunAction, secondaryActions, actions } = buildChecksToolbar(
+    {
+      variant,
+      canUseChecksRepoContext,
+      refreshing,
+      rerunning,
+      fixingChecks,
+      canFixBrokenChecks,
+      failedChecksCount: failedChecks.length,
+      listLength: list.length,
+      onRefresh: () => {
+        void handleRefresh()
+      },
+      onFix: () => {
+        void fixBrokenPullRequestChecks({
+          targetRepoId,
+          fixingChecks,
+          failedChecks,
+          item,
+          list,
+          setFixingChecks,
+          setFixChecksComposerPrompt
+        })
+      },
+      onRerun: (failedOnly) => {
+        void handleRerun(failedOnly)
+      }
     },
-    onFix: () => {
-      void fixBrokenPullRequestChecks({
-        targetRepoId,
-        fixingChecks,
-        failedChecks,
-        item,
-        list,
-        setFixingChecks,
-        setFixChecksComposerPrompt
-      })
-    },
-    onRerun: (failedOnly) => {
-      void handleRerun(failedOnly)
-    }
-  })
+    t
+  )
 
   const compactHeader = (
     <ChecksCompactHeader
       SummaryIcon={SummaryIcon}
       summaryColor={summaryColor}
       summaryLabel={summaryLabel}
-      counts={counts}
+      counts={overallCounts}
+      showSummary={isCompletePRCheckOwner(checkOwner)}
       listLength={list.length}
       refreshAction={refreshAction}
       rerunAction={rerunAction}
@@ -375,6 +380,8 @@ export function ChecksTab({
       summaryColor={summaryColor}
       summaryLabel={summaryLabel}
       counts={counts}
+      summaryPending={overallCounts.pending > 0 && overallCounts.failing === 0}
+      owner={checkOwner}
       sorted={sorted}
       renderCheckRow={renderCheckRow}
       fixChecksAgentDialog={fixChecksAgentDialog}

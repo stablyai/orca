@@ -1,5 +1,5 @@
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import { resolveAdvertisedPairingEndpoint } from '../runtime/pairing-endpoint'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
+import { resolveAdvertisedPairingEndpoint } from '../runtime/rpc/server/pairing/network/pairing-endpoint'
 import { assertServeProjectRoot, renderServePairingQr } from './serve-pairing-output'
 import type { ServeReadiness, ServeReadinessOutput } from './serve-readiness'
 

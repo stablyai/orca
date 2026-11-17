@@ -1,6 +1,6 @@
 // Preserve user TOML while managing marker blocks and positively recognized Orca hook tables.
 
-import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
+import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   findManagedTomlBlocks,
   findRecognizedManagedTables,
@@ -8,7 +8,7 @@ import {
   type ManagedTomlMarkers,
   type ManagedTomlRegion,
   type RecognizedManagedTable
-} from '../agent-hooks/managed-toml-ownership'
+} from '../agent-hooks/installation/configuration/managed-toml-ownership'
 
 export const KIMI_HOOK_EVENTS = [
   'SessionStart',

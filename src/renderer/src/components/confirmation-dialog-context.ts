@@ -1,5 +1,4 @@
 import { createContext, useContext } from 'react'
-import type { LucideIcon } from 'lucide-react'
 
 // Keep the context component-free so Fast Refresh preserves its identity.
 
@@ -8,21 +7,22 @@ export type ConfirmationDialogField = {
   label: string
   type?: 'text' | 'password'
   autoComplete?: string
+  defaultValue?: string
 }
 
 export type ConfirmationDialogOptions = {
   title: string
   description?: string
   descriptionClassName?: string
-  confirmLabel?: string
+  /** The verb the button performs ("Delete", "Restart"); there is no generic default. */
+  confirmLabel: string
   cancelLabel?: string
   confirmVariant?: 'default' | 'destructive'
   surface?: 'security'
-  icon?: LucideIcon
-  cancelVariant?: 'outline' | 'ghost'
-  initialFocus?: 'confirm'
-  /** The short close-prompt look: small title, text and buttons. */
-  compact?: boolean
+  /** A notice, not a question: only the confirm button shows, and it settles true. */
+  acknowledgeOnly?: boolean
+  /** Focus starts on Cancel (or the first field); `confirm` starts on the verb instead. */
+  initialFocus?: 'confirm' | 'cancel'
   /** Ignore repeated Enter and the opening double-click’s second click; fresh presses and Escape still settle the prompt. */
   ignoresOpeningGesture?: boolean
   /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */

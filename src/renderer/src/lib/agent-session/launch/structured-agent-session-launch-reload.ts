@@ -1,25 +1,33 @@
 import {
-  restoreStructuredAgentSessionLaunchIntent,
-  type StructuredAgentSessionLaunchIntent
-} from '../../launch-structured-agent-session'
-import { StructuredAgentSessionOwnerUnresolvedError } from '../../structured-agent-session-launch-errors'
+  findStructuredAgentSessionPendingSend,
+  getStructuredAgentSessionPendingSends,
+  publishStructuredAgentSessionSends
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { restoreStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
+import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
+import { StructuredAgentSessionOwnerUnresolvedError } from './structured-agent-session-launch-errors'
 import {
   createStructuredLaunchCallerGroup,
   type StructuredLaunchCallerGroup
-} from '../../structured-agent-session-launch-callers'
+} from './structured-agent-session-launch-callers'
+
+import { structuredLaunchIdentity } from './structured-agent-session-launch-registry'
 import {
-  getPersistedStructuredAgentLaunchRecord,
   setStructuredLaunchState,
-  structuredLaunchIdentity,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
-import { initialStructuredLaunchSelection } from '../../structured-agent-session-launch-options'
+} from './structured-agent-session-launch-state-store'
+import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
+
+import {
+  initialStructuredLaunchSelection,
+  structuredLaunchSelectionController
+} from './structured-agent-session-launch-options'
 
 export function restorePersistedStructuredLaunchState(
   worktreeId: string,
   sessionId: string
 ): StructuredLaunchState | undefined {
-  const record = getPersistedStructuredAgentLaunchRecord(sessionId)
+  const record = readStructuredAgentLaunchRecord(sessionId)
   if (!record) {
     return undefined
   }
@@ -34,6 +42,7 @@ export function restorePersistedStructuredLaunchState(
       payloadFingerprint: record.payloadFingerprint,
       expectedRuntimeFence: record.expectedRuntimeFence,
       ...(record.resumeFrom ? { resumeFrom: record.resumeFrom } : {}),
+      ...(record.forkFrom ? { forkFrom: record.forkFrom } : {}),
       ...(record.seedOptions ? { seedOptions: record.seedOptions } : {}),
       ...(record.firstMessage ? { firstMessage: record.firstMessage } : {}),
       ...(record.optionsMode ? { optionsMode: record.optionsMode } : {}),
@@ -52,7 +61,7 @@ export function restorePersistedStructuredLaunchState(
     }
     throw error
   }
-  // Only a Retry or re-check restarts a restored launch.
+  // Saved openings are passive correlation; reading them never resubmits their envelope.
   const callers: StructuredLaunchCallerGroup = createStructuredLaunchCallerGroup({ kind: 'retry' })
   const state: StructuredLaunchState = {
     identity: structuredLaunchIdentity(worktreeId, record.agent, record),
@@ -62,7 +71,10 @@ export function restorePersistedStructuredLaunchState(
     },
     promptDelivery: 'draft',
     promise: Promise.resolve({ sessionId: record.sessionId, fence: 0 }),
-    visibilityUnknown: record.lifecycle === 'visibility-unknown',
+    visibilityUnknown: record.lifecycle !== 'failed',
+    ...(record.firstMessage && record.lifecycle !== 'failed'
+      ? { operationEnded: true as const }
+      : {}),
     cancelled: false,
     onVisibilityChanged: undefined,
     callers,
@@ -70,6 +82,28 @@ export function restorePersistedStructuredLaunchState(
   }
   callers.outcome = record.lifecycle === 'failed' ? 'failed' : 'unknown'
   callers.failedAt = record.failedAt
+  structuredLaunchSelectionController(state)
   setStructuredLaunchState(state)
+  if (
+    record.firstMessage &&
+    record.lifecycle !== 'failed' &&
+    !findStructuredAgentSessionPendingSend(sessionId, record.firstMessage.clientMessageId)
+  ) {
+    publishStructuredAgentSessionSends(sessionId, {
+      entries: [
+        {
+          sessionId,
+          clientMessageId: record.firstMessage.clientMessageId,
+          body: record.firstMessage.body,
+          previewUris: [],
+          queuedAt: Date.now(),
+          phase: 'unconfirmed',
+          issued: true,
+          ...(record.options ? { options: record.options } : {})
+        },
+        ...getStructuredAgentSessionPendingSends(sessionId)
+      ]
+    })
+  }
   return state
 }

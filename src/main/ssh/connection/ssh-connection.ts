@@ -1,16 +1,13 @@
 /* eslint-disable max-lines -- Why: the connect attempt (transport choice, the system-ssh ControlMaster retry, the ssh2 proxy and credential prompts) and teardown all read and write one generation, proxy, transport flags and cached sign-in; splitting them would spread each guard across files. Reconnect and channel opening live in their own modules. */
 import {
   createSshFileUploadSession,
-  downloadSshFolder,
   downloadSshFile,
-  readSshFileChunk,
   uploadSshDirectory,
   writeSshBuffer,
   writeSshFile,
   type SshFileTransferHost,
-  type SshRemoteFileOptions,
-  type SshRemoteFileReadChunkResult
-} from './ssh-connection-file-transfers'
+  type SshRemoteFileOptions
+} from '../file-transfer/ssh-connection-file-transfers'
 import type { ChildProcess } from 'node:child_process'
 import type {
   Client as SshClient,
@@ -21,7 +18,11 @@ import type {
   SFTPWrapper,
   ShellOptions
 } from 'ssh2'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   getOrcaControlSocketPath,
   isOpenSshConfigBackedTarget,
@@ -31,54 +32,58 @@ import {
   shouldUseSystemSshLoopbackRoute,
   startSystemSshLoopbackRoute,
   type SystemSshLoopbackRoute
-} from '../system-transport/system-ssh-loopback-route'
-import { removeControlSocketPath } from '../ssh-control-socket'
+} from '../system-transport/forwarding/system-ssh-loopback-route'
+import { removeControlSocketPath } from '../system-transport/ssh-control-socket'
 import { INITIAL_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY_MS, sleep } from './ssh-connection-timing'
 import {
   isTransientError,
   isAuthError,
   isPassphraseError,
   isDefiniteSystemSshHostFailure
-} from '../ssh-reconnect-error-classification'
+} from './reconnect/ssh-reconnect-error-classification'
 import { buildConnectConfig } from './ssh-connect-config'
-import { withSkippedIdentityFileDetail, type SkippedIdentityFiles } from '../ssh-auth-resolution'
+import {
+  withSkippedIdentityFileDetail,
+  type SkippedIdentityFiles
+} from '../authentication/ssh-auth-resolution'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-exec-options'
 import type { SshConnectionCallbacks, SshCredentialKind } from './ssh-connection-callbacks'
-import { collectKeyboardInteractiveResponses } from '../ssh-keyboard-interactive'
-import { resolveEffectiveProxy, spawnProxyCommand } from '../ssh-proxy-command'
+import { collectKeyboardInteractiveResponses } from '../authentication/ssh-keyboard-interactive'
+import { resolveEffectiveProxy, spawnProxyCommand } from '../system-transport/ssh-proxy-command'
 import { resolveWithSshG, type SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import {
   createCancelledConnectAttemptError,
   isCancelledConnectAttemptError
-} from '../ssh-connect-attempt-cancellation'
+} from './reconnect/ssh-connect-attempt-cancellation'
 import { mayUserSshConfigClaimAlias } from '../config/ssh-config-alias-claim'
 import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
-} from '../ssh-transport-selection'
-import type { FileUploadSession } from '../../providers/filesystem-provider-contract'
+} from '../system-transport/ssh-transport-selection'
+import type { FileUploadSession } from '../../providers/filesystem/provider-contract'
 import {
   openSshExecChannel,
   openSshSftpChannel,
   openSshShellChannel,
   spawnTrackedSystemSshChannel,
+  type SshExecChannelOptions,
   type SshSessionChannelHost
-} from './ssh-connection-session-channels'
+} from './channels/ssh-connection-session-channels'
 import {
   SshConnectionReconnector,
   type SshConnectionReconnectHost
-} from './ssh-connection-reconnect'
+} from './reconnect/ssh-connection-reconnect'
 import { cloneResolvedConfig, waitForSystemSshProbe } from './ssh-system-ssh-probe'
 import {
   installSsh2HostKeyVerification,
   readHostKeyTrustSources,
   type HostKeyTrustSources
-} from './ssh2-host-key-verification'
-import { runSsh2Handshake } from './ssh2-handshake'
+} from '../host-keys/ssh2-host-key-verification'
+import { runSsh2Handshake } from '../authentication/ssh2-handshake'
 import {
   recoverFailedSsh2Attempt,
   type Ssh2CredentialFallbackHost
-} from './ssh2-credential-fallback'
+} from '../authentication/ssh2-credential-fallback'
 
 /** The sign-in a connection holds in memory, handed to the connection that replaces it. */
 export type SshCachedCredentials = { password: string | null; passphrase: string | null }
@@ -214,8 +219,12 @@ export class SshConnection {
     return { password: this.cachedPassword, passphrase: this.cachedPassphrase }
   }
 
-  exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
+  exec(cmd: string, options?: SshExecChannelOptions): Promise<ClientChannel> {
     return openSshExecChannel(this.sessionChannelHost(), cmd, options)
+  }
+
+  execWithClosedStdin(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
+    return this.exec(cmd, { ...options, closeStdin: true })
   }
 
   /** Interactive login shell over a session channel with pty-req; ssh2 transport only. */
@@ -256,27 +265,6 @@ export class SshConnection {
   ): Promise<void> {
     return this.runAdmitted(() =>
       downloadSshFile(this.fileTransferHost(), remotePath, localPath, options)
-    )
-  }
-
-  downloadFolder(
-    remotePath: string,
-    localPath: string,
-    options?: SshRemoteFileOptions & { signal?: AbortSignal }
-  ): Promise<void> {
-    return this.runAdmitted(() =>
-      downloadSshFolder(this.fileTransferHost(), remotePath, localPath, options)
-    )
-  }
-
-  readFileChunk(
-    remotePath: string,
-    offset: number,
-    length: number,
-    options?: SshRemoteFileOptions
-  ): Promise<SshRemoteFileReadChunkResult> {
-    return this.runAdmitted(() =>
-      readSshFileChunk(this.fileTransferHost(), remotePath, offset, length, options)
     )
   }
 
@@ -585,7 +573,8 @@ export class SshConnection {
       this.sessionChannelHost(),
       'echo ORCA-SYSTEM-SSH-OK',
       {
-        wrapCommand: false
+        wrapCommand: false,
+        closeStdin: true
       }
     )
     try {

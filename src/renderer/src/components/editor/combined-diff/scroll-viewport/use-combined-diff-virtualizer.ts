@@ -3,8 +3,8 @@ import type React from 'react'
 import { elementScroll, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
-import type { DiffSection } from '../../diff-section-types'
-import { getDiffSectionRowEstimatedHeight } from '../../diff-section-layout'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
+import { getDiffSectionRowEstimatedHeight } from '../../diff/sections/diff-section-layout'
 import { getCombinedDiffRenderRange } from './combined-diff-render-range'
 
 const COMBINED_DIFF_OVERSCAN = 5
