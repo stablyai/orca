@@ -44,5 +44,9 @@
     "PING_INTERVAL_MS": "30000",
     "SILENCE_TIMEOUT_MS": "75000",
     "ORPHAN_GRACE_MS": "30000"
+    // Edge-native director endpoints (src/director-config.ts) are dark: unset in every environment.
+    // Example only, for a test hostname:
+    //   "DIRECTOR_HOSTNAME": "director-next.relay.example",
+    //   "DIRECTOR_EDGE_URL": "https://edge.relay.example"
   }
 }
