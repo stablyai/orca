@@ -218,11 +218,15 @@ type CodexSubagentIdentityRead = {
 
 /** Reads a few unnamed children's own rollouts per poll, taking turns, off the main thread; a relay restart can leave no parent transcript to drive this. */
 export async function readPendingCodexSubagentIdentities(
-  roster: CodexSubagentRoster
+  roster: CodexSubagentRoster,
+  current: () => boolean
 ): Promise<CodexSubagentIdentityRead[]> {
   const reads: CodexSubagentIdentityRead[] = []
   // Sequential reads keep one file operation per pane in flight.
   for (const [id, pending] of pendingIdentityTurn(roster)) {
+    if (!current()) {
+      break
+    }
     // A task path the parent rollout supplied meanwhile outranks the child's own header.
     if (usableAgentChildLabel(pending.description)) {
       pending.identityPendingPath = undefined

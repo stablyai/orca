@@ -55,9 +55,9 @@ async function prefetchParent(
 /** Reads off the main thread the rollouts this Codex hook's normalization would read, so it never opens a live rollout synchronously (#43539). */
 export async function prefetchCodexHookRolloutReads(
   state: HookListenerState,
-  body: unknown
+  body: unknown,
+  reads: PrefetchedRolloutReads = createPrefetchedRolloutReads()
 ): Promise<PrefetchedRolloutReads> {
-  const reads = createPrefetchedRolloutReads()
   const paneKey = hookPaneKey(body)
   const payload = hookPayload(body)
   if (!paneKey || !payload) {
@@ -107,6 +107,21 @@ export async function prefetchCodexHookRolloutReads(
   return reads
 }
 
+// Why: a hung open must not hold the hook (and every later hook of its pane) forever; reads still pending are deferred to the poll.
+const HOOK_PREFETCH_MAX_MS = 5_000
+
+function settledWithin(promise: Promise<unknown>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    timer.unref?.()
+    const done = (): void => {
+      clearTimeout(timer)
+      resolve()
+    }
+    promise.then(done, done)
+  })
+}
+
 /** Prefetches Codex hooks per pane in arrival order, so a slow read cannot let a later hook's status overtake an earlier one. */
 export class CodexHookRolloutPrefetcher {
   private readonly tails = new Map<string, Promise<void>>()
@@ -128,12 +143,10 @@ export class CodexHookRolloutPrefetcher {
       }
     })
     this.tails.set(key, turn)
-    try {
-      await previous
-      return { reads: await prefetchCodexHookRolloutReads(state, body), release }
-    } catch (error) {
-      release()
-      throw error
-    }
+    // Every turn's prefetch is time-bounded and its release follows synchronously, so the wait for `previous` is bounded too.
+    await previous
+    const reads = createPrefetchedRolloutReads()
+    await settledWithin(prefetchCodexHookRolloutReads(state, body, reads), HOOK_PREFETCH_MAX_MS)
+    return { reads, release }
   }
 }

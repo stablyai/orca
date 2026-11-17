@@ -23,7 +23,7 @@ import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
 
 export type CodexTranscriptPollReads = {
-  roster: CodexSubagentRoster
+  roster?: CodexSubagentRoster
   transcript?: CodexSubagentTranscriptState
   transcriptReads?: CodexSubagentTranscriptReads
   identities: Awaited<ReturnType<typeof readPendingCodexSubagentIdentities>>
@@ -34,19 +34,20 @@ export async function readCodexTranscriptPoll(
   state: HookListenerState,
   paneKey: string
 ): Promise<CodexTranscriptPollReads> {
-  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  // A replaced or cleared pane makes the rest of these reads unappliable; stop opening rollouts for it.
+  const current = (): boolean =>
+    state.codexSubagentRosterByPaneKey.get(paneKey) === roster &&
+    state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
   const transcriptReads = transcript?.parent.filePath
-    ? await readCodexSubagentTranscript(
-        transcript,
-        () => state.codexSubagentTranscriptByPaneKey.get(paneKey) === transcript
-      )
+    ? await readCodexSubagentTranscript(transcript, current)
     : undefined
   return {
     roster,
     transcript,
     transcriptReads,
-    identities: await readPendingCodexSubagentIdentities(roster)
+    identities: roster ? await readPendingCodexSubagentIdentities(roster, current) : []
   }
 }
 
