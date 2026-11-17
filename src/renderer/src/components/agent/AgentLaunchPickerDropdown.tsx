@@ -1,5 +1,4 @@
 import { useState, type Ref } from 'react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
