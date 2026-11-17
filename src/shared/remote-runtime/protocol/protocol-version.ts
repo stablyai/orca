@@ -8,7 +8,7 @@ import * as agentLaunchCapabilities from '../../agent-launch/contracts/agent-lau
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   AGENT_SESSION_RUNTIME_CAPABILITIES
-} from '../../agent-session/agent-session-runtime-capabilities'
+} from '../../agent-session/capabilities/agent-session-runtime-capabilities'
 import { AI_VAULT_RUNTIME_CAPABILITIES } from '../../ai-vault/contracts/ai-vault-runtime-capabilities'
 import {
   AUTOMATION_RUNTIME_CAPABILITIES,

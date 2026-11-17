@@ -38,7 +38,7 @@ export type MetricEvent =
   // that close code; double2 = seconds between last-known-alive and the actual close.
   // reason 'keepalive' | 'legacy' of the new control.
   | 'reconnect_gap'
-  // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data' | 'health'. Unpushed-host phones: 'not_on_edge'.
+  // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data' | 'health' | 'resolve'. Unpushed-host phones: 'not_on_edge'.
   | 'preauth_limited'
   | 'not_on_edge'
   // A request carried an ingress header that failed to verify (wrong secret, skew, malformed).
@@ -47,6 +47,9 @@ export type MetricEvent =
   | 'ingress_rejected'
   // An ingress mode is configured but malformed, so it is off: label names the problem (per isolate).
   | 'ingress_config_invalid'
+  // Edge-native director endpoints (director.ts): label '<route>:<status>' ('assign:200',
+  // 'connect:101'), or 'config:<problem>' for a malformed DIRECTOR_* setup (per isolate).
+  | 'director'
 
 // blobs: [event, label, version, reason, place]; doubles: [value, ...extra]. place is the
 // client's ingress '<continent>/<colo>' (e.g. 'AS/HKG'), '' where no client is involved. A verified

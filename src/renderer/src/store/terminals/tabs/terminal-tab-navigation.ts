@@ -2,7 +2,7 @@ import { resolveActiveTabOwnerWorktreeId } from '../ownership/active-tab-owner-w
 import { getTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
-import { replaceTabBuckets } from '../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../record-transitions/keyed-record-transitions'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,

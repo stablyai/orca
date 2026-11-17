@@ -23,6 +23,9 @@ type MainOwnedUIState =
   | 'starNagAgentValueMomentAppVersion'
   // Desktop-local replay queue: a paired client must not overwrite it.
   | 'pendingRuntimeRepoRemovals'
+  // The moved-to-WSL list exists only on the desktop that moved the projects.
+  | 'wslMovedSectionCollapsed'
+  | 'hiddenWslMovedProjectKeys'
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.infer<UiUpdateFieldsSchema>

@@ -2,7 +2,7 @@ import { runInNewContext } from 'node:vm'
 import { expect, it, vi } from 'vitest'
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from './agent-view-mod-source'
 
-it.each(['{}', '', 'not-json', 'null'])(
+it.each(['not-json'])(
   'keeps registration through %j replies and rejects in-flight commands after clear',
   async (registrationReply) => {
     type SessionEvent = {

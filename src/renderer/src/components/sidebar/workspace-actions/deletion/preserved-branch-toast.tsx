@@ -1,3 +1,4 @@
+// @protected-copy
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'

@@ -1,7 +1,7 @@
 import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
 import { agentJournalItemRowOrigin } from '../../../agent-session/journal/agent-session-journal-position'
 import { agentJournalLinkageFields } from '../../../agent-session/journal/agent-session-journal-producer'
-import { readAgentMessageSource } from '../../../agent-session/agent-session-message-source'
+import { readAgentMessageSource } from '../../../agent-session/journal/agent-session-message-source'
 import type { NativeChatMessage } from '../../native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../agent-session/view/structured-agent-session-projection'
 

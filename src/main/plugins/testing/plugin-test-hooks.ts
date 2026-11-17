@@ -6,8 +6,9 @@
  */
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { posix, relative, sep } from 'node:path'
+import { posix, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { pathInsidePluginRoot } from '../../../shared/plugins/artifacts/plugin-root-containment'
 import { isPluginWorkerSourcePath } from '../../../shared/plugins/frames/plugin-frame-source-modules'
 import { resolvePluginModuleSpecifier } from '../panels/frame-serving/plugin-frame-module-resolution'
 import { formatPluginTranspileFailure } from '../panels/source-transpilation/plugin-source-transpile-failure'
@@ -47,8 +48,8 @@ function pluginRelativePath(url: string): string | null {
   if (!url.startsWith('file:')) {
     return null
   }
-  const path = relative(pluginRoot, fileURLToPath(url))
-  if (path.startsWith('..') || path.split(sep).includes('node_modules')) {
+  const path = pathInsidePluginRoot(pluginRoot, fileURLToPath(url))
+  if (path === null || path.split(sep).includes('node_modules')) {
     return null
   }
   return path.split(sep).join(posix.sep)

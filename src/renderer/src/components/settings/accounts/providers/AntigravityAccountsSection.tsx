@@ -27,7 +27,7 @@ import {
 } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
-import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {

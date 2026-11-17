@@ -1,6 +1,6 @@
 // HostRelay's state and shared plumbing: socket attachments, the session, the host's connection
 // bookkeeping (splice pool), alarm scheduling. The class chain is base → handshake → control →
-// phones → HostRelay (host-relay.ts); each layer adds one group of handlers, nothing overrides.
+// phones → director → HostRelay (host-relay.ts); each layer adds one group of handlers, nothing overrides.
 import { DurableObject } from 'cloudflare:workers'
 import type { RelayHello } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'

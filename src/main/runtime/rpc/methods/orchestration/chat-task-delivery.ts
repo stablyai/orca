@@ -3,7 +3,7 @@ import { conversationRecordReader } from '../../../orchestration/addressing/sess
 
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'

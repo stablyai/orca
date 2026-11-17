@@ -1,8 +1,4 @@
-import {
-  isGooglePlayInstall,
-  prefersGooglePlayUpdate,
-  useWallAppUpdate
-} from '../../app-update/use-wall-app-update'
+import { isGooglePlayInstall, useWallAppUpdate } from '../../app-update/use-wall-app-update'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { useRouteHandoff } from '../../navigation/route-handoff'
 import { Platform, Pressable, Text, View } from 'react-native'
@@ -47,13 +43,12 @@ function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
   }
 }
 
-// Play installs may only update through Play, and GitHub installs outside mainland China are steered
-// there too; other Android installs came from GitHub Releases.
+// Play installs may only update through Play; other Android installs came from GitHub Releases.
 function mobileUpdateChannel(): 'app-store' | 'google-play' | 'github-releases' {
   if (Platform.OS === 'ios') {
     return 'app-store'
   }
-  return isGooglePlayInstall || prefersGooglePlayUpdate ? 'google-play' : 'github-releases'
+  return isGooglePlayInstall ? 'google-play' : 'github-releases'
 }
 
 function mobileUpdateChannelTarget(t: Translate): { label: string; url: string } {

@@ -1,12 +1,12 @@
-import type { AgentSessionForkNaming } from './agent-session-fork-name'
-import type { AgentSessionUnavailable } from './agent-session-availability'
-import type { AgentSessionFrameFields } from './agent-session-frame-fields'
-import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
+import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
+import type { AgentSessionUnavailable } from './failures/agent-session-availability'
+import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
+import type { AgentSessionUsageLimitContinue } from './lifecycle/stopping/agent-session-usage-limit-continue-wire'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
+} from './background-tasks/agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
@@ -372,8 +372,7 @@ export type AgentSessionOptionChoice = {
   description?: string
 }
 
-import type { AgentSessionModelOption } from './agent-session-model-option'
-export type { AgentSessionModelOption }
+import type { AgentSessionModelOption } from './options/model-catalog/agent-session-model-option'
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
 

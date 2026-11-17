@@ -8,8 +8,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
-import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
+import { BrowserCookieImportDisclosure } from '@/components/settings/browser/profiles/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '@/components/settings/browser/profiles/BrowserCookieImportMachineNotice'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
@@ -61,7 +61,7 @@ export function BrowserToolbarProfileSub({
   return (
     <DropdownMenuSub open={forceOpen || open} onOpenChange={setOpen}>
       <DropdownMenuSubTrigger>
-        <UserRound className="mr-2 size-3.5" />
+        <UserRound className="size-3.5" />
         {t('browser.toolbar.profile', 'Profile')}
         <span className="ml-auto truncate pl-2 text-xs text-muted-foreground">
           {translateBrowserSessionProfileLabel(currentProfile?.label, effectiveProfileId)}
@@ -77,7 +77,7 @@ export function BrowserToolbarProfileSub({
                 onSelect={() => onSwitchProfile(profile.id === 'default' ? null : profile.id)}
               >
                 <Check
-                  className={`mr-2 size-3.5 shrink-0 ${isSelectedProfile ? 'opacity-100' : 'opacity-0'}`}
+                  className={`size-3.5 shrink-0 ${isSelectedProfile ? 'opacity-100' : 'opacity-0'}`}
                 />
                 <span className="truncate">
                   {translateBrowserSessionProfileLabel(profile.label, profile.id)}
@@ -93,7 +93,7 @@ export function BrowserToolbarProfileSub({
           })}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onNewProfile}>
-            <Plus className="mr-2 size-3.5" />
+            <Plus className="size-3.5" />
             {t('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
           </DropdownMenuItem>
           <DropdownMenuSub
@@ -111,7 +111,7 @@ export function BrowserToolbarProfileSub({
               }
               data-contextual-tour-target="browser-import-cookies-control"
             >
-              <Import className="mr-2 size-3.5" />
+              <Import className="size-3.5" />
               {t('auto.components.browser.pane.BrowserToolbarMenu.2293adf620', 'Import Cookies')}
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
