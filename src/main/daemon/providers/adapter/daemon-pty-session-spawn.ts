@@ -183,7 +183,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
         return null
       }
       const requestedCwd = opts.cwd ?? resolveSafePtyDefaultCwd()
-      // Keep an unverified recovered cwd; fall back when the folder probe proves it missing.
+      // Keep an unverified recovered cwd; fall back when it is proven missing or would start an agent at a root.
       return {
         ...restoreInfo,
         cwd: await resolveColdRestoreStartupCwd({

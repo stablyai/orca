@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-status/process/agent-process-recognition'
+import { parseWslUncPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 import { isRootLikePath } from './path-safety'
 
 function homeDrivePath(env: NodeJS.ProcessEnv): string | null {
@@ -37,8 +38,12 @@ export function isUnsafeAgentStartupCwd(
   cwd: string | undefined,
   command: string | undefined
 ): boolean {
+  // A WSL drive mount (`\\wsl.localhost\<distro>\mnt\c`) is the whole Windows drive.
+  const wslLinuxPath = cwd ? parseWslUncPath(cwd)?.linuxPath : undefined
+  const effectiveCwd = (wslLinuxPath && toWindowsWslDrivePath(wslLinuxPath)) || cwd
   return (
-    !isSafeImplicitPtyCwd(cwd) && Boolean(command && recognizeAgentProcessFromCommandLine(command))
+    !isSafeImplicitPtyCwd(effectiveCwd) &&
+    Boolean(command && recognizeAgentProcessFromCommandLine(command))
   )
 }
 
