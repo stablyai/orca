@@ -66,15 +66,17 @@ export async function runSessionSearchIndexPass(
           cursor !== null
         ) {
           deferred = false
-          for (const path of retirableAliasRows(
-            options.rows,
-            candidate,
-            aliases.slice(position + 1)
-          )) {
-            store.removeFile(path)
-            if (++heldRemovals >= ALIAS_REMOVALS_PER_FLUSH) {
-              heldRemovals = 0
-              await store.flush?.()
+          if (position + 1 < aliases.length) {
+            for (const path of retirableAliasRows(
+              options.rows,
+              candidate,
+              aliases.slice(position + 1)
+            )) {
+              store.removeFile(path)
+              if (++heldRemovals >= ALIAS_REMOVALS_PER_FLUSH) {
+                heldRemovals = 0
+                await store.flush?.()
+              }
             }
           }
           break

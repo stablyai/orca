@@ -93,19 +93,19 @@ export async function parseSessionCandidates(args: {
         let provisional: { candidate: SessionFileCandidate; session: AiVaultSession } | undefined
         let accepted: typeof provisional
         // A hardlink twin holds the same bytes, so parsing it again cannot change the outcome.
-        const parsedInodes = new Set<string>()
+        const parsedInodes = choice.alternatives ? new Set<string>() : null
         for (const candidate of physicalSessionCandidates(choice)) {
           throwIfAiVaultScanCancelled(args.signal)
-          const inode = codexRolloutHardlinkIdentity(candidate.file)
-          if (inode !== null && parsedInodes.has(inode)) {
+          const inode = parsedInodes && codexRolloutHardlinkIdentity(candidate.file)
+          if (inode && parsedInodes?.has(inode)) {
             continue
           }
           if (args.selectCandidate && !(await args.selectCandidate(candidate))) {
             continue
           }
           selected = true
-          if (inode !== null) {
-            parsedInodes.add(inode)
+          if (inode) {
+            parsedInodes?.add(inode)
           }
           const result = await parseSessionCandidate(candidate, {
             platform: args.platform,
