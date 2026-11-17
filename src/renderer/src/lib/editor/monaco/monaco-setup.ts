@@ -28,6 +28,7 @@ import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancella
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoDiffViewportTokenization } from './monaco-diff-viewport-tokenization'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
+import { installMonacoImportDefinitionNavigation } from '@/components/editor/monaco/import-navigation/monaco-import-definition-navigation'
 import { installMonacoContextMenuPaste } from '@/components/editor/monaco/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
 import { installMonacoTsWorkerIdleStop } from './monaco-ts-worker-idle-stop'
@@ -95,6 +96,7 @@ runMonacoSetupSteps([
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
   ['diff viewport tokenization', () => installMonacoDiffViewportTokenization(monaco)],
   ['peek references preview options', installMonacoPeekReferencesPreviewOptions],
+  ['import definition navigation', () => installMonacoImportDefinitionNavigation(monaco)],
   // Sandboxed navigator.clipboard blocks Monaco Paste; use trusted IPC as native Cmd+V does.
   ['context-menu paste', () => installMonacoContextMenuPaste(monaco)],
   ['TS worker idle stop', () => installMonacoTsWorkerIdleStop(monaco)],
