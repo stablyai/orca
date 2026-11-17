@@ -17,7 +17,8 @@ import {
   twinFileBrowserUnsupportedMessage
 } from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
-import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import { sideGroupPlacement } from './side-group-placement'
+import { requestChangedFilePageRefresh } from '../refresh/request-changed-file-page-refresh'
 import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import {
@@ -109,23 +110,28 @@ export function canShowWorkspaceFileBrowserAction(
   return plan.status !== 'unsupported'
 }
 
+const NO_BROWSER_ACTION_INPUTS = {}
+
 export function useWorkspaceFileBrowserActionPredicate(
   worktreeId: string | null
 ): (filePath: string) => boolean {
   // Subscribe only to trigger rerenders; use the action’s live plan for visibility so the rules cannot drift and handlers retain stable identity.
   useAppStore(
-    useShallow((state) => ({
-      managedBrowser: worktreeId
-        ? getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state
-        : null,
-      runtimeEnvironmentId: worktreeId
-        ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-        : null,
-      folderWorkspaces: selectFolderWorkspaces(state),
-      projectGroups: state.projectGroups,
-      repos: state.repos,
-      worktreesByRepo: selectWorktreesByRepo(state)
-    }))
+    useShallow((state) =>
+      // No workspace, no question: a row that never asks must not rerender on catalog changes.
+      worktreeId
+        ? {
+            managedBrowser: getWorkspaceClientCreationActionPolicy(state, worktreeId)[
+              'managed-browser'
+            ].state,
+            runtimeEnvironmentId: runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
+            folderWorkspaces: selectFolderWorkspaces(state),
+            projectGroups: state.projectGroups,
+            repos: state.repos,
+            worktreesByRepo: selectWorktreesByRepo(state)
+          }
+        : NO_BROWSER_ACTION_INPUTS
+    )
   )
   return useCallback(
     (filePath: string) =>
@@ -143,6 +149,7 @@ function openDocPreviewTab(
     worktreeId: string
     activate: boolean
     placementWorkspaceId?: string
+    refreshReusedPage?: boolean
   },
   placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split'>
 ): void {
@@ -173,6 +180,9 @@ function openDocPreviewTab(
       state.setActiveBrowserTab(existing.workspaceId)
       state.setActiveBrowserPage(existing.workspaceId, existing.pageId)
     }
+    if (params.refreshReusedPage) {
+      requestChangedFilePageRefresh(existing.pageId, { kind: 'document', docLocation })
+    }
     return
   }
   state.createBrowserTab(placementWorkspaceId, ORCA_BROWSER_BLANK_URL, {
@@ -192,6 +202,8 @@ export function openFileInBrowserTab(
     clientLocal?: boolean
     linkContext?: BrowserLinkOpenContext
     onLinkOutcome?: (outcome: BrowserOpenOutcome) => void
+    /** An explicit reopen: a reused document tab re-reads the file (link opens set it on linkContext). */
+    refreshReusedPage?: boolean
   }
 ): WorkspaceFilePreviewPlan {
   const state = useAppStore.getState()
@@ -226,7 +238,8 @@ export function openFileInBrowserTab(
     return plan
   }
 
-  state.createBrowserTab(params.worktreeId, plan.url, {
+  // Same pane as the doc-preview branch: a folder workspace's attached repo opens in the folder.
+  state.createBrowserTab(params.placementWorkspaceId ?? params.worktreeId, plan.url, {
     title: plan.title,
     ...(params.targetGroupId ? { targetGroupId: params.targetGroupId } : {}),
     activate: true,
@@ -259,18 +272,11 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  // Use the originating tab’s group, falling back to the workspace’s active group.
-  const sourceGroupId =
-    params.sourceGroupId ??
-    state.activeGroupIdByWorktree[worktreeId] ??
-    state.groupsByWorktree[worktreeId]?.[0]?.id ??
-    null
-  if (!sourceGroupId) {
+  const side = sideGroupPlacement(state, worktreeId, params.sourceGroupId)
+  if (!side) {
     return
   }
-
-  const layout = state.layoutByWorktree[worktreeId] ?? null
-  const existingSibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
+  const { sourceGroupId, existingSibling } = side
 
   // Keep paired side splits unfocused; host snapshots interpret activated empty groups as terminals.
   const activate = !runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)

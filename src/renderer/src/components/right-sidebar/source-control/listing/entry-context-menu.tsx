@@ -21,6 +21,13 @@ import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
 import { OpenInContextSubmenu } from '@/components/file-actions/OpenInContextSubmenu'
+import { changedFileOpenLabel, editorChangedFileView } from '@/lib/files/open/changed-file-view'
+import { ChangedFileOpenIcon } from '@/lib/files/open/ChangedFileOpenIcon'
+import { canShowWorkspaceFileBrowserAction } from '@/lib/browser/documents/file-preview'
+import {
+  sourceControlFileOpenActions,
+  sourceControlRouting
+} from './source-control-file-open-actions'
 
 type SourceControlEntryContextMenuProps = {
   currentWorktreeId: string
@@ -86,6 +93,29 @@ export function SourceControlEntryContextMenu({
     onRevealInExplorer(currentWorktreeId, absolutePath)
   }, [absolutePath, currentWorktreeId, hasWorkingTreeFile, onRevealInExplorer, onView, scope])
 
+  const view = absolutePath && hasWorkingTreeFile ? editorChangedFileView(absolutePath) : 'source'
+  const canOpenPage = useSourceControlState(
+    (s) =>
+      view === 'page' &&
+      !!absolutePath &&
+      canShowWorkspaceFileBrowserAction(s, currentWorktreeId, absolutePath)
+  )
+  // Why scope routing: a folder section opens on its repo's host and lands in the folder's pane.
+  const fileOpenActions = useCallback(
+    () => sourceControlFileOpenActions(sourceControlRouting(scope)),
+    [scope]
+  )
+  const handleOpenPage = useCallback(() => {
+    if (absolutePath) {
+      fileOpenActions().openInOrcaBrowser(currentWorktreeId, absolutePath)
+    }
+  }, [absolutePath, currentWorktreeId, fileOpenActions])
+  const handleOpenMarkdownPreview = useCallback(() => {
+    if (absolutePath && relativePath) {
+      fileOpenActions().openMarkdownPreviewFile(currentWorktreeId, absolutePath, relativePath)
+    }
+  }, [absolutePath, currentWorktreeId, fileOpenActions, relativePath])
+
   const handleRevealInFileManager = useCallback(() => {
     if (absolutePath) {
       void revealInFileManager(absolutePath, revealOwner)
@@ -100,6 +130,18 @@ export function SourceControlEntryContextMenu({
           <Eye className="size-3.5" />
           {t('auto.components.right.sidebar.SourceControlEntryContextMenu.a1f2c8d901', 'View')}
         </ContextMenuItem>
+        {canOpenPage ? (
+          <ContextMenuItem onSelect={handleOpenPage}>
+            <ChangedFileOpenIcon target="orca-browser" className="size-3.5" />
+            {changedFileOpenLabel('orca-browser', t)}
+          </ContextMenuItem>
+        ) : null}
+        {view === 'markdown' && relativePath ? (
+          <ContextMenuItem onSelect={handleOpenMarkdownPreview}>
+            <ChangedFileOpenIcon target="markdown-preview" className="size-3.5" />
+            {changedFileOpenLabel('markdown-preview', t)}
+          </ContextMenuItem>
+        ) : null}
         {onResolveConflict && conflictResolutions && conflictResolutions.length > 0 ? (
           <>
             <ContextMenuSeparator />

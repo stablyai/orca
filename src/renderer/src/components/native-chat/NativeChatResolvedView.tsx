@@ -57,7 +57,7 @@ import { createNativeChatRuntimeSelector } from './pane/ownership/native-chat-ru
 import { useNativeChatPasteBridge } from './paste/use-native-chat-paste-bridge'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './links/actions/use-native-chat-link-actions'
-import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
+import { NativeChatLinkProviders } from './links/actions/NativeChatLinkProviders'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './links/actions/use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './links/actions/use-native-chat-file-link-existence'
@@ -280,11 +280,7 @@ export function NativeChatResolvedView({
     clear()
     interactiveSend.cancel()
   }, [interactiveSend, clear])
-  const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
-    fileLinkContext,
-    rootRef,
-    { sessionId, isVisible }
-  )
+  const links = useNativeChatLinkActions(fileLinkContext, rootRef, { sessionId, isVisible })
 
   useNativeChatFontSize(isConversation && isVisible && isFocusedGroup, rootRef)
   const find = useNativeChatFind(isVisible && isFocusedGroup, rootRef, composerRef, messageListRef)
@@ -413,8 +409,8 @@ export function NativeChatResolvedView({
         />
       </div>
       {contextMenu.menu}
-      <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
+      <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
     </div>
   )
-  return <NativeChatLinkClickContext value={onLinkClick}>{root}</NativeChatLinkClickContext>
+  return <NativeChatLinkProviders links={links}>{root}</NativeChatLinkProviders>
 }

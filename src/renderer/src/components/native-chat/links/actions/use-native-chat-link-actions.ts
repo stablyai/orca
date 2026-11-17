@@ -10,10 +10,16 @@ import type { NativeChatFileLinkContext } from './native-chat-file-link-context'
 import { resolveNativeChatHttpLinkRouting } from './native-chat-link-target-actions'
 import { handleNativeChatWebLink } from './native-chat-web-link-actions'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
-import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import {
+  useNativeChatExplicitFileOpener,
+  useNativeChatFileLinkClick,
+  type NativeChatFileOpener
+} from './use-native-chat-file-link-click'
 
 export type NativeChatLinkActions = {
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
+  /** Explicit open buttons' file actions, which bypass link-click settings. */
+  openFile: NativeChatFileOpener | undefined
   linkActionRequest: LinkActionRequest | null
   closeLinkActions: (dismissed?: LinkActionRequest) => void
 }
@@ -26,6 +32,7 @@ export function useNativeChatLinkActions(
 ): NativeChatLinkActions {
   const [linkActionRequest, setLinkActionRequest] = useState<LinkActionRequest | null>(null)
   const openFileLink = useNativeChatFileLinkClick(context, setLinkActionRequest, rootRef)
+  const openFile = useNativeChatExplicitFileOpener(context)
   const scopeKey = JSON.stringify([
     context?.worktreeId,
     context?.runtimeEnvironmentId,
@@ -73,6 +80,7 @@ export function useNativeChatLinkActions(
 
   return {
     onLinkClick: context ? onLinkClick : undefined,
+    openFile,
     linkActionRequest,
     closeLinkActions
   }

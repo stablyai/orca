@@ -16344,7 +16344,6 @@
           "resolveConflictGuidance": "Git で競合を解決するか、片方の内容を復元してから再度開いてください。"
         },
         "EditorPanelHeader": {
-          "fb8331694e": "プレビューを横に開く",
           "4157f3cbf3": "Markdown プレビューを開く",
           "269ce4842b": "相対パスをコピー",
           "7c08a1f990": "パスのコピー",

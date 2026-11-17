@@ -9,7 +9,7 @@ import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment
 import { DiffSectionItem } from '../../diff/sections/DiffSectionItem'
 import type { DiffSectionItemProps } from '../../diff/sections/diff-section-item-props'
 import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
-import { canOpenDiffSectionPreviewToSide } from '../../diff/sections/diff-section-preview'
+import { diffSectionPreviewTarget } from '../../diff/sections/diff-section-preview'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
 import { useTranslate } from '@/i18n/use-translate'
@@ -132,8 +132,9 @@ export function CombinedDiffSectionList({
                           'Open in editor'
                         )
                   }
-                  onOpenPreview={
-                    canOpenDiffSectionPreviewToSide({
+                  onOpenPreview={openSectionPreview}
+                  previewTarget={(section) =>
+                    diffSectionPreviewTarget({
                       path: section.path,
                       status: section.status,
                       isCommitSurface: isCommitMode,
@@ -141,8 +142,6 @@ export function CombinedDiffSectionList({
                         joinPath(file.filePath, section.path)
                       )
                     })
-                      ? openSectionPreview
-                      : undefined
                   }
                   setSectionHeights={setSectionHeights}
                   setSections={setSections}

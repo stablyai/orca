@@ -2,6 +2,7 @@ import { focusOpenedBrowserLink } from './browser-link-focus'
 import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/retention/browser-page-mount-admission'
 import { createBrowserLinkHostMatcher } from './browser-link-owner'
 import { useAppStore } from '@/store/index'
+import { requestChangedFilePageRefresh } from '../refresh/request-changed-file-page-refresh'
 import { activateBrowserWorkspaceTab } from '../workspace/browser-workspace-tab-activation'
 import {
   browserLinkPageMatches,
@@ -24,6 +25,16 @@ import type { AppState } from '@/store/types'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 
 export class BrowserLinkPlacementRefused extends Error {}
+
+function requestReusedPageRefresh(
+  pageId: string,
+  resource: BrowserLinkDestination['resource']
+): void {
+  // A website is not a changed file; only file and document pages are refreshed.
+  if (resource.kind !== 'website') {
+    requestChangedFilePageRefresh(pageId, resource)
+  }
+}
 
 export function browserLinkCommitIsValid(
   state: AppState,
@@ -179,6 +190,9 @@ export async function openLocalBrowserLink(params: {
     }
     focusOpenedBrowserLink(actual)
     retainCreatedTab = true
+    if (selection.match && context.refreshReusedPage && context.isCurrentRequest?.() !== false) {
+      requestReusedPageRefresh(actual.browserPageId, destination.resource)
+    }
     return { status: 'opened', result: actual }
   } catch (error) {
     if (context.isCurrentRequest?.() === false) {

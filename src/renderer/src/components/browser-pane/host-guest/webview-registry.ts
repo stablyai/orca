@@ -11,6 +11,7 @@ import {
   isWebviewDragPassthroughActive,
   registerWebviewDragPassthroughSurface
 } from './drag/webview-drag-passthrough'
+import { noteBrowserPageGuestRegistered } from './lifecycle/browser-page-main-frame-events'
 
 // Keep guest coordination outside React to break the store/slices → components → store cleanup cycle.
 export const webviewRegistry = new Map<string, Electron.WebviewTag>()
@@ -189,6 +190,7 @@ export function registerPersistentWebview(
   })
   webviewRegistry.set(browserTabId, webview)
   registerBrowserGuestActivity(browserTabId, webview)
+  noteBrowserPageGuestRegistered(webview)
   applyCurrentDragPassthroughToWebview(webview)
   ensureDragListeners()
 }

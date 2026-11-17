@@ -4,6 +4,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../../../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../../../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
+import { NativeChatFileCard, nativeChatFileType } from '../../files/NativeChatFileCard'
+import { useNativeChatChangedFileOpen } from '../../files/use-native-chat-changed-file-open'
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import {
   NativeChatCardHideButton,
@@ -37,27 +39,46 @@ function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.
 }
 
 function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
+  const t = useTranslate()
   const name = nativeChatEditFileBaseName(file.path)
   const disclosureKey = `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`
   const { open, setOpen } = useNativeChatDisclosure(disclosureKey, false)
+  const openAction = useNativeChatChangedFileOpen(file.path)
   return (
     <div>
-      <Button
-        variant="ghost"
-        size="xs"
-        className="w-full min-w-0 justify-start"
-        aria-expanded={open}
-        aria-label={`${file.path} +${file.added} -${file.removed}`}
-        title={file.path}
-        onClick={() => setOpen(!open)}
-      >
-        <ChevronRight aria-hidden className={open ? 'size-3.5 rotate-90' : 'size-3.5'} />
-        <span className="max-w-2/3 shrink-0 truncate font-mono text-chat-foreground">{name}</span>
-        <span aria-hidden className="min-w-0 flex-1 truncate text-right font-mono">
-          {file.path.slice(0, -name.length)}
-        </span>
-        <DiffLineCounts added={file.added} removed={file.removed} />
-      </Button>
+      <div className="flex min-w-0 items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0"
+          aria-expanded={open}
+          aria-label={t('components.native-chat.turnDiff.showDiff', 'Show diff: {{path}}', {
+            path: file.path
+          })}
+          onClick={() => setOpen(!open)}
+        >
+          <ChevronRight aria-hidden className={open ? 'size-3.5 rotate-90' : 'size-3.5'} />
+        </Button>
+        <NativeChatFileCard
+          variant="row"
+          path={file.path}
+          name={name}
+          detail={file.path.slice(0, -name.length)}
+          meta={
+            <>
+              <DiffLineCounts added={file.added} removed={file.removed} />
+              <span>
+                {'· '}
+                {file.deleted
+                  ? t('components.native-chat.turnDiff.deleted', 'Deleted')
+                  : nativeChatFileType(file.path)}
+              </span>
+            </>
+          }
+          // Deleted by this turn: nothing to open, though the chevron still shows what it removed.
+          action={file.deleted ? null : openAction}
+        />
+      </div>
       <NativeChatExpandable open={open}>
         <TurnDiffFilePatches file={file} />
       </NativeChatExpandable>
@@ -101,7 +122,7 @@ export function NativeChatTurnDiffRollup({
           )}
         />
       </div>
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {files.map((file) => (
           <TurnDiffFileRow key={file.path} file={file} />
         ))}

@@ -1,21 +1,22 @@
-import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
-import { canPreviewLanguage } from '@/lib/browser/documents/file-preview'
+import {
+  editorChangedFileView,
+  type ChangedFileOpenTarget
+} from '@/lib/files/open/changed-file-view'
 
-// Preview reads the working file on disk; exclude deleted files and historical snapshots that may differ from it.
-export function canOpenDiffSectionPreviewToSide(params: {
+// Preview reads the working file; exclude deleted files and historical snapshots that may differ from it.
+export function diffSectionPreviewTarget(params: {
   path: string
   status: string
   isCommitSurface: boolean
   canOpenWorkspaceFileBrowser: boolean
-}): boolean {
-  if (!params.canOpenWorkspaceFileBrowser) {
-    return false
+}): Extract<ChangedFileOpenTarget, 'orca-browser' | 'markdown-preview'> | null {
+  if (params.isCommitSurface || params.status === 'deleted') {
+    return null
   }
-  if (params.isCommitSurface) {
-    return false
+  const view = editorChangedFileView(params.path)
+  if (view === 'markdown') {
+    // Markdown renders in an editor tab that reads through the workspace's own host, not the browser.
+    return 'markdown-preview'
   }
-  if (params.status === 'deleted') {
-    return false
-  }
-  return canPreviewLanguage(detectLanguage(params.path))
+  return view === 'page' && params.canOpenWorkspaceFileBrowser ? 'orca-browser' : null
 }

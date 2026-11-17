@@ -1,3 +1,4 @@
+import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
@@ -201,6 +202,7 @@ export function createBrowserPageCreateActions(
             ),
             remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
             browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId,
+            changedFileRefreshByPageId: omitRecordKeys(s.changedFileRefreshByPageId, [pageId]),
             browserAnnotationsByPageId: nextBrowserAnnotationsByPageId,
             browserAnnotationMarkerIdsByPageId: nextBrowserAnnotationMarkerIdsByPageId
           }

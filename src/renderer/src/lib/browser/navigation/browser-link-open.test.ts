@@ -214,3 +214,82 @@ describe('existing open routes with link intent', () => {
     expect(store.getState().activeWorktreeId).toBe(WORKSPACE)
   })
 })
+
+describe('explicit reopen of a changed file page', () => {
+  const FILE_URL = 'file:///repo/site/index.html'
+  const fileDestination = browserLinkTestDestination({
+    resource: { kind: 'local-file', url: FILE_URL }
+  })
+
+  function reopen(linkContext: ReturnType<typeof context> & { refreshReusedPage?: boolean }) {
+    return openLocalBrowserLink({
+      destination: fileDestination,
+      context: linkContext,
+      url: FILE_URL,
+      ownsRoute: () => true
+    })
+  }
+
+  it('records one refresh intent for the reused local file page', async () => {
+    const existing = browser('c', FILE_URL)
+    const result = await reopen({ ...context(), refreshReusedPage: true })
+    expect(result).toMatchObject({
+      status: 'opened',
+      result: { browserPageId: existing.activePageId }
+    })
+    expect(store.getState().changedFileRefreshByPageId).toEqual({
+      [existing.activePageId!]: expect.objectContaining({
+        resource: { kind: 'local-file', url: FILE_URL }
+      })
+    })
+  })
+
+  it('records one refresh intent for the reused document page', async () => {
+    const existing = browser('c', 'https://other.example/')
+    const docLocation = {
+      kind: 'workspace-doc' as const,
+      worktreeId: WORKSPACE,
+      filePath: '/repo/doc.html'
+    }
+    const doc = buildBrowserPage(
+      existing.id,
+      WORKSPACE,
+      '',
+      undefined,
+      null,
+      'doc-page',
+      docLocation
+    )
+    store.setState({
+      browserPagesByWorkspace: {
+        ...store.getState().browserPagesByWorkspace,
+        [existing.id]: [...store.getState().browserPagesByWorkspace[existing.id]!, doc]
+      }
+    })
+    await openLocalBrowserLink({
+      destination: browserLinkTestDestination({ resource: { kind: 'document', docLocation } }),
+      context: { ...context(), refreshReusedPage: true },
+      url: 'about:blank',
+      ownsRoute: () => true
+    })
+    expect(Object.keys(store.getState().changedFileRefreshByPageId)).toEqual(['doc-page'])
+    expect(store.getState().changedFileRefreshByPageId['doc-page']?.resource).toEqual({
+      kind: 'document',
+      docLocation
+    })
+  })
+
+  it('records none for an ordinary link reopen, which keeps the page as it is', async () => {
+    browser('c', FILE_URL)
+    expect(await reopen(context())).toMatchObject({ status: 'opened' })
+    expect(store.getState().changedFileRefreshByPageId).toEqual({})
+  })
+
+  it('records none for a request a newer click superseded', async () => {
+    browser('c', FILE_URL)
+    const stale = { ...context(), refreshReusedPage: true }
+    beginLinkOpenRequest()
+    expect(await reopen(stale)).toEqual({ status: 'superseded' })
+    expect(store.getState().changedFileRefreshByPageId).toEqual({})
+  })
+})

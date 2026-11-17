@@ -50,6 +50,8 @@ export type BrowserLinkOpenContext = {
   linkIntent: LinkOpenIntent | null
   isCurrentRequest?: () => boolean
   canReveal?: () => boolean
+  /** An explicit reopen of a changed file: a reused page must show the file as it is now. */
+  refreshReusedPage?: boolean
 }
 
 /** Credential-bearing requests cannot use their redacted stored URL as an identity. */

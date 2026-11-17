@@ -40,7 +40,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
 import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
-import type { FileOpenFailure } from './terminal-file-open-failure'
+import type { ExplicitFileOpenDestination, FileOpenFailure } from './terminal-file-open-failure'
 import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
@@ -65,6 +65,10 @@ type TerminalFileOpenDeps = {
   openInSourceGroup?: boolean
   /** Opt-in menu request; the legacy flag remains editor-only. */
   openInSourceGroupSurface?: 'internal' | 'browser'
+  /** An explicit open button's destination: skips link routing and never falls back silently. */
+  explicitDestination?: ExplicitFileOpenDestination
+  /** An explicit 'orca-browser' open that showed no page (refused, unsupported, failed or unroutable). */
+  onBrowserOpenFailure?: () => void
 }
 
 export function openDetectedFilePath(
@@ -93,7 +97,16 @@ export function openDetectedFilePath(
   )
   const refuseExplicitNonEditorRoute = (): boolean =>
     refuseOpenInGroupRequest(mappedFilePath, explicitGroupRequest, isCurrentRequest)
-  const linkContext = deps.sourceTabId ? { linkIntent, isCurrentRequest } : undefined
+  const explicitBrowser = deps.explicitDestination === 'orca-browser'
+  const explicitEditor = deps.explicitDestination === 'editor'
+  const linkContext = deps.sourceTabId
+    ? { linkIntent, isCurrentRequest, ...(explicitBrowser ? { refreshReusedPage: true } : {}) }
+    : undefined
+  const reportBrowserOpenFailure = (): void => {
+    if (isCurrentRequest()) {
+      deps.onBrowserOpenFailure?.()
+    }
+  }
   if (explicitGroupRequest && !linkIntent) {
     refuseExplicitNonEditorRoute()
     return
@@ -201,9 +214,12 @@ export function openDetectedFilePath(
       !clientLocal &&
       hostGrant === null &&
       !explicitGroupRequest &&
+      !explicitEditor &&
       isHtmlFilePath(mappedFilePath)
-        ? (deps.browserDestination ??
-          httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
+        ? explicitBrowser
+          ? 'orca'
+          : (deps.browserDestination ??
+            httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
         : null
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
@@ -248,7 +264,8 @@ export function openDetectedFilePath(
 
     // Route local HTML to Orca browser, including system-browser opens OS could not launch.
     // Why: a read-only grant comes from a host that re-grants only to the printing terminal, so preview reads would fail.
-    if (isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
+    // An explicit editor open skips the page route, so an HTML file really opens as source.
+    if (!explicitEditor && isHtmlFilePath(mappedFilePath) && !hostGrant?.readOnly) {
       if (deps.openInSourceGroup) {
         refuseExplicitNonEditorRoute()
         return
@@ -262,11 +279,20 @@ export function openDetectedFilePath(
           canOpenWithSystemDefault,
           ...(linkContext && !clientLocal ? { fileExecutionHostId } : {}),
           linkContext,
-          ...(explicitGroupRequest ? { refuseOpenInSourceGroup: refuseExplicitNonEditorRoute } : {})
+          ...(explicitGroupRequest
+            ? { refuseOpenInSourceGroup: refuseExplicitNonEditorRoute }
+            : {}),
+          ...(explicitBrowser ? { onBrowserOpenFailure: reportBrowserOpenFailure } : {})
         })
       ) {
         return
       }
+    }
+
+    if (explicitBrowser) {
+      // The action promised the Orca Browser; opening the editor instead would hide that it failed.
+      reportBrowserOpenFailure()
+      return
     }
 
     if (deps.openInSourceGroupSurface === 'browser') {

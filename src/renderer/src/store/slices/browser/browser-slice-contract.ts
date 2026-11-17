@@ -33,6 +33,10 @@ import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persisten
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
+import type {
+  ChangedFilePageRefreshIntent,
+  ChangedFilePageRefreshResource
+} from '@/lib/browser/refresh/changed-file-page-refresh-intent'
 
 export type CreateBrowserTabOptions = {
   /** Link-only guard, checked before records and again at the unified-tab mutation. */
@@ -122,6 +126,16 @@ export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
+  /** Explicit reopens a page's owner still has to show fresh; cleared on settle, close or conversion. */
+  changedFileRefreshByPageId: Record<string, ChangedFilePageRefreshIntent>
+  /** Records the intent and returns its seq; callers use requestChangedFilePageRefresh in lib/browser/refresh. */
+  requestChangedFilePageRefresh: (
+    pageId: string,
+    resource: ChangedFilePageRefreshResource
+  ) => number
+  setChangedFilePageRefreshBaseline: (pageId: string, seq: number, baselineSeq: number) => void
+  /** Clears the intent only while `seq` is still the page's latest request. */
+  settleChangedFilePageRefresh: (pageId: string, seq: number) => void
   /** May precede the page record (client-hosted pages); main's false on guest teardown clears it. */
   browserAudiblePageIds: Record<string, true>
   /** Tab mute lives for the tab's life; each new guest of its pages is muted again. */

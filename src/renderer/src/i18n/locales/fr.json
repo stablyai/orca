@@ -16153,7 +16153,6 @@
           "resolveConflictGuidance": "Résolvez le conflit dans Git ou restaurez l'un des côtés avant de le rouvrir."
         },
         "EditorPanelHeader": {
-          "fb8331694e": "Ouvrir l'aperçu sur le côté",
           "4157f3cbf3": "Ouvrir l'aperçu Markdown",
           "269ce4842b": "Copier le chemin relatif",
           "7c08a1f990": "Copier le chemin",

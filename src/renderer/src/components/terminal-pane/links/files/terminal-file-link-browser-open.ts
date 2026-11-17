@@ -56,16 +56,33 @@ type TerminalHtmlFileBrowserTarget = FileBrowserLinkTarget & {
   canOpenWithSystemDefault: boolean
   linkContext?: BrowserLinkOpenContext
   refuseOpenInSourceGroup?: () => boolean
+  /** Reports an outcome that showed no page; a superseded open is the newer click's to report. */
+  onBrowserOpenFailure?: () => void
+}
+
+function reportBrowserOutcome(
+  params: TerminalHtmlFileBrowserTarget,
+  outcome: BrowserOpenOutcome | null
+): void {
+  if (outcome?.status === 'refused' || outcome?.status === 'unsupported') {
+    params.refuseOpenInSourceGroup?.()
+  }
+  if (
+    outcome?.status === 'refused' ||
+    outcome?.status === 'unsupported' ||
+    outcome?.status === 'failed'
+  ) {
+    params.onBrowserOpenFailure?.()
+  }
 }
 
 /** Returns true when the HTML link was opened or deliberately refused. */
 export function openTerminalHtmlFileInBrowser(params: TerminalHtmlFileBrowserTarget): boolean {
   if (params.canOpenWithSystemDefault) {
-    void openResolvedHtmlFileInBrowser(params).then((outcome) => {
-      if (outcome?.status === 'refused' || outcome?.status === 'unsupported') {
-        params.refuseOpenInSourceGroup?.()
-      }
-    })
+    void openResolvedHtmlFileInBrowser(params).then(
+      (outcome) => reportBrowserOutcome(params, outcome),
+      () => reportBrowserOutcome(params, { status: 'failed' })
+    )
     return true
   }
 
@@ -87,11 +104,7 @@ export function openTerminalHtmlFileInBrowser(params: TerminalHtmlFileBrowserTar
     ...(params.linkContext
       ? {
           linkContext: params.linkContext,
-          onLinkOutcome: (outcome) => {
-            if (outcome.status === 'refused' || outcome.status === 'unsupported') {
-              params.refuseOpenInSourceGroup?.()
-            }
-          }
+          onLinkOutcome: (outcome) => reportBrowserOutcome(params, outcome)
         }
       : {})
   })

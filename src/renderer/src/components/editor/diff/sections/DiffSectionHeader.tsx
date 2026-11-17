@@ -1,5 +1,10 @@
 import { combinedDiffHeaderAttributes } from '../../combined-diff/scroll-viewport/combined-diff-viewport'
-import { ChevronDown, ChevronRight, ExternalLink, Eye } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import {
+  changedFileOpenLabel,
+  type ChangedFileOpenTarget
+} from '@/lib/files/open/changed-file-view'
+import { ChangedFileOpenIcon } from '@/lib/files/open/ChangedFileOpenIcon'
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { splitPathForDisplay } from '../../panel/header/editor-path-display'
@@ -13,7 +18,7 @@ export function DiffSectionHeader({
   onToggle,
   onOpenSection,
   openSectionTitle,
-  onOpenPreview,
+  preview,
   trailingContent
 }: {
   path: string
@@ -24,7 +29,8 @@ export function DiffSectionHeader({
   onToggle: () => void
   onOpenSection: (event: MouseEvent) => void
   openSectionTitle: string
-  onOpenPreview?: (event: MouseEvent) => void
+  /** Opens the working file rendered beside the diff; the target names where it lands. */
+  preview?: { target: ChangedFileOpenTarget; onOpen: (event: MouseEvent) => void }
   trailingContent?: ReactNode
 }): ReactElement {
   const t = useTranslate()
@@ -80,25 +86,19 @@ export function DiffSectionHeader({
       </span>
       <div className="flex items-center gap-1 shrink-0 ml-2">
         {trailingContent}
-        {onOpenPreview != null && (
+        {preview != null && (
           <button
             type="button"
             // Keep preview visible for touch and consistent with the single-file header.
             className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
             onClick={(event) => {
               event.stopPropagation()
-              onOpenPreview(event)
+              preview.onOpen(event)
             }}
-            title={t(
-              'auto.components.editor.EditorPanelHeader.fb8331694e',
-              'Open Preview to the Side'
-            )}
-            aria-label={t(
-              'auto.components.editor.EditorPanelHeader.fb8331694e',
-              'Open Preview to the Side'
-            )}
+            title={changedFileOpenLabel(preview.target, t, 'side')}
+            aria-label={changedFileOpenLabel(preview.target, t, 'side')}
           >
-            <Eye className="size-3.5" />
+            <ChangedFileOpenIcon target={preview.target} className="size-3.5" />
           </button>
         )}
         <button
