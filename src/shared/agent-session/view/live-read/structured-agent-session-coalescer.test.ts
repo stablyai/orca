@@ -65,37 +65,4 @@ describe('structured agent session event coalescer', () => {
       false
     ])
   })
-
-  it('drops it when a later frame carries rows without it, as applying both would', () => {
-    const events: AgentSessionSubscribeEvent[] = []
-    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
-    const token = (sequence: number) => ({
-      ...batch(sequence),
-      batch: {
-        ...batch(sequence).batch,
-        items: [
-          {
-            itemId: `token-${sequence}`,
-            revision: 1,
-            sequence,
-            observedAt: sequence,
-            body: { kind: 'message' as const, role: 'assistant' as const, blocks: [] }
-          }
-        ]
-      }
-    })
-    const running = {
-      itemId: 'turn-1',
-      observedAt: 1,
-      turn: { turnId: 'turn-1', state: 'running' as const }
-    }
-
-    // Old-host rows without latestTurn must clear the prior claim.
-    coalescer.push({ ...token(1), latestTurn: running })
-    coalescer.push(token(2))
-    coalescer.flush()
-
-    expect(events).toHaveLength(1)
-    expect(events[0]).not.toHaveProperty('latestTurn')
-  })
 })

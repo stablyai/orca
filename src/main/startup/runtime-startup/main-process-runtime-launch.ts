@@ -40,7 +40,7 @@ import {
 import { registerCliForHeadlessServe } from '../serve-launch/serve-cli-registration'
 import { startAppImageCopyPreExtraction } from '../../cli/appimage/appimage-copy-pre-extraction'
 import { scheduleAllPendingHistoryTreeRemovals } from '../../pty/history/terminal-history-deletion'
-import { triggerStartupNotificationRegistration } from '../../ipc/startup-notification-registration'
+import { triggerStartupNotificationRegistration } from '../../ipc/notifications/startup-notification-registration'
 import { startDesktopPushService } from '../cloud-startup/main-process-push-startup'
 import {
   connectDesktopConnectorCloud,

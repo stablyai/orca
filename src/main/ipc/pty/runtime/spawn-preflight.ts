@@ -20,9 +20,9 @@ import {
   resolveRuntimeSpawnClaudeAccount
 } from './spawn-claude-account'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
-import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
-import { resolvePtySpawnHostEnv } from '../spawn-host-env'
-import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
+import { resolvePtySpawnStartupTarget } from '../host-env/spawn-startup-target'
+import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
+import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../host-env/spawn-pane-env'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   ensureJcodeRuntimeDir,

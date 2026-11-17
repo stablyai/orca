@@ -5,31 +5,34 @@ import SidebarWorkspaceOptionsMenu from './worktree-list/controls/SidebarWorkspa
 
 const settings = { ...getDefaultSettings('/home/fixture'), experimentalNewWorktreeCardStyle: false }
 
+// The note floats right of a sidebar strip, over the main area.
 const render = (): React.JSX.Element => (
-  <div className="bg-worktree-sidebar py-2">
-    <WorktreeCardsIntroNotice />
-    <div className="mx-2 rounded-lg px-2.5 py-2 text-sm text-worktree-sidebar-foreground">
-      release-train
+  <div className="flex h-[380px]">
+    <div className="flex w-[240px] flex-col bg-worktree-sidebar py-2">
+      <WorktreeCardsIntroNotice />
+      <div className="mx-2 rounded-lg px-2.5 py-2 text-sm text-worktree-sidebar-foreground">
+        release-train
+      </div>
     </div>
   </div>
 )
 
-// The note opens on New, so the list below is already a preview.
+// The note opens on New, so the list beside it is already a preview.
 export const previewing = defineFixture({
-  width: 280,
+  width: 660,
   store: { settings, worktreeCardsIntroNoticeSeen: true, worktreeCardsIntroChoice: 'new' },
   render
 })
 
 export const flippedToClassic = defineFixture({
-  width: 280,
+  width: 660,
   store: { settings, worktreeCardsIntroNoticeSeen: true, worktreeCardsIntroChoice: 'classic' },
   render
 })
 
-// The sidebar's narrowest width: "Keep new" should stay on one line beside the switch.
+// Too little room beside the sidebar: the note drops under the first row instead of clipping.
 export const narrow = defineFixture({
-  width: 220,
+  width: 420,
   store: { settings, worktreeCardsIntroNoticeSeen: true, worktreeCardsIntroChoice: 'new' },
   render
 })

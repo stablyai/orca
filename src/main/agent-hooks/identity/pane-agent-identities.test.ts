@@ -388,7 +388,7 @@ it('answers unavailable when the worker cannot load, or is stopped while loading
   const exited = (worker: Worker) => worker.threadId === -1
   let maxLive = 0
   const spawn = () => {
-    const worker = spawnWorkerThread(missing)
+    const worker = spawnWorkerThread(missing, { name: 'orca-agent-identity' })
     workers.push(worker)
     maxLive = Math.max(maxLive, workers.filter((spawned) => !exited(spawned)).length)
     return worker

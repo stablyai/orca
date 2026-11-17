@@ -7,7 +7,7 @@ import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   getRepoMainWorktreeId
 } from '../../../shared/worktree/id'
-import { mergeWorktree } from '../worktree-metadata-merge'
+import { mergeWorktree } from '../worktrees/metadata/worktree-metadata-merge'
 import { getRepoOwnedWorktreeMeta } from '../../workspaces/catalog/worktree-metadata-ownership'
 
 export function listWorkspaceCleanupFolderWorkspaces(

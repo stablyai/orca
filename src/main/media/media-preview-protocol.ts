@@ -22,7 +22,7 @@ import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-
 import { remoteFilePath } from '../../shared/file-access/remote-file-locator'
 import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { openLocalRegularFile } from '../filesystem/local-file-io/local-regular-file-read'
-import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../ipc/renderer-requests/renderer-lifetime-abort'
 import { createMediaRangeResponse } from './media-range-response'
 import {
   REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE,

@@ -4,7 +4,7 @@ import type {
   TerminalLimitUpdate
 } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
-import type { PtySpawnOutcome } from '../../../ipc/pty/spawn-outcome'
+import type { PtySpawnOutcome } from '../../../ipc/pty/spawn/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../../../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'

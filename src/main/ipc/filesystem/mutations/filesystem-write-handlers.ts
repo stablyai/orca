@@ -11,7 +11,7 @@ import {
 } from '../access/local-file-access-resolution'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
-import { registerAgentSessionAttachmentUploadHandlers } from '../../agent-session-attachment-upload-ipc'
+import { registerAgentSessionAttachmentUploadHandlers } from '../../agent-attachments/agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type {
   FileWriteDiskPrecondition,

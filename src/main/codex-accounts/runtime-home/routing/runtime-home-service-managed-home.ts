@@ -262,7 +262,10 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     }
     if (this.isHostHistorySourceInWsl()) {
       // This launch's dates go unrecorded, so a later plain source must walk all history.
-      markCodexSessionBackfillMarkerNeedsFullScan(resolveCodexSessionBackfillPaths().markerPath)
+      markCodexSessionBackfillMarkerNeedsFullScan(
+        resolveCodexSessionBackfillPaths().markerPath,
+        true
+      )
       return null
     }
     if (!this.hostSystemDefaultSessionMigrationPending) {

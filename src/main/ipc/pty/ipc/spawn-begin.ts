@@ -1,4 +1,4 @@
-import { resolveEarlyPaneKey as resolvePaneCoordinates } from '../spawn-pane-coordinates'
+import { resolveEarlyPaneKey as resolvePaneCoordinates } from '../pane/spawn-pane-coordinates'
 import {
   forgetFailedAgentLaunches,
   resolveAgentLaunchPaneVerdict

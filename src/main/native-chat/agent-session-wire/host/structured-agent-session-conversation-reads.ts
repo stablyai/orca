@@ -194,7 +194,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     sessionAgent: (id: string) => context().deps.store.getConversation(id)?.provider ?? null,
     childAccountHome: (id: string) => context().sessions.get(id)?.child?.accountHome,
     holdsSessions: () => context().deps.store.holdsRecords(),
-    onSessionsHeld: (listener: () => void) => context().deps.store.onFirstRecord(listener),
+    onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {
       const { deps, serialize } = context()
       return serialize(

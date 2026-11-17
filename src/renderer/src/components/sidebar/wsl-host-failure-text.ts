@@ -107,6 +107,25 @@ const DETAIL_COPY: Record<WslHostStatusDetailCode, (values: Values) => string | 
       : translate('sidebar.wslHosts.statusDetails.removalUnrecorded', DETAIL.removalUnrecorded, {
           detail
         })
+  },
+  installLockWait: ({ count: readCount }) => {
+    const count = readCount('count')
+    return count === null
+      ? null
+      : translate('sidebar.wslHosts.statusDetails.installLockWait', DETAIL.installLockWait.other, {
+          count,
+          defaultValue_one: DETAIL.installLockWait.one
+        })
+  },
+  installLockWaitGivesUp: ({ count: readCount }) => {
+    const count = readCount('count')
+    return count === null
+      ? null
+      : translate(
+          'sidebar.wslHosts.statusDetails.installLockWaitGivesUp',
+          DETAIL.installLockWaitGivesUp.other,
+          { count, defaultValue_one: DETAIL.installLockWaitGivesUp.one }
+        )
   }
 }
 

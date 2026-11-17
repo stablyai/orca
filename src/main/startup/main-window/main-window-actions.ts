@@ -46,7 +46,7 @@ import {
 } from '../quit/quit-and-stop-all-sessions-prompt'
 import { isHoldingForNewerProtocolDaemon } from '../../daemon/providers/routing/daemon-newer-protocol-hold'
 import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provider-state'
-import { confirmNoDaemonSessionsRemain } from '../../ipc/pty/pty-management'
+import { confirmNoDaemonSessionsRemain } from '../../ipc/pty/ipc/pty-management'
 import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
 import type { DesktopActivationRequest } from '../serve-launch/serve-desktop-activation'
 

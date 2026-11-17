@@ -21,6 +21,11 @@ import {
 } from './worker-placement-topology'
 import { createWorkerWorktree, type WorkerWorktreeCreationTarget } from './worker-worktree-creation'
 import type { ReopenedWorker, WorkerFollowUp } from '../../follow-up/worker-follow-up-placement'
+import {
+  structuredWorkerLaunchReceipt,
+  type OrchestrationWorkerLaunchReceipt
+} from '../launch/worker-launch-preferences'
+import { recordWorkerLaunchObservation } from '../../../../../../orchestration/workers/launch/worker-launch-observation'
 
 /** Name only the two required fields so untyped worktree accessors cannot introduce any into unions. */
 type PlacedWorktree = { id: string; repoId: string }
@@ -29,6 +34,8 @@ type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerS
 export type WorkerAgentPlacement = {
   /** The mode that actually ran; a created worktree can settle it later than the caller could. */
   mode: WorkerStartModeReceipt
+  /** What launched; a chat worker runs the model and effort its session seeded. */
+  launch: OrchestrationWorkerLaunchReceipt
   worktree: PlacedWorktree
   terminalHandle: string
   terminalCreation?: RuntimeTerminalCreate
@@ -55,7 +62,10 @@ type WorkerAgentPlacementArgs = {
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
   mode: WorkerStartModeReceipt
   agent: TuiAgent | undefined
-  launchPreferences: AgentLaunchPreferences | undefined
+  launch: {
+    preferences: AgentLaunchPreferences | undefined
+    receipt: OrchestrationWorkerLaunchReceipt
+  }
   /** `--account`: the managed Claude account a terminal worker runs on. */
   claudeAccountId?: string
   effects: WorkerEffect[]
@@ -88,6 +98,7 @@ export async function placeWorkerAgent(
     })
     return {
       mode: args.mode,
+      launch: args.launch.receipt,
       worktree: existing,
       terminalHandle: args.params.terminal,
       structuredSession: null,
@@ -105,6 +116,7 @@ export async function placeWorkerAgent(
     })
     return {
       mode: args.mode,
+      launch: args.launch.receipt,
       worktree: existing,
       terminalHandle: reopened.handle,
       structuredSession: null,
@@ -169,7 +181,7 @@ async function launchWorkerAgent(
             withAgentTerminal: startupAgent !== undefined,
             promisedAgentChat,
             onWorkspaceCreated,
-            ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+            ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
             ...(args.claudeAccountId ? { claudeAccountId: args.claudeAccountId } : {}),
             effects: args.effects
           })
@@ -203,6 +215,7 @@ async function launchWorkerAgent(
   }
   return {
     mode: launched.receipt,
+    launch: launchedWorkerReceipt(args, structuredSession),
     worktree: existing ?? requirePlacement(created?.worktree),
     terminalHandle: launched.outcome.handle,
     terminalCreation: created?.terminalCreation ?? terminalCreation,
@@ -210,6 +223,18 @@ async function launchWorkerAgent(
     setupReceipt: created?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
     ...(launched.warning ? { warning: launched.warning } : {})
   }
+}
+
+function launchedWorkerReceipt(
+  args: WorkerAgentPlacementArgs,
+  session: WorkerStructuredSession | null
+): OrchestrationWorkerLaunchReceipt {
+  if (!session) {
+    return args.launch.receipt
+  }
+  const receipt = structuredWorkerLaunchReceipt(args.launch.receipt, session.options)
+  recordWorkerLaunchObservation(args.db, args.dispatchId, receipt)
+  return receipt
 }
 
 /** Create worker-specific background chat/redrive/mailbox or worker-task terminal without moving the sidebar. */
@@ -235,7 +260,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         dispatchId: args.dispatchId,
-        ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+        ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         effects: args.effects
       })
       onStructuredSession(session)
@@ -251,7 +276,7 @@ function workerSurfaceFactory(
         runtime: args.runtime,
         worktreeId,
         agent,
-        ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+        ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         ...(args.claudeAccountId ? { claudeAccountId: args.claudeAccountId } : {}),
         taskId: args.taskId,
         effects: args.effects

@@ -26,6 +26,10 @@ import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/age
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
 import { DOWNGRADE_DETAIL, type AgentLaunchDowngradeReason } from './agent-launch-downgrade-detail'
+import {
+  withWslHostChatRecovery,
+  type WslHostChatSettingsSource
+} from './agent-launch-wsl-host-recovery'
 
 /** Caller-specific receipt wording, shared across desktop, mobile and orchestration. */
 export type AgentLaunchModeVocabulary = {
@@ -158,7 +162,7 @@ export function decideAgentLaunchMode(args: {
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
 export async function resolveAgentLaunchModeOnHost(
-  runtime: AgentLaunchModeHostRuntime,
+  runtime: AgentLaunchModeHostRuntime & WslHostChatSettingsSource,
   receipt: AgentLaunchModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined,
@@ -168,35 +172,33 @@ export async function resolveAgentLaunchModeOnHost(
   if (receipt.mode !== 'structured' || !worktreeId) {
     return receipt
   }
+  const settlement = context ? { ...context, agent } : undefined
   if (context && launchCwdRelation(context) !== 'root') {
     return unavailableLaunchMode(
       'tui_launch_command',
       vocabulary,
       receipt.reason === 'requested',
-      {
-        ...context,
-        agent
-      },
+      settlement,
       launchCwdRelation(context) === 'custom'
     )
   }
-  const settled = downgradeAgentLaunchModeForHost(
-    receipt,
-    await readStructuredCreateSupport(runtime, worktreeId, agent),
-    vocabulary,
-    context ? { ...context, agent } : undefined
-  )
+  const support = await readStructuredCreateSupport(runtime, worktreeId, agent)
+  let settled: AgentLaunchModeReceipt
+  try {
+    settled = downgradeAgentLaunchModeForHost(receipt, support, vocabulary, settlement)
+  } catch (error) {
+    throw await withWslHostChatRecovery(error, context?.workspacePath, runtime)
+  }
   // Why after the host verdict: an SSH or WSL workspace, which never pins, keeps its own reason.
   if (settled.mode !== 'structured' || !projectClaudeAccountForLaunch(runtime, worktreeId, agent)) {
     return settled
   }
-  const requested = settled.reason === 'requested'
   // Why refused: an explicit chat request must not quietly become a terminal before anything opens.
   return unavailableLaunchMode(
     'pinned_claude_account',
     vocabulary,
-    requested,
-    context && { ...context, agent },
+    settled.reason === 'requested',
+    settlement,
     true,
     PROJECT_CLAUDE_ACCOUNT_DETAIL
   )
@@ -287,7 +289,8 @@ function unavailableLaunchMode(
 ): AgentLaunchModeReceipt {
   if (requested && conclusive && context?.phase === 'before-effects') {
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${detail ?? DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${detail ?? DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
+      reason
     )
   }
   return downgraded(reason, vocabulary, requested, detail)

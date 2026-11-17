@@ -41,6 +41,7 @@ export async function runProfileStateBackupWorker(
     await new Promise<void>((resolve, reject) => {
       const workerPath = options.workerPath ?? resolveProfileStateBackupWorkerPath()
       const worker = spawnWorkerThread(workerPath, {
+        name: 'orca-profile-state-backup',
         workerData: { ...job, temporaryPath },
         execArgv: []
       })
