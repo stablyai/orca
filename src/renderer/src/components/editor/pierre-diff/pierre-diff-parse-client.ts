@@ -1,4 +1,5 @@
 import PierreDiffParseWorker from './pierre-diff-parse.worker?worker'
+import { setLineDiffProvider } from '@pierre/diffs'
 import {
   cachePierreDiff,
   getCachedPierreDiff,
@@ -7,9 +8,28 @@ import {
 import type { PierreDiffInput } from './pierre-diff-metadata'
 import { createPierreDiffParseScheduler } from './pierre-diff-parse-scheduler'
 import { preparePierreDiffHighlight } from './pierre-diff-highlight'
+import { computePierreLineChanges, type PierreLineChanges } from './pierre-diff-line-changes'
+import { formatPierreLinePatch } from './pierre-diff-line-patch'
 
 const scheduler = createPierreDiffParseScheduler(() => new PierreDiffParseWorker())
 let nextRequestId = 0
+// Bounds a synchronous edit-session region diff on the UI thread; larger regions go to the worker.
+const MAX_SYNC_REGION_LINES = 500
+
+setLineDiffProvider({
+  syncLineLimit: MAX_SYNC_REGION_LINES,
+  computeSync: (oldLines, newLines, options) =>
+    computePierreLineChanges(oldLines, newLines, Boolean(options?.ignoreWhitespace)),
+  computeAsync: (oldLines, newLines, options) =>
+    scheduler.request<PierreLineChanges>(
+      {
+        id: ++nextRequestId,
+        lines: { oldLines, newLines, ignoreWhitespace: Boolean(options?.ignoreWhitespace) }
+      },
+      new AbortController().signal
+    ),
+  formatPatch: formatPierreLinePatch
+})
 
 export async function requestPierreDiffMetadata(input: PierreDiffInput, signal: AbortSignal) {
   if (signal.aborted) {
@@ -32,7 +52,9 @@ export async function requestPierreDiffMetadata(input: PierreDiffInput, signal: 
     return cached
   }
   const diff = await scheduler.request({ id: ++nextRequestId, identity, input }, signal)
-  cachePierreDiff(identity, diff)
+  if (diff.cacheKey === identity) {
+    cachePierreDiff(identity, diff)
+  }
   return diff
 }
 

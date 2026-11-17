@@ -1,9 +1,10 @@
 import type { FileDiffMetadata } from '@pierre/diffs'
+import type { PierreLineChanges } from './pierre-diff-line-changes'
 import type { PierreDiffParseRequest, PierreDiffParseWorker } from './pierre-diff-parse-protocol'
 
 type Task = {
   request: PierreDiffParseRequest
-  resolve: (diff: FileDiffMetadata) => void
+  resolve: (result: FileDiffMetadata | PierreLineChanges) => void
   reject: (error: Error) => void
   removeAbortListener: () => void
 }
@@ -26,7 +27,7 @@ export function createPierreDiffParseScheduler(
     slots.delete(slot)
   }
 
-  const finish = (slot: Slot, result: FileDiffMetadata | Error): void => {
+  const finish = (slot: Slot, result: FileDiffMetadata | PierreLineChanges | Error): void => {
     const task = slot.task
     slot.task = null
     task?.removeAbortListener()
@@ -46,7 +47,10 @@ export function createPierreDiffParseScheduler(
       if (data.id !== slot.task?.request.id) {
         return
       }
-      finish(slot, 'error' in data ? new Error(data.error) : data.diff)
+      finish(
+        slot,
+        'error' in data ? new Error(data.error) : 'diff' in data ? data.diff : data.lineChanges
+      )
     }
     worker.onerror = (event) => finish(slot, new Error(event.message || 'Diff worker failed'))
     worker.onmessageerror = () => finish(slot, new Error('Could not read the computed diff'))
@@ -88,7 +92,10 @@ export function createPierreDiffParseScheduler(
   }
 
   return {
-    request(request: PierreDiffParseRequest, signal: AbortSignal): Promise<FileDiffMetadata> {
+    request<T extends FileDiffMetadata | PierreLineChanges = FileDiffMetadata>(
+      request: PierreDiffParseRequest,
+      signal: AbortSignal
+    ): Promise<T> {
       if (disposed || signal.aborted) {
         return Promise.reject(new DOMException('Canceled', 'AbortError'))
       }
@@ -98,7 +105,7 @@ export function createPierreDiffParseScheduler(
       if (pending.size >= 64) {
         return Promise.reject(new Error('Too many diffs are loading. Retry this file.'))
       }
-      return new Promise((resolve, reject) => {
+      return new Promise<T>((resolve, reject) => {
         const abort = (): void => {
           pending.delete(request.id)
           for (const slot of slots) {
@@ -113,7 +120,7 @@ export function createPierreDiffParseScheduler(
         signal.addEventListener('abort', abort, { once: true })
         pending.set(request.id, {
           request,
-          resolve,
+          resolve: resolve as Task['resolve'],
           reject,
           removeAbortListener: () => signal.removeEventListener('abort', abort)
         })

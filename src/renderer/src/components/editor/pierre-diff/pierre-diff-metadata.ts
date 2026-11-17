@@ -3,6 +3,8 @@ import type { CreatePatchOptionsNonabortable } from 'diff'
 import { buildPierreLinePatch } from './pierre-diff-line-patch'
 import { getPierreDiffCacheIdentity } from './pierre-diff-cache-identity'
 
+const PIERRE_TIMED_OUT_KEY_SUFFIX = ':timed-out'
+
 /** Statuses whose old side does not exist, so Pierre should render an add. */
 const ADDED_STATUSES = new Set(['added', 'untracked'])
 
@@ -54,20 +56,21 @@ export function buildPierreFileDiff(
       originalContent,
       modifiedContent
     )
-  const oldFile = isAdded
-    ? null
-    : toFileContents(oldPath ?? path, originalContent, `${identity}:old`, lang)
-  const newFile = isDeleted ? null : toFileContents(path, modifiedContent, `${identity}:new`, lang)
-
-  const patch = buildPierreLinePatch(
-    oldFile?.name ?? '/dev/null',
-    newFile?.name ?? '/dev/null',
-    oldFile?.contents ?? '',
-    newFile?.contents ?? '',
+  const { patch, timedOut } = buildPierreLinePatch(
+    isAdded ? '/dev/null' : (oldPath ?? path),
+    isDeleted ? '/dev/null' : path,
+    isAdded ? '' : originalContent,
+    isDeleted ? '' : modifiedContent,
     Boolean(parseDiffOptions.ignoreWhitespace)
   )
+  // A timed-out fallback must never share cache entries with the exact result for this content.
+  const key = timedOut ? `${identity}${PIERRE_TIMED_OUT_KEY_SUFFIX}` : identity
+  const oldFile = isAdded
+    ? null
+    : toFileContents(oldPath ?? path, originalContent, `${key}:old`, lang)
+  const newFile = isDeleted ? null : toFileContents(path, modifiedContent, `${key}:new`, lang)
   return {
     ...parseDiffFromFile(oldFile, newFile, { ...parseDiffOptions }, false, patch),
-    cacheKey: identity
+    cacheKey: key
   }
 }

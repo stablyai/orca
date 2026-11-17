@@ -176,19 +176,54 @@ interface ImportMetaEnv {
 
 export {}
 
+type MonacoDiffRange = { start: number; endExclusive: number }
+type MonacoSequenceDiff = { seq1Range: MonacoDiffRange; seq2Range: MonacoDiffRange }
+type MonacoDiffResult = { hitTimeout: boolean; diffs: MonacoSequenceDiff[] }
+type MonacoTimeout = { isValid(): boolean }
+type MonacoLineSequence = { readonly length: number; getElement(offset: number): number }
+
+declare module 'monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.js' {
+  export class DateTimeout {
+    constructor(timeoutMs: number)
+    isValid(): boolean
+  }
+}
 declare module 'monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.js' {
   export class MyersDiffAlgorithm {
     compute(
-      left: { length: number; getElement(index: number): number },
-      right: { length: number; getElement(index: number): number },
-      budget: { isValid(): boolean }
-    ): {
-      hitTimeout: boolean
-      diffs: {
-        seq1Range: { start: number; endExclusive: number }
-        seq2Range: { start: number; endExclusive: number }
-      }[]
-    }
+      left: MonacoLineSequence,
+      right: MonacoLineSequence,
+      timeout: MonacoTimeout
+    ): MonacoDiffResult
+  }
+}
+declare module 'monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.js' {
+  export class DynamicProgrammingDiffing {
+    compute(
+      left: MonacoLineSequence,
+      right: MonacoLineSequence,
+      timeout: MonacoTimeout,
+      equalityScore: (offset1: number, offset2: number) => number
+    ): MonacoDiffResult
+  }
+}
+declare module 'monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.js' {
+  export function optimizeSequenceDiffs(
+    left: MonacoLineSequence,
+    right: MonacoLineSequence,
+    diffs: MonacoSequenceDiff[]
+  ): MonacoSequenceDiff[]
+  export function removeVeryShortMatchingLinesBetweenDiffs(
+    left: MonacoLineSequence,
+    right: MonacoLineSequence,
+    diffs: MonacoSequenceDiff[]
+  ): MonacoSequenceDiff[]
+}
+declare module 'monaco-editor/esm/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.js' {
+  export class LineSequence {
+    constructor(trimmedHash: number[], lines: string[])
+    readonly length: number
+    getElement(offset: number): number
   }
 }
 

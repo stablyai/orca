@@ -1276,3 +1276,596 @@ diff --git a/dist/worker/WorkerPoolManager.js b/dist/worker/WorkerPoolManager.js
  	}
  	executeTask(managedWorker, task) {
  		if (shouldSyncCustomExtensions(task.request)) this.maybeAttachCustomExtensions(managedWorker, task.request);
+diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
+--- a/dist/components/FileDiff.js
++++ b/dist/components/FileDiff.js
+@@ -156,6 +156,11 @@
+ 	handleHighlightRender = () => {
+ 		this.rerender();
+ 	};
++	handleLineDiffResolved = () => {
++		if (this.editSession == null) this.hunksRenderer.refreshHighlightedResult();
++		this.lineStateRefreshPending = true;
++		this.escalateEditSessionRender();
++	};
+ 	getTheme() {
+ 		return this.workerManager?.getDiffRenderOptions().theme ?? this.options.theme ?? DEFAULT_THEMES;
+ 	}
+@@ -163,7 +168,9 @@
+ 		return getDiffHunksRendererOptions(options);
+ 	}
+ 	createHunksRenderer(options) {
+-		return new DiffHunksRenderer(this.getHunksRendererOptions(options), this.getAnnotationSlotName, this.handleHighlightRender, this.workerManager);
++		const renderer = new DiffHunksRenderer(this.getHunksRendererOptions(options), this.getAnnotationSlotName, this.handleHighlightRender, this.workerManager);
++		renderer.onLineDiffResolved = this.handleLineDiffResolved;
++		return renderer;
+ 	}
+ 	getLineIndex = (lineNumber, side = "additions") => {
+ 		return this.getLineIndexForDiff(this.getDiffForLineIndex(), lineNumber, side);
+@@ -737,6 +744,7 @@
+ 		if (workingDiff.editSessionDirty === true && this.shouldSelfHealEditSession()) {
+ 			finishEditSessionForDiff(workingDiff, this.options.parseDiffOptions);
+ 			this.hunksRenderer.refreshHighlightedResult();
++			this.hunksRenderer.scheduleDeferredLineDiffs();
+ 		}
+ 		if (expandUnchanged) this.loadFilesIfNecessary();
+ 		this.hunksRenderer.setOptions(this.getHunksRendererOptions(this.options));
+@@ -1113,6 +1121,7 @@
+ 		finishEditSessionForDiff(fileDiff, this.options.parseDiffOptions);
+ 		this.hunksRenderer.setExpandedHunksMap(rebuildExpansionFromAnchors(fileDiff, anchors));
+ 		this.hunksRenderer.refreshHighlightedResult();
++		this.hunksRenderer.scheduleDeferredLineDiffs();
+ 		this.escalateEditSessionRender();
+ 		return true;
+ 	}
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -105,7 +105,7 @@
+ import { isDefaultRenderRange } from "./utils/isDefaultRenderRange.js";
+ import { isWorkerContext } from "./utils/isWorkerContext.js";
+ import { createDiffSpanDecoration, pushOrJoinSpan } from "./utils/parseDiffDecorations.js";
+-import { parseDiffFromFile } from "./utils/parseDiffFromFile.js";
++import { LineDiffChange, LineDiffProvider, LineDiffResult, parseDiffFromFile, setLineDiffProvider } from "./utils/parseDiffFromFile.js";
+ import { ParsedLine, parseLineType } from "./utils/parseLineType.js";
+ import { parsePatchFiles, processFile, processPatch } from "./utils/parsePatchFiles.js";
+ import { prefersReducedMotion } from "./utils/prefersReducedMotion.js";
+@@ -121,4 +121,4 @@
+ import { tokenStyle } from "./utils/tokenStyle.js";
+ import { tokensToHtml } from "./utils/tokensToHtml.js";
+ import { trimPatchContext } from "./utils/trimPatchContext.js";
+-export { type AnnotationLineMap, type AnnotationSide, type AnnotationSpan, type AppliedThemeStyleCache, AttachedLanguages, type BaseCodeOptions, type BaseDiffOptions, type BaseDiffOptionsWithDefaults, CODE_VIEW_DIFF_OPTION_KEYS, CODE_VIEW_FILE_OPTION_KEYS, CODE_VIEW_FOOTER_ATTRIBUTE, CODE_VIEW_HEADER_ATTRIBUTE, COMMIT_METADATA_SPLIT, CORE_CSS_ATTRIBUTE, type CSSVariablesThemeOptions, CUSTOM_HEADER_SLOT_ID, type ChangeContent, type ChangeTypes, type CodeColumnType, type CodeToHtmlOptions, CodeToTokenTransformStream, CodeToTokenTransformStreamOptions, type CodeToTokensOptions, CodeView, CodeViewCoordinator, CodeViewCreateEditorOptions, type CodeViewDiffItem, type CodeViewFileItem, type CodeViewItem, CodeViewItemEditCompleteEventMap, CodeViewItemEditCompleteHandler, type CodeViewItemScrollTarget, type CodeViewLayout, type CodeViewLineScrollTarget, CodeViewLineSelection, CodeViewMode, CodeViewModeItemMap, CodeViewOptions, type CodeViewPositionScrollTarget, type CodeViewRangeScrollTarget, CodeViewRenderedDiffItem, CodeViewRenderedFileItem, CodeViewRenderedItem, type CodeViewScrollBehavior, CodeViewScrollListener, type CodeViewScrollTarget, CodeViewSlotSnapshot, type ConflictResolverTypes, type ContextContent, CreateFileHeaderElementProps, type CreatePatchOptionsNonabortable, type CustomPreProperties, type CustomThemeLoader, DEFAULT_CODE_VIEW_FILE_METRICS, DEFAULT_CODE_VIEW_LAYOUT, DEFAULT_COLLAPSED_CONTEXT_THRESHOLD, DEFAULT_EXPANDED_REGION, DEFAULT_HIGHLIGHTER, DEFAULT_RENDER_RANGE, DEFAULT_SMOOTH_SCROLL_SETTINGS, DEFAULT_THEMES, DEFAULT_TOKENIZE_MAX_LENGTH, DEFAULT_VIRTUAL_FILE_METRICS, DIFFS_DEVELOPMENT_BUILD, DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY, DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE, DIFFS_TAG_NAME, type DecorationItem, type DiffAcceptRejectHunkConfig, type DiffAcceptRejectHunkType, type DiffFileInput, DiffHunksRenderer, DiffHunksRendererOptions, DiffHunksRendererOptionsWithDefaults, type DiffIndicators, type DiffLineAnnotation, type DiffLineEventBaseProps, type DiffTokenEventBaseProps, type DiffsEditorTokenizer, type DiffsEditorTokenizerOptions, type DiffsHighlighter, type DiffsStreamTokenizer, type DiffsTheme, type DiffsThemeNames, EMPTY_LINE_ANNOTATIONS, EMPTY_RENDER_RANGE, EXTENSION_TO_FILE_FORMAT, type ExpansionDirections, type ExtensionFormatMap, FILENAME_HEADER_REGEX, FILE_CONTEXT_BLOB, File, type FileContents, FileDiff, type FileDiffContentsLoader, FileDiffEditChangeHandler, type FileDiffEditCompleteEvent, FileDiffEditCompleteHandler, FileDiffHydrationProps, type FileDiffLoadedChangedFiles, type FileDiffLoadedFiles, type FileDiffLoadedPureRenamedFile, type FileDiffMetadata, FileDiffOptions, FileDiffRenderBaseProps, FileDiffRenderData, FileDiffRenderInput, FileDiffRenderProps, FileDiffType, FileEditChangeHandler, type FileEditCompleteEvent, FileEditCompleteHandler, type FileHeaderRenderMode, FileHydrateProps, FileOptions, FileRenderData, FileRenderInput, FileRenderProps, FileRenderResult, FileRenderer, FileRendererOptions, FileStream, FileStreamOptions, type ForceDiffPlainTextOptions, type ForceFilePlainTextOptions, GIT_DIFF_FILE_BREAK_REGEX, type GapSpan, GetHoveredLineResult, GetLineIndexUtility, HEADER_FILENAME_SUFFIX_SLOT_ID, HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID, HUNK_HEADER, type HighlightedToken, HighlighterDisposedError, HighlighterOptions, type HighlighterTypes, type Hunk, type HunkData, type HunkExpansionRegion, type HunkLineType, type HunkSeparators, HunksRenderResult, INDEX_LINE_METADATA, InjectedRow, InteractionManager, InteractionManagerBaseOptions, InteractionManagerMode, InteractionManagerOptions, type LineAnnotation, LineAnnotationPosition, LineDecoration, type LineDiffTypes, type LineEventBaseProps, type LineInfo, type LineSpans, type LineTypes, LogTypes, MERGE_CONFLICT_BASE_MARKER_REGEX, MERGE_CONFLICT_END_MARKER_REGEX, MERGE_CONFLICT_SEPARATOR_MARKER_REGEX, MERGE_CONFLICT_START_MARKER_REGEX, type MaybeDiffFileInput, type MergeConflictActionPayload, MergeConflictActionTarget, MergeConflictActionsTypeOption, type MergeConflictMarkerRow, type MergeConflictMarkerRowType, type MergeConflictRegion, type MergeConflictResolution, type NumericScrollLineAnchor, type ObservedAnnotationNodes, type ObservedGridNodes, OnDiffLineClickProps, OnDiffLineEnterLeaveProps, OnLineClickProps, OnLineEnterLeaveProps, OnTokenEventProps, ParsedLine, type ParsedPatch, type PendingCodeViewLayoutReset, type PostRenderPhase, type PrePropertiesConfig, type ProcessFileConflictData, type RecallToken, RegisteredCustomLanguages, type RenderDiffFilesResult, type RenderDiffOptions, type RenderDiffResult, type RenderFileMetadata, type RenderFileOptions, type RenderFileResult, type RenderHeaderFilenameSuffixCallback, type RenderHeaderMetadataCallback, type RenderHeaderPrefixCallback, RenderMergeConflictActions, type RenderRange, RenderTokenLinesOptions, type RenderWindow, type RenderedDiffASTCache, type RenderedFileASTCache, RenderedLineContext, ResizeManager, ResizeManagerColumnVariableMode, ResizeManagerSetupOptions, ResolvedLanguages, ResolvingLanguages, SPLIT_WITH_NEWLINES, SVGSpriteNames, SVGSpriteSheet, ScrollSyncManager, type SelectedLineRange, type SelectionPoint, type SelectionSide, SelectionWriteOptions, type SharedRenderState, type SmoothScrollSettings, SplitInjectedRow, SplitInjectedRowPlacement, SplitLineDecorationProps, type StickySpecs, type SupportedLanguages, THEME_CSS_ATTRIBUTE, type ThemeTypes, type ThemedDiffResult, type ThemedFileResult, type ThemedToken, type ThemesType, type TokenEventBase, type TokensResult, UNIFIED_DIFF_FILE_BREAK_REGEX, UNSAFE_CSS_ATTRIBUTE, UnifiedInjectedRowPlacement, UnifiedLineDecorationProps, UnresolvedFile, UnresolvedFileHydrationProps, UnresolvedFileOptions, UnresolvedFileRenderData, UnresolvedFileRenderInput, UnresolvedFileRenderProps, VIRTUALIZED_FILE_DIFF_LAYOUT_CHECKPOINT_INTERVAL, type VirtualFileMetrics, type VirtualWindowSpecs, VirtualizedFile, VirtualizedFileDiff, Virtualizer, VirtualizerConfig, VirtualizerScrollOptions, areDiffLineAnnotationsEqual, areDiffRenderOptionsEqual, areDiffTargetsEqual, areFileRenderOptionsEqual, areFilesEqual, areHunkDataEqual, areLanguagesAttached, areLineAnnotationsEqual, areObjectsEqual, areOptionsEqual, arePrePropertiesEqual, areRenderRangesEqual, areSelectionsEqual, areThemesAttached, areThemesEqual, areVirtualWindowSpecsEqual, areWorkerStatsEqual, attachResolvedLanguages, attachResolvedThemes, canUseWASM, cleanLastNewline, cleanUpResolvedLanguages, cleanUpResolvedThemes, clearRenderQueue, cloneFileDiffMetadata, cloneHunks, createAnnotationElement, createAnnotationWrapperNode, createCSSVariablesTheme, createDiffSpanDecoration, createEmptyRowBuffer, createFileHeaderElement, createGutterGap, createGutterItem, createGutterUtilityContentNode, createGutterUtilityElement, createGutterWrapper, createHastElement, createHighlighter, createIconElement, createNoNewlineElement, createPreElement, createPreWrapperProperties, createRowNodes, createSeparator, createSpanFromToken, createStyleElement, createTextNodeElement, createThemeStyleElement, createUnsafeCSSStyleNode, createWindowFromScrollPosition, dequeueRender, detachString, diffAcceptRejectHunk, disposeHighlighter, findCodeElement, formatCSSVariablePrefix, getCustomExtensionsMap, getCustomExtensionsVersion, getFiletypeFromFileName, getHighlighterIfLoaded, getHighlighterOptions, getHighlighterThemeStyles, getHighlighterType, getHunkSeparatorSlotName, getIconForType, getLineAnnotationName, getLineAnnotationSource, getLineEndingType, getLineNodes, getOrCreateCodeNode, getResolvedLanguages, getResolvedOrResolveLanguage, getResolvedOrResolveTheme, getResolvedThemes, getSharedHighlighter, getSingularPatch, getThemes, getTotalLineCountFromHunks, getUnresolvedDiffHunksRendererOptions, hasResolvedLanguages, hasResolvedThemes, hastToHtml, hydratePartialDiff, isDefaultRenderRange, isDiffAnnotation, isDiffAnnotationCollection, isFileAnnotation, isFileAnnotationCollection, isHighlighterLoaded, isHighlighterLoading, isHighlighterNull, isWorkerContext, parseDiffFromFile, parseLineType, parsePatchFiles, patchScrollbarGutterSize, pluckInteractionOptions, prefersReducedMotion, preloadHighlighter, prerenderHTMLIfNecessary, processFile, processLine, processPatch, pushOrJoinSpan, queueRender, recordLineAnnotationSource, registerCustomCSSVariableTheme, registerCustomLanguage, unregisterCustomLanguage, registerCustomTheme, releaseStringDetachBuffer, renderDiffWithHighlighter, renderFileWithHighlighter, renderTokenLines, replaceCustomExtensions, resolveConflict, resolveLanguage, resolveLanguages, resolveRegion, resolveTheme, resolveThemes, setCustomExtension, setLanguageOverride, setPreNodeProperties, tokenStyle, tokensToHtml, trimPatchContext, wrapCoreCSS, wrapThemeCSS, wrapUnsafeCSS };
+\ No newline at end of file
++export { type AnnotationLineMap, type AnnotationSide, type AnnotationSpan, type AppliedThemeStyleCache, AttachedLanguages, type BaseCodeOptions, type BaseDiffOptions, type BaseDiffOptionsWithDefaults, CODE_VIEW_DIFF_OPTION_KEYS, CODE_VIEW_FILE_OPTION_KEYS, CODE_VIEW_FOOTER_ATTRIBUTE, CODE_VIEW_HEADER_ATTRIBUTE, COMMIT_METADATA_SPLIT, CORE_CSS_ATTRIBUTE, type CSSVariablesThemeOptions, CUSTOM_HEADER_SLOT_ID, type ChangeContent, type ChangeTypes, type CodeColumnType, type CodeToHtmlOptions, CodeToTokenTransformStream, CodeToTokenTransformStreamOptions, type CodeToTokensOptions, CodeView, CodeViewCoordinator, CodeViewCreateEditorOptions, type CodeViewDiffItem, type CodeViewFileItem, type CodeViewItem, CodeViewItemEditCompleteEventMap, CodeViewItemEditCompleteHandler, type CodeViewItemScrollTarget, type CodeViewLayout, type CodeViewLineScrollTarget, CodeViewLineSelection, CodeViewMode, CodeViewModeItemMap, CodeViewOptions, type CodeViewPositionScrollTarget, type CodeViewRangeScrollTarget, CodeViewRenderedDiffItem, CodeViewRenderedFileItem, CodeViewRenderedItem, type CodeViewScrollBehavior, CodeViewScrollListener, type CodeViewScrollTarget, CodeViewSlotSnapshot, type ConflictResolverTypes, type ContextContent, CreateFileHeaderElementProps, type CreatePatchOptionsNonabortable, type CustomPreProperties, type CustomThemeLoader, DEFAULT_CODE_VIEW_FILE_METRICS, DEFAULT_CODE_VIEW_LAYOUT, DEFAULT_COLLAPSED_CONTEXT_THRESHOLD, DEFAULT_EXPANDED_REGION, DEFAULT_HIGHLIGHTER, DEFAULT_RENDER_RANGE, DEFAULT_SMOOTH_SCROLL_SETTINGS, DEFAULT_THEMES, DEFAULT_TOKENIZE_MAX_LENGTH, DEFAULT_VIRTUAL_FILE_METRICS, DIFFS_DEVELOPMENT_BUILD, DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY, DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE, DIFFS_TAG_NAME, type DecorationItem, type DiffAcceptRejectHunkConfig, type DiffAcceptRejectHunkType, type DiffFileInput, DiffHunksRenderer, DiffHunksRendererOptions, DiffHunksRendererOptionsWithDefaults, type DiffIndicators, type DiffLineAnnotation, type DiffLineEventBaseProps, type DiffTokenEventBaseProps, type DiffsEditorTokenizer, type DiffsEditorTokenizerOptions, type DiffsHighlighter, type DiffsStreamTokenizer, type DiffsTheme, type DiffsThemeNames, EMPTY_LINE_ANNOTATIONS, EMPTY_RENDER_RANGE, EXTENSION_TO_FILE_FORMAT, type ExpansionDirections, type ExtensionFormatMap, FILENAME_HEADER_REGEX, FILE_CONTEXT_BLOB, File, type FileContents, FileDiff, type FileDiffContentsLoader, FileDiffEditChangeHandler, type FileDiffEditCompleteEvent, FileDiffEditCompleteHandler, FileDiffHydrationProps, type FileDiffLoadedChangedFiles, type FileDiffLoadedFiles, type FileDiffLoadedPureRenamedFile, type FileDiffMetadata, FileDiffOptions, FileDiffRenderBaseProps, FileDiffRenderData, FileDiffRenderInput, FileDiffRenderProps, FileDiffType, FileEditChangeHandler, type FileEditCompleteEvent, FileEditCompleteHandler, type FileHeaderRenderMode, FileHydrateProps, FileOptions, FileRenderData, FileRenderInput, FileRenderProps, FileRenderResult, FileRenderer, FileRendererOptions, FileStream, FileStreamOptions, type ForceDiffPlainTextOptions, type ForceFilePlainTextOptions, GIT_DIFF_FILE_BREAK_REGEX, type GapSpan, GetHoveredLineResult, GetLineIndexUtility, HEADER_FILENAME_SUFFIX_SLOT_ID, HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID, HUNK_HEADER, type HighlightedToken, HighlighterDisposedError, HighlighterOptions, type HighlighterTypes, type Hunk, type HunkData, type HunkExpansionRegion, type HunkLineType, type HunkSeparators, HunksRenderResult, INDEX_LINE_METADATA, InjectedRow, InteractionManager, InteractionManagerBaseOptions, InteractionManagerMode, InteractionManagerOptions, type LineAnnotation, LineAnnotationPosition, LineDecoration, type LineDiffTypes, type LineEventBaseProps, type LineInfo, type LineSpans, type LineTypes, LogTypes, MERGE_CONFLICT_BASE_MARKER_REGEX, MERGE_CONFLICT_END_MARKER_REGEX, MERGE_CONFLICT_SEPARATOR_MARKER_REGEX, MERGE_CONFLICT_START_MARKER_REGEX, type MaybeDiffFileInput, type MergeConflictActionPayload, MergeConflictActionTarget, MergeConflictActionsTypeOption, type MergeConflictMarkerRow, type MergeConflictMarkerRowType, type MergeConflictRegion, type MergeConflictResolution, type NumericScrollLineAnchor, type ObservedAnnotationNodes, type ObservedGridNodes, OnDiffLineClickProps, OnDiffLineEnterLeaveProps, OnLineClickProps, OnLineEnterLeaveProps, OnTokenEventProps, ParsedLine, type ParsedPatch, type PendingCodeViewLayoutReset, type PostRenderPhase, type PrePropertiesConfig, type ProcessFileConflictData, type RecallToken, RegisteredCustomLanguages, type RenderDiffFilesResult, type RenderDiffOptions, type RenderDiffResult, type RenderFileMetadata, type RenderFileOptions, type RenderFileResult, type RenderHeaderFilenameSuffixCallback, type RenderHeaderMetadataCallback, type RenderHeaderPrefixCallback, RenderMergeConflictActions, type RenderRange, RenderTokenLinesOptions, type RenderWindow, type RenderedDiffASTCache, type RenderedFileASTCache, RenderedLineContext, ResizeManager, ResizeManagerColumnVariableMode, ResizeManagerSetupOptions, ResolvedLanguages, ResolvingLanguages, SPLIT_WITH_NEWLINES, SVGSpriteNames, SVGSpriteSheet, ScrollSyncManager, type SelectedLineRange, type SelectionPoint, type SelectionSide, SelectionWriteOptions, type SharedRenderState, type SmoothScrollSettings, SplitInjectedRow, SplitInjectedRowPlacement, SplitLineDecorationProps, type StickySpecs, type SupportedLanguages, THEME_CSS_ATTRIBUTE, type ThemeTypes, type ThemedDiffResult, type ThemedFileResult, type ThemedToken, type ThemesType, type TokenEventBase, type TokensResult, UNIFIED_DIFF_FILE_BREAK_REGEX, UNSAFE_CSS_ATTRIBUTE, UnifiedInjectedRowPlacement, UnifiedLineDecorationProps, UnresolvedFile, UnresolvedFileHydrationProps, UnresolvedFileOptions, UnresolvedFileRenderData, UnresolvedFileRenderInput, UnresolvedFileRenderProps, VIRTUALIZED_FILE_DIFF_LAYOUT_CHECKPOINT_INTERVAL, type VirtualFileMetrics, type VirtualWindowSpecs, VirtualizedFile, VirtualizedFileDiff, Virtualizer, VirtualizerConfig, VirtualizerScrollOptions, areDiffLineAnnotationsEqual, areDiffRenderOptionsEqual, areDiffTargetsEqual, areFileRenderOptionsEqual, areFilesEqual, areHunkDataEqual, areLanguagesAttached, areLineAnnotationsEqual, areObjectsEqual, areOptionsEqual, arePrePropertiesEqual, areRenderRangesEqual, areSelectionsEqual, areThemesAttached, areThemesEqual, areVirtualWindowSpecsEqual, areWorkerStatsEqual, attachResolvedLanguages, attachResolvedThemes, canUseWASM, cleanLastNewline, cleanUpResolvedLanguages, cleanUpResolvedThemes, clearRenderQueue, cloneFileDiffMetadata, cloneHunks, createAnnotationElement, createAnnotationWrapperNode, createCSSVariablesTheme, createDiffSpanDecoration, createEmptyRowBuffer, createFileHeaderElement, createGutterGap, createGutterItem, createGutterUtilityContentNode, createGutterUtilityElement, createGutterWrapper, createHastElement, createHighlighter, createIconElement, createNoNewlineElement, createPreElement, createPreWrapperProperties, createRowNodes, createSeparator, createSpanFromToken, createStyleElement, createTextNodeElement, createThemeStyleElement, createUnsafeCSSStyleNode, createWindowFromScrollPosition, dequeueRender, detachString, diffAcceptRejectHunk, disposeHighlighter, findCodeElement, formatCSSVariablePrefix, getCustomExtensionsMap, getCustomExtensionsVersion, getFiletypeFromFileName, getHighlighterIfLoaded, getHighlighterOptions, getHighlighterThemeStyles, getHighlighterType, getHunkSeparatorSlotName, getIconForType, getLineAnnotationName, getLineAnnotationSource, getLineEndingType, getLineNodes, getOrCreateCodeNode, getResolvedLanguages, getResolvedOrResolveLanguage, getResolvedOrResolveTheme, getResolvedThemes, getSharedHighlighter, getSingularPatch, getThemes, getTotalLineCountFromHunks, getUnresolvedDiffHunksRendererOptions, hasResolvedLanguages, hasResolvedThemes, hastToHtml, hydratePartialDiff, isDefaultRenderRange, isDiffAnnotation, isDiffAnnotationCollection, isFileAnnotation, isFileAnnotationCollection, isHighlighterLoaded, isHighlighterLoading, isHighlighterNull, isWorkerContext, parseDiffFromFile, setLineDiffProvider, type LineDiffChange, type LineDiffProvider, type LineDiffResult, parseLineType, parsePatchFiles, patchScrollbarGutterSize, pluckInteractionOptions, prefersReducedMotion, preloadHighlighter, prerenderHTMLIfNecessary, processFile, processLine, processPatch, pushOrJoinSpan, queueRender, recordLineAnnotationSource, registerCustomCSSVariableTheme, registerCustomLanguage, unregisterCustomLanguage, registerCustomTheme, releaseStringDetachBuffer, renderDiffWithHighlighter, renderFileWithHighlighter, renderTokenLines, replaceCustomExtensions, resolveConflict, resolveLanguage, resolveLanguages, resolveRegion, resolveTheme, resolveThemes, setCustomExtension, setLanguageOverride, setPreNodeProperties, tokenStyle, tokensToHtml, trimPatchContext, wrapCoreCSS, wrapThemeCSS, wrapUnsafeCSS };
+\ No newline at end of file
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -58,7 +58,7 @@
+ import { cleanLastNewline } from "./utils/cleanLastNewline.js";
+ import { detachString, releaseStringDetachBuffer } from "./utils/detachString.js";
+ import { parsePatchFiles, processFile, processPatch } from "./utils/parsePatchFiles.js";
+-import { parseDiffFromFile } from "./utils/parseDiffFromFile.js";
++import { parseDiffFromFile, setLineDiffProvider } from "./utils/parseDiffFromFile.js";
+ import { ScrollSyncManager } from "./managers/ScrollSyncManager.js";
+ import { areDiffRenderOptionsEqual } from "./utils/areDiffRenderOptionsEqual.js";
+ import { createEmptyRowBuffer } from "./utils/createEmptyRowBuffer.js";
+@@ -111,4 +111,4 @@
+ import { setLanguageOverride } from "./utils/setLanguageOverride.js";
+ import { tokensToHtml } from "./utils/tokensToHtml.js";
+ import { trimPatchContext } from "./utils/trimPatchContext.js";
+-export { AttachedLanguages, CODE_VIEW_DIFF_OPTION_KEYS, CODE_VIEW_FILE_OPTION_KEYS, CODE_VIEW_FOOTER_ATTRIBUTE, CODE_VIEW_HEADER_ATTRIBUTE, COMMIT_METADATA_SPLIT, CORE_CSS_ATTRIBUTE, CUSTOM_HEADER_SLOT_ID, CodeToTokenTransformStream, CodeView, DEFAULT_CODE_VIEW_FILE_METRICS, DEFAULT_CODE_VIEW_LAYOUT, DEFAULT_COLLAPSED_CONTEXT_THRESHOLD, DEFAULT_EXPANDED_REGION, DEFAULT_HIGHLIGHTER, DEFAULT_RENDER_RANGE, DEFAULT_SMOOTH_SCROLL_SETTINGS, DEFAULT_THEMES, DEFAULT_TOKENIZE_MAX_LENGTH, DEFAULT_VIRTUAL_FILE_METRICS, DIFFS_DEVELOPMENT_BUILD, DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY, DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE, DIFFS_TAG_NAME, DiffHunksRenderer, EMPTY_LINE_ANNOTATIONS, EMPTY_RENDER_RANGE, EXTENSION_TO_FILE_FORMAT, FILENAME_HEADER_REGEX, FILE_CONTEXT_BLOB, File, FileDiff, FileRenderer, FileStream, GIT_DIFF_FILE_BREAK_REGEX, HEADER_FILENAME_SUFFIX_SLOT_ID, HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID, HUNK_HEADER, HighlighterDisposedError, INDEX_LINE_METADATA, InteractionManager, MERGE_CONFLICT_BASE_MARKER_REGEX, MERGE_CONFLICT_END_MARKER_REGEX, MERGE_CONFLICT_SEPARATOR_MARKER_REGEX, MERGE_CONFLICT_START_MARKER_REGEX, RegisteredCustomLanguages, ResizeManager, ResolvedLanguages, ResolvingLanguages, SPLIT_WITH_NEWLINES, SVGSpriteSheet, ScrollSyncManager, THEME_CSS_ATTRIBUTE, UNIFIED_DIFF_FILE_BREAK_REGEX, UNSAFE_CSS_ATTRIBUTE, UnresolvedFile, VIRTUALIZED_FILE_DIFF_LAYOUT_CHECKPOINT_INTERVAL, VirtualizedFile, VirtualizedFileDiff, Virtualizer, areDiffLineAnnotationsEqual, areDiffRenderOptionsEqual, areDiffTargetsEqual, areFileRenderOptionsEqual, areFilesEqual, areHunkDataEqual, areLanguagesAttached, areLineAnnotationsEqual, areObjectsEqual, areOptionsEqual, arePrePropertiesEqual, areRenderRangesEqual, areSelectionsEqual, areThemesAttached, areThemesEqual, areVirtualWindowSpecsEqual, areWorkerStatsEqual, attachResolvedLanguages, attachResolvedThemes, canUseWASM, cleanLastNewline, cleanUpResolvedLanguages, cleanUpResolvedThemes, clearRenderQueue, cloneFileDiffMetadata, cloneHunks, createAnnotationElement, createAnnotationWrapperNode, createCSSVariablesTheme, createDiffSpanDecoration, createEmptyRowBuffer, createFileHeaderElement, createGutterGap, createGutterItem, createGutterUtilityContentNode, createGutterUtilityElement, createGutterWrapper, createHastElement, createHighlighter, createIconElement, createNoNewlineElement, createPreElement, createPreWrapperProperties, createRowNodes, createSeparator, createSpanFromToken, createStyleElement, createTextNodeElement, createThemeStyleElement, createUnsafeCSSStyleNode, createWindowFromScrollPosition, dequeueRender, detachString, diffAcceptRejectHunk, disposeHighlighter, findCodeElement, formatCSSVariablePrefix, getCustomExtensionsMap, getCustomExtensionsVersion, getFiletypeFromFileName, getHighlighterIfLoaded, getHighlighterOptions, getHighlighterThemeStyles, getHighlighterType, getHunkSeparatorSlotName, getIconForType, getLineAnnotationName, getLineAnnotationSource, getLineEndingType, getLineNodes, getOrCreateCodeNode, getResolvedLanguages, getResolvedOrResolveLanguage, getResolvedOrResolveTheme, getResolvedThemes, getSharedHighlighter, getSingularPatch, getThemes, getTotalLineCountFromHunks, getUnresolvedDiffHunksRendererOptions, hasResolvedLanguages, hasResolvedThemes, hastToHtml, hydratePartialDiff, isDefaultRenderRange, isDiffAnnotation, isDiffAnnotationCollection, isFileAnnotation, isFileAnnotationCollection, isHighlighterLoaded, isHighlighterLoading, isHighlighterNull, isWorkerContext, parseDiffFromFile, parseLineType, parsePatchFiles, patchScrollbarGutterSize, pluckInteractionOptions, prefersReducedMotion, preloadHighlighter, prerenderHTMLIfNecessary, processFile, processLine, processPatch, pushOrJoinSpan, queueRender, recordLineAnnotationSource, registerCustomCSSVariableTheme, registerCustomLanguage, unregisterCustomLanguage, registerCustomTheme, releaseStringDetachBuffer, renderDiffWithHighlighter, renderFileWithHighlighter, renderTokenLines, replaceCustomExtensions, resolveConflict, resolveLanguage, resolveLanguages, resolveRegion, resolveTheme, resolveThemes, setCustomExtension, setLanguageOverride, setPreNodeProperties, tokenStyle, tokensToHtml, trimPatchContext, wrapCoreCSS, wrapThemeCSS, wrapUnsafeCSS };
++export { AttachedLanguages, CODE_VIEW_DIFF_OPTION_KEYS, CODE_VIEW_FILE_OPTION_KEYS, CODE_VIEW_FOOTER_ATTRIBUTE, CODE_VIEW_HEADER_ATTRIBUTE, COMMIT_METADATA_SPLIT, CORE_CSS_ATTRIBUTE, CUSTOM_HEADER_SLOT_ID, CodeToTokenTransformStream, CodeView, DEFAULT_CODE_VIEW_FILE_METRICS, DEFAULT_CODE_VIEW_LAYOUT, DEFAULT_COLLAPSED_CONTEXT_THRESHOLD, DEFAULT_EXPANDED_REGION, DEFAULT_HIGHLIGHTER, DEFAULT_RENDER_RANGE, DEFAULT_SMOOTH_SCROLL_SETTINGS, DEFAULT_THEMES, DEFAULT_TOKENIZE_MAX_LENGTH, DEFAULT_VIRTUAL_FILE_METRICS, DIFFS_DEVELOPMENT_BUILD, DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY, DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE, DIFFS_TAG_NAME, DiffHunksRenderer, EMPTY_LINE_ANNOTATIONS, EMPTY_RENDER_RANGE, EXTENSION_TO_FILE_FORMAT, FILENAME_HEADER_REGEX, FILE_CONTEXT_BLOB, File, FileDiff, FileRenderer, FileStream, GIT_DIFF_FILE_BREAK_REGEX, HEADER_FILENAME_SUFFIX_SLOT_ID, HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID, HUNK_HEADER, HighlighterDisposedError, INDEX_LINE_METADATA, InteractionManager, MERGE_CONFLICT_BASE_MARKER_REGEX, MERGE_CONFLICT_END_MARKER_REGEX, MERGE_CONFLICT_SEPARATOR_MARKER_REGEX, MERGE_CONFLICT_START_MARKER_REGEX, RegisteredCustomLanguages, ResizeManager, ResolvedLanguages, ResolvingLanguages, SPLIT_WITH_NEWLINES, SVGSpriteSheet, ScrollSyncManager, THEME_CSS_ATTRIBUTE, UNIFIED_DIFF_FILE_BREAK_REGEX, UNSAFE_CSS_ATTRIBUTE, UnresolvedFile, VIRTUALIZED_FILE_DIFF_LAYOUT_CHECKPOINT_INTERVAL, VirtualizedFile, VirtualizedFileDiff, Virtualizer, areDiffLineAnnotationsEqual, areDiffRenderOptionsEqual, areDiffTargetsEqual, areFileRenderOptionsEqual, areFilesEqual, areHunkDataEqual, areLanguagesAttached, areLineAnnotationsEqual, areObjectsEqual, areOptionsEqual, arePrePropertiesEqual, areRenderRangesEqual, areSelectionsEqual, areThemesAttached, areThemesEqual, areVirtualWindowSpecsEqual, areWorkerStatsEqual, attachResolvedLanguages, attachResolvedThemes, canUseWASM, cleanLastNewline, cleanUpResolvedLanguages, cleanUpResolvedThemes, clearRenderQueue, cloneFileDiffMetadata, cloneHunks, createAnnotationElement, createAnnotationWrapperNode, createCSSVariablesTheme, createDiffSpanDecoration, createEmptyRowBuffer, createFileHeaderElement, createGutterGap, createGutterItem, createGutterUtilityContentNode, createGutterUtilityElement, createGutterWrapper, createHastElement, createHighlighter, createIconElement, createNoNewlineElement, createPreElement, createPreWrapperProperties, createRowNodes, createSeparator, createSpanFromToken, createStyleElement, createTextNodeElement, createThemeStyleElement, createUnsafeCSSStyleNode, createWindowFromScrollPosition, dequeueRender, detachString, diffAcceptRejectHunk, disposeHighlighter, findCodeElement, formatCSSVariablePrefix, getCustomExtensionsMap, getCustomExtensionsVersion, getFiletypeFromFileName, getHighlighterIfLoaded, getHighlighterOptions, getHighlighterThemeStyles, getHighlighterType, getHunkSeparatorSlotName, getIconForType, getLineAnnotationName, getLineAnnotationSource, getLineEndingType, getLineNodes, getOrCreateCodeNode, getResolvedLanguages, getResolvedOrResolveLanguage, getResolvedOrResolveTheme, getResolvedThemes, getSharedHighlighter, getSingularPatch, getThemes, getTotalLineCountFromHunks, getUnresolvedDiffHunksRendererOptions, hasResolvedLanguages, hasResolvedThemes, hastToHtml, hydratePartialDiff, isDefaultRenderRange, isDiffAnnotation, isDiffAnnotationCollection, isFileAnnotation, isFileAnnotationCollection, isHighlighterLoaded, isHighlighterLoading, isHighlighterNull, isWorkerContext, parseDiffFromFile, setLineDiffProvider, parseLineType, parsePatchFiles, patchScrollbarGutterSize, pluckInteractionOptions, prefersReducedMotion, preloadHighlighter, prerenderHTMLIfNecessary, processFile, processLine, processPatch, pushOrJoinSpan, queueRender, recordLineAnnotationSource, registerCustomCSSVariableTheme, registerCustomLanguage, unregisterCustomLanguage, registerCustomTheme, releaseStringDetachBuffer, renderDiffWithHighlighter, renderFileWithHighlighter, renderTokenLines, replaceCustomExtensions, resolveConflict, resolveLanguage, resolveLanguages, resolveRegion, resolveTheme, resolveThemes, setCustomExtension, setLanguageOverride, setPreNodeProperties, tokenStyle, tokensToHtml, trimPatchContext, wrapCoreCSS, wrapThemeCSS, wrapUnsafeCSS };
+diff --git a/dist/renderers/DiffHunksRenderer.d.ts b/dist/renderers/DiffHunksRenderer.d.ts
+--- a/dist/renderers/DiffHunksRenderer.d.ts
++++ b/dist/renderers/DiffHunksRenderer.d.ts
+@@ -87,6 +87,8 @@
+   private pendingHighlightResult;
+   private pendingStructuralRows;
+   private editSessionActive;
++  /** Called after an asynchronous line diff replaced a deferred region's hunks. */
++  onLineDiffResolved?: () => void;
+   constructor(options?: DiffHunksRendererOptions, annotationSlotName?: (annotation: DiffLineAnnotation<LAnnotation>) => string, onRenderUpdate?: (() => unknown) | undefined, workerManager?: WorkerPoolManager | undefined);
+   cleanUp(): void;
+   recycle(): void;
+@@ -136,6 +138,7 @@
+   updateRenderCache(dirtyLines: Map<number, Array<HighlightedToken>>, themeType: 'dark' | 'light', lineCountChangeInFlight?: boolean, changedDocumentLines?: ReadonlyMap<number, string>, documentLineCount?: number): boolean;
+   private applyExpansionRemap;
+   applyDocumentChange(textDocument: TextDocument<'file-diff', LAnnotation>): void;
++  scheduleDeferredLineDiffs(): void;
+   private applySessionDocumentChange;
+   private applyRecomputePreservingSessionType;
+   private markEditSessionPass;
+diff --git a/dist/renderers/DiffHunksRenderer.js b/dist/renderers/DiffHunksRenderer.js
+--- a/dist/renderers/DiffHunksRenderer.js
++++ b/dist/renderers/DiffHunksRenderer.js
+@@ -27,7 +27,8 @@
+ import { createNoNewlineElement } from "../utils/createNoNewlineElement.js";
+ import { createSeparator } from "../utils/createSeparator.js";
+ import { recomputeDiffHunksForEdit, recomputeEmptyDocumentDiff, recomputeTopAlignedAdditionDiff, shouldTopAlignAdditionRecompute, updateDiffHunks } from "../utils/updateDiffHunks.js";
+-import { applySessionChangedLines, rebuildSessionHunks, remapExpandedHunksForRegionChange } from "../utils/editSessionHunks.js";
++import { applyDeferredLineDiff, applySessionChangedLines, captureExpansionAnchors, findDeferredLineRegion, getSessionEditSpan, normalizeEditorLines, rebuildExpansionFromAnchors, rebuildSessionHunks, remapExpandedHunksForRegionChange } from "../utils/editSessionHunks.js";
++import { getLineDiffProvider } from "../utils/parseDiffFromFile.js";
+ import { getHunkSeparatorSlotName } from "../utils/getHunkSeparatorSlotName.js";
+ import { getTotalLineCountFromHunks } from "../utils/getTotalLineCountFromHunks.js";
+ import { isDiffPlainText } from "../utils/isDiffPlainText.js";
+@@ -49,6 +50,10 @@
+ 	pendingHighlightResult;
+ 	pendingStructuralRows;
+ 	editSessionActive = false;
++	lineDiffGeneration = 0;
++	lineDiffInFlight = false;
++	lineDiffDisposed = false;
++	onLineDiffResolved;
+ 	constructor(options = { theme: DEFAULT_THEMES }, annotationSlotName = getLineAnnotationName, onRenderUpdate, workerManager) {
+ 		this.options = options;
+ 		this.annotationSlotName = annotationSlotName;
+@@ -56,6 +61,7 @@
+ 		this.workerManager = workerManager;
+ 	}
+ 	cleanUp() {
++		this.lineDiffDisposed = true;
+ 		this.endEditSession();
+ 		this.recycle();
+ 		this.expandedHunks.clear();
+@@ -313,6 +319,7 @@
+ 		}
+ 		let regionsChanged = false;
+ 		if (changedAdditionLines.length > 0) {
++			this.lineDiffGeneration++;
+ 			if (this.editSessionActive) {
+ 				if (diff.additionLines.length <= 1 && diff.additionLines.join("") === "") {
+ 					this.applyRecomputePreservingSessionType(diff, recomputeEmptyDocumentDiff(diff, this.options.parseDiffOptions));
+@@ -324,6 +331,7 @@
+ 					const change = applySessionChangedLines(diff, changedAdditionLines, this.options.parseDiffOptions, previousAdditionLines);
+ 					this.applyExpansionRemap(change);
+ 					regionsChanged = change != null;
++					this.scheduleDeferredLineDiffs();
+ 				}
+ 			} else Object.assign(diff, updateDiffHunks(diff, changedAdditionLines, this.options.parseDiffOptions));
+ 		}
+@@ -342,6 +350,7 @@
+ 		const result = renderCache?.result;
+ 		if (diff.isPartial) throw new Error("Could not apply document change for partial diff");
+ 		const { additionLines: previousAdditionLines } = diff;
++		this.lineDiffGeneration++;
+ 		const { lines, characterCount } = getEditorDocumentLines(textDocument);
+ 		diff.additionLines = lines;
+ 		diff.additionCharacterCount = characterCount;
+@@ -363,7 +372,35 @@
+ 			this.applyRecomputePreservingSessionType(diff, recomputeTopAlignedAdditionDiff(diff, rawLines, diff.additionCharacterCount, parseDiffOptions));
+ 			return;
+ 		}
+-		this.applyExpansionRemap(rebuildSessionHunks(diff, parseDiffOptions, (index) => previousAdditionLines[index]));
++		this.applyExpansionRemap(rebuildSessionHunks(diff, parseDiffOptions, (index) => previousAdditionLines[index], getSessionEditSpan(previousAdditionLines, rawLines)));
++		this.scheduleDeferredLineDiffs();
++	}
++	/**
++	* Ask the line diff provider for one deferred region at a time. Any edit since
++	* the request discards its answer; the next pass asks again for current text.
++	*/
++	scheduleDeferredLineDiffs() {
++		const provider = getLineDiffProvider();
++		const diff = this.diff ?? this.renderCache?.diff;
++		if (provider == null || diff == null || diff.isPartial || this.lineDiffInFlight || this.lineDiffDisposed) return;
++		const region = findDeferredLineRegion(diff);
++		if (region == null) return;
++		const generation = this.lineDiffGeneration;
++		const additionLines = normalizeEditorLines(diff.additionLines);
++		const { parseDiffOptions, collapsedContextThreshold = 1 } = this.options;
++		this.lineDiffInFlight = true;
++		const settle = (result) => {
++			if ((this.diff ?? this.renderCache?.diff) !== diff || generation !== this.lineDiffGeneration || this.lineDiffDisposed) return;
++			const anchors = captureExpansionAnchors(diff, this.expandedHunks, collapsedContextThreshold);
++			if (!applyDeferredLineDiff(diff, region, result, parseDiffOptions, this.editSessionActive)) return;
++			this.expandedHunks = rebuildExpansionFromAnchors(diff, anchors);
++			if (this.renderCache != null) this.renderCache.isDirty = true;
++			this.onLineDiffResolved?.();
++		};
++		provider.computeAsync(diff.deletionLines.slice(region.deletionStart, region.deletionEnd), additionLines.slice(region.additionStart, region.additionEnd), parseDiffOptions).then(settle, () => settle(void 0)).finally(() => {
++			this.lineDiffInFlight = false;
++			this.scheduleDeferredLineDiffs();
++		});
+ 	}
+ 	applyRecomputePreservingSessionType(diff, update) {
+ 		const sessionType = this.editSessionActive ? diff.type : void 0;
+diff --git a/dist/utils/editSessionHunks.js b/dist/utils/editSessionHunks.js
+--- a/dist/utils/editSessionHunks.js
++++ b/dist/utils/editSessionHunks.js
+@@ -1,8 +1,8 @@
+ import { getHunkSideStartBoundary } from "./getHunkSideBoundaries.js";
+ import { getExpandedRegion, getTrailingExpandedRegion } from "./virtualDiffLayout.js";
+ import { slideBlankBoundaryBlocksUp } from "./realignChangeContent.js";
+-import { parseDiffFromFile } from "./parseDiffFromFile.js";
+-import { offsetHunkContent, preserveTrailingEditorBlankLine, recomputeDiffHunks, recomputeDiffHunksForEdit, recomputeDiffRenderLineCounts, recomputeHunkRenderLineCounts, syncHunkNoEOFCRFromFullFile } from "./updateDiffHunks.js";
++import { getLineDiffProvider, parseDiffFromFile } from "./parseDiffFromFile.js";
++import { offsetHunkContent, preserveTrailingEditorBlankLine, recomputeDiffHunks, recomputeDiffHunksForEdit, recomputeDiffRenderLineCounts, recomputeHunkRenderLineCounts, shouldTopAlignAdditionRecompute, syncHunkNoEOFCRFromFullFile } from "./updateDiffHunks.js";
+ //#region src/utils/editSessionHunks.ts
+ const deletionLineSetCache = /* @__PURE__ */ new WeakMap();
+ /**
+@@ -41,7 +41,7 @@
+ * sliding new or edited blank changes up for the live editor. Previous line text
+ * distinguishes edits to an insertion from untouched blocks of the same size.
+ */
+-function rebuildSessionHunks(diff, parseDiffOptions, getPreviousAdditionLine) {
++function rebuildSessionHunks(diff, parseDiffOptions, getPreviousAdditionLine, editSpan) {
+ 	const previousHunks = diff.hunks;
+ 	const editorAdditionLines = diff.additionLines;
+ 	const canonicalAdditionLines = normalizeEditorLines(editorAdditionLines);
+@@ -49,7 +49,7 @@
+ 		...diff,
+ 		additionLines: canonicalAdditionLines
+ 	};
+-	const plans = buildRegionPlans(previousHunks, parseSessionChangeBlocks(canonicalDiff, parseDiffOptions, getPreviousAdditionLine), diff.deletionLines.length);
++	const plans = buildRegionPlans(previousHunks, parseSessionChangeBlocks(canonicalDiff, parseDiffOptions, getPreviousAdditionLine, editSpan), diff.deletionLines.length);
+ 	const nextHunks = buildRegionHunks(canonicalDiff, plans);
+ 	diff.additionLines = canonicalAdditionLines;
+ 	diff.hunks = nextHunks;
+@@ -68,6 +68,7 @@
+ 	const lines = Array.from(changedLines).filter((line) => line >= 0 && line < diff.additionLines.length).sort((a, b) => a - b);
+ 	if (lines.length === 0) return;
+ 	const getPreviousAdditionLine = (index) => changedLines.has(index) ? previousAdditionLines?.get(index) : diff.additionLines[index];
++	const editSpan = getChangedLinesSpan(diff.additionLines, lines, getPreviousAdditionLine);
+ 	const { hunks } = diff;
+ 	let regionIndex;
+ 	let hunkIndex = 0;
+@@ -79,7 +80,7 @@
+ 		}
+ 		const hunk = hunks[hunkIndex];
+ 		const start = hunk == null ? void 0 : getHunkAdditionStart(hunk);
+-		if (start == null || line < start || regionIndex != null && regionIndex !== hunkIndex) return rebuildSessionHunks(diff, parseDiffOptions, getPreviousAdditionLine);
++		if (start == null || line < start || regionIndex != null && regionIndex !== hunkIndex) return rebuildSessionHunks(diff, parseDiffOptions, getPreviousAdditionLine, editSpan);
+ 		regionIndex = hunkIndex;
+ 	}
+ 	if (regionIndex == null) return;
+@@ -87,7 +88,7 @@
+ 		diff.editSessionDirty = true;
+ 		return;
+ 	}
+-	return rebuildSessionHunks(diff, parseDiffOptions, getPreviousAdditionLine);
++	return rebuildSessionHunks(diff, parseDiffOptions, getPreviousAdditionLine, editSpan);
+ }
+ function canRetainCanonicalBlocks(diff, changedLines, regionIndex, previousAdditionLines, parseDiffOptions) {
+ 	if (previousAdditionLines == null || parseDiffOptions?.stripTrailingCr === true || parseDiffOptions?.ignoreCase === true || parseDiffOptions?.newlineIsToken === true || parseDiffOptions?.ignoreNewlineAtEof === true || parseDiffOptions?.comparator != null) return false;
+@@ -213,10 +214,13 @@
+ function finishEditSessionForDiff(diff, parseDiffOptions) {
+ 	if (diff.editSessionDirty !== true) return false;
+ 	delete diff.editSessionDirty;
+-	Object.assign(diff, diff.additionLines.length <= 1 && diff.additionLines.join("") === "" ? recomputeDiffHunks(diff, parseDiffOptions) : recomputeDiffHunksForEdit(diff, parseDiffOptions));
++	if (diff.additionLines.length <= 1 && diff.additionLines.join("") === "") Object.assign(diff, recomputeDiffHunks(diff, parseDiffOptions));
++	else if (getLineDiffProvider() != null && !shouldTopAlignAdditionRecompute(diff, diff.additionLines)) Object.assign(diff, recomputeFromChangeBlocks(diff, collectChangeBlocks(diff.hunks, editorLineCount(diff.additionLines)), parseDiffOptions));
++	else Object.assign(diff, recomputeDiffHunksForEdit(diff, parseDiffOptions));
+ 	return true;
+ }
+-function parseSessionChangeBlocks(diff, parseDiffOptions, getPreviousAdditionLine) {
++function parseSessionChangeBlocks(diff, parseDiffOptions, getPreviousAdditionLine, editSpan) {
++	if (getLineDiffProvider() != null && editSpan != null) return parseSessionRegionBlocks(diff, parseDiffOptions, getPreviousAdditionLine, editSpan);
+ 	const core = findDivergenceCore(diff.deletionLines, diff.additionLines);
+ 	if (core == null) return [];
+ 	// Retain boundary context for the existing blank-line alignment rules.
+@@ -231,12 +235,15 @@
+ 		contents: diff.additionLines.slice(start, additionEnd).join(""),
+ 		lang: diff.lang
+ 	}, { ...parseDiffOptions, maxEditLength: 2048 });
++	return extractSessionBlocks(diff, parsed, start, start, getPreviousAdditionLine);
++}
++function extractSessionBlocks(diff, parsed, additionStart, deletionStart, getPreviousAdditionLine) {
+ 	parsed.deletionLines = diff.deletionLines;
+ 	parsed.additionLines = diff.additionLines;
+ 	for (const hunk of parsed.hunks) {
+-		hunk.deletionLineIndex += start;
+-		hunk.additionLineIndex += start;
+-		hunk.hunkContent = hunk.hunkContent.map(content => offsetHunkContent(content, start, start));
++		hunk.deletionLineIndex += deletionStart;
++		hunk.additionLineIndex += additionStart;
++		hunk.hunkContent = hunk.hunkContent.map(content => offsetHunkContent(content, additionStart, deletionStart));
+ 	}
+ 	let previousBlocks;
+ 	const resolveSlide = (block, maxSlide) => {
+@@ -252,8 +259,8 @@
+ 		return maxSlide;
+ 	};
+ 	const blocks = [];
+-	let coveredAdditions = 0;
+-	let coveredDeletions = 0;
++	let coveredAdditions = additionStart;
++	let coveredDeletions = deletionStart;
+ 	for (const hunk of parsed.hunks) {
+ 		slideBlankBoundaryBlocksUp(hunk, parsed, resolveSlide);
+ 		const contextLines = hunk.additionCount > 0 ? hunk.additionLineIndex - coveredAdditions : hunk.deletionLineIndex - coveredDeletions;
+@@ -274,6 +281,232 @@
+ 		}
+ 	}
+ 	return blocks;
++}
++const SESSION_REGION_CONTEXT = 4;
++function editorLineCount(lines) {
++	return lines.length > 1 && lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
++}
++/** Change blocks of every hunk, clamped to the canonical (phantom-free) addition line count. */
++function collectChangeBlocks(hunks, additionLineCount) {
++	const blocks = [];
++	for (const hunk of hunks) for (const content of hunk.hunkContent) {
++		if (content.type !== "change") continue;
++		const additions = Math.max(0, Math.min(content.additions, additionLineCount - content.additionLineIndex));
++		if (additions === 0 && content.deletions === 0) continue;
++		blocks.push(additions === content.additions ? { ...content } : { ...content, additions });
++	}
++	return blocks;
++}
++/** Canonical previous/current span an edit replaced, from whole editor line arrays. */
++function getSessionEditSpan(previousLines, currentLines) {
++	const previousEnd = editorLineCount(previousLines);
++	const currentEnd = editorLineCount(currentLines);
++	const max = Math.min(previousEnd, currentEnd);
++	let start = 0;
++	while (start < max && previousLines[start] === currentLines[start]) start++;
++	let previous = previousEnd;
++	let current = currentEnd;
++	while (previous > start && current > start && previousLines[previous - 1] === currentLines[current - 1]) {
++		previous--;
++		current--;
++	}
++	return {
++		start,
++		previousEnd: previous,
++		currentEnd: current
++	};
++}
++function getChangedLinesSpan(lines, changedLines, getPreviousAdditionLine) {
++	const last = lines.length - 1;
++	const previousLast = getPreviousAdditionLine(last);
++	const previousLength = lines.length > 1 && previousLast === "" ? lines.length - 1 : lines.length;
++	const currentLength = editorLineCount(lines);
++	const start = Math.min(changedLines[0], previousLength, currentLength);
++	const end = changedLines[changedLines.length - 1] + 1;
++	return {
++		start,
++		previousEnd: Math.max(start, Math.min(end, previousLength)),
++		currentEnd: Math.max(start, Math.min(end, currentLength))
++	};
++}
++/**
++* Grow the edited span to the previous blocks it touches plus up to four aligned
++* context lines, never into an untouched block, so only that region is re-diffed.
++*/
++function resolveSessionEditRegion(blocks, span, previousLength) {
++	const { start, previousEnd } = span;
++	let first = 0;
++	let offset = 0;
++	while (first < blocks.length && blocks[first].additionLineIndex + blocks[first].additions < start) {
++		offset += blocks[first].deletions - blocks[first].additions;
++		first++;
++	}
++	let last = first;
++	let through = offset;
++	while (last < blocks.length && blocks[last].additionLineIndex <= previousEnd) {
++		through += blocks[last].deletions - blocks[last].additions;
++		last++;
++	}
++	const firstTouched = last > first ? blocks[first] : void 0;
++	const lastTouched = last > first ? blocks[last - 1] : void 0;
++	let additionStart = start;
++	let deletionStart = start + offset;
++	if (firstTouched != null && firstTouched.additionLineIndex < start) {
++		additionStart = firstTouched.additionLineIndex;
++		deletionStart = firstTouched.deletionLineIndex;
++	}
++	let additionEnd = previousEnd;
++	let deletionEnd = previousEnd + through;
++	if (lastTouched != null && lastTouched.additionLineIndex + lastTouched.additions > previousEnd) {
++		additionEnd = lastTouched.additionLineIndex + lastTouched.additions;
++		deletionEnd = lastTouched.deletionLineIndex + lastTouched.deletions;
++	}
++	const before = first > 0 ? blocks[first - 1].additionLineIndex + blocks[first - 1].additions : 0;
++	const after = last < blocks.length ? blocks[last].additionLineIndex : previousLength;
++	const lead = Math.max(0, Math.min(SESSION_REGION_CONTEXT, additionStart - before));
++	const trail = Math.max(0, Math.min(SESSION_REGION_CONTEXT, after - additionEnd));
++	return {
++		first,
++		last,
++		deletionStart: deletionStart - lead,
++		deletionEnd: deletionEnd + trail,
++		additionStart: additionStart - lead,
++		additionEnd: additionEnd + trail + span.currentEnd - span.previousEnd
++	};
++}
++/**
++* Diff one region with the host provider. Too large for the UI thread: show its
++* trimmed replacement now and flag it for the provider's asynchronous answer.
++*/
++function diffSessionRegion(diff, region, parseDiffOptions, getPreviousAdditionLine, computed) {
++	const provider = getLineDiffProvider();
++	if (computed == null && region.deletionEnd - region.deletionStart + region.additionEnd - region.additionStart > provider.syncLineLimit) return deferredReplacementBlock(diff, region, parseDiffOptions);
++	const oldLines = diff.deletionLines.slice(region.deletionStart, region.deletionEnd);
++	const newLines = diff.additionLines.slice(region.additionStart, region.additionEnd);
++	const result = computed ?? provider.computeSync(oldLines, newLines, parseDiffOptions);
++	if (result == null) return deferredReplacementBlock(diff, region, parseDiffOptions);
++	if (result.changes.length === 0) return [];
++	const oldName = diff.prevName ?? diff.name;
++	const parsed = parseDiffFromFile({
++		name: oldName,
++		contents: oldLines.join("")
++	}, {
++		name: diff.name,
++		contents: newLines.join(""),
++		lang: diff.lang
++	}, parseDiffOptions, false, provider.formatPatch(oldName, diff.name, oldLines, newLines, result.changes));
++	return extractSessionBlocks(diff, parsed, region.additionStart, region.deletionStart, getPreviousAdditionLine);
++}
++function deferredReplacementBlock(diff, region, parseDiffOptions) {
++	const equal = parseDiffOptions?.ignoreWhitespace ? (a, b) => a.trim() === b.trim() : (a, b) => a === b;
++	const { deletionLines, additionLines } = diff;
++	let deletionStart = region.deletionStart;
++	let additionStart = region.additionStart;
++	let { deletionEnd, additionEnd } = region;
++	while (deletionStart < deletionEnd && additionStart < additionEnd && equal(deletionLines[deletionStart], additionLines[additionStart])) {
++		deletionStart++;
++		additionStart++;
++	}
++	while (deletionEnd > deletionStart && additionEnd > additionStart && equal(deletionLines[deletionEnd - 1], additionLines[additionEnd - 1])) {
++		deletionEnd--;
++		additionEnd--;
++	}
++	if (deletionStart === deletionEnd && additionStart === additionEnd) return [];
++	return [{
++		type: "change",
++		additions: additionEnd - additionStart,
++		deletions: deletionEnd - deletionStart,
++		additionLineIndex: additionStart,
++		deletionLineIndex: deletionStart,
++		deferredLineDiff: true
++	}];
++}
++function parseSessionRegionBlocks(diff, parseDiffOptions, getPreviousAdditionLine, editSpan) {
++	const delta = editSpan.currentEnd - editSpan.previousEnd;
++	const blocks = collectChangeBlocks(diff.hunks, diff.additionLines.length - delta);
++	const region = resolveSessionEditRegion(blocks, editSpan, diff.additionLines.length - delta);
++	return [
++		...blocks.slice(0, region.first),
++		...diffSessionRegion(diff, region, parseDiffOptions, getPreviousAdditionLine),
++		...blocks.slice(region.last).map((block) => ({
++			...block,
++			additionLineIndex: block.additionLineIndex + delta
++		}))
++	];
++}
++/** Recompute-shaped hunks from exact change blocks, without re-diffing the file. */
++function recomputeFromChangeBlocks(diff, blocks, parseDiffOptions) {
++	const editorLines = diff.additionLines;
++	const additionLines = editorLines.slice(0, editorLineCount(editorLines));
++	const oldName = diff.prevName ?? diff.name;
++	const patch = getLineDiffProvider().formatPatch(oldName, diff.name, diff.deletionLines, additionLines, blocks.map((block) => ({
++		oldStart: block.deletionLineIndex,
++		oldEnd: block.deletionLineIndex + block.deletions,
++		newStart: block.additionLineIndex,
++		newEnd: block.additionLineIndex + block.additions
++	})));
++	const recomputed = parseDiffFromFile({
++		name: oldName,
++		contents: diff.deletionLines.join("")
++	}, {
++		name: diff.name,
++		contents: additionLines.join(""),
++		lang: diff.lang
++	}, parseDiffOptions, false, patch);
++	const deferred = blocks.filter((block) => block.deferredLineDiff === true);
++	if (deferred.length > 0) for (const hunk of recomputed.hunks) for (const content of hunk.hunkContent) {
++		if (content.type === "change" && deferred.some((block) => content.deletionLineIndex < block.deletionLineIndex + Math.max(block.deletions, 1) && block.deletionLineIndex < content.deletionLineIndex + Math.max(content.deletions, 1) || content.additionLineIndex < block.additionLineIndex + Math.max(block.additions, 1) && block.additionLineIndex < content.additionLineIndex + Math.max(content.additions, 1))) content.deferredLineDiff = true;
++	}
++	const result = {
++		hunks: recomputed.hunks,
++		splitLineCount: recomputed.splitLineCount,
++		unifiedLineCount: recomputed.unifiedLineCount,
++		additionLines: recomputed.additionLines,
++		deletionLines: recomputed.deletionLines,
++		additionCharacterCount: recomputed.additionCharacterCount,
++		deletionCharacterCount: recomputed.deletionCharacterCount,
++		type: recomputed.type
++	};
++	preserveTrailingEditorBlankLine(result, editorLines);
++	return result;
++}
++function findDeferredLineRegion(diff) {
++	const blocks = collectChangeBlocks(diff.hunks, editorLineCount(diff.additionLines));
++	const block = blocks.find((entry) => entry.deferredLineDiff === true);
++	if (block == null) return;
++	return {
++		deletionStart: block.deletionLineIndex,
++		deletionEnd: block.deletionLineIndex + block.deletions,
++		additionStart: block.additionLineIndex,
++		additionEnd: block.additionLineIndex + block.additions
++	};
++}
++/**
++* Install the provider's answer for a deferred region if that fallback block is
++* still current; a failed answer (result undefined) keeps the fallback as final.
++*/
++function applyDeferredLineDiff(diff, region, result, parseDiffOptions, sessionActive) {
++	const editorLines = diff.additionLines;
++	const additionLines = editorLines.slice(0, editorLineCount(editorLines));
++	const blocks = collectChangeBlocks(diff.hunks, additionLines.length);
++	const index = blocks.findIndex((block) => block.deferredLineDiff === true && block.deletionLineIndex === region.deletionStart && block.deletions === region.deletionEnd - region.deletionStart && block.additionLineIndex === region.additionStart && block.additions === region.additionEnd - region.additionStart);
++	if (index === -1) return false;
++	const canonicalDiff = {
++		...diff,
++		additionLines
++	};
++	const exact = result == null ? [{ ...blocks[index], deferredLineDiff: false }] : diffSessionRegion(canonicalDiff, region, parseDiffOptions, (line) => additionLines[line], result);
++	const { type } = diff;
++	Object.assign(diff, recomputeFromChangeBlocks(diff, [
++		...blocks.slice(0, index),
++		...exact,
++		...blocks.slice(index + 1)
++	], parseDiffOptions));
++	if (sessionActive) {
++		diff.type = type;
++		diff.editSessionDirty = true;
++	}
++	return true;
+ }
+ function collectPureChangeBlocks(hunks) {
+ 	const blocks = /* @__PURE__ */ new Map();
+@@ -471,6 +704,6 @@
+ 	for (let index = 0; index < diff.hunks.length; index++) syncHunkNoEOFCRFromFullFile(diff, index);
+ }
+ //#endregion
+-export { applySessionChangedLines, captureExpansionAnchors, findDivergenceCore, finishEditSessionForDiff, normalizeEditorLines, rebuildExpansionFromAnchors, rebuildSessionHunks, remapExpandedHunksForRegionChange };
++export { applyDeferredLineDiff, applySessionChangedLines, captureExpansionAnchors, findDeferredLineRegion, findDivergenceCore, finishEditSessionForDiff, getSessionEditSpan, normalizeEditorLines, rebuildExpansionFromAnchors, rebuildSessionHunks, remapExpandedHunksForRegionChange };
+ 
+ //# sourceMappingURL=editSessionHunks.js.map
+\ No newline at end of file
+diff --git a/dist/utils/parseDiffFromFile.d.ts b/dist/utils/parseDiffFromFile.d.ts
+--- a/dist/utils/parseDiffFromFile.d.ts
++++ b/dist/utils/parseDiffFromFile.d.ts
+@@ -8,6 +8,27 @@
+  * collision-safe key derived from both values.
+  */
+ declare function parseDiffFromFile(oldFile: FileContents | null, newFile: FileContents | null, options?: CreatePatchOptionsNonabortable, throwOnError?: boolean, precomputedPatch?: string): FileDiffMetadata;
++/** Zero-based line ranges with exclusive ends over lines that keep their newline. */
++interface LineDiffChange {
++  oldStart: number;
++  oldEnd: number;
++  newStart: number;
++  newEnd: number;
++}
++interface LineDiffResult {
++  changes: LineDiffChange[];
++  timedOut: boolean;
++}
++interface LineDiffProvider {
++  /** Regions above this many old plus new lines are diffed asynchronously. */
++  syncLineLimit: number;
++  /** Synchronous result, or undefined when the input is too large for the UI thread. */
++  computeSync(oldLines: readonly string[], newLines: readonly string[], options?: CreatePatchOptionsNonabortable): LineDiffResult | undefined;
++  computeAsync(oldLines: readonly string[], newLines: readonly string[], options?: CreatePatchOptionsNonabortable): Promise<LineDiffResult>;
++  formatPatch(oldName: string, newName: string, oldLines: readonly string[], newLines: readonly string[], changes: readonly LineDiffChange[]): string;
++}
++declare function setLineDiffProvider(provider: LineDiffProvider | undefined): void;
++declare function getLineDiffProvider(): LineDiffProvider | undefined;
+ //#endregion
+-export { parseDiffFromFile };
++export { type LineDiffChange, type LineDiffProvider, type LineDiffResult, getLineDiffProvider, parseDiffFromFile, setLineDiffProvider };
+ //# sourceMappingURL=parseDiffFromFile.d.ts.map
+\ No newline at end of file
+diff --git a/dist/utils/parseDiffFromFile.js b/dist/utils/parseDiffFromFile.js
+--- a/dist/utils/parseDiffFromFile.js
++++ b/dist/utils/parseDiffFromFile.js
+@@ -75,7 +75,15 @@
+ 		contents: ""
+ 	};
+ }
++// Host-supplied line diff for edit sessions; jsdiff remains the default without one.
++let lineDiffProvider;
++function setLineDiffProvider(provider) {
++	lineDiffProvider = provider;
++}
++function getLineDiffProvider() {
++	return lineDiffProvider;
++}
+ //#endregion
+-export { parseDiffFromFile };
++export { getLineDiffProvider, parseDiffFromFile, setLineDiffProvider };
+ 
+ //# sourceMappingURL=parseDiffFromFile.js.map
+\ No newline at end of file
