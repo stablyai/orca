@@ -22,7 +22,7 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
     })
   }
   ensureJournalStoredOutputColumn(db)
-  runJournalTransaction(db, () => ensureJournalRetirePending(db))
+  ensureJournalRetirePending(db)
 }
 
 /** Added without a user_version change: released builds name their columns and never read it. */

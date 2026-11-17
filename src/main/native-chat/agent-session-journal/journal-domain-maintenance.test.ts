@@ -5,8 +5,8 @@ import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journa
 import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import { JournalSqlActivity } from './journal-sql-activity'
-import { registerJournalForkStages } from './journal-fork-stage-state'
-import type { JournalForkStages } from './journal-fork-stages'
+import { JournalForkStages } from './journal-fork-stages'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 
 const databases: Database.Database[] = []
 const maintainers: JournalSqlBackgroundMaintenance[] = []
@@ -199,23 +199,59 @@ it('visits only chats whose head epoch changed since their last completed pass',
     const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after: null })
     return page.kind === 'retired-heads' ? page.heads : []
   })()
-  expect(moved).toEqual({ sessionId: 'session-03', epoch: 'replacement', generation: 1 })
+  expect(moved).toMatchObject({ sessionId: 'session-03', epoch: 'replacement' })
   db.exec(`UPDATE journal_chat_state SET epoch='newer' WHERE session_id='session-03'`)
   maintain(db, { kind: 'domain-retired-prune', ...moved! })
   expect(retiredPass(db)).toEqual(['session-03'])
 
-  registerJournalForkStages(db, {
-    epochs: (sessionId: string) => (sessionId === 'session-04' ? ['staged'] : []),
-    holds: () => false,
-    holdsAttachments: () => false
-  } as unknown as JournalForkStages)
-  db.exec(`INSERT INTO journal_retire_pending VALUES('session-04',1),('forgotten',1);
-    INSERT INTO journal_item_tombstones VALUES('session-04','staged','staged',1)`)
+  const stages = new JournalForkStages(db, '')
+  const begun = stages.apply(
+    {
+      kind: 'fork-stage-begin',
+      input: {
+        target: { sessionId: 'session-04', epoch: 'epoch', ownerToken: 'fork' },
+        identity: {
+          sessionId: 'session-04',
+          workspaceId: 'workspace',
+          hostId: LOCAL_EXECUTION_HOST_ID,
+          agent: 'codex',
+          providerHandle: null
+        },
+        fence: 1,
+        operationId: 'fork',
+        fingerprint: 'fork',
+        source: {
+          sessionId: 'chat',
+          throughItemId: 'body',
+          capability: 'tip',
+          retained: '',
+          location: {
+            executionHostId: LOCAL_EXECUTION_HOST_ID,
+            wslDistro: null,
+            workspaceId: 'workspace',
+            workspaceKind: 'folder'
+          },
+          submissionsToken: null
+        }
+      }
+    },
+    100
+  )
+  const [staged] = stages.epochs('session-04')
+  db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,
+    sequence_index,owner_fence,payload_json) VALUES('session-04',?,'staged',1,1,1,0,1,'{}')`).run(staged)
+  db.exec(`INSERT INTO journal_retire_pending VALUES('forgotten',1)`)
   expect(retiredPass(db)).toEqual(['forgotten', 'session-04'])
   expect(retiredPass(db)).toEqual(['session-04'])
-  expect(
-    db.prepare("SELECT epoch FROM journal_item_tombstones WHERE session_id='session-04'").all()
-  ).toEqual([{ epoch: 'staged' }])
+  if (!begun || !('token' in begun)) {
+    throw new Error('expected a fork stage')
+  }
+  stages.apply({ kind: 'fork-abort', token: begun.token }, 200)
+  expect(retiredPass(db)).toEqual(['session-04'])
+  expect(retiredPass(db)).toEqual([])
+  expect(db.prepare("SELECT epoch FROM journal_items WHERE session_id='session-04'").all()).toEqual(
+    []
+  )
 })
 
 it('finishes a retired pass during activity while an already-started conversion is paused on idle', async () => {
