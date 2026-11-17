@@ -12,24 +12,24 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/re
 type Prefix = readonly [sessionId: string, epoch: string]
 type TailText = AgentJournalMessageItem & { blocks: [{ type: 'text'; text: string }] }
 
-// With writes off, a connection that once saw no tail never sees one: only folds touch the table.
-const tailsMayExist = new WeakMap<Database.Database, boolean>()
+// A store this build opened read-only (a newer schema) may predate the table; it holds no tail.
+// Only presence is remembered: a reader that looked before the writer created it looks again.
+const tailTables = new WeakSet<Database.Database>()
 
-function mayHoldTails(db: Database.Database): boolean {
-  if (JOURNAL_TEXT_TAIL_WRITES) {
+function hasTailTable(db: Database.Database): boolean {
+  if (tailTables.has(db)) {
     return true
   }
-  let known = tailsMayExist.get(db)
-  if (known === undefined) {
-    try {
-      known = db.prepare('SELECT 1 AS held FROM journal_text_tail LIMIT 1').get() !== undefined
-    } catch {
-      // A store opened before this build created the table holds no tail.
-      known = false
-    }
-    tailsMayExist.set(db, known)
+  const present =
+    db
+      .prepare(
+        `SELECT 1 AS present FROM sqlite_schema WHERE type='table' AND name='journal_text_tail'`
+      )
+      .get() !== undefined
+  if (present) {
+    tailTables.add(db)
   }
-  return known
+  return present
 }
 
 /** Only a streamed single-text assistant or reasoning message can carry a tail. */
@@ -61,7 +61,8 @@ export function hydrateJournalTextTail<T extends AgentJournalRenderItem>(
   prefix: Prefix,
   item: T
 ): T {
-  return isTailText(item.body) && mayHoldTails(db) ? joinTail(db, prefix, item, item.body) : item
+  // Probed per read: another build sharing the store may append at any time.
+  return isTailText(item.body) && hasTailTable(db) ? joinTail(db, prefix, item, item.body) : item
 }
 
 function joinTail<T extends AgentJournalRenderItem>(
@@ -225,8 +226,6 @@ export function foldJournalTurnTextTails(
 export function tryFoldJournalTextTails(db: Database.Database): void {
   try {
     runJournalTransaction(db, () => foldJournalTextTails(db))
-    // Only after commit: a fold that rolled back left its tails to read.
-    tailsMayExist.set(db, JOURNAL_TEXT_TAIL_WRITES)
   } catch (error) {
     console.warn('[agent-session-journal] left streamed text tails to fold later', error)
   }

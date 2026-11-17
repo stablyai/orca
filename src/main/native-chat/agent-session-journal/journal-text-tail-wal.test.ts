@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { message, messageFixture } from './journal-sql-message.test-fixture'
+import { message, messageFixture, target } from './journal-sql-message.test-fixture'
+import { readJournalDomainClientForms } from './journal-domain-item-presentation'
 
 const switches = vi.hoisted(() => ({ writes: true }))
 vi.mock('./journal-text-tail-writes', () => ({
@@ -74,6 +75,23 @@ it.runIf(process.env.ORCA_TEXT_TAIL_WAL_BENCH === '1')(
         console.log(JSON.stringify(await streamWal(tails, answers, kib)))
       }
     }
+    // Each read of a finished assistant item probes the (empty) tail table once.
+    const db = new Database(':memory:')
+    const { commit } = messageFixture(db)
+    const ids = Array.from({ length: 1000 }, (_, index) => `assistant-${index}`)
+    for (const id of ids) {
+      await commit(message('word '.repeat(400), id))
+    }
+    const page = ids.map((id) => `orca:${id}`)
+    readJournalDomainClientForms(db, target, page)
+    const started = performance.now()
+    for (let run = 0; run < 20; run++) {
+      readJournalDomainClientForms(db, target, page)
+    }
+    console.log(
+      JSON.stringify({ historyPageItems: 1000, msPerPage: (performance.now() - started) / 20 })
+    )
+    db.close()
   },
   3_600_000
 )
