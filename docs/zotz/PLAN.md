@@ -196,10 +196,10 @@ Verificación en hardware real (pendiente; nada de esto se pudo probar desde la 
 
 Los agentes tienen acceso total **a la MSI**; que esa máquina no tenga nada que no deba perderse.
 
-- [ ] Usuario de Windows dedicado (`zotz`), sin la sesión de Chrome personal de Hugo y sin datos de negocios ni de clientes.
-- [ ] Tokens con alcance mínimo y revocables: GitHub fine-grained, solo con acceso a los repos que el nodo trabaja.
-- [ ] Respaldo: punto de restauración de Windows antes de la primera puesta en marcha y backup semanal de la carpeta de datos de Zotz.
-- [ ] Documentar todo en `docs/zotz/SECURITY.md`.
+- [ ] Usuario de Windows dedicado (`zotz`), sin la sesión de Chrome personal de Hugo y sin datos de negocios ni de clientes. (Pasos en `SECURITY.md` §1; falta hacerlo en la MSI, que hoy corre como `rodri`.)
+- [ ] Tokens con alcance mínimo y revocables: GitHub fine-grained, solo con acceso a los repos que el nodo trabaja. (Guía y plan de revocación en `SECURITY.md` §2; lo crea Hugo.)
+- [ ] Respaldo: punto de restauración de Windows antes de la primera puesta en marcha y backup semanal de la carpeta de datos de Zotz. (Comandos listos en `SECURITY.md` §3; falta correrlos en la MSI.)
+- [x] Documentar todo en `docs/zotz/SECURITY.md`.
 
 ---
 
@@ -454,3 +454,14 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - No se usa `--bind <IP-de-Tailscale>` (decisión de Fase 5): la IP cambia y upstream rechaza abrir la red con una IP fija. El filtro por origen + firewall da el mismo resultado.
 - `orca serve` sin ventana mantiene la política de upstream (acepta LAN); el nodo no lo usa. Documentado cómo restringirlo.
 - Falta la prueba manual: vincular desde la laptop y desde la app móvil oficial por la tailnet, y confirmar que desde la LAN (`192.168…`) se rechaza.
+
+### 2026-11-17 — Fase 7 (`zotz/fase-7-seguridad`)
+
+- `docs/zotz/SECURITY.md`: usuario estándar `zotz` (qué instalar ahí y qué nunca), tokens con alcance mínimo (GitHub fine-grained solo con los repos del nodo y 90 días; cuentas o API keys de agentes solo para el nodo con límite de gasto), qué revocar y en qué orden si el nodo se compromete, punto de restauración antes del asistente y tarea semanal `\Zotz\Backup` (robocopy como `SYSTEM`, sin cachés). Los bloques de PowerShell se verificaron con el parser.
+- Sin cambios de código: todo es configuración de la máquina y de las cuentas, que hace Hugo.
+
+**Sorpresas / pendientes**
+
+- Hoy la MSI corre Zotz como `rodri` (el usuario principal) y su carpeta de datos tiene la identidad de pairing (`orca-devices.json`, `orca-e2ee-keypair.json`). Hay que crear `zotz` y mover el nodo ahí.
+- Los secretos que Zotz cifra con `safeStorage` (DPAPI) solo se descifran con el mismo usuario en la misma instalación de Windows: un respaldo restaurado en otra máquina obliga a volver a iniciar sesión y a vincular de nuevo.
+- Las bases SQLite se copian en caliente (con `-wal`/`-shm`), así que la copia puede no ser consistente. Lo crítico (JSON de configuración y pairing) sí se copia bien.
