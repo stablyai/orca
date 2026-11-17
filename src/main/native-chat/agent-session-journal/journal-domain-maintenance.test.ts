@@ -178,7 +178,7 @@ function retiredPass(db: Database.Database): string[] {
   }
 }
 
-it('visits only chats whose head epoch changed since their last completed pass', () => {
+it('visits only chats that can hold retired rows since their last completed pass', () => {
   const db = fixture()
   const insert =
     db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
@@ -239,7 +239,9 @@ it('visits only chats whose head epoch changed since their last completed pass',
   )
   const [staged] = stages.epochs('session-04')
   db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,
-    sequence_index,owner_fence,payload_json) VALUES('session-04',?,'staged',1,1,1,0,1,'{}')`).run(staged)
+    sequence_index,owner_fence,payload_json) VALUES('session-04',?,'staged',1,1,1,0,1,'{}')`).run(
+    staged
+  )
   db.exec(`INSERT INTO journal_retire_pending VALUES('forgotten',1)`)
   expect(retiredPass(db)).toEqual(['forgotten', 'session-04'])
   expect(retiredPass(db)).toEqual(['session-04'])
