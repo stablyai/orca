@@ -60,6 +60,14 @@ it('accepts completed replay without a retained start and never begins dependent
   expect(launch.listeners.size).toBe(0)
 })
 
+it('joins contiguous replay and live bytes when completion is split at attachment', async () => {
+  const launch = watch(start + '\x1b]133;D;130;orca_command=0123456789abcdef')
+  launch.emit('0123456789abcdef\x07\x1b]133;C\x07successor')
+  expect(await launch.result).toMatchObject({ commandId, exitCode: 130 })
+  expect(launch.signal()?.aborted).toBe(true)
+  expect(launch.listeners.size).toBe(0)
+})
+
 it('does not use historical or nested metadata as this command’s finish', async () => {
   const launch = watch(finish, false)
   launch.emit(start)

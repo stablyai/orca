@@ -149,7 +149,6 @@ export function failOnLaunchedAgentExit<T>(
     const replay = command?.alreadySubmitted === false ? undefined : runtime.readRecentTerminalOutput(ptyId)
     if (replay) {
       scanner.scan(replay)
-      scanner.reset()
     }
     if (!stop.signal.aborted) {
       wait(signal ? AbortSignal.any([signal, stop.signal]) : stop.signal).then(resolve, reject)

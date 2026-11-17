@@ -35,7 +35,7 @@ describe.skipIf(process.platform === 'win32')('identified POSIX submissions', ()
     try {
       const rcfile = join(root, 'rcfile')
       writeFileSync(rcfile, content())
-      const launch = identifyTerminalCommand('(__orca_emit_command_finished 0); false', 'posix')
+      const launch = identifyTerminalCommand('(__orca_emit_command_finished 0); false', 'bash')
       const result = spawnSync('bash', ['--noprofile', '--rcfile', rcfile, '-i'], {
         input: `${launch.command}\ntrue\nexit 0\n`, encoding: 'utf8', timeout: 10_000,
         env: { ...process.env, HOME: root, ORCA_SHELL_FEATURES: 'markers', TERM: 'xterm' }
@@ -56,7 +56,7 @@ describe.skipIf(process.platform === 'win32')('identified POSIX submissions', ()
         input: 'exit 0\n', encoding: 'utf8', timeout: 10_000,
         env: {
           ...process.env, HOME: root, ORCA_SHELL_FEATURES: 'markers', TERM: 'xterm',
-          [POSIX_SHELL_STARTUP_COMMAND_ENV]: identifyTerminalCommand('false', 'posix').command
+          [POSIX_SHELL_STARTUP_COMMAND_ENV]: identifyTerminalCommand('false', 'bash').command
         }
       })
       expect(result.error).toBeUndefined()
@@ -76,7 +76,7 @@ describe.skipIf(process.platform === 'win32')('identified POSIX submissions', ()
       mkdirSync(home)
       const run = await runZshPty({
         env: { PATH: process.env.PATH ?? '', HOME: home, ZDOTDIR: root, ORCA_SHELL_FEATURES: 'ready,markers' },
-        commands: [identifyTerminalCommand('(__orca_emit_command_finished 0); false', 'posix').command, 'true']
+        commands: [identifyTerminalCommand('(__orca_emit_command_finished 0); false', 'zsh').command, 'true']
       })
       expect(finishes(run.output)).toEqual([{ id: expectedId, status: 1 }])
     } finally {
@@ -85,7 +85,7 @@ describe.skipIf(process.platform === 'win32')('identified POSIX submissions', ()
   })
 
   it('executes unchanged on a legacy shell without the identity function', () => {
-    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', identifyTerminalCommand("printf 'legacy-ok'", 'posix').command], { encoding: 'utf8' })
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-c', identifyTerminalCommand("printf 'legacy-ok'", 'bash').command], { encoding: 'utf8' })
     expect(result.stdout).toBe('legacy-ok')
     expect(result.status).toBe(0)
   })

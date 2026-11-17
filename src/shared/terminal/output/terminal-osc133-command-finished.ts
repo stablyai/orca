@@ -11,16 +11,16 @@ const OSC_133_PREFIX = '\x1b]133;'
 const MAX_OSC_CARRY_LENGTH = 4096
 
 function findOscTerminator(data: string, startIndex: number): OscTerminator | null {
-  const bel = data.indexOf('\x07', startIndex)
-  const st = data.indexOf('\x1b\\', startIndex)
-
-  if (bel === -1 && st === -1) {
-    return null
+  for (let index = startIndex; index < data.length; index += 1) {
+    const code = data.charCodeAt(index)
+    if (code === 7) return { index, length: 1 }
+    if (code === 27) {
+      // A trailing ESC may become ST in the next transport chunk.
+      if (index + 1 === data.length) return null
+      return { index, length: data.charCodeAt(index + 1) === 92 ? 2 : 0 }
+    }
   }
-  if (bel !== -1 && (st === -1 || bel < st)) {
-    return { index: bel, length: 1 }
-  }
-  return { index: st, length: 2 }
+  return null
 }
 
 function parseBestEffortExitCode(value: string | undefined): number | null {
@@ -84,7 +84,7 @@ export function createOsc133CommandFinishedScanner(
     // Why: read as the command's exit, that `D` retired a live agent's status.
     const closesAppZone = closesAppOsc133Zone(adjacentMarkers, payload)
     adjacentMarkers = (adjacentMarkers + sequence.slice(0, 1)).slice(-2)
-    if (closesAppZone) {
+    if (closesAppZone && !commandId) {
       return
     }
     if (sequence === 'C') {
@@ -127,10 +127,9 @@ export function createOsc133CommandFinishedScanner(
 
       const payloadStart = start + OSC_133_PREFIX.length
       const terminator = findOscTerminator(combined, payloadStart)
-      const interrupted = combined.indexOf('\x1b', payloadStart)
-      if (interrupted !== -1 && (!terminator || interrupted < terminator.index)) {
-        combined = combined.slice(interrupted)
-        combinedStartInChunk += interrupted
+      if (terminator?.length === 0) {
+        combined = combined.slice(terminator.index)
+        combinedStartInChunk += terminator.index
         noteOutput()
         continue
       }
