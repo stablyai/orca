@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'

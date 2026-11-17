@@ -1,4 +1,4 @@
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 
 export function useFloatingTerminalShortcutDetails() {
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')

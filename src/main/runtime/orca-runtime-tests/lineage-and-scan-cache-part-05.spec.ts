@@ -262,14 +262,20 @@ describe('OrcaRuntimeService', () => {
         handles['coordinator-created-worker'],
         paneKey('coordinator-created-worker')
       )
-      expect(
-        (await runtime.syncWindowGraph(1, graph())).agentOrchestrationByPaneKey?.[paneKey('worker')]
-      ).toMatchObject({
+      const created = await runtime.syncWindowGraph(1, graph())
+      expect(created.agentOrchestrationByPaneKey?.[paneKey('worker')]).toMatchObject({
         parentTerminalHandle: handles.creator,
         parentPaneKey: paneKey('creator'),
         coordinatorHandle: handles.coordinator,
         orchestrationRunId: runA.id
       })
+      // A window that applied this revision gets no rows back until the projection changes.
+      const unchanged = await runtime.syncWindowGraph(1, {
+        ...graph(),
+        agentOrchestrationBase: created.agentOrchestrationRevision
+      })
+      expect(unchanged.agentOrchestrationRevision).toBe(created.agentOrchestrationRevision)
+      expect(unchanged).not.toHaveProperty('agentOrchestrationByPaneKey')
 
       const oldCreatorPaneKey = paneKey('creator')
       terminalByName.creator.tabId = 'tab-creator-reminted'
@@ -281,8 +287,12 @@ describe('OrcaRuntimeService', () => {
         coordinatorHandle: remintedCreatorHandle,
         coordinatorPaneKey: paneKey('creator')
       })
-      const reboundContext = (await runtime.syncWindowGraph(1, graph()))
-        .agentOrchestrationByPaneKey?.[paneKey('worker')]
+      const reboundContext = (
+        await runtime.syncWindowGraph(1, {
+          ...graph(),
+          agentOrchestrationBase: unchanged.agentOrchestrationRevision
+        })
+      ).agentOrchestrationByPaneKey?.[paneKey('worker')]
 
       expect(db.getRun(runA.id)).toMatchObject({
         coordinator_handle: handles.coordinator,

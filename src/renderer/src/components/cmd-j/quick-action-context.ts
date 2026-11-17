@@ -4,7 +4,7 @@ import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId,
   getSshTargetIdForExecutionHost
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   selectRuntimeAwareSshStatus,
   type RuntimeAwareSshStatusState

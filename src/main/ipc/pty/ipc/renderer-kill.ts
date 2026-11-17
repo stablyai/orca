@@ -2,7 +2,7 @@ import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
 import type { Store } from '../../../persistence/loading-store/store'

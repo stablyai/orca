@@ -2,10 +2,10 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { ProjectHostSetup } from '../../../shared/project/project-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
 

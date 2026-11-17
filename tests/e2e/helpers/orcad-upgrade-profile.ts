@@ -7,8 +7,8 @@ import type {
   SshTarget,
   SshTargetCreateInput
 } from '../../../src/shared/remote-runtime/ssh/ssh-types'
-import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
-import { toSshExecutionHostId } from '../../../src/shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../src/shared/orca-profiles/constants'
+import { toSshExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { toAppSshPtyId } from '../../../src/shared/remote-runtime/ssh/ssh-pty-id'
 import { normalizeSshTarget } from '../../../src/main/persistence/leasing-ssh-ptys/ssh-normalization'
 import { mutateStoppedProfileState } from './persisted-profile-state'

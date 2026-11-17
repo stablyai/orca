@@ -48,6 +48,28 @@ function linuxPackageType(layout: PackagedLayout | null): 'deb' | 'rpm' | null {
   }
 }
 
+// The running app owns its daemon: stopped from here, its terminals would respawn one.
+async function stopTerminalDaemon(client: RuntimeClient): Promise<void> {
+  const status = await client.getOfflineRuntimeAdmission()
+  if (status.reachable) {
+    try {
+      await client.call('terminalDaemon.stopForUninstall', undefined, { timeoutMs: 60_000 })
+      return
+    } catch (error) {
+      if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+        throw new Error('This Orca cannot stop its terminals. Quit Orca and run this again.')
+      }
+      throw error
+    }
+  }
+  if (status.legacyPidRunning) {
+    throw new Error('Orca is running but unavailable. Quit Orca and run this again.')
+  }
+  const { stopLocalTerminalDaemons } =
+    await import('../../main/daemon/launch/local-terminal-daemon-stop.js')
+  await stopLocalTerminalDaemons(getDefaultUserDataPath())
+}
+
 async function createCliHost(client: RuntimeClient): Promise<OrcaUninstallHost> {
   const layout = packagedLayout(process.argv[1])
   const [{ resolveOrcaInstallIdentity }, { CliInstaller }, { persistAgentStatusHooksEnabled }] =
@@ -69,6 +91,7 @@ async function createCliHost(client: RuntimeClient): Promise<OrcaUninstallHost> 
   return {
     platform: process.platform,
     homeDir: homedir(),
+    userDataPath: getDefaultUserDataPath(),
     uid: process.getuid?.() ?? 0,
     identity: await resolveOrcaInstallIdentity({
       platform: process.platform,
@@ -91,7 +114,13 @@ async function createCliHost(client: RuntimeClient): Promise<OrcaUninstallHost> 
     listHosts: async () => [],
     removeHostHooks: async () => {
       throw new Error('SSH hosts are removed from the Orca app.')
-    }
+    },
+    isTerminalDaemonLive: async () => {
+      const { isLocalTerminalDaemonLive } =
+        await import('../../main/daemon/launch/local-terminal-daemon-stop.js')
+      return isLocalTerminalDaemonLive(getDefaultUserDataPath())
+    },
+    stopTerminalDaemon: () => stopTerminalDaemon(client)
   }
 }
 
@@ -101,7 +130,8 @@ function hasWork(plan: OrcaUninstallPlan): boolean {
     plan.cliCommand !== null ||
     plan.backgroundService !== null ||
     plan.hookScripts !== null ||
-    plan.hosts.length > 0
+    plan.hosts.length > 0 ||
+    plan.terminalDaemon !== null
   )
 }
 
@@ -109,7 +139,9 @@ function hasUnfinishedEntry(plan: OrcaUninstallPlan): boolean {
   const entries = [
     ...plan.agents,
     ...plan.hosts,
-    ...[plan.cliCommand, plan.backgroundService, plan.hookScripts].filter((entry) => entry !== null)
+    ...[plan.cliCommand, plan.backgroundService, plan.hookScripts, plan.terminalDaemon].filter(
+      (entry) => entry !== null
+    )
   ]
   return entries.some((entry) => entry.state === 'error' || entry.state === 'needs-user')
 }
@@ -134,7 +166,12 @@ function line(
 export function formatOrcaUninstallPlan(plan: OrcaUninstallPlan): string {
   const lines = [
     ...plan.agents.map((entry) =>
-      line(`${entry.agent} hooks`, entry.paths.join(', '), entry.state, entry.detail)
+      line(
+        `${entry.agent} hooks`,
+        entry.paths.map((each) => each.path).join(', '),
+        entry.state,
+        entry.detail
+      )
     ),
     ...(plan.cliCommand
       ? [
@@ -149,7 +186,7 @@ export function formatOrcaUninstallPlan(plan: OrcaUninstallPlan): string {
     ...(plan.backgroundService
       ? [
           line(
-            'Background service',
+            '`orca serve` server',
             plan.backgroundService.location,
             plan.backgroundService.state,
             plan.backgroundService.detail
@@ -173,7 +210,17 @@ export function formatOrcaUninstallPlan(plan: OrcaUninstallPlan): string {
         entry.state,
         entry.detail
       )
-    )
+    ),
+    ...(plan.terminalDaemon
+      ? [
+          line(
+            'Terminal background process',
+            plan.terminalDaemon.location,
+            plan.terminalDaemon.state,
+            plan.terminalDaemon.detail
+          )
+        ]
+      : [])
   ]
   return lines.length > 0 ? lines.join('\n') : '  Nothing outside Orca to remove.'
 }
@@ -211,16 +258,17 @@ export const UNINSTALL_HANDLERS: Record<string, CommandHandler> = {
     const host = await createCliHost(client)
     let plan = await buildOrcaUninstallPlan(host)
     if (hasWork(plan) && flags.get('yes') !== true) {
+      const closesTerminals = plan.terminalDaemon ? ' Open terminals will close.' : ''
       const confirm = confirmFor(json)
       if (!confirm) {
         throw new RuntimeClientError(
           'confirmation_required',
-          'Removes what Orca added outside its own folders. Re-run with --yes to confirm.',
+          `Removes what Orca added outside its own folders.${closesTerminals} Re-run with --yes to confirm.`,
           { plan }
         )
       }
       const question = [
-        'Orca will remove what it added outside its own folders. Your projects, worktrees, chat history and Orca settings stay.',
+        `Orca will remove what it added outside its own folders. Your projects, worktrees, chat history and Orca settings stay.${closesTerminals}`,
         formatOrcaUninstallPlan(plan),
         ...(plan.otherOrcaBuildName
           ? [`${plan.otherOrcaBuildName} is still installed, so the shared agent hooks stay.`]

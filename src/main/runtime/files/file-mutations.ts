@@ -12,7 +12,7 @@ import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import { constants, copyFile, mkdir, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
-import { replaceLocalFileBytesIfUnchanged } from '../../ipc/filesystem/local-disk-bytes-replace'
+import { replaceLocalFileBytesIfUnchanged } from '../../filesystem/local-file-io/local-disk-bytes-replace'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult

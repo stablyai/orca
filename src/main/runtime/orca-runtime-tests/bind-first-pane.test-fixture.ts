@@ -2,7 +2,7 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
   asProfileSessionStore,

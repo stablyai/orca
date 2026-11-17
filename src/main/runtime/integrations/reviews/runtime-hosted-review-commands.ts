@@ -225,6 +225,7 @@ export class RuntimeHostedReviewCommands {
           linkedBitbucketPR: args.linkedBitbucketPR ?? null,
           linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
           linkedGiteaPR: args.linkedGiteaPR ?? null,
+          currentHeadOid: args.currentHeadOid ?? null,
           ...executionOptions
         }),
       {

@@ -7,11 +7,19 @@ import { runOrcaUninstallSteps } from './orca-uninstall-plan-state'
 
 const plan: OrcaUninstallPlan = {
   installKind: 'mac-app',
-  agents: [{ agent: 'claude', paths: ['~/.claude/settings.json'], state: 'present', detail: null }],
+  agents: [
+    {
+      agent: 'claude',
+      paths: [{ path: '~/.claude/settings.json', orcaData: null }],
+      state: 'present',
+      detail: null
+    }
+  ],
   cliCommand: null,
   backgroundService: { location: 'launchd', state: 'present', detail: null },
   hookScripts: { location: '~/.orca/agent-hooks', state: 'present', detail: null },
   hosts: [],
+  terminalDaemon: null,
   otherOrcaBuildName: null,
   appPath: null,
   removeAppCommand: null

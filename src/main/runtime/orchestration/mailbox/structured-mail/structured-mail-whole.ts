@@ -4,7 +4,7 @@ import type { MessageRow } from '../../db/orchestration-records'
 import {
   orchestrationMailNotice,
   readAgentMessageSource
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 
 /** Compare the admitted fields, never a newly rendered address or reply line. */
 export function structuredMailWasDeliveredWhole(

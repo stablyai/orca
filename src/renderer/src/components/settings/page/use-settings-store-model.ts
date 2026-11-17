@@ -1,9 +1,9 @@
-import { useSupportedGroupHookSettings } from '@/hooks/use-supported-group-hook-settings'
+import { useSupportedGroupHookSettings } from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
-import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
+import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/app-lifecycle/appearance/app-font-family'
 import { useAppStore } from '../../../store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { usePluginFontFamilies } from '@/store/plugins/appearance/plugin-fonts'
@@ -22,7 +22,7 @@ import {
   useInstalledAgentSkillNames
 } from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
-import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { useLinearProviderConnected } from '@/lib/work-items/linear/useLinearProviderConnected'
 import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
 import {
   getFallbackTerminalFonts,

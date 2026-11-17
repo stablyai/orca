@@ -11,10 +11,10 @@ import WslMovedProjectsSection from './WslMovedProjectsSection'
 import HiddenProjectsSection from './hidden-projects/HiddenProjectsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDrawer'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/class-names'
 import { FolderPlus, Loader2 } from 'lucide-react'
-import { ActivityThreadCollapseContext } from '@/components/activity/activity-thread-collapse-context'
+import { ActivityThreadCollapseContext } from '@/components/activity/thread-list/activity-thread-collapse-context'
 import { useSidebarProjectDrop } from './project-admission/drop/useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBoardPanel'
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
@@ -24,6 +24,7 @@ import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
+import { WorktreeCardsIntroNotice } from './WorktreeCardsIntroNotice'
 import { WorktreeCardsUpdateNotice } from './WorktreeCardsUpdateNotice'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
@@ -214,6 +215,7 @@ function Sidebar({
                   <LocalGitToolchainScanBanner />
                   <StartupWorktreeRefreshStatus />
                   <WorktreeCardsUpdateNotice />
+                  <WorktreeCardsIntroNotice />
                   <WorktreeList
                     scrollOffsetRef={worktreeScrollOffsetRef}
                     scrollAnchorRef={worktreeScrollAnchorRef}

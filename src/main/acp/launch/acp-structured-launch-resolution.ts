@@ -14,7 +14,7 @@ import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
 } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
 import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
@@ -33,8 +33,8 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import {
   nothingExchangedOn,
-  type AcpSavedSessionReads
-} from '../session/acp-structured-resume-history'
+  type SavedProviderTurnReads
+} from '../../native-chat/agent-session-journal/journal-provider-turn-saved'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
@@ -61,7 +61,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
 }
 
 export type AcpStructuredLaunchPartDeps = {
-  savedSession: AcpSavedSessionReads
+  savedSession: SavedProviderTurnReads
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
   inheritedEnv?: NodeJS.ProcessEnv

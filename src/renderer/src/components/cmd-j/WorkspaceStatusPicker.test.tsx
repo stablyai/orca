@@ -27,7 +27,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
   useActiveWorktree: () => mocks.worktree.value
 }))
-vi.mock('@/hooks/useModalReturnFocus', () => ({
+vi.mock('@/lib/pane-manager/pane-focus/useModalReturnFocus', () => ({
   useModalReturnFocus: () => ({
     captureReturnFocus: mocks.captureReturnFocus,
     skipReturnFocus: () => {}

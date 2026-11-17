@@ -6,7 +6,7 @@ import type {
 import type { NativeChatSettledTurns } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { AgentSessionLatestTurn } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import type { StructuredAgentHostClock } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentHostClock } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { selectStructuredAgentTurnBars } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import {
   stepStructuredAgentTurnClock,

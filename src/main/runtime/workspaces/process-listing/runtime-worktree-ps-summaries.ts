@@ -1,7 +1,10 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { folderLineageEdgeOf } from '../../../../shared/worktree/lineage/folder-lineage-parents'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -13,7 +16,7 @@ import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/worktree/catalog/ru
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { runtimeWorktreePsRowKey } from './runtime-worktree-summary-paths'
 
@@ -145,14 +148,17 @@ export function buildRuntimeWorktreePsSummaries(args: {
     (args.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
   )
   for (const folderWorkspace of runtimeVisibleFolderWorkspaces(args.store)) {
+    if (
+      args.worktreeId !== undefined &&
+      folderWorkspaceKey(folderWorkspace.id) !== args.worktreeId
+    ) {
+      continue
+    }
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
     if (!projectGroup) {
       continue
     }
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
-    if (args.worktreeId !== undefined && worktree.id !== args.worktreeId) {
-      continue
-    }
     setPsSummary(summaries, {
       workspaceKind: 'folder-workspace',
       worktreeId: worktree.id,

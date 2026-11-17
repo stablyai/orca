@@ -14,7 +14,7 @@ import {
 import { getTerminalParkingPolicyOverrides } from './terminal-pane/parking/instrumentation/terminal-parking-e2e-overrides'
 import './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
 import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
-import { getHeldTerminalPrewarmWorktrees } from './terminal/terminal-worktree-prewarm'
+import { getHeldTerminalPrewarmWorktrees } from './terminal/worktree-prewarm/terminal-worktree-prewarm'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
 export type TerminalParkingPassCandidates = ReturnType<typeof collectTerminalParkingPassCandidates>

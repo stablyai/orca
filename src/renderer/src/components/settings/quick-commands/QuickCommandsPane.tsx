@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { getTerminalQuickCommandScope } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import {
@@ -22,11 +22,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   getTerminalQuickCommandHostOptions,
   shouldShowTerminalQuickCommandHostOwnership
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings

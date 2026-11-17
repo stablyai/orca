@@ -3,13 +3,13 @@
 import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-activation'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../hooks/ipc-tab-switch'
+import '../lib/workspace/tabs/ipc-tab-switch'
 import '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import '@/lib/notifications/terminal-shortcut-capture-notification'
 import '@/lib/workspace/tabs/workspace-tab-commands'
 
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
@@ -18,7 +18,7 @@ import '@/store/testing/app-store-test-fixture'
 import '@/store/repos/repo.test-fixture'
 import '@/store/slices/worktrees/worktree.test-fixture'
 
-import './tab-bar/agent-menu-shortcut-labels'
+import './agent/launch-menu/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 import type * as AgentTabShortcuts from './terminal-agent-tab-shortcut'
@@ -51,7 +51,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
   admitStructuredAgentSession: (
-    await import('@/store/slices/agent-status/structured-session-admission.test-fixture')
+    await import('@/store/slices/agent-status/structured-sessions/structured-session-admission.test-fixture')
   ).admissionFromBusy(mocks.structuredSessionBusy)
 }))
 
@@ -61,7 +61,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal)
 }))
 
 vi.mock('../store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('../hooks/ipc-tab-switch', () => ({
+vi.mock('../lib/workspace/tabs/ipc-tab-switch', () => ({
   handleSwitchRecentTab: vi.fn(),
   handleSwitchTab: vi.fn(),
   handleSwitchTabAcrossAllTypes: vi.fn(),
@@ -90,7 +90,9 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
 
-vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
+vi.mock('./terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: mocks.closeTerminalTab
+}))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
@@ -107,7 +109,9 @@ vi.mock('@/runtime/browser/closing/browser-workspace-tab-close', () => ({
 vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({
   destroyWorkspaceWebviews: vi.fn()
 }))
-vi.mock('./tab-bar/web-runtime-tab-move-mirror', () => ({ mirrorWebRuntimeTabMove: vi.fn() }))
+vi.mock('../runtime/web-session-tabs-sync/placement/web-runtime-tab-move-mirror', () => ({
+  mirrorWebRuntimeTabMove: vi.fn()
+}))
 
 const controller = {
   activeWorktreeId: 'repo-1::/repo/worktree',

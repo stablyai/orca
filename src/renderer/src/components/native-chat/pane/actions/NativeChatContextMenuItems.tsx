@@ -1,6 +1,6 @@
 import { Copy, ExternalLink, FileText, Globe, Quote, Search, Undo2 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { LinkAction } from '@/components/link-actions/link-action-request'

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
 import { toast } from 'sonner'
-import { ModalBoundary } from '@/app-shell/app-root-surface-boundaries'
+import { ModalBoundary } from '@/app-shell/root-surfaces/app-root-surface-boundaries'
 import {
   CommandDialog,
   CommandEmpty,
@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command'
 import { FooterKey } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
 import { getWorkspaceStatusVisualMeta } from '@/components/sidebar/workspace-status/presentation/workspace-status'
-import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
+import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'

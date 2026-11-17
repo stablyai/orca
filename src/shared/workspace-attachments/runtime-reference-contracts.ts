@@ -1,5 +1,5 @@
 import type { WorkspaceAttachment, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { PtyLivenessVerdict } from '../terminal/pty/lifecycle/pty-liveness-verdict'
 
 export type ReferenceWorkspace = Worktree & {

@@ -16,7 +16,7 @@ import type {
   DurableProfileStateMutation,
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   applyLayout,
   applyEditorFileRenamesInPartitions,
