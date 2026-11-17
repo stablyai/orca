@@ -19,6 +19,7 @@ import {
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 import { readPairingOffer, readServeReadiness } from './headless-paired-runtime-serve-readiness'
 import { retryTransientMainEvaluate } from '../../../desktop/electron-fixtures/electron-main-evaluate-retry'
+import { observeHeadlessPairedRuntimeProcessExit } from './headless-paired-runtime-process-exit'
 
 export type HeadlessPairedRuntimeHost = {
   /** Current serve process. Replaced by `restartServeProcess`, so always read it fresh. */
@@ -87,6 +88,7 @@ export async function launchHeadlessPairedRuntimeHost(
   let servePort = 0
   let agentBrowserSocketDir: string | null = null
   let app: ElectronApplication | undefined
+  let stopProcessDiagnostics: (() => void) | undefined
   try {
     agentBrowserSocketDir = options.agentBrowserSocketParent
       ? mkdtempSync(path.join(options.agentBrowserSocketParent, 'orca-ab-'))
@@ -112,8 +114,8 @@ export async function launchHeadlessPairedRuntimeHost(
       isolation.env.AGENT_BROWSER_SOCKET_DIR = agentBrowserSocketDir
     }
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
-    const launchServeProcess = (): Promise<ElectronApplication> =>
-      electron.launch({
+    const launchServeProcess = async (): Promise<ElectronApplication> => {
+      const launched = await electron.launch({
         ...(options.executablePath ? { executablePath: options.executablePath } : {}),
         args: [
           ...(options.executablePath ? [] : getOrcaElectronLaunchArgs(mainPath, false)),
@@ -127,6 +129,9 @@ export async function launchHeadlessPairedRuntimeHost(
         ],
         env: isolation.env
       })
+      stopProcessDiagnostics = observeHeadlessPairedRuntimeProcessExit(launched)
+      return launched
+    }
     const launchedApp = await launchServeProcess()
     app = launchedApp
     const [offer] = await Promise.all([
@@ -161,6 +166,7 @@ export async function launchHeadlessPairedRuntimeHost(
             'restartServeProcess requires launchHeadlessPairedRuntimeHost({ pinnedServePort: true })'
           )
         }
+        stopProcessDiagnostics?.()
         await stopServeElectronAppForE2E(serveProcess)
         serveProcessOpen = false
         await restartOptions.betweenProcesses?.()
@@ -172,6 +178,7 @@ export async function launchHeadlessPairedRuntimeHost(
       dispose: async () => {
         const socketDir = agentBrowserSocketDir
         await cleanupHeadlessHostResources([
+          () => stopProcessDiagnostics?.(),
           ...(serveProcessOpen
             ? [
                 () =>
@@ -200,6 +207,7 @@ export async function launchHeadlessPairedRuntimeHost(
     const socketDir = agentBrowserSocketDir
     try {
       await cleanupHeadlessHostResources([
+        () => stopProcessDiagnostics?.(),
         ...(launchedApp
           ? [
               () =>
