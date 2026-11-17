@@ -1,7 +1,4 @@
-import type {
-  LinearSearchIssueSummary,
-  LinearSearchResult
-} from '../../../../shared/linear/agent-result-types'
+import type { LinearSearchResult } from '../../../../shared/linear/agent-result-types'
 import { clampLinearSearchLimit } from '../../../../shared/linear/agent-access'
 import type { LinearWorkspace } from '../../../../shared/linear/workspace-types'
 import { acquire, release } from '../../requests/linear-request-concurrency'
@@ -18,6 +15,7 @@ import type { RawIssueResponse } from './issue-context-graphql'
 import { LinearAgentAccessError, linearError, toLinearAccessError } from './linear-access-errors'
 import { getFanoutClientEntries, workspaceFailure } from './workspace-read-fanout'
 import type { WorkspaceReadFailure } from './workspace-read-fanout'
+import { sumSearchTotals, type WorkspaceSearchResult } from './linear-search-totals'
 import {
   ambiguousWorkspace,
   resolveWorkspaceSelector,
@@ -280,26 +278,6 @@ async function readSearchWorkspace(
     })),
     totalCount: typeof response?.totalCount === 'number' ? response.totalCount : undefined
   }
-}
-
-type WorkspaceSearchResult = { issues: LinearSearchIssueSummary[]; totalCount?: number }
-
-// Why: a total is only true when every attempted workspace reported its own count.
-function sumSearchTotals(
-  results: WorkspaceSearchResult[],
-  attemptedWorkspaceCount: number
-): number | undefined {
-  if (results.length !== attemptedWorkspaceCount) {
-    return undefined
-  }
-  let total = 0
-  for (const result of results) {
-    if (result.totalCount === undefined) {
-      return undefined
-    }
-    total += result.totalCount
-  }
-  return total
 }
 
 async function readSearchWorkspaces(
