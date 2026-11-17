@@ -12,7 +12,7 @@ Zotz es un fork de [stablyai/orca](https://github.com/stablyai/orca) para correr
 2. **Una fase por rama/PR**: `zotz/fase-N-<tema>`. No mezcles fases.
 3. **Diff mínimo contra upstream.** Vamos a seguir jalando cambios de Orca, así que:
    - Cambia **configuración, defaults y textos visibles**, no renombres identificadores internos en masa.
-   - **No renombres** variables `ORCA_*`, paquetes `@orca/*`, nombres de RPC ni el protocolo de pairing. Si lo haces, se rompe la compatibilidad con la app móvil oficial de Orca y cada sync con upstream va a ser un infierno.
+   - **No renombres** variables `ORCA_*`, paquetes `@orca/*`, nombres de RPC ni el protocolo de pairing. (La Fase 1c renombra solo lo que choca con Orca o se ve: CLI, `~/.orca`, procesos; ver `RENAME-SPEC.md`.) Si lo haces, se rompe la compatibilidad con la app móvil oficial de Orca y cada sync con upstream va a ser un infierno.
    - Si necesitas lógica nueva, ponla en archivos nuevos con nombre `zotz-*` y engánchala con un cambio de pocas líneas en el código existente.
 4. **No borres features de upstream**: desactívalas desde un default o un guard. Así hacer rebase es barato.
 5. Antes de cada push: `pnpm check:changed`. Nunca `--no-verify`.
@@ -60,6 +60,17 @@ Archivos clave:
 
 ---
 
+## Fase 1c — Nombres internos y CLI `zotz`
+
+Spec en [`RENAME-SPEC.md`](./RENAME-SPEC.md). Va después de la Fase 3b para que llegue por el actualizador.
+
+- [ ] CLI `zotz` en el PATH global; `orca` solo como alias dentro de las terminales de Zotz.
+- [ ] `~/.orca` → `~/.zotz`, procesos `zotz-*.exe`, etiquetas de launchd, sidecar de macOS y ejecutable de Linux, con migración.
+- [ ] Alias `ZOTZ_*` → `ORCA_*` al arrancar cada proceso.
+- [ ] **No** se renombran protocolo/RPC/pairing (app móvil oficial) ni `ORCA_*`/`@orca/*` en el código (costo de sync).
+
+---
+
 ## Fase 2 — Cero telemetría y cero "phone home"
 
 Hoy Orca manda eventos a PostHog y se conecta a varios dominios de `onorca.dev`.
@@ -97,6 +108,21 @@ Un auto-update del Orca original pisaría el fork o reiniciaría la app a media 
 - [x] Escribir `docs/zotz/UPDATE.md`: cómo actualizar Zotz en la MSI (`git pull`, `pnpm install`, `pnpm build`, reiniciar el servicio).
 
 **Listo cuando:** la app corre 24 h sin pedir ni instalar updates.
+
+---
+
+## Fase 3b — Updates desde los releases de Zotz
+
+Reemplaza la regla "Zotz no se auto-actualiza" de la Fase 3: el actualizador de Orca se reapunta a `HugoRodriguezDEV/zotz`. Spec completo en [`UPDATES-SPEC.md`](./UPDATES-SPEC.md).
+
+- [x] CI publica releases versionados `v1.4.<parche×100 + build>` (estables, con `latest*.yml`, `.blockmap` y `zip` de macOS) en vez de `desktop-latest`.
+- [x] El actualizador usa `ZOTZ_RELEASE_REPO` en lugar de `stablyai/orca`; changelog y nudges de `orca.dev` apagados; solo canal estable.
+- [x] Encendido por default con switch en Ajustes; revisa cada 6 h y descarga en segundo plano; nunca reinicia sola.
+- [x] Modo servidor: instala solo tras 10 min sin agentes corriendo ni en cola.
+- [x] macOS sin firma: solo aviso con enlace al `.dmg`.
+- [ ] Única instalación manual de la primera versión versionada; borrar `desktop-latest`.
+
+**Listo cuando:** un cambio mergeado a `main` llega a la MSI como "Hay una versión nueva", se instala al reiniciar y, en modo servidor, nunca interrumpe a un agente.
 
 ---
 
@@ -217,6 +243,23 @@ Los agentes tienen acceso total **a la MSI**; que esa máquina no tenga nada que
 | Tope por terminal              | `src/main/daemon/process-scopes/terminal-memory-limits.ts` (`ORCA_TERMINAL_MEMORY_MAX`)                                                                 | Tope duro vía **cgroups**, opt-in, **solo Linux**.                                                                                                                                                           | Nada en Windows ni macOS; no hay UI.                              |
 | Árbol de procesos por terminal | `process-growth-breaker.ts` (scopes por terminal)                                                                                                       | Ya agrupa descendientes por terminal.                                                                                                                                                                        | Solo cuenta procesos, no RSS.                                     |
 
+### Decisiones de diseño (2026-11-17)
+
+- **Cola:** FIFO multinivel con relleno y envejecimiento.
+  - Tres niveles: manual › remota › automatización. Dentro de cada nivel, orden de llegada.
+  - Si la cabeza no cabe, puede entrar el primero de atrás que sí quepa (relleno). Cuando la cabeza lleva 10 min o la rebasaron 3 veces, se le reserva la memoria (envejecimiento).
+  - "Pedir cambios" regresa la tarea al frente de su nivel.
+  - La cola se guarda en disco y sobrevive reinicios. FIFO puro se descartó: la cabeza bloquea la fila aunque haya memoria para otros, y no tiene prioridades.
+  - Estructura de datos en `src/shared/zotz/agent-queue/` y `src/main/zotz/zotz-agent-queue-store.ts`.
+- **Las tareas en cola no abren terminal:** la terminal se crea cuando la tarea entra. Así no aplica el límite de 5 min de `createOrAttach` del daemon.
+- **Tablero de la cola**, distinto del kanban de agentes de Orca, con columnas por ciclo de vida de la tarea:
+  - **Backlog:** la cola real, numerada, con la siguiente tarea resaltada y por qué espera.
+  - **In Progress:** corriendo; los pausados se quedan aquí con ⏸.
+  - **Review:** el agente terminó; la sesión abierta sigue contando como memoria ocupada, con botón "Liberar memoria".
+  - **Done:** su pico alimenta el libro de estimaciones.
+  - Arriba, barra de RAM con la línea del mínimo libre.
+- **Pausar no libera RAM:** la pausa frena a un agente que crece; lo que protege la máquina es no admitir lo que no cabe.
+
 ### 8a. Medir la memoria de verdad
 
 Nuevo `src/main/daemon/admission/zotz-memory-pressure.ts`:
@@ -307,8 +350,10 @@ Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-
 | ----------------------- | ---------- | -------------------------------------- |
 | 0 Setup                 | —          | S                                      |
 | 1 Rebrand + 1b logo     | 0          | M                                      |
+| 1c Nombres internos/CLI | 1, 3b      | M                                      |
 | 2 Telemetría y red      | 0          | M                                      |
 | 3 Updates               | 0          | S                                      |
+| 3b Updates desde Zotz   | 3          | M                                      |
 | 4 Agentes               | 1          | S                                      |
 | 5 Nodo 24/7 Windows     | 1, 3       | L                                      |
 | 6 Tailscale             | 5          | S                                      |
@@ -465,3 +510,21 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - Hoy la MSI corre Zotz como `rodri` (el usuario principal) y su carpeta de datos tiene la identidad de pairing (`orca-devices.json`, `orca-e2ee-keypair.json`). Hay que crear `zotz` y mover el nodo ahí.
 - Los secretos que Zotz cifra con `safeStorage` (DPAPI) solo se descifran con el mismo usuario en la misma instalación de Windows: un respaldo restaurado en otra máquina obliga a volver a iniciar sesión y a vincular de nuevo.
 - Las bases SQLite se copian en caliente (con `-wal`/`-shm`), así que la copia puede no ser consistente. Lo crítico (JSON de configuración y pairing) sí se copia bien.
+
+### 2026-11-17 — Fase 3b (`zotz/fase-3b-updates`)
+
+- **Versiones:** `1.4.<parche×100 + build>` (`zotz-release-version.mjs`). Sin sufijo, para que cuenten como estables. `-zotz.N` se descartó porque el actualizador lo toma como RC, lo ordena por debajo de `1.4.214` y marca error cuando no hay update.
+- **CI:** job `version`; builds con `ORCA_LOCAL_BUILD_VERSION`; zip de macOS; los manifiestos y sus archivos se suben con el nombre original (`zotz-stage-release-assets.mjs`) más copias `zotz-*`; release estable `v<versión>` marcado como latest; check `zotz-check-release-repo-refs.mjs`.
+- **App:**
+  - `ZOTZ_RELEASE_REPO` en el feed, el Atom, `/releases/latest`, la revisión de manifiestos y `MAIN_RELEASE_REPO`.
+  - `orca-whats-new` apaga el changelog y los nudges de `orca.dev`.
+  - Encendido por default; se apaga con `zotzUpdatesEnabled` (o `ZOTZ_DISABLE_UPDATER=1`).
+  - `zotz-update-automation.ts` descarga sola (Windows/AppImage) y, en modo servidor, instala tras 10 min sin agentes trabajando (`getWorkingAgentCount` del servicio de awake). Revisión cada 6 h.
+  - Ajustes → Acerca de: switch, `Zotz 1.4.21427 (Orca 1.4.214, build 27)`, sin selector de canales. Ayuda → Changelog/GitHub apuntan a Zotz.
+- **Tests:** versión, staging de assets, idle install, lectura de versión y política (con el switch apagado no se carga `electron-updater`). Las fixtures de upstream con URLs de `stablyai/orca` pasan al repo de Zotz.
+
+**Sorpresas / pendientes**
+
+- La automatización solo se activa cuando el arranque de la app la configura; así las suites del actualizador de upstream siguen probando su flujo de "clic para descargar".
+- Las builds locales conservan la versión de Orca (`1.4.214`): el actualizador les ofrece el siguiente release de Zotz.
+- Falta la prueba real: instalar a mano `v1.4.21401`, publicar un cambio y ver que llega, se instala al reiniciar y que en modo servidor no interrumpe a un agente.

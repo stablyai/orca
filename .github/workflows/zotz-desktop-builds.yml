@@ -1,6 +1,7 @@
 name: Zotz desktop builds
 
-# Builds unsigned Zotz installers for Windows, macOS (Apple silicon) and Linux and publishes them as the rolling `desktop-latest` prerelease of the fork.
+# Builds unsigned Zotz installers for Windows, macOS (Apple silicon) and Linux and publishes them as a
+# versioned release the in-app updater reads (docs/zotz/UPDATES-SPEC.md).
 on:
   push:
     branches: [main]
@@ -18,7 +19,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  version:
+    if: github.repository == 'HugoRodriguezDEV/zotz'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      tag: ${{ steps.compute.outputs.tag }}
+      base: ${{ steps.compute.outputs.base }}
+      build: ${{ steps.compute.outputs.build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # An Orca sync must not point the updater back at stablyai/orca.
+      - name: Check the updater reads Zotz releases
+        run: node config/scripts/release/zotz-check-release-repo-refs.mjs
+
+      - name: Compute the release version
+        id: compute
+        run: node config/scripts/release/zotz-release-version.mjs
+
   build:
+    needs: version
     if: github.repository == 'HugoRodriguezDEV/zotz'
     name: build (${{ matrix.platform }})
     strategy:
@@ -29,21 +54,22 @@ jobs:
             runner: windows-2022
             builder-args: --win nsis --x64
             app-dir: dist/win-unpacked
-            assets: |
-              dist/orca-windows-setup.exe=zotz-windows-x64-setup.exe
+            human-assets: |
+              orca-windows-setup.exe=zotz-windows-x64-setup.exe
           - platform: macos
             runner: macos-15
-            builder-args: --mac dmg --arm64
+            # The zip is what writes latest-mac.yml; the updater only offers mac a download link (unsigned).
+            builder-args: --mac dmg zip --arm64
             app-dir: dist/mac-arm64/Zotz.app
-            assets: |
-              dist/orca-macos-arm64.dmg=zotz-macos-arm64.dmg
+            human-assets: |
+              orca-macos-arm64.dmg=zotz-macos-arm64.dmg
           - platform: linux
             runner: ubuntu-24.04
             builder-args: --linux AppImage deb --x64
             app-dir: dist/linux-unpacked
-            assets: |
-              dist/orca-linux.AppImage=zotz-linux-x64.AppImage
-              dist/orca-ide_*_amd64.deb=zotz-linux-amd64.deb
+            human-assets: |
+              orca-linux.AppImage=zotz-linux-x64.AppImage
+              orca-ide_*_amd64.deb=zotz-linux-amd64.deb
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -119,6 +145,7 @@ jobs:
         shell: bash
         env:
           ORCA_BUILD_COMMIT: ${{ github.sha }}
+          ORCA_LOCAL_BUILD_VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
           node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
@@ -127,20 +154,11 @@ jobs:
       - name: Smoke the packaged CLI
         run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=${{ matrix.app-dir }}
 
+      # Manifest-named files must keep their names or the updater sees 404s and never offers the release.
       - name: Stage release assets
-        shell: bash
         env:
-          ASSETS: ${{ matrix.assets }}
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          while IFS='=' read -r pattern name; do
-            [[ -z "$pattern" ]] && continue
-            matches=( $pattern )
-            [[ -s "${matches[0]}" ]] || { echo "::error::Missing build output: $pattern"; ls -la dist; exit 1; }
-            cp "${matches[0]}" "release/$name"
-          done <<< "$ASSETS"
-          ls -la release
+          ZOTZ_HUMAN_ASSETS: ${{ matrix.human-assets }}
+        run: node config/scripts/release/zotz-stage-release-assets.mjs
 
       - name: Upload release assets
         uses: actions/upload-artifact@v7
@@ -150,8 +168,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
-    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.repository == 'HugoRodriguezDEV/zotz' }}
+    needs: [version, build]
+    if: ${{ !cancelled() && needs.version.result == 'success' && github.event_name != 'pull_request' && github.repository == 'HugoRodriguezDEV/zotz' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -164,10 +182,15 @@ jobs:
           path: release
           merge-multiple: true
 
-      - name: Publish the desktop-latest prerelease
+      # A stable, latest release: the updater resolves /releases/latest and ignores prereleases.
+      - name: Publish the versioned release
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD_RESULT: ${{ needs.build.result }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+          BASE: ${{ needs.version.outputs.base }}
+          BUILD: ${{ needs.version.outputs.build }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -176,16 +199,13 @@ jobs:
             echo "::error::No platform produced an installer."
             exit 1
           fi
-          notes="Instaladores sin firmar de Zotz (commit ${GITHUB_SHA::10}, run ${GITHUB_RUN_ID}).
+          notes="Zotz ${VERSION} (Orca ${BASE}, build ${BUILD}) · commit ${GITHUB_SHA::10}.
+          Las instalaciones de Zotz con updates (Fase 3b) la reciben solas. Instaladores sin firmar:
           - Windows: SmartScreen → Más información → Ejecutar de todas formas.
           - macOS (Apple silicon): clic derecho → Abrir, o xattr -dr com.apple.quarantine /Applications/Zotz.app.
           - Linux: chmod +x al AppImage, o instala el .deb."
           if [[ "$BUILD_RESULT" != success ]]; then
             notes="$notes
-          Aviso: al menos una plataforma falló en este build; revisa el run."
+          Aviso: al menos una plataforma falló en este build; esas máquinas no ven esta versión."
           fi
-          gh release delete desktop-latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
-          gh release delete windows-latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
-          gh release create desktop-latest "${files[@]}" \
-            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "Zotz (último build de main)" --notes "$notes"
+          gh release create "$TAG" "${files[@]}"             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest             --title "Zotz ${VERSION}" --notes "$notes" --generate-notes

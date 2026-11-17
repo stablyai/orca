@@ -7747,7 +7747,7 @@
           "a6b37929dc": "Versión",
           "8311da27ba": "está disponible. Haz clic en \"Instalar actualización\" para descargarla e instalarla.",
           "02dc082e70": "No se pudo iniciar la descarga de la actualización.",
-          "ceb579abaf": "Busca actualizaciones de la app e instala una versión más reciente de Orca.",
+          "ceb579abaf": "Busca actualizaciones e instala una versión más nueva de Zotz.",
           "bd79d412f0": "No se pudo buscar actualizaciones. {{value0}}",
           "b9ad70c30d": "Error al actualizar. {{value0}}",
           "2a48034c4c": "Descargando v{{value0}}... {{value1}}%",
@@ -24175,8 +24175,11 @@
   },
   "zotz": {
     "updater": {
-      "manualUpdate": "Zotz se actualiza con git pull + build.",
-      "manualUpdateDetail": "Consulta docs/zotz/UPDATE.md. Define ZOTZ_ENABLE_UPDATER=1 para reactivar el actualizador integrado."
+      "updatesOffDetail": "Actívalas en Ajustes → Actualizaciones y reinicia Zotz.",
+      "versionWithBase": "Zotz {{version}} (Orca {{base}}, build {{build}})",
+      "toggleLabel": "Buscar y descargar versiones nuevas de Zotz",
+      "toggleDescription": "Desde los releases de Zotz en GitHub, cada 6 horas. Nunca reinicia sola; en un servidor instala cuando ningún agente está trabajando. Se aplica al reiniciar Zotz.",
+      "updatesOff": "Las actualizaciones de Zotz están apagadas."
     },
     "machineMode": {
       "autostartRemoveFailed": "No se pudo quitar la tarea de inicio de sesión: {{detail}}",

@@ -1090,8 +1090,8 @@
     "worktree.setupTrust.branchDiffersBody",
     "worktree.setupTrust.branchDiffersTitle",
     "worktree.setupTrust.branchSetupScript",
-    "zotz.updater.manualUpdate",
-    "zotz.updater.manualUpdateDetail"
+    "zotz.updater.updatesOff",
+    "zotz.updater.updatesOffDetail"
   ],
   "prefixes": []
 }

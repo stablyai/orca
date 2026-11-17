@@ -2,6 +2,7 @@ import { loadElectronAutoUpdater, type ElectronAutoUpdater } from '../electron-u
 import { statusesEqual } from '../releases/updater-fallback'
 import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/update-status-types'
 import { UpdaterState as BaseUpdaterState } from './updater-state'
+import { observeZotzUpdateStatus } from '../zotz-update-automation'
 
 export abstract class UpdaterStatus extends BaseUpdaterState {
   protected getAutoUpdater(): ElectronAutoUpdater {
@@ -171,6 +172,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       if (options?.force) {
         this.currentStatus = decoratedStatus
         this.sendToMainWindow('updater:status', decoratedStatus)
+        observeZotzUpdateStatus(decoratedStatus)
       }
       this.launchPendingUserInitiatedCheckAfterInFlight(pendingUserInitiatedCheckOptions)
       return
@@ -180,6 +182,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     }
     this.currentStatus = decoratedStatus
     this.sendToMainWindow('updater:status', decoratedStatus)
+    observeZotzUpdateStatus(decoratedStatus)
   }
 
   protected abstract finishActiveUpdateCheckAttempt(): void

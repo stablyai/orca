@@ -39,6 +39,7 @@ import {
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { ZOTZ_RELEASE_REPO, ZOTZ_RELEASES_URL } from '../../../../shared/zotz/zotz-app-identity'
 
 // Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
 const loadSidebarFeedbackDialog = (): Promise<typeof SidebarFeedbackDialogModule> =>
@@ -50,8 +51,9 @@ const SidebarFeedbackDialog = lazyWithRetry(
 )
 
 const DOCS_URL = 'https://orca.dev/docs'
-const CHANGELOG_URL = 'https://orca.dev/changelog'
-const GITHUB_URL = 'https://github.com/stablyai/orca'
+// Zotz ships its own releases; docs and community links stay Orca's.
+const CHANGELOG_URL = ZOTZ_RELEASES_URL
+const GITHUB_URL = `https://github.com/${ZOTZ_RELEASE_REPO}`
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
 const NO_UPDATE_CHECK_MODIFIERS = {

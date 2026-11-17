@@ -140,7 +140,7 @@ describe('updater check failure handling', () => {
       if (url.endsWith('/releases/latest')) {
         return new Response(null, {
           status: 302,
-          headers: { location: 'https://github.com/stablyai/orca/releases/tag/v1.0.51' }
+          headers: { location: 'https://github.com/HugoRodriguezDEV/zotz/releases/tag/v1.0.51' }
         })
       }
       return new Response(

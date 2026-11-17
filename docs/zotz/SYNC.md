@@ -25,13 +25,14 @@ git rebase upstream/main                    # o: git merge upstream/main
 
 Los conflictos esperables están en lo que Zotz toca a propósito:
 
-| Zona                             | Qué conservar                                                                                                                                       |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/*`            | Los guards `github.repository == 'stablyai/orca'` en jobs que publican. Si upstream agrega un workflow nuevo de release/publish, agrégale el guard. |
-| `LICENSE`                        | Las dos líneas de copyright (la de upstream intacta + la de Zotz).                                                                                  |
-| `README.md`                      | La nota "Zotz es un fork de Orca" arriba; el resto, lo de upstream.                                                                                 |
-| Archivos `zotz-*` y `docs/zotz/` | Son solo de Zotz; upstream no los toca.                                                                                                             |
-| Defaults / guards de fases 1–3   | El cambio de Zotz (default, guard, string visible) sobre el código nuevo de upstream.                                                               |
+| Zona                              | Qué conservar                                                                                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/*`             | Los guards `github.repository == 'stablyai/orca'` en jobs que publican. Si upstream agrega un workflow nuevo de release/publish, agrégale el guard. |
+| `LICENSE`                         | Las dos líneas de copyright (la de upstream intacta + la de Zotz).                                                                                  |
+| `README.md`                       | La nota "Zotz es un fork de Orca" arriba; el resto, lo de upstream.                                                                                 |
+| Archivos `zotz-*` y `docs/zotz/`  | Son solo de Zotz; upstream no los toca.                                                                                                             |
+| Defaults / guards de fases 1–3    | El cambio de Zotz (default, guard, string visible) sobre el código nuevo de upstream.                                                               |
+| Actualizador (`src/main/updater`) | URLs desde `ZOTZ_RELEASE_REPO`, nunca `stablyai/orca`. `node config/scripts/release/zotz-check-release-repo-refs.mjs` lo revisa (también en CI).    |
 
 Después de resolver:
 

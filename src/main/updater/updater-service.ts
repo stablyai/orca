@@ -13,9 +13,11 @@ import type { ReleaseBuild, ReleaseChannel } from '../../shared/release-channel'
 import type { ReleaseBuildListOptions } from './releases/updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'
 import type { UpdateInstallMode } from './lifecycle/updater-state'
-import { isZotzUpdaterEnabled, showZotzManualUpdateNotice } from './zotz-updater-policy'
+import { isZotzUpdaterEnabled, showZotzUpdatesDisabledNotice } from './zotz-updater-policy'
+import { registerZotzUpdateActions } from './zotz-update-automation'
 
 const updater = new UpdaterSetup()
+registerZotzUpdateActions({ download: () => downloadUpdate(), install: () => quitAndInstall() })
 
 export function resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {
   return updater.resolveUpdateInstallMode(isServeMode)
@@ -60,7 +62,7 @@ export function checkForUpdates(): void {
 
 export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
   if (!isZotzUpdaterEnabled()) {
-    showZotzManualUpdateNotice()
+    showZotzUpdatesDisabledNotice()
     return
   }
   updater.checkForUpdatesFromMenu(options)

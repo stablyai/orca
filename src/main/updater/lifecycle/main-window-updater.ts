@@ -26,6 +26,7 @@ import {
 } from '../updater-service'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
 import type { UpdaterSetupOptions } from './updater-setup'
+import { applyZotzUpdaterSetting } from '../zotz-updater-policy'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -83,6 +84,7 @@ function setupAutoUpdaterWithAppProxy(
 ): void {
   // Starts synchronously, so the session request guard holds the first update check until it settles.
   void applyProxyToElectronUpdaterSession(store.getSettings())
+  applyZotzUpdaterSetting(store.getSettings())
   setupAutoUpdater(mainWindow, buildUpdaterSetupOptions(store, options))
 }
 

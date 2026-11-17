@@ -6,4 +6,6 @@ export type ZotzGlobalSettings = {
   zotzMachineMode?: 'unset' | 'personal' | 'server'
   /** Catalog agents already offered once, so only ones added later start hidden. */
   zotzSeenTuiAgents?: TuiAgent[]
+  /** Check, download and offer releases of the fork; off only when set to false. */
+  zotzUpdatesEnabled?: boolean
 }

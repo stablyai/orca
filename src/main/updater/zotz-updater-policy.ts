@@ -1,21 +1,32 @@
 import { dialog } from 'electron'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { translateMain } from '../i18n/main-i18n'
 import { getTrustedUIRendererWindow } from '../ipc/ui'
 
-export const ZOTZ_ENABLE_UPDATER_ENV = 'ZOTZ_ENABLE_UPDATER'
+// Kill switch for automated launches that must never reach GitHub releases.
+export const ZOTZ_DISABLE_UPDATER_ENV = 'ZOTZ_DISABLE_UPDATER'
 
-// Zotz ships from git; upstream Orca releases would overwrite the fork.
+let updatesEnabledSetting = true
+
+/** Updates come from the fork's own releases (docs/zotz/UPDATES-SPEC.md); on unless turned off. */
 export function isZotzUpdaterEnabled(): boolean {
-  return process.env[ZOTZ_ENABLE_UPDATER_ENV] === '1'
+  return updatesEnabledSetting && process.env[ZOTZ_DISABLE_UPDATER_ENV] !== '1'
 }
 
-export function showZotzManualUpdateNotice(): void {
+/** Read once when the updater starts; flipping the setting takes effect on the next launch. */
+export function applyZotzUpdaterSetting(
+  settings: Pick<GlobalSettings, 'zotzUpdatesEnabled'>
+): void {
+  updatesEnabledSetting = settings.zotzUpdatesEnabled !== false
+}
+
+export function showZotzUpdatesDisabledNotice(): void {
   const options = {
     type: 'info' as const,
-    message: translateMain('zotz.updater.manualUpdate', 'Zotz updates with git pull + build.'),
+    message: translateMain('zotz.updater.updatesOff', 'Zotz updates are turned off.'),
     detail: translateMain(
-      'zotz.updater.manualUpdateDetail',
-      'See docs/zotz/UPDATE.md. Set ZOTZ_ENABLE_UPDATER=1 to turn the built-in updater back on.'
+      'zotz.updater.updatesOffDetail',
+      'Turn them on in Settings → Updates and restart Zotz.'
     )
   }
   const window = getTrustedUIRendererWindow()
