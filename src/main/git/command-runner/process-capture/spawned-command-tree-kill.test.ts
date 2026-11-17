@@ -200,6 +200,31 @@ describe('Git command tree termination', () => {
     expect(spawnMock).not.toHaveBeenCalled()
     expect(rootKill).toHaveBeenCalledOnce()
   })
+  it('reruns every taskkill a dying worker never started with one launch from main', async () => {
+    workerTaskkill.available = true
+    const children = [1234, 1235].map((pid) => childWithPid(pid))
+    const pending = Promise.all(children.map((child) => killSpawnedCommandTree(child)))
+    const killer = childWithPid(5678)
+    spawnMock.mockReturnValue(killer)
+    for (const queued of workerTaskkill.killers) {
+      queued.receive({
+        type: 'error',
+        id: 99,
+        error: {
+          message: 'Child process worker exited with code 1',
+          code: WORKER_CHILD_ABANDONED_CODE
+        }
+      })
+    }
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
+    expect(spawnMock).toHaveBeenCalledWith(
+      'taskkill',
+      ['/pid', '1234', '/pid', '1235', '/t', '/f'],
+      { stdio: 'ignore', windowsHide: true }
+    )
+    killer.emit('close', 0)
+    await pending
+  })
   it('still kills the tree when the worker reports the PID after the wait', async () => {
     vi.useFakeTimers()
     try {

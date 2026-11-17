@@ -210,7 +210,7 @@ describe('Windows process creation off the calling loop', () => {
         code: WORKER_CHILD_ABANDONED_CODE
       }
     })
-    expect(treeKills.via).toEqual(['worker', 'main'])
+    await vi.waitFor(() => expect(treeKills.via).toEqual(['worker', 'main']))
     expect(treeKills.args[1]).toEqual(['/pid', '4242', '/t', '/f'])
     treeKills.killers[1]!.emit('close', 0)
     await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })

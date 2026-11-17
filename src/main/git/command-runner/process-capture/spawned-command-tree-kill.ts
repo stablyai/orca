@@ -13,9 +13,27 @@ const WORKER_PID_WAIT_MS = 5_000
 const WORKER_TASKKILL_LAUNCH_ALLOWANCE_MS = 30_000
 // One tree kill per worker child: a second could walk a reused PID after the first ended the tree.
 const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<void>>()
-// PIDs a dying worker abandons in one turn share a taskkill, so main pays one launch per worker death.
-let abandonedPids: number[] | null = null
-let abandonedTreeKill: Promise<void> = Promise.resolve()
+// Tree kills a dying worker leaves in one turn share one taskkill per host, so main pays at most one launch.
+const taskkillBatches = new Map<boolean, { pids: Set<number>; ended: Promise<boolean> }>()
+
+function batchTaskkill(pids: readonly number[], onWorker: boolean): Promise<boolean> {
+  let batch = taskkillBatches.get(onWorker)
+  if (!batch) {
+    const collected = new Set<number>()
+    const ended = new Promise<boolean>((resolve) => {
+      queueMicrotask(() => {
+        taskkillBatches.delete(onWorker)
+        void runTaskkill([...collected], onWorker).then(resolve)
+      })
+    })
+    batch = { pids: collected, ended }
+    taskkillBatches.set(onWorker, batch)
+  }
+  for (const pid of pids) {
+    batch.pids.add(pid)
+  }
+  return batch.ended
+}
 
 /** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. */
 export function killAbandonedWorkerChildTree(
@@ -35,21 +53,11 @@ export function killAbandonedWorkerChildTree(
   ) {
     return Promise.resolve()
   }
-  if (!abandonedPids) {
-    const pids: number[] = []
-    abandonedPids = pids
-    abandonedTreeKill = new Promise((resolve) => {
-      queueMicrotask(() => {
-        abandonedPids = null
-        void runTaskkill(pids).then(() => resolve())
-      })
-    })
-  }
-  abandonedPids.push(pid)
+  const kill = batchTaskkill([pid], canSpawnOnWorkerThread()).then(() => {})
   if (child instanceof WorkerThreadChildProcess) {
-    workerTreeKills.set(child, abandonedTreeKill)
+    workerTreeKills.set(child, kill)
   }
-  return abandonedTreeKill
+  return kill
 }
 
 export function killSpawnedCommandTree(
@@ -141,7 +149,7 @@ function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promi
           clearTimeout(timer)
         }
         killer.removeAllListeners()
-        resolve(runTaskkill(pids, false))
+        resolve(batchTaskkill(pids, false))
         return
       }
       finish(false)
