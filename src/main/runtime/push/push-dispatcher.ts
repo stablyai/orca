@@ -121,17 +121,21 @@ export class PushDispatcher {
     const asked = new Set(request.tokenDigests)
     // A phone whose preferences here refuse this kind of alert is still the mirror's to push.
     return this.liveTokenDigests(
-      (registration) =>
-        asked.has(registration.tokenDigest ?? '') &&
+      (registration, digest) =>
+        asked.has(digest) &&
         allowsMobilePushAlertKind(registration.filter, request.source, request.agentState)
     )
   }
 
-  private liveTokenDigests(include: (registration: MobilePushRegistration) => boolean): string[] {
+  private liveTokenDigests(
+    include: (registration: MobilePushRegistration, digest: string) => boolean
+  ): string[] {
     return this.registry
       .listDevices()
       .flatMap(({ pushRegistration: registration }) =>
-        registration?.tokenDigest && registration.expiresAt > Date.now() && include(registration)
+        registration?.tokenDigest &&
+        registration.expiresAt > Date.now() &&
+        include(registration, registration.tokenDigest)
           ? [registration.tokenDigest]
           : []
       )

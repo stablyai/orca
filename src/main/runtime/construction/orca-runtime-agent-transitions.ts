@@ -47,6 +47,7 @@ import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
+import type { PushCoverageRequest } from '../push/push-dispatcher'
 
 function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
@@ -133,22 +134,19 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   }
 
   /** Whether this host pushes the alert to its own phones, so a mirroring desktop can leave them to it. */
-  pushesOwnPhoneAlert(alert: {
-    source: string
-    agentState?: string
-    paneKey?: string
-    structured?: boolean
-  }): boolean {
+  pushesOwnPhoneAlert(
+    alert: Pick<PushCoverageRequest, 'source' | 'agentState' | 'paneKey' | 'structured'>
+  ): boolean {
     // Host main pushes native chats; a window pushes every terminal alert it raises.
     if (alert.structured === true || this.hasPhonePushingWindow()) {
       return true
     }
     // Without a window only hook-reported turns reach phones, never bells or title-only turns.
-    const row =
-      alert.source === 'agent-task-complete' && alert.paneKey
-        ? this.agentTransitions.latestRow(alert.paneKey)
-        : null
-    return row !== null && row.state === alert.agentState && row.restoredUnconfirmed !== true
+    return (
+      alert.source === 'agent-task-complete' &&
+      alert.paneKey !== undefined &&
+      this.terminalAgentPhonePush.pushesHookTurn(alert.paneKey, alert.agentState)
+    )
   }
 
   protected onTitleAgentStatusChanged(): void {
