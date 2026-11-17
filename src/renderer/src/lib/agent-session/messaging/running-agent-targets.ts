@@ -10,7 +10,11 @@ import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-sessi
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import {
+  borrowsSplitTabTitle,
+  liveLeafPtyId,
+  resolveLeafTitle
+} from './terminal-pane-send-evidence'
 import { hookSilentPaneSendState } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 import {
@@ -215,22 +219,6 @@ function deriveStatuslessTerminalAgentSendTargets(
   return targets
 }
 
-// Without pane titles the row builder lends a split's tab title to its focused pane, which may be a shell.
-function borrowsSplitTabTitle(state: RunningAgentTargetState, tabId: string): boolean {
-  const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
-  const hasPaneTitles = paneTitles !== undefined && Object.keys(paneTitles).length > 0
-  return !hasPaneTitles && state.terminalLayoutsByTabId[tabId]?.root?.type === 'split'
-}
-
-function liveLeafPtyId(
-  state: RunningAgentTargetState,
-  tabId: string,
-  leafId: string
-): string | null {
-  const layoutPtyId = state.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId] ?? null
-  return layoutPtyId && state.ptyIdsByTabId?.[tabId]?.includes(layoutPtyId) ? layoutPtyId : null
-}
-
 // Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes first-turn chats.
 function deriveStructuredAgentSendTargets(
   state: RunningAgentTargetState,
@@ -264,21 +252,6 @@ function deriveStructuredAgentSendTargets(
     })
   }
   return targets
-}
-
-// The tab title is the active surface's; it belongs to this leaf only when the tab has no split.
-function resolveLeafTitle(
-  state: RunningAgentTargetState,
-  tabId: string,
-  leafId: string,
-  tabTitle: string
-): string | null {
-  const layout = state.terminalLayoutsByTabId[tabId]
-  const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
-  const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
-  const tabTitleIsLeafs =
-    !paneTitleResolution.hasAnyPaneTitle && (!layout?.root || layout.root.type === 'leaf')
-  return paneTitleResolution.title ?? (tabTitleIsLeafs ? tabTitle : null)
 }
 
 const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
