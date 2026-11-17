@@ -136,13 +136,13 @@ function WorkspaceCleanupDialogContent({
   }, [selectedIds])
   // Held order must never wait on the user's first touch, so interaction is tracked in a ref.
   const listInteractedRef = useRef(false)
-  const markListInteracted = useCallback(() => {
-    listInteractedRef.current = true
-  }, [])
   useEffect(() => {
     // Only the user's own input counts, including pointer entering or moving over rows (hover).
     // Programmatic scrolls (virtualizer restore, scrollIntoView) must not suppress the settle sort.
     const controller = new AbortController()
+    const markListInteracted = (): void => {
+      listInteractedRef.current = true
+    }
     const target = rowsScrollElement?.parentElement ?? rowsScrollElement
     if (target) {
       for (const name of [
@@ -162,7 +162,7 @@ function WorkspaceCleanupDialogContent({
       }
     }
     return () => controller.abort()
-  }, [markListInteracted, rowsScrollElement])
+  }, [rowsScrollElement])
   const liveRowByIdentity = useMemo(
     () => new Map(facetRows.allRows.map((row) => [row.identity, row])),
     [facetRows.allRows]
