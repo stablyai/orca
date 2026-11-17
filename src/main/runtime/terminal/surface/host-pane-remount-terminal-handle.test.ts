@@ -127,7 +127,7 @@ function startMultiplex(runtime: OrcaRuntimeService) {
 describe('a host pane remounting onto its same live PTY (#23759)', () => {
   it('keeps the handle a paired client is typing into', async () => {
     const { runtime, writes, inputWritten } = makeHost({ livePtyIds: new Set([PTY_ID]) })
-    runtime.syncWindowGraph(1, graph(PTY_ID))
+    await runtime.syncWindowGraph(1, graph(PTY_ID))
     const handle = await handleFor(runtime)
 
     const client = startMultiplex(runtime)
@@ -146,8 +146,8 @@ describe('a host pane remounting onto its same live PTY (#23759)', () => {
     await client.subscribed
     expect(client.messages.some((message) => message.result?.type === 'subscribed')).toBe(true)
 
-    runtime.syncWindowGraph(1, graph(null))
-    runtime.syncWindowGraph(1, graph(PTY_ID))
+    await runtime.syncWindowGraph(1, graph(null))
+    await runtime.syncWindowGraph(1, graph(PTY_ID))
     expect(await handleFor(runtime)).toBe(handle)
 
     client.send(1, TerminalStreamOpcode.Input, encodeTerminalStreamText('ls\r'))
@@ -160,9 +160,9 @@ describe('a host pane remounting onto its same live PTY (#23759)', () => {
 
   it('accepts input sent while the remounting leaf has not reattached yet', async () => {
     const { runtime, writes } = makeHost({ livePtyIds: new Set([PTY_ID]) })
-    runtime.syncWindowGraph(1, graph(PTY_ID))
+    await runtime.syncWindowGraph(1, graph(PTY_ID))
     const handle = await handleFor(runtime)
-    runtime.syncWindowGraph(1, graph(null))
+    await runtime.syncWindowGraph(1, graph(null))
 
     await runtime.sendTerminal(handle, { text: 'x' }, { inputKind: 'driving' })
     expect(writes).toEqual(['x'])
@@ -171,10 +171,10 @@ describe('a host pane remounting onto its same live PTY (#23759)', () => {
   it('still drops a leaf whose PTY the host no longer has', async () => {
     const livePtyIds = new Set([PTY_ID])
     const { runtime } = makeHost({ livePtyIds })
-    runtime.syncWindowGraph(1, graph(PTY_ID))
+    await runtime.syncWindowGraph(1, graph(PTY_ID))
     const handle = await handleFor(runtime)
     livePtyIds.clear()
-    runtime.syncWindowGraph(1, graph(null))
+    await runtime.syncWindowGraph(1, graph(null))
 
     await expect(
       runtime.sendTerminal(handle, { text: 'x' }, { inputKind: 'driving' })
@@ -183,8 +183,8 @@ describe('a host pane remounting onto its same live PTY (#23759)', () => {
 
   it('does not hold a PTY the same graph binds to another leaf', async () => {
     const { runtime } = makeHost({ livePtyIds: new Set([PTY_ID]) })
-    runtime.syncWindowGraph(1, graph(PTY_ID))
-    runtime.syncWindowGraph(1, graph(null, PTY_ID))
+    await runtime.syncWindowGraph(1, graph(PTY_ID))
+    await runtime.syncWindowGraph(1, graph(null, PTY_ID))
 
     const listing = await runtime.listTerminals()
     expect(listing.terminals.filter((terminal) => terminal.tabId === TAB_ID)).toEqual([])

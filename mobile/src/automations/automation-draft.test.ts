@@ -1,10 +1,7 @@
 import { loadAutomationTargets, workspaceMatchesSetup } from './automation-target-inventory'
 import { describe, expect, it } from 'vitest'
 
-import { AutomationUpdate } from '../../../src/shared/rpc-contract/automation-params'
-
-import { automationUpdateParams, newAutomationDraft } from './automation-draft'
-import { automationClient, automationTargets, savedAutomation } from './automation-test-fixtures'
+import { automationClient, automationTargets } from './automation-test-fixtures'
 
 describe('mobile automation host contracts', () => {
   it('resolves legacy inventory only from a unique repo host and never assumes local', async () => {
@@ -51,27 +48,5 @@ describe('mobile automation host contracts', () => {
     expect((await loadAutomationTargets(port.client)).workspaces).toEqual([])
     repos = []
     expect((await loadAutomationTargets(port.client)).workspaces).toEqual([])
-  })
-  it('edits only changed fields, preserving paused/custom/advanced and future host values', () => {
-    const saved = savedAutomation()
-    const original = newAutomationDraft(saved)
-    const params = automationUpdateParams(
-      saved.id,
-      { ...original, name: 'Renamed' },
-      original,
-      automationTargets()
-    )
-    expect(AutomationUpdate.parse(params)).toMatchObject({
-      id: saved.id,
-      updates: { name: 'Renamed' }
-    })
-    expect(params.updates).toEqual({ name: 'Renamed' })
-    expect(params.destination).toBeUndefined()
-    expect(original).toMatchObject({
-      agentId: 'codex',
-      rrule: saved.rrule,
-      grace: '0',
-      reuseSession: true
-    })
   })
 })

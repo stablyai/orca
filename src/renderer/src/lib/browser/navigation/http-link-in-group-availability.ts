@@ -15,7 +15,7 @@ import { selectBrowserLinkDestination } from './browser-link-destination'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
 import type { HttpLinkGroupActionRequest } from './http-link-routing'
 

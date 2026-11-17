@@ -1,5 +1,5 @@
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
-import '../../../../shared/constants'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
 

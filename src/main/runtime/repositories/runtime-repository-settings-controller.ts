@@ -1,7 +1,7 @@
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { isRepoHidden } from '../../../shared/hidden-projects'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
@@ -62,6 +62,7 @@ type RepositoryUpdates = Partial<
   hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
+  browserProfileId?: string | null
 }
 
 // Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.

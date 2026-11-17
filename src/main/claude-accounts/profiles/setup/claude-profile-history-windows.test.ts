@@ -13,6 +13,11 @@ vi.mock('node:fs', async (original) => {
     symlinkSync: vi.fn(actual.symlinkSync)
   }
 })
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof fsPromises>()
+  return { ...actual, symlink: vi.fn(actual.symlink) }
+})
+import * as fsPromises from 'node:fs/promises'
 vi.mock('../../../filesystem/atomic-file-publication', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
@@ -61,7 +66,7 @@ describe('Claude profile history sharing on Windows', () => {
     expect(report.warnings).toEqual([])
     expect(report.surfaces.projects).toBe('linked')
     expect(report.surfaces['history.jsonl']).toBe('linked')
-    expect(fs.symlinkSync).toHaveBeenCalledWith(
+    expect(fsPromises.symlink).toHaveBeenCalledWith(
       join(f.defaultHome, 'projects'),
       join(f.profileHome, 'projects'),
       'junction'

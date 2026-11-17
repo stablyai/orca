@@ -11,7 +11,7 @@ import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'

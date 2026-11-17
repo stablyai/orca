@@ -8,7 +8,7 @@ import { installRealWorkerThreadChildProcesses } from '../../../worker-thread-ch
 import { switchBranchGuarded } from './branch-switch'
 import { BranchSwitchCollisionError } from './branch-switch-target'
 import { checkoutBranch, listLocalBranches } from './checkout'
-import { getStatus } from '../../source-control/status-read'
+import { getStatus } from '../../source-control/status/status-read'
 import { searchRemoteRefPage } from '../../refs/resolution/repo-remote-ref-search'
 
 let directory: string

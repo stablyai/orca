@@ -1,19 +1,22 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import { folderLineageEdgeOf } from '../../../../shared/worktree/folder-lineage-parents'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import { folderLineageEdgeOf } from '../../../../shared/worktree/lineage/folder-lineage-parents'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
-import { getWorkspaceRowKindFacts } from '../../../../shared/worktree/workspace-kinds'
-import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/workspace-review-facts'
-import { withOwnerRepos } from '../../../../shared/sidebar-list/workspace-rows'
-import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/runtime-worktree-contracts'
+import { getWorkspaceRowKindFacts } from '../../../../shared/worktree/visibility/workspace-kinds'
+import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/feed-facts/workspace-review-facts'
+import { withOwnerRepos } from '../../../../shared/sidebar-list/feed-facts/workspace-rows'
+import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { runtimeWorktreePsRowKey } from './runtime-worktree-summary-paths'
 
@@ -21,6 +24,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
   store: RuntimeStore | null
   resolvedWorktrees: readonly ResolvedWorktree[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
+  /** Only this workspace's rows (every host's copy); PTY liveness still reads every worktree. */
+  worktreeId?: string
 }): Map<string, RuntimeWorktreePsSummary> {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const metaByHost = new Map<ExecutionHostId, Record<string, WorktreeMeta>>()
@@ -42,8 +47,12 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const ghCache = args.store?.getGitHubCache?.()
   const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
   const workspaceLineage = args.store?.getAllWorkspaceLineage?.()
+  const resolvedWorktrees =
+    args.worktreeId === undefined
+      ? args.resolvedWorktrees
+      : args.resolvedWorktrees.filter((worktree) => worktree.id === args.worktreeId)
   for (const { worktree, repo } of withOwnerRepos(
-    args.resolvedWorktrees,
+    resolvedWorktrees,
     args.store?.getRepos() ?? []
   )) {
     const meta = readMeta(worktree)
@@ -139,8 +148,14 @@ export function buildRuntimeWorktreePsSummaries(args: {
     (args.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
   )
   for (const folderWorkspace of runtimeVisibleFolderWorkspaces(args.store)) {
+    if (
+      args.worktreeId !== undefined &&
+      folderWorkspaceKey(folderWorkspace.id) !== args.worktreeId
+    ) {
+      continue
+    }
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
-    if (!projectGroup?.parentPath) {
+    if (!projectGroup) {
       continue
     }
     const worktree = folderWorkspaceToWorktree(folderWorkspace)

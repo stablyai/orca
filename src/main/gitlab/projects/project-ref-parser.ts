@@ -1,4 +1,4 @@
-import type { GitLabProjectRef } from '../../../shared/gitlab-types'
+import type { GitLabProjectRef } from '../../../shared/gitlab/gitlab-types'
 import { normalizeGitLabRemoteHost } from '../../../shared/git/remotes/git-remote-host-alias'
 import { getPublicForgeProviderForHost } from '../../../shared/git/remotes/public-forge-host'
 

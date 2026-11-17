@@ -1,6 +1,6 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Project, ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { Project, ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 
 // Use the answering host’s persisted registrations to avoid Git scans.

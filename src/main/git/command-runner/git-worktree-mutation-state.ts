@@ -4,7 +4,7 @@ import {
   classifyGitCommand,
   findGitSubcommandIndex
 } from '../../../shared/git/commands/git-command-classification'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import { resolveGitFetchHeadCommand } from '../../../shared/git/fetch/git-fetch-head-lock'
 import { resolveGitDir } from '../source-control/resolve-git-dir'

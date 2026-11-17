@@ -1,5 +1,5 @@
 import { getLocalWorktreeCatalogVersion } from '../../../../workspaces/catalog/local-worktree-scan-generation'
-import { WorktreeAdoptProvisionedRoot } from '../../../../../shared/rpc-contract/worktree-provisioned-root-params'
+import { WorktreeAdoptProvisionedRoot } from '../../../../../shared/rpc-contract/workspaces/worktree-provisioned-root-params'
 import { defineMethod } from '../../core'
 
 export const WORKTREE_PROVISIONED_ROOT_METHOD = defineMethod({

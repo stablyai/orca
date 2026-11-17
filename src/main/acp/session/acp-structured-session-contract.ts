@@ -15,6 +15,8 @@ export type AcpStructuredSession = {
   fence: number
   acquisitionGeneration: string
   spec: AcpLaunchSpec
+  /** The session's folder on the agent's host. */
+  cwd: string
   /** Session modes this launch reports as Orca's permission modes. */
   permissionModes: Readonly<Partial<Record<AgentChatPermissionMode, string>>> | undefined
   childStops?: AcpChildStops
@@ -28,6 +30,7 @@ export type AcpStructuredSession = {
   failureClose: string | null
   /** Null while provider events can still reach the journal. */
   journalClosed: string | null
+  historyCatchUp?: AbortController
   /** Exit was proven and reported to the host. */
   ended: boolean
   exitObservedAt: number | null

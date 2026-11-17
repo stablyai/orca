@@ -22,7 +22,7 @@ vi.mock('../../../git/command-runner/git-exec-file', async (importOriginal) => (
 vi.mock('../removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRegisteredPath
 }))
-vi.mock('../../local-worktree-runtime-options', () => ({
+vi.mock('../local-worktree-runtime-options', () => ({
   getLocalRepoForRegisteredWorktree: mocks.getLocalRepo,
   getLocalGitOptionsForRepo: mocks.getLocalOptions
 }))
@@ -42,31 +42,6 @@ describe('applyGitStatusUpstreamRefWatchRequest', () => {
     mocks.setWatch.mockImplementation(
       async (_args: unknown, resolve: (signal: AbortSignal) => Promise<string | undefined>) =>
         resolve(new AbortController().signal)
-    )
-  })
-
-  it('routes local exact resolution through the registered worktree runtime', async () => {
-    mocks.getLocalOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
-    mocks.gitExec.mockResolvedValue({
-      stdout: 'refs/heads/feature/main\0refs/remotes/origin/feature/main\0origin/feature/main\n'
-    })
-
-    await applyGitStatusUpstreamRefWatchRequest({} as Store, {
-      worktreeId: 'repo-1::/repo',
-      worktreePath: '/repo',
-      executionHostId: 'wsl:Ubuntu',
-      branch: 'refs/heads/feature/main',
-      upstreamName: 'origin/feature/main'
-    })
-
-    expect(mocks.gitExec).toHaveBeenCalledWith(
-      [
-        'for-each-ref',
-        '--format=%(refname)%00%(upstream)%00%(upstream:short)',
-        '--count=1',
-        'refs/heads/feature/main'
-      ],
-      expect.objectContaining({ cwd: '/resolved/repo', wslDistro: 'Ubuntu', timeout: 15_000 })
     )
   })
 

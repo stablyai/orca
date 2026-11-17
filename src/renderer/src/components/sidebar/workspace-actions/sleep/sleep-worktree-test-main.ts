@@ -2,7 +2,7 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest,
   WorkspaceSleepTarget
-} from '../../../../../../shared/workspace-sleep'
+} from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { followWorkspaceSleep } from './workspace-sleep-follower'
 
 /** Main's sleep as the window sees it: a started notice, the host's answer, then ended. */

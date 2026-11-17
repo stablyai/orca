@@ -6,15 +6,15 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy
-} from '../../../../../../shared/agent-session/agent-message-presentation'
-import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/agent-message-display-text'
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
+import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import { NativeChatAgentMessageSenders } from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'

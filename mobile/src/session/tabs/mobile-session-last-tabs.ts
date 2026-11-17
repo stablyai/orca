@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { hashKey, skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { hostQueryKey } from '../../query/host-query-key'
 import type { PersistedHostFamily } from '../../query/host-query-persistence'

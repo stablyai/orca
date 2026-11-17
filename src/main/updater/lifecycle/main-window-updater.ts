@@ -3,15 +3,15 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type {
   ReleaseBuildListResult,
   UpdateCheckOptions
-} from '../../../shared/update-status-types'
-import { RELEASE_CHANNELS, type ReleaseChannel } from '../../../shared/release-channel'
+} from '../../../shared/updater/update-status-types'
+import { RELEASE_CHANNELS, type ReleaseChannel } from '../../../shared/updater/release-channel'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../../ipc/ui'
 import type { Store } from '../../persistence/loading-store/store'
 import { logStartupMilestone } from '../../startup/diagnostics/startup-diagnostics'
 import { applyProxyToElectronUpdaterSession } from './electron-updater-proxy-session'
 import { updaterErrorMessage } from './updater-coded-error'
-import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
-import { normalizeUpdateDelayDays } from '../../../shared/update-delay'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
+import { normalizeUpdateDelayDays } from '../../../shared/updater/update-delay'
 import {
   checkForUpdatesFromMenu,
   dismissAvailableUpdate,

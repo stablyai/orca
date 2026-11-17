@@ -4,7 +4,7 @@ import '../../workspace-status/presentation/workspace-status'
 import {
   getWorkspaceStatus,
   makeWorkspaceStatusId
-} from '../../../../../../shared/workspace-statuses'
+} from '../../../../../../shared/workspace/status/workspace-statuses'
 
 import {
   ownerHostDefinesStatus,

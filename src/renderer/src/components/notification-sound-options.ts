@@ -9,11 +9,12 @@ import {
   Radio,
   Radar,
   Volume1,
+  VolumeX,
   Zap,
   type LucideIcon
 } from 'lucide-react'
 import { basename } from '@/lib/path'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
@@ -29,6 +30,11 @@ export const getBuiltInNotificationSoundOptions = createLocalizedCatalog(
       id: 'system',
       title: translate('auto.components.notification.sound.options.017abebfa6', 'System Default'),
       icon: Bell
+    },
+    {
+      id: 'none',
+      title: translate('auto.components.notification.sound.options.silent', 'Silent'),
+      icon: VolumeX
     },
     {
       id: 'two-tone',

@@ -1,5 +1,8 @@
-import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
-import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/native-chat-stream-unsubscribe'
+import type {
+  NativeChatApi,
+  NativeChatAppendedMessages
+} from '../../../../preload/api/native-chat/native-chat-api'
+import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat/transcript/streaming/native-chat-stream-unsubscribe'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle

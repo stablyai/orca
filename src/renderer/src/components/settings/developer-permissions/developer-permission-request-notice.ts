@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { DeveloperPermissionRequestResult } from '../../../../../shared/developer-permissions-types'
+import type { DeveloperPermissionRequestResult } from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 /** Reports only permission outcomes supported by the corresponding macOS API. */
 export function showDeveloperPermissionRequestNotice(

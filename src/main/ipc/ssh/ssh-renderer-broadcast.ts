@@ -4,8 +4,8 @@ import type {
   DetectedPort,
   EnrichedDetectedPort,
   SshConnectionState
-} from '../../../shared/ssh-types'
-import { isOwnedSshTargetId } from '../../../shared/execution-host'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
+import { isOwnedSshTargetId } from '../../../shared/execution-host/execution-host'
 import {
   enrichSshDetectedPorts,
   enrichSshForwardEntries,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AgentHookServer } from '../../agent-hook-server'
-import { wslHookRelayConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
+import { wslHookRelayConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 const PANE_KEY = 'tab-handle:33333333-3333-4333-8333-333333333333'
 const HANDLE = 'term_identity'

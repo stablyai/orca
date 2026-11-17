@@ -5,13 +5,16 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../../../../../shared/antigravity-account-types'
-import type { ProviderRateLimits, RateLimitState } from '../../../../../../shared/rate-limit-types'
-import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-account-runtime'
+} from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type {
+  ProviderRateLimits,
+  RateLimitState
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
@@ -24,8 +27,9 @@ import {
 } from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
-import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityTerminalAccountRows,
   type AntigravityAccountAction
@@ -204,7 +208,7 @@ export function AntigravityAccountsSection({
     ) : null
 
   return (
-    <div id="accounts-antigravity" className="scroll-mt-6 space-y-3">
+    <div id={ACCOUNTS_SECTION_IDS.antigravity} className="scroll-mt-6 space-y-3">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">

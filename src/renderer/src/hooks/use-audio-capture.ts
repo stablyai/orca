@@ -6,9 +6,9 @@ import {
   type DictationCaptureWorkletMessage,
   type DictationCaptureWorkletOptions
 } from '@/components/dictation/dictation-capture-worklet-protocol'
-import { DICTATION_SAMPLE_RATE } from '../../../shared/rpc-contract/speech-params'
-import { DICTATION_METER_WINDOW_MS } from '../../../shared/dictation-audio-meter'
-import { START_DICTATION_TIMEOUT_MS } from '../../../shared/dictation-finish-deadlines'
+import { DICTATION_SAMPLE_RATE } from '../../../shared/rpc-contract/speech/speech-params'
+import { DICTATION_METER_WINDOW_MS } from '../../../shared/speech/dictation/dictation-audio-meter'
+import { START_DICTATION_TIMEOUT_MS } from '../../../shared/speech/dictation/dictation-finish-deadlines'
 import { useAudioCaptureMeter, type DictationMeterPublisher } from './use-audio-capture-meter'
 import { useAudioCaptureStopTail, type StopCaptureOptions } from './use-audio-capture-stop-tail'
 

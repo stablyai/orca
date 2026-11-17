@@ -1,9 +1,9 @@
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { createHash } from 'node:crypto'
-import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type { AgentSessionStoreState } from './agent-session-store-state'
-import type { AgentSessionConversationCommandRecord } from '../../../../shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommandRecord } from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 
 export type AgentSessionConversationClear = {
   sessionId: string

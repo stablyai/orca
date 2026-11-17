@@ -2,8 +2,8 @@ import {
   type RecognizedAgentProcess,
   recognizeAgentProcess
 } from '../../../../../shared/agent-status/process/agent-process-recognition'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
-import { admitRemoteForegroundEvidence } from '../../../../../shared/remote-foreground-evidence-admission'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { admitRemoteForegroundEvidence } from '../../../../../shared/terminal/pty/foreground/remote-foreground-evidence-admission'
 import {
   isClientOnlyUnverifiableInspection,
   type TerminalProcessInspection as RuntimeTerminalProcessInspection

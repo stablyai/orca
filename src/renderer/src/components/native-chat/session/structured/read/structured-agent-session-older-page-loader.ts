@@ -1,8 +1,8 @@
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   oldestStructuredAgentSessionCursor,
   type StructuredAgentSessionAction
-} from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionReadSnapshot } from './structured-agent-session-read-owner-contract'
 import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
 import { readStructuredAgentSessionOlderPage } from './structured-agent-session-older-page-read'

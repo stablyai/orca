@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
@@ -168,6 +168,16 @@ describe('web UI preload API', () => {
     await expect(readClipboardImagePngBase64()).resolves.toBe('Zml0dGVk')
     expect({ width: canvas.width, height: canvas.height }).toEqual({ width: 6688, height: 5016 })
     expect(readAsDataURL).toHaveBeenCalledWith(fitted)
+  })
+
+  it('reads the paste event image on insecure origins without the async clipboard', async () => {
+    installClipboardImageBase64('ZXZlbnQ=')
+    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8, clipboard: undefined })
+    const { readClipboardImagePngBase64 } = await import('./preload-api/web-clipboard-api')
+
+    await expect(
+      readClipboardImagePngBase64(new Blob([PNG_BYTES], { type: 'image/png' }))
+    ).resolves.toBe('ZXZlbnQ=')
   })
 
   it('saves browser clipboard images through bounded upload chunks', async () => {

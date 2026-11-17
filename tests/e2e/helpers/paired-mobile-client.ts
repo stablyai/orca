@@ -8,9 +8,9 @@ import type {
   RemoteRuntimeTransportSubscription,
   RemoteRuntimeTransportSubscriptionCallbacks
 } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../src/shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime/remote-runtime-passthrough-socket'
-import type { RuntimeCapability } from '../../../src/shared/protocol-version'
+import type { RuntimeCapability } from '../../../src/shared/remote-runtime/protocol/protocol-version'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame

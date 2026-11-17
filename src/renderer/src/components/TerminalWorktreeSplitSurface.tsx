@@ -1,14 +1,14 @@
 import React from 'react'
-import type { TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
 import {
   useBrowserGuestPaintRetention,
   useWorktreeBrowserPageIds
-} from './browser-pane/host-guest/browser-guest-paint-retention'
+} from './browser-pane/host-guest/retention/browser-guest-paint-retention'
 import {
   shouldKeepHiddenWorktreeSurfacePaintable,
   shouldMountRetainedBrowserOverlay
-} from './browser-pane/host-guest/browser-worktree-surface-paintability'
+} from './browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from './terminal/terminal-worktree-prewarm'

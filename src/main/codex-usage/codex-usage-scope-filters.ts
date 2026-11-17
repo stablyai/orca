@@ -1,4 +1,7 @@
-import type { CodexUsageRange, CodexUsageScope } from '../../shared/codex-usage-types'
+import type {
+  CodexUsageRange,
+  CodexUsageScope
+} from '../../shared/agent-usage/analytics/codex-usage-types'
 import type { CodexUsagePersistedState } from './types'
 import {
   filterUsageDaily,

@@ -1,4 +1,4 @@
-import { clipboardHtmlMayHaveLinks } from '../../../../../shared/clipboard-link-html'
+import { clipboardHtmlMayHaveLinks } from '../../../../../shared/clipboard/clipboard-link-html'
 
 const LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
 // A page dump with more links than this pastes as plain text rather than paying a long scan.

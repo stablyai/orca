@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   formatOptionalPrimaryShortcutLabel,
   formatPrimaryShortcutLabel
@@ -205,6 +205,7 @@ function TerminalContextMenuItems({
       expand: formatPrimaryShortcutLabel('terminal.expandPane', keybindings),
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
+      copySessionId: formatOptionalPrimaryShortcutLabel('terminal.copySessionId', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
       nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
     }),
@@ -325,6 +326,9 @@ function TerminalContextMenuItems({
         <DropdownMenuItem onSelect={onCopyAgentSessionId}>
           <Copy />
           {t('components.terminalPane.TerminalContextMenu.copySessionId', 'Copy Session ID')}
+          {shortcuts.copySessionId ? (
+            <DropdownMenuShortcut>{shortcuts.copySessionId}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
       ) : null}
       {agentIdCopy ? (
@@ -332,18 +336,21 @@ function TerminalContextMenuItems({
           resolveOrcaSessionId={agentIdCopy.resolve}
           onSettled={agentIdCopy.focusPane}
           copy={{
-            label: t('components.terminalPane.TerminalContextMenu.copyAgentId', 'Copy Agent ID'),
+            label: t(
+              'components.terminalPane.TerminalContextMenu.copyOrcaSessionId',
+              'Copy Orca Session ID'
+            ),
             tooltip: t(
-              'components.terminalPane.TerminalContextMenu.copyAgentIdTooltip',
+              'components.terminalPane.TerminalContextMenu.orcaSessionIdTooltip',
               "Orca's ID for this agent, separate from the agent CLI's own session ID. Agents use it to refer to each other through Orca."
             ),
             copied: t(
-              'components.terminalPane.TerminalContextMenu.copyAgentIdSuccess',
-              'Agent ID copied'
+              'components.terminalPane.TerminalContextMenu.orcaSessionIdCopied',
+              'Orca session ID copied'
             ),
             failed: t(
-              'components.terminalPane.TerminalContextMenu.copyAgentIdError',
-              'Unable to copy agent ID'
+              'components.terminalPane.TerminalContextMenu.orcaSessionIdCopyFailed',
+              'Unable to copy Orca session ID'
             )
           }}
         />

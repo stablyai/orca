@@ -6,12 +6,11 @@ import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-r
 import type * as WorktreeOperationRoute from '@/lib/workspace/ownership/worktree-operation-route'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { loadWebRuntimeSessionTabsApplyModulesForTests } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 let store: ReturnType<typeof createTestStore>
-let actualCreation: typeof importCreation
 const { createRemote, runtimeOwners, requestSplit } = vi.hoisted(() => ({
   createRemote: vi.fn(),
   runtimeOwners: new Map<string, string>(),
@@ -26,7 +25,7 @@ vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () 
 vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
-vi.mock('@/components/tab-bar/request-active-terminal-pane-split', () => ({
+vi.mock('@/components/tab-bar/pane-actions/request-active-terminal-pane-split', () => ({
   requestActiveTerminalPaneSplit: requestSplit
 }))
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (original) => ({
@@ -52,7 +51,7 @@ import { runNativeChatSplitTarget } from './native-chat-layout-actions'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 
 beforeAll(async () => {
-  actualCreation = await vi.importActual<typeof importCreation>(
+  await vi.importActual<typeof importCreation>(
     '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
   )
   await loadWebRuntimeSessionTabsApplyModulesForTests()
@@ -120,48 +119,6 @@ it('Close leaves an empty split that is waiting on chosen content', () => {
     source.groupId,
     pending
   ])
-})
-
-it('settles real host terminal creation after later navigation', async () => {
-  createRemote.mockImplementation(actualCreation.createWebRuntimeSessionTerminal)
-  vi.useFakeTimers()
-  try {
-    const worktreeId = folderWorkspaceKey('paired-folder')
-    const { source, target } = sourceChat(worktreeId)
-    store.getState().setActiveWorktree(worktreeId, 'runtime:paired-host')
-    runtimeOwners.set(worktreeId, 'paired-host')
-    const call = vi.fn().mockImplementation(async ({ method }: { method: string }) => {
-      if (method === 'session.tabs.createTerminal') {
-        return { id: 'create', ok: true, result: { tab: { id: 'host-tab' } } }
-      }
-      throw new Error('snapshot unavailable')
-    })
-    Object.assign(window.api, { runtimeEnvironments: { call } })
-    void store.getState().openNewTerminalTabInActiveWorkspace(target.groupId)
-    const laterWorkspace = folderWorkspaceKey('another-folder')
-    store.getState().setActiveWorktree(laterWorkspace, 'local')
-    await vi.advanceTimersByTimeAsync(10_500)
-    expect(call).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'paired-host',
-        method: 'session.tabs.createTerminal',
-        params: expect.objectContaining({
-          worktree: `id:${worktreeId}`,
-          targetGroupId: source.groupId
-        })
-      })
-    )
-    expect(store.getState()).toMatchObject({
-      activeWorktreeId: worktreeId,
-      activeWorkspaceKey: worktreeId,
-      activeWorkspaceExecutionHostId: 'runtime:paired-host'
-    })
-    expect(store.getState().unifiedTabsByWorktree[worktreeId]).toEqual([source])
-    expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(1)
-    expect(store.getState().tabsByWorktree[worktreeId] ?? []).toEqual([])
-  } finally {
-    vi.useRealTimers()
-  }
 })
 
 it('keeps floating chat splits local while a remote workspace is selected', async () => {

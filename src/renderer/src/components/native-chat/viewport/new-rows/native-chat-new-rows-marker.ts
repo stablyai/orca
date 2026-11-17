@@ -5,7 +5,7 @@ import { useOrcaWindowForegroundFocused } from '@/hooks/use-orca-window-foregrou
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { useAppStore } from '@/store'
-import { nativeChatMarksNewMessages } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
+import { nativeChatMarksNewMessages } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import {
   nativeChatSlotIndexOf,
   nativeChatSlotKey
@@ -14,7 +14,7 @@ import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-c
 
 /** Use journal positions for conversation rows, including folded-turn bars; terminal-backed rows have none and remain unmarked. */
 function rowPosition(slot: NativeChatTranscriptSlot): AgentJournalPosition | undefined {
-  return slot.kind === 'message' && slot.depth === 0 && (slot.drawsMessage || slot.statusAbove)
+  return slot.kind === 'message' && (slot.drawsMessage || slot.statusAbove)
     ? slot.message.journalPosition
     : undefined
 }

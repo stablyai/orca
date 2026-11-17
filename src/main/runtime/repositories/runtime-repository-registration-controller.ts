@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
@@ -17,7 +17,7 @@ import {
   getSavedProjectPathKeys
 } from '../../git/repositories/cloning/repo-clone-path'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
@@ -28,11 +28,14 @@ import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windo
 import {
   WslHostWindowsDriveRefusalError,
   type WslHostWindowsDriveRefusal
-} from '../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
 import { getResolvedFolderWorkspacePathStatus } from '../../project-groups/folder-workspace-path-status'
 import { runAsWslUserAct, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
-import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
+import {
+  repoCreateFailure,
+  type RepoCreateFailure
+} from '../../../shared/repository/creation/repo-create-failure-copy'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null

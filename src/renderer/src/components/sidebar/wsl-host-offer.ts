@@ -1,6 +1,10 @@
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   listWslHostWindowsPathAccess,
   type WslHostWindowsPathAccess
@@ -25,7 +29,9 @@ export function shouldOfferWslHost(gate: WslHostOfferGate): boolean {
 }
 
 export function readWslHostOfferGate(
-  state: Pick<AppState, 'settings' | 'wslHostsAcceptNewWork' | 'wslHostServerFiles'>
+  state: Pick<AppState, 'wslHostsAcceptNewWork' | 'wslHostServerFiles'> & {
+    settings: Pick<GlobalSettings, 'experimentalWslHosts' | 'wslHostOfferDismissed'> | null
+  }
 ): WslHostOfferGate {
   return {
     gateOpen:

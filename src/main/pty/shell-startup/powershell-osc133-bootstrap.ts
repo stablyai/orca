@@ -1,6 +1,6 @@
 import { getPowerShellOmpShellWrapper } from './omp-shell-wrapper'
-import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../../../shared/managed-data-account-shell'
-import { getPowerShellAgentWrappers } from '../../../shared/powershell-agent-wrappers'
+import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
+import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
 
 // Inline scripts work under Restricted/AllSigned policies that block dot-sourced files.
 // EncodedCommand preserves quoting for appended cwd/startup commands; AMSI and script logging still decode it.
@@ -42,6 +42,17 @@ ${getPowerShellAgentWrappers()}
         $fakeExitCode = [int](!$global:?)
         Set-StrictMode -Off
         $result = ""
+
+        if ($PWD.Provider.Name -eq 'FileSystem') {
+            $cwdPath = $PWD.ProviderPath
+            if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
+                $cwdPath = $cwdPath.Replace([char]92, [char]47)
+                $cwdPath = $cwdPath -replace '^//[?.]/UNC/', '//' -replace '^//[?.]/(?=[A-Za-z]:/)', ''
+            }
+            if ($cwdPath -match '^[A-Za-z]:/') { $cwdPath = '/' + $cwdPath }
+            $cwdPath = ($cwdPath.Split('/') | ForEach-Object { [System.Uri]::EscapeDataString($_) }) -join '/'
+            $result += "$($Global:__OrcaOsc133State.Esc)]7;file://localhost$cwdPath$($Global:__OrcaOsc133State.Bel)"
+        }
 
         # Emit D from prompt, not readline state. Some profile setups bypass
         # PSConsoleHostReadLine; the consumer only needs completion.

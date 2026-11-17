@@ -7,7 +7,7 @@ import {
   ProjectHostSetupExistingFolder,
   ProjectHostSetupUpdate,
   ProjectUpdate
-} from '../../../../../shared/rpc-contract/project-runtime-params'
+} from '../../../../../shared/rpc-contract/projects/project-runtime-params'
 
 export const PROJECT_RUNTIME_METHODS = [
   defineMethod({

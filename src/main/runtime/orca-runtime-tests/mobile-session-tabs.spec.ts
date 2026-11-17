@@ -5,7 +5,7 @@ import '../__fixtures__/main-layout-close-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import '../orca-runtime-test-mocks/setup.spec'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 
 import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 import '../../../shared/worktree/host-qualified-identity'
@@ -14,7 +14,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps published mobile terminal handles usable across renderer graph epochs', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -63,7 +63,7 @@ describe('OrcaRuntimeService', () => {
       throw new Error('expected ready terminal tab')
     }
 
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',

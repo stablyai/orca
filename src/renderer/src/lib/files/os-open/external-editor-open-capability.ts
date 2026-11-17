@@ -1,5 +1,5 @@
-import { isRemoteSshEditorCommand } from '../../../../../shared/remote-ssh-editor-launcher'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { isRemoteSshEditorCommand } from '../../../../../shared/editor/launch/remote-ssh-editor-launcher'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getWindowsPathAccess } from './windows-path-access'
 import type { WorkspaceEditorSshHost } from '../../../components/file-actions/workspace-editor-ssh-target'
 

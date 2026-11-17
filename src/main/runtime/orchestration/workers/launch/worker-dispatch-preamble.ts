@@ -1,7 +1,7 @@
 import type { OrchestrationCliCommand } from './orchestration-cli-command'
 import type { RuntimeAgentPromptWriteOptions } from '../../../terminal/input/agent-prompt-write-options'
-import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orca-dispatch-status-prompt'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../../../shared/orchestration/workers/orca-dispatch-status-prompt'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
 export type PreambleParams = {
   taskId: string
@@ -78,12 +78,8 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
 \`\`\`sh
 ${
   params.unreadMail
-    ? chat
-      ? `  # Messages for this task arrive next, one at a time.
-
-`
-      : `  # Messages for this task are waiting; read them:
-  ${cli} orchestration check --terminal ${params.workerHandle}
+    ? `  # Messages for this task are waiting; read them:
+  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
 
 `
     : ''
