@@ -21,6 +21,11 @@ vi.mock('@orca/process-host', () => ({
   runProcessSync: runProcessSyncMock
 }))
 
+// Hermetic on a Windows host with WSL: a real service key would answer before the mocked sc.exe.
+vi.mock('../../windows/windows-native-registry', () => ({
+  loadWindowsNativeRegistry: () => ({ HK: { CU: 1, LM: 2 }, getRegistryKey: () => null })
+}))
+
 vi.mock('../execution/wsl-interop-spawn-directory', () => ({
   resolveWslInteropSpawnCwd: () => 'C:\\Windows'
 }))

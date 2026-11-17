@@ -118,7 +118,7 @@ function cachedInstallation(): WslInstallation | null {
 
 /**
  * Cached answer only; never spawns. Null means no verdict yet. An expired unknown is still served
- * as unknown; callers use wslInstallationCheckDue() to start the re-check.
+ * as unknown; sync readers use peekWslInstallationAndRefreshIfDue() to start the re-check.
  */
 export function peekWslInstallation(): WslInstallation | null {
   if (process.platform !== 'win32') {
