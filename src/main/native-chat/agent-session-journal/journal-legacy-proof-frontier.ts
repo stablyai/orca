@@ -12,10 +12,6 @@ export type LegacyProofFrontier = {
   pending: boolean
 }
 
-/** Why a proof keeps the original when a difference both sides could have made can't be settled. */
-export const DIVERGED =
-  "a chat's name, options, permission mode or queued text differ from the original"
-
 export function createLegacyProofFrontier(): LegacyProofFrontier {
   return { cursor: { table: 0, after: null }, session: 0, pending: false }
 }

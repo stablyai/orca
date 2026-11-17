@@ -240,9 +240,8 @@ export class JournalLegacyRetirement {
   }
 
   /**
-   * The original exactly as this store copied it, and as the last older-Orca reconcile absorbed
-   * it. A write after the copy can change records, tabs and queues that no chat revision shows, so
-   * such an original is kept; null keeps it.
+   * The original as the last older-Orca reconcile absorbed it, so the content proof reads what
+   * this store has already taken in; null keeps the original for this attempt.
    */
   private async observe(
     saved: RetirementState

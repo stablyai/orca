@@ -141,8 +141,24 @@ function queueHeld(
   store: Database.Database,
   sessionId: string
 ): boolean {
-  const card = store.prepare(`SELECT state,payload_json FROM journal_queue_cards
-    WHERE session_id=? AND message_id=? ORDER BY epoch DESC LIMIT 1`)
+  // Each card by its key: one seek per epoch the chat's cards have, then one per (epoch, message),
+  // so the cost follows the waiting messages, not the chat's whole queue history.
+  const firstEpoch = store.prepare(
+    'SELECT epoch FROM journal_queue_cards WHERE session_id=? ORDER BY epoch LIMIT 1'
+  )
+  const nextEpoch = store.prepare(
+    'SELECT epoch FROM journal_queue_cards WHERE session_id=? AND epoch>? ORDER BY epoch LIMIT 1'
+  )
+  const epochs: string[] = []
+  for (
+    let row = firstEpoch.get(sessionId);
+    row;
+    row = nextEpoch.get(sessionId, String(row.epoch))
+  ) {
+    epochs.push(String(row.epoch))
+  }
+  const card = store.prepare(`SELECT payload_json FROM journal_queue_cards
+    WHERE session_id=? AND epoch=? AND message_id=?`)
   for (const row of source
     .prepare('SELECT * FROM queued_messages WHERE session_id=?')
     .iterate(sessionId)) {
@@ -153,23 +169,30 @@ function queueHeld(
     if (!isUnsettledQueuedMessage(queued)) {
       continue
     }
-    const held = card.get(sessionId, queued.messageId)
-    // The same text, waiting here or already acted on here; anything else is weighed by the caller.
-    if (!held || !sameBody(held.payload_json, queued.body)) {
+    // The same text, waiting here or already acted on here; anything else is kept from the original.
+    if (
+      !epochs.some((epoch) => {
+        const held = card.get(sessionId, epoch, queued.messageId)
+        return held !== undefined && sameQueued(held.payload_json, queued)
+      })
+    ) {
       return false
     }
   }
   return true
 }
 
-function sameBody(payload: unknown, body: unknown): boolean {
+/** The same text and send options as the original's waiting message. */
+function sameQueued(payload: unknown, queued: { body: unknown; options?: unknown }): boolean {
   try {
     const card: unknown = typeof payload === 'string' ? JSON.parse(payload) : null
     return (
       typeof card === 'object' &&
       card !== null &&
       'body' in card &&
-      JSON.stringify(card.body) === JSON.stringify(body)
+      JSON.stringify(card.body) === JSON.stringify(queued.body) &&
+      JSON.stringify('options' in card ? card.options : undefined) ===
+        JSON.stringify(queued.options)
     )
   } catch {
     return false
