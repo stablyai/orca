@@ -1,10 +1,17 @@
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { RemoteCommandChannel, RemoteInstallTransport } from './remote-install-transport'
-import {
-  InstallLockHolderUnconfirmedError,
-  startInstallLockHolder
-} from './remote-install-lock-holder'
+
+const unmarks = vi.hoisted((): string[] => [])
+vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  execCommand: async (_conn: unknown, command: string) => {
+    unmarks.push(command)
+    return ''
+  }
+}))
+
+const { startInstallLockHolder } = await import('./remote-install-lock-holder')
 
 const owner = { fileName: '.orca-fence-owner', token: 't-1' }
 // Lets the holder attach its listeners once the exec resolves.
@@ -55,7 +62,7 @@ describe('startInstallLockHolder', () => {
     host.say('HOLDER_READY')
     await vi.waitFor(() => expect(host.written).toEqual(['mark\n']))
     host.say('HOLDER_HELD')
-    const holder = await started
+    const { holder } = await started
     let lost = false
     void holder?.lost.then(() => (lost = true))
     host.exit()
@@ -68,7 +75,7 @@ describe('startInstallLockHolder', () => {
     await attached()
     host.say('HOLDER_READY')
     host.say('HOLDER_HELD')
-    const holder = await started
+    const { holder } = await started
     let lost = false
     void holder?.lost.then(() => (lost = true))
     holder?.release()
@@ -83,17 +90,35 @@ describe('startInstallLockHolder', () => {
     const started = startInstallLockHolder(host.conn, '/l', owner)
     await attached()
     host.exit()
-    await expect(started).resolves.toBeNull()
+    await expect(started).resolves.toEqual({ holder: null, fenceable: false })
     expect(host.written).toEqual([])
   })
 
-  it('gives up the install when a marked holder never confirms', async () => {
+  it('keeps an unbacked lock when the holder cannot start', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const conn: RemoteInstallTransport = Object.assign(Object.create(null), {
+      exec: async () => {
+        throw new Error('spawn failed')
+      }
+    })
+    await expect(startInstallLockHolder(conn, '/l', owner)).resolves.toEqual({
+      holder: null,
+      fenceable: false
+    })
+  })
+
+  it('falls back to an unbacked, still fenceable lock and clears any mark when HELD never comes', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    unmarks.length = 0
     const host = fakeHolder()
     const started = startInstallLockHolder(host.conn, '/l', owner)
     await attached()
     host.say('HOLDER_READY')
     await vi.waitFor(() => expect(host.written).toEqual(['mark\n']))
     host.exit()
-    await expect(started).rejects.toBeInstanceOf(InstallLockHolderUnconfirmedError)
+    await expect(started).resolves.toEqual({ holder: null, fenceable: true })
+    expect(host.closed()).toBe(true)
+    expect(unmarks).toHaveLength(1)
+    expect(unmarks[0]).toContain(": > './.holder-flock'")
   })
 })

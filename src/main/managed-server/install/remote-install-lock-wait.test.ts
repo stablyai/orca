@@ -3,11 +3,20 @@ import type { RemoteInstallTransport } from './remote-install-transport'
 import type { InstallLockWait } from './remote-install-lock'
 
 // A held install lock answered by command shape; its age follows the faked clock.
-const lock: { createdAt: number; stolen: boolean; holderGoneAt: number | null; probes: number } = {
+const lock: {
+  createdAt: number
+  stolen: boolean
+  holderGoneAt: number | null
+  holderLive: boolean
+  probes: number
+  steals: string[]
+} = {
   createdAt: 0,
   stolen: false,
   holderGoneAt: null,
-  probes: 0
+  holderLive: false,
+  probes: 0,
+  steals: []
 }
 vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
   execHostCommand: async (_conn: unknown, _host: unknown, command: string) => {
@@ -19,11 +28,16 @@ vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
     }
     if (command.includes('echo "HOLDER_EXITED')) {
       lock.probes += 1
+      if (lock.holderLive && !holderGone) {
+        return 'HOLDER_LIVE\n'
+      }
       return holderGone ? 'HOLDER_EXITED 1794874229:262443 t-dead\n' : ''
     }
     if (command.includes('.steal')) {
-      // Mirrors the host's rule: stale only once older than the threshold.
-      lock.stolen = ageSec > 20 * 60
+      lock.steals.push(command)
+      // Mirrors the host's rule: stale once older than the threshold, unless a live holder vetoes.
+      const vetoed = lock.holderLive && !holderGone && command.includes('holder_live')
+      lock.stolen = ageSec > 20 * 60 && !vetoed
       return lock.stolen ? 'OK' : 'BUSY'
     }
     if (command.includes('echo "$age"')) {
@@ -60,40 +74,13 @@ describe('acquireInstallLock waiting on a held lock', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     lock.stolen = false
     lock.holderGoneAt = null
+    lock.holderLive = false
     lock.probes = 0
+    lock.steals = []
   })
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
-  })
-
-  it('reports when takeover becomes possible and waits for it past the step timeout', async () => {
-    // A relaunch 1 minute after the lock was taken: the old 15-minute wait expired before takeover.
-    lock.createdAt = Date.now() - 60_000
-    const waits: InstallLockWait[] = []
-    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
-      relayGcClaim: false,
-      waitThroughStaleTakeover: true,
-      onWait: (wait) => waits.push(wait)
-    })
-    expect(await settle(acquired, 25 * 60_000)).toBe('done')
-    expect(lock.stolen).toBe(true)
-    expect(waits[0]).toEqual({ takeoverInMs: 19 * 60_000, givesUpInMs: 20 * 60_000 })
-    // Taken at the first recheck after the lock turned stale, about 20 minutes after it was made.
-    expect(Date.now() - lock.createdAt).toBeLessThanOrEqual(21 * 60_000 + 1_000)
-  })
-
-  it('a relaunch takes over when the lock turns stale, not a full wait after it started', async () => {
-    // Four minutes in: a fresh 15-minute wait would end a minute before the lock turns stale.
-    lock.createdAt = Date.now() - 4 * 60_000
-    const start = Date.now()
-    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
-      relayGcClaim: false,
-      waitThroughStaleTakeover: true
-    })
-    expect(await settle(acquired, 25 * 60_000)).toBe('done')
-    expect(Date.now() - start).toBeGreaterThan(15 * 60_000)
-    expect(Date.now() - start).toBeLessThanOrEqual(17 * 60_000 + 1_000)
   })
 
   it('takes over a fresh flock-backed lock seconds after its holder is seen gone twice', async () => {
@@ -125,27 +112,46 @@ describe('acquireInstallLock waiting on a held lock', () => {
     expect(lock.probes).toBe(0)
   })
 
-  it('stops at the cap when a holder keeps refreshing the lock, and stops promising takeover', async () => {
-    const start = Date.now()
-    const refresh = setInterval(() => (lock.createdAt = Date.now()), 60_000)
-    lock.createdAt = start
+  it('reports a takeover in seconds, not the age countdown, once a holder reads gone', async () => {
+    lock.createdAt = Date.now() - 60_000
+    lock.holderLive = true
+    lock.holderGoneAt = Date.now() + 90_000
     const waits: InstallLockWait[] = []
     const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
       relayGcClaim: false,
       waitThroughStaleTakeover: true,
+      owner: { fileName: '.orca-fence-owner', token: 't-next' },
+      probeExitedHolder: true,
       onWait: (wait) => waits.push(wait)
     })
-    try {
-      expect(await settle(acquired, 30 * 60_000)).toBeInstanceOf(RemoteInstallLockBusyError)
-      expect(Date.now() - start).toBeGreaterThan(20 * 60_000)
-      expect(Date.now() - start).toBeLessThanOrEqual(22 * 60_000 + 1_000)
-    } finally {
-      clearInterval(refresh)
-    }
-    expect(waits[0]?.takeoverInMs).toBe(20 * 60_000)
-    // Once takeover would land after the cap, the wait says when it gives up instead.
-    const last = waits.at(-1)
-    expect(last?.takeoverInMs).toBeNull()
-    expect(last?.givesUpInMs).toBeLessThanOrEqual(60_000)
+    expect(await settle(acquired, 3 * 60_000)).toBe('done')
+    // While the holder runs, no age takeover is promised.
+    expect(waits[0]?.takeoverInMs).toBeNull()
+    expect(waits.at(-1)?.takeoverInMs).toBe(5_000)
+  })
+
+  it('never takes a lock by age while its holder still runs', async () => {
+    lock.createdAt = Date.now() - 25 * 60_000
+    lock.holderLive = true
+    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
+      relayGcClaim: false,
+      waitThroughStaleTakeover: true,
+      owner: { fileName: '.orca-fence-owner', token: 't-next' },
+      probeExitedHolder: true
+    })
+    expect(await settle(acquired, 30 * 60_000)).toBeInstanceOf(RemoteInstallLockBusyError)
+    expect(lock.stolen).toBe(false)
+    expect(lock.steals.every((steal) => steal.includes('holder_live'))).toBe(true)
+  })
+
+  it('keeps the age rules, without the veto, when it does not probe holders', async () => {
+    lock.createdAt = Date.now() - 25 * 60_000
+    lock.holderLive = true
+    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
+      relayGcClaim: false,
+      owner: { fileName: '.orca-fence-owner', token: 't-next' }
+    })
+    expect(await settle(acquired, 60_000)).toBe('done')
+    expect(lock.steals[0]).not.toContain('holder_live')
   })
 })

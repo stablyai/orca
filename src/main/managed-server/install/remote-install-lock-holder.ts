@@ -1,10 +1,15 @@
 import type { RemoteInstallTransport } from './remote-install-transport'
 import type { InstallLockOwnerFile } from './remote-install-lock-commands'
 import {
+  execCommand,
+  isUnconfirmedSshCommandTermination
+} from '../../ssh/remote-exec/remote-exec-command'
+import {
   INSTALL_LOCK_HOLDER_HELD,
   INSTALL_LOCK_HOLDER_MARK,
   INSTALL_LOCK_HOLDER_READY,
-  installLockHolderCommand
+  installLockHolderCommand,
+  installLockHolderUnmarkCommand
 } from './remote-install-lock-holder-commands'
 
 const HOLDER_ANSWER_TIMEOUT_MS = 15_000
@@ -12,24 +17,27 @@ const HOLDER_ANSWER_TIMEOUT_MS = 15_000
 /** A guest process keeping the install lock flock-backed; `lost` settles if it exits before release. */
 export type InstallLockHolder = { lost: Promise<void>; release(): void }
 
-export class InstallLockHolderUnconfirmedError extends Error {
-  constructor() {
-    super('The install lock holder did not confirm it marked the lock; giving up this install.')
-    this.name = 'InstallLockHolderUnconfirmedError'
-  }
-}
+/** `fenceable`: the holder file exists in a lock this owner holds, so commands can still be fenced. */
+export type InstallLockHolderStart =
+  | { holder: InstallLockHolder }
+  | { holder: null; fenceable: boolean }
 
-/** Null when the host cannot back the lock (no flock, no exclusive locks, lock not ours): the
- * lock stays unmarked, so contenders keep today's rules. Throws only when the lock may be
- * marked but this client cannot keep its holder alive. */
+/** Without a confirmed holder the lock is left unmarked, so contenders keep the age rules. */
 export async function startInstallLockHolder(
   conn: RemoteInstallTransport,
   lockDir: string,
   owner: InstallLockOwnerFile,
   signal?: AbortSignal
-): Promise<InstallLockHolder | null> {
+): Promise<InstallLockHolderStart> {
   signal?.throwIfAborted()
-  const channel = await conn.exec(installLockHolderCommand(lockDir, owner), { signal })
+  let channel: Awaited<ReturnType<RemoteInstallTransport['exec']>>
+  try {
+    channel = await conn.exec(installLockHolderCommand(lockDir, owner), { signal })
+  } catch (error) {
+    signal?.throwIfAborted()
+    console.warn('[ssh] Install lock holder did not start; keeping an unbacked lock', error)
+    return { holder: null, fenceable: false }
+  }
   let stdout = ''
   let released = false
   let closed = false
@@ -76,13 +84,26 @@ export async function startInstallLockHolder(
   if (!(await waitFor(INSTALL_LOCK_HOLDER_READY))) {
     close()
     signal?.throwIfAborted()
-    return null
+    return { holder: null, fenceable: false }
   }
   channel.write(`${INSTALL_LOCK_HOLDER_MARK}\n`)
   if (!(await waitFor(INSTALL_LOCK_HOLDER_HELD))) {
+    // It may have marked the lock before going quiet: let it exit, then clear any mark.
     close()
     signal?.throwIfAborted()
-    throw new InstallLockHolderUnconfirmedError()
+    console.warn('[ssh] Install lock holder did not confirm; keeping an unbacked lock')
+    try {
+      await execCommand(conn, installLockHolderUnmarkCommand(lockDir, owner), {
+        wrapCommand: true,
+        signal
+      })
+    } catch (error) {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      signal?.throwIfAborted()
+    }
+    return { holder: null, fenceable: true }
   }
   channel.off('data', onData)
   channel.resume()
@@ -99,10 +120,14 @@ export async function startInstallLockHolder(
     channel.once('error', settle)
   })
   return {
-    lost,
-    release: () => {
-      released = true
-      channel.close()
+    holder: {
+      lost,
+      release: () => {
+        if (!released) {
+          released = true
+          channel.close()
+        }
+      }
     }
   }
 }

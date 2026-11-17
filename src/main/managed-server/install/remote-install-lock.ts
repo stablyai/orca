@@ -138,8 +138,40 @@ export async function acquireInstallLock(
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
   let lastWaitLogAt = Number.NEGATIVE_INFINITY
   let lastHolderProbeAt = Number.NEGATIVE_INFINITY
-  const holderTakeover: HolderTakeoverState = { gone: null }
-  const probedOwner = options?.probeExitedHolder ? options.owner : undefined
+  const holderTakeover: HolderTakeoverState = { gone: null, live: false }
+  const probedOwner =
+    options?.probeExitedHolder && !isWindowsRemoteHost(host) ? options.owner : undefined
+  let reportedHolderView: 'live' | 'gone' | null = null
+  // A flock-backed lock's wait follows its holder, not the lock's age.
+  const reportWait = (ageMs: number | null): void => {
+    reportedHolderView = holderTakeover.live ? 'live' : holderTakeover.gone ? 'gone' : null
+    const takeoverInMs =
+      reportedHolderView === 'live'
+        ? null
+        : reportedHolderView === 'gone'
+          ? INSTALL_LOCK_HOLDER_PROBE_MS
+          : ageMs === null
+            ? null
+            : Math.max(0, INSTALL_LOCK_STALE_MS - ageMs)
+    // Capped so a holder that keeps refreshing the lock cannot extend the wait forever.
+    const cap = start + INSTALL_LOCK_STALE_MS + 2 * INSTALL_LOCK_STALE_RECHECK_MS
+    if (options?.waitThroughStaleTakeover && reportedHolderView === 'live') {
+      // A live holder may exit any time; wait as long as an age takeover would have.
+      deadline = Math.max(deadline, cap)
+    } else if (options?.waitThroughStaleTakeover && takeoverInMs !== null) {
+      // Lock age, not this attempt, sets the takeover time; a relaunch waits only the rest.
+      deadline = Math.max(
+        deadline,
+        Math.min(Date.now() + takeoverInMs + INSTALL_LOCK_STALE_RECHECK_MS, cap)
+      )
+    }
+    const now = Date.now()
+    // Promise a takeover only if this attempt is still waiting when it comes due.
+    options?.onWait?.({
+      takeoverInMs: takeoverInMs !== null && now + takeoverInMs < deadline ? takeoverInMs : null,
+      givesUpInMs: Math.max(0, deadline - now)
+    })
+  }
   while (true) {
     // Recover crashed GC claims rather than polling them forever.
     if (relayGcClaim) {
@@ -166,11 +198,7 @@ export async function acquireInstallLock(
       // Retried until the bounded wait expires: one refused channel is not a verdict.
       lastCommandError = err
     }
-    if (
-      probedOwner &&
-      !isWindowsRemoteHost(host) &&
-      Date.now() - lastHolderProbeAt >= INSTALL_LOCK_HOLDER_PROBE_MS
-    ) {
+    if (probedOwner && Date.now() - lastHolderProbeAt >= INSTALL_LOCK_HOLDER_PROBE_MS) {
       lastHolderProbeAt = Date.now()
       const steal = await tryTakeOverExitedHolder(
         conn,
@@ -186,6 +214,16 @@ export async function acquireInstallLock(
         if (await keptAfterGcRecheck()) {
           return
         }
+      }
+      const view = holderTakeover.live ? 'live' : holderTakeover.gone ? 'gone' : null
+      // After the first age report, a holder turning live or gone is reported at once.
+      if (
+        view !== null &&
+        view !== reportedHolderView &&
+        Number.isFinite(lastStaleCheckAt) &&
+        (options?.onWait || options?.waitThroughStaleTakeover)
+      ) {
+        reportWait(null)
       }
     }
     if (
@@ -204,7 +242,8 @@ export async function acquireInstallLock(
             lockDir,
             INSTALL_LOCK_STALE_SECONDS,
             options?.owner,
-            exitedOwner
+            exitedOwner,
+            probedOwner ? { vetoLiveHolder: true } : undefined
           ),
           { signal: options?.signal }
         ),
@@ -221,26 +260,7 @@ export async function acquireInstallLock(
           return
         }
       } else if (options?.onWait || options?.waitThroughStaleTakeover) {
-        const ageMs = await readInstallLockAgeMs(conn, lockDir, host, options.signal)
-        const takeoverInMs = ageMs === null ? null : Math.max(0, INSTALL_LOCK_STALE_MS - ageMs)
-        if (options.waitThroughStaleTakeover && takeoverInMs !== null) {
-          // Lock age, not this attempt, sets the takeover time; a relaunch waits only the rest.
-          // Capped so a holder that keeps refreshing the lock cannot extend the wait forever.
-          deadline = Math.max(
-            deadline,
-            Math.min(
-              Date.now() + takeoverInMs + INSTALL_LOCK_STALE_RECHECK_MS,
-              start + INSTALL_LOCK_STALE_MS + 2 * INSTALL_LOCK_STALE_RECHECK_MS
-            )
-          )
-        }
-        const now = Date.now()
-        // Promise a takeover only if this attempt is still waiting when it comes due.
-        options.onWait?.({
-          takeoverInMs:
-            takeoverInMs !== null && now + takeoverInMs < deadline ? takeoverInMs : null,
-          givesUpInMs: Math.max(0, deadline - now)
-        })
+        reportWait(await readInstallLockAgeMs(conn, lockDir, host, options.signal))
       }
     }
     if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {

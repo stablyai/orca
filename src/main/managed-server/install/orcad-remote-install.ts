@@ -10,6 +10,7 @@ import { recordedRemoteNodeRuntimeProbeCommand } from './orcad-remote-node-runti
 import { cachedOrcadSlotInstalled } from './orcad-remote-install-cached-probe'
 import {
   execCommand,
+  isSshCommandExitError,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
@@ -17,7 +18,11 @@ import type { OrcadHostTransport } from './orcad-host-transport'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { acquireInstallLock, type InstallLockWait } from './remote-install-lock'
-import { installLockFenceStatement } from './remote-install-lock-holder-commands'
+import {
+  INSTALL_LOCK_FENCE_EXIT_CODE,
+  installLockFenceStatement,
+  installLockReleaseGate
+} from './remote-install-lock-holder-commands'
 import { startInstallLockHolder, type InstallLockHolder } from './remote-install-lock-holder'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/remote-runtime/relay/relay-install-lock-name'
 import { ORCAD_FENCE_OWNER_FILENAME } from '../activation/orcad-activation-fence-scope'
@@ -113,10 +118,12 @@ export async function installOrcadBundle(
   let holder: InstallLockHolder | null = null
   let conn: OrcadHostTransport = options.conn
   let signal = options.signal
+  let releaseGate: string | undefined
+  let takenOver = false
   try {
     const held = await holdInstallLock(options, remoteDir, owner)
     if (held) {
-      ;({ holder, conn, signal } = held)
+      ;({ holder, conn, signal, releaseGate } = held)
     }
     // A sibling may have completed deployment while this client waited for the lock.
     if (
@@ -150,20 +157,44 @@ export async function installOrcadBundle(
     return 'uploaded'
   } catch (error) {
     preserveInstallLock = isUnconfirmedSshCommandTermination(error)
+    if (
+      releaseGate !== undefined &&
+      isSshCommandExitError(error) &&
+      error.exitCode === INSTALL_LOCK_FENCE_EXIT_CODE
+    ) {
+      takenOver = true
+      throw new OrcadInstallTakenOverError(error)
+    }
     throw error
   } finally {
     try {
-      if (!preserveInstallLock) {
+      if (takenOver) {
+        // The lock is the successor's now; nothing of ours is left to remove.
+        forgetHeldOrcadFence(token)
+      } else if (!preserveInstallLock) {
+        // The gate waits on the holder's lock too, so release the holder first.
+        holder?.release()
         // Retain ownership proof if interrupted cleanup cannot confirm lock removal.
         // Token-checked: a cleanup that runs after a takeover leaves the successor's lock alone.
-        if (await abandonInstall(conn, remoteDir, options.host, owner)) {
+        if (await abandonInstall(options.conn, remoteDir, options.host, owner, releaseGate)) {
           forgetHeldOrcadFence(token)
         }
       }
     } finally {
-      // After cleanup: a lock left behind is then reclaimable once its last fenced command ends.
+      // A lock left behind is reclaimable once its last fenced command ends.
       holder?.release()
     }
+  }
+}
+
+/** A fenced install command found another Orca window now owns the install lock. */
+export class OrcadInstallTakenOverError extends Error {
+  constructor(cause: unknown) {
+    super(
+      'Another Orca window took over installing the Orca server in this distro, so this window stopped its own install. Try connecting again.',
+      { cause }
+    )
+    this.name = 'OrcadInstallTakenOverError'
   }
 }
 
@@ -178,22 +209,33 @@ async function holdInstallLock(
   },
   remoteDir: string,
   owner: { fileName: string; token: string }
-): Promise<{ holder: InstallLockHolder; conn: OrcadHostTransport; signal: AbortSignal } | null> {
+): Promise<{
+  holder: InstallLockHolder | null
+  conn: OrcadHostTransport
+  signal: AbortSignal | undefined
+  releaseGate: string
+} | null> {
   const withFence = options.conn.withCommandFence
   if (!options.localWslHost || !withFence || options.host.os === 'win32') {
     return null
   }
   const lockDir = joinRemotePath(options.host, remoteDir, RELAY_INSTALL_LOCK_NAME)
-  const holder = await startInstallLockHolder(options.conn, lockDir, owner, options.signal)
+  const started = await startInstallLockHolder(options.conn, lockDir, owner, options.signal)
+  const fenced = {
+    conn: withFence.call(options.conn, installLockFenceStatement(lockDir, owner)),
+    releaseGate: installLockReleaseGate(lockDir)
+  }
+  const { holder } = started
   if (!holder) {
-    return null
+    // No confirmed holder: the lock keeps the age rules, and the fence still catches a takeover.
+    return started.fenceable ? { ...fenced, holder: null, signal: options.signal } : null
   }
   // A holder lost mid-install ends this install: its lock is now reclaimable.
   const lost = new AbortController()
   void holder.lost.then(() => lost.abort(new Error('The install lock holder exited.')))
   return {
+    ...fenced,
     holder,
-    conn: withFence.call(options.conn, installLockFenceStatement(lockDir, owner)),
     signal: options.signal ? AbortSignal.any([options.signal, lost.signal]) : lost.signal
   }
 }
