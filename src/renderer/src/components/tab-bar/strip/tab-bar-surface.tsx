@@ -23,6 +23,7 @@ import type { TabBarCreateMenuController } from '../create-menu/tab-bar-create-m
 import type { TabBarItemProjection } from '../model/use-tab-bar-item-projection'
 import type { TabBarItemActions } from '../model/use-tab-bar-item-actions'
 import { renderTabBarItems } from '../model/tab-bar-item-surface'
+import type { TabStripSegment } from './tab-strip-window'
 import { TabBarStaticCreateMenu } from '../create-menu/tab-bar-static-create-menu'
 import { NewTabMenuContent } from '../menu-fit/NewTabMenuContent'
 import ClientHostedBrowserTabRows from '../browser-tabs/ClientHostedBrowserTabRows'
@@ -41,7 +42,8 @@ export function renderTabBarSurface(
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
     itemActions,
-    surfaceRef
+    surfaceRef,
+    tabStripWindow
   }: {
     props: TabBarProps
     runtime: TabBarRuntimeModel
@@ -52,6 +54,8 @@ export function renderTabBarSurface(
     activeClientHostedBrowserRowId: string | null
     itemActions: TabBarItemActions
     surfaceRef: (node: HTMLDivElement | null) => void
+    /** Mounted runs of the strip and their sortable ids; every tab when the strip isn't windowed. */
+    tabStripWindow: { segments: readonly TabStripSegment[]; sortableIds: string[] }
   },
   t: Translate = translate
 ): React.JSX.Element {
@@ -90,7 +94,8 @@ export function renderTabBarSurface(
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
-  const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
+  const { orderedItems, dropIndicatorByVisibleId } = itemProjection
+  const { segments, sortableIds } = tabStripWindow
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
   const {
     tabStripRef,
@@ -108,7 +113,8 @@ export function renderTabBarSurface(
     actions: itemActions,
     dropIndicatorByVisibleId,
     includeTopTabBorder,
-    activeClientHostedBrowserRowId
+    activeClientHostedBrowserRowId,
+    segments
   })
 
   const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0

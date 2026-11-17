@@ -53,12 +53,15 @@ export function useTabStripOverflowNavigation({
   activeVisibleTabId,
   activeDockSlotId,
   layoutKey,
+  slotIds,
   worktreeId
 }: {
   activeVisibleTabId: string | null
   /** The slot drawn active; a client-hosted row can take it without `activeVisibleTabId` changing. */
   activeDockSlotId: string | null
   layoutKey: string
+  /** Every slot in strip order, mounted or not: a windowed strip's DOM holds only part of it. */
+  slotIds: readonly string[]
   worktreeId: string
 }): {
   tabStripRef: RefObject<HTMLDivElement | null>
@@ -74,6 +77,7 @@ export function useTabStripOverflowNavigation({
   const stickToEndRef = useRef(false)
   const tabClosedThisCommitRef = useRef(false)
   const activeTabIdRef = useRef<string | null>(null)
+  const slotIdsRef = useRef<readonly string[]>(slotIds)
   const hoverDeferredRevealIdsRef = useRef<Set<string>>(new Set())
   const scrollAnchorRef = useRef<{
     activeTabId: string | null
@@ -195,6 +199,9 @@ export function useTabStripOverflowNavigation({
   useLayoutEffect(() => {
     activeTabIdRef.current = activeVisibleTabId
   }, [activeVisibleTabId])
+  useLayoutEffect(() => {
+    slotIdsRef.current = slotIds
+  }, [slotIds])
 
   useLayoutEffect(() => {
     const strip = tabStripRef.current
@@ -203,7 +210,8 @@ export function useTabStripOverflowNavigation({
       return
     }
     const prev = prevStripRef.current
-    const tabIds = readTabStripSlotIds(strip)
+    // Why logical ids: scrolling a windowed strip mounts and unmounts slots without opening or closing tabs.
+    const tabIds: ReadonlySet<string> = new Set(slotIdsRef.current)
     prevStripRef.current = { worktreeId, tabIds }
     if (!prev || prev.worktreeId !== worktreeId) {
       hoverDeferredRevealIdsRef.current = new Set()

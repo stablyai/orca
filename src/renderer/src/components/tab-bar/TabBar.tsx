@@ -1,6 +1,13 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
+import {
+  buildTabStripSegments,
+  useFocusedTabStripSlotId,
+  useTabStripRange
+} from './strip/tab-strip-window'
+import { useActiveDragVisibleTabId } from '../tab-group/drag/tab-drag-context'
+import { sameStringArray } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-core'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarItem } from './model/tab-bar-item-model'
 import { useTabBarRuntimeModel } from './model/use-tab-bar-runtime-model'
@@ -91,6 +98,14 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     groupId: runtime.resolvedGroupId,
     groupActiveTabId: props.groupActiveTabId ?? null
   })
+  const clientHostedBrowserRows = props.clientHostedBrowserRows
+  const slotIds = useMemo(
+    () => [
+      ...itemProjection.sortableIds,
+      ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+    ],
+    [clientHostedBrowserRows, itemProjection.sortableIds]
+  )
   const tabStripNavigation = useTabStripOverflowNavigation({
     activeVisibleTabId: itemProjection.activeVisibleTabId,
     activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
@@ -98,6 +113,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       itemProjection.tabStripLayoutKey,
       ...(props.clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
     ].join('|'),
+    slotIds,
     worktreeId
   })
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
@@ -109,6 +125,44 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     },
     [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
   )
+  const tabStripRange = useTabStripRange(
+    tabStripNavigation.tabStripRef,
+    itemProjection.orderedItems.length,
+    tabStripNavigation.subscribeToStripResize
+  )
+  const focusedSlotId = useFocusedTabStripSlotId(tabStripNavigation.tabStripRef)
+  const activeDragVisibleTabId = useActiveDragVisibleTabId()
+  const { orderedItems, sortableIds, activeVisibleTabId } = itemProjection
+  const tabStripWindow = useMemo(() => {
+    if (tabStripRange === null) {
+      return { segments: buildTabStripSegments(orderedItems.length, null, []), sortableIds }
+    }
+    // Keep the active, dragged and focused tabs mounted wherever they sit in the order.
+    const keptIds = new Set([activeVisibleTabId, activeDragVisibleTabId, focusedSlotId])
+    const keptIndices: number[] = []
+    orderedItems.forEach((item, index) => {
+      if (keptIds.has(item.id)) {
+        keptIndices.push(index)
+      }
+    })
+    const segments = buildTabStripSegments(orderedItems.length, tabStripRange, keptIndices)
+    const mountedIds = segments.flatMap((segment) =>
+      segment.kind === 'tabs' ? sortableIds.slice(segment.start, segment.end) : []
+    )
+    return { segments, sortableIds: mountedIds }
+  }, [
+    activeDragVisibleTabId,
+    activeVisibleTabId,
+    focusedSlotId,
+    orderedItems,
+    sortableIds,
+    tabStripRange
+  ])
+  // Why: dnd-kit re-renders every mounted tab when this array's identity changes, and tab writes rebuild it.
+  const [mountedSortableIds, setMountedSortableIds] = useState(tabStripWindow.sortableIds)
+  if (!sameStringArray(mountedSortableIds, tabStripWindow.sortableIds)) {
+    setMountedSortableIds(tabStripWindow.sortableIds)
+  }
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
@@ -124,7 +178,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       tabStripDragScroll,
       activeClientHostedBrowserRowId,
       itemActions,
-      surfaceRef
+      surfaceRef,
+      tabStripWindow: { segments: tabStripWindow.segments, sortableIds: mountedSortableIds }
     },
     t
   )
