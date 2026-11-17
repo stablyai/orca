@@ -64,9 +64,10 @@ it('keeps the original whenever the store cannot prove it holds all of it', asyn
   expect(written.errors).toEqual([])
 
   // Content the proof can't account for is refused, and the refusal is not re-proven.
+  // The smallest possible key is still read: an empty session id sorts before every other.
   const orphan = await profile({
     seed: (legacy) =>
-      legacy.exec("INSERT INTO journal_rows VALUES('orphan','old',1,1,'unaccounted user text')")
+      legacy.exec("INSERT INTO journal_rows VALUES('','',1,1,'unaccounted user text')")
   })
   await orphan.launch().run()
   expect(companions(orphan.filename)).toContain(orphan.filename)

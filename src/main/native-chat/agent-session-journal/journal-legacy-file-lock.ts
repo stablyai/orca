@@ -70,7 +70,8 @@ async function startLegacyHelper(
         reject(error)
       }
     })
-    child.once('exit', (code) => {
+    // 'close' comes after stdout drained, so "locked"/"retired" output is never lost to exit.
+    child.once('close', (code) => {
       exited = true
       terminated.resolve()
       clearTimeout(forceTimer)

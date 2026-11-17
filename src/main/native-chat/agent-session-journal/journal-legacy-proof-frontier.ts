@@ -51,6 +51,8 @@ export async function completeJournalLegacyProof(
         try {
           await conversions.ensure(source.sessionId, false)
         } catch (error) {
+          // The next attempt converts this chat again instead of waiting on a conversion that failed.
+          frontier.pending = false
           const content = journalSqlSourceContent(error)
           if (content) {
             throw new JournalLegacyRetentionError(

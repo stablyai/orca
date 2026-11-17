@@ -7,6 +7,7 @@ import {
   mergeWindowsCompilerEnvironment
 } from './windows/initialize-windows-native-toolchain.mjs'
 import { runProcessSync } from '@orca/process-host'
+import { MACOS_DEPLOYMENT_TARGET } from './posix/build-provider-exec.mjs'
 
 // Reuse the glibc 2.28 slot images from node-server-tests.yml.
 const SERVER_TOOLCHAIN_IMAGES = {
@@ -79,7 +80,13 @@ export function buildJournalFileLock(
         '-Wall',
         '-Wextra',
         '-Werror',
-        ...(process.platform === 'darwin' ? ['-arch', arch === 'x64' ? 'x86_64' : arch] : []),
+        ...(process.platform === 'darwin'
+          ? [
+              '-arch',
+              arch === 'x64' ? 'x86_64' : arch,
+              `-mmacosx-version-min=${MACOS_DEPLOYMENT_TARGET}`
+            ]
+          : []),
         source,
         '-o',
         output

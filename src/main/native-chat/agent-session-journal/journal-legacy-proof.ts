@@ -45,8 +45,9 @@ export class JournalLegacyProof {
 
   /** True when this exact original was refused before; the proof isn't run again for it. */
   refused(saved: string | null, observation: LegacyProofObservation): boolean {
+    // An unsaved refusal proves again, which saves it; only a saved one ends this process's attempts.
     if (this.refusal) {
-      return true
+      return this.refusalSaved
     }
     const refusal = decodeLegacySourceRefusal(saved)
     if (!refusal || refusal.proof !== observation.proof || refusal.store !== observation.store) {

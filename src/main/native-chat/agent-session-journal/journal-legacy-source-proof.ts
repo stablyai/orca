@@ -163,23 +163,25 @@ function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): Legac
     if (indexed) {
       // One seek per distinct key: a DISTINCT over the index would read every row of a huge chat
       // inside a single statement, which no pause between pages can interrupt.
+      const keys = table === 'journal_rows' ? 'session_id,epoch' : 'generation'
+      // The first page starts from the smallest key, whatever it is; later ones seek past the last.
+      const first = db.prepare(`SELECT ${keys} FROM ${table} ORDER BY ${keys} LIMIT 1`)
       const next = db.prepare(
         table === 'journal_rows'
           ? 'SELECT session_id,epoch FROM journal_rows WHERE (session_id,epoch)>(?,?) ORDER BY session_id,epoch LIMIT 1'
           : 'SELECT generation FROM journal_outcomes WHERE generation>? ORDER BY generation LIMIT 1'
       )
+      first.setReadBigInts(true)
       next.setReadBigInts(true)
       rows = []
-      let after: SqliteRow[string][] =
+      let after: SqliteRow[string][] | null =
         cursor.after === null
-          ? table === 'journal_rows'
-            ? ['', '']
-            : [-1n]
+          ? null
           : table === 'journal_rows'
             ? [cursor.after, cursor.epoch!]
             : [BigInt(cursor.after)]
       while (rows.length < 128) {
-        const row = next.get(...after)
+        const row = after === null ? first.get() : next.get(...after)
         if (!row) {
           break
         }
