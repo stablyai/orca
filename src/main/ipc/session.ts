@@ -9,7 +9,7 @@ import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane
 import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { windowSaveKeepingMainSleepRecords } from '../persistence/window-save-sleep-records'
-import { WindowSessionPatchRepeats } from '../persistence/window-session-patch-repeats'
+import { isNoopWindowSessionPatch } from '../persistence/window-session-patch-noop'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type {
   WorkspaceSessionPatch,
@@ -59,20 +59,16 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   })
 
-  const patchRepeats = new WindowSessionPatchRepeats((hostId) => store.getWorkspaceSession(hostId))
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    const windowOwned = !ORCA_LAYOUT_OWNER_IS_MAIN
-    if (isFenced(hostId) || (windowOwned && patchRepeats.isRepeat(args, hostId))) {
+    if (isFenced(hostId)) {
       return
     }
-    store.patchWorkspaceSession(
-      windowOwned
-        ? windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'patch')
-        : patchForMain(args, hostId),
-      hostId
-    )
-    if (windowOwned) {
-      patchRepeats.noteApplied(args, hostId)
+    const stored = store.getWorkspaceSession(hostId)
+    const save = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? patchForMain(args, hostId)
+      : windowSaveKeepingMainSleepRecords(stored, args, 'patch')
+    if (ORCA_LAYOUT_OWNER_IS_MAIN || !isNoopWindowSessionPatch(stored, save)) {
+      store.patchWorkspaceSession(save, hostId)
     }
   })
 

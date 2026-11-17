@@ -75,6 +75,18 @@ describe('session:patch', () => {
     )
   })
 
+  it('rewrites a repeated patch once another writer changed the partition in place', () => {
+    const { store, patch } = harness()
+    patch(activeTab('tab-1'))
+    // Binding writes change the stored partition object without replacing it.
+    store.getWorkspaceSession(HOST).activeTabIdByWorktree['repo-1::/work/a'] = 'tab-9'
+
+    patch(activeTab('tab-1'))
+    expect(store.getWorkspaceSession(HOST).activeTabIdByWorktree).toEqual(
+      activeTab('tab-1').activeTabIdByWorktree
+    )
+  })
+
   it('writes a patch a WSL move hold dropped once the hold lifts', () => {
     const { store, patch } = harness()
     patch(activeTab('tab-1'))
