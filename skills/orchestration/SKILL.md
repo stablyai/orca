@@ -2,17 +2,18 @@
 name: orchestration
 description: >-
   Run work in separate Orca worker agents and get their results back. Use when
-  the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,
-  decision gates), or when the work needs something your own subagents cannot
-  give: a different agent (such as Codex from Claude) or its own Orca workspace.
-  "Have Codex (or Claude) review this and report back" means an Orca worker of
-  that agent, even when you have your own model subagents.
-  Also use when you are a dispatched worker (a prompt with Task and Dispatch
-  IDs: ask, worker_done). Otherwise prefer your own subagents,
-  including for long or parallel work. Use `orca-cli` to hand work off with
-  nothing expected back ("hand off", "handover", "give this to another agent",
-  "another worktree"), and for terminal control, shell commands, worktree
-  management, and reading or waiting on terminals.
+  the user invokes /orchestration or asks for Orca workers or supervision
+  (monitor, task DAGs, ask/reply, decision gates); then start Orca workers and
+  never substitute your own subagents. Also use when each piece of work needs
+  its own agent session: code changes made in parallel on separate worktrees or
+  branches, a different agent (such as Codex from Claude), or its own Orca
+  workspace. "Have Codex (or Claude) review this and report back" means an Orca
+  worker of that agent. Also use when you are a dispatched worker (a prompt
+  with Task and Dispatch IDs: ask, worker_done). Prefer your own subagents for
+  searches, reads and research that change no files. Use `orca-cli` to hand
+  work off with nothing expected back ("hand off", "handover", "give this to
+  another agent", "another worktree"), and for terminal control, shell
+  commands, worktree management, and reading or waiting on terminals.
 ---
 
 # Orca Orchestration
