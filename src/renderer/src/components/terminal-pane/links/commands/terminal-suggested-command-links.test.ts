@@ -4,6 +4,7 @@ import {
   createTerminalSuggestedCommandLinkProvider,
   runTerminalSuggestedCommand
 } from './terminal-suggested-command-links'
+import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
@@ -40,12 +41,21 @@ function makeTerminal(rows: string[], cursorY: number) {
   return terminal as typeof terminal & Terminal
 }
 
-function provide(terminal: Terminal | null, lineNumber: number): ILink[] | undefined {
-  const tooltip = { textContent: '', style: { display: 'none' } }
+const tooltip = { textContent: '', style: { display: 'none' } }
+
+function provide(
+  terminal: Terminal | null,
+  lineNumber: number,
+  options: {
+    getTerminal?: () => Terminal | null
+    getLinkActionContext?: () => TerminalLinkActionContext | null
+  } = {}
+): ILink[] | undefined {
   const provider = createTerminalSuggestedCommandLinkProvider({
-    getTerminal: () => terminal,
+    getTerminal: options.getTerminal ?? (() => terminal),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the provider only writes textContent and style.display.
-    linkTooltip: tooltip as unknown as HTMLElement
+    linkTooltip: tooltip as unknown as HTMLElement,
+    getLinkActionContext: options.getLinkActionContext
   })
   let links: ILink[] | undefined
   provider.provideLinks(lineNumber, (result) => {
@@ -109,6 +119,39 @@ describe('terminal suggested command links', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: activation reads only the button, modifier and preventDefault members.
     links?.[0].activate(click as unknown as MouseEvent, links[0].text)
     expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
+  it('does not run once the setting turns off while the link is offered', () => {
+    const terminal = makeTerminal(['  ! git status'], 3)
+    let enabled = true
+    const links = provide(terminal, 1, { getTerminal: () => (enabled ? terminal : null) })
+    enabled = false
+
+    const isMac = navigator.userAgent.includes('Mac')
+    const click = { button: 0, metaKey: isMac, ctrlKey: !isMac, preventDefault: vi.fn() }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: activation reads only the button, modifier and preventDefault members.
+    links?.[0].activate(click as unknown as MouseEvent, links[0].text)
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
+  it('advertises the popover only when a plain click opens it', () => {
+    const terminal = makeTerminal(['  ! git status'], 3)
+    const context = (plainClickBehavior: 'actions' | 'open'): TerminalLinkActionContext =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hover hint reads only plainClickBehavior.
+      ({ plainClickBehavior }) as TerminalLinkActionContext
+
+    provide(terminal, 1, { getLinkActionContext: () => context('open') })?.[0].hover?.(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hover ignores the event.
+      {} as MouseEvent,
+      ''
+    )
+    expect(tooltip.textContent).not.toContain('Click for actions')
+    provide(terminal, 1, { getLinkActionContext: () => context('actions') })?.[0].hover?.(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hover ignores the event.
+      {} as MouseEvent,
+      ''
+    )
+    expect(tooltip.textContent).toContain('Click for actions')
   })
 
   it('offers nothing on the prompt row or when the setting turns links off', () => {

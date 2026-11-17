@@ -80,12 +80,10 @@ describe('findTerminalSuggestedCommand', () => {
   })
 
   it('keeps the space where xterm soft-wrapped at a word boundary', () => {
-    const buffer = makeBuffer([
-      '! rm -rf build                          ',
-      { text: 'dist', wrapped: true }
-    ])
+    // xterm soft-wraps only a full row, so the boundary space is the row's last cell.
+    const buffer = makeBuffer([`! rm -rf ${'b'.repeat(30)} `, { text: 'dist', wrapped: true }])
 
-    expect(findTerminalSuggestedCommand(buffer, 2)?.text).toBe('! rm -rf build dist')
+    expect(findTerminalSuggestedCommand(buffer, 2)?.text).toBe(`! rm -rf ${'b'.repeat(30)} dist`)
   })
 
   it('does not end a wrapped command at a row that starts with a flag', () => {
@@ -93,6 +91,37 @@ describe('findTerminalSuggestedCommand', () => {
 
     expect(findTerminalSuggestedCommand(buffer, 2)?.text).toBe(
       '! pnpm vitest run src/term/links/x.ts --coverage'
+    )
+  })
+
+  it('drops a backslash line continuation instead of escaping the joining space', () => {
+    const buffer = makeBuffer(['  ! git diff \\', '  --stat'])
+
+    expect(findTerminalSuggestedCommand(buffer, 2)?.text).toBe('! git diff --stat')
+  })
+
+  it('keeps every space inside a quoted argument that xterm soft-wrapped', () => {
+    const buffer = makeBuffer([`! echo "${'a'.repeat(30)}  `, { text: '  b"', wrapped: true }])
+
+    expect(findTerminalSuggestedCommand(buffer, 1)?.text).toBe(`! echo "${'a'.repeat(30)}    b"`)
+  })
+
+  it('does not swallow an explanation that starts where the command row ended', () => {
+    const buffer = makeBuffer(['  ! cd /tmp/projects/x && ls', '  Explain the output.'])
+
+    expect(findTerminalSuggestedCommand(buffer, 1)?.text).toBe('! cd /tmp/projects/x && ls')
+    expect(findTerminalSuggestedCommand(buffer, 2)).toBeNull()
+  })
+
+  it('offers nothing when the command continues past the row limit', () => {
+    const rows = [
+      `! echo ${'a'.repeat(33)}`,
+      ...Array.from({ length: 12 }, () => ({ text: 'a'.repeat(40), wrapped: true as const }))
+    ]
+
+    expect(findTerminalSuggestedCommand(makeBuffer(rows), 1)).toBeNull()
+    expect(findTerminalSuggestedCommand(makeBuffer(rows.slice(0, 12)), 1)?.text).toBe(
+      `! echo ${'a'.repeat(33 + 11 * 40)}`
     )
   })
 

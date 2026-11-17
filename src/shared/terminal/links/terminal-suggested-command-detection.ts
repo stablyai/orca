@@ -23,9 +23,9 @@ type CommandRow = {
   endColumn: number
   lineLength: number
   isWrapped: boolean
-  /** Trimmed whitespace at either edge; matters only where xterm soft-wraps mid-line. */
-  leadingSpace: boolean
-  trailingSpace: boolean
+  /** Trimmed whitespace at either edge; it is content only where xterm soft-wraps mid-line. */
+  leadingWhitespace: string
+  trailingWhitespace: string
 }
 
 const MAX_SUGGESTED_COMMAND_ROWS = 12
@@ -58,8 +58,8 @@ function readCommandRow(buffer: TerminalLinkBuffer, y: number): CommandRow | nul
     endColumn: translated.columns[end] ?? end,
     lineLength: line.length,
     isWrapped: line.isWrapped,
-    leadingSpace: start > 0,
-    trailingSpace: end < translated.text.length
+    leadingWhitespace: translated.text.slice(0, start),
+    trailingWhitespace: translated.text.slice(end)
   }
 }
 
@@ -70,13 +70,18 @@ function firstWordWidth(row: CommandRow): number {
 }
 
 const TRAILING_SHELL_OPERATOR_RE = /(?:\\|\|\|?|&&|[<>]|\()$/
+// A sentence the agent printed after the command, not a wrapped argument.
+const PROSE_ROW_RE = /^(?:[A-Z][a-z]|[\u0080-\uFFFF]).*[.!?:。]$/
 
-/** True when the shell would still wait for input: an open quote or a trailing operator. */
-export function isIncompleteShellCommand(text: string): boolean {
+/** Open quote at the end of `text`, and whether its last character is an escaping backslash. */
+function scanShellQuotes(text: string): { quote: '"' | "'" | null; trailingEscape: boolean } {
   let quote: '"' | "'" | null = null
   for (let index = 0; index < text.length; index++) {
     const char = text[index]
     if (char === '\\' && quote !== "'") {
+      if (index === text.length - 1) {
+        return { quote, trailingEscape: true }
+      }
       index++
     } else if (quote === null && (char === '"' || char === "'")) {
       quote = char
@@ -84,15 +89,25 @@ export function isIncompleteShellCommand(text: string): boolean {
       quote = null
     }
   }
-  return quote !== null || TRAILING_SHELL_OPERATOR_RE.test(text)
+  return { quote, trailingEscape: false }
 }
 
-/** Soft wraps split wherever the row filled up; agent hard wraps replace a single space. */
-function rowSeparator(previous: CommandRow, next: CommandRow): string {
-  if (!next.isWrapped) {
-    return ' '
+/** True when the shell would still wait for input: an open quote or a trailing operator. */
+export function isIncompleteShellCommand(text: string): boolean {
+  return scanShellQuotes(text).quote !== null || TRAILING_SHELL_OPERATOR_RE.test(text)
+}
+
+/** The command text once `next` is added, as the shell would read the rows the agent printed. */
+function appendCommandRow(command: string, previous: CommandRow, next: CommandRow): string {
+  if (next.isWrapped) {
+    // Soft wraps split wherever the row filled up, so the edge whitespace is content.
+    return command + previous.trailingWhitespace + next.leadingWhitespace + next.text
   }
-  return previous.trailingSpace || next.leadingSpace ? ' ' : ''
+  // Why: the shell drops a backslash-newline; keeping the backslash would escape the joining space.
+  if (scanShellQuotes(command).trailingEscape) {
+    return command.slice(0, -1) + next.text
+  }
+  return `${command} ${next.text}`
 }
 
 /** True when `next` is the rest of a command the agent wrapped after `previous`. */
@@ -112,35 +127,46 @@ function continuesCommand(
   if (isIncompleteShellCommand(commandSoFar)) {
     return true
   }
+  if (PROSE_ROW_RE.test(next.text)) {
+    return false
+  }
   // Why: a sentence after the command fits on the previous row; a wrapped tail's first word does not.
   return previous.endColumn + 1 + firstWordWidth(next) > previous.lineLength - WORD_WRAP_RIGHT_SLACK
 }
 
-function collectCommandRows(buffer: TerminalLinkBuffer, start: CommandRow): CommandRow[] {
+function collectCommandRows(
+  buffer: TerminalLinkBuffer,
+  start: CommandRow
+): { rows: CommandRow[]; text: string } | null {
   const rows = [start]
-  let commandSoFar = start.text
-  for (let y = start.y + 1; rows.length < MAX_SUGGESTED_COMMAND_ROWS; y++) {
+  let text = start.text
+  for (let y = start.y + 1; ; y++) {
     const next = readCommandRow(buffer, y)
     // oxlint-disable-next-line unicorn/prefer-at -- the phone's terminal WebView (Chrome 74) has no Array#at
-    if (!next || !continuesCommand(start, rows[rows.length - 1], next, commandSoFar)) {
+    const previous = rows[rows.length - 1]
+    if (!next || !continuesCommand(start, previous, next, text)) {
       break
     }
-    // oxlint-disable-next-line unicorn/prefer-at -- the phone's terminal WebView (Chrome 74) has no Array#at
-    commandSoFar += rowSeparator(rows[rows.length - 1], next) + next.text
-    if (commandSoFar.length > MAX_SUGGESTED_COMMAND_CHARS) {
-      return []
+    // Why: a command longer than the limits would run without its tail.
+    if (rows.length >= MAX_SUGGESTED_COMMAND_ROWS) {
+      return null
+    }
+    text = appendCommandRow(text, previous, next)
+    if (text.length > MAX_SUGGESTED_COMMAND_CHARS) {
+      return null
     }
     rows.push(next)
   }
   // Why: a command whose tail could not be found is unsafe to run as shown.
-  return isIncompleteShellCommand(commandSoFar) ? [] : rows
+  return isIncompleteShellCommand(text) ? null : { rows, text }
 }
 
+/** Rows laid end to end for link-range mapping; the runnable text is built separately. */
 function toLogicalLine(rows: CommandRow[]): WrappedLogicalLine {
   let text = ''
   const logicalRows = rows.map((row, index) => {
     if (index > 0) {
-      text += rowSeparator(rows[index - 1], row)
+      text += ' '
     }
     const startIndex = text.length
     text += row.text
@@ -178,9 +204,13 @@ export function findTerminalSuggestedCommand(
       }
       continue
     }
-    const rows = collectCommandRows(buffer, start)
+    const collected = collectCommandRows(buffer, start)
+    if (!collected) {
+      return null
+    }
+    const { rows, text } = collected
     // oxlint-disable-next-line unicorn/prefer-at -- the phone's terminal WebView (Chrome 74) has no Array#at
-    const endY = rows.length > 0 ? rows[rows.length - 1].y : -1
+    const endY = rows[rows.length - 1].y
     if (endY < y) {
       return null
     }
@@ -189,7 +219,7 @@ export function findTerminalSuggestedCommand(
     }
     const logicalLine = toLogicalLine(rows)
     const range = rangeForParsedFileLink(logicalLine, 0, logicalLine.text.length)
-    return range ? { text: logicalLine.text, startY, endY, range } : null
+    return range ? { text, startY, endY, range } : null
   }
   return null
 }

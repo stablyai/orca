@@ -60,8 +60,8 @@ export function createTerminalSuggestedCommandLinkProvider(
         return
       }
       const run = (): void => {
-        // Why: agent TUIs repaint rows; never run text other than what the user was shown.
-        if (find()?.text === command.text) {
+        // Why: agent TUIs repaint rows, and the setting may turn off while the popover is open.
+        if (deps.getTerminal() === terminal && find()?.text === command.text) {
           runTerminalSuggestedCommand(terminal, command.text)
         }
       }
@@ -95,8 +95,10 @@ export function createTerminalSuggestedCommandLinkProvider(
           }
         },
         hover: () => {
+          const context = deps.getLinkActionContext?.()
+          // Only the 'actions' behavior opens the popover on a plain click.
           const showActions = deps.getLinkActionContext
-            ? deps.getLinkActionContext() !== null
+            ? context != null && (context.plainClickBehavior ?? 'actions') === 'actions'
             : true
           deps.linkTooltip.textContent = `${command.text} (${getTerminalCommandRunHint(showActions)})`
           deps.linkTooltip.style.display = ''
