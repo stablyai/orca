@@ -264,7 +264,7 @@ export function openBrowserExtensionOptions(
   extensionId: string
 ): Promise<BrowserExtensionActionResult> {
   return settle(async () => {
-    browserSessionRegistry.attachExtensions(browserProfileId)
+    await startBrowserExtensionsForSettings(browserProfileId)
     await whenBrowserExtensionProfileLoaded(browserProfileId)
     const extension =
       getBrowserExtensionSessionForProfile(browserProfileId)?.extensions.getExtension(extensionId)

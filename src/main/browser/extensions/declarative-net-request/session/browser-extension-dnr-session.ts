@@ -175,7 +175,10 @@ export class DnrSessionRuntime {
       ])
       this.loadHold = hold
       void hold.then(() => {
-        this.startupLoad = null
+        // A reattach may have re-armed the hold meanwhile; that one stays.
+        if (this.startupLoad === startup) {
+          this.startupLoad = null
+        }
         if (this.loadHold === hold) {
           this.loadHold = null
         }

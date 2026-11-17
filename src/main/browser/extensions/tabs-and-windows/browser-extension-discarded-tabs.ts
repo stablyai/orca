@@ -51,9 +51,18 @@ const assignedByPageId = new Map<string, { tabId: number; session: Electron.Sess
 
 /** The extension session a tab's guest would load in, as the renderer picks its partition. */
 function extensionSessionFor(tab: BrowserWorkspace): Electron.Session | null {
-  const partition = tab.sessionPartition || resolveKnownPartition(tab.sessionProfileId)
+  const partition = partitionFor(tab)
   const profile = partition ? getBrowserExtensionProfileForPartition(partition) : null
   return profile ? getBrowserExtensionSessionForProfile(profile.id) : null
+}
+
+function partitionFor(tab: BrowserWorkspace): string | null {
+  return tab.sessionPartition || resolveKnownPartition(tab.sessionProfileId)
+}
+
+// A document page is no web page; a runtime-hosted page streams, never a local guest.
+function isLocalWebPage(page: BrowserPage): boolean {
+  return !page.docLocation && !(page.remoteBrowserPageId && !page.remoteBrowserPageClientHosted)
 }
 
 /**
@@ -73,11 +82,7 @@ function visitSavedPages(
           continue
         }
         for (const page of state.browserPagesByWorkspace?.[tab.id] ?? []) {
-          // A document page is no web page; a runtime-hosted page streams, never a local guest.
-          if (
-            page.docLocation ||
-            (page.remoteBrowserPageId && !page.remoteBrowserPageClientHosted)
-          ) {
+          if (!isLocalWebPage(page)) {
             continue
           }
           if (visit(page, session)) {
@@ -143,6 +148,9 @@ export function setSavedBrowserTabsSource(
   resolveKnownPartition = resolvePartition
   stopWatchingWrites =
     next?.onWorkspaceSessionWritten((hostId) => {
+      for (const listener of savedTabsWriteListeners) {
+        listener()
+      }
       if (unloadedPageIds.size === 0 && assignedByPageId.size === 0) {
         return
       }
@@ -189,16 +197,36 @@ export function listDiscardedBrowserTabs(): DiscardedBrowserTab[] {
   return tabs
 }
 
+const savedTabsWriteListeners = new Set<() => void>()
+
+/** Runs after each saved workspace session write, when a saved tab may have gone. */
+export function onSavedBrowserTabsWritten(listener: () => void): () => void {
+  savedTabsWriteListeners.add(listener)
+  return () => savedTabsWriteListeners.delete(listener)
+}
+
 /**
- * Whether the saved workspace session still holds a web page in this extension session, freed or
- * not shown yet. A closed page leaves it with the renderer's next session write.
+ * Whether the saved workspace session still holds a web page in this partition, freed or not
+ * shown yet. A closed page leaves it with the renderer's next session write.
  */
-export function hasSavedBrowserTabInSession(sess: Electron.Session): boolean {
-  let found = false
-  if (source) {
-    visitSavedPages(source, (_page, session) => (found = session === sess))
+export function hasSavedBrowserTabInPartition(partition: string): boolean {
+  if (!source) {
+    return false
   }
-  return found
+  for (const hostId of source.getWorkspaceSessionHostIds()) {
+    const state = source.getWorkspaceSession(hostId)
+    for (const tabs of Object.values(state.browserTabsByWorktree ?? {})) {
+      for (const tab of tabs) {
+        if (
+          partitionFor(tab) === partition &&
+          (state.browserPagesByWorkspace?.[tab.id] ?? []).some(isLocalWebPage)
+        ) {
+          return true
+        }
+      }
+    }
+  }
+  return false
 }
 
 /** Looks up one page without listing (and numbering) every other discarded tab. */

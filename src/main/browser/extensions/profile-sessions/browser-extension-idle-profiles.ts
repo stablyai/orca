@@ -1,8 +1,12 @@
 import { webContents } from 'electron'
 import { isHiddenHelperContents } from '../../hidden-helper-window'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
-import { hasSavedBrowserTabInSession } from '../tabs-and-windows/browser-extension-discarded-tabs'
 import {
+  hasSavedBrowserTabInPartition,
+  onSavedBrowserTabsWritten
+} from '../tabs-and-windows/browser-extension-discarded-tabs'
+import {
+  getBrowserExtensionProfile,
   getBrowserExtensionSessionForProfile,
   unloadBrowserExtensionsFromIdleProfile,
   whenBrowserExtensionProfileUnloaded
@@ -14,6 +18,8 @@ const IDLE_PROFILE_UNLOAD_DELAY_MS = 60_000
 const idleChecks = new Map<string, NodeJS.Timeout>()
 /** Observed pages alive per extension session, so a close never scans every WebContents. */
 const livePages = new WeakMap<Electron.Session, number>()
+/** Profiles with no live page that only saved tabs kept running: a session write may drop the last one. */
+const keptBySavedTabs = new Map<string, Electron.Session>()
 let observePage: (contents: Electron.WebContents) => void = () => {}
 
 /** Tabs (webview guests and serve's offscreen pages) and extension windows: what keeps a profile running. */
@@ -30,6 +36,14 @@ export function setIdleBrowserExtensionPageObserver(
   observe: (contents: Electron.WebContents) => void
 ): void {
   observePage = observe
+  onSavedBrowserTabsWritten(() => {
+    for (const [profileId, sess] of keptBySavedTabs) {
+      // A pending check already covers it; rescheduling on every write would postpone it forever.
+      if (!idleChecks.has(profileId)) {
+        scheduleIdleBrowserExtensionProfileCheck(profileId, sess)
+      }
+    }
+  })
 }
 
 /** Counts an observed page toward its profile; when the profile's last one closes, the idle check starts. */
@@ -49,15 +63,17 @@ export function trackBrowserExtensionPage(profileId: string, contents: Electron.
  * Open tabs keep a profile's extensions running, as in Chromium, including tabs Memory Saver
  * freed and saved tabs not shown yet: only closing the profile's last tab stops them.
  */
-function hasTab(sess: Electron.Session): boolean {
-  return (livePages.get(sess) ?? 0) > 0 || hasSavedBrowserTabInSession(sess)
-}
-
 function scheduleIdleBrowserExtensionProfileCheck(profileId: string, sess: Electron.Session): void {
   clearTimeout(idleChecks.get(profileId))
   const timer = setTimeout(() => {
     idleChecks.delete(profileId)
-    if (hasTab(sess)) {
+    keptBySavedTabs.delete(profileId)
+    if ((livePages.get(sess) ?? 0) > 0) {
+      return
+    }
+    const partition = getBrowserExtensionProfile(profileId)?.partition
+    if (partition && hasSavedBrowserTabInPartition(partition)) {
+      keptBySavedTabs.set(profileId, sess)
       return
     }
     void unloadBrowserExtensionsFromIdleProfile(profileId, (reattachRequested) => {
@@ -81,7 +97,7 @@ export async function startBrowserExtensionsForSettings(profileId: string): Prom
   browserSessionRegistry.attachExtensions(profileId)
   await whenBrowserExtensionProfileUnloaded(profileId)
   const sess = getBrowserExtensionSessionForProfile(profileId)
-  if (sess && !hasTab(sess)) {
+  if (sess && (livePages.get(sess) ?? 0) === 0) {
     scheduleIdleBrowserExtensionProfileCheck(profileId, sess)
   }
 }

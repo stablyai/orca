@@ -99,6 +99,7 @@ vi.mock('../installation/browser-extension-load-directory', () => ({
 
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
 
+const apiHost = await import('../api-runtime/browser-extension-api-host')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
 await import('./browser-extension-load-errors')
@@ -255,6 +256,56 @@ describe('deleted profile action state', () => {
   })
 })
 
+describe('a profile whose last page closed', () => {
+  const profile = {
+    id: 'idle-profile',
+    scope: 'isolated' as const,
+    partition: 'persist:orca-browser-idle',
+    label: 'Idle',
+    source: null
+  }
+
+  // Attaches with nothing to load, then stands in a running extension in its session.
+  async function attachRunning(): Promise<void> {
+    setBrowserExtensionSupportEnabled(true)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    await loader.whenBrowserExtensionProfileLoaded(profile.id)
+    mocks.loaded.set(ID, { id: ID })
+  }
+
+  it('stops its extensions and keeps nothing attached', async () => {
+    await attachRunning()
+    const afterUnload = vi.fn()
+    await loader.unloadBrowserExtensionsFromIdleProfile(profile.id, afterUnload)
+    expect(afterUnload).toHaveBeenCalledWith(false)
+    expect(mocks.loaded.size).toBe(0)
+    expect(loader.getBrowserExtensionSessionForProfile(profile.id)).toBeNull()
+  })
+
+  it('reattaches for a page that opened while it unloaded, before that page stops waiting', async () => {
+    await attachRunning()
+    const unloading = loader.unloadBrowserExtensionsFromIdleProfile(profile.id, (requested) => {
+      if (requested) {
+        loader.attachBrowserExtensionsToProfileSession(profile, [])
+      }
+    })
+    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    expect(loader.isBrowserExtensionProfileLoading(profile.id)).toBe(true)
+    await loader.whenBrowserExtensionProfileLoaded(profile.id)
+    expect(loader.getBrowserExtensionSessionForProfile(profile.id)).not.toBeNull()
+    expect(loader.isBrowserExtensionProfileLoading(profile.id)).toBe(false)
+    // The unload's teardown ran before the reattach wired the session up again.
+    const attached = vi.mocked(apiHost.attachBrowserExtensionApiHostToSession).mock
+    const forgotten = vi.mocked(apiHost.forgetBrowserExtensionContexts).mock
+    expect(attached.invocationCallOrder.at(-1)).toBeGreaterThan(
+      forgotten.invocationCallOrder.at(-1) ?? Infinity
+    )
+    await unloading
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+  })
+})
+
 it('does not restore stale enablement after uninstall and reinstall in another Orca profile', async () => {
   setBrowserExtensionSupportEnabled(true)
   await loader.detachBrowserExtensionsFromAllProfileSessions()
@@ -288,48 +339,4 @@ it('does not restore stale enablement after uninstall and reinstall in another O
   ).rejects.toThrow('Restart Orca')
   expect(mocks.session.extensions.loadExtension).not.toHaveBeenCalled()
   await loader.detachBrowserExtensionsFromAllProfileSessions()
-})
-
-describe('a profile whose last page closed', () => {
-  const profile = {
-    id: 'idle-profile',
-    scope: 'isolated' as const,
-    partition: 'persist:orca-browser-idle',
-    label: 'Idle',
-    source: null
-  }
-
-  async function attachLoaded(): Promise<void> {
-    setBrowserExtensionSupportEnabled(true)
-    await loader.detachBrowserExtensionsFromAllProfileSessions()
-    getBrowserExtensionInstallStore().save(installed)
-    loader.attachBrowserExtensionsToProfileSession(profile, [ID])
-    await loader.whenBrowserExtensionProfileLoaded(profile.id)
-    expect(mocks.loaded.has(ID)).toBe(true)
-  }
-
-  it('stops its extensions and keeps nothing attached', async () => {
-    await attachLoaded()
-    const afterUnload = vi.fn()
-    await loader.unloadBrowserExtensionsFromIdleProfile(profile.id, afterUnload)
-    expect(afterUnload).toHaveBeenCalledWith(false)
-    expect(mocks.loaded.size).toBe(0)
-    expect(loader.getBrowserExtensionSessionForProfile(profile.id)).toBeNull()
-  })
-
-  it('reattaches for a page that opened while it unloaded, before that page stops waiting', async () => {
-    await attachLoaded()
-    const unloading = loader.unloadBrowserExtensionsFromIdleProfile(profile.id, (requested) => {
-      if (requested) {
-        loader.attachBrowserExtensionsToProfileSession(profile, [ID])
-      }
-    })
-    loader.attachBrowserExtensionsToProfileSession(profile, [ID])
-    expect(loader.isBrowserExtensionProfileLoading(profile.id)).toBe(true)
-    await loader.whenBrowserExtensionProfileLoaded(profile.id)
-    expect(mocks.loaded.has(ID)).toBe(true)
-    expect(loader.getBrowserExtensionSessionForProfile(profile.id)).not.toBeNull()
-    await unloading
-    await loader.detachBrowserExtensionsFromAllProfileSessions()
-  })
 })
