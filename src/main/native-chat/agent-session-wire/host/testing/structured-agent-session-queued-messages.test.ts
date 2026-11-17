@@ -72,3 +72,16 @@ it('a steer send waiting on approval joins the running turn when approval clears
   await eventually(async () => expect((await rig.handoff(steer.id))?.handedOverAt).toBeDefined())
   expect(await rig.handoff(queueOnly.id)).toBeUndefined()
 })
+
+it('Send-now steers a second card while the first steer is still unechoed', async () => {
+  const opener = await rig.workingSend()
+  await rig.settleAccepted(opener, 'opening')
+  await openRigTurnFor(rig, opener)
+  const first = rig.send('first card', 'queue-if-active')
+  const second = rig.send('second card', 'queue-if-active')
+  await Promise.all([first.result, second.result])
+  expect(await rig.sendNow(first.id)).toMatchObject({ ok: true })
+  await eventually(async () => expect((await rig.handoff(first.id))?.handedOverAt).toBeDefined())
+  expect(await rig.sendNow(second.id)).toMatchObject({ ok: true })
+  await eventually(async () => expect((await rig.handoff(second.id))?.handedOverAt).toBeDefined())
+})

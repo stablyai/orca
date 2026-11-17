@@ -183,7 +183,7 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   // The worktree cards notice badge marks a new feature too.
   'sidebar.worktreeCardsUpdateNotice.newLabel': { zh: '新功能' },
   // The card-style switch picks the new design, not the generic "New" → 新建 (create).
-  'sidebar.worktreeCardsIntroNotice.new': { zh: '新版' },
+  'sidebar.worktreeCardsIntroNotice.new': { zh: '新样式' },
   // Automation status: "Active" means enabled, not the generic "current" (当前).
   'auto.components.automations.listGroups.active': { zh: '已启用' },
   'auto.components.automations.AutomationDetail.active': { zh: '已启用' },

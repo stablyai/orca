@@ -1,11 +1,11 @@
 import { useMemo, useState, type ComponentPropsWithoutRef } from 'react'
 import type { ExtraProps } from 'react-markdown'
-import type { CommentMarkdownExtension } from '@/components/sidebar/CommentMarkdown'
+import type { CommentMarkdownExtension } from '@/components/comment-markdown/CommentMarkdown'
 import {
   NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH,
   NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
   isNativeChatVisualFileName
-} from '../../../../../../shared/native-chat/native-chat-visual-directive'
+} from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
 import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'

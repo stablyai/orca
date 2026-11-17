@@ -114,11 +114,7 @@
       "codeNoLongerValid": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
     },
     "terminalSettings": {
-      "defaultText": "預設（100%）",
       "keepPhoneSize": "保持手機尺寸（預設）",
-      "largeText": "大（125%）",
-      "largerText": "較大（150%）",
-      "largestText": "最大（200%）",
       "leaveAppDescription": "在手機上使用終端機時，Orca 會將終端機縮小以符合螢幕大小。關閉 App 或切換到其他 App 時，此設定決定終端機要保持手機尺寸（避免互動式 CLI 工具重新排版），還是還原為電腦上的尺寸。您隨時都能使用桌面版橫幅上的「還原」手動調整尺寸。",
       "leaveAppHeading": "離開 App 時",
       "noPairedDesktops": "尚未配對任何電腦。配對一台電腦後，即可設定終端機行為。",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
       "restoreHost": "還原 {{name}}",
-      "smallerText": "較小（75%）",
-      "smallestText": "最小（50%）",
-      "textSize": "文字大小",
-      "textSizeDescription": "調整終端機文字大小。文字較小時可顯示更多欄，並保留兩側邊距；文字較大時顯示的欄數較少，可向左右拖曳來平移。您也可以直接在終端機中用雙指縮放，同時更新此設定。此設定僅影響此裝置的顯示，不會變更電腦上的終端機。",
-      "textSizeHeading": "文字大小",
-      "textSizePickerTitle": "終端機文字大小",
       "title": "終端機"
     }
   },
@@ -675,6 +665,10 @@
       "mark": "分支 ·",
       "markedName": "{{mark}} {{name}}",
       "accessibleName": "分支：{{name}}"
+    },
+    "selectionQuote": {
+      "action": "引用",
+      "hint": "將所選文字作為引用加入訊息"
     }
   },
   "common": {
@@ -908,7 +902,8 @@
       "copyCode": "複製程式碼",
       "openImage": "開啟圖片",
       "wrapLines": "自動換行",
-      "disableLineWrap": "停用自動換行"
+      "disableLineWrap": "停用自動換行",
+      "codeLabel": "程式碼"
     },
     "markdownCallout": {
       "note": "備註",
@@ -1011,7 +1006,6 @@
       "clearSearch": "清除搜尋"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "description": "此存放庫的 orca.yaml 會在工作區啟動前執行。請僅在信任此存放庫時執行。",
       "dontRun": "不執行",
       "newScriptLabel": "新的設定指令碼",
@@ -2432,7 +2426,6 @@
     },
     "sheets": {
       "browser": "瀏覽器",
-      "browserUpdateRequired": "需更新桌面版，才能將瀏覽器畫面串流至手機",
       "chat": "聊天",
       "copyAllAndLeave": "全部複製並離開",
       "copyDraftsFailed": "無法複製草稿",
@@ -2528,7 +2521,6 @@
       "browserCommandFailed": "瀏覽器命令執行失敗",
       "browserCreateFailed": "建立瀏覽器失敗",
       "browserUnavailable": "瀏覽器頁面尚未就緒。",
-      "browserUpdateRequired": "需更新桌面版才能使用行動版瀏覽器串流",
       "invalidUrl": "請輸入有效的網址",
       "noteCreateFailed": "建立 Markdown 筆記失敗",
       "untitledNoteCreateFailed": "無法建立未命名的 Markdown 筆記"
@@ -2681,6 +2673,7 @@
       "conversationCleared": "此對話已被清除。",
       "goalsUnsupported": "此代理程式不支援目標。",
       "historyUnavailable": "Orca 目前無法開啟此聊天的歷史記錄。",
+      "savedInOtherFolder": "此對話儲存在另一個資料夾中。",
       "historyUnreadable": "Orca 無法讀取此聊天的已儲存歷史記錄。",
       "historyUnusable": "無法載入此聊天。",
       "hostReconciling": "Orca 重啟後仍在檢查此聊天。",
@@ -3911,27 +3904,19 @@
       "reconnecting": "重新連線中"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "一律信任並執行",
       "creating": "建立中…",
       "directoriesLabel": "目錄",
       "directories_one": "{{count}} 個目錄",
       "directories_other": "{{count}} 個目錄",
-      "dontRun": "不執行",
       "editSparsePreset": "編輯稀疏預設",
       "nameLabel": "名稱",
       "namePlaceholder": "算繪器介面",
-      "newSetupScript": "新的設定指令碼",
       "newSparsePreset": "新增稀疏預設",
-      "runHooks": "執行鉤子",
       "runSetupAndCreate": "執行設定並建立",
-      "runSetupTitle": "要執行 {{name}} 的設定指令碼嗎？",
-      "setupChangedTitle": "{{name}} 的設定指令碼已變更",
-      "setupScript": "設定指令碼",
       "setupSubtitle": "建立此工作區前，請先選擇是否為 {{name}} 執行設定。",
       "setupTitle": "要執行設定指令碼嗎？",
       "skipSetupAndCreate": "略過設定並建立",
-      "trustFailed": "無法將設定指令碼設為信任。",
-      "trustSubtitle": "此存放庫的 orca.yaml 會在工作區啟動前於您的電腦上執行。請僅在信任此存放庫時執行。"
+      "trustFailed": "無法將設定指令碼設為信任。"
     },
     "worktreeCreateRetry": {
       "createFailed": "建立工作區失敗"

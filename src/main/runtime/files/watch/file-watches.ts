@@ -10,6 +10,8 @@ import {
 } from '../file-target'
 import type { RuntimeFileCommandHost } from '../file-command-host'
 import { stat } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { isPathOutsideAllowedDirectoriesError } from '../../../../shared/file-access/local-file-access'
 import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
 import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
 import { sortDirEntries } from '../../../../shared/file-listing/file-name-sort'
@@ -100,7 +102,16 @@ export class RuntimeFileWatches {
     // Windows watches in-process, so only the leases above exist; Git may already have revoked the path.
     if (!connectionId && process.platform !== 'win32') {
       // Failed setup may still own a child without having published a lease-release callback.
-      const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
+      // Closing only looks up existing watches, so a revoked path still closes.
+      const resolvedRootPath = await resolveAuthorizedPath(
+        rootPath,
+        this.host.requireStore()
+      ).catch((error: unknown) => {
+        if (!isPathOutsideAllowedDirectoriesError(error)) {
+          throw error
+        }
+        return resolve(rootPath)
+      })
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)
     }
   }

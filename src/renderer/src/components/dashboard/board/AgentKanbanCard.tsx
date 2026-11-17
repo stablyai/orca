@@ -8,8 +8,8 @@ import {
   GitPullRequestDraft
 } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'

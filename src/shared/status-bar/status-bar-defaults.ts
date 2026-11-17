@@ -14,5 +14,6 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'muse',
   'ssh',
   'resource-usage',
-  'ports'
+  'ports',
+  'git-blame'
 ]

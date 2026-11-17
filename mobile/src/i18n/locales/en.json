@@ -73,6 +73,28 @@
       "on": "On",
       "off": "Off"
     },
+    "nativeChatText": {
+      "heading": "TEXT",
+      "footer": "Pinch in a chat to change it; it saves here.",
+      "size": "Text size",
+      "sizeDefault": "Default",
+      "sizePoints": "{{size}} pt",
+      "sizeSpoken": "{{size}} points",
+      "font": "Font",
+      "fontPickerTitle": "Chat font",
+      "fontSystem": "System",
+      "fontSerif": "Serif",
+      "fontMono": "Monospace",
+      "fontMonoSubtitle": "Same as code",
+      "lineSpacing": "Line spacing",
+      "spacingCompact": "Compact",
+      "spacingDefault": "Default",
+      "spacingRelaxed": "Relaxed",
+      "reset": "Reset text settings",
+      "previewQuestion": "Why is the resume test flaky?",
+      "previewTools": "Read 3 files · Ran pnpm test",
+      "previewAnswer": "The test waits on `setTimeout(0)` while the stream is still flushing, so it passes only when the flush wins."
+    },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
       "saveFailed": "Could not save delivery settings. Try again.",
@@ -265,19 +287,14 @@
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
       "tryAgain": "Try Again",
-      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again."
+      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
+      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server."
     },
     "pair": {
       "missingCode": "Missing pairing code",
       "backToHome": "Back to home"
     },
     "terminalSettings": {
-      "smallestText": "Smallest (50%)",
-      "smallerText": "Smaller (75%)",
-      "defaultText": "Default (100%)",
-      "largeText": "Large (125%)",
-      "largerText": "Larger (150%)",
-      "largestText": "Largest (200%)",
       "restoreAfterMinutes_one": "After {{count}} minute",
       "restoreAfterMinutes_other": "After {{count}} minutes",
       "keepPhoneSize": "Keep at phone size (default)",
@@ -287,11 +304,32 @@
       "leaveAppHeading": "WHEN YOU LEAVE THE APP",
       "leaveAppDescription": "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually.",
       "noPairedDesktops": "No paired desktops yet. Pair one to control terminal behavior.",
-      "textSizeHeading": "TEXT SIZE",
-      "textSizeDescription": "Scale the terminal text. Smaller sizes fit more columns with side margins; larger sizes show fewer columns — drag sideways to pan. You can also pinch to zoom in the terminal itself, which updates this setting. Per-device display only; doesn't change the desktop terminal.",
-      "textSize": "Text size",
       "restoreHost": "Restore {{name}}",
-      "textSizePickerTitle": "Terminal text size"
+      "previewColumns_one": "{{count}} column",
+      "previewColumns_other": "{{count}} columns",
+      "previewLabel": "Terminal preview",
+      "previewHeading": "PREVIEW",
+      "fontHeading": "FONT",
+      "fontDescription": "Pinch in a terminal to change the size; it saves here. Only changes this device, not the desktop terminal.",
+      "font": "Font",
+      "size": "Size",
+      "sizePoints": "{{size}} pt",
+      "smaller": "Smaller",
+      "larger": "Larger",
+      "lineSpacing": "Line spacing",
+      "lineSpacingTight": "Tight",
+      "lineSpacingNormal": "Normal",
+      "lineSpacingRoomy": "Roomy",
+      "weight": "Weight",
+      "weightLight": "Light",
+      "weightRegular": "Regular",
+      "weightMedium": "Medium",
+      "fontPickerTitle": "Terminal font",
+      "fontsOnDevice": "On this device",
+      "fontsIncluded": "Included with Orca",
+      "systemMono": "System mono",
+      "defaultFont": "Default",
+      "resetFont": "Reset font settings"
     }
   },
   "appMove": {
@@ -1324,13 +1362,18 @@
       "newScriptLabel": "New setup script",
       "scriptLabel": "Setup script",
       "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
       "dontRun": "Don't run",
       "runArchiveTitle": "Run archive script from {{repoName}}?",
       "archiveScriptChangedTitle": "{{repoName}}'s archive script changed",
       "archiveDescription": "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository.",
       "archiveScriptLabel": "Archive script",
-      "newArchiveScriptLabel": "New archive script"
+      "newArchiveScriptLabel": "New archive script",
+      "runOnce": "Run once",
+      "alwaysTrust": "Always trust",
+      "alwaysTrustScope": "Always trust runs future orca.yaml changes in {{repoName}} without asking.",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersDescription": "The workspace was created, but its setup didn't run: its branch's orca.yaml differs from what you approved. Run it in this workspace only if you trust this repository.",
+      "branchSetupLabel": "Branch's setup script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",
@@ -1434,7 +1477,8 @@
       "copyCode": "Copy code",
       "openImage": "Open image",
       "wrapLines": "Wrap lines",
-      "disableLineWrap": "Disable line wrap"
+      "disableLineWrap": "Disable line wrap",
+      "codeLabel": "Code"
     },
     "markdownCallout": {
       "note": "Note",
@@ -1923,7 +1967,7 @@
     },
     "stream": {
       "updateApp": "Update the Orca app to stream browser tabs here.",
-      "updateDesktop": "Update desktop Orca to stream browser tabs on mobile.",
+      "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
       "timedOut": "Browser stream timed out."
@@ -2169,7 +2213,8 @@
       "newTab": "New tab",
       "quickCommands": "Quick commands",
       "fileExplorer": "File explorer",
-      "sourceControl": "Source control"
+      "sourceControl": "Source control",
+      "textSize": "Text size"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -2184,7 +2229,7 @@
       "newTab": "New Tab",
       "terminal": "Terminal",
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "markdownNote": "Markdown Note",
       "sendReviewNotes": "Send Review Notes",
       "notesHint": "Choose an agent session for the current notes.",
@@ -2195,6 +2240,8 @@
       "copyPath": "Copy Path",
       "file": "File",
       "chat": "Chat",
+      "cli": "CLI",
+      "cliOnly": "CLI only",
       "unsavedMarkdown": "Unsaved markdown changes",
       "draftsHint": "Copy or discard phone drafts before leaving.",
       "copyAllAndLeave": "Copy All & Leave",
@@ -2577,7 +2624,7 @@
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
       "untitledNoteCreateFailed": "Unable to create untitled markdown note",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "invalidUrl": "Enter a valid URL",
       "browserCreateFailed": "Failed to create browser",
       "browserUnavailable": "Browser page is not available yet.",
@@ -2796,6 +2843,7 @@
       "historyUnreadable": "Orca couldn't read this chat's saved history.",
       "historyUnusable": "Unable to load this chat.",
       "historyUnavailable": "Orca couldn't open this chat's history right now.",
+      "savedInOtherFolder": "This conversation was saved in another folder.",
       "savedByNewerOrca": "Chats were saved by a newer Orca.",
       "updateOrcaToKeepUsing": "Update Orca to keep using them.",
       "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
@@ -2978,6 +3026,14 @@
       "next": "Next tab",
       "previous": "Previous tab",
       "hint": "Shows all tabs"
+    },
+    "textSizeSheet": {
+      "chatTitle": "Chat text",
+      "size": "Size",
+      "moreChat": "More text settings",
+      "terminalTitle": "Terminal text",
+      "pointsAndColumns": "{{points}} · {{count}} columns",
+      "moreTerminal": "More terminal settings"
     }
   },
   "chat": {
@@ -3189,6 +3245,7 @@
       "permissionDenied": "{{agent}} denied permission. View details.",
       "safetyReviewApproved": "{{agent}} approved this action. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
+      "autoReviewDenied": "{{agent}}'s automatic review denied: {{action}}",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
       "forkedFrom": "Forked from",
@@ -3552,6 +3609,10 @@
         "failed": "{{count}} failed"
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
+    },
+    "selectionQuote": {
+      "action": "Quote",
+      "hint": "Adds the selected text to your message as a quote"
     }
   },
   "sourceControl": {
@@ -4133,6 +4194,11 @@
       "loading": "Loading",
       "downloading": "Downloading",
       "downloadProgress": "Downloading… {{progress}}"
+    },
+    "createdSetupReview": {
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
+      "runFailed": "Could not start setup."
     }
   },
   "tasks": {
@@ -4591,15 +4657,7 @@
       "creating": "Creating...",
       "runSetupAndCreate": "Run setup and create",
       "skipSetupAndCreate": "Skip setup and create",
-      "setupChangedTitle": "{{name}}'s setup script changed",
-      "runSetupTitle": "Run setup from {{name}}?",
-      "trustSubtitle": "This repository's orca.yaml runs on your machine before the workspace starts. Only run it if you trust this repository.",
-      "newSetupScript": "New setup script",
-      "setupScript": "Setup script",
-      "trustFailed": "Failed to trust setup script.",
-      "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
-      "dontRun": "Don't run"
+      "trustFailed": "Failed to trust setup script."
     },
     "sparsePresetDraft": {
       "repoRelativeDirectoriesRequired": "Use repo-relative directories, not root, absolute paths, or parent segments.",

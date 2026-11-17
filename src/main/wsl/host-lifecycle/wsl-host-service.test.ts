@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
-import type { WslHostStatus } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type {
+  WslHostAddProgress,
+  WslHostStatus
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 import { WslHostService } from './wsl-host-service'
 import type { WslHostConnector } from './wsl-host-connector-contract'
@@ -17,6 +20,7 @@ import { UBUNTU, connection, makeConnector } from './__tests__/wsl-host-service-
 describe('WslHostService', () => {
   let userDataPath: string
   let published: WslHostStatus[]
+  let addProgress: WslHostAddProgress[]
   let enabled: boolean
   let serverFiles: boolean
   const pairingChanged = vi.fn()
@@ -32,6 +36,12 @@ describe('WslHostService', () => {
       isEnabled: () => enabled,
       hasServerFiles: () => serverFiles,
       publish: (status) => published.push(status),
+      publishAddProgress: (distro, status) => {
+        const progress = connectionRecords.wslHostAddProgress(distro, status)
+        if (progress) {
+          addProgress.push(progress)
+        }
+      },
       pairingChanged,
       ready,
       removed,
@@ -44,6 +54,7 @@ describe('WslHostService', () => {
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-wsl-host-service-'))
     published = []
+    addProgress = []
     enabled = true
     serverFiles = true
     vi.clearAllMocks()
@@ -319,5 +330,80 @@ describe('WslHostService', () => {
     expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
     expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
     expect(ready).not.toHaveBeenCalled()
+  })
+
+  it('tells an in-flight Add, then the added host, what an install lock wait is for', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    let finishConnect: () => void = () => {}
+    connector.connect.mockImplementationOnce(async (distro: string) => {
+      await new Promise<void>((resolve) => {
+        finishConnect = resolve
+      })
+      return connection(distro)
+    })
+    const adding = service.add({ distro: 'Ubuntu' })
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalled())
+    await service.handleConnectionChange('Ubuntu', null, {
+      state: 'connecting',
+      installLockWait: { takeoverInMs: 14 * 60_000 + 1, givesUpInMs: 16 * 60_000 }
+    })
+    expect(addProgress).toEqual([
+      {
+        distro: 'Ubuntu',
+        detail: expect.stringContaining('takes over in about 15 minutes'),
+        detailCode: 'installLockWait',
+        detailParams: { count: 15 }
+      }
+    ])
+    // No host exists yet, so nothing reaches the host list.
+    expect(published).toEqual([])
+    finishConnect()
+    await expect(adding).resolves.toMatchObject({ ok: true })
+
+    // A wait that gives up before takeover says when it stops, not a takeover it won't reach.
+    await service.handleConnectionChange('Ubuntu', null, {
+      state: 'connecting',
+      installLockWait: { takeoverInMs: null, givesUpInMs: 90_000 }
+    })
+    expect(service.getStatuses()).toEqual([
+      expect.objectContaining({
+        state: 'connecting',
+        detail: expect.stringContaining('Orca stops waiting in about 2 minutes'),
+        detailCode: 'installLockWaitGivesUp'
+      })
+    ])
+    // A gone holder is taken over within seconds, not "about 1 minute".
+    await service.handleConnectionChange('Ubuntu', null, {
+      state: 'connecting',
+      installLockWait: { takeoverInMs: 5_000, givesUpInMs: 90_000, holderGone: true }
+    })
+    expect(service.getStatuses()).toEqual([
+      expect.objectContaining({
+        detail: expect.stringContaining('takes over in a few seconds'),
+        detailCode: 'installLockWaitHolderGone'
+      })
+    ])
+    // Once added, the host's own status carries the wait.
+    expect(addProgress).toHaveLength(1)
+    // Taking the lock clears it.
+    await service.handleConnectionChange('Ubuntu', null, { state: 'connecting' })
+    expect(service.getStatuses()).toEqual([
+      expect.objectContaining({ state: 'connecting', detail: null })
+    ])
+  })
+
+  it('clears an in-flight Add’s wait once the connect takes the lock', async () => {
+    const connector = makeConnector([UBUNTU])
+    const service = makeService(connector)
+    connector.connect.mockImplementationOnce(() => new Promise(() => {}))
+    void service.add({ distro: 'Ubuntu' })
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalled())
+    await service.handleConnectionChange('Ubuntu', null, {
+      state: 'connecting',
+      installLockWait: { takeoverInMs: 60_000, givesUpInMs: 120_000 }
+    })
+    await service.handleConnectionChange('Ubuntu', null, { state: 'connecting' })
+    expect(addProgress.at(-1)).toEqual({ distro: 'Ubuntu', detail: null })
   })
 })

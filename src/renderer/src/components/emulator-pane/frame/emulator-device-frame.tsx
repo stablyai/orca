@@ -30,7 +30,7 @@ import { useEmulatorControlStream } from '../streaming/use-emulator-control-stre
 import { scrcpyDeviceIdFromStreamUrl } from '../streaming/emulator-scrcpy-stream-url'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from '../input/use-emulator-screen-keyboard'
-import { useWindowStreamVisible as useEmulatorStreamWindowVisible } from '../../../hooks/use-window-stream-visibility'
+import { useWindowStreamVisible as useEmulatorStreamWindowVisible } from '../../../lib/window-activity/use-window-stream-visibility'
 import { useEmulatorWheelGesture } from '../input/use-emulator-wheel-gesture'
 
 type EmulatorDeviceFrameProps = {

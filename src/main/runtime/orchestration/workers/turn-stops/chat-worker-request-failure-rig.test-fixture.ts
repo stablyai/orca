@@ -12,7 +12,7 @@ import type { StructuredAgentSessionAdapter } from '../../../../native-chat/agen
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
-import { openStructuredAgentSessionSqlJournalDatabase } from '../../../agent-session/structured-agent-session-journal-open'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../../../agent-session/installation/structured-agent-session-journal-open'
 import { SqlAgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-sql-store'
 import type { JournalSqlDatabase } from '../../../../native-chat/agent-session-journal/database/journal-sql-database'
 import {

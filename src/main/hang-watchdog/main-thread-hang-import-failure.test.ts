@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { MainToHangWatchdogWorkerMessage } from './hang-watchdog-worker-protocol'
 
 const state = vi.hoisted(() => ({ records: new Array<unknown>() }))
-vi.mock('node:worker_threads', () => ({ isMainThread: false, parentPort: null, workerData: null }))
+vi.mock('node:worker_threads', () => ({
+  isMainThread: false,
+  parentPort: null,
+  workerData: null,
+  getEnvironmentData: () => undefined
+}))
 vi.mock('node:inspector', () => ({
   Session: class {
     connectToMainThread() {}

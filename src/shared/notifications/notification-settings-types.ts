@@ -2,7 +2,7 @@ import {
   type StructuredAttentionRead,
   type StructuredAttentionOrigin,
   isStructuredAttentionRead
-} from '../agent-session/agent-session-attention'
+} from '../agent-session/view/agent-session-attention'
 import {
   isAgentSessionExecutionLocation,
   type AgentSessionExecutionLocation

@@ -10,11 +10,11 @@ import {
   keepPreviewOpenForChatMenu
 } from '../../media/images/native-chat-image-copy'
 import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
-import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/native-chat-image-label'
+import { isNativeChatPastedImagePath } from '../../../../../../shared/native-chat/attachments/native-chat-image-label'
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 import { isAgentSessionAttachmentStorePath } from '../../../../../../shared/agent-session/agent-session-attachments'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { nativeChatImageNumberLabel } from '../../composer/editor/NativeChatImageReferencePill'
 

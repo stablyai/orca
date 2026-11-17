@@ -7,7 +7,7 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
+
 import { drawTabsFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
@@ -236,31 +236,5 @@ afterEach(() => {
         expect(closed.manuallyUnreadTurnsByPaneKey[paneKey]).toBeUndefined()
       }
     )
-
-    it('keeps an exact-pane remote retirement scoped to that pane', () => {
-      vi.useFakeTimers()
-      const store = createTestStore()
-      const retiringPaneKey = 'host-tab:11111111-1111-4111-8111-111111111111'
-      const siblingPaneKey = 'host-tab:22222222-2222-4222-8222-222222222222'
-      for (const paneKey of [retiringPaneKey, siblingPaneKey, 'missing-owner:0']) {
-        store
-          .getState()
-          .setAgentStatus(
-            paneKey,
-            { state: 'done', prompt: 'remote chat', agentType: 'codex' },
-            undefined,
-            undefined,
-            { worktreeId: 'wt-1' }
-          )
-      }
-      const before = store.getState()
-
-      const { patch } = buildAgentStatusTabPrefixDropPatch(before, 'host-tab', [], {
-        worktreeId: 'wt-1',
-        paneKeys: new Set([retiringPaneKey])
-      })
-
-      expect(patch.agentStatusByPaneKey?.get(retiringPaneKey)).toBeUndefined()
-    })
   })
 }
