@@ -41,6 +41,8 @@ export type Env = {
   SPIKE_ADMIN?: string
   // Spike/test only: /__spike/info and /__spike/host/<id> debug endpoints (colo, version).
   SPIKE_DEBUG?: string
+  // Staging only: '1' serves the socket hold probe (hold-probe.ts). Production never sets it.
+  HOLD_PROBE?: string
   // Version label baked in per deploy (--var EDGE_VERSION:<tag>), reported by metrics and debug.
   EDGE_VERSION?: string
   METRICS?: AnalyticsEngineDataset

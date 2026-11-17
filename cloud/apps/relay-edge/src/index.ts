@@ -8,6 +8,7 @@ import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
 import { objectHealth } from './health'
+import { holdProbe } from './hold-probe'
 import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
 import { fromTokenSource, readIngress, type Ingress } from './ingress'
 import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, VerifyBodySchema, verifyAdminRequest, type AdminOp } from './admin'
@@ -165,6 +166,11 @@ export default {
       }
       const info = url.pathname.match(/^\/__spike\/host\/([A-Za-z0-9_-]{16})$/)
       if (info) { return forward(env, request, ingress, info[1], { 'x-edge-kind': 'info' }) }
+    }
+    // Staging only (HOLD_PROBE): null when off or not a probe path, so those stay 404.
+    if (url.pathname.startsWith('/__probe/')) {
+      const probe = await holdProbe(env, request, ingress, url.pathname)
+      if (probe) { return probe }
     }
     const isUpgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket'
 
