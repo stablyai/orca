@@ -20,6 +20,7 @@ import {
 import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
 import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
+import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/delivery-hold/receipt-mailbox-ownership'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
 const CORROBORATED_HOLDS: ReadonlySet<MailboxDeliveryHold['kind']> = new Set([
@@ -138,14 +139,17 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   /** Why delivery would not type a note for this mailbox now, for a send receipt: the gates' own reads,
-   *  through the terminal delivery resolves (a Run's current coordinator, a Dispatch's assignee). */
+   *  through the terminal delivery resolves (a Run's current coordinator, a Dispatch's assignee),
+   *  once that terminal is shown to read the mailbox. */
   readTerminalMailHold(mailbox: string): MailboxDeliveryHold | null {
     const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
     if (!terminal) {
       return null
     }
-    if (mailbox === terminal.handle && this.isRemoteAttachedMailboxTerminal(terminal.paneKeys)) {
-      return { kind: 'unreachable', terminal: terminal.handle }
+    const db = this._orchestrationDb
+    const notRead = db ? receiptMailboxOwnershipHold(db, terminal, mailbox) : null
+    if (notRead) {
+      return notRead
     }
     const refusal = this.deliveryRefusal(terminal.ptyId)
     if (refusal === 'no-terminal') {
@@ -158,14 +162,6 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return refusal && CORROBORATED_HOLDS.has(refusal.kind)
       ? refusal
       : { kind: 'unverified', terminal: terminal.handle }
-  }
-
-  /** A remote-attached pane reads only its Task's `dispatch:` mail, so direct mail stays unread there.
-   *  Send routing already moved direct mail for a pane with a local Run or Dispatch to that mailbox,
-   *  so one indexed LIMIT 1 read per pane decides this without loading the pane's Run history. */
-  private isRemoteAttachedMailboxTerminal(paneKeys: readonly string[]): boolean {
-    const db = this._orchestrationDb
-    return !!db && paneKeys.some((paneKey) => !!db.findActiveRemoteAttachmentForPane?.(paneKey))
   }
 
   /** Whether a waiting `check --wait` takes mail of this type stored for this mailbox, as arrival would. */

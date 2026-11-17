@@ -29,6 +29,7 @@ const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid DESC`
+const CURRENT_RUN_BOUND_TO_PANE_SQL = `${RUNS_BOUND_TO_PANE_SQL} LIMIT 1`
 // Use one query to preserve newest-first rowid order across pane and session matches; filter identity in JavaScript.
 const RUNS_BOUND_TO_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE legacy = 0 AND (
@@ -119,8 +120,18 @@ export function listRuns(
   }
 }
 
+// Read the newest suffix match alone; only a non-equivalent newest row (a remint elsewhere) needs the full list.
 export function getCurrentRunForPane(this: OrchestrationDb, paneKey: string): RunRow | undefined {
-  const run = this.runsBoundToPane(paneKey)[0]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RUN_COLUMN_LIST projects the schema-owned Run row; the adapter exposes unknown.
+  const newest = this.db
+    .prepare(CURRENT_RUN_BOUND_TO_PANE_SQL)
+    .get(paneKeyMatchSuffix(paneKey)) as RunRow | undefined
+  const run =
+    !newest ||
+    (newest.coordinator_pane_key !== null &&
+      isEquivalentPaneKey(newest.coordinator_pane_key, paneKey))
+      ? newest
+      : this.runsBoundToPane(paneKey)[0]
   return run ? exposeRunTimestamps(run) : undefined
 }
 

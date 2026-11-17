@@ -3,6 +3,7 @@ import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 import { settledWriteStub } from '../../../../../providers/testing/settled-pty-write-stub'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 const TAB_ID = '11111111-1111-4111-8111-111111111111'
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -56,12 +57,8 @@ describe('send receipt for a terminal Orca cannot notify', () => {
     return state
   }
 
-  function send(ctx: { runtime: OrcaRuntimeService }): Promise<unknown> {
-    return harness.call(
-      'orchestration.send',
-      { from: 'term_coord', to: RECIPIENT, subject: 'status?' },
-      ctx
-    )
+  function send(ctx: { runtime: OrcaRuntimeService }, to = RECIPIENT): Promise<unknown> {
+    return harness.call('orchestration.send', { from: 'term_coord', to, subject: 'status?' }, ctx)
   }
 
   function heldWarning(recipient: string, command: string) {
@@ -120,5 +117,29 @@ describe('send receipt for a terminal Orca cannot notify', () => {
         `orca orchestration check --run ${run.id} --terminal term_titleless`
       )
     )
+  })
+
+  it("says a coordinator's context-only Dispatch mail is not read in its terminal", async () => {
+    const { ctx, db } = await setupTitlelessRecipient()
+    const run = db.createRun({
+      objective: 'Coordinated from the title-less terminal',
+      coordinatorHandle: RECIPIENT,
+      coordinatorPaneKey: PANE_KEY
+    })
+    const task = db.createTask({ spec: 'self-assigned context', runId: run.id })
+    const dispatch = createRootDispatch(db, task.id, RECIPIENT, PANE_KEY)
+
+    const result = await send(ctx, `dispatch:${dispatch.id}`)
+
+    expect(result).toMatchObject({
+      message: { to_handle: `dispatch:${dispatch.id}` },
+      warnings: expect.arrayContaining([
+        {
+          code: 'recipient_delivery_held',
+          recipient: `dispatch:${dispatch.id}`,
+          message: `Queued for dispatch:${dispatch.id}, but the agent in term_titleless reads its Run's mail (run:${run.id}), so Orca won't notify it of this message and its own check won't read it. Message term_titleless directly instead.`
+        }
+      ])
+    })
   })
 })

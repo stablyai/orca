@@ -22,6 +22,8 @@ export type MailboxDeliveryHold =
   | { kind: 'unverified'; terminal: string }
   /** The terminal is open but cannot read this mailbox (it reads only its Task's mail). */
   | { kind: 'unreachable'; terminal: string }
+  /** The terminal's own check reads another mailbox (`reads`; null when no local sender can reach it). */
+  | { kind: 'not-read'; terminal: string; reads: string | null }
   /** The chat accepts the mail into its queue behind an open prompt or question. */
   | { kind: 'behind-prompt' }
   /** The chat is detached from its agent, or not attached here; the mail waits for it. */
@@ -87,6 +89,10 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
       return `Queued. Orca can't notify the agent in ${hold.terminal} right now with the evidence it has. The agent in ${hold.terminal} can read it by running \`orca orchestration check${orchestrationCheckRunFlag(recipient)} --terminal ${hold.terminal}\` in its own terminal; don't run this yourself. Orca will notify it once it can verify the agent accepts input.`
     case 'unreachable':
       return `Queued for ${hold.terminal}, but it can't be read in that terminal: it only reads its Task's mail. Message its coordinator instead.`
+    case 'not-read':
+      return hold.reads
+        ? `Queued for ${recipient}, but the agent in ${hold.terminal} reads ${mailboxOwnerRole(hold.reads)}, so Orca won't notify it of this message and its own check won't read it. Message ${hold.terminal} directly instead.`
+        : `Queued for ${recipient}, but the agent in ${hold.terminal} can't read this mailbox there, so Orca won't notify it of this message. Tell the user instead.`
     case 'behind-prompt':
       return `Queued behind an open prompt; ${recipient} sees it after the prompt is answered.`
     case 'detached':
@@ -96,3 +102,10 @@ export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeli
   }
 }
 
+function mailboxOwnerRole(mailbox: string): string {
+  return mailbox.startsWith('run:')
+    ? `its Run's mail (${mailbox})`
+    : mailbox.startsWith('dispatch:')
+      ? `its Task's mail (${mailbox})`
+      : 'only its own mail'
+}
