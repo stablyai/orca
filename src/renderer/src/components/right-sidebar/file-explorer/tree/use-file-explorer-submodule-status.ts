@@ -12,15 +12,18 @@ import {
   buildStatusMap
 } from '../../../../../../shared/git/status/git-path-decoration'
 
-// Why: bounds parallel `git status` processes (and SSH round trips) without hiding any expanded submodule.
+// Why: bounds parallel `git status` processes (and SSH round trips) per parent read.
 const SUBMODULE_STATUS_CONCURRENCY = 4
+// Why: keeps inner reads near one parent read's cost (16 x 2k-file submodules, 4-wide ~= 1.3x) so huge expansions cannot run Git nonstop.
+export const FILE_EXPLORER_SUBMODULE_STATUS_LIMIT = 16
 
 const NO_ENTRIES: GitStatusEntry[] = []
 
 /** Dirty submodules the user has expanded; clean or collapsed ones never trigger inner Git work. */
 export function selectExpandedDirtySubmodulePaths(
   entries: readonly GitStatusEntry[],
-  expandedRelativePaths: ReadonlySet<string>
+  expandedRelativePaths: ReadonlySet<string>,
+  limit: number = FILE_EXPLORER_SUBMODULE_STATUS_LIMIT
 ): string[] {
   const paths = new Set<string>()
   for (const entry of entries) {
@@ -36,7 +39,8 @@ export function selectExpandedDirtySubmodulePaths(
       paths.add(path)
     }
   }
-  return Array.from(paths).sort()
+  // Path order roughly follows the explorer's top-to-bottom rows.
+  return Array.from(paths).sort().slice(0, limit)
 }
 
 /** Parent-relative inner entries, or null on failure so callers keep the last good badges. */
