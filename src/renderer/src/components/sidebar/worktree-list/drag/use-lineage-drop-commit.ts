@@ -7,7 +7,10 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import { worktreeParentPlacementFor } from '../../workspace-actions/parenting/worktree-parent-candidates'
 import { showCrossStoreParentError } from '../../workspace-actions/parenting/worktree-parent-selection'
-import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import {
+  useAllWorktrees,
+  useWorktreeTopology
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { isCrossStoreParent } from '@/store/slices/worktrees/metadata/cross-store-parent-ref'
 import type { DraggedWorktreeCopies } from './dragged-worktree-copies'
@@ -82,9 +85,11 @@ export function useWorktreeLineageDropCommit(args: {
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  // The structural map keeps its identity across title writes, so this cycle walk stays cached.
+  const structuralWorktreeMap = useWorktreeTopology()
   const cyclicLineageIds = useMemo(
-    () => getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap),
-    [worktreeLineageById, worktreeMap]
+    () => getCyclicProjectedWorktreeLineageIds(worktreeLineageById, structuralWorktreeMap),
+    [worktreeLineageById, structuralWorktreeMap]
   )
   // Drops name rows by host identity: a parent or child may be on another machine than its twin.
   const rowsByIdentity = useMemo(

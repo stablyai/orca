@@ -11,6 +11,13 @@ function sameMembershipRow(row: MembershipRow, before: MembershipRow): boolean {
   )
 }
 
+/** For a replaced row (same id, host, archive state): true when lineage, cycle, and surface structure is unchanged, e.g. a title-only write. */
+export function sameWorktreeStructure(row: Worktree, before: Worktree): boolean {
+  return (
+    row.path === before.path && row.instanceId === before.instanceId && row.repoId === before.repoId
+  )
+}
+
 /** Rows a write replaced in place without moving any id, host, or archive state; null when membership changed. Unchanged rows are compared by identity only. */
 export function replacedWorktreeRows(
   next: AppState['worktreesByRepo'],

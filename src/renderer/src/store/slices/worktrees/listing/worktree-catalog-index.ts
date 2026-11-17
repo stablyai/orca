@@ -4,7 +4,11 @@ import {
   getWorktreeIdFromHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../../types'
-import { replacedWorktreeRows, type ReplacedWorktreeRow } from './worktree-catalog-membership'
+import {
+  replacedWorktreeRows,
+  sameWorktreeStructure,
+  type ReplacedWorktreeRow
+} from './worktree-catalog-membership'
 import { ReadOnlyOverlayMap } from './read-only-overlay-map'
 
 type WorktreeBase = {
@@ -15,17 +19,32 @@ type WorktreeBase = {
   positions: Map<Worktree, number>
 }
 
-/** One catalog's view: an immutable base shared across title writes plus that catalog's replaced rows. */
-type WorktreeSnapshot = {
-  base: WorktreeBase
+type WorktreeOverlay = {
   /** Replaced rows by slot in base.allWorktrees, and each replacement's slot. */
   rows: ReadonlyMap<number, Worktree>
   slots: ReadonlyMap<Worktree, number>
   firstById: ReadonlyMap<string, Worktree>
   byId: ReadonlyMap<string, Worktree[]>
+  /** First-host rows whose structure (path, instance, repo) moved; title-only replacements never land here. */
+  structureById: ReadonlyMap<string, Worktree>
+}
+
+/** One catalog's view: an immutable base shared across title writes plus that catalog's replaced rows. */
+type WorktreeSnapshot = WorktreeOverlay & {
+  base: WorktreeBase
   worktreeMap: Map<string, Worktree>
+  /** Structural id map; keeps its identity (and stale row objects) across title-only replacements. */
+  topology: ReadonlyMap<string, Worktree>
   /** Built on first read only, so a title write with no reader copies nothing. */
   allWorktrees: Worktree[] | null
+}
+
+const EMPTY_OVERLAY: WorktreeOverlay = {
+  rows: new Map(),
+  slots: new Map(),
+  firstById: new Map(),
+  byId: new Map(),
+  structureById: new Map()
 }
 
 // Past this many replaced rows, a rebuild costs less than carrying the overlay.
@@ -48,28 +67,28 @@ function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Work
   const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
   const snapshot =
     (previousSnapshot && replaced && overlayWorktreeSnapshot(previousSnapshot, replaced)) ||
-    viewOf(buildWorktreeSnapshot(worktreesByRepo))
+    viewOf(buildWorktreeSnapshot(worktreesByRepo), EMPTY_OVERLAY, null)
   worktreeSnapshotCache.set(worktreesByRepo, snapshot)
   lastIndexedRows = new WeakRef(worktreesByRepo)
   return snapshot
 }
 
+function overlayOf<K, V>(base: Map<K, V>, overlay: ReadonlyMap<K, V>): Map<K, V> {
+  return overlay.size === 0 ? base : new ReadOnlyOverlayMap(base, overlay)
+}
+
+/** `topology` is the previous view's when no path moved, or null to derive it from the overlay. */
 function viewOf(
   base: WorktreeBase,
-  rows: ReadonlyMap<number, Worktree> = new Map(),
-  slots: ReadonlyMap<Worktree, number> = new Map(),
-  firstById: ReadonlyMap<string, Worktree> = new Map(),
-  byId: ReadonlyMap<string, Worktree[]> = new Map()
+  overlay: WorktreeOverlay,
+  topology: ReadonlyMap<string, Worktree> | null
 ): WorktreeSnapshot {
   return {
+    ...overlay,
     base,
-    rows,
-    slots,
-    firstById,
-    byId,
-    worktreeMap:
-      firstById.size === 0 ? base.worktreeMap : new ReadOnlyOverlayMap(base.worktreeMap, firstById),
-    allWorktrees: rows.size === 0 ? base.allWorktrees : null
+    worktreeMap: overlayOf(base.worktreeMap, overlay.firstById),
+    topology: topology ?? overlayOf(base.worktreeMap, overlay.structureById),
+    allWorktrees: overlay.rows.size === 0 ? base.allWorktrees : null
   }
 }
 
@@ -86,6 +105,8 @@ function overlayWorktreeSnapshot(
   const slots = new Map(previous.slots)
   const firstById = new Map(previous.firstById)
   const byId = new Map(previous.byId)
+  const structureById = new Map(previous.structureById)
+  let structureMoved = false
   for (const { before, after } of replaced) {
     const slot = base.positions.get(before) ?? previous.slots.get(before)
     if (slot !== undefined) {
@@ -103,8 +124,15 @@ function overlayWorktreeSnapshot(
       } else {
         firstById.set(before.id, after)
       }
+      // Same first-host rule as the title map; only a structural change replaces the topology.
+      const structural = previous.topology.get(before.id)
+      if (!structural || !sameWorktreeStructure(after, structural)) {
+        structureMoved = true
+        structureById.set(before.id, after)
+      }
     }
-    const idRows = previous.byId.get(before.id) ?? base.worktreesById.get(before.id)
+    // Earlier replacements in this batch may already have swapped a twin in this id's list.
+    const idRows = byId.get(before.id) ?? base.worktreesById.get(before.id)
     if (idRows?.includes(before)) {
       byId.set(
         before.id,
@@ -112,7 +140,13 @@ function overlayWorktreeSnapshot(
       )
     }
   }
-  return rows.size > MAX_OVERLAY_ROWS ? null : viewOf(base, rows, slots, firstById, byId)
+  return rows.size > MAX_OVERLAY_ROWS
+    ? null
+    : viewOf(
+        base,
+        { rows, slots, firstById, byId, structureById },
+        structureMoved ? null : previous.topology
+      )
 }
 
 function rowsOf(snapshot: WorktreeSnapshot): Worktree[] {
@@ -157,6 +191,13 @@ function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Wo
 
 export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {
   return rowsOf(getWorktreeSnapshot(worktreesByRepo))
+}
+
+/** Structural id map for paths, lineage, and cycles; a title write keeps its identity, so its rows may carry an older title. */
+export function getIndexedWorktreeTopology(
+  worktreesByRepo: AppState['worktreesByRepo']
+): ReadonlyMap<string, Worktree> {
+  return getWorktreeSnapshot(worktreesByRepo).topology
 }
 
 /** Legacy bare-ID view cannot prove ownership amid collisions; destructive paths need explicit WorktreeRemovalTarget hosts and getIndexedWorktreesById. */

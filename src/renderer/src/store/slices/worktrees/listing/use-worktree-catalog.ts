@@ -2,7 +2,8 @@ import { useAppStore } from '../../../index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   getIndexedAllWorktrees as getCachedAllWorktrees,
-  getIndexedWorktreeMap as getCachedWorktreeMap
+  getIndexedWorktreeMap as getCachedWorktreeMap,
+  getIndexedWorktreeTopology
 } from './worktree-catalog-index'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
@@ -18,3 +19,7 @@ export const useAllWorktrees = () =>
 
 export const useWorktreeMap = () =>
   useAppStore((s) => getCachedWorktreeMap(selectWorktreesByRepo(s)))
+
+/** Ids and paths only; keeps its identity across title writes, unlike useWorktreeMap. */
+export const useWorktreeTopology = () =>
+  useAppStore((s) => getIndexedWorktreeTopology(selectWorktreesByRepo(s)))

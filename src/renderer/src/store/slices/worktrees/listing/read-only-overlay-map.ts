@@ -5,6 +5,8 @@
 export class ReadOnlyOverlayMap<K, V> extends Map<K, V> {
   readonly #base: ReadonlyMap<K, V>
   readonly #overlay: ReadonlyMap<K, V>
+  /** Merged entries, built on the first walk and reused so repeat walks never reread the base. */
+  #entries: [K, V][] | null = null
 
   constructor(base: ReadonlyMap<K, V>, overlay: ReadonlyMap<K, V>) {
     super()
@@ -24,18 +26,26 @@ export class ReadOnlyOverlayMap<K, V> extends Map<K, V> {
     return this.#base.has(key)
   }
 
+  #merged(): [K, V][] {
+    this.#entries ??= Array.from(this.#base, ([key, value]): [K, V] => [
+      key,
+      this.#overlay.get(key) ?? value
+    ])
+    return this.#entries
+  }
+
   override *entries(): MapIterator<[K, V]> {
-    for (const [key, value] of this.#base) {
-      yield [key, this.#overlay.get(key) ?? value]
+    yield* this.#merged()
+  }
+
+  override *keys(): MapIterator<K> {
+    for (const [key] of this.#merged()) {
+      yield key
     }
   }
 
-  override keys(): MapIterator<K> {
-    return this.#base.keys()
-  }
-
   override *values(): MapIterator<V> {
-    for (const [, value] of this.entries()) {
+    for (const [, value] of this.#merged()) {
       yield value
     }
   }
@@ -45,7 +55,7 @@ export class ReadOnlyOverlayMap<K, V> extends Map<K, V> {
   }
 
   override forEach(callback: (value: V, key: K, map: Map<K, V>) => void, thisArg?: unknown): void {
-    for (const [key, value] of this.entries()) {
+    for (const [key, value] of this.#merged()) {
       callback.call(thisArg, value, key, this)
     }
   }

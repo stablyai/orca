@@ -2,6 +2,7 @@ import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktre
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   replacedWorktreeRows,
+  sameWorktreeStructure,
   type ReplacedWorktreeRow
 } from '@/store/slices/worktrees/listing/worktree-catalog-membership'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -51,12 +52,13 @@ function lineageView(
   }
 }
 
-/** Archive state is unchanged for replaced rows, so a row is indexed exactly when its predecessor was. Null asks for a rebuild. */
+/** Archive state is unchanged for replaced rows, so a row is indexed exactly when its predecessor was. Values may carry an older title. Null asks for a rebuild. */
 function overlayLineageIndex(
   previous: LineageIndex,
   replaced: readonly ReplacedWorktreeRow[]
 ): LineageIndex | null {
-  if (replaced.length === 0) {
+  // Title-only writes keep the index object so lineage caches keyed on it still hit; display reads current rows.
+  if (replaced.every(({ before, after }) => sameWorktreeStructure(after, before))) {
     return previous
   }
   const overlay = new Map(previous.overlay)

@@ -17,6 +17,8 @@ export type VisibleSidebarWorktreeInputs = {
   rows: readonly Worktree[]
   /** Non-archived rows by host identity, the lineage ancestors a visible child may pull in. */
   ancestorByIdentity: ReadonlyMap<string, Worktree>
+  /** The current row for an ancestor-map row, whose display fields may be older; identity otherwise. */
+  currentRowOf?: (worktree: Worktree) => Worktree
   /** A row's place in the frozen sort order; unranked rows go last. */
   rankOf: (worktree: Worktree) => number | undefined
   filters: WorkspaceRowFilters
@@ -34,6 +36,7 @@ export type VisibleSidebarWorktreeInputs = {
 export function selectVisibleSidebarWorktrees({
   rows,
   ancestorByIdentity: everyAncestorByIdentity,
+  currentRowOf = (worktree) => worktree,
   rankOf,
   filters,
   facts,
@@ -63,7 +66,7 @@ export function selectVisibleSidebarWorktrees({
         : [...ancestorByIdentity.values()].find((candidate) => candidate.id === worktreeId)
       if (worktree && !isWorktreeRetiredByRemoval(worktree)) {
         includedIds.add(worktreeId)
-        all.push(worktree)
+        all.push(currentRowOf(worktree))
       }
     }
   }
@@ -75,7 +78,8 @@ export function selectVisibleSidebarWorktrees({
       ancestorByIdentity,
       worktreeLineageById,
       selectedRepoIds,
-      lineageParentIdentities
+      lineageParentIdentities,
+      currentRowOf
     )
   }
   all = all
@@ -90,7 +94,8 @@ export function selectVisibleSidebarWorktrees({
         ancestorByIdentity,
         worktreeLineageById,
         selectedRepoIds,
-        lineageParentIdentities
+        lineageParentIdentities,
+        currentRowOf
       )
 }
 
@@ -113,7 +118,8 @@ function addVisibleLineageAncestors(
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
   selectedRepoIds: ReadonlySet<string> | null,
-  lineageParentIdentities: SidebarLineageParentIdentities | undefined
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined,
+  currentRowOf: (worktree: Worktree) => Worktree
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
@@ -138,7 +144,7 @@ function addVisibleLineageAncestors(
     const parent = parentByIdentity.get(identity)
     // Repository filters are hard boundaries; ordinary filters may retain ancestors.
     if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
-      addWithAncestors(parent)
+      addWithAncestors(currentRowOf(parent))
     }
     if (!included.has(identity)) {
       included.add(identity)
