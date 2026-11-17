@@ -30,7 +30,9 @@ export type CatalogEntryImageFill = (
 export async function extractCatalogImages(
   marketplace: PluginMarketplace,
   readBlob: CatalogBlobReader,
-  fill?: CatalogEntryImageFill
+  fill?: CatalogEntryImageFill,
+  /** Digests of buffers a reader returns again, so repeated extraction passes hash each image once. */
+  digests?: WeakMap<Buffer, string>
 ): Promise<{ marketplace: PluginMarketplace; images: Buffer[] }> {
   const verified = new Map<string, Buffer>()
   const rejected = new Set<string>()
@@ -52,7 +54,7 @@ export async function extractCatalogImages(
     const ok =
       bytes !== null &&
       typeof info !== 'string' &&
-      sha256Hex(bytes) === image.sha256 &&
+      digestOf(bytes, digests) === image.sha256 &&
       info.width === image.width &&
       info.height === image.height &&
       pluginImageRuleError(kind, info, bytes.byteLength) === null
@@ -105,4 +107,13 @@ export async function extractCatalogImages(
     plugins.push({ ...entry, releases })
   }
   return { marketplace: { ...marketplace, plugins }, images: [...verified.values()] }
+}
+
+function digestOf(bytes: Buffer, digests: WeakMap<Buffer, string> | undefined): string {
+  let digest = digests?.get(bytes)
+  if (digest === undefined) {
+    digest = sha256Hex(bytes)
+    digests?.set(bytes, digest)
+  }
+  return digest
 }
