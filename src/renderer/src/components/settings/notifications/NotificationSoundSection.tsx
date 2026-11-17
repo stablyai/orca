@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { usesCustomNotificationSound } from '../../../../../shared/notifications/notification-settings-types'
 import { Label } from '../../ui/label'
 import { Slider } from '../../ui/slider'
 import {
@@ -12,9 +13,9 @@ import {
   SelectValue
 } from '../../ui/select'
 import { FileAudio, Upload, Volume2 } from 'lucide-react'
-import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { getNotificationSoundOptions } from '@/components/notifications/notification-sound-options'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const CHOOSE_CUSTOM_SOUND_VALUE = 'choose-custom-file'
 
@@ -45,13 +46,14 @@ export function NotificationSoundSection({
   onVolumeCommit,
   onUpdateNotificationSettings
 }: NotificationSoundSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const [isPickingSound, setIsPickingSound] = useState(false)
 
   const previewSound = async (
     customSoundId: GlobalSettings['notifications']['customSoundId']
   ): Promise<void> => {
-    if (customSoundId === 'system') {
+    if (!usesCustomNotificationSound(customSoundId)) {
       return
     }
     const result = await window.api.notifications.playSound({
@@ -60,7 +62,7 @@ export function NotificationSoundSection({
     })
     if (!result.played) {
       toast.error(
-        translate(
+        t(
           'auto.components.settings.NotificationsPane.0fadad17ce',
           'Notification sound could not be played'
         )
@@ -96,19 +98,16 @@ export function NotificationSoundSection({
   const soundOptions = getNotificationSoundOptions(notificationSettings.customSoundPath)
 
   return (
-    <div className="space-y-2 py-2">
+    <div data-settings-row="" className="space-y-2 py-2">
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           <FileAudio className="size-4" />
           <Label>
-            {translate(
-              'auto.components.settings.NotificationsPane.88686e6ca8',
-              'Notification Sound'
-            )}
+            {t('auto.components.settings.NotificationsPane.b3c7207c8f', 'Notification sound')}
           </Label>
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.NotificationsPane.2a2033c388',
             'Choose the alert Orca plays when a desktop notification is delivered.'
           )}
@@ -121,7 +120,7 @@ export function NotificationSoundSection({
       >
         <SelectTrigger className="w-full max-w-[360px]" size="sm">
           <SelectValue
-            placeholder={translate(
+            placeholder={t(
               'auto.components.settings.NotificationsPane.c258cb96dc',
               'Choose notification sound'
             )}
@@ -142,14 +141,8 @@ export function NotificationSoundSection({
             <Upload className="size-4" />
             <span>
               {notificationSettings.customSoundPath
-                ? translate(
-                    'auto.components.settings.NotificationsPane.76e02467b8',
-                    'Change Custom File'
-                  )
-                : translate(
-                    'auto.components.settings.NotificationsPane.6e6df3a09a',
-                    'Choose Custom File'
-                  )}
+                ? t('auto.components.settings.NotificationsPane.0b8141ed49', 'Change custom file')
+                : t('auto.components.settings.NotificationsPane.38e3bbeb25', 'Choose custom file')}
             </span>
           </SelectItem>
         </SelectContent>
@@ -159,11 +152,11 @@ export function NotificationSoundSection({
           className="truncate font-mono text-[11px] text-muted-foreground"
           title={notificationSettings.customSoundPath}
         >
-          {translate('auto.components.settings.NotificationsPane.4aa5085cd7', 'Custom:')}{' '}
+          {t('auto.components.settings.NotificationsPane.4aa5085cd7', 'Custom:')}{' '}
           {notificationSettings.customSoundPath}
         </p>
       ) : null}
-      {selectedSoundId !== 'system' ? (
+      {usesCustomNotificationSound(selectedSoundId) ? (
         <div className="flex items-center gap-3 pt-1">
           <Volume2 className="size-4 text-muted-foreground" />
           <Slider
@@ -175,7 +168,7 @@ export function NotificationSoundSection({
             onValueChange={([value]) => onVolumeDraftChange(value)}
             onValueCommit={([value]) => onVolumeCommit(value)}
             className="flex-1"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.NotificationsPane.2a42dd8d6f',
               'Notification sound volume'
             )}

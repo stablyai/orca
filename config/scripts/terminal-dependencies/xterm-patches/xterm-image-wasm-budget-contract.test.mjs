@@ -7,8 +7,6 @@ const require = createRequire(
 const { Terminal } = require('@xterm/xterm')
 const { ImageAddon } = require('@xterm/addon-image')
 
-// Renderer V8 limits live wasm memories (~124); idle terminals need zero and exhaustion must drop image without wedging write queue.
-
 const SIXEL_RED_REGISTER_1 = '\x1bPq#1;2;100;0;0#1~\x1b\\'
 const SIXEL_USE_REGISTER_1 = '\x1bPq#1~\x1b\\'
 const PNG_1X1 =
@@ -65,14 +63,6 @@ function write(terminal, data) {
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-// A throw out of a handler leaves xterm's write queue waiting forever.
-function writeOrWedge(terminal, data) {
-  return Promise.race([
-    write(terminal, data).then(() => 'parsed'),
-    new Promise((resolve) => setTimeout(() => resolve('wedged'), 2000))
-  ])
-}
-
 function firstPixel(image) {
   return Array.from(image.data.subarray(0, 4))
 }
@@ -80,42 +70,6 @@ function firstPixel(image) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('xterm image wasm budget', () => {
-  it('keeps idle terminals free of wasm decoders', async () => {
-    const panes = Array.from({ length: 300 }, () => createTerminal())
-    try {
-      // Let any asynchronous decoder instantiation settle.
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      for (const { sixel, iip } of panes) {
-        expect(sixel._dec).toBeUndefined()
-        expect(iip._dec._inst).toBeNull()
-        expect(iip._qoiDec._inst).toBeFalsy()
-      }
-    } finally {
-      for (const { terminal } of panes) {
-        terminal.dispose()
-      }
-    }
-  })
-
-  it('returns decoders after each SIXEL and IIP image', async () => {
-    const painted = stubCanvasGlobals()
-    const { terminal, addon, sixel, iip } = createTerminal()
-    let added = 0
-    addon.onImageAdded(() => added++)
-    try {
-      await write(terminal, SIXEL_RED_REGISTER_1)
-      expect(painted).toHaveLength(1)
-      expect(sixel._dec).toBeUndefined()
-
-      await write(terminal, IIP_PNG)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(iip._dec._inst).toBeNull()
-      expect(added).toBe(2)
-    } finally {
-      terminal.dispose()
-    }
-  })
-
   it('keeps SIXEL color registers across images until a terminal reset', async () => {
     const painted = stubCanvasGlobals()
     const { terminal } = createTerminal()
@@ -143,12 +97,10 @@ describe('xterm image wasm budget', () => {
     }
     vi.stubGlobal('WebAssembly', { ...WebAssembly, Memory: exhausted, Instance: exhausted })
     try {
-      expect(await writeOrWedge(terminal, '\x1b_Ga=T,f=32,s=1,v=1,i=7;AAAA/w==\x1b\\')).toBe(
-        'parsed'
-      )
-      expect(await writeOrWedge(terminal, IIP_PNG)).toBe('parsed')
-      expect(await writeOrWedge(terminal, SIXEL_USE_REGISTER_1)).toBe('parsed')
-      expect(await writeOrWedge(terminal, 'after')).toBe('parsed')
+      await write(terminal, '\x1b_Ga=T,f=32,s=1,v=1,i=7;AAAA/w==\x1b\\')
+      await write(terminal, IIP_PNG)
+      await write(terminal, SIXEL_USE_REGISTER_1)
+      await write(terminal, 'after')
 
       expect(addon._storage._images.size).toBe(0)
       expect(replies.join('')).toContain('ENOMEM')

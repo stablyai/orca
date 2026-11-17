@@ -4,7 +4,7 @@ import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceScanProgress
 } from '../../../shared/workspace-disk-space/workspace-space-types'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import {
   WorkspaceSpaceScanCancelledError,
   createWorkspaceSpaceScanLimiter,
@@ -128,7 +128,10 @@ export async function analyzeWorkspaceSpace(
   const repos = repoResults.map((result) => result.summary)
   const worktrees = repoResults
     .flatMap((result) => result.worktrees)
-    .sort((a, b) => b.sizeBytes - a.sizeBytes || a.displayName.localeCompare(b.displayName))
+    .sort(
+      (a, b) =>
+        b.sizeBytes - a.sizeBytes || (a.displayName ?? '').localeCompare(b.displayName ?? '')
+    )
   throwIfWorkspaceSpaceScanAborted(options.signal)
   const summary = summarizeWorkspaceSpaceRows(worktrees)
   let unavailableRepoCount = 0

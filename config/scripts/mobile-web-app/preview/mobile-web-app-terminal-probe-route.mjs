@@ -30,10 +30,10 @@ export function escapeDenseStream() {
   return rows.join('')
 }
 
-// Expose actual component handle/notifies in scratch route; beforeinput on helper textarea covers browser text path, composing soft keyboard remains device proof.
+// Expose actual component handle/notifies in scratch route.
 export function probeRouteSource(componentPath) {
   return `import { useCallback, useEffect, useRef, useState } from 'react'
-import { TextInput, View } from 'react-native'
+import { View } from 'react-native'
 import { TerminalWebView } from ${JSON.stringify(componentPath)}
 
 export default function TerminalProbeRoute() {
@@ -52,25 +52,14 @@ export default function TerminalProbeRoute() {
   }, [])
   useEffect(() => {
     globalThis.__orcaTerminalEngineErrors = globalThis.__orcaTerminalEngineErrors ?? []
-    globalThis.__orcaTerminalBeforeInput = []
     globalThis.__orcaTerminalProbe = {
       init: (cols, rows, initialData) =>
         handleRef.current?.init({ cols, rows, initialData, oscLinks: [], frame: frameRef.current }),
       write: (data) => handleRef.current?.write(data),
       selectAll: () => handleRef.current?.doSelectAll(),
-      fit: () => handleRef.current?.fitDimensions(frameRef.current),
       awaitReady: () => handleRef.current?.awaitReady(),
       setMounted: (next) => setMounted(next)
     }
-    const onBeforeInput = (event) => {
-      globalThis.__orcaTerminalBeforeInput.push({
-        inputType: event.inputType,
-        data: event.data === null ? null : String(event.data),
-        isComposing: !!event.isComposing
-      })
-    }
-    document.addEventListener('beforeinput', onBeforeInput, true)
-    return () => document.removeEventListener('beforeinput', onBeforeInput, true)
   }, [])
   return (
     <View testID="terminal-probe" style={{ flex: 1 }}>
@@ -89,23 +78,11 @@ export default function TerminalProbeRoute() {
           />
         ) : null}
       </View>
-      {/* The shape the terminal's live input takes on the page: xterm's own textarea is inert by
-          the document's design, so this is where typed text arrives. */}
-      <TextInput testID="terminal-live-input" style={{ fontSize: 16 }} />
     </View>
   )
 }
 `
 }
-
-// Same-app no-terminal control isolates terminal CSP effects from entry dependencies such as historical swallowed Zod JIT probe.
-export const CONTROL_SOURCE = `import { View } from 'react-native'
-
-export default function ControlRoute() {
-  globalThis.__orcaTerminalControlMounted = true
-  return <View testID="terminal-control" />
-}
-`
 
 export const LAYOUT_SOURCE = `import { Slot } from 'expo-router'
 export default function ProbeLayout() {

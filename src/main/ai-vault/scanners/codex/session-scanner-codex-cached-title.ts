@@ -8,7 +8,9 @@ export async function refreshCodexTitleFromIndex(
   readIndexedTitle: (sessionId: string) => Promise<string | null>
 ): Promise<AiVaultSession> {
   const title = await readIndexedTitle(session.sessionId)
-  return title && title !== session.title ? { ...session, title } : session
+  return title && (title !== session.title || session.titleKind !== 'named')
+    ? { ...session, title, titleKind: 'named' }
+    : session
 }
 
 export function refreshCachedCodexTitle(

@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'
 import { readFreshComposerHold } from './launched-agent-composer-readiness'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -7,7 +7,7 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
-} from '../../runtime-worktree-startup-readiness'
+} from '../../workspaces/startup/runtime-worktree-startup-readiness'
 
 // Why: a paste that lands before Claude's composer mounts stays in its input, but its Enter is lost (#34580).
 const SUBMIT_WAITS_FOR_LAUNCH_COMPOSER: ReadonlySet<TuiAgent> = new Set([

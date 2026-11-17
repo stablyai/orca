@@ -1,4 +1,4 @@
-import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   readAgentLaunchModeSettings,
   decideAgentLaunchMode
@@ -12,9 +12,9 @@ import {
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
-} from '../../../shared/browser-screencast-protocol'
+} from '../../../shared/browser/screencast/browser-screencast-protocol'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   declareRelayedPhoneCapabilities,
   RelayedPhoneReplies,
@@ -156,7 +156,7 @@ it.each(['chat', 'terminal'] as const)(
       const frame = JSON.stringify({
         id: agent,
         method: 'agent.launch',
-        params: { agent, nativeChatDefault: false }
+        params: { agent }
       })
       const stamped = JSON.parse(
         withRelayedLaunchChatDefault(frame, 'agent.launch', (id) =>
@@ -188,3 +188,13 @@ it.each(['chat', 'terminal'] as const)(
     }
   }
 )
+
+it("keeps the phone's own Chat or CLI pick over the desktop default", () => {
+  const frame = JSON.stringify({
+    id: 'pi',
+    method: 'agent.launchReplay',
+    params: { agent: 'pi', nativeChatDefault: true }
+  })
+  const stamped = JSON.parse(withRelayedLaunchChatDefault(frame, 'agent.launchReplay', () => false))
+  expect(stamped.params.nativeChatDefault).toBe(true)
+})

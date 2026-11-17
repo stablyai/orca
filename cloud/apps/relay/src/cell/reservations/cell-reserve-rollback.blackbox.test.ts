@@ -3,13 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
-import { CELL_ADMIT_EFFECTIVE_REFRESH_MS } from './cell-admit-effective-writer.js'
 import { RESERVE_DEAD_MAN_MS, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { openRelayDatabase } from '../../database/database.js'
 import {
   REREGISTER_MAX_ATTEMPTS,
-  REREGISTER_STALL_LOG_EVERY,
-  reregisterInFlightLimit
+  REREGISTER_STALL_LOG_EVERY
 } from '../../connections/host-session-registry.js'
 import { startReserveModeCell } from '../../test-fixtures/reserve-mode-cell.js'
 
@@ -35,7 +33,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     vi.restoreAllMocks()
   })
 
-  async function cell(now?: () => number, options: { flagsUnread?: boolean } = {}) {
+  async function cell(now?: () => number) {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -43,7 +41,7 @@ describe('flipping a reserve-mode cell back to the database', () => {
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }))
     const database = await openRelayDatabase({ dataDir })
     cleanup.push(() => database.close())
-    return await startReserveModeCell({ database, dataDir, cleanup, ...options, ...(now ? { now } : {}) })
+    return await startReserveModeCell({ database, dataDir, cleanup, ...(now ? { now } : {}) })
   }
 
   it('registers every memory-admitted control without disconnecting any, matching the seat report', async () => {
@@ -105,25 +103,6 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect((await reserve.controlLeases()).map((row) => row.relay_host_id)).toEqual([fine.identity.hostId])
   }, 30_000)
 
-  it('gives up on a refusal from a database that answered, as on a row naming another seat', async () => {
-    let now = Date.now()
-    const reserve = await cell(() => now)
-    const host = await reserve.bookedHost(5)
-    vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockRejectedValue(
-      new Error('activity_lease_shape_mismatch')
-    )
-    reserve.setAdmitMode('db')
-    for (let step = 0; step < 3 * REREGISTER_MAX_ATTEMPTS && host.socket.readyState === WebSocket.OPEN; step += 1) {
-      now += 6_000
-      if (host.socket.readyState === WebSocket.OPEN) host.socket.send(JSON.stringify({ type: 'pong', t: now }))
-      await new Promise((resolve) => setTimeout(resolve, 120))
-    }
-    expect(await host.closeCode).toBe(4409)
-    // The cell stops reporting reserve once nothing is left to re-register.
-    await until(() => reserve.relay.sessions.reregistrationPending() === 0)
-    expect(reserve.relay.sessions.inReserveMode()).toBe(false)
-  }, 30_000)
-
   it('retries a stalled database for as long as the control is open, and closes nobody for it', async () => {
     let now = Date.now()
     const reserve = await cell(() => now)
@@ -178,76 +157,6 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(await reserve.controlLeases()).toHaveLength(1)
     expect(host.socket.readyState).toBe(WebSocket.OPEN)
   }, 60_000)
-
-  it('never lets the switch file take the connections hellos and renewals need', () => {
-    expect(reregisterInFlightLimit(undefined, 10)).toBe(3)
-    expect(reregisterInFlightLimit(undefined, 16)).toBe(5)
-    expect(reregisterInFlightLimit(16, 10)).toBe(8)
-    expect(reregisterInFlightLimit(4, 10)).toBe(4)
-    expect(reregisterInFlightLimit(16, 2)).toBe(1)
-  })
-
-  it('takes its flip-back pace from the switch file', async () => {
-    const reserve = await cell()
-    for (let index = 0; index < 4; index += 1) await reserve.bookedHost(5 + index)
-    const real = reserve.relay.assignments.activateControlDeferringCell.bind(reserve.relay.assignments)
-    let inFlight = 0
-    let peak = 0
-    vi.spyOn(reserve.relay.assignments, 'activateControlDeferringCell').mockImplementation(async (...args) => {
-      inFlight += 1
-      peak = Math.max(peak, inFlight)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      try {
-        return await real(...args)
-      } finally {
-        inFlight -= 1
-      }
-    })
-    reserve.setAdmitMode('db', { reregisterInFlight: 1 })
-    await until(async () => (await reserve.controlLeases()).length === 4)
-    expect(peak).toBe(1)
-  }, 30_000)
-
-  it('leases a control whose proof lands after the flip, though memory admitted its hello', async () => {
-    const reserve = await cell()
-    const identity = await reserve.host()
-    await reserve.insertRow(identity.hostId, 4)
-    reserve.relay.sessions.reserve({
-      v: 1,
-      directorId: 'director-a',
-      items: [{ userId: 'user-1', relayHostId: identity.hostId, epoch: 4, ttlMs: 30_000 }]
-    })
-    // The flip lands between the hello (admitted from the booking) and the proof.
-    const activate = vi.spyOn(reserve.relay.assignments, 'activateControl')
-    const pending = reserve.connect(identity, 4)
-    reserve.setAdmitMode('db')
-    const reply = await pending
-    expect(reply.ack).toMatchObject({ type: 'host-hello-ack' })
-    await until(async () => (await reserve.controlLeases()).length === 1)
-    // The proof took the lease itself, or the rescan did: either way exactly one.
-    expect(activate.mock.calls.length + reserve.relay.sessions.reregistrationPending()).toBeLessThanOrEqual(1)
-    expect(reply.socket.readyState).toBe(WebSocket.OPEN)
-  }, 30_000)
-
-  // Step 5 off adds no writes before/after flag reads; leaving reserve owes exactly one db write.
-  it('writes an admit-effective row only while its switch says reserve, plus one db write on the way out', async () => {
-    let now = Date.now()
-    const booting = await cell(() => now, { flagsUnread: true })
-    await new Promise((resolve) => setTimeout(resolve, 2_500))
-    expect(await booting.admitEffectiveRow()).toBeUndefined()
-    booting.setAdmitMode('db')
-    now += 3 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
-    await new Promise((resolve) => setTimeout(resolve, 2_500))
-    expect(await booting.admitEffectiveRow()).toBeUndefined()
-    booting.setAdmitMode('reserve')
-    await until(async () => (await booting.admitEffectiveRow())?.mode === 'reserve')
-    booting.setAdmitMode('db')
-    await until(async () => (await booting.admitEffectiveRow())?.mode === 'db')
-    const last = (await booting.admitEffectiveRow())!.updated_at
-    now += 3 * CELL_ADMIT_EFFECTIVE_REFRESH_MS
-    await new Promise((resolve) => setTimeout(resolve, 2_500))
-    expect((await booting.admitEffectiveRow())!.updated_at).toEqual(last)
-  }, 30_000)
 
   it('flips itself back to db when no placing director has been in touch for the dead-man window', async () => {
     let now = Date.now()

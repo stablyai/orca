@@ -11,7 +11,9 @@ import {
 export function readCodexTopLevelModelProvider(config: string): string | null {
   let state = createTomlLineScanState()
   let lineOffset = 0
-  for (const line of config.split('\n')) {
+  while (lineOffset <= config.length) {
+    const lineEnd = config.indexOf('\n', lineOffset)
+    const line = config.slice(lineOffset, lineEnd === -1 ? config.length : lineEnd)
     if (isTomlStructuralLine(state)) {
       if (getTomlTableHeader(line)) {
         return null

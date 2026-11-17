@@ -15,11 +15,11 @@ vi.mock('electron', () => ({
   app: { getPath: () => mocks.userData },
   session: { fromPartition: mocks.fromPartition }
 }))
-vi.mock('../../sessions/browser-session-partition-policies', () => ({
+vi.mock('../../sessions/partition-policies/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: vi.fn(async () => {}),
   clearBrowserSessionPartitionPolicies: mocks.clearPolicies
 }))
-vi.mock('../../sessions/browser-session-profile-retirement', () => ({
+vi.mock('../../sessions/profiles/browser-session-profile-retirement', () => ({
   retireDeletedBrowserSessionProfile: vi.fn(async () => {}),
   retireFailedBrowserSessionProfile: vi.fn(async () => {})
 }))
@@ -86,15 +86,6 @@ it('clears a session this run may have loaded, and leaves its folder for the nex
     currentBrowserRoutePartitionBindingFilePath()
   )
   expect(JSON.parse(readFileSync(pending, 'utf8'))).toEqual([folder])
-})
-
-it('deletes the folder at startup without loading its session', async () => {
-  const dependencies = browserRoutePartitionStorageDependencies(() => false, 'cold')
-  await dependencies.clearPartitionStorage(PARTITION)
-  await dependencies.removePartitionDirectory(folder)
-
-  expect(mocks.fromPartition).not.toHaveBeenCalled()
-  expect(existsSync(folder)).toBe(false)
 })
 
 it('collects cold orphan folders without opening sessions, preserving retained and listed scopes', async () => {

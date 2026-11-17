@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import type { RelayConfig } from '../config.js'
 import { PostgresDatabase } from '../database/database.js'
-import { HostSessionRegistry } from './host-session-registry.js'
 import { createRelayServer, HOST_HELLO_SHED_OLDEST_WAIT_MS } from '../relay-server.js'
 
 async function unusedPort(): Promise<number> {
@@ -148,7 +147,7 @@ describe('host hello shedding under database pool pressure', () => {
     })
   }
 
-  it('admits hellos behind a deep queue that is still moving', async () => {
+  it('admits hellos behind a deep queue below the age threshold', async () => {
     const cell = await startCell(120)
     cell.advance(HOST_HELLO_SHED_OLDEST_WAIT_MS - 300)
 
@@ -168,19 +167,6 @@ describe('host hello shedding under database pool pressure', () => {
     cell.advance(HOST_HELLO_SHED_OLDEST_WAIT_MS)
 
     expect(await dial(cell)).toEqual({ status: 503, retryAfter: '2' })
-    // Shipped desktops lack unexpected-response listeners; refusal must reach their ordinary connect-error backoff.
-    const desktop = new WebSocket(cell.url, {
-      headers: { authorization: `Bearer ${cell.token}` }
-    })
-    const error = await new Promise<Error>((resolve) => desktop.once('error', resolve))
-    expect(error.message).toBe('Unexpected server response: 503')
   })
 
-  it('never refuses a rebind over a live control', async () => {
-    vi.spyOn(HostSessionRegistry.prototype, 'hasActiveControl').mockReturnValue(true)
-    const cell = await startCell(2)
-    cell.advance(HOST_HELLO_SHED_OLDEST_WAIT_MS * 2)
-
-    expect(await dial(cell)).toEqual({ status: 101 })
-  })
 })

@@ -1,9 +1,10 @@
 import { useCallback, useRef } from 'react'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { MarkdownPreviewSurface } from './MarkdownPreviewSurface'
 import type { MarkdownPreviewProps } from '../render-tree/markdown-preview-types'
 import { useMarkdownPreviewAnnotationRenderers } from '../review/use-markdown-preview-annotation-renderers'
+import { MarkdownPreviewAnnotationContext } from '../review/markdown-preview-annotation-context'
 import { useMarkdownPreviewComponents } from '../render-tree/use-markdown-preview-components'
 import { useMarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import { useMarkdownPreviewReviewActions } from '../review/use-markdown-preview-review-actions'
@@ -13,9 +14,9 @@ import { useMarkdownPreviewDocumentSearch } from '../search/use-markdown-preview
 import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-preview-navigation'
 import { useMarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { readMarkdownPreviewChatSelection } from '../review/markdown-preview-chat-selection'
-import { SelectionAddToChatPopover } from '../../../native-chat/SelectionAddToChatPopover'
-import { openAddToChatMenuAt } from '../../../native-chat/add-to-chat-point-menu'
-import { formatNativeChatQuote } from '../../../native-chat/native-chat-quote-selection'
+import { SelectionAddToChatPopover } from '../../../native-chat/selection-quotes/SelectionAddToChatPopover'
+import { openAddToChatMenuAt } from '../../../native-chat/selection-quotes/add-to-chat-point-menu'
+import { formatNativeChatQuote } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []
 
@@ -83,8 +84,6 @@ export default function MarkdownPreview({
   const components = useMarkdownPreviewComponents({
     foundation,
     viewport,
-    reviewActions,
-    annotationRenderers,
     filePath,
     onOpenDocument
   })
@@ -94,7 +93,7 @@ export default function MarkdownPreview({
   const chatRelativePath = sourceRelativePath
 
   return (
-    <>
+    <MarkdownPreviewAnnotationContext value={annotationRenderers}>
       <MarkdownPreviewSurface
         largePreview={largePreview}
         documentState={documentState}
@@ -128,6 +127,6 @@ export default function MarkdownPreview({
           })
         }
       />
-    </>
+    </MarkdownPreviewAnnotationContext>
   )
 }

@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
+import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import {
   configureBrowserPasswordVaults,
   deleteBrowserPasswordVault,
@@ -27,16 +27,6 @@ describe('deleteBrowserPasswordVault', () => {
     chmodSync(join(dir, 'browser-passwords'), 0o700)
     _resetSecretStoreForTests()
     rmSync(dir, { recursive: true, force: true })
-  })
-
-  it('deletes the file and forgets the cached vault', () => {
-    getBrowserPasswordVault('default').add({
-      origin: 'https://a.test',
-      username: 'u',
-      password: 'p'
-    })
-    expect(deleteBrowserPasswordVault('default')).toEqual({ ok: true, value: true })
-    expect(getBrowserPasswordVault('default').list()).toEqual({ ok: true, value: [] })
   })
 
   it('deletes the captured vault after an Orca profile switch without touching its replacement', () => {

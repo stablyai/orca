@@ -1,7 +1,7 @@
 import type { Socket } from 'node:net'
 import { readDaemonClientToken } from './daemon-client-token'
 import { randomUUID } from 'node:crypto'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import { NOTIFY_PREFIX } from '../../protocol/daemon-rpc-contract'
 import { DaemonConnectionLostError, DaemonProtocolError } from '../../protocol/daemon-errors'
@@ -123,6 +123,7 @@ export class DaemonClient {
     sharedBudget: boolean
   ): Promise<void> {
     const token = readDaemonClientToken(this.tokenPath)
+    // A shared budget is the caller's wall-clock bound (quit, teardown, launch): a freeze mid-step is tolerated but still spends it.
     const deadlineMs = Date.now() + timeoutMs
     const remainingMs = (): number =>
       sharedBudget ? Math.max(1, deadlineMs - Date.now()) : timeoutMs

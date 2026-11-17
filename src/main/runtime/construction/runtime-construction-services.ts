@@ -1,7 +1,8 @@
+import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-contract'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
-import type { selectFreshExplicitAgentStatus } from '../runtime-hook-agent-row-selection'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeHeadlessTerminal,
@@ -15,39 +16,39 @@ import type { TuiIdleHookTurn } from '../terminal/wait/tui-idle-hook-lane'
 import type { RuledScreen } from '../terminal/wait/screen-input-veto'
 import type {
   TerminalHandlePty,
-  TerminalHandleLeaf,
-  TerminalWaiter,
-  OrchestrationCompatibilityTerminalAuthority
-} from '../runtime-terminal-contracts'
-import type { TitleDisplayClear } from '../runtime-worktree-status-projection'
+  TerminalHandleLeaf
+} from '../terminal/identity/terminal-handle-records'
+import type { TerminalWaiter } from '../terminal/wait/terminal-waiter'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
+import type { TitleDisplayClear } from '../workspaces/process-listing/runtime-worktree-status-projection'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
-import type { WorkerTerminalResourceRow } from '../orchestration/worker-terminal-ownership'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
-} from '../../../shared/runtime-terminal-contracts'
-import type { RuntimeSyncedLeaf } from '../../../shared/runtime-session-contracts'
-import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration-fleet-agent-status-snapshot'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import type { RuntimeWorktreeScanResult } from '../repo-worktree-resolution-scan'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeSyncedLeaf } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
+import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
 import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runtime-terminal-agent-presence'
-import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/cli-command'
-import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox-owner'
-import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox-pointer-submit'
+import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
+import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
+import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import type { StructuredPointerTarget } from '../orchestration/structured-mailbox-pointer-delivery'
+import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type * as PtyControllerContract from '../runtime-pty-controller-contract'
-import type { RuntimeClientEventBus } from '../runtime-client-event-bus'
-import type { RuntimeRepoSelector } from '../runtime-repo-selector'
+
+import type * as PtyControllerContract from '../terminal/lifecycle/runtime-pty-controller-contract'
+import type { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
+import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
-export abstract class RuntimeConstructionServices {
+export abstract class RuntimeConstructionServices extends RuntimeAgentStatusReadContract {
   abstract getOrchestrationDb(): OrchestrationDb
   abstract getExistingOrchestrationDb(): OrchestrationDb | null
   abstract listRepos(): Repo[]
@@ -56,6 +57,7 @@ export abstract class RuntimeConstructionServices {
   abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
+  protected abstract onPtyStopSettled(ptyId: string, stopped: boolean): void
 
   abstract getPtyLivenessVerdict(
     ...args: Calls.GetPtyLivenessVerdictArgs
@@ -210,7 +212,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options?: { claimsHygiene?: boolean }
   ): Promise<RuntimeWorktreeScanResult>
   protected abstract listKnownExecutionHostIds(
     additionalHostIds?: Iterable<ExecutionHostId>,
@@ -274,10 +277,6 @@ export abstract class RuntimeConstructionServices {
   protected abstract getWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
-  protected abstract readonly getAgentStatusSnapshotForPaneFn:
-    | ((paneKey: string) => AgentStatusIpcPayload[])
-    | null
-  abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
@@ -285,10 +284,8 @@ export abstract class RuntimeConstructionServices {
     selector: string,
     requiredHostId?: ExecutionHostId
   ): Promise<ResolvedWorktree>
-  protected abstract resolveWorkspaceSelector(
-    selector: string,
-    options?: { requireUsableFolderPath?: boolean; requiredHostId?: ExecutionHostId }
-  ): Promise<ResolvedWorktree>
+  protected abstract resolveWorkspaceSelector(...args: Calls.SelectorArgs): Calls.SelectorResult
+  protected abstract resolveWorkspaceCandidate(...args: Calls.SelectorArgs): Calls.CandidateResult
   protected abstract refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId?: string | null,
@@ -297,8 +294,4 @@ export abstract class RuntimeConstructionServices {
     retryStale?: boolean,
     inventoryOptions?: PtyControllerContract.PtyInventoryRefreshOptions
   ): Promise<PtyControllerContract.PtyControllerInventory | null>
-  protected abstract getFreshExplicitAgentStatusForHandle(
-    handle: string,
-    paneKeyOverride?: string | null
-  ): ReturnType<typeof selectFreshExplicitAgentStatus>
 }

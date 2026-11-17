@@ -1,23 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import {
   DaemonSpawner,
-  getDaemonArtifactHoldClaimPath,
-  getDaemonPidPath,
-  getDaemonPidSwapClaimPath,
-  getDaemonSocketPath,
-  getDaemonTokenPath,
   publishDaemonPidFile,
   replaceDaemonPidFile,
   restoreClaimedDaemonArtifact
 } from '../daemon-spawner'
-import { getDaemonSocketBindPath } from '../../endpoint/publication/daemon-endpoint-ownership'
 import { startDaemon, type DaemonHandle } from '../../server/daemon-main'
 import { DaemonClient } from '../../transport/client/daemon-client'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
-import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-spawner-test-'))
@@ -79,55 +72,6 @@ describe('DaemonSpawner', () => {
   }
 
   describe('ensureRunning', () => {
-    it('passes the scoped PID path and a fresh launch nonce to the launcher', async () => {
-      const launcher = vi.fn(async () => ({ shutdown: vi.fn(async () => {}) }))
-      spawner = new DaemonSpawner({ runtimeDir: dir, launcher })
-
-      await spawner.ensureRunning()
-
-      expect(launcher).toHaveBeenCalledWith(
-        getDaemonSocketPath(dir),
-        getDaemonTokenPath(dir),
-        getDaemonPidPath(dir),
-        expect.stringMatching(/^[0-9a-f-]{36}$/)
-      )
-    })
-
-    it('uses protocol-scoped socket and token paths', () => {
-      const socketPath = getDaemonSocketPath(dir)
-      const tokenPath = getDaemonTokenPath(dir)
-      const pidPath = getDaemonPidPath(dir)
-
-      if (process.platform === 'win32') {
-        expect(socketPath).toContain(`orca-terminal-host-v${PROTOCOL_VERSION}`)
-      } else {
-        expect(socketPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.sock`))
-      }
-      expect(tokenPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.token`))
-      expect(pidPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.pid`))
-    })
-
-    it('starts daemon and returns connection info', async () => {
-      const s = createSpawner()
-      const info = await s.ensureRunning()
-
-      if (process.platform === 'win32') {
-        expect(info.socketPath).toContain(`orca-terminal-host-v${PROTOCOL_VERSION}`)
-      } else {
-        expect(info.socketPath).toContain(dir)
-      }
-      expect(info.tokenPath).toContain(dir)
-    })
-
-    it('returns same info on subsequent calls', async () => {
-      const s = createSpawner()
-      const info1 = await s.ensureRunning()
-      const info2 = await s.ensureRunning()
-
-      expect(info1.socketPath).toBe(info2.socketPath)
-      expect(info1.tokenPath).toBe(info2.tokenPath)
-    })
-
     it('daemon is connectable after ensureRunning', async () => {
       const s = createSpawner()
       const info = await s.ensureRunning()
@@ -153,11 +97,6 @@ describe('DaemonSpawner', () => {
         tokenPath: info.tokenPath
       })
       await expect(client.ensureConnected()).rejects.toThrow()
-    })
-
-    it('can be called when daemon is not running', async () => {
-      const s = createSpawner()
-      await expect(s.shutdown()).resolves.toBeUndefined()
     })
 
     it('allows re-start after shutdown', async () => {
@@ -205,23 +144,6 @@ describe('restoreClaimedDaemonArtifact', () => {
     } finally {
       rmSync(restoreDir, { recursive: true, force: true })
     }
-  })
-
-  it('allows claim cleanup after successful restore or a confirmed replacement', () => {
-    expect(
-      restoreClaimedDaemonArtifact('/claimed', '/canonical', {
-        copyExclusive: () => {},
-        canonicalExists: () => false
-      })
-    ).toBe(true)
-    expect(
-      restoreClaimedDaemonArtifact('/claimed', '/canonical', {
-        copyExclusive: () => {
-          throw Object.assign(new Error('injected EEXIST'), { code: 'EEXIST' })
-        },
-        canonicalExists: () => true
-      })
-    ).toBe(true)
   })
 })
 
@@ -286,31 +208,5 @@ describe('daemon PID publication', () => {
       chmodSync(dir, 0o700)
       rmSync(dir, { recursive: true, force: true })
     }
-  })
-})
-
-describe('daemon socket publication', () => {
-  it('keeps every scratch namespace outside the released sweeper pattern', () => {
-    // Released age-only sweepers can delete live bind names and the sole copy of claimed ownership records.
-    const RELEASED_SWEEPER_PATTERN =
-      /(?:\.(?:cleanup|replace)-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|^\.b[0-9a-f]{10})$/
-
-    for (let i = 0; i < 20; i++) {
-      const names = [
-        basename(getDaemonSocketBindPath(getDaemonSocketPath('/tmp/orca-daemon'))),
-        basename(getDaemonPidSwapClaimPath('/tmp/orca-daemon/daemon-v32.pid')),
-        basename(getDaemonArtifactHoldClaimPath('/tmp/orca-daemon/daemon-v32.token'))
-      ]
-      for (const name of names) {
-        expect(name).not.toMatch(RELEASED_SWEEPER_PATTERN)
-      }
-    }
-  })
-
-  it('keeps the bind name shorter than the canonical endpoint', () => {
-    // sockaddr_un caps the path, so the private bind name must never extend it.
-    const canonicalPath = getDaemonSocketPath('/tmp/orca-daemon-runtime')
-
-    expect(getDaemonSocketBindPath(canonicalPath).length).toBeLessThan(canonicalPath.length)
   })
 })

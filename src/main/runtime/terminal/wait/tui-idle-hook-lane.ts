@@ -1,9 +1,9 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { hookAuthority } from '../../agent-state-rules/agent-state-rules-engine'
-import { selectFreshExplicitAgentStatusRow } from '../../runtime-hook-agent-row-selection'
-import { terminalHostConnectionMatches } from '../../orchestration/worker-provider-session'
+import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { terminalHostConnectionMatches } from '../../orchestration/workers/transcripts/worker-provider-session'
 
 type HookTurnState = 'done' | 'working' | 'permission'
 

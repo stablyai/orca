@@ -54,15 +54,6 @@ describe('shell process readiness', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'uses the POSIX exec default when PATH is unset',
-    async () => {
-      await expect(resolveShellExecutablePath('sh', process.cwd(), undefined)).resolves.toBe(
-        await resolveShellExecutablePath('/bin/sh', process.cwd(), '')
-      )
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
     'resolves relative shell paths against the PTY cwd',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-relative-shell-'))

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automation-runtime-capabilities'
+import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automations/automation-runtime-capabilities'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import type { RpcResponse } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import { automationCreateWrite } from './automation-operations'
 import { AUTOMATION_OUTCOME_UNKNOWN } from './automation-error'
@@ -25,7 +25,9 @@ export function useAutomationCreateAttempt(
   rows: readonly MobileAutomationRow[],
   creating: boolean,
   onReconcile: (row: MobileAutomationRow, initialDraft?: AutomationDraft) => void,
-  isCurrentSnapshot: () => boolean
+  isCurrentSnapshot: () => boolean,
+  // The host holds the create, so the form's saved copy must not bring it back for a second one.
+  onCreated: () => void
 ) {
   const attempt = useRef<SubmittedAutomationCreate | null>(null)
   const latestDraft = useRef<AutomationDraft | null>(null)
@@ -60,8 +62,9 @@ export function useAutomationCreateAttempt(
     }
     submitted.affirmed = true
     attempt.current = null
+    onCreated()
     onReconcile(saved, Object.keys(changes).length ? { ...baseline, ...changes } : undefined)
-  }, [rows, creating, onReconcile, isCurrentSnapshot])
+  }, [rows, creating, onReconcile, isCurrentSnapshot, onCreated])
   return {
     observeDraft,
     reset: () => {
@@ -140,10 +143,11 @@ export function useAutomationCreateAttempt(
       }
       try {
         submitted.replyId = automationCreateWrite.interpret(response).automation.id
-        submitted.affirmed = true
       } catch {
         throw new Error(AUTOMATION_OUTCOME_UNKNOWN)
       }
+      submitted.affirmed = true
+      onCreated()
     }
   }
 }

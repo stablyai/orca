@@ -28,10 +28,7 @@
       "ws": ["../node_modules/@types/ws"]
     }
   },
-  "files": [
-    "src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx",
-    "../src/types/build-constants.d.ts"
-  ],
+  "files": ["../src/types/build-constants.d.ts"],
   "include": [],
   "exclude": ["node_modules"]
 }

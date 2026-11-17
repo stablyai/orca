@@ -2,8 +2,8 @@ import {
   DnrExtensionMatcher,
   type DnrFrameAllowState,
   type DnrHostAccess
-} from './extension-matcher'
-import { sameDomainOrHost } from './domain-matching'
+} from './matching/extension-matcher'
+import { sameDomainOrHost } from './matching/domain-matching'
 import {
   createDnrRequestContext,
   dnrOriginHost,
@@ -11,8 +11,8 @@ import {
   type DnrRequestInfo,
   type DnrResponseHeaders
 } from './request-context'
-import { DnrCandidatePostings } from './candidate-postings'
-import type { DnrRulesetIndex } from './ruleset-index'
+import { DnrCandidatePostings } from './indexing/candidate-postings'
+import type { DnrRulesetIndex } from './indexing/ruleset-index'
 import {
   crossExtensionRank,
   emptyDnrEvaluation,
@@ -25,8 +25,8 @@ import {
   DnrRulesetMatcher,
   type DnrRequestAction,
   type DnrStage
-} from './ruleset-matcher'
-import type { DnrRulesetSource } from './rule-types'
+} from './matching/ruleset-matcher'
+import type { DnrRulesetSource } from './rule-compilation/rule-types'
 
 // RulesetManager (ruleset_manager.cc) plus the per-request bookkeeping WebRequestInfo keeps
 // between stages (see request-state.ts).

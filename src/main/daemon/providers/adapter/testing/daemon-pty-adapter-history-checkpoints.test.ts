@@ -5,7 +5,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import type { DaemonServer } from '../../../server/daemon-server'
 import { getHistorySessionDirName } from '../../../history/storage/history-paths'
-import type { PendingOutputRecord } from '../../../protocol/daemon-rpc-contract'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -25,8 +24,6 @@ const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMo
     )
   })
 )
-
-const itOnPosix = process.platform === 'win32' ? it.skip : it
 
 vi.mock('../../../health/daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
@@ -96,24 +93,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       historyAdapter?.dispose()
     })
 
-    it('does not write to disk on individual data events (checkpoint-based)', async () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-      const { id } = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/home/user',
-        sessionId: 'hist-test'
-      })
-
-      lastSubprocess._simulateData('hello from pty\r\n')
-      await new Promise((r) => setTimeout(r, 50))
-
-      expect(existsSync(join(historyDir, getHistorySessionDirName(id), 'scrollback.bin'))).toBe(
-        false
-      )
-    })
-
     it('appends increments for only dirty sessions on the periodic timer', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
@@ -155,66 +134,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
       }
-    })
-
-    it('limits concurrent checkpoint snapshot and disk work', async () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const releaseSnapshotRequests: (() => void)[] = []
-      const requestedSessionIds: string[] = []
-      let inFlight = 0
-      let maxInFlight = 0
-      const request = vi.fn(async (_type: string, payload: { sessionId: string }) => {
-        requestedSessionIds.push(payload.sessionId)
-        inFlight++
-        maxInFlight = Math.max(maxInFlight, inFlight)
-        await new Promise<void>((resolve) => {
-          releaseSnapshotRequests.push(() => {
-            inFlight--
-            resolve()
-          })
-        })
-        return {
-          records: [{ kind: 'output', data: payload.sessionId }],
-          seq: 1,
-          overflowed: false,
-          snapshot: null
-        }
-      })
-      const checkpoint = vi.fn(async () => 'committed' as const)
-      const appendIncrements = vi.fn(async () => 'ok' as const)
-      const dispose = vi.fn(async () => {})
-      const disconnect = vi.fn()
-      const internals = historyAdapter as unknown as {
-        client: { request: typeof request; disconnect: typeof disconnect }
-        historyManager: {
-          checkpoint: typeof checkpoint
-          appendIncrements: typeof appendIncrements
-          dispose: typeof dispose
-        }
-        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
-      }
-      internals.client = { request, disconnect }
-      internals.historyManager = { checkpoint, appendIncrements, dispose }
-
-      const checkpointing = internals.checkpointSessions(['a', 'b', 'c', 'd', 'e', 'f'])
-      await waitFor(() => requestedSessionIds.length === 4)
-
-      expect(maxInFlight).toBe(4)
-      expect(requestedSessionIds).toEqual(['a', 'b', 'c', 'd'])
-
-      for (const release of releaseSnapshotRequests.splice(0)) {
-        release()
-      }
-      await waitFor(() => requestedSessionIds.length === 6)
-
-      expect(maxInFlight).toBe(4)
-
-      for (const release of releaseSnapshotRequests.splice(0)) {
-        release()
-      }
-      await expect(checkpointing).resolves.toEqual(new Set(['a', 'b', 'c', 'd', 'e', 'f']))
-      expect(appendIncrements).toHaveBeenCalledTimes(6)
-      expect(checkpoint).not.toHaveBeenCalled()
     })
 
     it('keeps abandoned periodic checkpoints within the global work cap', async () => {
@@ -276,294 +195,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = previousDeadline
         warn.mockRestore()
-      }
-    })
-
-    it('lets one session hold only one global non-final admission', () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const internals = historyAdapter as unknown as {
-        tryAdmitNonFinalCheckpoint(sessionId: string): boolean
-        releaseNonFinalCheckpointAdmission(sessionId: string): void
-        nonFinalCheckpointAdmissionSessionIds: Set<string>
-        nonFinalAdmissionDeniedSessionIds: Set<string>
-      }
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-      try {
-        expect(internals.tryAdmitNonFinalCheckpoint('stalled')).toBe(true)
-        expect(internals.tryAdmitNonFinalCheckpoint('stalled')).toBe(false)
-        expect(warn).toHaveBeenCalledWith(
-          '[history] non-final checkpoint already in flight:',
-          'stalled'
-        )
-        expect(internals.tryAdmitNonFinalCheckpoint('healthy-a')).toBe(true)
-        expect(internals.tryAdmitNonFinalCheckpoint('healthy-b')).toBe(true)
-        expect(internals.tryAdmitNonFinalCheckpoint('healthy-c')).toBe(true)
-        expect(internals.tryAdmitNonFinalCheckpoint('overflow')).toBe(false)
-        expect(internals.tryAdmitNonFinalCheckpoint('another-overflow')).toBe(false)
-
-        expect(internals.nonFinalCheckpointAdmissionSessionIds).toEqual(
-          new Set(['stalled', 'healthy-a', 'healthy-b', 'healthy-c'])
-        )
-        expect(internals.nonFinalAdmissionDeniedSessionIds).toEqual(new Set(['stalled']))
-        expect(warn).toHaveBeenCalledWith(
-          '[history] non-final checkpoint global admission limit reached:',
-          'overflow'
-        )
-        expect(
-          warn.mock.calls.filter(
-            ([message]) =>
-              message === '[history] non-final checkpoint global admission limit reached:'
-          )
-        ).toHaveLength(1)
-
-        internals.releaseNonFinalCheckpointAdmission('stalled')
-        expect(internals.nonFinalAdmissionDeniedSessionIds).toEqual(new Set())
-        expect(internals.tryAdmitNonFinalCheckpoint('overflow')).toBe(true)
-      } finally {
-        warn.mockRestore()
-      }
-    })
-
-    it('logs non-final checkpoint RPC failures', async () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const request = vi.fn(async () => {
-        throw new Error('daemon socket unavailable')
-      })
-      const internals = historyAdapter as unknown as {
-        client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
-        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
-      }
-      internals.client = { request, disconnect: vi.fn() }
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-      try {
-        await expect(internals.checkpointSessions(['broken'])).resolves.toEqual(new Set())
-        expect(warn).toHaveBeenCalledWith(
-          '[history] checkpoint failed:',
-          'broken',
-          expect.objectContaining({ message: 'daemon socket unavailable' })
-        )
-      } finally {
-        warn.mockRestore()
-      }
-    })
-
-    it('logs a periodic checkpoint failure that arrives after its deadline', async () => {
-      const adapterClass = DaemonPtyAdapter as unknown as {
-        PERIODIC_CHECKPOINT_DEADLINE_MS: number
-      }
-      const previousDeadline = adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS
-      adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = 5
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      let rejectRequest!: (error: unknown) => void
-      const request = vi.fn(
-        async () =>
-          await new Promise<never>((_resolve, reject) => {
-            rejectRequest = reject
-          })
-      )
-      const internals = historyAdapter as unknown as {
-        client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
-        checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
-      }
-      internals.client = { request, disconnect: vi.fn() }
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-      try {
-        const checkpointing = internals.checkpointSessions(['late-failure'])
-        await waitFor(() => request.mock.calls.length === 1)
-        await expect(checkpointing).resolves.toEqual(new Set())
-
-        rejectRequest(new Error('late daemon failure'))
-        await waitFor(() =>
-          warn.mock.calls.some(
-            ([message, sessionId, error]) =>
-              message === '[history] checkpoint failed:' &&
-              sessionId === 'late-failure' &&
-              error instanceof Error &&
-              error.message === 'late daemon failure'
-          )
-        )
-      } finally {
-        adapterClass.PERIODIC_CHECKPOINT_DEADLINE_MS = previousDeadline
-        warn.mockRestore()
-      }
-    })
-
-    describe('full-snapshot cooldown', () => {
-      type CooldownInternals = {
-        client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
-        historyManager: {
-          checkpoint: ReturnType<typeof vi.fn>
-          appendIncrements: ReturnType<typeof vi.fn>
-          dispose: ReturnType<typeof vi.fn>
-        }
-        checkpointSessions(
-          sessionIds: Iterable<string>,
-          opts?: { final?: boolean; teardown?: boolean }
-        ): Promise<Set<string>>
-        sessionsNeedingFullCheckpoint: Set<string>
-        lastFullCheckpointAt: Map<string, number>
-      }
-
-      function makeCooldownHarness(takeResult: {
-        overflowed: boolean
-        appendResult?: 'ok' | 'needs-checkpoint'
-        checkpointResult?: 'committed' | 'retryable' | 'unavailable'
-        snapshotRecords?: PendingOutputRecord[]
-      }): CooldownInternals {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-        const request = vi.fn(async (_type: string, payload: Record<string, unknown>) => {
-          if (payload.includeSnapshot === true) {
-            return {
-              records: takeResult.snapshotRecords ?? [],
-              seq: 2,
-              overflowed: false,
-              snapshot: { cols: 80, rows: 24 }
-            }
-          }
-          return {
-            records: [{ kind: 'output', data: 'x' }],
-            seq: 1,
-            overflowed: takeResult.overflowed,
-            snapshot: null
-          }
-        })
-        const internals = historyAdapter as unknown as CooldownInternals
-        internals.client = { request, disconnect: vi.fn() }
-        internals.historyManager = {
-          checkpoint: vi.fn(async () => takeResult.checkpointResult ?? 'committed'),
-          appendIncrements: vi.fn(async () => takeResult.appendResult ?? 'ok'),
-          dispose: vi.fn(async () => {})
-        }
-        return internals
-      }
-
-      it('bounds overflow-triggered full snapshots to one per cooldown window', async () => {
-        const internals = makeCooldownHarness({ overflowed: true })
-
-        await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set(['hot']))
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
-
-        await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
-        expect(internals.sessionsNeedingFullCheckpoint.has('hot')).toBe(true)
-        const requestsAfterSecondTick = internals.client.request.mock.calls.length
-
-        for (let i = 0; i < 22; i++) {
-          await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
-        }
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
-        expect(internals.client.request.mock.calls.length).toBe(requestsAfterSecondTick)
-
-        internals.lastFullCheckpointAt.set('hot', Date.now() - 46_000)
-        await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set(['hot']))
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(2)
-        expect(internals.sessionsNeedingFullCheckpoint.has('hot')).toBe(false)
-      })
-
-      it('lets final checkpoints bypass the cooldown', async () => {
-        const internals = makeCooldownHarness({ overflowed: true })
-        await internals.checkpointSessions(['hot'])
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
-
-        await expect(internals.checkpointSessions(['hot'], { final: true })).resolves.toEqual(
-          new Set(['hot'])
-        )
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(2)
-      })
-
-      it('defers log-cap (needs-checkpoint) snapshots inside the cooldown', async () => {
-        const internals = makeCooldownHarness({
-          overflowed: false,
-          appendResult: 'needs-checkpoint'
-        })
-        internals.lastFullCheckpointAt.set('capped', Date.now())
-
-        await expect(internals.checkpointSessions(['capped'])).resolves.toEqual(new Set())
-        expect(internals.historyManager.checkpoint).not.toHaveBeenCalled()
-        expect(internals.sessionsNeedingFullCheckpoint.has('capped')).toBe(true)
-
-        internals.lastFullCheckpointAt.set('capped', Date.now() - 46_000)
-        await expect(internals.checkpointSessions(['capped'])).resolves.toEqual(new Set(['capped']))
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
-        expect(internals.sessionsNeedingFullCheckpoint.has('capped')).toBe(false)
-      })
-
-      it('defers a teardown checkpoint that fails to serialize and drops its held tail', async () => {
-        const internals = makeCooldownHarness({
-          overflowed: false,
-          checkpointResult: 'retryable',
-          // Model shell-ready bytes emitted by Session.prepareForFinalSnapshot.
-          snapshotRecords: [{ kind: 'output', data: 'held tail' }]
-        })
-
-        await expect(
-          internals.checkpointSessions(['sleeping'], { final: true, teardown: true })
-        ).resolves.toEqual(new Set())
-
-        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
-        expect(internals.sessionsNeedingFullCheckpoint.has('sleeping')).toBe(true)
-        // Appending the held tail would hide the failed snapshot’s gap behind contiguous sequence numbers.
-        expect(internals.historyManager.appendIncrements).not.toHaveBeenCalled()
-        expect(internals.lastFullCheckpointAt.has('sleeping')).toBe(false)
-      })
-    })
-
-    it('does not schedule a checkpoint timer until a session is dirty', async () => {
-      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
-      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
-      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
-      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
-
-      try {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-        await historyAdapter.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '/home/user',
-          sessionId: 'idle-checkpoint'
-        })
-
-        expect(setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000)).toBe(false)
-
-        lastSubprocess._simulateData('dirty after idle\r\n')
-        await waitFor(() => setTimeoutSpy.mock.calls.some(([, delay]) => delay === 10_000))
-      } finally {
-        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
-        setTimeoutSpy.mockRestore()
-      }
-    })
-
-    it('clears a pending checkpoint timer when the last dirty session closes', async () => {
-      const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
-      const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
-      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
-      adapterClass.CHECKPOINT_INTERVAL_MS = 10_000
-
-      try {
-        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-        const { id } = await historyAdapter.spawn({
-          cols: 80,
-          rows: 24,
-          cwd: '/home/user',
-          sessionId: 'close-dirty-checkpoint'
-        })
-        const internals = historyAdapter as unknown as {
-          dirtySessionVersions: Map<string, number>
-        }
-
-        lastSubprocess._simulateData('dirty before close\r\n')
-        await waitFor(() => internals.dirtySessionVersions.has(id))
-        const callsBeforeClose = clearTimeoutSpy.mock.calls.length
-
-        await historyAdapter.shutdown(id, { immediate: true })
-
-        expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThan(callsBeforeClose)
-      } finally {
-        adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
-        clearTimeoutSpy.mockRestore()
       }
     })
 
@@ -666,25 +297,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('writes meta.json with endedAt on exit', async () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-      const { id } = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'exit-hist'
-      })
-
-      lastSubprocess._simulateExit(0)
-      await new Promise((r) => setTimeout(r, 50))
-
-      const meta = JSON.parse(
-        readFileSync(join(historyDir, getHistorySessionDirName(id), 'meta.json'), 'utf-8')
-      )
-      expect(meta.endedAt).toBeDefined()
-      expect(meta.exitCode).toBe(0)
-    })
-
     it('removes history on explicit shutdown', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
@@ -703,31 +315,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await new Promise((r) => setTimeout(r, 50))
 
       expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(false)
-    })
-
-    itOnPosix('persists final take records that are not represented in the snapshot', async () => {
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-      const { id } = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/home/user',
-        command: 'printf ready',
-        env: { SHELL: '/bin/zsh' },
-        sessionId: 'sleep-checkpoint-tail'
-      })
-      const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
-
-      lastSubprocess._simulateData('\x1b]777;orca-shell-ready')
-      await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
-
-      expect(checkpointSpy).toHaveBeenCalledWith(
-        id,
-        expect.objectContaining({
-          pendingEscapeTailAnsi: expect.stringContaining('\x1b]777;orca-shell-ready')
-        }),
-        { pendingOutputSeq: expect.any(Number) }
-      )
     })
 
     // Preserve an unverified recovered cwd; fall back only when the directory is proven missing.

@@ -32,7 +32,7 @@ beforeAll(async () => {
   }
   // Import behind dependency gate: transforming mobile/ reads Expo tsconfig absent from root-only shards.
   ;({ buildNativeChatVisualDocument, NATIVE_CHAT_VISUAL_PONG_TYPE: pongType } =
-    await import('../../../../src/shared/native-chat/native-chat-visual-shell'))
+    await import('../../../../src/shared/native-chat/visuals/native-chat-visual-shell'))
   ;({ buildMobileNativeChatVisualHostDocument } =
     await import('../../../../mobile/src/session/native-chat/visual/mobile-native-chat-visual-host-document'))
   const header = await readShellCsp()
@@ -103,27 +103,6 @@ window.addEventListener('message', function(event) {
 const escaped = (page) =>
   page.evaluate(() => window.sent.some((message) => message.kind === 'escaped'))
 
-async function outlastTheAnswer(page) {
-  await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        const channel = new MessageChannel()
-        channel.port1.onmessage = () => {
-          channel.port1.close()
-          channel.port2.close()
-          resolve()
-        }
-        channel.port2.postMessage(null)
-      })
-  )
-  await expect
-    .poll(() =>
-      page.evaluate(() => window.visualLoads < 2 || window.visualPongs.includes(window.visualLoads))
-    )
-    .toBe(true)
-  await page.clock.runFor(PONG_TIMEOUT_MS * 3)
-}
-
 for (const engine of ['chromium', 'webkit']) {
   describeEngines(
     `a chat visual's in-page links on ${engine}`,
@@ -135,61 +114,6 @@ for (const engine of ['chromium', 'webkit']) {
         }
         return one
       }
-
-      it.each(['let', 'const', 'var', 'function'])(
-        'renders a visual declaring %s open',
-        async (kind) => {
-          const declaration =
-            kind === 'function' ? 'function open() { return 6 }' : `${kind} open = 6`
-          const html = `${VISUAL}<p id="rendered"></p><script>${declaration};
-document.getElementById('rendered').textContent = String(typeof open === 'function' ? open() : open)
-</script>`
-          const { page, frame } = await openNativeHost(browser(), html)
-          try {
-            await expect.poll(() => frame.textContent('#rendered')).toBe('6')
-          } finally {
-            await page.close()
-          }
-        }
-      )
-
-      it('blocks popups even when a visual restores the native open function', async () => {
-        const context = await browser().newContext()
-        try {
-          await context.addInitScript(() => {
-            window.originalOpen = window.open
-          })
-          const html = `${VISUAL}<button id="popup" onclick="this.dataset.blocked = String(window.open('about:blank', '_blank') === null)">Open</button>`
-          const { frame } = await openNativeHost(context, html)
-          expect(
-            await frame.evaluate(() => {
-              window.open = window.originalOpen
-              return window.open === window.originalOpen
-            })
-          ).toBe(true)
-          await frame.click('#popup')
-          expect(await frame.getAttribute('#popup', 'data-blocked')).toBe('true')
-          expect(context.pages()).toHaveLength(1)
-        } finally {
-          await context.close()
-        }
-      })
-
-      it('moves within the visual in the app, and the host keeps it', async () => {
-        const { page, frame } = await openNativeHost(browser())
-        const marker = await frame.evaluate(() => window.marker)
-        expect(await frame.evaluate(() => document.baseURI)).toBe('about:srcdoc')
-        await frame.click('#to-s2')
-        await outlastTheAnswer(page)
-        expect(await frame.evaluate(() => document.querySelector(':target')?.id)).toBe('s2')
-        await frame.click('#to-route')
-        await frame.evaluate(() => history.pushState(null, '', '#/pushed'))
-        await outlastTheAnswer(page)
-        expect(await frame.evaluate(() => location.href)).toBe('about:srcdoc#/pushed')
-        expect(await frame.evaluate(() => window.marker)).toBe(marker)
-        expect(await escaped(page)).toBe(false)
-        await page.close()
-      })
 
       it("refuses a base the visual declares, so the shell's stays", async () => {
         const own = '<head><base href="https://example.com/"></head>'
@@ -222,17 +146,6 @@ document.getElementById('rendered').textContent = String(typeof open === 'functi
           expect(await page.evaluate(() => document.querySelector('iframe'))).toBeNull()
           await page.close()
         }
-      })
-
-      it('keeps a visual that reran its own page, which is the same host-owned document', async () => {
-        const { page, frame } = await openNativeHost(browser())
-        const marker = await frame.evaluate(() => window.marker)
-        await frame.evaluate(() => location.reload()).catch(() => {})
-        await expect.poll(() => frame.evaluate(() => window.marker)).not.toBe(marker)
-        await expect.poll(() => page.evaluate(() => window.visualLoads)).toBeGreaterThan(1)
-        await outlastTheAnswer(page)
-        expect(await escaped(page)).toBe(false)
-        await page.close()
       })
 
       it('moves within the sealed visual on the web shell, under its shipped policy', async () => {

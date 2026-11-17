@@ -2,7 +2,7 @@ import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import * as Slot from 'radix-ui/slot'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const badgeVariants = cva(
   'inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3',
@@ -26,6 +26,9 @@ const badgeVariants = cva(
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:
           'h-4 border-current/30 px-1.5 py-0 align-[1px] text-3xs font-semibold tracking-wider uppercase',
+        /** A caution next to a name, such as a community plugin asking for trust. */
+        warning:
+          'border-status-warning-border bg-status-warning-background text-status-warning-text',
         /** A skill or file sitting inline in the chat message box, ringed while selected. */
         promptPill:
           'max-w-full border-border bg-secondary px-1.5 py-0 align-baseline text-muted-foreground data-[selected=true]:ring-1 data-[selected=true]:ring-ring'

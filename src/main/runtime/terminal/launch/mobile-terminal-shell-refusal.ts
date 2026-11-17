@@ -3,7 +3,7 @@ import {
   type LaunchScopeRuntimeStore
 } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 /** Throws before any surface exists when this host cannot run the requested shell. */
 export function assertMobileTerminalShellSupported(

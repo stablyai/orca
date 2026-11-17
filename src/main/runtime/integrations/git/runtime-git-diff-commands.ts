@@ -3,10 +3,11 @@ import type {
   GitCommitCompareResult,
   GitDiffResult
 } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitBlameResult } from '../../../../shared/git/blame/git-blame-types'
 import { assertGitDiffWithinTransportBudget } from '../../../../shared/git/diff/git-diff-transport-budget'
-import { getBranchDiff } from '../../../git/source-control/branch-diff'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
-import { normalizeRuntimeRelativePath } from '../../runtime-relative-paths'
+import { getBranchDiff } from '../../../git/source-control/comparisons/branch-diff'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
+import { normalizeRuntimeRelativePath } from '../../files/paths/runtime-relative-paths'
 import {
   localGitOptionsForTarget,
   normalizeRuntimeGitRelativePath,
@@ -131,5 +132,18 @@ export class RuntimeGitDiffCommands {
   ): Promise<string | null> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).getRemoteCommitUrl(target.worktree.path, sha)
+  }
+
+  async getRuntimeGitBlame(
+    worktreeSelector: string,
+    filePath: string,
+    knownHeadOid?: string
+  ): Promise<GitBlameResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    return requireRuntimeGitProvider(target).getBlame(
+      target.worktree.path,
+      normalizeRuntimeGitRelativePath(filePath),
+      knownHeadOid
+    )
   }
 }

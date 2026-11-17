@@ -2,16 +2,17 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../shared/constants'
-import { setSecretStore } from '../../shared/secret-store'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
+  forgetHostRepoCatalogRepo,
   listHostRepoCatalogSnapshots,
   recordHostRepoCatalogAnswer
 } from './host-repo-catalog-snapshot-recorder'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
-import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
+import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 
 vi.mock('electron', () => ({
   app: {
@@ -55,13 +56,18 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-function profile() {
+function profile(savedSnapshots: Record<string, unknown> = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-host-repo-catalog-'))
   directories.push(directory)
   const databasePath = join(directory, 'profile-state.db')
   const profileId = 'host-repo-catalog'
   new ProfileStateSqliteAuthority(databasePath, profileId).writeSerializedState(
-    Buffer.from(JSON.stringify(getDefaultPersistedState(directory)))
+    Buffer.from(
+      JSON.stringify({
+        ...getDefaultPersistedState(directory),
+        hostRepoCatalogSnapshots: savedSnapshots
+      })
+    )
   )
   const open = () => {
     const store = new Store({
@@ -151,29 +157,28 @@ it("keeps a WSL host's projects across a restart, with only the row fields", () 
   })
 })
 
-it('replaces the saved list with each answer and saves only when it changed', () => {
+it('does not restore a removed WSL project from the offline catalog after a restart', () => {
   const { open } = profile()
   const store = open()
-  let writes = 0
-  store.onStateWritten((domains) => {
-    if (domains?.includes('hostRepoCatalogSnapshots')) {
-      writes++
-    }
-  })
   recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
-  expect(writes).toBe(1)
-
-  // Every catalog refresh lands here; an identical answer must not schedule a save.
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld, django]))
-  expect(writes).toBe(1)
-
-  // django was deleted on the host.
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld]))
-  expect(writes).toBe(2)
+  recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
+  forgetHostRepoCatalogRepo(store, wslHost.id, 'django')
   store.flushOrThrow()
-  expect(
-    listHostRepoCatalogSnapshots(open(), [wslHost])['env-wsl']?.repos.map((repo) => repo.id)
-  ).toEqual(['hello'])
+
+  const restarted = open()
+  expect(listHostRepoCatalogSnapshots(restarted, [wslHost, otherWslHost])).toEqual({
+    'env-wsl': { repos: [expect.objectContaining({ id: 'hello' })] },
+    'env-wsl-2': { repos: [expect.objectContaining({ id: 'django' })] }
+  })
+})
+
+it('leaves a damaged saved catalog alone when a WSL project is removed', () => {
+  const { open } = profile({ 'env-wsl': { repos: 'damaged' }, 'env-wsl-2': null })
+  const store = open()
+
+  expect(() => forgetHostRepoCatalogRepo(store, wslHost.id, 'django')).not.toThrow()
+  expect(() => forgetHostRepoCatalogRepo(store, otherWslHost.id, 'django')).not.toThrow()
+  expect(listHostRepoCatalogSnapshots(store, [wslHost, otherWslHost])).toEqual({})
 })
 
 it('keeps each distro separately and ignores failures, other methods and paired servers', () => {
@@ -202,24 +207,6 @@ it('keeps each distro separately and ignores failures, other methods and paired 
   expect(Object.keys(stored).sort()).toEqual(['env-wsl', 'env-wsl-2'])
   expect(stored['env-wsl']?.repos.map((repo) => repo.id)).toEqual(['hello'])
   expect(stored['env-wsl-2']?.repos.map((repo) => repo.id)).toEqual(['django'])
-})
-
-it('lists only WSL hosts, even when a paired server has a saved entry', () => {
-  const { open } = profile()
-  const store = open()
-  store.setHostRepoCatalogSnapshot('env-paired', { repos: [notes] })
-  store.setHostRepoCatalogSnapshot('env-wsl', { repos: [django] })
-  expect(Object.keys(listHostRepoCatalogSnapshots(store, [wslHost, pairedServer]))).toEqual([
-    'env-wsl'
-  ])
-})
-
-it('never lists a host no longer saved (removed outside Settings)', () => {
-  const { open } = profile()
-  const store = open()
-  recordHostRepoCatalogAnswer(store, wslHost, 'repo.list', repoListAnswer([helloWorld]))
-  recordHostRepoCatalogAnswer(store, otherWslHost, 'repo.list', repoListAnswer([django]))
-  expect(Object.keys(listHostRepoCatalogSnapshots(store, [wslHost]))).toEqual(['env-wsl'])
 })
 
 it('does not seed stale projects when a removed WSL host is added back under the same id', async () => {

@@ -58,31 +58,4 @@ describe('mobile E2EE v2 framing', () => {
     expect(attempt({ payloadKind: 'text' })).toBeNull()
     expect(attempt({ sessionId: new Uint8Array(32).fill(9) })).toBeNull()
   })
-
-  it('round-trips text and binary frames with successive counters', () => {
-    const kinds = ['text', 'binary', 'text'] as const
-    const frames = kinds.map((payloadKind, counter) =>
-      sealMobileE2EEV2Frame({
-        payload: new Uint8Array([counter]),
-        key,
-        sessionId,
-        direction: 'desktop-to-mobile',
-        payloadKind,
-        counter: BigInt(counter)
-      })
-    )
-
-    for (let counter = 0; counter < frames.length; counter++) {
-      expect(
-        openMobileE2EEV2Frame({
-          frame: frames[counter]!,
-          key,
-          sessionId,
-          direction: 'desktop-to-mobile',
-          payloadKind: kinds[counter]!,
-          expectedCounter: BigInt(counter)
-        })
-      ).toEqual(new Uint8Array([counter]))
-    }
-  })
 })

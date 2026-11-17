@@ -1,7 +1,7 @@
 import {
   type SpawnRequestFacts,
   TERMINAL_SPAWN_REFUSED_MESSAGE
-} from '../../../shared/host-spawn-admission'
+} from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { TERMINAL_HOST_CAP_HINT } from '../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
 import type { LegacyRestoreDetails, LegacyRestoreRecords } from './legacy-restore-records'
 import type { TerminalSpawnLease } from './terminal-spawn-gate'

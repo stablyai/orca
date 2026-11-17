@@ -1,3 +1,4 @@
+import { useId, useState } from 'react'
 import { SourceControlTextActionAgentPicker } from './text-actions/SourceControlTextActionAgentPicker'
 import type { SourceControlAiModelEdits } from '../../../../../shared/source-control/ai/settings/source-control-ai-action-model-edits'
 import type {
@@ -12,7 +13,7 @@ import {
 import { canonicalSourceControlActionSelection } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { ActionArgumentChoices } from '../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { CustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { isCustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -35,6 +36,7 @@ import {
   getSourceControlAgentArgsPlaceholder
 } from './source-control-action-recipe-options'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SourceControlActionOptionField } from '../../agent/launch-settings/AgentChoiceOptionField'
 
 const DEFAULT_AGENT_VALUE = '__default_agent__'
@@ -92,9 +94,9 @@ function resolveAgentArgsPlaceholderAgent(
   return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
 }
 
-function getActionLabel(actionId: AiActionId): string {
+function getActionLabel(actionId: AiActionId, t: Translate = translate): string {
   return actionId === 'conversationName'
-    ? translate('settings.chat.names.recipe', 'Chat name')
+    ? t('settings.chat.names.recipe', 'Chat name')
     : SOURCE_CONTROL_ACTION_LABELS[actionId]
 }
 
@@ -124,8 +126,12 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
   onDiscard,
   onSave
 }: SourceControlActionRecipeRowProps<ActionId>): React.JSX.Element {
+  const t = useTranslate()
+  const fieldIdPrefix = useId()
   const draftScope = useAgentPickerDraftScope(setupDiscardSignal)
   const isLaunchAction = !AI_TEXT_ACTION_ID_SET.has(actionId)
+  // The picker's Permissions and Arguments need the card's full width, under its header row.
+  const [launchFields, setLaunchFields] = useState<HTMLDivElement | null>(null)
   const templateDirty =
     hasUnsavedChanges ?? JSON.stringify(draftValue) !== JSON.stringify(baseValue)
   const agentArgsPlaceholder =
@@ -133,20 +139,21 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
     getSourceControlAgentArgsPlaceholder(
       resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
     )
-  const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
+  const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent, t)
   const agentSupportText =
-    (!selectedAgent && defaultAgentSupportText) || getSourceControlActionAgentSupportText(actionId)
+    (!selectedAgent && defaultAgentSupportText) ||
+    getSourceControlActionAgentSupportText(actionId, t)
 
   return (
     <div className="rounded-md border border-border px-3 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
-          <p className="text-xs font-medium text-foreground">{getActionLabel(actionId)}</p>
+          <p className="text-xs font-medium text-foreground">{getActionLabel(actionId, t)}</p>
           <p className="text-[11px] text-muted-foreground">{getActionDescriptions()[actionId]}</p>
           {actionId === 'commitMessage' ? (
             // The global Commit message model is also the other text actions' fallback.
             <p className="text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.source.control.action.recipe.options.commitMessageSharedModel',
                 'Pull request details, Branch name and Chat name can also use this model when they don’t pick their own; their “Same as default” option shows which model they use.'
               )}
@@ -157,6 +164,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
           {isLaunchAction ? (
             <SourceControlActionAgentPicker
               draftScope={draftScope}
+              launchDefaultsContainer={launchFields}
               agent={selectedAgent && !isCustomAgentId(selectedAgent) ? selectedAgent : null}
               surface={surface}
               disabled={isSavingTemplate}
@@ -206,11 +214,14 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         </div>
       </div>
       <div className="mt-3 grid min-w-0 grid-cols-1 items-start gap-3">
+        {isLaunchAction ? <div ref={setLaunchFields} className="min-w-0 empty:hidden" /> : null}
         {!isLaunchAction ? (
           <SourceControlActionOptionField
-            label={translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+            label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+            controlId={`${fieldIdPrefix}-arguments`}
           >
             <Input
+              id={`${fieldIdPrefix}-arguments`}
               value={draftValue.agentArgs ?? ''}
               spellCheck={false}
               placeholder={agentArgsPlaceholder}
@@ -221,13 +232,14 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
           </SourceControlActionOptionField>
         ) : null}
         <div className="min-w-0 space-y-2">
-          <Label variant="settings">
-            {translate(
+          <Label variant="settings" htmlFor={`${fieldIdPrefix}-command-template`}>
+            {t(
               'auto.components.settings.SourceControlAiActionRecipeDefaults.fb09da4345',
               'Command template'
             )}
           </Label>
           <textarea
+            id={`${fieldIdPrefix}-command-template`}
             value={draftValue.commandInputTemplate}
             rows={3}
             spellCheck={false}
@@ -245,11 +257,11 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground">
             {templateDirty
-              ? translate(
+              ? t(
                   'auto.components.settings.SourceControlAiActionRecipeDefaults.817128d94e',
                   'Unsaved changes'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.SourceControlAiActionRecipeDefaults.9d3cc627f8',
                   'Saved'
                 )}
@@ -266,7 +278,7 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
                 }}
                 disabled={isSavingTemplate}
               >
-                {translate(
+                {t(
                   'auto.components.settings.SourceControlAiActionRecipeDefaults.b3914ecbbc',
                   'Discard'
                 )}
@@ -280,11 +292,11 @@ export function SourceControlActionRecipeRow<ActionId extends AiActionId>({
               disabled={!templateDirty || isSavingTemplate}
             >
               {isSavingTemplate
-                ? translate(
+                ? t(
                     'auto.components.settings.SourceControlAiActionRecipeDefaults.4f549a5fa8',
                     'Saving...'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.SourceControlAiActionRecipeDefaults.d18d665e12',
                     'Save'
                   )}

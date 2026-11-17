@@ -1,10 +1,14 @@
-import { reserveNotificationCooldown } from '../../../shared/notification-burst-cooldown'
+import { reserveNotificationCooldown } from '../../../shared/notifications/notification-burst-cooldown'
 // Send background push after socket fan-out without making sockets wait or fail on gateway results.
-import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
-import { allowsMobilePushDelivery, mobilePushAlertContent } from '../../../shared/mobile-push-alert'
-import type { MobileNotificationEvent } from '../runtime-mobile-notification-controller'
+import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
+import {
+  allowsMobilePushDelivery,
+  mobilePushAlertContent
+} from '../../../shared/notifications/mobile-push-alert'
+import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
+import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
 
 const PUSH_RETRY_DELAY_MS = 2_000
 // Split requests at the gateway's per-send limit so extra paired phones still receive notifications.
@@ -18,6 +22,7 @@ export type PushDispatcherRegistry = {
 type PushDispatcherOptions = {
   client: PushGatewayClient
   registry: PushDispatcherRegistry
+  deliveryMode?: MobilePushDeliveryMode
   /** Test seam: lets a suite drive the single retry without real time. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
 }
@@ -30,11 +35,13 @@ export class PushDispatcher {
   private stopped = false
   private readonly client: PushGatewayClient
   private readonly registry: PushDispatcherRegistry
+  private readonly deliveryMode: MobilePushDeliveryMode
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
 
   constructor(options: PushDispatcherOptions) {
     this.client = options.client
     this.registry = options.registry
+    this.deliveryMode = options.deliveryMode ?? 'full'
     this.scheduleRetry =
       options.scheduleRetry ??
       ((run, delayMs) => {
@@ -53,7 +60,7 @@ export class PushDispatcher {
   }
 
   enqueue(event: MobileNotificationEvent): void {
-    if (this.stopped) {
+    if (this.stopped || this.deliveryMode === 'disabled') {
       return
     }
     try {

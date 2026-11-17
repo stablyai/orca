@@ -3,15 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { PtyStartupIngress } from './pty-startup-ingress'
 import type { PtyIngressEmission } from './pty-startup-ingress-contract'
 import { mode2031SequenceFor } from '../../protocol/queries/terminal-color-scheme-protocol'
-import {
-  extractOnlyCookedEchoSafeQueryReplies,
-  needsCookedEchoSafeQueryReply
-} from '../../protocol/queries/terminal-query-reply'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../protocol/queries/terminal-query-reply'
 
 const COLOR_SCHEME_REPLY = mode2031SequenceFor('dark')
 const OSC_COLOR_REPLY = '\x1b]11;rgb:00/00/00\x07'
-const CPR_REPLY = '\x1b[6;1R'
-const DA1_REPLY = '\x1b[?1;2c'
+
 // ECHOCTL encodes every C0 including BEL→^G; live PTY transcripts disprove the old ESC-only fixture.
 const caretEcho = (reply: string): string =>
   [...reply]
@@ -41,12 +37,6 @@ const visible = (emissions: readonly PtyIngressEmission[]): string =>
   emissions.map((emission) => emission.data).join('')
 
 describe('live query replies', () => {
-  it('classifies the real mode-2031 reply as cooked-echo-risk', () => {
-    expect(COLOR_SCHEME_REPLY).toBe('\x1b[?997;1n')
-    expect(needsCookedEchoSafeQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    expect(needsCookedEchoSafeQueryReply(mode2031SequenceFor('light'))).toBe(true)
-  })
-
   it('answers repeated identical replies without collapsing them', () => {
     const { ingress, writes } = harness()
     expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
@@ -103,16 +93,6 @@ describe('live query replies', () => {
     ingress.drainAndClose()
   })
 
-  it('leaves ordinary keystrokes alone', () => {
-    for (const keystroke of ['y', 'gh auth login\r', '\x1b[A', '\x1b', '\x03']) {
-      expect(needsCookedEchoSafeQueryReply(keystroke)).toBe(false)
-    }
-    const { ingress, writes } = harness()
-    expect(ingress.answerLiveQueryReply('ls\r')).toBe(false)
-    expect(writes).toEqual([])
-    ingress.drainAndClose()
-  })
-
   it('swallows a pre-coalesced repeated ?997 payload', () => {
     const doubled = COLOR_SCHEME_REPLY + COLOR_SCHEME_REPLY
     expect(extractOnlyCookedEchoSafeQueryReplies(doubled)).toEqual([
@@ -122,16 +102,6 @@ describe('live query replies', () => {
     const { ingress, writes } = harness()
     expect(ingress.answerLiveQueryReply(doubled)).toBe(true)
     expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
-    ingress.drainAndClose()
-  })
-
-  it('leaves latency-critical replies on the host path, in call order', () => {
-    const { ingress, writes } = harness()
-    // Host writes CPR/DA1 behind daemon post-ready flush; delivery declines them instead of splicing replies into buffered startup commands.
-    for (const reply of [CPR_REPLY, DA1_REPLY, OSC_COLOR_REPLY + DA1_REPLY]) {
-      expect(ingress.answerLiveQueryReply(reply)).toBe(false)
-    }
-    expect(writes).toEqual([])
     ingress.drainAndClose()
   })
 

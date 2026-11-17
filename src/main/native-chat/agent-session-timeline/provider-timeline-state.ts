@@ -1,13 +1,11 @@
-// FIFO admission tracks this producer’s writes; read other writers’ facts by journal key, never copy them.
+// FIFO admission tracks this producer’s writes; the writer decides against other writers’ facts.
 
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import type { ProviderTimelineRowId, ProviderTimelineTurnRef } from './provider-timeline-rows'
+import type { ProviderTimelineTurnRef } from './provider-timeline-rows'
 
 /** Bound duplicate-close memory; older rows defer to the journal. */
 const MAX_CLOSED_ITEMS = 512
@@ -32,9 +30,11 @@ export type ProviderTimelinePendingInput = {
 
 export type ProviderTimelineOpenItem = {
   kind: 'item' | 'request'
-  /** Request rows are chosen later by their queued write. */
-  row: ProviderTimelineRowId | null
+  /** The provider's request ID; the writer chooses its row. */
+  request?: string
   turnItemId: string | null
+  /** Requests whose live exchange settles them, not their turn's end. */
+  outlivesTurn?: true
 }
 
 export class ProviderTimelineState {
@@ -64,17 +64,6 @@ export class ProviderTimelineState {
         this.serial = taken
       }
     }
-  }
-
-  /** Read any writer’s settlement; queued writes without rows remain open. */
-  settledInJournal(key: string, journal: StructuredAgentSessionTransitionJournal): boolean {
-    const entry = this.items.get(key)
-    if (!entry || !entry.row) {
-      return false
-    }
-    const body = journal.itemBody(entry.row.itemId)
-    // Request-open may have skipped a turn already ended.
-    return body === null ? entry.kind === 'request' : !requiresTerminalSettlement(body)
   }
 
   /** Evict oldest pending sends at the bound; later turns then use provider-owned openers. */
@@ -119,7 +108,8 @@ export class ProviderTimelineState {
     if (this.stopped?.itemId === turn.itemId) {
       this.stopped = null
     }
-    this.forget(turn, () => true)
+    // Kept requests leave by their own answer or withdrawal, so the kept set stays live-sized.
+    this.forget(turn, (entry) => !entry.outlivesTurn)
     for (const [key, turnItemId] of this.closedItems) {
       if (turnItemId === turn.itemId) {
         this.closedItems.delete(key)
@@ -134,7 +124,18 @@ export class ProviderTimelineState {
       this.latest = turn
       this.stopped = turn
     }
-    this.forget(turn, (entry) => entry.kind === 'request')
+    this.forget(turn, (entry) => entry.kind === 'request' && !entry.outlivesTurn)
+  }
+
+  /** Requests a turn's end must leave pending. */
+  liveRequests(turnItemId: string): string[] {
+    const requests: string[] = []
+    for (const entry of this.items.values()) {
+      if (entry.outlivesTurn && entry.request !== undefined && entry.turnItemId === turnItemId) {
+        requests.push(entry.request)
+      }
+    }
+    return requests
   }
 
   endSession(): void {

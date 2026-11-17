@@ -3,20 +3,27 @@
  * moves; this only names rows, counts what they hold, and maps blockers back to their project.
  */
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   isWslHostRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../terminal-pane/terminal-layout-leaf-ids'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import '../terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { wslHostMovableDistroOfPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   WslMoveBlocker,
   WslMoveRowRef
@@ -40,18 +47,12 @@ export type WslMoveCounts = {
   chats: number
 }
 
-// Rule D7: a repo on a Windows drive reached through the distro stays a Windows project.
-const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z](\/|$)/i
-
 /** The distro a local folder lives in when it could move to that distro's host; else null. */
-export function wslMoveDistroOfPath(path: string): string | null {
-  const parsed = parseWslUncPath(path)
-  return parsed && !WINDOWS_DRIVE_MOUNT.test(parsed.linuxPath) ? parsed.distro : null
-}
+export const wslMoveDistroOfPath = wslHostMovableDistroOfPath
 
 /** The added WSL host of a distro, matched as WSL matches names: case-insensitively. */
 export function findWslHostForDistro(
-  environments: readonly PublicKnownRuntimeEnvironment[],
+  environments: readonly Pick<PublicKnownRuntimeEnvironment, 'name' | 'orcadDeployment'>[],
   distro: string
 ): { distro: string; name: string } | null {
   const wanted = distro.toLowerCase()
@@ -136,7 +137,7 @@ export function wslMoveCounts(
 function terminalPaneCount(catalog: WslMoveCatalog, tab: Pick<Tab, 'id' | 'entityId'>): number {
   const layout =
     catalog.terminalLayoutsByTabId?.[tab.entityId] ?? catalog.terminalLayoutsByTabId?.[tab.id]
-  return Math.max(1, collectLeafIdsInOrder(layout?.root).length)
+  return Math.max(1, collectLayoutLeafIdsInOrder(layout?.root).length)
 }
 
 function projectOfWorkspaceKey(key: string): WslMoveRowRef {
@@ -189,17 +190,41 @@ export function wslMoveCatalogCandidates(
     wslMoveDistroOfPath(path)?.toLowerCase() === distro.toLowerCase()
   return {
     repoIds: catalog.repos
-      .filter(
-        (repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID && inDistro(repo.path)
-      )
+      .filter((repo) => isLocalRepo(repo) && inDistro(repo.path))
       .map((repo) => repo.id),
     folderWorkspaceIds: catalog.folders
-      .filter(
-        (folder) =>
-          (folder.executionHostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
-          !folder.connectionId &&
-          inDistro(folder.folderPath)
-      )
+      .filter((folder) => isLocalFolder(folder) && inDistro(folder.folderPath))
       .map((folder) => folder.id)
   }
+}
+
+/** The local project holding a workspace, and the distro whose host it could move to. */
+export function wslMoveProjectOfWorkspace(
+  catalog: {
+    repos: readonly Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'>[]
+    folders: readonly Pick<
+      FolderWorkspace,
+      'id' | 'folderPath' | 'connectionId' | 'executionHostId'
+    >[]
+  },
+  workspaceKey: string
+): { ref: WslMoveRowRef; distro: string } | null {
+  const ref = projectOfWorkspaceKey(workspaceKey)
+  const path =
+    ref.kind === 'repo'
+      ? catalog.repos.find((repo) => repo.id === ref.id && isLocalRepo(repo))?.path
+      : catalog.folders.find((folder) => folder.id === ref.id && isLocalFolder(folder))?.folderPath
+  const distro = path ? wslMoveDistroOfPath(path) : null
+  return distro ? { ref, distro } : null
+}
+
+function isLocalRepo(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): boolean {
+  return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+}
+
+function isLocalFolder(folder: Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>): boolean {
+  return (
+    (folder.executionHostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
+    !folder.connectionId
+  )
 }

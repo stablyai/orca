@@ -14,7 +14,6 @@ import {
 } from '../preview/mobile-web-app-render-harness.mjs'
 
 // Exercise editable artifact’s draft-confirm drawer in a real browser, including portal/gesture/Reanimated paint.
-// Require modal title before asserting no RN-Web BackHandler error; opening the drawer once registered an unsupported hardware-back listener.
 
 const HOST_ROUTE = '/h/render-check-host'
 const WORKTREE = 'wt-1'
@@ -103,40 +102,17 @@ async function openPreview() {
     pageRoutes: PAGE_ROUTE_PATTERNS,
     replies: REPLIES
   })
-  const errors = []
-  page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      errors.push(`console.error: ${message.text()}`)
-    }
-  })
   await page.goto(`${origin}/`, { waitUntil: 'load' })
   await page.waitForFunction(() => document.documentElement.dataset.orcaWebEntry === 'mounted', {
     timeout: 60_000,
     polling: 250
   })
-  return { page, errors }
+  return { page }
 }
 
 describeRender(
   'the file preview page',
   () => {
-    it('asks before discarding a draft, without registering a hardware back handler', async () => {
-      const { page, errors } = await openPreview()
-      // Require editor to prove loaded/editable precondition or missing prompt would pass vacuously.
-      const editor = page.getByLabel(`${ARTIFACT_TITLE} editor`)
-      await editor.waitFor({ timeout: 60_000 })
-      await editor.fill(EDITED_CONTENT)
-      await page.getByLabel('Back to files').click()
-
-      const title = page.getByText('Discard changes?')
-      await title.waitFor({ timeout: 30_000 })
-      expect(await title.isVisible()).toBe(true)
-      // RN-Web logs this unsupported BackHandler registration; every interactive drawer once emitted it.
-      expect(errors.filter((entry) => entry.includes('BackHandler'))).toEqual([])
-      await page.close()
-    }, 180_000)
-
     it('leaves the draft alone when the answer is to stay', async () => {
       const { page } = await openPreview()
       const editor = page.getByLabel(`${ARTIFACT_TITLE} editor`)

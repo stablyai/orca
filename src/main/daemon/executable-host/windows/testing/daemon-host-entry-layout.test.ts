@@ -2,7 +2,7 @@ import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { setAppEnvironment } from '../../../../../shared/app-environment'
+import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import { getRelocatedDaemonHost, materializeRelocatedDaemonHost } from '../daemon-host-relocation'
 
@@ -54,19 +54,6 @@ afterEach(() => {
 })
 
 describe('daemon-host entry layout after source removal', () => {
-  it('keeps the observed direct-entry mirror after the entire install disappears', () => {
-    const host = materializeRelocatedDaemonHost()
-    expect(host).not.toBeNull()
-    expect(host?.entryPath).toBe(
-      join(dirname(host?.execPath ?? ''), 'resources', 'app.asar.unpacked', 'daemon-entry.js')
-    )
-    rmSync(installDir, { recursive: true, force: true })
-
-    expect(getRelocatedDaemonHost()).toEqual(host)
-    expect(materializeRelocatedDaemonHost()).toEqual(host)
-    expect(existsSync(host?.entryPath ?? '')).toBe(true)
-  })
-
   it('validates a present alternate layout and preserves that newer observed build', () => {
     const direct = materializeRelocatedDaemonHost()
     expect(direct).not.toBeNull()

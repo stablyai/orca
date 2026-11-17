@@ -1,0 +1,10 @@
+{
+  "capturedAt": "2026-11-16T20:05:00.000Z",
+  "platform": "darwin",
+  "command": ["muse", "--provider", "echo", "--trust-workspace"],
+  "env": { "MUSE_EXPERIMENTAL_VOICE": "0" },
+  "cols": 80,
+  "rows": 24,
+  "note": "Muse 1.4.20 holding a 3,300-char bracketed paste before Enter, voice off as on Windows (#43126)",
+  "exitCode": null
+}

@@ -4,8 +4,8 @@ import {
   groupPRComments,
   type PRCommentGroup
 } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
-import { isPRCommentGroupQueueableForAI } from '@/lib/pr-comment-action-state'
-import type { PRComment } from '../../../../../../shared/github/comment-types'
+import { isPRCommentGroupQueueableForAI } from '@/lib/source-control/review/comments/pr-comment-action-state'
+import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 
 export type PRCommentsListSelection = {
   isSelectingForAI: boolean

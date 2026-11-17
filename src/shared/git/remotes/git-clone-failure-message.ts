@@ -98,7 +98,7 @@ function formatGitCloneFailureLine(line: string, options: { clonePath?: string |
   if (destinationMatch || /repository exists/i.test(line)) {
     const destination = options.clonePath?.trim() || destinationMatch?.[1] || null
     const target = destination ? `: ${destination}` : ''
-    return `Destination already exists and is not empty${target}. Choose a different parent folder, delete the existing folder, or add the existing repository instead.`
+    return `Destination already exists and is not empty${target}. Clone into a different folder name, delete the existing folder, or add the existing repository instead.`
   }
   return line
 }

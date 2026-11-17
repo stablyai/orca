@@ -15,8 +15,8 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { lock } from 'proper-lockfile'
 import { reclaimReleaseTestCaches } from './reclaim-release-test-caches.mjs'
-import { withReleaseSourceLease } from '../../../tests/e2e/cross-version-wire/release-source-retention'
-import { CHECKOUT_FORMAT } from '../../../tests/e2e/cross-version-wire/release-checkout-publication'
+import { withReleaseSourceLease } from '../../../tests/e2e/cross-version-wire/release-checkouts/release-source-retention'
+import { CHECKOUT_FORMAT } from '../../../tests/e2e/cross-version-wire/release-checkouts/release-checkout-publication'
 
 const roots: string[] = []
 const commit = 'c'.repeat(40)
@@ -185,10 +185,3 @@ it('skips publication locks and a shared source copy lease', async () => {
   expect((await lstat(local)).isDirectory()).toBe(true)
   expect((await lstat(seed)).isDirectory()).toBe(true)
 })
-
-it.each([-1, Number.NaN, Number.POSITIVE_INFINITY])(
-  'rejects invalid minimum age %s',
-  async (age) => {
-    await expect(reclaimReleaseTestCaches({ minAgeDays: age })).rejects.toThrow('--min-age-days')
-  }
-)

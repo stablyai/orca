@@ -6,7 +6,7 @@ import type {
   BrowserPasswordGuestFieldFocused,
   BrowserPasswordGuestRect,
   BrowserPasswordGuestSubmitted
-} from '../../shared/browser-passwords-types'
+} from '../../shared/browser/passwords/browser-passwords-types'
 
 // Why every guest payload is re-checked here: the preload runs in a page process that page code
 // may have compromised, so main treats its messages as untrusted input.

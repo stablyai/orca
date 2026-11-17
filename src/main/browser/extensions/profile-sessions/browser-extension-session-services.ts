@@ -1,7 +1,7 @@
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { webContents } from 'electron'
 import { parseChromeExtensionUrl } from '../../../../shared/browser/extensions/browser-extension-url'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { observeBrowserExtensionCookieChanges } from '../api/cookies'
 import { observeBrowserExtensionActionSession } from '../actions/browser-extension-action-registry'
 import { revokeBrowserExtensionActiveTabInSession } from '../permissions/browser-extension-active-tab'
@@ -18,11 +18,13 @@ import {
   whenBrowserExtensionDnrLoaded
 } from '../declarative-net-request/session/browser-extension-dnr-session'
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
+import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
+import { forgetSidePanelExtensionOptions } from '../side-panel/browser-extension-side-panel-options'
 import {
   installBrowserExtensionWebRequestForwarding,
   observeBrowserExtensionWebRequests,
   stopObservingBrowserExtensionWebRequests
-} from '../browser-extension-web-request'
+} from '../requests/browser-extension-web-request-observer'
 
 // Why once: a session outlives the experimental setting being switched off and on again.
 const servedSessions = new WeakSet<Electron.Session>()
@@ -64,6 +66,9 @@ export function installBrowserExtensionSessionServices(): void {
         sess.extensions.on('extension-unloaded', (_event, extension) => {
           forgetBrowserExtensionContentScriptRestore(sess, extension.id)
           revokeBrowserExtensionActiveTabInSession(sess, extension.id)
+          // Why the attach-time id: deleting a profile forgets its session before unloading.
+          closeBrowserExtensionSidePanelsForExtension(profileId, extension.id)
+          forgetSidePanelExtensionOptions(profileId, extension.id)
         })
       }
     },

@@ -3,8 +3,8 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { isCustomAgentId } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { useAppStore } from '@/store/index'
 
 type ActionAgent = { status: 'pending' } | { status: 'ready'; agent: TuiAgent | null }

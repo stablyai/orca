@@ -3,8 +3,8 @@ import { useAppStore } from '@/store'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { widenSavedExecutionHostIds } from '../../../../../../shared/managed-orcad-execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
+import { widenSavedExecutionHostIds } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { useSidebarHostScopeOptions } from '../controls/use-sidebar-host-scope-options'
 
 /** Merged SSH rows represent two owner IDs; widen saved filters so selecting the row includes both. */

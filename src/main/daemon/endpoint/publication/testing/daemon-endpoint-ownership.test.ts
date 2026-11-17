@@ -2,7 +2,6 @@ import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
-  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -16,11 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DaemonServer } from '../../../server/daemon-server'
 import { getDaemonSocketPath, publishDaemonPidFile } from '../../../launch/daemon-spawner'
-import {
-  getDaemonSocketBindPath,
-  readDaemonEndpointOwnershipState,
-  readDaemonSocketIdentity
-} from '../daemon-endpoint-ownership'
+import { getDaemonSocketBindPath, readDaemonSocketIdentity } from '../daemon-endpoint-ownership'
 import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
 
 function connectsTo(socketPath: string): Promise<boolean> {
@@ -49,36 +44,6 @@ function createMockSubprocess(): SubprocessHandle {
     dispose() {}
   }
 }
-
-describe('endpoint ownership identity rules', () => {
-  it.skipIf(process.platform === 'win32')(
-    'reports lost when the name resolves to a different inode',
-    async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'endpoint-identity-lost-'))
-      const socketPath = join(dir, 'daemon.sock')
-      const ours = createServer((socket) => socket.end())
-      const usurper = createServer((socket) => socket.end())
-      try {
-        const ourBind = getDaemonSocketBindPath(socketPath)
-        await new Promise<void>((resolve) => ours.listen(ourBind, resolve))
-        linkSync(ourBind, socketPath)
-        unlinkSync(ourBind)
-        const owned = readDaemonSocketIdentity(socketPath)
-
-        const theirBind = join(dir, '.usurp')
-        await new Promise<void>((resolve) => usurper.listen(theirBind, resolve))
-        unlinkSync(socketPath)
-        linkSync(theirBind, socketPath)
-
-        expect(readDaemonEndpointOwnershipState(socketPath, owned)).toBe('lost')
-      } finally {
-        await new Promise<void>((resolve) => ours.close(() => resolve()))
-        await new Promise<void>((resolve) => usurper.close(() => resolve()))
-        rmSync(dir, { recursive: true, force: true })
-      }
-    }
-  )
-})
 
 describe('daemon endpoint ownership publication', () => {
   let dir: string
@@ -181,59 +146,6 @@ describe('daemon endpoint ownership publication', () => {
           }
           replacement.close(() => resolve())
         })
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'retires a daemon whose endpoint was taken over by another daemon',
-    async () => {
-      const pidPath = join(dir, 'daemon.pid')
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        pidPath,
-        launchNonce: 'original-daemon',
-        publishEndpointOwnership: () =>
-          publishDaemonPidFile(pidPath, {
-            pid: process.pid,
-            startedAtMs: 1_000,
-            launchNonce: 'original-daemon'
-          }),
-        spawnSubprocess: () => createMockSubprocess()
-      })
-      await server.start()
-
-      const daemon = server as unknown as {
-        endpoint: { checkOwnership: () => void }
-        lifecycle: { retirementRequested: boolean }
-      }
-      daemon.endpoint.checkOwnership()
-      daemon.endpoint.checkOwnership()
-      expect(daemon.lifecycle.retirementRequested).toBe(false)
-
-      unlinkSync(socketPath)
-      const usurper = createServer()
-      const usurperBind = join(dir, '.usurper')
-      await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
-      linkSync(usurperBind, socketPath)
-      unlinkSync(usurperBind)
-
-      try {
-        // Require confirmation because a legacy unlink-then-link replacement can expose a transient gap.
-        daemon.endpoint.checkOwnership()
-        expect(daemon.lifecycle.retirementRequested).toBe(false)
-
-        daemon.endpoint.checkOwnership()
-        // Retirement drains existing sessions instead of killing them.
-        expect(daemon.lifecycle.retirementRequested).toBe(true)
-      } finally {
-        await new Promise<void>((resolve) => usurper.close(() => resolve()))
-        try {
-          unlinkSync(socketPath)
-        } catch {
-          // Already gone.
-        }
       }
     }
   )

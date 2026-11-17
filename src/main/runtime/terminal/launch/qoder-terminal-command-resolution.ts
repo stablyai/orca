@@ -1,4 +1,4 @@
-import type { PreflightRuntimeContext } from '../../../ipc/preflight-runtime-target'
+import type { PreflightRuntimeContext } from '../../../ipc/preflight/preflight-runtime-target'
 import { detectAgentCommandsOnHost } from '../../../preflight/agent-command-detection'
 import {
   getTuiAgentDetectCommands,
@@ -8,7 +8,7 @@ import {
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './terminal-create-options'
 
 export async function resolveQoderTerminalCommand<
   T extends Pick<TerminalCreateOptions, 'launchAgent' | 'command' | 'launchConfig'>

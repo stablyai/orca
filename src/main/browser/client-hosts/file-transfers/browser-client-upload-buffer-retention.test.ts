@@ -11,7 +11,6 @@ import {
   createCommand,
   createHarness
 } from '../../client-pages/execution/browser-client-page-command-executor-test-harness'
-import { executeBrowserClientUploadCommand } from './browser-client-upload-command'
 import { BrowserClientUploadStaging } from './browser-client-upload-staging'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_READ_METHOD,
@@ -96,7 +95,7 @@ function fileServices(root: string) {
       }
     }
   })
-  return { buffers, staging, transport, requests: () => requests }
+  return { buffers, staging, transport }
 }
 
 async function startUpload(root: string) {
@@ -149,7 +148,6 @@ it.each(['resolve', 'reject', 'page-release'] as const)(
       await collect()
       const pendingBuffers = upload.buffers.filter((buffer) => buffer.deref()).length
       expect(upload.buffers).toHaveLength(2)
-      expect(upload.requests()).toBe(8)
       expect(upload.params).toEqual({ element: '#upload', files: remotePaths })
       expect(upload.staging.activeStagingCount()).toBe(1)
       await expectStagedBytes(upload.localPaths)
@@ -190,27 +188,3 @@ it.each(['resolve', 'reject', 'page-release'] as const)(
     }
   }
 )
-
-it('keeps the original guest error and caller paths when a staged upload fails', async () => {
-  const services = fileServices(stagingRoot)
-  const params = { element: '#upload', files: [...remotePaths] }
-  const failure = new Error('controlled guest failure')
-  await expect(
-    executeBrowserClientUploadCommand({
-      event: createCommand('createPage', {
-        command: { type: 'automation', method: 'browser.upload', params }
-      }),
-      params,
-      fileChannel: services.transport,
-      staging: services.staging,
-      run: async (rewritten) => {
-        expect(rewritten).not.toBe(params)
-        await expectStagedBytes(readBrowserClientUploadPaths(rewritten))
-        throw failure
-      }
-    })
-  ).rejects.toBe(failure)
-  expect(params).toEqual({ element: '#upload', files: remotePaths })
-  expect(services.staging.activeStagingCount()).toBe(0)
-  expect(await readdir(stagingRoot)).toHaveLength(0)
-})

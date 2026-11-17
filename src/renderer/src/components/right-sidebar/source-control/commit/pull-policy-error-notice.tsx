@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, Copy, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const PULL_POLICY_ERROR_PREFIX = 'Pull needs a Git pull policy for divergent branches.'
 
@@ -42,6 +42,7 @@ type PullPolicyRemoteActionNoticeProps = {
 export function PullPolicyRemoteActionNotice({
   id
 }: PullPolicyRemoteActionNoticeProps): React.JSX.Element {
+  const t = useTranslate()
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
 
   useEffect(() => {
@@ -73,17 +74,14 @@ export function PullPolicyRemoteActionNotice({
           <div className="min-w-0 space-y-1">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <span className="text-xs font-semibold text-foreground">
-                {translate(
-                  'auto.components.right.sidebar.pull.policy.notice.title',
-                  'Pull needs a policy'
-                )}
+                {t('auto.components.right.sidebar.pull.policy.notice.title', 'Pull needs a policy')}
               </span>
               <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-destructive">
-                {translate('auto.components.right.sidebar.pull.policy.notice.diverged', 'Diverged')}
+                {t('auto.components.right.sidebar.pull.policy.notice.diverged', 'Diverged')}
               </span>
             </div>
             <p className="text-[11px] leading-4 text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.pull.policy.notice.body',
                 'This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.'
               )}
@@ -93,8 +91,8 @@ export function PullPolicyRemoteActionNotice({
         <div className="space-y-1.5">
           {PULL_POLICY_OPTIONS.map((option) => {
             const copied = copiedCommand === option.command
-            const label = translate(option.labelKey, option.labelFallback)
-            const description = translate(option.descriptionKey, option.descriptionFallback)
+            const label = t(option.labelKey, option.labelFallback)
+            const description = t(option.descriptionKey, option.descriptionFallback)
             return (
               <div
                 key={option.command}
@@ -114,7 +112,7 @@ export function PullPolicyRemoteActionNotice({
                         variant="ghost"
                         size="icon-xs"
                         className="mt-0.5 shrink-0"
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.right.sidebar.pull.policy.notice.copyAria',
                           'Copy {{value0}} pull policy command',
                           { value0: label.toLowerCase() }
@@ -130,11 +128,8 @@ export function PullPolicyRemoteActionNotice({
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={4}>
                       {copied
-                        ? translate(
-                            'auto.components.right.sidebar.pull.policy.notice.copied',
-                            'Copied'
-                          )
-                        : translate(
+                        ? t('auto.components.right.sidebar.pull.policy.notice.copied', 'Copied')
+                        : t(
                             'auto.components.right.sidebar.pull.policy.notice.copyCommand',
                             'Copy command'
                           )}

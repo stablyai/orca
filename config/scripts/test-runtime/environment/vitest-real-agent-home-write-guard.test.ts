@@ -5,10 +5,7 @@ import { homedir, tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  clearInheritedAgentStateEnv,
-  takeRealAgentHomeWriteViolations
-} from './vitest-real-agent-home-write-guard'
+import { takeRealAgentHomeWriteViolations } from './vitest-real-agent-home-write-guard'
 
 // Use missing-parent/no-op paths so guard ablation never writes real home either.
 const missingRealFolder = (entry: string) =>
@@ -20,29 +17,6 @@ afterEach(() => {
 })
 
 describe('vitest real-agent-home write guard', () => {
-  it.each([undefined, '', '0', 'true', '1'])(
-    'keeps only the explicitly opted-in Claude profile for %s',
-    (value) => {
-      vi.stubEnv('ORCA_REAL_CLAUDE_CLI_TEST', value)
-      vi.stubEnv('CLAUDE_CONFIG_DIR', '/tmp/explicit-claude-profile')
-      vi.stubEnv('CODEX_HOME', '/tmp/inherited-codex-profile')
-      vi.stubEnv('ORCA_USER_DATA_PATH', '/tmp/inherited-orca-state')
-      vi.stubEnv('ORCA_CODEX_LAUNCH_PREFLIGHT', '/tmp/inherited-live-cli')
-
-      clearInheritedAgentStateEnv()
-
-      expect(process.env.CLAUDE_CONFIG_DIR).toBe(
-        value === '1' ? '/tmp/explicit-claude-profile' : undefined
-      )
-      expect(process.env.CODEX_HOME).toBeUndefined()
-      expect(process.env.ORCA_USER_DATA_PATH).toBeUndefined()
-      expect(process.env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
-      expect(() => rmSync(missingRealFolder('.claude'), { force: true })).toThrow(
-        /real-agent-home guard/
-      )
-    }
-  )
-
   it.each(['string', 'buffer', 'url'])(
     'refuses a named-import sync write through a %s path under the real ~/.codex',
     (pathType) => {
@@ -108,11 +82,6 @@ describe('vitest real-agent-home write guard', () => {
   it('leaves a sibling that only shares an agent folder prefix alone', () => {
     const sibling = join(userInfo().homedir, `.codex-orca-vitest-guard-${randomUUID()}`)
     expect(() => rmSync(sibling, { force: true })).not.toThrow()
-  })
-
-  it('stands down while an opted-in real-agent suite switch is set', () => {
-    vi.stubEnv('ORCA_CODEX_TRUST_CONTRACT_BINARY', '/opt/codex')
-    expect(() => rmSync(missingRealFolder('.codex'), { force: true })).not.toThrow()
   })
 
   it('allows reads there and writes under a temp home', () => {

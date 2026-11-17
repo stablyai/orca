@@ -1,7 +1,7 @@
 import type {
   CodexConfigSyncStallReason,
   CodexConfigSyncStatus
-} from '../../../../../../shared/codex-config-sync-types'
+} from '../../../../../../shared/agent-accounts/codex/codex-config-sync-types'
 
 /** Keep stall reasons machine-readable so warning copy is localized at the component. */
 export function getCodexConfigSyncWarning(

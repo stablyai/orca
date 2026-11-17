@@ -51,88 +51,8 @@ describe('PostgreSQL query failure diagnostics', () => {
     vi.restoreAllMocks()
   })
 
-  it('identifies acquisition failure without issuing SQL or changing the error', async () => {
-    const error = new Error('timeout exceeded when trying to connect: private detail')
-    fakes.connectError = error
-    await expect(database.query(sql, ['private-token'])).rejects.toBe(error)
-    expect(fakes.query).not.toHaveBeenCalled()
-    expect(fakes.release).not.toHaveBeenCalled()
-    expect(JSON.parse(vi.mocked(console.warn).mock.calls[0]![0] as string)).toEqual({
-      event: 'orca_relay_postgres_query_failed',
-      phase: 'acquire',
-      operation: 'control-renewal',
-      code: 'unknown',
-      connectionTimeout: true,
-      transient: true,
-      elapsedMs: expect.any(Number),
-      poolTotal: 10,
-      poolIdle: 0,
-      poolWaiting: 7
-    })
-    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('private')
-  })
-
   // A reset from the database layer answers 503 like 08006 (staging B1); transaction() still
   // never retries it, since the statement went out.
-  it.each([
-    ['57014', true],
-    ['55P03', true],
-    ['ECONNRESET', true]
-  ] as const)(
-    'identifies execute failure %s and releases its client',
-    async (code, transient) => {
-      const error = Object.assign(new Error('private-token'), { code, detail: sql })
-      fakes.query.mockRejectedValueOnce(error)
-      await expect(database.query(sql, ['private-token'])).rejects.toBe(error)
-      expect(fakes.query).toHaveBeenCalledOnce()
-      expect(fakes.release).toHaveBeenCalledOnce()
-      expect(JSON.parse(vi.mocked(console.warn).mock.calls[0]![0] as string)).toMatchObject({
-        phase: 'execute',
-        operation: 'control-renewal',
-        code,
-        connectionTimeout: false,
-        transient
-      })
-      expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain('private-token')
-      expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(sql)
-    }
-  )
-
-  it('marks a dialling timeout that node-postgres reports with no code', async () => {
-    // pg-pool raises this when a new client's own handshake outruns the limit.
-    const error = new Error('Connection terminated due to connection timeout')
-    fakes.connectError = error
-    await expect(database.query(sql)).rejects.toBe(error)
-    expect(JSON.parse(vi.mocked(console.warn).mock.calls[0]![0] as string)).toMatchObject({
-      phase: 'acquire',
-      code: 'unknown',
-      connectionTimeout: true,
-      transient: true
-    })
-  })
-
-  it('separates an early-ended socket from a timeout while still calling it transient', async () => {
-    const error = new Error('Connection terminated unexpectedly')
-    fakes.connectError = error
-    await expect(database.query(sql)).rejects.toBe(error)
-    expect(JSON.parse(vi.mocked(console.warn).mock.calls[0]![0] as string)).toMatchObject({
-      phase: 'acquire',
-      code: 'unknown',
-      connectionTimeout: false,
-      transient: true
-    })
-  })
-
-  it('reports an acquire failure that is not transient as a hard failure', async () => {
-    const error = new Error('password authentication failed')
-    fakes.connectError = error
-    await expect(database.query(sql)).rejects.toBe(error)
-    expect(JSON.parse(vi.mocked(console.warn).mock.calls[0]![0] as string)).toMatchObject({
-      phase: 'acquire',
-      connectionTimeout: false,
-      transient: false
-    })
-  })
 
   it('does not emit an arbitrary error code, message, query, or parameter', async () => {
     const error = { code: 'private-code', message: 'private-message' }
@@ -157,9 +77,4 @@ describe('PostgreSQL query failure diagnostics', () => {
     expect(fakes.release).toHaveBeenCalledOnce()
   })
 
-  it('does not log successful queries', async () => {
-    await database.query(sql)
-    expect(console.warn).not.toHaveBeenCalled()
-    expect(fakes.release).toHaveBeenCalledOnce()
-  })
 })

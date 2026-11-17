@@ -1,3 +1,5 @@
+import { readBrowserExtensionProfileGrants } from '../permissions/browser-extension-session-permissions'
+import { hasBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import { z } from 'zod'
 import {
   emitBrowserExtensionEvent,
@@ -11,7 +13,6 @@ import {
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
 import {
-  browserExtensionHostPatterns,
   containsBrowserExtensionPermissions,
   effectiveBrowserExtensionPermissions,
   planBrowserExtensionPermissionRemoval,
@@ -25,10 +26,8 @@ import { getBrowserExtensionProfileStateStore } from '../profile-storage/browser
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'
 import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
 import { getDnrSessionRuntime } from '../declarative-net-request/session/browser-extension-dnr-session'
-import { observeBrowserExtensionWebRequests } from '../browser-extension-web-request'
+import { observeBrowserExtensionWebRequests } from '../requests/browser-extension-web-request-observer'
 
-const USER_GESTURE_WINDOW_MS = 5_000
-const recentGestures = new WeakMap<AbortSignal, number>()
 const pendingRequests = new Set<string>()
 
 const permissionsSchema = z
@@ -38,51 +37,6 @@ const permissionsSchema = z
 
 function gestureKey(profileId: string, extensionId: string): string {
   return `${profileId}\n${extensionId}`
-}
-
-/**
- * Chrome lets permissions.request run only inside a user gesture. Orca records the gestures it
- * delivers to an extension (menu click, command, notification click, toolbar click).
- */
-export function noteBrowserExtensionUserGesture(
-  session: Electron.Session,
-  extensionId: string
-): void {
-  const state = getHostSessionState(session)
-  if (!state) {
-    return
-  }
-  const signal = getBrowserExtensionContextSignal(state, extensionId)
-  recentGestures.set(signal, Date.now())
-}
-
-export function hasBrowserExtensionUserGesture(caller: BrowserExtensionCaller): boolean {
-  if (caller.userGesture === true) {
-    return true
-  }
-  const state = getHostSessionState(caller.session)
-  if (!state) {
-    return false
-  }
-  const signal = getBrowserExtensionContextSignal(state, caller.extension.id)
-  const at = recentGestures.get(signal)
-  return at !== undefined && !signal.aborted && Date.now() - at <= USER_GESTURE_WINDOW_MS
-}
-
-function readGrants(profileId: string, extensionId: string) {
-  return getBrowserExtensionProfileStateStore().read(profileId, extensionId)
-}
-
-/** Manifest host patterns plus origins the user granted in this session's profile. */
-export function browserExtensionHostPatternsInSession(
-  extension: Electron.Extension,
-  session: Electron.Session
-): string[] {
-  const profileId = getBrowserExtensionProfileIdForSession(session)
-  const grants = profileId
-    ? readGrants(profileId, extension.id)
-    : { grantedPermissions: [], grantedOrigins: [] }
-  return browserExtensionHostPatterns(extension.manifest, grants)
 }
 
 function emitChange(
@@ -108,7 +62,7 @@ async function request(
   const { extension, browserProfileId } = caller
   const plan = planBrowserExtensionPermissionRequest(
     extension.manifest,
-    readGrants(browserProfileId, extension.id),
+    readBrowserExtensionProfileGrants(browserProfileId, extension.id),
     wanted
   )
   if (plan.kind === 'invalid') {
@@ -161,7 +115,7 @@ async function remove(
   const { extension, browserProfileId } = caller
   const plan = planBrowserExtensionPermissionRemoval(
     extension.manifest,
-    readGrants(browserProfileId, extension.id),
+    readBrowserExtensionProfileGrants(browserProfileId, extension.id),
     wanted
   )
   if (plan.kind === 'invalid') {
@@ -178,21 +132,23 @@ async function remove(
 export function registerPermissionsNamespace(): void {
   setBrowserExtensionGrantedPermissionsLookup((extension, session) => {
     const profileId = getBrowserExtensionProfileIdForSession(session)
-    return profileId ? readGrants(profileId, extension.id).grantedPermissions : []
+    return profileId
+      ? readBrowserExtensionProfileGrants(profileId, extension.id).grantedPermissions
+      : []
   })
   registerBrowserExtensionNamespace('permissions', {
     methods: {
       contains: defineBrowserExtensionMethod(z.tuple([permissionsSchema]), (caller, wanted) =>
         containsBrowserExtensionPermissions(
           caller.extension.manifest,
-          readGrants(caller.browserProfileId, caller.extension.id),
+          readBrowserExtensionProfileGrants(caller.browserProfileId, caller.extension.id),
           wanted
         )
       ),
       getAll: defineBrowserExtensionMethod(z.tuple([]), (caller) =>
         effectiveBrowserExtensionPermissions(
           caller.extension.manifest,
-          readGrants(caller.browserProfileId, caller.extension.id)
+          readBrowserExtensionProfileGrants(caller.browserProfileId, caller.extension.id)
         )
       ),
       request: defineBrowserExtensionMethod(z.tuple([permissionsSchema]), request),
