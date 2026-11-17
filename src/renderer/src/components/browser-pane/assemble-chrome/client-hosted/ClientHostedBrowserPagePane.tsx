@@ -146,7 +146,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   )
   const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
-  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, { current: pageBox.content })
+  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
 
   useLayoutEffect(() => {
     const viewport = pageBox.contentRef.current
