@@ -24,12 +24,12 @@ function browserClientPageCommandFailureCode(error: unknown, signal: AbortSignal
   if (error instanceof BrowserClientPageCommandError) {
     return error.message
   }
-  // The host's own refusal, e.g. an upload path it cannot read, goes back as the host sent it.
-  if (error instanceof RemoteRuntimeClientError) {
-    return error.code
+  if (signal.aborted) {
+    return 'browser_client_page_command_aborted'
   }
-  return signal.aborted
-    ? 'browser_client_page_command_aborted'
+  // The host's own refusal, e.g. an upload path it cannot read, goes back as the host sent it.
+  return error instanceof RemoteRuntimeClientError
+    ? error.code
     : 'browser_client_page_command_failed'
 }
 
@@ -42,7 +42,7 @@ export function browserClientPageCommandFailure(
   const detail =
     error instanceof BrowserClientPageCommandError
       ? error.detail
-      : error instanceof RemoteRuntimeClientError
+      : error instanceof RemoteRuntimeClientError && !signal.aborted
         ? error.message
         : undefined
   const errorMessage = detail ? truncateBrowserClientAutomationErrorMessage(detail) : undefined

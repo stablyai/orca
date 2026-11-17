@@ -37,7 +37,7 @@ export class RuntimeBrowserProfiles {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getRuntimeId' | 'getAuthoritativeWindow'
+      'getRuntimeId' | 'getAuthoritativeWindow' | 'getAvailableAuthoritativeWindow'
     > &
       BrowserClientPageOpeningHost,
     private readonly targets: Pick<

@@ -12,6 +12,7 @@ export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntime
     {
       getRuntimeId: () => executorRuntimeId,
       getAuthoritativeWindow: unavailable,
+      getAvailableAuthoritativeWindow: unavailable,
       getRuntimeBrowserPageRegistry: unavailable,
       getBrowserHostLeaseRegistry: unavailable,
       getBrowserHostRequestRegistry: unavailable,

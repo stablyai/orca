@@ -43,7 +43,13 @@ const LOGICAL_TAB_QUERIES = [
   'browserTabSwitch'
 ] as const
 
-export function orcadClientPageCommand<K extends 'browserTabCreate' | 'browserOpenUrlOnClient'>(
+export function orcadClientPageCommand<
+  K extends
+    | 'browserTabCreate'
+    | 'browserOpenUrlOnClient'
+    | 'browserTabProfileShow'
+    | 'browserTabProfileClone'
+>(
   host: RuntimeBrowserCommandHost,
   name: K,
   forward: Forward,
@@ -124,6 +130,12 @@ export function orcadClientPageCommand(
         : pages.listPages(workspaceId).find((page) => page.active)
       if (!source) {
         return forward(args)
+      }
+      if (workspaceId !== undefined && source.workspaceId !== workspaceId) {
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `Browser page ${source.browserPageId} was not found in this worktree`
+        )
       }
       const profile = orcadProfileLabel(orcadBrowserProfileId(params.profileId))
       const created = await cloneBrowserClientPage(host, source, profile.id)

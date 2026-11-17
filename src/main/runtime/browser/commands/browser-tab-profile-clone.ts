@@ -5,11 +5,17 @@ import type { BrowserClientPageOpeningHost } from '../client-pages/browser-clien
 import { cloneBrowserClientPage } from '../client-pages/browser-client-page-clone'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
 import type { RuntimeBrowserTabCreation } from '../tabs/browser-tab-creation'
-import type { BrowserCommandTargetParams } from './browser-command-contracts'
+import { createBrowserTabInRenderer } from '../tabs/browser-tab-renderer-create'
+import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
+import type {
+  BrowserCommandTargetParams,
+  RuntimeBrowserCommandHost
+} from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 
 export type BrowserTabProfileCloneDependencies = {
-  host: BrowserClientPageOpeningHost
+  host: BrowserClientPageOpeningHost &
+    Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindow' | 'getAuthoritativeWindow'>
   targets: Pick<
     RuntimeBrowserCommandTargets,
     'requireAgentBrowserBridge' | 'resolveBrowserCommandTarget'
@@ -33,14 +39,14 @@ export async function cloneBrowserTabToProfile(
         sourceBrowserPageId: clientPage.browserPageId,
         ...(await cloneBrowserClientPage(dependencies.host, clientPage, profile.id))
       }
-    : await createBesideEnginePage(dependencies, params, profile.id)
+    : await createBesideEnginePage(dependencies, params, profile)
   return { ...cloned, profileId: profile.id, profileLabel: profile.label }
 }
 
 async function createBesideEnginePage(
-  { targets, catalog, creation }: BrowserTabProfileCloneDependencies,
+  { host, targets, catalog, creation }: BrowserTabProfileCloneDependencies,
   params: BrowserCommandTargetParams,
-  profileId: string
+  profile: { id: string; partition: string }
 ): Promise<{ browserPageId: string; sourceBrowserPageId: string }> {
   const target = await targets.resolveBrowserCommandTarget(params)
   const sourceBrowserPageId =
@@ -50,13 +56,27 @@ async function createBesideEnginePage(
   }
   const sourceTab = catalog.describeBrowserTab(sourceBrowserPageId, target.worktreeId)
   const worktreeId = sourceTab.worktreeId ?? target.worktreeId
-  // Server placement keeps the clone in this host's browser: offscreen when it has no window.
-  const created = await creation.browserTabCreate({
-    url: sourceTab.url,
-    ...(worktreeId ? { worktree: `id:${worktreeId}` } : {}),
-    profileId,
-    activate: false,
-    placement: { kind: 'server' }
-  })
+  if (!host.getAvailableAuthoritativeWindow()) {
+    // A headless host has no renderer; `tab create` opens the clone in its offscreen browser.
+    const created = await creation.browserTabCreate({
+      url: sourceTab.url,
+      ...(worktreeId ? { worktree: `id:${worktreeId}` } : {}),
+      profileId: profile.id,
+      activate: false,
+      placement: { kind: 'server' }
+    })
+    return { browserPageId: created.browserPageId, sourceBrowserPageId }
+  }
+  const created = await createBrowserTabInRenderer(
+    host,
+    sourceTab.url,
+    worktreeId,
+    profile.id,
+    profile.partition
+  )
+  // Do not return an inoperable clone before its webview registers.
+  try {
+    await waitForTabRegistration(created.browserPageId)
+  } catch {}
   return { browserPageId: created.browserPageId, sourceBrowserPageId }
 }
