@@ -156,7 +156,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why before the store loads: its pane normalization tells a moved project's retained rows from
   // a rival host's, and no handler or runtime may give a moving project a new terminal.
   // Saved drive answers first: the fence and the move prune read them and never a drive.
-  loadWslMappedDriveAnswers(getAppEnvironment().getPath('userData'))
+  await loadWslMappedDriveAnswers(getAppEnvironment().getPath('userData'))
   loadWslMoveFence(getAppEnvironment().getPath('userData'))
   const profileState = await createProfileStateStoreForStartup({
     userDataPath: getProfileUserDataPath(),

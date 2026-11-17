@@ -5,7 +5,7 @@
  */
 import { join } from 'node:path'
 import { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   durableWriteTempPath,
@@ -55,10 +55,13 @@ export function wslMappedDriveAnswersPath(userDataPath: string): string {
  * Seeds the answers saved by earlier launches, then saves every new one. Reads only this file;
  * a missing or malformed file leaves every letter unknown.
  */
-export function loadWslMappedDriveAnswers(userDataPath: string): { saved: () => Promise<void> } {
+export async function loadWslMappedDriveAnswers(
+  userDataPath: string
+): Promise<{ saved: () => Promise<void> }> {
   const path = wslMappedDriveAnswersPath(userDataPath)
   try {
-    const raw = readNodeFileSyncWithinLimit(path, MAX_FILE_BYTES).buffer.toString('utf8')
+    // Seeding never overwrites an answer that settled while this read was in flight.
+    const raw = (await readNodeFileWithinLimit(path, MAX_FILE_BYTES)).buffer.toString('utf8')
     const parsed = AnswersSchema.safeParse(JSON.parse(raw))
     if (parsed.success) {
       seedWslMappedDriveAnswers(parsed.data.answers)

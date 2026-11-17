@@ -50,7 +50,7 @@ afterEach(() => {
 })
 
 /** A fresh launch: memory gone, only the saved file left. */
-function restart(): ReturnType<typeof loadWslMappedDriveAnswers> {
+function restart(): Promise<{ saved: () => Promise<void> }> {
   clearWslMappedDriveShareCacheForTests()
   return loadWslMappedDriveAnswers(userDataPath)
 }
@@ -64,7 +64,7 @@ const fake = (real: string) => ({
 
 describe('saved mapped-drive answers', () => {
   it('keep each settled answer across a restart, without reading any drive', async () => {
-    const answers = restart()
+    const answers = await restart()
     await readWslMappedDriveShareNow('C', fake('C:\\'))
     await readWslMappedDriveShareNow('W', fake('\\\\wsl.localhost\\Ubuntu\\'))
     await answers.saved()
@@ -75,26 +75,26 @@ describe('saved mapped-drive answers', () => {
         { letter: 'W', share: '\\\\wsl.localhost\\Ubuntu', at: 1_000 }
       ]
     })
-    restart()
+    await restart()
     expect(wslMappedDriveLastKnownShare('C')).toEqual({ share: null })
     expect(wslMappedDriveLastKnownShare('W')).toEqual({ share: '\\\\wsl.localhost\\Ubuntu' })
     expect(realpathNative).not.toHaveBeenCalled()
   })
 
-  it('ignore a malformed file', () => {
+  it('ignore a malformed file', async () => {
     writeFileSync(
       wslMappedDriveAnswersPath(userDataPath),
       '{"version":1,"answers":[{"letter":"cc"}]}'
     )
-    restart()
+    await restart()
     expect(wslMappedDriveLastKnownShare('C')).toBeNull()
   })
 
   it('let an unreadable journal’s fence pass a C: project after a restart', async () => {
-    const answers = restart()
+    const answers = await restart()
     await readWslMappedDriveShareNow('C', fake('C:\\'))
     await answers.saved()
-    restart()
+    await restart()
     mkdirSync(wslMoveJournalDirectory(userDataPath), { recursive: true })
     writeFileSync(
       join(wslMoveJournalDirectory(userDataPath), 'move-1.json'),
@@ -112,7 +112,7 @@ describe('saved mapped-drive answers', () => {
   })
 
   it('keep a WSL answer through a failed lookup and a restart, and report it unverifiable', async () => {
-    const answers = restart()
+    const answers = await restart()
     await readWslMappedDriveShareNow('W', fake('\\\\wsl.localhost\\Ubuntu\\'))
     await answers.saved()
     const failing = {
@@ -127,7 +127,7 @@ describe('saved mapped-drive answers', () => {
       share: '\\\\wsl.localhost\\Ubuntu'
     })
     await answers.saved()
-    restart()
+    await restart()
     expect(wslMappedDriveLastKnownShare('W')).toEqual({ share: '\\\\wsl.localhost\\Ubuntu' })
     writeUnreadableJournal()
     loadWslMoveFence(userDataPath)
@@ -135,10 +135,10 @@ describe('saved mapped-drive answers', () => {
   })
 
   it('classify unknown letters once for an unreadable journal, never a saved WSL one', async () => {
-    const answers = restart()
+    const answers = await restart()
     await readWslMappedDriveShareNow('W', fake('\\\\wsl.localhost\\Ubuntu\\'))
     await answers.saved()
-    restart()
+    await restart()
     realpathNative.mockImplementation((root: string, done: (e: null, real: string) => void) =>
       done(null, root)
     )
@@ -156,7 +156,7 @@ describe('saved mapped-drive answers', () => {
     const stale = `${wslMappedDriveAnswersPath(userDataPath)}.999999.1.abc.tmp`
     writeFileSync(stale, 'x')
     utimesSync(stale, 0, 0)
-    const answers = restart()
+    const answers = await restart()
     await answers.saved()
     expect(existsSync(stale)).toBe(false)
     await readWslMappedDriveShareNow('C', fake('C:\\'))
