@@ -5,7 +5,7 @@ const commandId = '0123456789abcdef0123456789abcdef'
 const start = '\x1b]133;C;orca_command=0123456789abcdef0123456789abcdef\x07'
 const finish = '\x1b]133;D;130;orca_command=0123456789abcdef0123456789abcdef\x07'
 
-function watch(replay = '', alreadySubmitted = true) {
+function watch(replay = '', alreadySubmitted = true, agent: 'claude' | null = 'claude') {
   const listeners = new Set<(data: string) => void>()
   let recent = replay
   const runtime: LaunchedAgentExitRuntime = {
@@ -21,7 +21,7 @@ function watch(replay = '', alreadySubmitted = true) {
     signal = next
     return new Promise<void>(() => {})
   })
-  const result = failOnLaunchedAgentExit(runtime, 'pty-1', 'claude', undefined, wait, {
+  const result = failOnLaunchedAgentExit(runtime, 'pty-1', agent ?? undefined, undefined, wait, {
     commandId,
     alreadySubmitted
   }).catch((error: unknown) => error)
@@ -36,6 +36,13 @@ function watch(replay = '', alreadySubmitted = true) {
 }
 
 afterEach(() => vi.useRealTimers())
+
+it('reports a shell command outcome without inventing an agent for foreground fallback', async () => {
+  const launch = watch('', true, null)
+  launch.emit(start + finish)
+  expect(await launch.result).toMatchObject({ commandId, exitCode: 130 })
+  expect(launch.runtime.readLaunchedAgentForeground).not.toHaveBeenCalled()
+})
 
 it.each([1_000, 10_000])('coalesces %i legacy finishes into one owned check and still observes the latest return', async (count) => {
   vi.useFakeTimers()

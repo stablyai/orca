@@ -69,13 +69,13 @@ export class TerminalCommandFinishedError extends Error {
   }
 }
 
-/** Fails a fresh launch's readiness wait once its launch command has finished and the shell is back in front.
+/** Matching identity finishes any command wait; agent enables the legacy foreground-confirmed fallback.
  * Neither proves it alone: a shell nested in the agent leaks OSC 133;D, and the shell also leads until the agent starts.
  * Panes without shell integration, or that cannot prove a shell, wait as long as they did without this. */
 export function failOnLaunchedAgentExit<T>(
   runtime: LaunchedAgentExitRuntime,
   ptyId: string,
-  agent: TuiAgent,
+  agent: TuiAgent | undefined,
   signal: AbortSignal | undefined,
   wait: (signal: AbortSignal) => Promise<T>,
   command?: { commandId: string; alreadySubmitted: boolean }
@@ -98,6 +98,7 @@ export function failOnLaunchedAgentExit<T>(
     let latestFinish = -1
     let checking = false
     const checkForExit = async (): Promise<void> => {
+      if (!agent) return
       checking = true
       try {
         while (!stop.signal.aborted && !identified && latestFinish === marks) {
@@ -131,7 +132,7 @@ export function failOnLaunchedAgentExit<T>(
         }
         if (identified) return
         // Prompt hooks can report a finish before any command began.
-        if (commandStarted) {
+        if (commandStarted && agent) {
           marks += 1
           latestFinish = marks
           cancelDelay()
