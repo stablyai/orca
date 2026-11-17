@@ -5,6 +5,7 @@ export type OrchestrationMailboxDeliveryFlight = {
   deferredUntilIdle: boolean
   idleObservedWhileDeferred: boolean
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
+  drivingInputRevisionAtWrite?: number
   processIncarnation?: string
 }
 

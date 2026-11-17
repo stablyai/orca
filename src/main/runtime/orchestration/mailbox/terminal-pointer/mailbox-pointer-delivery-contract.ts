@@ -25,6 +25,7 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   /** Whether the terminal may take the pointer plus Enter now: at rest, or mid-turn (input queues). */
   isAgentSettledForDelivery: (ptyId: string) => boolean
+  readDrivingInputRevision: (ptyId: string) => number
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand

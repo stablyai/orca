@@ -17,6 +17,77 @@ import {
 import type { WriteSettlement } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 describe('orchestration mailbox pointer submit', () => {
+  it.each([false, true])(
+    'holds a typed-over pointer after the final dialog check (deferred: %s)',
+    async (deferred) => {
+      const db = new OrchestrationDb(':memory:')
+      try {
+        const message = db.insertMessage({
+          runId: 'run_legacy_local',
+          from: 'worker',
+          to: 'run:test',
+          subject: 'mail'
+        })
+        const ptyId = 'pty-driving-input'
+        const terminal = {
+          ptyId,
+          handle: 'term-test',
+          paneKeys: ['tab:leaf'],
+          lastAgentStatus: 'idle' as const,
+          lastAgentStatusObservedLive: true
+        }
+        const target = { terminal, processIncarnation: 'inc-test' }
+        const reservation = { ptyId, processIncarnation: 'inc-test' }
+        db.stageMailboxPointerEnter([message.id], reservation)
+        db.markMailboxPointerWriteAttempted([message.id], reservation)
+        const state = new OrchestrationMailboxPointerState()
+        const flight = state.beginFlight(ptyId)
+        flight.drivingInputRevisionAtWrite = 0
+        state.setWatermark('run:test', 1, ptyId)
+        let revision = 0
+        let dialog = deferred
+        const writePty = vi.fn(settledWriteStub())
+        const settle = vi.fn()
+        submitOrchestrationMailboxPointer(
+          {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: submit only calls resolve() on the owner.
+            mailboxOwner: { resolve: () => 'run:test' } as never,
+            state,
+            getDb: () => db,
+            resolveSubmitTarget: () => target,
+            isLeafPtyProvenAbsent: async () => false,
+            isPtyAwaitingUserInput: () => {
+              revision += 1
+              return dialog
+            },
+            readDrivingInputRevision: () => revision,
+            writePty,
+            settle,
+            redrive: vi.fn()
+          },
+          {
+            mailboxHandle: 'run:test',
+            messages: [message],
+            newestSequence: 1,
+            ptyId,
+            flight,
+            expectedTarget: target
+          }
+        )
+        if (deferred) {
+          await vi.waitFor(() => expect(flight.submitEnter).toBeTypeOf('function'))
+          dialog = false
+          flight.submitEnter!()
+        }
+        await vi.waitFor(() => expect(settle).toHaveBeenCalled())
+        expect(writePty).not.toHaveBeenCalled()
+        expect(db.getMessageById(message.id)?.read).toBe(0)
+      } finally {
+        db.close()
+      }
+    }
+  )
+
   it('does not settle a replacement reservation after an old Enter write resolves', async () => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({
@@ -41,6 +112,7 @@ describe('orchestration mailbox pointer submit', () => {
     }
     const state = new OrchestrationMailboxPointerState()
     const oldFlight = state.beginFlight(ptyId)
+    oldFlight.drivingInputRevisionAtWrite = 0
     state.setWatermark('run:run-1', 1, ptyId)
     expect(db.stageMailboxPointerEnter([message.id], oldReservation)).toBe(true)
     expect(db.markMailboxPointerWriteAttempted([message.id], oldReservation)).toBe(true)
@@ -56,6 +128,7 @@ describe('orchestration mailbox pointer submit', () => {
         state,
         getDb: () => db,
         resolveSubmitTarget: () => expectedTarget,
+        readDrivingInputRevision: () => 0,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
         writePty,
@@ -150,6 +223,7 @@ describe('orchestration mailbox pointer submit', () => {
       const expectedTarget = { terminal, processIncarnation: reservation.processIncarnation }
       const state = new OrchestrationMailboxPointerState()
       const flight = state.beginFlight(ptyId)
+      flight.drivingInputRevisionAtWrite = 0
       state.setWatermark('run:run-1', 1, ptyId)
       expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
       expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
@@ -163,6 +237,7 @@ describe('orchestration mailbox pointer submit', () => {
           getDb: () => db,
           resolveSubmitTarget: () =>
             options.replaced ? { terminal, processIncarnation: 'inc-replaced' } : expectedTarget,
+          readDrivingInputRevision: () => 0,
           isLeafPtyProvenAbsent: async () => options.absent ?? false,
           isPtyAwaitingUserInput: () => options.dialogOpen ?? false,
           writePty,
