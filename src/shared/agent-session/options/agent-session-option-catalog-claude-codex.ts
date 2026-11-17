@@ -100,8 +100,14 @@ const CLAUDE_FAST_MODE: CatalogOption = {
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
-  // Use CLI family aliases/labels across versions; pinned names mislabel older hosts and break header/model-echo matching. listModels supplies exact host names.
+  // Keep family aliases for older hosts; listModels supplies exact host names when supported.
   models: [
+    {
+      id: 'claude-fable-5-2',
+      label: 'Claude Fable 5.2',
+      description: 'Most capable for the hardest, longest-running tasks',
+      options: [claudeEffort(true)]
+    },
     {
       id: 'fable',
       label: 'Fable',
