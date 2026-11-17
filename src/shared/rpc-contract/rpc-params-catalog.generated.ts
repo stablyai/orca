@@ -1524,6 +1524,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
+  'repo.defaultCreateParent': null,
   'repo.gitAvailable': null,
   'repo.hooks': RepoHooksRead,
   'repo.hooksCheck': RepoHooksCheck,
