@@ -80,7 +80,7 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
   }
   return (
     <div
-      className="flex flex-col"
+      className="flex min-h-0 flex-col"
       data-agent-launch-picker="true"
       onKeyDownCapture={(event) => {
         // Shift+Tab from the search goes back to the agent tabs.
