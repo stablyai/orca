@@ -1,7 +1,7 @@
 import { Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { isMac } from '@/app-shell/app-window-chrome'
+import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { DEV_DRIVE_SETUP_URL } from '../../../../shared/perforce/workspace-copy/workspace-copy-platform'
 
 /**

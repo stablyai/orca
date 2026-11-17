@@ -30,7 +30,7 @@ vi.mock('../removal/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn(),
   resolveRegisteredWorktreePath: mocks.resolveRoot
 }))
-vi.mock('../../worktree-remote', () => ({ emitCreateWorktreeProgress: vi.fn() }))
+vi.mock('../worktree-remote', () => ({ emitCreateWorktreeProgress: vi.fn() }))
 vi.mock('../create/folder-workspace-creation', () => ({
   folderWorkspaceCreateMeta: () => ({}),
   prepareFolderWorkspaceCreateSetup: mocks.prepareSetup

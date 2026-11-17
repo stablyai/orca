@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { MouseEvent } from 'react'
-import { isMac } from '../../../app-shell/app-window-chrome'
+import { isMac } from '../../../app-shell/chrome/app-window-chrome'
 
 /** Row selection with Cmd/Ctrl-click toggling and Shift-click ranges over the visible row order. */
 export function usePerforceSelection() {

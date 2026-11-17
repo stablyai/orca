@@ -15,7 +15,7 @@ import {
   invalidateAuthorizedRootsCache,
   resolveRegisteredWorktreePath
 } from '../removal/registered-worktree-roots-cache'
-import { emitCreateWorktreeProgress } from '../../worktree-remote'
+import { emitCreateWorktreeProgress } from '../worktree-remote'
 import {
   folderWorkspaceCreateMeta,
   prepareFolderWorkspaceCreateSetup

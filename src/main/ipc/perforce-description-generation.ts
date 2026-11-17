@@ -11,7 +11,7 @@ import {
 } from '../perforce/perforce-desktop-settings'
 import type { GenerateCommitMessageResult } from '../text-generation/source-control-text-generation-types'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
-import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from './worktrees/local-worktree-runtime-options'
 import { resolveRegisteredWorktreePath } from './worktrees/removal/registered-worktree-roots-cache'
 
 type GenerateArgs = {
