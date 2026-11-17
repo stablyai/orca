@@ -23,11 +23,11 @@ import type {
 } from './provider-timeline-event'
 import {
   providerTimelineLiveText,
-  providerTimelineTextBody,
+  providerTimelineCloseSaves,
+  providerTimelineTextResolution,
   type ProviderTimelineStream
 } from './provider-timeline-text-stream'
 import { splitProviderTimelineTextBlocks } from './provider-timeline-text-blocks'
-import { JOURNAL_TEXT_TAIL_WRITES } from '../agent-session-journal/journal-text-tail-writes'
 import { providerTimelineKeyPart } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
 import { providerKey, turnOf } from './provider-timeline-rows'
@@ -199,12 +199,7 @@ export class ProviderTimelineTextStreams {
   planClose(plan: ProviderTimelinePlan, stream: ProviderTimelineStream, finalText?: string): void {
     if (finalText === undefined) {
       const owed = this.coalescer.snapshot(stream.id)
-      // A saved tail folds into its payload with one last whole save.
-      if (
-        owed &&
-        (owed.text.length !== stream.queuedLength ||
-          (JOURNAL_TEXT_TAIL_WRITES && stream.queuedLength > 0))
-      ) {
+      if (owed && providerTimelineCloseSaves(stream, owed.text.length)) {
         this.planText(plan, stream, owed.text, false, true)
       }
     } else {
@@ -283,17 +278,14 @@ export class ProviderTimelineTextStreams {
       plan.onAdmitted(() => this.coalescer.markFlushed(stream.id))
       return
     }
-    const body = providerTimelineTextBody(stream, text)
+    const resolution = providerTimelineTextResolution(stream, text, final)
     plan.item(
       {
-        reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
-        resolution: {
-          kind: 'text-snapshot',
-          identity: stream.row.identity,
-          body,
-          scopeItemIds: stream.scopeItemIds,
-          ...(final ? { final: true as const } : {})
-        },
+        reservedBytes: estimateStructuredAgentSessionItemBytes(
+          stream.row.identity,
+          resolution.body
+        ),
+        resolution,
         options: { ...stream.producer, turnScope: stream.scope }
       },
       false,

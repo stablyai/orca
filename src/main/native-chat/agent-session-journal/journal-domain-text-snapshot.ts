@@ -36,7 +36,7 @@ export function writeJournalDomainTextSnapshot(
   const { revision: _previousRevision, ...previousPlacement } = JSON.parse(
     String(stored.placement_json)
   )
-  const { revision, body: _body, ...placement } = item
+  const { revision: _revision, body: _body, ...placement } = item
   if (!isDeepStrictEqual(previousPlacement, placement)) {
     return false
   }

@@ -8,7 +8,6 @@ import { journalDomainOutlineSource } from './journal-domain-outline-source'
 import { runJournalTransaction } from './database/journal-database'
 import { JOURNAL_TEXT_TAIL_WRITES } from './journal-text-tail-writes'
 
-
 type Prefix = readonly [sessionId: string, epoch: string]
 type TailText = AgentJournalMessageItem & { blocks: [{ type: 'text'; text: string }] }
 
@@ -76,7 +75,11 @@ function joinTail<T extends AgentJournalRenderItem>(
   }
   const text = body.blocks[0].text + tail.map((row) => row.text).join('')
   // Each tail row's seq is the revision that saved it.
-  return { ...item, revision: tail.at(-1)!.seq, body: { ...body, blocks: [{ ...body.blocks[0], text }] } }
+  return {
+    ...item,
+    revision: tail.at(-1)!.seq,
+    body: { ...body, blocks: [{ ...body.blocks[0], text }] }
+  }
 }
 
 /**
@@ -97,6 +100,7 @@ export function appendJournalTextTail(
   const stored = db
     .prepare(`SELECT json_remove(payload_json,'$.revision','$.body.blocks[0].text') AS skeleton,
       json_extract(payload_json,'$.body.blocks[0].text') AS folded,
+      json_extract(payload_json,'$.revision') AS folded_revision,
       wire_version,wire_json IS NULL AND detail_json IS NULL AS plain,outline_source_json
       FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
     .get(...prefix, item.itemId)
@@ -128,7 +132,9 @@ export function appendJournalTextTail(
     wire.wireJson !== null ||
     wire.detailJson !== null ||
     wire.wireVersion !== stored.wire_version ||
-    journalDomainOutlineSource(item) !== stored.outline_source_json
+    // The outline never reads the revision it embeds, so the folded one stands until the fold.
+    journalDomainOutlineSource({ ...item, revision: Number(stored.folded_revision) }) !==
+      stored.outline_source_json
   ) {
     return false
   }
@@ -167,13 +173,13 @@ export function writeJournalTextPayload(
 
 /** Folds every tail into its payload. */
 function foldJournalTextTails(db: Database.Database): number {
-  const items = db
-    .prepare('SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail')
-    .all()
+  const items = db.prepare('SELECT DISTINCT session_id,epoch,item_id FROM journal_text_tail').all()
   for (const row of items) {
     const target = { sessionId: String(row.session_id), epoch: String(row.epoch) }
     const stored = db
-      .prepare('SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?')
+      .prepare(
+        'SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
+      )
       .get(target.sessionId, target.epoch, row.item_id)
     const item: AgentJournalRenderItem | undefined = stored
       ? JSON.parse(String(stored.payload_json))
@@ -182,15 +188,15 @@ function foldJournalTextTails(db: Database.Database): number {
     if (item && isTailText(item.body)) {
       writeJournalTextPayload(db, target, joinTail(db, prefix, item, item.body))
     } else {
-      db.prepare(
-        'DELETE FROM journal_text_tail WHERE session_id=? AND epoch=? AND item_id=?'
-      ).run(...prefix, row.item_id)
+      db.prepare('DELETE FROM journal_text_tail WHERE session_id=? AND epoch=? AND item_id=?').run(
+        ...prefix,
+        row.item_id
+      )
     }
   }
   tailsMayExist.set(db, JOURNAL_TEXT_TAIL_WRITES)
   return items.length
 }
-
 
 /** At store open, before any chat opens, and on clean quit; a failed fold leaves the tail to read. */
 export function tryFoldJournalTextTails(db: Database.Database): void {
