@@ -20,7 +20,7 @@ import { getProviderAccountScope } from '../../provider-accounts/provider-accoun
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { JIRA_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { useTranslate } from '@/i18n/use-translate'
-import { getJiraSiteLabel } from '../../../../shared/jira/jira-site-label'
+import { getJiraSiteLabel } from '../../../../../shared/jira/jira-site-label'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
 
