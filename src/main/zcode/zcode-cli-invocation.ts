@@ -6,7 +6,7 @@ import {
 import {
   resolveCliCommand,
   resolveExecutableCommand
-} from '../../shared/node-cli-command-resolution'
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { StructuredAgentCommandSettings } from '../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   probeZcodeOfficialRuntimes,

@@ -1,20 +1,16 @@
 import { useMemo, useRef } from 'react'
-import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
-import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
-import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
-import { selectNativeChatViewState } from './native-chat-view-state'
+import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './appearance/native-chat-appearance-style'
+import { useNativeChatStoreAppearanceStyle } from './appearance/use-native-chat-store-appearance-style'
+import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
+import { isNativeChatTranscriptUnsettled } from './session/terminal/read/native-chat-live-session-contract'
+import { selectNativeChatViewState } from './session/status/native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import {
-  useNativeChatMessageListHandle,
-  useNativeChatRevealLatest,
-  type NativeChatMessageListHandle
-} from './use-native-chat-reveal-latest'
-import { NativeChatEmptyState } from './NativeChatEmptyState'
-import { useNativeChatFontSize } from './use-native-chat-font-size'
-import { useNativeChatFind } from './use-native-chat-find'
-import { NativeChatFindBar } from './NativeChatFindBar'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import { useNativeChatRevealLatest } from './messages/actions/use-native-chat-reveal-latest'
+import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
+import { useNativeChatFontSize } from './appearance/use-native-chat-font-size'
+import { useNativeChatFind } from './viewport/find/use-native-chat-find'
+import { NativeChatFindBar } from './viewport/find/NativeChatFindBar'
+import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 
@@ -46,9 +42,7 @@ export function AiVaultSessionHistoryChatView({
     sessionId,
     enabled: isVisible
   })
-  const { revealLatest } = useNativeChatRevealLatest()
-  const messageListRef = useRef<NativeChatMessageListHandle | null>(null)
-  useNativeChatMessageListHandle(messageListRef, revealLatest)
+  const { messageListRef } = useNativeChatRevealLatest()
   const fontSizeRootRef = useRef<HTMLDivElement>(null)
   useNativeChatFontSize(
     session.readPhase === 'ready' && isVisible && isFocusedGroup,

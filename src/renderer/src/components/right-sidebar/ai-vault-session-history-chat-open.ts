@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { activateAiVaultResumeWorkspace } from './ai-vault/session-actions/ai-vault-session-resume-in-chat-launch'

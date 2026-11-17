@@ -2,7 +2,7 @@
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import {
   composeStructuredLaunch,

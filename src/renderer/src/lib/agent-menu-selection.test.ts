@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { resolveAgentMenuSelection } from './agent-menu-selection'
+import { resolveAgentMenuSelection } from './agent-session/launch/routing/agent-menu-selection'
 
 const input = {
   agent: 'zcode',

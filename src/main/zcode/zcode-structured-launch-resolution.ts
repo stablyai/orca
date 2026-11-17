@@ -9,8 +9,8 @@
 // (`composeStructuredLaunch` / `sealStructuredSessionChild`); this is ZCode's own part:
 // its account home, its binary, and what its child must not inherit.
 
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentCommandSettings } from '../native-chat/agent-launch/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'

@@ -1,11 +1,11 @@
-import type { NdjsonRejectedRecord } from '../../shared/main-process-ndjson-framer'
+import type { NdjsonRejectedRecord } from '../../shared/json-stream/main-process-ndjson-framer'
 import type { ZcodeAppServerConnectionHandlers } from './zcode-app-server-connection-types'
 import { isProviderRecord } from '../provider-process/provider-json-record'
 import {
   ZcodeAppServerRequestError,
   ZCODE_SESSION_BUSY_CODE
 } from './zcode-app-server-request-error'
-import { classifyJsonRpcPrefix } from '../../shared/json-rpc-record-prefix'
+import { classifyJsonRpcPrefix } from '../../shared/json-stream/json-rpc-record-prefix'
 
 const OVERSIZED_REQUEST_ERROR_CODE = -32001
 const MAX_REMEMBERED_TIMEOUTS = 64

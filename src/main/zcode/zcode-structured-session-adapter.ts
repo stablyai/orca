@@ -10,13 +10,13 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
-import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
-import {
-  type AgentSessionAcquisition,
-  type AgentSessionDispatchOutcome,
-  type StructuredAgentSessionAcquireInput,
-  type StructuredAgentSessionAdapter,
-  type StructuredAgentSessionSetOptionInput
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/requests/prompts/agent-session-question-answer'
+import type {
+  AgentSessionAcquisition,
+  AgentSessionDispatchOutcome,
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionSetOptionInput
 } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
