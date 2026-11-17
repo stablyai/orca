@@ -3,7 +3,7 @@
 import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-activation'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../hooks/ipc-tab-switch'
+import '../lib/workspace/tabs/ipc-tab-switch'
 import '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import '@/lib/notifications/terminal-shortcut-capture-notification'
@@ -51,7 +51,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
   admitStructuredAgentSession: (
-    await import('@/store/slices/agent-status/structured-session-admission.test-fixture')
+    await import('@/store/slices/agent-status/structured-sessions/structured-session-admission.test-fixture')
   ).admissionFromBusy(mocks.structuredSessionBusy)
 }))
 
@@ -61,7 +61,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal)
 }))
 
 vi.mock('../store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('../hooks/ipc-tab-switch', () => ({
+vi.mock('../lib/workspace/tabs/ipc-tab-switch', () => ({
   handleSwitchRecentTab: vi.fn(),
   handleSwitchTab: vi.fn(),
   handleSwitchTabAcrossAllTypes: vi.fn(),
@@ -90,7 +90,9 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTabWithOutcome: mocks.launchAgentInNewTab
 }))
 
-vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
+vi.mock('./terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: mocks.closeTerminalTab
+}))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))

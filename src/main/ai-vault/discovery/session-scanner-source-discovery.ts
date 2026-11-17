@@ -71,6 +71,7 @@ function agentDiscoveries(
       contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate,
       keepScopeFiles: scopeWalksAgentFiles(agent, options.scopePaths),
+      statCache: options.statCache,
       signal: options.signal
     })
   return source.mergeRootDiscoveries

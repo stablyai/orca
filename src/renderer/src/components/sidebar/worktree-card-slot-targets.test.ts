@@ -1,4 +1,4 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'

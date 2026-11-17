@@ -373,6 +373,17 @@ describe('WslHostService', () => {
         detailCode: 'installLockWaitGivesUp'
       })
     ])
+    // A gone holder is taken over within seconds, not "about 1 minute".
+    await service.handleConnectionChange('Ubuntu', null, {
+      state: 'connecting',
+      installLockWait: { takeoverInMs: 5_000, givesUpInMs: 90_000, holderGone: true }
+    })
+    expect(service.getStatuses()).toEqual([
+      expect.objectContaining({
+        detail: expect.stringContaining('takes over in a few seconds'),
+        detailCode: 'installLockWaitHolderGone'
+      })
+    ])
     // Once added, the host's own status carries the wait.
     expect(addProgress).toHaveLength(1)
     // Taking the lock clears it.

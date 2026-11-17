@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 export type SlotLayout = Pick<
   AppState,

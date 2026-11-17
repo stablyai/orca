@@ -3,6 +3,8 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import DeleteWorktreeDialog from './DeleteWorktreeDialog'
 
 const repo: Repo = {
@@ -31,6 +33,34 @@ const worktree: Worktree = {
   isPinned: false,
   sortOrder: 0,
   lastActivityAt: 1
+}
+
+const shortWorktree: Worktree = {
+  ...worktree,
+  id: 'orca-plugins::/Users/me/orca/workspaces/orca-plugins/fix-login',
+  path: '/Users/me/orca/workspaces/orca-plugins/fix-login',
+  displayName: 'fix-login',
+  branch: 'fix-login'
+}
+
+const thirdWorktree: Worktree = {
+  ...worktree,
+  id: 'orca-plugins::/Users/me/orca/workspaces/orca-plugins/docs-refresh',
+  path: '/Users/me/orca/workspaces/orca-plugins/docs-refresh',
+  displayName: 'docs-refresh',
+  branch: 'docs-refresh'
+}
+
+function unsavedFile(worktreeId: string, name: string): OpenFile {
+  return {
+    id: `${worktreeId}::${name}`,
+    filePath: `/Users/me/orca/workspaces/orca-plugins/fix-login/${name}`,
+    relativePath: name,
+    worktreeId,
+    language: 'typescript',
+    isDirty: true,
+    mode: 'edit'
+  }
 }
 
 const dirtyEntries: GitStatusEntry[] = Array.from({ length: 13 }, (_, index) => ({
@@ -81,25 +111,61 @@ const manyAtRiskLocalFiles: WorktreeAtRiskLocalFiles = {
   complete: true
 }
 
-function dialogFixture(options: {
-  entries: GitStatusEntry[]
-  localFiles?: WorktreeAtRiskLocalFiles | 'pending'
-  heightClassName?: string
+let defaultGitStatus: typeof window.api.git.status | undefined
+
+function dialogFixture(
+  options: {
+    target?: Worktree
+    entries?: GitStatusEntry[]
+    batch?: boolean
+    unsaved?: boolean
+    incomplete?: boolean
+    ignored?: boolean
+    localFiles?: WorktreeAtRiskLocalFiles | 'pending'
+    heightClassName?: string
+    deleteState?: WorktreeDeleteState
+  } = {},
   interact?: (frame: HTMLElement) => void
-}) {
+) {
+  const target = options.target ?? worktree
+  const entries = options.entries ?? dirtyEntries
+  const all = options.batch ? [target, shortWorktree, thirdWorktree] : [target]
   return defineFixture({
     width: 640,
     store: {
       repos: [repo],
-      worktreesByRepo: { [repo.id]: [worktree] },
-      gitStatusByWorktree: { [worktree.id]: options.entries },
+      worktreesByRepo: { [repo.id]: all },
+      gitStatusByWorktree: options.incomplete
+        ? {}
+        : Object.fromEntries(all.map((item) => [item.id, entries])),
+      openFiles: options.unsaved
+        ? [unsavedFile(target.id, 'src/login.ts'), unsavedFile(target.id, 'src/session.ts')]
+        : [],
+      deleteStateByWorktreeId: options.deleteState ? { [target.id]: options.deleteState } : {},
       activeModal: 'delete-worktree',
-      modalData: { worktreeId: worktree.id }
+      modalData: options.batch
+        ? { worktreeIds: all.map((item) => item.id) }
+        : { worktreeId: target.id }
     },
     setup: () => {
-      const localFiles = options.localFiles ?? cleanLocalFiles
-      window.api.git.atRiskLocalFiles = () =>
-        localFiles === 'pending' ? new Promise(() => {}) : Promise.resolve(localFiles)
+      defaultGitStatus ??= window.api.git.status
+      window.api.git.status = options.incomplete
+        ? async () => {
+            throw new Error('Fixture: Git scan unavailable')
+          }
+        : defaultGitStatus
+      window.api.git.atRiskLocalFiles = () => {
+        if (options.localFiles === 'pending') {
+          return new Promise(() => {})
+        }
+        return Promise.resolve(
+          options.localFiles ?? {
+            count: options.ignored ? 2 : 0,
+            samplePaths: options.ignored ? ['.env', 'node_modules/'] : [],
+            complete: !options.incomplete
+          }
+        )
+      }
     },
     // The dialog portals to <body>; reserve room so the centered modal fits the frame.
     render: () => (
@@ -107,42 +173,91 @@ function dialogFixture(options: {
         <DeleteWorktreeDialog />
       </div>
     ),
-    interact: options.interact
+    interact
   })
 }
 
+export const dirty = dialogFixture({ target: shortWorktree })
+
+export const clean = dialogFixture({ target: shortWorktree, entries: [] })
+
+export const dirtyWithUnsavedFiles = dialogFixture({ target: shortWorktree, unsaved: true })
+
+export const dirtyWithIgnoredFiles = dialogFixture({
+  target: shortWorktree,
+  unsaved: true,
+  ignored: true
+})
+
+export const cleanWithIgnoredFiles = dialogFixture({
+  target: shortWorktree,
+  entries: [],
+  ignored: true
+})
+
+export const showChangesOpen = dialogFixture({ target: shortWorktree, unsaved: true }, () => {
+  ;[...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')]
+    .find((button) => button.textContent?.includes('Show changes'))
+    ?.click()
+})
+
+export const longName = dialogFixture()
+
+export const batch = dialogFixture({ target: shortWorktree, batch: true })
+
+export const batchUnsavedIncomplete = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  entries: [],
+  unsaved: true,
+  incomplete: true
+})
+
+export const batchUncommittedIgnored = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  ignored: true
+})
+
+export const batchAllLosses = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  unsaved: true,
+  ignored: true
+})
+
+export const batchCleanIncomplete = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  entries: [],
+  incomplete: true
+})
+
+export const forceDelete = dialogFixture({
+  target: shortWorktree,
+  deleteState: {
+    isDeleting: false,
+    error:
+      "fatal: '/Users/me/orca/workspaces/orca-plugins/fix-login' contains modified or untracked files, use --force to delete it",
+    canForceDelete: true,
+    forceDeleteReason: 'dirty'
+  }
+})
+
 export const checking = dialogFixture({ entries: [], localFiles: 'pending' })
-
-export const clean = dialogFixture({ entries: [], localFiles: cleanLocalFiles })
-
 export const ignoredFiles = dialogFixture({ entries: [], localFiles: atRiskLocalFiles })
-
-export const ignoredFilesOpen = dialogFixture({
-  entries: [],
-  localFiles: atRiskLocalFiles,
-  heightClassName: 'h-[540px]',
-  interact: () => {
-    document.querySelector<HTMLButtonElement>('[aria-label*="Show ignored paths"]')?.click()
-  }
+export const ignoredFilesOpen = dialogFixture({ entries: [], localFiles: atRiskLocalFiles }, () => {
+  document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
 })
-
-export const ignoredFilesScrolling = dialogFixture({
-  entries: [],
-  localFiles: manyAtRiskLocalFiles,
-  heightClassName: 'h-[580px]',
-  interact: () => {
-    document.querySelector<HTMLButtonElement>('[aria-label*="Show ignored paths"]')?.click()
+export const ignoredFilesScrolling = dialogFixture(
+  { entries: [], localFiles: manyAtRiskLocalFiles, heightClassName: 'h-[580px]' },
+  () => {
+    document.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click()
   }
-})
-
-export const dirty = dialogFixture({ entries: dirtyEntries, localFiles: atRiskLocalFiles })
-
-export const alwaysDeleteMenu = dialogFixture({
-  entries: dirtyEntries,
-  localFiles: cleanLocalFiles,
-  interact: () => {
-    document
-      .querySelector<HTMLButtonElement>('[aria-label="More delete options"]')
-      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+)
+export const alwaysDeleteMenu = dialogFixture(
+  { entries: dirtyEntries, localFiles: cleanLocalFiles },
+  () => {
+    document.querySelector<HTMLButtonElement>('[role="checkbox"]')?.click()
   }
-})
+)

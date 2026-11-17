@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import '@orca/process-host/wsl-distro-allowlist'
-import {
-  _resetWslCachesForTests,
-  getWslHome,
-  getWslHomeAsync,
-  listWslDistrosAsync
-} from './distro-catalog'
+import { _resetWslCachesForTests, listWslDistrosAsync } from './distro-catalog'
 import { getCachedWslAvailability, isWslAvailableAsync } from './wsl-availability'
 
 const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
@@ -45,26 +40,6 @@ async function withPlatformAsync<T>(value: NodeJS.Platform, fn: () => Promise<T>
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
   }
 }
-
-describe('WSL home probe on a booting distro', () => {
-  afterEach(() => {
-    runProcessMock.mockReset()
-    runProcessSyncMock.mockReset()
-    _resetWslCachesForTests()
-  })
-
-  it('never starts a 5 s synchronous probe while the async one waits out a boot', async () => {
-    let finish!: (result: ProcessResult) => void
-    runProcessMock.mockReturnValueOnce(new Promise<ProcessResult>((resolve) => (finish = resolve)))
-    await withPlatformAsync('win32', async () => {
-      const pending = getWslHomeAsync('Ubuntu')
-      expect(getWslHome('Ubuntu')).toBeNull()
-      expect(runProcessSyncMock).not.toHaveBeenCalled()
-      finish(exited('/home/alice\n'))
-      expect(await pending).toContain('alice')
-    })
-  })
-})
 
 describe('WSL availability cache', () => {
   afterEach(() => {

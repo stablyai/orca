@@ -1006,7 +1006,6 @@
       "clearSearch": "Aramayı temizle"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Her zaman güven ve çalıştır",
       "description": "Bu repository'deki orca.yaml, çalışma alanı başlamadan önce çalıştırılır. Yalnızca bu repository'ye güveniyorsanız çalıştırın.",
       "dontRun": "Çalıştırma",
       "newScriptLabel": "Yeni kurulum betiği",
@@ -3906,27 +3905,19 @@
       "reconnecting": "Yeniden bağlanılıyor"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Her zaman güven ve çalıştır",
       "creating": "Oluşturuluyor…",
       "directoriesLabel": "Dizinler",
       "directories_one": "{{count}} dizin",
       "directories_other": "{{count}} dizin",
-      "dontRun": "Çalıştırma",
       "editSparsePreset": "Sparse Ön Ayarını Düzenle",
       "nameLabel": "Ad",
       "namePlaceholder": "İşleyici Arayüzü",
-      "newSetupScript": "Yeni kurulum betiği",
       "newSparsePreset": "Yeni Sparse Ön Ayarı",
-      "runHooks": "Hook'ları çalıştır",
       "runSetupAndCreate": "Kurulumu çalıştır ve oluştur",
-      "runSetupTitle": "{{name}} içindeki kurulum çalıştırılsın mı?",
-      "setupChangedTitle": "{{name}} için kurulum betiği değişti",
-      "setupScript": "Kurulum betiği",
       "setupSubtitle": "Bu çalışma alanını oluşturmadan önce {{name}} için bir kurulum seçeneği belirlemeniz gerekiyor.",
       "setupTitle": "Kurulum Betiği Çalıştırılsın mı?",
       "skipSetupAndCreate": "Kurulumu atla ve oluştur",
-      "trustFailed": "Kurulum betiği güvenilir olarak işaretlenemedi.",
-      "trustSubtitle": "Bu repository'nin orca.yaml dosyası, çalışma alanı başlamadan önce makinenizde çalıştırılır. Yalnızca bu repository'ye güveniyorsanız çalıştırın."
+      "trustFailed": "Kurulum betiği güvenilir olarak işaretlenemedi."
     },
     "worktreeCreateRetry": {
       "createFailed": "Çalışma alanı oluşturulamadı"

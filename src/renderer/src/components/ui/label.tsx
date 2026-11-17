@@ -10,7 +10,11 @@ const labelVariants = cva('', {
   variants: {
     variant: {
       default: '',
-      settings: 'text-xs text-muted-foreground'
+      settings: 'text-xs text-muted-foreground',
+      // Unified dialogs: a field label, a checkbox choice, and a quiet opt-out like "Don’t ask again".
+      'dialog-field': 'text-[13px]',
+      dialog: 'text-[13px] leading-snug font-normal',
+      'dialog-muted': 'text-[13px] leading-snug font-normal text-muted-foreground'
     }
   },
   defaultVariants: { variant: 'default' }

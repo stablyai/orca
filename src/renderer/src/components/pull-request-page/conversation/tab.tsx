@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store/index'
-import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
+import { useRepoAssignees } from '@/lib/work-items/github/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget

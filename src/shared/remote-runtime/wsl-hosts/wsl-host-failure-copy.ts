@@ -38,7 +38,9 @@ export const WSL_HOST_STATUS_DETAIL_COPY = {
     one: 'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minute.',
     other:
       'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca stops waiting in about {{count}} minutes.'
-  }
+  },
+  installLockWaitHolderGone:
+    'The other Orca install in this distro stopped. Orca takes over in a few seconds.'
 } as const
 
 export type WslHostStatusDetailCode = keyof typeof WSL_HOST_STATUS_DETAIL_COPY
@@ -97,8 +99,12 @@ export function wslHostStatusDetailText(
 export function wslHostInstallLockWaitText(wait: {
   takeoverInMs: number | null
   givesUpInMs: number
+  holderGone?: boolean
 }): WslHostCodedText {
   const minutes = (ms: number) => Math.max(1, Math.ceil(ms / 60_000))
+  if (wait.holderGone && wait.takeoverInMs !== null) {
+    return wslHostStatusDetailText('installLockWaitHolderGone')
+  }
   return wait.takeoverInMs === null
     ? wslHostStatusDetailText('installLockWaitGivesUp', { count: minutes(wait.givesUpInMs) })
     : wslHostStatusDetailText('installLockWait', { count: minutes(wait.takeoverInMs) })

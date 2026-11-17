@@ -72,7 +72,7 @@ export function hostWorktreeActionMountAdapters(
             return performHookAction(() => actions.handleDeleteWorktree(ROW))
           }
           if (name === 'approve-archive-trust') {
-            return performHookAction(() => actions.approveArchiveTrust(false))
+            return performHookAction(() => actions.approveArchiveTrust(true))
           }
           if (name === 'delete-anyway') {
             return performHookAction(() => actions.deleteDespiteArchiveHookFailure())

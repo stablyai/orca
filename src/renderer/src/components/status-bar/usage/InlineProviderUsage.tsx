@@ -9,7 +9,7 @@ import {
   normalizeUsagePercentageDisplay,
   clampUsedPercent
 } from '../../../../../shared/agent-usage/display/usage-percentage-display'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { usageBarClass } from './usage-health-tone'
 import { formatWindowLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
 import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'

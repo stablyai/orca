@@ -1,0 +1,174 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { subscribeRuntimeEnvironmentFromPreload } from '../../../../../preload/runtime/runtime-environment-subscriptions'
+import { tagRuntimeSubscriptionReplayResponse } from '../../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
+import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import {
+  beginWorktreeLineageRefresh,
+  isRemoteWorktreeLineageFresh
+} from '../../../store/slices/worktrees/metadata/worktree-lineage-readiness'
+
+const initialState = useAppStore.getState()
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => {
+  useAppStore.setState(initialState, true)
+  replaceRuntimeEnvironmentRevisions(initialState.runtimeEnvironments)
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+function createHarness() {
+  type Ipc = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[0]
+  type Args = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[1]
+  type Callbacks = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[2]
+  let listener: Parameters<Ipc['on']>[1] | undefined
+  const pending: ReturnType<typeof Promise.withResolvers<unknown>>[] = []
+  const issueRead = Promise.withResolvers<null>()
+  const ipc: Ipc = {
+    invoke: vi.fn((channel) => {
+      if (channel !== 'runtimeEnvironments:subscribe') {
+        return Promise.resolve()
+      }
+      const setup = Promise.withResolvers<unknown>()
+      pending.push(setup)
+      return setup.promise
+    }),
+    send: vi.fn(),
+    on: (_channel, callback) => {
+      listener = callback
+    },
+    removeListener: vi.fn()
+  }
+  const getIssue = vi.fn(() => issueRead.promise)
+  const refreshStatus = vi.fn(async () => true)
+  const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
+  const acknowledgeAttention = vi.fn(async () => ({ dismissed: 0 }))
+  let nextId = 0
+  vi.stubGlobal('window', {
+    api: {
+      runtimeEnvironments: {
+        subscribe: (args: Args, callbacks: Callbacks) =>
+          subscribeRuntimeEnvironmentFromPreload(ipc, args, callbacks, () => `sub-${nextId++}`),
+        call: vi.fn(async () => ({ id: 'r', ok: true, result: [] }))
+      },
+      notifications: { acknowledgeAttention },
+      browser: { sessionClientRouteImportSources: async () => ({}) },
+      linear: { getIssue }
+    }
+  })
+  const status = createCompatibleRuntimeStatusResponse()
+  if (!status.ok) {
+    throw new Error('expected valid runtime status fixture')
+  }
+  useAppStore.setState({
+    settings: null,
+    runtimeEnvironments: [
+      {
+        id: 'host-a',
+        name: 'Host A',
+        createdAt: 1,
+        updatedAt: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [
+          { id: 'ws-a', kind: 'websocket', label: 'WS', endpoint: 'ws://example.invalid' }
+        ],
+        preferredEndpointId: 'ws-a'
+      }
+    ],
+    runtimeStatusByEnvironmentId: new Map([['host-a', { status: status.result, checkedAt: 1 }]]),
+    linearIssueCache: {},
+    linearSearchCache: {},
+    linearListCache: {},
+    linearProjectIssueCache: {},
+    linearCustomViewIssueCache: {},
+    checkLinearConnection: vi.fn(async () => {}),
+    refreshRuntimeEnvironmentStatus: refreshStatus,
+    fetchRuntimeEnvironmentRepos
+  })
+  const starts: (() => void)[] = []
+  const activateNotifiedWorktree = vi.fn(async () => {})
+  const enqueue = vi.fn()
+  const start = (): (() => void) => {
+    const unsubs: (() => void)[] = []
+    const unsubscribeStore = registerRuntimeClientIpcBridge(unsubs, {
+      worktreeChangeRefreshQueue: { enqueue, dispose: vi.fn() },
+      activateNotifiedWorktree
+    })
+    const stop = (): void => {
+      unsubscribeStore()
+      unsubs.forEach((unsubscribe) => unsubscribe())
+    }
+    starts.push(stop)
+    return stop
+  }
+  return {
+    start,
+    getIssue,
+    refreshStatus,
+    fetchRuntimeEnvironmentRepos,
+    pending,
+    ipc,
+    activateNotifiedWorktree,
+    acknowledgeAttention,
+    enqueue,
+    emit: (
+      index: number,
+      replay = false,
+      event?:
+        | RuntimeClientEvent
+        | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown; sortOrders?: unknown }
+    ) => {
+      const response = {
+        id: 'r',
+        ok: true as const,
+        _meta: { runtimeId: 'remote-runtime' },
+        result: event ?? {
+          type: 'linearLinkedIssueUpdated',
+          worktreeId: 'missing-row',
+          identifier: 'ISSUE-1',
+          workspaceId: 'workspace-a'
+        }
+      }
+      listener?.(null, {
+        subscriptionId: `sub-${index}`,
+        type: 'response',
+        response: replay ? tagRuntimeSubscriptionReplayResponse(response) : response
+      })
+    },
+    finish: async () => {
+      starts.forEach((stop) => stop())
+      pending.forEach((setup, index) =>
+        setup.resolve({ subscriptionId: `sub-${index}`, requestId: 'r' })
+      )
+      issueRead.resolve(null)
+      for (let index = 0; index < 30; index += 1) {
+        await Promise.resolve()
+      }
+    }
+  }
+}
+
+it('invalidates lineage before unknown-repository discovery can block a structural event', async () => {
+  const h = createHarness()
+  const repos = Promise.withResolvers<never[]>()
+  h.fetchRuntimeEnvironmentRepos.mockImplementation(() => repos.promise)
+  try {
+    h.start()
+    beginWorktreeLineageRefresh(useAppStore.getState, {
+      kind: 'environment',
+      environmentId: 'host-a'
+    })(true)
+    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(true)
+    h.emit(0, false, { type: 'worktreesChanged', repoId: 'unknown-repo' })
+    expect(h.enqueue).not.toHaveBeenCalled()
+    expect(isRemoteWorktreeLineageFresh(useAppStore.getState, 'host-a')).toBe(false)
+  } finally {
+    repos.resolve([])
+    await h.finish()
+  }
+})

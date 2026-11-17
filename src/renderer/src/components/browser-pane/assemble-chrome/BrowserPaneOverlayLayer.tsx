@@ -16,7 +16,7 @@ import {
   useClientHostedBrowserRowSelection,
   useClientHostedBrowserRows
 } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
-import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
+import { ClientHostedBrowserHostRowPane } from './client-hosted/client-hosted-browser-host-row-pane'
 import { useAnyBrowserPageMountAdmission } from '../host-guest/retention/browser-page-mount-admission'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.

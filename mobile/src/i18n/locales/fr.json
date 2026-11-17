@@ -1044,7 +1044,6 @@
       "clearSearch": "Effacer la recherche"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Toujours faire confiance et exécuter",
       "description": "Le fichier orca.yaml de ce dépôt s'exécute avant le démarrage de l'espace de travail. Ne l'exécutez que si vous faites confiance à ce dépôt.",
       "dontRun": "Ne pas exécuter",
       "newScriptLabel": "Nouveau script de setup",
@@ -4002,28 +4001,20 @@
       "reconnecting": "Reconnexion"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Toujours faire confiance et exécuter",
       "creating": "Création…",
       "directoriesLabel": "Répertoires",
       "directories_many": "{{count}} répertoires",
       "directories_one": "{{count}} répertoire",
       "directories_other": "{{count}} répertoires",
-      "dontRun": "Ne pas exécuter",
       "editSparsePreset": "Modifier le préréglage de checkout partiel",
       "nameLabel": "Nom",
       "namePlaceholder": "Interface de rendu",
-      "newSetupScript": "Nouveau script de setup",
       "newSparsePreset": "Nouveau préréglage de checkout partiel",
-      "runHooks": "Exécuter les hooks",
       "runSetupAndCreate": "Exécuter le setup et créer",
-      "runSetupTitle": "Exécuter le setup de {{name}} ?",
-      "setupChangedTitle": "Le script de setup de {{name}} a changé",
-      "setupScript": "Script de setup",
       "setupSubtitle": "Choisissez si vous souhaitez exécuter le setup de {{name}} avant de créer cet espace de travail.",
       "setupTitle": "Exécuter le script de setup ?",
       "skipSetupAndCreate": "Ignorer le setup et créer",
-      "trustFailed": "Échec de l'approbation du script de setup.",
-      "trustSubtitle": "Le fichier orca.yaml de ce dépôt s'exécute sur votre machine avant le démarrage de l'espace de travail. Ne l'exécutez que si vous faites confiance à ce dépôt."
+      "trustFailed": "Échec de l'approbation du script de setup."
     },
     "worktreeCreateRetry": {
       "createFailed": "Échec de la création de l'espace de travail"

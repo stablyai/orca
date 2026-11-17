@@ -1,5 +1,5 @@
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
-import { usePRCheckRefreshOwner } from '@/hooks/use-pr-check-refresh-owner'
+import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
 import { getChecksTabSummaryPresentation } from '@/components/github-item-dialog/inspect-pull-request/checks-tab-summary'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'

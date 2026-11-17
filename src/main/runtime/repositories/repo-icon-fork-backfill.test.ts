@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 import {
   probeRepoUpstream,
   type RepoUpstreamProbe

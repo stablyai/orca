@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { MarkdownPreviewSurface } from './MarkdownPreviewSurface'
 import type { MarkdownPreviewProps } from '../render-tree/markdown-preview-types'

@@ -128,16 +128,6 @@ export type SetupDecision = 'inherit' | 'run' | 'skip'
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 
-export type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: {
-    contentHash: string
-    scriptContent: string
-  }
-}
-
 export type LinearProject = {
   id: string
   name: string
