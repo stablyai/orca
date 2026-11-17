@@ -66,17 +66,24 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
       : () => {}
     let close: MainLayoutClose | null
     try {
-      const runtimePtyIdsOfPane = (id: string, leafId: string | null): string[] =>
+      // Disconnected records still count for admission: the flag reports transport, not exit.
+      const unboundPtyIdsOfPane = (
+        id: string,
+        leafId: string | null,
+        includeDisconnected: boolean
+      ): string[] =>
         [...this.ptysById.values()]
           .filter(
             (pty) =>
-              pty.connected &&
+              (includeDisconnected || pty.connected) &&
               pty.worktreeId === worktreeId &&
               parsePaneKey(pty.registeredPaneKey ?? '')?.tabId === id &&
               (leafId === null || pty.registeredPaneKey === `${id}:${leafId}`) &&
               this.paneOfPty(pty).paneKey === null
           )
           .map((pty) => pty.ptyId)
+      const runtimePtyIdsOfPane = (id: string, leafId: string | null): string[] =>
+        unboundPtyIdsOfPane(id, leafId, false)
       close = await closeInMainLayout(
         {
           panesOfTab: (id) => surfaces.panesOfTab(id),
@@ -107,7 +114,7 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
                     session?.tabsByWorktree?.[worktreeId]?.find((tab) => tab.id === row.parentTabId)
                       ?.ptyId,
                     session?.remoteSessionIdsByTabId?.[row.parentTabId],
-                    ...runtimePtyIdsOfPane(row.parentTabId, null)
+                    ...unboundPtyIdsOfPane(row.parentTabId, null, true)
                   ]
                   if (
                     boundPtyIds.some(

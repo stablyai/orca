@@ -18,7 +18,10 @@ const options = {
   localPtyTeardownOwnedExternally: true
 }
 
-function recordUnboundPty(runtime: Awaited<ReturnType<typeof setupMainOwnedWorkspace>>['runtime']) {
+function recordUnboundPty(
+  runtime: Awaited<ReturnType<typeof setupMainOwnedWorkspace>>['runtime'],
+  connected = true
+) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercise the state between PTY registration and the saved pane bind.
   const internals = runtime as unknown as {
     recordPtyWorktree: (
@@ -28,7 +31,7 @@ function recordUnboundPty(runtime: Awaited<ReturnType<typeof setupMainOwnedWorks
     ) => void
   }
   internals.recordPtyWorktree('pty-unbound', WORKTREE_ID, {
-    connected: true,
+    connected,
     registeredPaneKey: `${TAB_ID}:${LEAF_A}`
   })
 }
@@ -83,6 +86,22 @@ describe('close a stopped terminal tab by id', () => {
     ).rejects.toMatchObject({ code: 'terminal_tab_live' })
     expect(f.session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([TAB_ID])
     expect(f.session().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId).toEqual({})
+  })
+
+  it('refuses a disconnected unbound runtime PTY whose exit is unverified', async () => {
+    const f = await setupMainOwnedWorkspace({ stopped: true })
+    const apply = f.runtime.applyLayoutCommand.bind(f.runtime)
+    vi.spyOn(f.runtime, 'applyLayoutCommand').mockImplementation(async (command, run) => {
+      if (command.type === 'closeTabs') {
+        recordUnboundPty(f.runtime, false)
+      }
+      return apply(command, run)
+    })
+
+    await expect(
+      f.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, options)
+    ).rejects.toMatchObject({ code: 'terminal_tab_live' })
+    expect(f.session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([TAB_ID])
   })
 
   it('stops an unbound runtime PTY when a regular tab close commits', async () => {
