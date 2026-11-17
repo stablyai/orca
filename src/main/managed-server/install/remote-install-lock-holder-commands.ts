@@ -6,6 +6,8 @@ import type { InstallLockOwnerFile } from './remote-install-lock-commands'
 export const INSTALL_LOCK_HOLDER_FILENAME = '.holder-flock'
 // The holder's pid, so an owner that gave up on it can stop it before it marks the lock late.
 const HOLDER_PID_FILENAME = '.holder-pid'
+// In the holder's own command line beside its token, so a kill can check the pid is still that holder.
+const HOLDER_ARGV_TAG = 'orca-install-lock-holder'
 const HOLDER_MARKER = 'held'
 /** Exit status of a fenced command whose lock another owner now holds. */
 export const INSTALL_LOCK_FENCE_EXIT_CODE = 75
@@ -49,6 +51,7 @@ export function installLockHolderCommand(lockDir: string, owner: InstallLockOwne
   const holder = quotePosixShell(`./${INSTALL_LOCK_HOLDER_FILENAME}`)
   const ownsLock = `[ "$(cat ${ownerFile} 2>/dev/null)" = ${token} ]`
   return [
+    `: ${HOLDER_ARGV_TAG};`,
     // cwd pins this lock's inode, so a takeover that renames it cannot redirect the marker.
     `cd ${quotePosixShell(lockDir)} 2>/dev/null && ${ownsLock} || exit 0;`,
     'command -v flock >/dev/null 2>&1 || exit 0;',
@@ -57,14 +60,13 @@ export function installLockHolderCommand(lockDir: string, owner: InstallLockOwne
     // A filesystem that grants a second description an exclusive lock cannot prove anything.
     `if ( exec 8<${holder} && flock -x -n 8 ) 2>/dev/null; then exit 0; fi;`,
     `${ownsLock} || exit 0;`,
-    // `exec cat` below keeps this pid.
     `printf '%s' "$$" > ${quotePosixShell(`./${HOLDER_PID_FILENAME}`)} 2>/dev/null || exit 0;`,
     `echo ${INSTALL_LOCK_HOLDER_READY};`,
     `IFS= read -r holder_go && [ "$holder_go" = ${INSTALL_LOCK_HOLDER_MARK} ] && ${ownsLock} || exit 0;`,
     `printf ${HOLDER_MARKER} >&9 || exit 0;`,
     `echo ${INSTALL_LOCK_HOLDER_HELD};`,
-    // One process keeps fd 9 (the lock); stdin EOF means the desktop let go or died.
-    'exec cat >/dev/null'
+    // This shell keeps fd 9 (the lock) and its tagged command line; stdin EOF means the desktop let go or died.
+    'while IFS= read -r holder_rest; do :; done'
   ].join(' ')
 }
 
@@ -131,11 +133,24 @@ export function installLockHolderUnmarkCommand(
     `{ command exec 9<${holder}; } 2>/dev/null || exit 0;`,
     'unmark_tries=0; until flock -x -n 9 2>/dev/null; do unmark_tries=$((unmark_tries + 1));',
     `if [ "$unmark_tries" -eq ${SHARED_LOCK_ATTEMPTS} ]; then holder_pid=$(head -c 16 ${quotePosixShell(`./${HOLDER_PID_FILENAME}`)} 2>/dev/null);`,
-    `case "$holder_pid" in ''|*[!0-9]*) ;; *) kill -9 "$holder_pid" 2>/dev/null;; esac; fi;`,
+    `case "$holder_pid" in ''|*[!0-9]*) ;; *) if ${posixIsHolderProcess('holder_pid', owner.token)}; then kill -9 "$holder_pid" 2>/dev/null; fi;; esac; fi;`,
     // A killed holder can no longer write, so the mark is cleared even if the lock stays busy.
     `[ "$unmark_tries" -ge ${SHARED_LOCK_ATTEMPTS + 5} ] && break; sleep 1; done;`,
     `${ownsLock} && : > ${holder}`
   ].join(' ')
+}
+
+/** True only while `pidVariable` names this owner's holder: its command line carries the tag and
+ * token. A reused pid or an unreadable /proc reads false, so nothing else is ever killed. */
+function posixIsHolderProcess(pidVariable: string, token: string): string {
+  // Split so this script's own command line never matches the tag.
+  const [head, tail] = [HOLDER_ARGV_TAG.slice(0, 5), HOLDER_ARGV_TAG.slice(5)]
+  const argv = `tr '\\000' '\\n' 2>/dev/null < "/proc/$${pidVariable}/cmdline"`
+  return (
+    `[ "$${pidVariable}" != "$$" ] && holder_argv=$(${argv}) && ` +
+    `printf '%s\\n' "$holder_argv" | grep -qF "${head}""${tail}" && ` +
+    `printf '%s\\n' "$holder_argv" | grep -qF -- ${quotePosixShell(token)}`
+  )
 }
 
 /** Prefix for an owner's own lock removal: waits for its fenced commands to end, so a successor

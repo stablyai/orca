@@ -286,6 +286,23 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(probe(lock)).toBe('')
   }, 30_000)
 
+  it('never kills a process that reused the holder pid', async () => {
+    const lock = lockOwnedBy('t-first')
+    const holder = await holdLock(lock)
+    // A leftover fenced command keeps the lock busy past the unmark wait.
+    const straggler = start(`${installLockFenceStatement(lock, first)} echo STARTED; sleep 30`)
+    expect(await line(straggler, 'STARTED')).toBe(true)
+    holder.stdin.end()
+    await exited(holder)
+    // The holder's pid now names a bystander, even one whose command line carries the token.
+    const bystander = start('sleep 60; echo t-first')
+    writeFileSync(join(lock, '.holder-pid'), String(bystander.pid))
+    expect(await exited(start(installLockHolderUnmarkCommand(lock, first)))).toBe(0)
+    expect(bystander.exitCode === null && bystander.signalCode === null).toBe(true)
+    expect(straggler.exitCode === null && straggler.signalCode === null).toBe(true)
+    expect(readFileSync(join(lock, INSTALL_LOCK_HOLDER_FILENAME), 'utf8')).toBe('')
+  }, 30_000)
+
   it('degrades to an unbacked lock where flock is missing', async () => {
     const lock = lockOwnedBy('t-first')
     const bin = join(lock, '..', 'bin')
