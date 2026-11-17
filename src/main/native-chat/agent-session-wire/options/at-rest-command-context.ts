@@ -19,7 +19,9 @@ const launchSettings = new Set([
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
   'terminalWindowsShell',
-  'terminalWindowsPowerShellImplementation'
+  'terminalWindowsPowerShellImplementation',
+  'httpProxyUrl',
+  'httpProxyBypassRules'
 ])
 
 export function retireAtRestCommandSettings(keys: Iterable<string>): void {
