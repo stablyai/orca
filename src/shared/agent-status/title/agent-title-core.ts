@@ -167,14 +167,16 @@ export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null)
   return lastEmittedTitle !== null && isCursorAgentTitle(lastEmittedTitle)
 }
 
-// Collapse only Grok’s spinner - phrase - grok frame; both delimiters exclude Claude/Codex task mentions.
-// Keep unspun session titles unchanged and accept spinner + grok so our collapsed label stays idempotent.
-const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
+// Grok frames read `[⚠ Action required - ]<spinner> - <activity> - [<session> - ]grok`; Windows uses `!` and spins | / - \.
+// Both delimiters exclude Claude/Codex task mentions; spinner + grok keeps our collapsed label idempotent.
+const GROK_FRAME_RE =
+  /^(?<actionRequired>[!\u26a0] Action required\s+-\s+)?(?:[\u2800-\u28FF]+|[|/\\-])\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
 const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
 
-export function isGrokRotatingWorkingTitle(title: string): boolean {
-  if (!containsBrailleSpinner(title)) {
-    return false
+export function grokFrameTitleStatus(title: string): 'working' | 'permission' | null {
+  const frame = GROK_FRAME_RE.exec(title)
+  if (frame) {
+    return frame.groups?.actionRequired ? 'permission' : 'working'
   }
-  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
+  return GROK_COLLAPSED_WORKING_TITLE_RE.test(title) ? 'working' : null
 }
