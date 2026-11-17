@@ -46,6 +46,7 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import { resolveZotzComputerAwakeMode } from '../../shared/zotz/zotz-machine-mode'
 import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
@@ -221,11 +222,10 @@ export function registerSettingsHandlers(
     }
     if (
       'computerAwakeMode' in sanitizedArgs ||
-      'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
+      'keepComputerAwakeWhileAgentsRun' in sanitizedArgs ||
+      'zotzMachineMode' in sanitizedArgs
     ) {
-      agentAwakeService?.setMode(
-        normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
-      )
+      agentAwakeService?.setMode(resolveZotzComputerAwakeMode(result))
     }
     await getClaudeAgentViewService().reconcile(result)
     const hookSettingChanged =

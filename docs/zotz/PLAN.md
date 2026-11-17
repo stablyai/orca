@@ -128,31 +128,56 @@ Hoy `orca serve service` **no existe en Windows**: `src/cli/server/serve-service
 
 ### 5a. `zotz serve service` para Windows
 
-- [ ] Implementar la variante de Windows en `serve-service-unit.ts`, siguiendo el patrón de las otras plataformas: `install`, `status` y `uninstall`.
-- [ ] Mecanismo: **Tarea programada de Windows** (`schtasks` o `Register-ScheduledTask` vía PowerShell), **no** un servicio de Windows. Un servicio corre en la sesión 0, sin escritorio, y entonces computer use y el navegador no funcionan.
+- [x] Implementar la variante de Windows en `serve-service-unit.ts`, siguiendo el patrón de las otras plataformas: `install`, `status` y `uninstall`. (Vive en `src/cli/server/zotz-windows-serve-service.ts`, enganchada desde `serve-service.ts`; el XML de la tarea en `src/shared/zotz/zotz-windows-scheduled-task.ts`.)
+- [x] Mecanismo: **Tarea programada de Windows** (`schtasks` o `Register-ScheduledTask` vía PowerShell), **no** un servicio de Windows. Un servicio corre en la sesión 0, sin escritorio, y entonces computer use y el navegador no funcionan.
   - Disparador: _al iniciar sesión_ del usuario dedicado.
-  - Reiniciar si falla: cada 1 min, intentos ilimitados.
+  - Reiniciar si falla: cada 1 min, intentos ilimitados. (RestartOnFailure llega a 999 como máximo y no vigila la salida del proceso, así que el disparador se repite cada minuto con `IgnoreNew` como watchdog.)
   - Sin límite de tiempo de ejecución.
   - "Ejecutar aunque esté con batería".
-- [ ] Usar `runProcess` de `@orca/process-host` (ya importado), no `child_process` directo. Leer `docs/agents-md-refs/cross-platform-support.md` antes.
+- [x] Usar `runProcess` de `@orca/process-host` (ya importado), no `child_process` directo. Leer `docs/agents-md-refs/cross-platform-support.md` antes.
 
 ### 5b. Que Windows no se duerma
 
 `src/main/power/` solo tiene asserts de mac (`macos-system-sleep-assertion.ts`) y Linux (`linux-lid-sleep-assertion.ts`).
 
-- [ ] Agregar `windows-system-sleep-assertion.ts` con `powerSaveBlocker.start('prevent-app-suspension')` de Electron (o `SetThreadExecutionState` si hace falta más fuerza), y conectarlo en `agent-awake-service.ts`. En modo serve debe estar activo **siempre**, no solo mientras haya un agente corriendo.
+- [x] Agregar `windows-system-sleep-assertion.ts` con `powerSaveBlocker.start('prevent-app-suspension')` de Electron (o `SetThreadExecutionState` si hace falta más fuerza), y conectarlo en `agent-awake-service.ts`. En modo serve debe estar activo **siempre**, no solo mientras haya un agente corriendo.
 
 ### 5c. Script de preparación de la MSI
 
-Crear `scripts/windows/zotz-node-setup.ps1` (idempotente, requiere admin, cada paso imprime qué hizo):
+Crear `resources/win32/zotz/zotz-node-setup.ps1` (el plan decía `scripts/windows/`, pero el guard de la raíz no admite carpetas nuevas) (idempotente, requiere admin, cada paso imprime qué hizo):
 
-- [ ] `powercfg`: nunca suspender ni hibernar con corriente, y que cerrar la tapa no haga nada.
-- [ ] Windows Update: horas activas 0–23 y sin reinicio automático con sesión iniciada (`NoAutoRebootWithLoggedOnUsers`).
-- [ ] Inicio de sesión automático del usuario dedicado (vía Sysinternals Autologon; documentarlo, no guardar la contraseña en texto plano).
-- [ ] Instalar y habilitar **OpenSSH Server**, solo con llave (`PasswordAuthentication no`).
-- [ ] Regla de firewall: el puerto de `zotz serve` y el 22 **solo** desde la interfaz de Tailscale (`100.64.0.0/10`).
-- [ ] Llamar a `zotz serve service install --bind <IP-tailscale>`.
-- [ ] Nota para Hugo, no automatizable: en el BIOS de la MSI, activar _Restore on AC Power Loss_ (o equivalente).
+- [x] `powercfg`: nunca suspender ni hibernar con corriente, y que cerrar la tapa no haga nada.
+- [x] Windows Update: horas activas 0–23 y sin reinicio automático con sesión iniciada (`NoAutoRebootWithLoggedOnUsers`). (Windows acepta máximo 18 h de horas activas: quedan 6:00–24:00, parametrizables.)
+- [x] Inicio de sesión automático del usuario dedicado (vía Sysinternals Autologon; documentarlo, no guardar la contraseña en texto plano).
+- [x] Instalar y habilitar **OpenSSH Server**, solo con llave (`PasswordAuthentication no`).
+- [x] Regla de firewall: el puerto de `zotz serve` y el 22 **solo** desde la interfaz de Tailscale (`100.64.0.0/10`).
+- [x] ~~Llamar a `zotz serve service install --bind <IP-tailscale>`.~~ Reemplazado: el script registra la tarea `\Zotz\Server`, que arranca la **app de escritorio en modo servidor** (computer use y navegador necesitan el escritorio; ver `docs/zotz/NODE-SETUP.md`), y no se fija a la IP de Tailscale porque cambia.
+- [x] Nota para Hugo, no automatizable: en el BIOS de la MSI, activar _Restore on AC Power Loss_ (o equivalente).
+
+### 5d. Asistente de primer arranque (personal vs. servidor remoto)
+
+La primera vez que se abre Zotz (y después desde Ajustes) pregunta el **modo de la máquina**. Decisiones de Hugo (2026-11-16): se pregunta **al primer arranque**, no en el instalador; en modo servidor se configura **todo de forma automática con un solo permiso de administrador**; si falta Tailscale se **guía e instala**; el autologon **solo se documenta**.
+
+- [x] Setting nuevo `zotzMachineMode: 'unset' | 'personal' | 'server'` (default `'unset'`). Mientras sea `'unset'`, se muestra el asistente. Cambiable en Ajustes.
+- [x] **Personal**: no toca el sistema; Zotz se comporta como hoy.
+- [x] **Servidor remoto**: detecta el SO y ejecuta los pasos de esa plataforma, mostrando cada uno con su estado (hecho / omitido / falló + por qué). Idempotente: re-ejecutarlo no duplica nada.
+  - **Tailscale**: detectar si está instalado y con sesión. Si falta, ofrecer instalarlo (Windows `winget install Tailscale.Tailscale`, macOS `brew install --cask tailscale` o link, Linux script oficial) y esperar a que tenga IP `100.x`. Tomar la IP de Tailscale como dirección de pairing.
+  - **Firewall** solo desde `100.64.0.0/10` al puerto del servidor (Windows `New-NetFirewallRule`; Linux `ufw` si está activo; macOS no requiere).
+  - **No dormirse**: Windows `powercfg` (sin suspensión/hibernación en corriente, tapa sin acción) + bloqueo de suspensión de 5b; macOS `pmset`/assertion; Linux inhibidor de systemd.
+  - **Arranque automático y reinicio si falla**: Windows tarea programada de 5a; macOS LaunchAgent; Linux unidad systemd de usuario (ya existen en `serve-service-unit.ts`).
+  - **Exposición de red permanente** en la IP de Tailscale (hoy solo se abre al pulsar "Compartir este equipo").
+  - **Enlace de acceso / QR** generado al final, listo para pegar en la laptop o escanear con el móvil.
+  - **Autologon (Windows)**: solo instrucciones + link a Sysinternals Autologon; Zotz nunca pide ni guarda la contraseña.
+- [x] Todo lo que requiere admin en Windows se agrupa en **un** script (`zotz-node-setup.ps1` de 5c) lanzado con **una** elevación UAC; macOS/Linux usan el diálogo de privilegios del sistema (`osascript … with administrator privileges` / `pkexec`) solo donde haga falta.
+- [x] Lógica nueva en archivos `zotz-*` (main: orquestador por plataforma; renderer: pantalla del asistente usando primitivas shadcn de `components/ui` y `docs/STYLEGUIDE.md`); textos en `en` + `es`.
+
+Verificación en hardware real (pendiente; nada de esto se pudo probar desde la Mac de desarrollo, pasos en `docs/zotz/NODE-SETUP.md`):
+
+- [ ] Windows (MSI): el asistente pide una sola UAC y deja ✓ en cada paso; la tarea relanza Zotz al cerrarlo; el enlace/QR conecta desde la Mac y el móvil.
+- [ ] Windows: `orca serve service install|status|uninstall` (perfil por defecto).
+- [ ] macOS: `pmset` solo pide contraseña si hace falta; el LaunchAgent abre Zotz al iniciar sesión.
+- [ ] Linux: regla `ufw` con `pkexec` y la unidad `zotz-server.service` al iniciar sesión.
+- [ ] "Listo cuando" de abajo (corte de corriente con Autologon y _Restore on AC Power Loss_).
 
 **Listo cuando:** desconectas y reconectas la corriente, la MSI prende sola, inicia sesión, Zotz levanta en modo serve y en menos de 2 minutos puedes mandarle una tarea por Tailscale.
 
@@ -184,70 +209,83 @@ Los agentes tienen acceso total **a la MSI**; que esa máquina no tenga nada que
 
 ### Lo que Orca ya trae (reutilízalo, no lo dupliques)
 
-| Pieza | Dónde | Qué hace hoy | Qué le falta |
-|---|---|---|---|
-| Admisión de spawns | `src/main/daemon/admission/terminal-spawn-gate.ts` + `src/shared/terminal/pty/admission/` | Limita trabajo **automático**: `automaticConcurrency: 3`, `maxLiveAutomatic: 8` (`DEFAULT_SPAWN_ADMISSION_LIMITS`). Ya tiene **cola de espera** (`terminal-spawn-waiters.ts`, `TerminalSpawnDeferredError`). | Cuenta procesos, no memoria. No aplica a agentes lanzados a mano. |
-| Nivel de presión | `HostPressureLevel = 'ok' \| 'elevated' \| 'critical' \| 'unknown'` en `spawn-admission-contract.ts`, alimentado por `daemon-process-growth-monitor.ts` | Detecta "tormentas" de procesos (descendientes/seg). | **No mira la RAM.** |
-| Pausa por presión | `AutomaticWorkMode` `{ kind: 'paused', reason: 'pressure' }` en `daemon-automatic-work-guard.ts` | Pausa trabajo automático cuando hay presión. | Se dispara solo por crecimiento de procesos. |
-| Tope por terminal | `src/main/daemon/process-scopes/terminal-memory-limits.ts` (`ORCA_TERMINAL_MEMORY_MAX`) | Tope duro vía **cgroups**, opt-in, **solo Linux**. | Nada en Windows ni macOS; no hay UI. |
-| Árbol de procesos por terminal | `process-growth-breaker.ts` (scopes por terminal) | Ya agrupa descendientes por terminal. | Solo cuenta procesos, no RSS. |
+| Pieza                          | Dónde                                                                                                                                                   | Qué hace hoy                                                                                                                                                                                                 | Qué le falta                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Admisión de spawns             | `src/main/daemon/admission/terminal-spawn-gate.ts` + `src/shared/terminal/pty/admission/`                                                               | Limita trabajo **automático**: `automaticConcurrency: 3`, `maxLiveAutomatic: 8` (`DEFAULT_SPAWN_ADMISSION_LIMITS`). Ya tiene **cola de espera** (`terminal-spawn-waiters.ts`, `TerminalSpawnDeferredError`). | Cuenta procesos, no memoria. No aplica a agentes lanzados a mano. |
+| Nivel de presión               | `HostPressureLevel = 'ok' \| 'elevated' \| 'critical' \| 'unknown'` en `spawn-admission-contract.ts`, alimentado por `daemon-process-growth-monitor.ts` | Detecta "tormentas" de procesos (descendientes/seg).                                                                                                                                                         | **No mira la RAM.**                                               |
+| Pausa por presión              | `AutomaticWorkMode` `{ kind: 'paused', reason: 'pressure' }` en `daemon-automatic-work-guard.ts`                                                        | Pausa trabajo automático cuando hay presión.                                                                                                                                                                 | Se dispara solo por crecimiento de procesos.                      |
+| Tope por terminal              | `src/main/daemon/process-scopes/terminal-memory-limits.ts` (`ORCA_TERMINAL_MEMORY_MAX`)                                                                 | Tope duro vía **cgroups**, opt-in, **solo Linux**.                                                                                                                                                           | Nada en Windows ni macOS; no hay UI.                              |
+| Árbol de procesos por terminal | `process-growth-breaker.ts` (scopes por terminal)                                                                                                       | Ya agrupa descendientes por terminal.                                                                                                                                                                        | Solo cuenta procesos, no RSS.                                     |
 
 ### 8a. Medir la memoria de verdad
+
 Nuevo `src/main/daemon/admission/zotz-memory-pressure.ts`:
+
 - **Memoria disponible real por plataforma** (no uses `os.freemem()` a secas: en macOS subestima porque no cuenta memoria inactiva o purgable):
-  - Windows: `os.freemem()` (equivale a *Available*), y como respaldo `GlobalMemoryStatusEx` si hace falta precisión.
+  - Windows: `os.freemem()` (equivale a _Available_), y como respaldo `GlobalMemoryStatusEx` si hace falta precisión.
   - macOS: `sysctl kern.memorystatus_level` (porcentaje disponible según el kernel) o `vm_stat` (free + inactive + purgeable + speculative). Reutiliza la lectura de `vm_stat` que ya existe en `src/main/hang-watchdog/hang-incident-snapshot.ts`.
   - Linux: `MemAvailable` de `/proc/meminfo`.
 - Leer cada 2 s y solo con agentes vivos o en cola; en reposo, cada 10 s.
 - Convertirlo a `HostPressureLevel` con los umbrales de 8d, y **combinarlo con el nivel de crecimiento existente: gana el peor de los dos**. Engánchalo en `daemon-automatic-work-guard.ts`, donde ya se lee `this.monitor.level`.
 
 ### 8b. Costo estimado de cada agente
+
 Nuevo `zotz-agent-memory-ledger.ts`:
+
 - Mide el **RSS del árbol completo** de cada terminal de agente (padre + hijos: tests, builds, servidores), reutilizando los scopes por terminal de `process-growth-breaker.ts`.
 - Guarda por tipo de agente (`claude`, `codex`, `antigravity`) el **p90 del pico** de las últimas 20 corridas, persistido en el userData de Zotz.
 - Sin historial, usa el default de configuración (`agentDefaultReserveGb`, 2.5 GB).
 
 ### 8c. Admisión por memoria antes de lanzar
+
 En `terminal-spawn-gate.ts` (y en `openAgentLaunch` de `src/main/agent-launch/agent-launch-executor.ts` para los lanzamientos manuales):
+
 - Un agente entra solo si `disponible − costo_estimado ≥ reserva_minima` **y** la suma de costos de los agentes vivos no rebasa `agentMemoryBudget`. Además, nunca más de `maxConcurrentAgents`.
 - Si no cabe: **en cola**, usando los waiters existentes. Se arranca **en orden de llegada** cuando un agente termina o la memoria se recupera. Nunca se descarta una tarea.
 - Aplica a **todos los lanzamientos de agentes** (manuales, automatizaciones, orquestación, remotos por `serve`). **No** aplica a terminales normales sin agente.
 - Interruptor "Lanzar de todos modos" por tarea, para cuando Hugo decida forzar.
 
 ### 8d. Regulación en caliente
+
 Si con agentes ya corriendo la presión sube:
+
 1. **`elevated`** (disponible < 20 % o < `minFreeGb` + 1 GB): no se admiten agentes nuevos y se avisa (notificación y UI).
 2. **`critical`** (disponible < `minFreeGb`), sostenido 30 s: se **pausa el agente más reciente** (macOS/Linux `SIGSTOP` al árbol; Windows `NtSuspendProcess` o suspender el Job Object), se avisa, y se **reanuda solo** cuando el nivel vuelve a `ok` durante 60 s. Un agente a la vez, del más nuevo al más viejo.
 3. **Tope por agente rebasado** (`perAgentMaxGb`): según `onAgentOverLimit` = `notify` | `pause` (default) | `kill`. `kill` solo si Hugo lo elige en Settings.
+
 - Nunca pausar ni matar el propio Zotz, el daemon, `tailscaled`, ni la sesión del sistema.
 - Ojo: pausar un agente mucho tiempo puede hacer que su sesión con la API expire. Registra en la UI cuánto lleva pausado y, pasados 15 min, avisa para que Hugo decida.
 
 ### 8e. Topes duros por plataforma
+
 - **Linux:** ya existe (`ORCA_TERMINAL_MEMORY_MAX`). Solo conectarlo a la configuración de Zotz.
 - **Windows:** meter cada terminal de agente en un **Job Object** con `JOB_OBJECT_LIMIT_JOB_MEMORY` = `perAgentMaxGb` y `KILL_ON_JOB_CLOSE`. El spawn de ConPTY está en `src/main/daemon/pty-subprocess/` (`native-pty-spawn-windows`); el Job Object va en el módulo nativo (carpeta `native/`, en Rust) o vía `koffi`/FFI si ya se usa en el repo. **Revisa antes qué hay** para no meter dependencias nuevas.
 - **macOS:** no existe un tope duro por proceso para usuarios normales; ahí aplica la regulación suave de 8d (medir, pausar, avisar).
 
 ### 8f. Configuración y "al instalar"
+
 Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-settings.ts`:
 
-| Clave | Default | Qué es |
-|---|---|---|
-| `agentMemoryBudgetPercent` | 70 | Máximo de RAM total que pueden usar los agentes juntos |
-| `minFreeGb` | max(2, 15 % de la RAM) | Memoria que siempre se deja libre para el sistema |
-| `perAgentMaxGb` | min(6, 35 % de la RAM) | Tope por agente (árbol completo) |
-| `maxConcurrentAgents` | según RAM: ≤8 GB → 1, ≤16 GB → 2, ≤32 GB → 4, más → 6 | Agentes simultáneos |
-| `agentDefaultReserveGb` | 2.5 | Costo supuesto de un agente sin historial |
-| `onAgentOverLimit` | `pause` | `notify` / `pause` / `kill` |
+| Clave                      | Default                                               | Qué es                                                 |
+| -------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| `agentMemoryBudgetPercent` | 70                                                    | Máximo de RAM total que pueden usar los agentes juntos |
+| `minFreeGb`                | max(2, 15 % de la RAM)                                | Memoria que siempre se deja libre para el sistema      |
+| `perAgentMaxGb`            | min(6, 35 % de la RAM)                                | Tope por agente (árbol completo)                       |
+| `maxConcurrentAgents`      | según RAM: ≤8 GB → 1, ≤16 GB → 2, ≤32 GB → 4, más → 6 | Agentes simultáneos                                    |
+| `agentDefaultReserveGb`    | 2.5                                                   | Costo supuesto de un agente sin historial              |
+| `onAgentOverLimit`         | `pause`                                               | `notify` / `pause` / `kill`                            |
 
 - **Primer arranque y `zotz-node-setup.ps1`:** detectar la RAM total, calcular los defaults de la tabla y mostrarlos ("Esta máquina tiene 16 GB: hasta 2 agentes a la vez, 4 GB libres siempre"). Hugo puede ajustarlos ahí mismo.
 - Los defaults se calculan una vez y se guardan; no se recalculan si Hugo ya los cambió.
 
 ### 8g. Que se vea
+
 - En la barra de estado (ya existe `status-bar/resources/popover/resource-usage-metrics.tsx`): memoria disponible, presupuesto usado por agentes y **agentes en cola**.
-- Cada tarea en cola muestra por qué: *"En cola: necesita ~3.1 GB, hay 1.4 GB libres. 2 agentes antes."*
+- Cada tarea en cola muestra por qué: _"En cola: necesita ~3.1 GB, hay 1.4 GB libres. 2 agentes antes."_
 - Notificación (y push al celular si está activo) cuando: un agente entra en cola, arranca desde la cola, se pausa o rebasa su tope.
 
 ### Pruebas
+
 - Unit tests **solo** para la lógica pura de admisión y regulación (alimentada con muestras falsas): cabe/no cabe, orden FIFO, reanudación con histéresis (no reanudar y pausar en bucle), p90 del ledger y procesos protegidos nunca tocados.
 - Prueba manual documentada en `docs/zotz/MEMORIA.md`: en la MSI, lanzar 6 tareas que corran un script que consuma 3 GB cada una. Resultado esperado: nunca bajan de `minFreeGb`, las que no caben esperan en cola y arrancan solas, y nada se mata.
 
@@ -265,17 +303,17 @@ Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-
 
 ## Orden y alcance sugeridos
 
-| Fase                | Depende de | Tamaño                                 |
-| ------------------- | ---------- | -------------------------------------- |
-| 0 Setup             | —          | S                                      |
-| 1 Rebrand + 1b logo | 0          | M                                      |
-| 2 Telemetría y red  | 0          | M                                      |
-| 3 Updates           | 0          | S                                      |
-| 4 Agentes           | 1          | S                                      |
-| 5 Nodo 24/7 Windows | 1, 3       | L                                      |
-| 6 Tailscale         | 5          | S                                      |
-| 7 Seguridad         | 5          | S (en su mayoría docs y configuración) |
-| 8 Gobernador de memoria | 4, 5    | L                                      |
+| Fase                    | Depende de | Tamaño                                 |
+| ----------------------- | ---------- | -------------------------------------- |
+| 0 Setup                 | —          | S                                      |
+| 1 Rebrand + 1b logo     | 0          | M                                      |
+| 2 Telemetría y red      | 0          | M                                      |
+| 3 Updates               | 0          | S                                      |
+| 4 Agentes               | 1          | S                                      |
+| 5 Nodo 24/7 Windows     | 1, 3       | L                                      |
+| 6 Tailscale             | 5          | S                                      |
+| 7 Seguridad             | 5          | S (en su mayoría docs y configuración) |
+| 8 Gobernador de memoria | 4, 5       | L                                      |
 
 Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 
@@ -357,3 +395,36 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - `docs/zotz/UPDATE.md`: `git pull` + `pnpm install` + `pnpm build:win` + reinstalar y reiniciar `serve` (manual hoy; tarea programada cuando exista `zotz serve service` en Fase 5).
 - Sorpresas: (1) no hace falta tocar `updater-setup.ts`: todos los caminos automáticos (timers, `powerMonitor` resume, `browser-window-focus`, nudges, reintentos) nacen en `setupAutoUpdater` o en eventos que este registra. (2) `orcad-managed-auto-update` (actualiza hosts SSH administrados) se dejó: empuja el orcad **empaquetado en este mismo build de Zotz**, no descarga nada de Orca. (3) Upstream rompía un import (`structural-value-equality`); se resolvió en la base `zotz/fase-0-setup` y esta rama se rebasó encima.
 - Pendiente: "Listo cuando" (24 h sin pedir ni instalar updates) solo se puede verificar corriendo el nodo real.
+
+### 2026-11-16 — Fase 5 (`zotz/fase-5-nodo`)
+
+**Qué cambió**
+
+- 5b: `src/main/power/windows-system-sleep-assertion.ts` (`powerSaveBlocker` `prevent-app-suspension`) conectado en `AgentAwakeService`: en Windows, como en macOS, la aserción de sistema sustituye al bloqueo de pantalla (la pantalla se puede apagar; si la aserción falla, se vuelve al bloqueo de pantalla). En modo servidor el modo efectivo es siempre `on` (`resolveZotzComputerAwakeMode` en `src/shared/zotz/zotz-machine-mode.ts`, usado al arrancar y al cambiar settings).
+- 5a: `orca serve service` en Windows con la tarea programada `\Zotz\Serve` (al iniciar sesión, token interactivo, repetición cada minuto con `IgnoreNew`, RestartOnFailure, sin límite de tiempo, con batería). Sin `--supervise` (solo POSIX) y solo con el perfil por defecto (una tarea no fija variables de entorno). `resolveServiceCommand` busca `orca.exe` en Windows. El estado sale del enum `State` de `Get-ScheduledTask`, que no depende del idioma de Windows.
+- 5c: `resources/win32/zotz/zotz-node-setup.ps1` (idempotente, exige admin, transcripción y JSON de resultado por paso; además quita reglas de bloqueo de `Zotz.exe` en el puerto, como la reparación de firewall de upstream). Se empaqueta en `resources/zotz/` (extraResources de Windows; `resources/win32` ya está excluido de `app.asar`) y el build de Windows de `zotz-desktop-builds.yml` valida que parsea.
+- 5d: setting `zotzMachineMode` (opcional en el tipo, default `'unset'`). Pantalla en `src/renderer/src/components/zotz/`, montada en `AppRootSurfaces` junto al onboarding de upstream (sale cuando el onboarding ya no está), con entrada en Ajustes → General. Orquestador en `src/main/zotz/` (fases por plataforma, estado por paso, errores aislados, IPC `zotzNode:*`). Mantener despierta, abrir la red, mostrar el enlace/QR (`mobile:getRuntimePairingUrl` / `mobile:getPairingQR` con la IP de Tailscale leída en vivo) y persistir `zotzMachineMode: 'server'` solo ocurren cuando Tailscale está conectado y el firewall no falló (si se cancela UAC o falla Tailscale/firewall en un equipo personal/sin configurar, no se expone la red ni queda guardado `server`).
+- Exposición de red persistente: en modo servidor el escritorio arranca con `exposeNetworkByDefault` y la política de origen de `serve --refuse-public` (cambio de pocas líneas en `main-process-runtime-launch.ts`). No se fija a la IP de Tailscale: cambia al re-registrar el nodo, puede no existir todavía al iniciar sesión, y con una IP fija `ensureNetworkExposure` de upstream rechaza abrir la red y rompe el botón de vincular. El firewall de Windows limita el puerto a `100.64.0.0/10`.
+- El arranque automático lanza la **app de escritorio** (`Zotz.exe --zotz-node-autostart`), no `serve` sin ventana: computer use y el navegador necesitan el escritorio, `Zotz.exe` no abre consola y es el mismo perfil con los mismos dispositivos. `shouldActivateDesktopForSecondInstance` ignora ese argumento para que el watchdog no robe el foco.
+- Docs: `docs/zotz/NODE-SETUP.md` (qué cambia por SO, cómo deshacerlo, Smart App Control, BIOS, Autologon, cómo probar).
+- Tests: XML/args de la tarea y su estado (`zotz-windows-serve-service.test.ts`); secuencia, aislamiento y estado del orquestador y fases con runners inyectados (`zotz-node-setup.test.ts`: una sola elevación en Windows, UAC rechazada, Tailscale instala → login → espera → timeout, macOS sin pedir contraseña si ya está); aserción de Windows en el servicio de awake; `zotz-machine-mode.test.ts`. Fixture `zotz/ZotzMachineModeWizard` para revisar la UI.
+
+**Sorpresas / pendientes**
+
+- Nada de esto se pudo ejecutar en Windows o Linux reales (esta Mac no tiene PowerShell); ver la lista de verificación de Fase 5.
+- `RestartOnFailure` del Programador de tareas no vigila la salida de un proceso largo y su `Count` máximo es 999; de ahí el watchdog de repetición cada minuto. Mientras un Zotz abierto a mano (no por la tarea) esté corriendo, la tarea lanza cada minuto un segundo `Zotz.exe` que sale al instante sin activar la ventana; desde el siguiente inicio de sesión es la tarea quien lo posee.
+- Windows limita las horas activas a 18 h (no 0–23).
+- `-ExecutionPolicy RemoteSigned` (no `Bypass`, por EDR) para el script empaquetado; si el archivo llegara con Mark-of-the-Web, PowerShell lo bloquea y el paso lo reporta.
+- Pasar de servidor a personal solo quita el arranque automático; energía, firewall, SSH y políticas se deshacen a mano (comandos en NODE-SETUP.md).
+- Homebrew renombró el cask de la app a `tailscale-app`; se intenta ese y luego `tailscale`. En Linux, `tailscaled` rechaza `tailscale login` de un usuario sin privilegios: el asistente lo hace operador con `pkexec tailscale set --operator=<usuario>` antes del login y reporta el error real si el login falla.
+- La exposición que abre el asistente adopta en caliente la política de origen de `serve --refuse-public` (`adoptServeNetworkSources` en `runtime-rpc-network-exposure.ts`), sin esperar reinicio.
+- La CLI empaquetada sigue llamándose `orca` (`orca.exe`); no se renombró.
+
+**Revisión del PR #7 (2026-11-16)** — arreglos tras code review:
+
+- Elegir "Personal" quita la tarea de arranque siempre que el modo no fuera ya personal: una configuración de servidor a medias (Tailscale falló) podía registrar la tarea sin guardar el modo. Al dejar el modo servidor avisa que los dispositivos emparejados siguen con acceso hasta revocarlos.
+- El paso "no dormirse" verifica que un bloqueo del SO quedó activo (`AgentAwakeService.isSleepPrevented`), no solo que se pidió.
+- En Windows el bloqueo de sistema es **adicional** al de pantalla (no lo reemplaza): con Modern Standby, apagar la pantalla podía dormir la máquina y sacarla de la tailnet.
+- Rechazar el UAC se detecta recorriendo las excepciones internas (`Win32Exception` 1223 / `0x800704C7`), para mostrar "permiso rechazado" en vez del error crudo.
+- `orca serve service` en Windows registra la tarea con `S4U` (sin ventana) en vez de `InteractiveToken`: `orca.exe` es de consola y abría una ventana visible en cada inicio de sesión.
+- Pendientes anotados, no arreglados: (1) la repetición cada minuto podría relanzar Zotz durante una actualización NSIS (hoy el updater está apagado por Fase 3); (2) `xmlText`/`systemdArgument` duplican escapadores de `serve-service-unit.ts`.

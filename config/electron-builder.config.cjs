@@ -596,6 +596,11 @@ module.exports = {
         from: 'native/computer-use-windows/runtime.ps1',
         to: 'computer-use-windows/runtime.ps1'
       },
+      // Zotz: the first-run wizard runs this with one UAC prompt.
+      {
+        from: 'resources/win32/zotz/zotz-node-setup.ps1',
+        to: 'zotz/zotz-node-setup.ps1'
+      },
       featureWallResources
     ]
   },

@@ -2,6 +2,10 @@ import { WebSocketTransport } from '../transports/websocket/ws-transport'
 import { writeWsFallbackPort } from '../transports/websocket/ws-fallback-port-store'
 import { RuntimeRpcLifecycle } from './runtime-rpc-lifecycle'
 import { WS_BIND_HOST_ALL_INTERFACES, WS_BIND_HOST_LOOPBACK } from './runtime-rpc-pairing-types'
+import {
+  createServeNetworkSourceGuard,
+  type ServeNetworkSourceOptions
+} from './serve-network-source-policy'
 
 export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
   // Advertise addresses the widened listener will answer, not its current loopback bind.
@@ -33,6 +37,14 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     return this.networkExposurePromise
   }
 
+  // Zotz server mode adopts a source policy after startup; a live wide listener rebinds so the guard applies now.
+  async adoptServeNetworkSources(options: ServeNetworkSourceOptions): Promise<void> {
+    this.serveNetworkSources = options
+    if (this.wsBoundHost === WS_BIND_HOST_ALL_INTERFACES && !this.stopping) {
+      await this.widenWebSocketBind()
+    }
+  }
+
   protected async widenWebSocketBind(): Promise<void> {
     const current = this.activeTransports.find(
       (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
@@ -47,6 +59,12 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
       // Detach old listener, then reattach new transport to the same wiring so relay state/revocation survive.
       this.detachWebSocketWiring?.()
       await current.stop()
+      this.webSocketSourceGuard = createServeNetworkSourceGuard({
+        options: this.serveNetworkSources,
+        bindHost: WS_BIND_HOST_ALL_INTERFACES,
+        userDataPath: this.userDataPath,
+        devices: this.deviceRegistry?.listDevices() ?? []
+      })
       widened = await this.startWebSocketTransport({
         host: WS_BIND_HOST_ALL_INTERFACES,
         port: previousPort,

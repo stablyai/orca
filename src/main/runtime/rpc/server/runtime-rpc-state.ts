@@ -52,7 +52,7 @@ export class RuntimeRpcState {
   protected readonly requirePinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
-  protected readonly serveNetworkSources: ServeNetworkSourceOptions | null
+  protected serveNetworkSources: ServeNetworkSourceOptions | null
   protected webSocketSourceGuard: WebSocketSourceGuard | null = null
   protected readonly webClientRoot: string | undefined
   // Track actual WS bind host for pairing exposure transitions (STA-2370).

@@ -78,10 +78,12 @@ export function resolveServiceCommand(
     return explicit
   }
   const name = appCliName(deps.platform)
+  // Windows ships the launcher as orca.exe; the orca.cmd shim would open a console via cmd.exe.
+  const fileName = deps.platform === 'win32' ? `${name}.exe` : name
   for (const dir of (deps.env.PATH ?? '').split(delimiter).filter(isAbsolute)) {
     // Profile and AppImage launchers point at files that disappear with an update.
-    if (!isVersionScopedDir(dir, userData) && isExecutable(join(dir, name))) {
-      return join(dir, name)
+    if (!isVersionScopedDir(dir, userData) && isExecutable(join(dir, fileName))) {
+      return join(dir, fileName)
     }
   }
   throw new RuntimeClientError(
