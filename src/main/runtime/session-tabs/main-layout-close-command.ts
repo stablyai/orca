@@ -18,6 +18,8 @@ export type MainLayoutCloseHost = {
   stop: (ptyIds: string[], addressedPtyId: string) => Promise<ExplicitCloseStop>
   /** The tab's saved remote session id, which a relay may still run with no pane bound to it. */
   remoteSessionIdOf: (tabId: string) => string | undefined
+  /** Registered terminals whose pane identity has not reached the saved layout yet. */
+  runtimePtyIdsOfPane?: (tabId: string, leafId: string | null) => string[]
 }
 
 export type MainLayoutCloseTarget = {
@@ -90,10 +92,21 @@ export async function closeInMainLayout(
   }
   const addressedPtyId = target.addressedPtyId === undefined ? pane.ptyId : target.addressedPtyId
   const ended = closesTab
-    ? [...new Set([...panes.flatMap((entry) => (entry.ptyId ? [entry.ptyId] : [])), ...dormant])]
+    ? [
+        ...new Set([
+          ...panes.flatMap((entry) => (entry.ptyId ? [entry.ptyId] : [])),
+          ...dormant,
+          ...(host.runtimePtyIdsOfPane?.(target.tabId, null) ?? [])
+        ])
+      ]
     : addressedPtyId
-      ? [addressedPtyId]
-      : []
+      ? [
+          ...new Set([
+            addressedPtyId,
+            ...(host.runtimePtyIdsOfPane?.(target.tabId, target.leafId) ?? [])
+          ])
+        ]
+      : (host.runtimePtyIdsOfPane?.(target.tabId, target.leafId) ?? [])
   // Every terminal the close ends stops here, addressed or not.
   const stopAddress = addressedPtyId ?? ended[0]
   const stop = target.stopEnded && stopAddress ? await host.stop(ended, stopAddress) : NO_STOP

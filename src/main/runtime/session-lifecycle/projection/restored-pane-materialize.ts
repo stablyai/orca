@@ -61,7 +61,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
   ): void
 
   /** Start once if no terminal exists; all workspace wakes and non-window restore triggers use this in main-owned layouts. Null if main no longer holds the pane. */
-  ensureRestoredPaneStarted(
+  async ensureRestoredPaneStarted(
     pane: RestoredPane,
     trigger: RestoredPaneTrigger = {}
   ): Promise<StartedPty | null> {

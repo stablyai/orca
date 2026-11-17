@@ -1,6 +1,8 @@
 import { RpcDispatcher } from '../../rpc/dispatcher'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../rpc/methods/terminal/terminal-lifecycle-methods'
 import { describe, expect, it, vi } from 'vitest'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { beginStoppedTerminalTabClose } from './stopped-terminal-tab-close-pending'
 import {
   LEAF_A,
   TAB_ID,
@@ -14,6 +16,21 @@ const options = {
   reason: 'user' as const,
   requireStoppedTerminalTab: true,
   localPtyTeardownOwnedExternally: true
+}
+
+function recordUnboundPty(runtime: Awaited<ReturnType<typeof setupMainOwnedWorkspace>>['runtime']) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercise the state between PTY registration and the saved pane bind.
+  const internals = runtime as unknown as {
+    recordPtyWorktree: (
+      ptyId: string,
+      worktreeId: string,
+      state: { connected: boolean; registeredPaneKey: string }
+    ) => void
+  }
+  internals.recordPtyWorktree('pty-unbound', WORKTREE_ID, {
+    connected: true,
+    registeredPaneKey: `${TAB_ID}:${LEAF_A}`
+  })
 }
 
 describe('close a stopped terminal tab by id', () => {
@@ -31,13 +48,13 @@ describe('close a stopped terminal tab by id', () => {
     const apply = f.runtime.applyLayoutCommand.bind(f.runtime)
     vi.spyOn(f.runtime, 'applyLayoutCommand').mockImplementation(async (command, run) => {
       if (command.type === 'closeTabs') {
-        expect(() =>
+        await expect(
           f.runtime.ensureRestoredPaneStarted({
             worktreeId: WORKTREE_ID,
             tabId: TAB_ID,
             leafId: LEAF_A
           })
-        ).toThrow('Terminal tab is closing.')
+        ).rejects.toThrow('Terminal tab is closing.')
         f.runtime.registerPty('pty-race', WORKTREE_ID, null)
         f.session().terminalLayoutsByTabId[TAB_ID]!.ptyIdsByLeafId = { [LEAF_A]: 'pty-race' }
       }
@@ -49,6 +66,97 @@ describe('close a stopped terminal tab by id', () => {
       code: 'terminal_tab_live'
     })
     expect(f.session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([TAB_ID])
+  })
+
+  it('refuses an unbound runtime PTY registered before the close commits', async () => {
+    const f = await setupMainOwnedWorkspace({ stopped: true })
+    const apply = f.runtime.applyLayoutCommand.bind(f.runtime)
+    vi.spyOn(f.runtime, 'applyLayoutCommand').mockImplementation(async (command, run) => {
+      if (command.type === 'closeTabs') {
+        recordUnboundPty(f.runtime)
+      }
+      return apply(command, run)
+    })
+
+    await expect(
+      f.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, options)
+    ).rejects.toMatchObject({ code: 'terminal_tab_live' })
+    expect(f.session().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([TAB_ID])
+    expect(f.session().terminalLayoutsByTabId[TAB_ID]?.ptyIdsByLeafId).toEqual({})
+  })
+
+  it('stops an unbound runtime PTY when a regular tab close commits', async () => {
+    const f = await setupMainOwnedWorkspace({ stopped: true })
+    const apply = f.runtime.applyLayoutCommand.bind(f.runtime)
+    vi.spyOn(f.runtime, 'applyLayoutCommand').mockImplementation(async (command, run) => {
+      if (command.type === 'closeTabs') {
+        recordUnboundPty(f.runtime)
+      }
+      return apply(command, run)
+    })
+
+    await f.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, { reason: 'user' })
+    expect(f.session().tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(f.stopped).toContain('pty-unbound')
+  })
+
+  it('continues starting WSL panes after a closing tab rejects', async () => {
+    const f = await setupMainOwnedWorkspace({ stopped: true })
+    const release = beginStoppedTerminalTabClose(f.runtime, WORKTREE_ID, TAB_ID)
+    const other = { worktreeId: WORKTREE_ID, tabId: 'other-tab', leafId: LEAF_A }
+    const original = f.runtime.ensureRestoredPaneStarted.bind(f.runtime)
+    const start = vi
+      .spyOn(f.runtime, 'ensureRestoredPaneStarted')
+      .mockImplementation((pane) =>
+        pane.tabId === TAB_ID ? original(pane) : Promise.resolve({ id: 'other-pty' })
+      )
+    try {
+      await expect(
+        f.runtime.startWslHeldTerminalPanes([
+          { worktreeId: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_A },
+          other
+        ])
+      ).resolves.toEqual({ started: false })
+      expect(start).toHaveBeenCalledWith(other, { wslUserAct: true })
+    } finally {
+      release()
+    }
+  })
+
+  it('continues resuming slept panes after a closing tab rejects', async () => {
+    const f = await setupMainOwnedWorkspace({ stopped: true })
+    const other = { worktreeId: WORKTREE_ID, tabId: 'other-tab', leafId: LEAF_A }
+    const record = (tabId: string): SleepingAgentSessionRecord => ({
+      paneKey: `${tabId}:${LEAF_A}`,
+      tabId,
+      worktreeId: WORKTREE_ID,
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: `${tabId}-session` },
+      prompt: '',
+      state: 'working',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'worktree-sleep'
+    })
+    f.session().sleepingAgentSessionsByPaneKey = {
+      [`${TAB_ID}:${LEAF_A}`]: record(TAB_ID),
+      [`${other.tabId}:${LEAF_A}`]: record(other.tabId)
+    }
+    const release = beginStoppedTerminalTabClose(f.runtime, WORKTREE_ID, TAB_ID)
+    const original = f.runtime.ensureRestoredPaneStarted.bind(f.runtime)
+    const start = vi
+      .spyOn(f.runtime, 'ensureRestoredPaneStarted')
+      .mockImplementation((pane) =>
+        pane.tabId === TAB_ID ? original(pane) : Promise.resolve({ id: 'other-pty' })
+      )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await expect(f.runtime.resumeSleptWorkspaceAgents(WORKTREE_ID)).resolves.toBeUndefined()
+      expect(start).toHaveBeenCalledWith(other)
+    } finally {
+      warn.mockRestore()
+      release()
+    }
   })
 
   it.each([

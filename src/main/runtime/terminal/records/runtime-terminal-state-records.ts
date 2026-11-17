@@ -79,6 +79,8 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   readonly tabId?: string | null
   /** Window-owned builds only (L80): read through paneOfPty; layout-owner records never carry it. */
   readonly paneKey?: string | null
+  /** Spawn registration's pane before main persists its binding. */
+  registeredPaneKey?: string | null
   /** Window-owned L80 graphSequence when paneKey was recorded; newer surfaces have no graph statement that could contradict them (pty-recorded-surface-topology.ts). */
   readonly surfaceRecordedAtGraphSequence?: number
   savedTerminalLaunchResult?: {

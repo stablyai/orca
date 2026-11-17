@@ -17,6 +17,7 @@ import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-a
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import { beginStoppedTerminalTabClose } from './stopped-terminal-tab-close-pending'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
   abstract override applyLayoutCommand(
@@ -65,13 +66,25 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
       : () => {}
     let close: MainLayoutClose | null
     try {
+      const runtimePtyIdsOfPane = (id: string, leafId: string | null): string[] =>
+        [...this.ptysById.values()]
+          .filter(
+            (pty) =>
+              pty.connected &&
+              pty.worktreeId === worktreeId &&
+              parsePaneKey(pty.registeredPaneKey ?? '')?.tabId === id &&
+              (leafId === null || pty.registeredPaneKey === `${id}:${leafId}`) &&
+              this.paneOfPty(pty).paneKey === null
+          )
+          .map((pty) => pty.ptyId)
       close = await closeInMainLayout(
         {
           panesOfTab: (id) => surfaces.panesOfTab(id),
           applyLayoutCommand: (command, run) => this.applyLayoutCommand(command, run),
           stop: (ptyIds, addressed) => this.stopExplicitlyClosedTabPtys(ptyIds, addressed),
           remoteSessionIdOf: (id) =>
-            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id]
+            this.getWorkspaceSessionForWorktree(worktreeId)?.remoteSessionIdsByTabId?.[id],
+          runtimePtyIdsOfPane
         },
         {
           worktreeId,
@@ -93,7 +106,8 @@ export abstract class OrcaRuntimeWithCloseMobileRowInMainLayout extends OrcaRunt
                     ),
                     session?.tabsByWorktree?.[worktreeId]?.find((tab) => tab.id === row.parentTabId)
                       ?.ptyId,
-                    session?.remoteSessionIdsByTabId?.[row.parentTabId]
+                    session?.remoteSessionIdsByTabId?.[row.parentTabId],
+                    ...runtimePtyIdsOfPane(row.parentTabId, null)
                   ]
                   if (
                     boundPtyIds.some(

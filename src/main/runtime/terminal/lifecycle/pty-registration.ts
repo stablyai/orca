@@ -126,6 +126,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
         ? {
             tabId: binding.tabId,
             paneKey,
+            registeredPaneKey: paneKey,
             surfaceRecordedAtGraphSequence: spawnSurfaceClaimSequence(this.graphSequence)
           }
         : {}),
@@ -139,6 +140,9 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       !isRuntimeHostedWorkspace(this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId))
     ) {
       assertPaneBoundAtRegistration(ptyId, paneKey, this.paneOfPty(pty).paneKey)
+    }
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && this.paneOfPty(pty).paneKey === paneKey) {
+      pty.registeredPaneKey = null
     }
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
