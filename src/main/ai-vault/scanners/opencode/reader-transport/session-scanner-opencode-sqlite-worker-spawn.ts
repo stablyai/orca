@@ -98,7 +98,8 @@ export async function listForHost(
   args: Parameters<OpenCodeSqliteWorkerClient['list']>[0]
 ): Promise<SessionFileCandidate[]> {
   const agent = args.agent ?? 'opencode'
-  const scoped = Boolean(args.scopePaths?.length)
+  // A Hermes list is always its store's main list; a scope only adds rows to it.
+  const scoped = Boolean(args.scopePaths?.length) && agent !== 'hermes'
   const issues: AiVault.AiVaultScanIssue[] = []
   const closeSource =
     !scoped && args.dbPaths.length > 0 ? openAiVaultScanSource(args.signal, agent) : null
@@ -155,7 +156,8 @@ async function listCandidatesForHost(
       const scopePaths = args.scopePaths?.length
         ? aiVaultScopePathsForWslDistro(args.scopePaths, distro)
         : args.scopePaths
-      if (args.scopePaths?.length && scopePaths?.length === 0) {
+      // A Hermes scope adds in-scope rows to its newest ones; elsewhere it is the whole request.
+      if (args.scopePaths?.length && scopePaths?.length === 0 && args.agent !== 'hermes') {
         return []
       }
       const first = paths.values().next().value!

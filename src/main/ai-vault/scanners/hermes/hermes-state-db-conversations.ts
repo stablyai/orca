@@ -1,6 +1,6 @@
 import type SyncDatabase from '../../../sqlite/sync-database'
-import { tableExists } from '../../../opencode-usage/schema-helpers'
 import { parseJsonObject } from '../../parsing/session-json-object'
+import { sessionSelect, type HermesSchema, type HermesSessionRow } from './hermes-state-db-schema'
 
 // Hermes' state.db holds every surface's sessions (CLI, TUI, gateway, ACP). These rules mirror its own
 // picker (hermes_state_common.py `_LISTABLE_CHILD_SQL`, `list_sessions_rich`, acp_adapter/catalog.py).
@@ -15,109 +15,11 @@ const RESET_END_REASONS = new Set([
 ])
 const LOCAL_POLICY_PREFIX = 'gateway.local_policy.v1:'
 
-const SESSION_COLUMNS = [
-  'id',
-  'parent_session_id',
-  'started_at',
-  'source',
-  'session_key',
-  'model',
-  'model_config',
-  'cwd',
-  'title',
-  'ended_at',
-  'end_reason',
-  'last_activity_at',
-  'hidden',
-  'archived',
-  'transcript_revision'
-] as const
-
-export type HermesSessionRow = {
-  id: string
-  parent_session_id: string | null
-  started_at: number
-  source: string | null
-  session_key: string | null
-  model: string | null
-  model_config: string | null
-  cwd: string | null
-  title: string | null
-  ended_at: number | null
-  end_reason: string | null
-  last_activity_at: number | null
-  hidden: number | null
-  archived: number | null
-  transcript_revision: number | null
-}
-
-/** Columns differ across Hermes releases (schema 4 had no cwd, hidden or archived); read them once per open. */
-export type HermesSchema = {
-  sessions: ReadonlySet<string>
-  messages: ReadonlySet<string>
-  messageIndexes: ReadonlySet<string>
-  hasStateMeta: boolean
-}
-
 export type HermesConversation = {
   /** The id Hermes' editors and `--resume` hold: a local receipt's owner, else the listed row. */
   id: string
   /** The listed segment and its compression continuations, oldest first. */
   segments: HermesSessionRow[]
-}
-
-function tableColumns(db: SyncDatabase, table: string): Set<string> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: PRAGMA table_info rows carry a name column.
-  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name?: unknown }[]
-  return new Set(rows.flatMap((row) => (typeof row.name === 'string' ? [row.name] : [])))
-}
-
-const schemaCache = new Map<string, { version: number; schema: HermesSchema | null }>()
-
-/** Null when the database is not a readable Hermes session store. Cached per store until its
- *  schema_version moves: the column probes cost more than a whole preview read. */
-export function readHermesSchema(db: SyncDatabase, dbPath: string): HermesSchema | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: PRAGMA schema_version returns one integer row.
-  const version = (db.prepare('PRAGMA schema_version').get() as { schema_version: number })
-    .schema_version
-  const cached = schemaCache.get(dbPath)
-  if (cached?.version === version) {
-    return cached.schema
-  }
-  const schema = probeHermesSchema(db)
-  schemaCache.delete(dbPath)
-  schemaCache.set(dbPath, { version, schema })
-  if (schemaCache.size > 32) {
-    schemaCache.delete(schemaCache.keys().next().value!)
-  }
-  return schema
-}
-
-function probeHermesSchema(db: SyncDatabase): HermesSchema | null {
-  const sessions = tableColumns(db, 'sessions')
-  const messages = tableColumns(db, 'messages')
-  const required =
-    ['id', 'parent_session_id', 'started_at'].every((column) => sessions.has(column)) &&
-    ['id', 'session_id', 'role', 'content', 'timestamp'].every((column) => messages.has(column))
-  if (!required) {
-    return null
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: PRAGMA index_list rows carry a name column.
-  const indexes = db.prepare('PRAGMA index_list(messages)').all() as { name?: unknown }[]
-  return {
-    sessions,
-    messages,
-    messageIndexes: new Set(
-      indexes.flatMap((index) => (typeof index.name === 'string' ? [index.name] : []))
-    ),
-    hasStateMeta: tableExists(db, 'state_meta')
-  }
-}
-
-function sessionSelect(schema: HermesSchema): string {
-  return SESSION_COLUMNS.map((column) =>
-    schema.sessions.has(column) ? column : `NULL AS ${column}`
-  ).join(', ')
 }
 
 type SessionMarkers = { branchedFrom: boolean; resetFrom: boolean; delegateFrom: boolean }
@@ -230,64 +132,121 @@ function resetSegmentStarts(lineage: readonly string[], endReason: (id: string) 
   )
 }
 
-/** One entry per conversation Hermes' own picker lists: no hidden, archived, sub-agent, tool or continuation rows. */
-export function listHermesConversations(
-  db: SyncDatabase,
-  schema: HermesSchema
-): HermesConversation[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
-  const sessionRows = db
-    .prepare(`SELECT ${sessionSelect(schema)} FROM sessions`)
-    .all() as HermesSessionRow[]
-  const rows = new Map(sessionRows.map((row) => [row.id, row]))
-  const children = Map.groupBy(
-    sessionRows.filter((row) => row.parent_session_id),
-    (row) => row.parent_session_id!
-  )
+type SessionRowSource = {
+  row: (id: string) => HermesSessionRow | undefined
+  children: (row: HermesSessionRow) => readonly HermesSessionRow[]
+}
+
+/** Local reset lineages list as one conversation: the owner of each segment, and the earlier
+ *  segments that no longer list (hermes_state_local.local_lineage_index). */
+function readLocalLineages(db: SyncDatabase, schema: HermesSchema, source: SessionRowSource) {
   const owners = new Map<string, string>()
   const superseded = new Set<string>()
-  if (schema.hasStateMeta) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects the value column.
-    const receipts = db
-      .prepare('SELECT value FROM state_meta WHERE key GLOB ?')
-      .all(`${LOCAL_POLICY_PREFIX}*`) as { value: unknown }[]
-    for (const receipt of receipts.map(({ value }) => parseReceipt(value))) {
-      if (!receipt) {
-        continue
-      }
-      for (const id of receipt.lineage) {
-        owners.set(id, receipt.owner)
-      }
-      const starts = resetSegmentStarts(receipt.lineage, (id) => rows.get(id)?.end_reason)
-      for (const start of starts.slice(0, -1)) {
-        superseded.add(start)
-      }
+  if (!schema.hasStateMeta) {
+    return { owners, superseded }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects the value column.
+  const receipts = db
+    .prepare('SELECT value FROM state_meta WHERE key GLOB ?')
+    .all(`${LOCAL_POLICY_PREFIX}*`) as { value: unknown }[]
+  for (const receipt of receipts.map(({ value }) => parseReceipt(value))) {
+    if (!receipt) {
+      continue
+    }
+    for (const id of receipt.lineage) {
+      owners.set(id, receipt.owner)
+    }
+    const starts = resetSegmentStarts(receipt.lineage, (id) => source.row(id)?.end_reason)
+    for (const start of starts.slice(0, -1)) {
+      superseded.add(start)
     }
   }
-  const listed: HermesConversation[] = []
-  for (const row of sessionRows) {
+  return { owners, superseded }
+}
+
+/** One entry per conversation Hermes' own picker lists: no hidden, archived, sub-agent, tool or
+ *  continuation rows. With `recent`, only conversations among the `recent` most recently active
+ *  session rows, found through Hermes' own recency index without reading every row. */
+export function listHermesConversations(
+  db: SyncDatabase,
+  schema: HermesSchema,
+  recent?: number
+): HermesConversation[] {
+  const select = sessionSelect(schema)
+  let starts: HermesSessionRow[]
+  let source: SessionRowSource
+  if (recent === undefined || !schema.sessions.has('last_activity_at')) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
+    starts = db.prepare(`SELECT ${select} FROM sessions`).all() as HermesSessionRow[]
+    const rows = new Map(starts.map((row) => [row.id, row]))
+    const children = Map.groupBy(
+      starts.filter((row) => row.parent_session_id),
+      (row) => row.parent_session_id!
+    )
+    source = { row: (id) => rows.get(id), children: (row) => children.get(row.id) ?? [] }
+  } else {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
+    const newest = db
+      .prepare(
+        `SELECT ${select} FROM sessions
+         ORDER BY COALESCE(last_activity_at, started_at) DESC, started_at DESC LIMIT ?`
+      )
+      .all(recent) as HermesSessionRow[]
+    source = lazySessionRows(db, select, newest)
+    // A recent continuation stands for the conversation it continues.
+    const heads = new Map<string, HermesSessionRow>()
+    for (let row of newest) {
+      const walked = new Set([row.id])
+      let parent = row.parent_session_id ? source.row(row.parent_session_id) : undefined
+      while (parent && !walked.has(parent.id) && isContinuation(row, parent)) {
+        walked.add(parent.id)
+        row = parent
+        parent = row.parent_session_id ? source.row(row.parent_session_id) : undefined
+      }
+      heads.set(row.id, row)
+    }
+    starts = [...heads.values()]
+  }
+  const { owners, superseded } = readLocalLineages(db, schema, source)
+  return starts.flatMap((row) => {
     const markers = markersOf(row)
-    const parent = row.parent_session_id ? rows.get(row.parent_session_id) : undefined
+    const parent = row.parent_session_id ? source.row(row.parent_session_id) : undefined
     const listable =
       !row.parent_session_id ||
       isBranchChild(row, markers, parent) ||
       isResetChild(row, markers, parent)
     // `hermes sessions list` also hides third-party tool sessions by default.
-    if (
-      listable &&
+    return listable &&
       !markers.delegateFrom &&
       row.source !== 'tool' &&
       Number(row.hidden ?? 0) === 0 &&
       Number(row.archived ?? 0) === 0 &&
       !superseded.has(row.id)
-    ) {
-      listed.push({
-        id: owners.get(row.id) ?? row.id,
-        segments: compressionChain(row, (segment) => children.get(segment.id) ?? [])
-      })
-    }
+      ? [{ id: owners.get(row.id) ?? row.id, segments: compressionChain(row, source.children) }]
+      : []
+  })
+}
+
+/** Session rows read on demand by id and by parent, seeded with rows already read. */
+function lazySessionRows(
+  db: SyncDatabase,
+  select: string,
+  seed: readonly HermesSessionRow[]
+): SessionRowSource {
+  const rows = new Map<string, HermesSessionRow | undefined>(seed.map((row) => [row.id, row]))
+  const byId = db.prepare(`SELECT ${select} FROM sessions WHERE id = ?`)
+  const byParent = db.prepare(`SELECT ${select} FROM sessions WHERE parent_session_id = ?`)
+  return {
+    row: (id) => {
+      if (!rows.has(id)) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
+        rows.set(id, byId.get(id) as HermesSessionRow | undefined)
+      }
+      return rows.get(id)
+    },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
+    children: (row) => byParent.all(row.id) as HermesSessionRow[]
   }
-  return listed
 }
 
 /** One conversation by the id its row carries, read without loading the whole store. */

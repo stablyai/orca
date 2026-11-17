@@ -30,14 +30,17 @@ import {
   readOpenCodeDatabase
 } from '../opencode/sqlite/session-scanner-opencode-sqlite-open'
 import { scopedSessionRows } from '../session-scanner-sqlite-scope-rows'
-import { hermesConversationActivity, readHermesSegmentActivity } from './hermes-state-db-activity'
+import {
+  hermesConversationActivity,
+  hermesConversationRecency,
+  readHermesSegmentActivity
+} from './hermes-state-db-activity'
 import {
   listHermesConversations,
   readHermesConversation,
-  readHermesSchema,
-  type HermesConversation,
-  type HermesSchema
+  type HermesConversation
 } from './hermes-state-db-conversations'
+import { readHermesSchema, type HermesSchema } from './hermes-state-db-schema'
 import {
   decodeHermesMessage,
   displayedMessages,
@@ -62,7 +65,11 @@ function conversationCwd(conversation: HermesConversation): string | null {
   return null
 }
 
-/** Lists Hermes conversations with live messages, newest first, without reading message bodies. */
+// Headroom over the limit for empty conversations and `last_activity_at` lagging a heartbeat.
+const RECENCY_SLACK = (limit: number) => Math.ceil(limit * 1.5) + 32
+
+/** Newest `limit` conversations, plus with `scopePaths` the newest `limit` in scope, newest first;
+ *  never reads message bodies. A finite limit reads activity for only the most recent candidates. */
 export function listHermesSqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
@@ -70,6 +77,7 @@ export function listHermesSqliteSessions(args: {
   scopePaths?: readonly string[]
 }): SessionFileCandidate[] {
   const candidates: SessionFileCandidate[] = []
+  const limited = Number.isFinite(args.limit)
   for (const dbPath of args.dbPaths) {
     try {
       const rows = readOpenCodeDatabase({
@@ -79,20 +87,52 @@ export function listHermesSqliteSessions(args: {
           if (!schema) {
             return []
           }
-          const activity = readHermesSegmentActivity(db, schema)
-          return listHermesConversations(db, schema)
-            .map((conversation) => ({
-              conversation,
-              activity: hermesConversationActivity(conversation, activity),
-              directory: conversationCwd(conversation)
+          const scoped = Boolean(args.scopePaths?.length)
+          const window = RECENCY_SLACK(args.limit)
+          // Stores older than last_activity_at have no recency of their own; read them whole.
+          const windowed = limited && schema.sessions.has('last_activity_at')
+          // A limited, unscoped list reads only the most recent session rows; a scope can reach any age.
+          const conversations = listHermesConversations(
+            db,
+            schema,
+            windowed && !scoped ? window : undefined
+          ).map((conversation) => ({ conversation, directory: conversationCwd(conversation) }))
+          const newest = (list: typeof conversations) =>
+            list
+              .toSorted(
+                (left, right) =>
+                  hermesConversationRecency(right.conversation) -
+                  hermesConversationRecency(left.conversation)
+              )
+              .slice(0, window)
+          const chosen = windowed
+            ? new Set([
+                ...newest(conversations),
+                ...(scoped
+                  ? newest(scopedSessionRows(conversations, args.scopePaths!, Infinity, dbPath))
+                  : [])
+              ])
+            : new Set(conversations)
+          const segmentIds = [...chosen].flatMap(({ conversation }) =>
+            conversation.segments.map((segment) => segment.id)
+          )
+          // An indexed search per chosen session; only an unlimited sweep reads the whole index.
+          const activity = readHermesSegmentActivity(db, schema, windowed ? segmentIds : undefined)
+          return [...chosen]
+            .map((row) => ({
+              ...row,
+              activity: hermesConversationActivity(row.conversation, activity)
             }))
             .filter((row) => row.activity.live > 0)
             .sort((left, right) => right.activity.updatedMs - left.activity.updatedMs)
         }
       })
-      const admitted = args.scopePaths?.length
-        ? scopedSessionRows(rows, args.scopePaths, args.limit, dbPath)
-        : rows.slice(0, Number.isFinite(args.limit) ? args.limit : undefined)
+      const admitted = new Set([
+        ...rows.slice(0, limited ? args.limit : undefined),
+        ...(args.scopePaths?.length
+          ? scopedSessionRows(rows, args.scopePaths, args.limit, dbPath)
+          : [])
+      ])
       for (const { conversation, activity } of admitted) {
         candidates.push({
           agent: 'hermes',

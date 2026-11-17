@@ -4,7 +4,8 @@ import { timestampIso } from '../../parsing/session-scanner-accumulator'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { asRecord } from '../../parsing/session-record-fields'
 import { decodeSessionMessage } from '../../transcripts/session-decoded-message'
-import type { HermesConversation, HermesSchema } from './hermes-state-db-conversations'
+import type { HermesConversation } from './hermes-state-db-conversations'
+import type { HermesSchema } from './hermes-state-db-schema'
 
 // Hermes marks JSON-encoded (multimodal) content with this prefix (hermes_state.py _CONTENT_JSON_PREFIX).
 const CONTENT_JSON_PREFIX = '\u0000json:'

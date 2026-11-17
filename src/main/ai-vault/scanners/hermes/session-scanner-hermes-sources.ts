@@ -82,20 +82,22 @@ export function hermesDiscoveries(
         )
       )
     ).filter((dbPath): dbPath is string => dbPath !== null)
-    const list = (scopePaths?: readonly string[]) =>
+    // One read serves both: the newest `limit`, then the in-scope ones beyond them.
+    const scoped = scopeWalksAgentFiles('hermes', options.scopePaths)
+    const listed =
       present.length === 0
-        ? Promise.resolve([])
-        : listHermesSqliteSessionsViaWorker({
-            dbPaths: present,
-            limit,
-            issues,
-            scopePaths,
-            signal: options.signal
-          }).then((candidates) => candidates.slice(0, limit).map((candidate) => candidate.file))
-    const [files, scopeFiles] = await Promise.all([
-      list(),
-      scopeWalksAgentFiles('hermes', options.scopePaths) ? list(options.scopePaths) : undefined
-    ])
+        ? []
+        : (
+            await listHermesSqliteSessionsViaWorker({
+              dbPaths: present,
+              limit,
+              issues,
+              ...(scoped ? { scopePaths: options.scopePaths } : {}),
+              signal: options.signal
+            })
+          ).map((candidate) => candidate.file)
+    const files = listed.slice(0, limit)
+    const scopeFiles = scoped ? listed.slice(limit) : undefined
     return {
       agent: 'hermes' as const,
       rootDir: home,

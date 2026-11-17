@@ -118,8 +118,8 @@ function exchange(db: Database.Database, session: string, prompt: string, at: nu
   addMessage(db, { session, role: 'assistant', content: `Echo: ${prompt}`, at: at + 1 })
 }
 
-function listedIds(path: string): string[] {
-  return listHermesSqliteSessions({ dbPaths: [path], limit: 50, issues: [] }).map(
+function listedIds(path: string, limit = 50): string[] {
+  return listHermesSqliteSessions({ dbPaths: [path], limit, issues: [] }).map(
     (candidate) => candidate.file.path
   )
 }
@@ -152,6 +152,9 @@ it('lists the conversations Hermes itself lists, newest first', () => {
   db.close()
 
   expect(listedIds(path)).toEqual([`${path}#branch`, `${path}#cli`])
+  // A limited list reads only the most recent session rows; it must agree with the whole sweep.
+  expect(listedIds(path, 1)).toEqual([`${path}#branch`])
+  expect(listedIds(path, Infinity)).toEqual(listedIds(path))
 })
 
 it('reads a compressed conversation as one row through the continuation Hermes resumes', () => {

@@ -19,7 +19,7 @@ export type OpenCodeSqliteListRequest = {
   dbPaths: readonly string[]
   limit: number | null
   agent?: SqliteReaderAgent
-  /** Lists only sessions whose directory is in scope; an older reader ignores it and lists unfiltered. */
+  /** Lists only sessions whose directory is in scope (Hermes: the newest plus those in scope); an older reader ignores it and lists unfiltered. */
   scopePaths?: readonly string[]
 }
 

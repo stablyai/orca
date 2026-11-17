@@ -18,9 +18,10 @@
 9 src/main/ai-vault-search/storage/session-search-write-buffer.ts
 19 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
 13 src/main/ai-vault/parse-cache/session-scope-cwds-table.ts
-2 src/main/ai-vault/scanners/hermes/hermes-state-db-activity.ts
+1 src/main/ai-vault/scanners/hermes/hermes-state-db-activity.ts
 16 src/main/ai-vault/scanners/hermes/hermes-state-db-conversations.ts
 4 src/main/ai-vault/scanners/hermes/hermes-state-db-messages.ts
+6 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
 2 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-capture.ts
 4 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list.ts
 1 src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open.ts

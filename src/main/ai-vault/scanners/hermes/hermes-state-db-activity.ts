@@ -1,12 +1,23 @@
 import type SyncDatabase from '../../../sqlite/sync-database'
-import type { HermesConversation, HermesSchema } from './hermes-state-db-conversations'
+import type { HermesConversation } from './hermes-state-db-conversations'
+import type { HermesSchema } from './hermes-state-db-schema'
 
 // Hermes' coerce_epoch window; cells outside it are damaged pages, not times.
 const EPOCH_MAX_SECONDS = 4_200_000_000
 
 export type SegmentActivity = { live: number; maxId: number; lastMessage: number | null }
 
-/** Live row count, newest row id and newest message time per session, from the session index alone. */
+type ActivityRow = {
+  session_id: string
+  live: number
+  max_id: number
+  last_message: number | null
+}
+
+const SESSION_ID_BATCH = 500
+
+/** Live row count, newest row id and newest message time per session, from the session index alone:
+ *  an indexed search per named session, or one pass over the index when `sessionIds` is absent. */
 export function readHermesSegmentActivity(
   db: SyncDatabase,
   schema: HermesSchema,
@@ -15,29 +26,44 @@ export function readHermesSegmentActivity(
   const live = schema.messages.has('active')
   // The planner otherwise picks the display index and reads every row for its timestamp (1.5 s at 200k rows).
   const index = live ? 'idx_messages_session_active' : 'idx_messages_session'
-  const filters = [
-    ...(live ? ['active = 1'] : []),
-    ...(sessionIds ? [`session_id IN (${sessionIds.map(() => '?').join(',')})`] : [])
-  ]
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects exactly these aggregates.
-  const rows = db
-    .prepare(
+  const query = (count: number | null) => {
+    const filters = [
+      ...(live ? ['active = 1'] : []),
+      ...(count === null
+        ? []
+        : [`session_id IN (${Array.from({ length: count }, () => '?').join(',')})`])
+    ]
+    return db.prepare(
       `SELECT session_id, COUNT(*) AS live, MAX(id) AS max_id, MAX(timestamp) AS last_message
        FROM messages ${schema.messageIndexes.has(index) ? `INDEXED BY ${index}` : ''}
        ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
        GROUP BY session_id`
     )
-    .all(...(sessionIds ?? [])) as {
-    session_id: string
-    live: number
-    max_id: number
-    last_message: number | null
-  }[]
+  }
+  const rows: ActivityRow[] = []
+  if (sessionIds) {
+    for (let start = 0; start < sessionIds.length; start += SESSION_ID_BATCH) {
+      const batch = sessionIds.slice(start, start + SESSION_ID_BATCH)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects exactly these aggregates.
+      rows.push(...(query(batch.length).all(...batch) as ActivityRow[]))
+    }
+  } else {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects exactly these aggregates.
+    rows.push(...(query(null).all() as ActivityRow[]))
+  }
   return new Map(
     rows.map((row) => [
       row.session_id,
       { live: row.live, maxId: row.max_id, lastMessage: row.last_message }
     ])
+  )
+}
+
+/** How recently Hermes says a conversation was active, from its session rows alone; message
+ *  timestamps can run up to a heartbeat ahead of `last_activity_at`. */
+export function hermesConversationRecency(conversation: HermesConversation): number {
+  return Math.max(
+    ...conversation.segments.map((segment) => segment.last_activity_at ?? segment.started_at)
   )
 }
 
