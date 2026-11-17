@@ -141,7 +141,9 @@ describe('useWorkspaceCleanupHeldRows', () => {
 
   it('keeps a kept (selected) row in its slot through a scan-start reset after it stops matching', () => {
     const keep = new Set(['b'])
-    const { result, update } = mount(props([row('a'), row('b'), row('c')], { keepIdentities: keep }))
+    const { result, update } = mount(
+      props([row('a'), row('b'), row('c')], { keepIdentities: keep })
+    )
     const all = new Map([row('a'), row('b', 1), row('c')].map((r) => [r.identity, r]))
     // b stops matching; Refresh starts and the live order changes.
     update({ liveRows: [row('c'), row('a')], liveRowByIdentity: all, loading: true })
@@ -154,7 +156,9 @@ describe('useWorkspaceCleanupHeldRows', () => {
 
   it('places a kept row before the row that followed it, and drops it once it no longer exists', () => {
     const keep = new Set(['b'])
-    const { result, update } = mount(props([row('a'), row('b'), row('c')], { keepIdentities: keep }))
+    const { result, update } = mount(
+      props([row('a'), row('b'), row('c')], { keepIdentities: keep })
+    )
     update({
       liveRows: [row('a'), row('c')],
       liveRowByIdentity: new Map([row('a'), row('b'), row('c')].map((r) => [r.identity, r])),
@@ -167,7 +171,9 @@ describe('useWorkspaceCleanupHeldRows', () => {
 
   it('does not keep a non-matching row across the user changing sort or filters', () => {
     const keep = new Set(['b'])
-    const { result, update } = mount(props([row('a'), row('b'), row('c')], { keepIdentities: keep }))
+    const { result, update } = mount(
+      props([row('a'), row('b'), row('c')], { keepIdentities: keep })
+    )
     update({
       liveRows: [row('a'), row('c')],
       liveRowByIdentity: new Map([row('a'), row('b'), row('c')].map((r) => [r.identity, r])),

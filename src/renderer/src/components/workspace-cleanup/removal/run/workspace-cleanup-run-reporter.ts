@@ -37,17 +37,33 @@ export function createWorkspaceCleanupRunReporter(started: {
   const { runId, attempts } = started
   const store = (): ReturnType<typeof useWorkspaceCleanupRunStore.getState> =>
     useWorkspaceCleanupRunStore.getState()
-  const expiryTimers = new Set<number>()
+  // Each physical removal of a row (first try, requeue, automatic ancestor retry) and each
+  // provisional report starts a new generation; a timer may only expire its own generation.
+  const generations = new Map<string, number>()
+  const expiryTimers = new Map<string, number>()
+  const nextGeneration = (identity: string): number => {
+    const timer = expiryTimers.get(identity)
+    if (timer !== undefined) {
+      window.clearTimeout(timer)
+      expiryTimers.delete(identity)
+    }
+    const generation = (generations.get(identity) ?? 0) + 1
+    generations.set(identity, generation)
+    return generation
+  }
   const settle = (failure: WorkspaceCleanupFailure): void => {
     const identity = getWorkspaceCleanupFailureIdentity(failure)
+    const generation = nextGeneration(identity)
     if (!failure.provisional) {
       store().markRowFailed(runId, attempts, identity, failure)
       return
     }
     store().markRowProvisional(runId, attempts, identity)
-    // Bound to this attempt: a later retry of the row is never expired by this timer.
     const timer = window.setTimeout(() => {
-      expiryTimers.delete(timer)
+      expiryTimers.delete(identity)
+      if (generations.get(identity) !== generation) {
+        return
+      }
       store().expireProvisionalRow(
         runId,
         attempts,
@@ -58,15 +74,18 @@ export function createWorkspaceCleanupRunReporter(started: {
         )
       )
     }, WORKSPACE_CLEANUP_PROVISIONAL_CEILING_MS)
-    expiryTimers.add(timer)
+    expiryTimers.set(identity, timer)
   }
   const applyResult = (result: WorkspaceCleanupRemoveResult): void => {
     store().markRowsDeleted(runId, attempts, result.removedIdentities)
     result.failures.forEach(settle)
   }
   return {
-    onRowStarted: (candidate) =>
-      store().markRowDeleting(runId, attempts, getWorkspaceCleanupCandidateIdentity(candidate)),
+    onRowStarted: (candidate) => {
+      const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+      nextGeneration(identity)
+      store().markRowDeleting(runId, attempts, identity)
+    },
     onRowRemoved: (candidate) =>
       store().markRowsDeleted(runId, attempts, [getWorkspaceCleanupCandidateIdentity(candidate)]),
     onRowFailed: settle,

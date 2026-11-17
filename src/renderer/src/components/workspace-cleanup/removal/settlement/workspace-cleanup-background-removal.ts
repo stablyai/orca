@@ -284,6 +284,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
         removeCandidates,
         removalTimeoutMs,
         removalSettlementGraceMs,
+        onRowStarted,
         reportResult: (lateResult, latePendingFailures) => {
           reportLateWorkspaceCleanupResult(lateResult, onLateResult, latePendingFailures)
         }

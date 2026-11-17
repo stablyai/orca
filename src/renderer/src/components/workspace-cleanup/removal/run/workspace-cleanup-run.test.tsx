@@ -33,6 +33,7 @@ const result = (removed: number[], failures: ReturnType<typeof failure>[] = []) 
   removedIdentities: removed.map(identity),
   failures
 })
+const HALF_CEILING = WORKSPACE_CLEANUP_PROVISIONAL_CEILING_MS / 2
 const store = () => useWorkspaceCleanupRunStore.getState()
 const run = (): WorkspaceCleanupRun => store().run!
 const statuses = () => run().rows.map((row) => row.status)
@@ -115,6 +116,7 @@ describe('workspace cleanup run', () => {
   it('joins a retry to the same run without letting the old attempt expire it', () => {
     const first = createWorkspaceCleanupRunReporter(store().startRun([candidates[0]]))
     act(() => first.onRowFailed(failure(0, { provisional: true })))
+    act(() => vi.advanceTimersByTime(HALF_CEILING))
     const started = store().beginRowRetry(candidates[0])
     expect(started.runId).toBe(run().id)
     expect(statuses()).toEqual(['deleting'])
@@ -122,14 +124,30 @@ describe('workspace cleanup run', () => {
 
     const retry = createWorkspaceCleanupRunReporter(started)
     act(() => retry.onRowFailed(failure(0, { provisional: true })))
-    // The first attempt's timer fires while the retry is still provisional.
+    // The first attempt's ceiling passes while the retry is still provisional.
     act(() => {
-      vi.advanceTimersByTime(WORKSPACE_CLEANUP_PROVISIONAL_CEILING_MS - 1)
+      vi.advanceTimersByTime(HALF_CEILING + 1)
       first.onLateResult(result([], [failure(0, { message: 'old' })]))
     })
     expect(statuses()).toEqual(['provisional'])
     act(() => retry.onLateResult(result([0])))
     expect(statuses()).toEqual(['deleted'])
+  })
+
+  it('does not let an earlier provisional timer expire an automatic retry of the same attempt', () => {
+    const reporter = createWorkspaceCleanupRunReporter(store().startRun([candidates[0]]))
+    // Skipped behind a timed-out child: provisional, with its own expiry timer.
+    act(() => reporter.onRowFailed(failure(0, { provisional: true })))
+    act(() => vi.advanceTimersByTime(HALF_CEILING))
+    // The child settles and the ancestor is deleted automatically, then times out too.
+    act(() => reporter.onRowStarted(candidates[0]))
+    expect(statuses()).toEqual(['deleting'])
+    act(() => reporter.onLateResult(result([], [failure(0, { provisional: true })])))
+    act(() => vi.advanceTimersByTime(HALF_CEILING + 1))
+    expect(statuses()).toEqual(['provisional'])
+    // Only the newer operation's own ceiling gives up on it.
+    act(() => vi.advanceTimersByTime(HALF_CEILING))
+    expect(statuses()).toEqual(['failed'])
   })
 
   it('fails only the batch rows that never reported', () => {

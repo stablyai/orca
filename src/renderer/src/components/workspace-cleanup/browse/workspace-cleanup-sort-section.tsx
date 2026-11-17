@@ -76,13 +76,7 @@ function SizeScanButton({
         )
       : t('components.workspace.cleanup.browse.measuringSizes', 'Scanning sizes')
   return (
-    <Button
-      variant="outline"
-      size="xs"
-      className="mt-2"
-      disabled={scanning}
-      onClick={onRun}
-    >
+    <Button variant="outline" size="xs" className="mt-2" disabled={scanning} onClick={onRun}>
       {scanning ? <Loader2 className="size-3 animate-spin" aria-hidden="true" /> : null}
       <span className="tabular-nums">{label}</span>
     </Button>

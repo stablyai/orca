@@ -253,13 +253,12 @@ export const CandidateRow = React.memo(function CandidateRow({
                 </span>
               ) : null}
               {canForget && group === 'cannot-delete' ? (
-                <Button
-                  variant="link"
-                  size="inline"
-                  onClick={() => onForgetLocally(candidate)}
-                >
+                <Button variant="link" size="inline" onClick={() => onForgetLocally(candidate)}>
                   <span className="text-xs">
-                    {t('auto.components.sidebar.ForgetSshWorkspaceDialog.forget', 'Remove from Orca')}
+                    {t(
+                      'auto.components.sidebar.ForgetSshWorkspaceDialog.forget',
+                      'Remove from Orca'
+                    )}
                   </span>
                 </Button>
               ) : null}
