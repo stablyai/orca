@@ -161,10 +161,10 @@ function settleLiveDispatch(
   onSettledLate?: ClaudeLateDispatchSettlement
 ): ClaudeReplayTurnOrigin | null {
   const joinsTurn =
-    session.translator?.openTurnOwnsLiveProviderCycle === true ||
+    session.translator?.turnCycle.ownsLiveProviderCycle === true ||
     (waiter.steers === true && session.translator?.currentTurnId != null)
   if (isUserReplay && joinsTurn) {
-    session.translator?.confirmTurnProviderCycle()
+    session.translator?.turnCycle.confirmProviderCycle()
   }
   settleWaiter(session, waiter, uuid, onSettledLate)
   return isUserReplay && !joinsTurn
