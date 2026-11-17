@@ -152,6 +152,7 @@ describe('browserManager', () => {
         webContentsId: guest.id
       })
       const handler = (name: string) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the manager registers these Electron listeners with this signature.
         guestOnMock.mock.calls.find(([event]) => event === name)?.[1] as (
           event: unknown,
           url: string,
