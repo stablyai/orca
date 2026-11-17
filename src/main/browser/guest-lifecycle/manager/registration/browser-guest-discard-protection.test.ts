@@ -12,10 +12,16 @@ import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/g
 
 it('protects only the current document, never earlier history', () => {
   const frames: object[] = []
+  let currentFrames: object[] | undefined = frames
   let audible = false
   let crashed = false
   let url = 'about:blank'
-  const mainFrame = { frames, send: vi.fn<(channel: string, generation: string) => void>() }
+  const mainFrame = {
+    get frames(): object[] | undefined {
+      return currentFrames
+    },
+    send: vi.fn<(channel: string, generation: string) => void>()
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
     id: 7,
@@ -85,6 +91,10 @@ it('protects only the current document, never earlier history', () => {
     frames.push({})
     guest.emit('frame-created')
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('frames')
+    currentFrames = undefined
+    guest.emit('frame-created')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('frames')
+    currentFrames = frames
     // Frame churn must not challenge every guest document or fan out unchanged protection.
     const challenges = mainFrame.send.mock.calls.length
     for (const count of [200, 2000]) {

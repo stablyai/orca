@@ -51,7 +51,8 @@ export function readBrowserGuestDiscardProtection(
     return result('unknown', 'observer')
   }
   // Input does not bubble out of child frames; retain their unobserved drafts conservatively.
-  if (guest.mainFrame.frames.length > 0) {
+  const frames = guest.mainFrame?.frames
+  if (!frames || frames.length > 0) {
     return result('unknown', 'frames')
   }
   if (owner.dirty) {
