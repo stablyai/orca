@@ -21,13 +21,15 @@ import {
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import {
   selectCrossStoreFolderChildrenById,
   selectSidebarLineageParentIdentities
 } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { OWN_LINEAGE_STORE_KEY } from '../../../../shared/worktree/lineage/cross-store-lineage-resolution'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   getCyclicProjectedWorktreeLineageIds,
