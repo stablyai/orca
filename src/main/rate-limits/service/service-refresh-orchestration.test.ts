@@ -70,7 +70,8 @@ vi.mock('../providers/cursor/cursor-auth', () => ({
 }))
 
 vi.mock('../providers/grok/grok-auth', () => ({
-  readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+  readGrokAuthSession: vi.fn(() => ({ status: 'missing' })),
+  readGrokAuthSessionAsync: vi.fn(async () => readGrokAuthSession())
 }))
 
 vi.mock('../../minimax/minimax-cookie-store', () => ({

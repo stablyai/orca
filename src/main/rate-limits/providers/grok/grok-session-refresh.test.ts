@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
-import { readGrokAuthSession, type GrokAuthReadResult } from './grok-auth'
+import { readGrokAuthSessionAsync, type GrokAuthReadResult } from './grok-auth'
 import type * as GrokAuthModule from './grok-auth'
 import {
   readGrokAuthForUsage,
@@ -25,7 +25,7 @@ vi.mock('../../../runtime/agent-session/environment/structured-agent-shell-envir
 }))
 vi.mock('./grok-auth', async (importOriginal) => ({
   ...(await importOriginal<typeof GrokAuthModule>()),
-  readGrokAuthSession: vi.fn()
+  readGrokAuthSessionAsync: vi.fn()
 }))
 
 const ENV = { PATH: '/usr/bin' }
@@ -127,7 +127,7 @@ describe('refreshGrokAccessTokenViaSessionsList', () => {
       return lookup.promise
     })
     const stale = session(Date.now() + 60_000)
-    vi.mocked(readGrokAuthSession).mockReturnValue(stale)
+    vi.mocked(readGrokAuthSessionAsync).mockResolvedValue(stale)
     const settled = vi.fn()
     const first = readGrokAuthForUsage({ authReadResult: stale }).then(settled)
     const second = readGrokAuthForUsage({ authReadResult: stale }).then(settled)
@@ -267,13 +267,13 @@ describe('readGrokAuthForUsage', () => {
   it('preserves all scheduled retries after concurrent and debounced usage reads', async () => {
     const stale = session(Date.now() + 60_000, 'stale')
     const fresh = session(Date.now() + 60 * 60 * 1000, 'fresh')
-    vi.mocked(readGrokAuthSession).mockReturnValue(stale)
+    vi.mocked(readGrokAuthSessionAsync).mockResolvedValue(stale)
     vi.mocked(runProcess)
       .mockResolvedValueOnce({ ...PROCESS_RESULT, code: 1 })
       .mockResolvedValueOnce({ ...PROCESS_RESULT, code: 1 })
       .mockResolvedValueOnce({ ...PROCESS_RESULT, code: 1 })
       .mockImplementationOnce(async () => {
-        vi.mocked(readGrokAuthSession).mockReturnValue(fresh)
+        vi.mocked(readGrokAuthSessionAsync).mockResolvedValue(fresh)
         return PROCESS_RESULT
       })
     let scheduledAuth: Promise<GrokAuthReadResult> | undefined
@@ -293,12 +293,11 @@ describe('readGrokAuthForUsage', () => {
   it('re-reads auth.json after refreshing a near-expiry token', async () => {
     const stale = session(Date.now() + 60_000, 'stale')
     const fresh = session(Date.now() + 60 * 60 * 1000, 'fresh')
-    vi.mocked(readGrokAuthSession).mockReturnValue(fresh)
+    vi.mocked(readGrokAuthSessionAsync).mockResolvedValue(fresh)
 
     const result = await readGrokAuthForUsage({ authReadResult: stale })
 
     expect(runProcess).toHaveBeenCalledTimes(1)
-    expect(readGrokAuthSession).toHaveBeenCalledTimes(1)
     expect(result).toBe(fresh)
   })
 
@@ -309,24 +308,22 @@ describe('readGrokAuthForUsage', () => {
     const stale = session(Date.now() + 60_000, 'stale')
     const fresh = session(Date.now() + 60 * 60 * 1000, 'fresh')
     vi.mocked(runProcess).mockResolvedValue({ ...PROCESS_RESULT, ...failure })
-    vi.mocked(readGrokAuthSession).mockReturnValue(fresh)
+    vi.mocked(readGrokAuthSessionAsync).mockResolvedValue(fresh)
 
     const result = await readGrokAuthForUsage({ authReadResult: stale })
 
     expect(runProcess).toHaveBeenCalledTimes(1)
-    expect(readGrokAuthSession).toHaveBeenCalledTimes(1)
     expect(result).toBe(fresh)
   })
 
   it('still reads auth when the CLI cannot start', async () => {
     const stale = session(Date.now() + 60_000)
     vi.mocked(runProcess).mockRejectedValue(new Error('spawn failed'))
-    vi.mocked(readGrokAuthSession).mockReturnValue(stale)
+    vi.mocked(readGrokAuthSessionAsync).mockResolvedValue(stale)
 
     const result = await readGrokAuthForUsage({ authReadResult: stale })
 
     expect(runProcess).toHaveBeenCalledTimes(1)
-    expect(readGrokAuthSession).toHaveBeenCalledTimes(1)
     expect(result).toBe(stale)
   })
 
@@ -336,7 +333,7 @@ describe('readGrokAuthForUsage', () => {
     const result = await readGrokAuthForUsage({ authReadResult: current })
 
     expect(result).toBe(current)
-    expect(readGrokAuthSession).not.toHaveBeenCalled()
+    expect(readGrokAuthSessionAsync).not.toHaveBeenCalled()
     expect(hostShellEnvironment).not.toHaveBeenCalled()
     expect(runProcess).not.toHaveBeenCalled()
   })

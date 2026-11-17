@@ -6,11 +6,10 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
-import { readGrokAuthSession } from '../providers/grok/grok-auth'
+import { readGrokAuthSessionAsync } from '../providers/grok/grok-auth'
 import {
   bindGrokTokenRefreshSchedule,
-  clearGrokTokenRefreshSchedule,
-  noteGrokAuthForScheduledRefresh
+  clearGrokTokenRefreshSchedule
 } from '../providers/grok/grok-token-refresh-schedule'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
@@ -41,11 +40,10 @@ import type { NetworkProxySettings } from '../../../shared/network/network-proxy
 
 export class RateLimitService extends RateLimitServiceAccountRefresh {
   protected bindGrokAccessTokenRefresh(): void {
+    // Arm from the file even when the window is unfocused; the poll does not run then.
     bindGrokTokenRefreshSchedule(() => {
       void this.fetchGrokOnly({ force: true })
-    })
-    // Arm from the file even when the window is unfocused; the poll does not run then.
-    noteGrokAuthForScheduledRefresh(readGrokAuthSession(), false)
+    }, readGrokAuthSessionAsync())
   }
 
   setCodexHomePathResolver(resolver: CodexHomePathResolver): void {

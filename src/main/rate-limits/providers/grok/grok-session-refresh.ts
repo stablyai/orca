@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
-import { getGrokHome, readGrokAuthSession, type GrokAuthReadResult } from './grok-auth'
+import { getGrokHome, readGrokAuthSessionAsync, type GrokAuthReadResult } from './grok-auth'
 import { grokAccessTokenNeedsCliRefresh } from './grok-auth-expiry'
 import { noteGrokAuthForScheduledRefresh } from './grok-token-refresh-schedule'
 
@@ -56,7 +56,10 @@ export async function refreshGrokAccessTokenViaSessionsList(
 export async function readGrokAuthForUsage(
   options: GrokUsageAuthOptions = {}
 ): Promise<GrokAuthReadResult> {
-  const readResult = options.authReadResult ?? readGrokAuthSession()
+  const readResult = options.authReadResult ?? (await readGrokAuthSessionAsync())
+  if (options.signal?.aborted) {
+    return readResult
+  }
   if (
     readResult.status !== 'ok' ||
     !grokAccessTokenNeedsCliRefresh(readResult.session.expiresAtMs)
@@ -64,12 +67,9 @@ export async function readGrokAuthForUsage(
     noteGrokAuthForScheduledRefresh(readResult, false)
     return readResult
   }
-  if (options.signal?.aborted) {
-    return readResult
-  }
   const attempt = await refreshGrokAccessTokenViaSessionsList(options.signal)
-  const refreshed = readGrokAuthSession()
-  if (attempt.kind !== 'skipped') {
+  const refreshed = await readGrokAuthSessionAsync()
+  if (attempt.kind !== 'skipped' && !options.signal?.aborted) {
     noteGrokAuthForScheduledRefresh(
       refreshed,
       attempt.kind === 'attempted',

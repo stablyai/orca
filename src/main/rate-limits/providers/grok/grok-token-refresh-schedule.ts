@@ -11,13 +11,24 @@ type GrokTokenRefreshSchedule = {
   timer: ReturnType<typeof setTimeout> | null
   retriesFor: number | null
   retries: number
+  authNoted: boolean
 }
 
 let schedule: GrokTokenRefreshSchedule | null = null
 
-export function bindGrokTokenRefreshSchedule(onDue: () => void): void {
+export function bindGrokTokenRefreshSchedule(
+  onDue: () => void,
+  initialRead?: Promise<GrokAuthReadResult>
+): void {
   clearGrokTokenRefreshSchedule()
-  schedule = { onDue, timer: null, retriesFor: null, retries: 0 }
+  const bound = { onDue, timer: null, retriesFor: null, retries: 0, authNoted: false }
+  schedule = bound
+  // An old startup read must not override a newer observation or a restarted schedule.
+  void initialRead?.then((auth) => {
+    if (schedule === bound && !bound.authNoted) {
+      noteGrokAuthForScheduledRefresh(auth, false)
+    }
+  })
 }
 
 export function clearGrokTokenRefreshSchedule(): void {
@@ -35,6 +46,7 @@ export function noteGrokAuthForScheduledRefresh(
   if (!schedule) {
     return
   }
+  schedule.authNoted = true
   const expiresAtMs = read.status === 'ok' ? read.session.expiresAtMs : null
   const delay = grokAccessTokenRefreshDelayMs(expiresAtMs, Date.now())
   if (delay === null) {

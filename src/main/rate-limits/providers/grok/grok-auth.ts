@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveGrokHomeDir } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { isGrokAccessTokenFreshAt } from './grok-auth-expiry'
@@ -87,45 +88,58 @@ export function readGrokAuthSession(): GrokAuthReadResult {
     return { status: 'missing' }
   }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
-    if (typeof parsed !== 'object' || parsed === null) {
-      return { status: 'error', error: 'Grok auth file is invalid' }
-    }
-    let preferredKeySeen = false
-    let expiredPreferred: GrokAuthSession | null = null
-    let fallback: GrokAuthSession | null = null
-    for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
-      const isPreferred = isPreferredGrokAuthKey(key)
-      preferredKeySeen ||= isPreferred
-      const authEntry = parseAuthEntry(entry)
-      if (!authEntry) {
-        continue
-      }
-      const session = sessionFromAuthEntry(authEntry)
-      if (isPreferred) {
-        if (isGrokAccessTokenFresh(session)) {
-          return { status: 'ok', session }
-        }
-        expiredPreferred ??= session
-        continue
-      }
-      if (!fallback) {
-        fallback = session
-      }
-    }
-    // Alternate issuers are fallback only when no default entry exists.
-    const selectedSession = expiredPreferred ?? (preferredKeySeen ? null : fallback)
-    if (selectedSession) {
-      return { status: 'ok', session: selectedSession }
-    }
-    // A tokenless logout is missing auth, not a persistent status-bar error.
-    return { status: 'missing' }
+    return parseGrokAuth(readFileSync(path, 'utf-8'))
   } catch (err) {
-    return {
-      status: 'error',
-      error: getGrokAuthReadError(err)
+    return { status: 'error', error: getGrokAuthReadError(err) }
+  }
+}
+
+export async function readGrokAuthSessionAsync(): Promise<GrokAuthReadResult> {
+  try {
+    return parseGrokAuth(await readFile(getGrokAuthPath(), 'utf-8'))
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return { status: 'missing' }
+    }
+    return { status: 'error', error: getGrokAuthReadError(err) }
+  }
+}
+
+function parseGrokAuth(contents: string): GrokAuthReadResult {
+  const parsed: unknown = JSON.parse(contents)
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { status: 'error', error: 'Grok auth file is invalid' }
+  }
+  let preferredKeySeen = false
+  let expiredPreferred: GrokAuthSession | null = null
+  let fallback: GrokAuthSession | null = null
+  for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
+    const isPreferred = isPreferredGrokAuthKey(key)
+    preferredKeySeen ||= isPreferred
+    const authEntry = parseAuthEntry(entry)
+    if (!authEntry) {
+      continue
+    }
+    const session = sessionFromAuthEntry(authEntry)
+    if (isPreferred) {
+      if (isGrokAccessTokenFresh(session)) {
+        return { status: 'ok', session }
+      }
+      expiredPreferred ??= session
+      continue
+    }
+    if (!fallback) {
+      fallback = session
     }
   }
+  // Alternate issuers are fallback only when no default entry exists.
+  const selectedSession = expiredPreferred ?? (preferredKeySeen ? null : fallback)
+  if (selectedSession) {
+    return { status: 'ok', session: selectedSession }
+  }
+  // A tokenless logout is missing auth, not a persistent status-bar error.
+  return { status: 'missing' }
 }
 
 export function isGrokAccessTokenFresh(session: GrokAuthSession): boolean {

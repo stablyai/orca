@@ -4,11 +4,10 @@ import { setMainHttpClient } from '../../../network/http-client'
 const fetchMock = vi.fn()
 const authState = vi.hoisted<{ file: string | null }>(() => ({ file: null }))
 
-vi.mock('node:fs', () => ({
-  existsSync: () => authState.file !== null,
-  readFileSync: () => {
+vi.mock('node:fs/promises', () => ({
+  readFile: async () => {
     if (authState.file === null) {
-      throw new Error('ENOENT')
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
     return authState.file
   }

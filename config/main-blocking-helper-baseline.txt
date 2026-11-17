@@ -1143,10 +1143,10 @@
 2 src/main/rate-limits/service/rate-limit-service.ts
 1 src/main/rate-limits/service/service-fetch-targets.ts
 1 src/main/rate-limits/service/service-full-cycle-application.ts
-7 src/main/rate-limits/service/service-full-cycle-preparation.ts
+6 src/main/rate-limits/service/service-full-cycle-preparation.ts
 1 src/main/rate-limits/service/service-inactive-accounts.ts
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
-3 src/main/rate-limits/service/service-provider-cycles.ts
+2 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/ripgrep/bundled-ripgrep-spawn.ts
