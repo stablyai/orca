@@ -4,11 +4,11 @@ import { linearError } from './linear-access-errors'
 export type LinearPageVariables = { first: number; after?: string }
 
 export type LinearConnection<T> = {
-  nodes?: T[]
+  nodes?: T[] | null
   pageInfo?: {
-    hasNextPage?: boolean
+    hasNextPage?: boolean | null
     endCursor?: string | null
-  }
+  } | null
 } | null
 
 export function linearConnectionHasNextPage(
@@ -31,8 +31,9 @@ export function linearConnectionHasNextPage(
 
 export async function readConnectionPages<T>(
   limit: number,
-  loadConnection: (page: LinearPageVariables) => Promise<LinearConnection<T>>,
-  pageSize = LINEAR_ISSUE_API_PAGE_SIZE_MAX
+  loadConnection: (page: LinearPageVariables) => Promise<LinearConnection<T> | undefined>,
+  pageSize = LINEAR_ISSUE_API_PAGE_SIZE_MAX,
+  deadline = Number.POSITIVE_INFINITY
 ): Promise<{ nodes: T[]; hasMore: boolean }> {
   const nodes: T[] = []
   let after: string | undefined
@@ -47,7 +48,13 @@ export async function readConnectionPages<T>(
     hasMore = linearConnectionHasNextPage(connection)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-    if (!hasMore || !nextCursor || nextCursor === after || pageNodes.length === 0) {
+    if (
+      !hasMore ||
+      !nextCursor ||
+      nextCursor === after ||
+      pageNodes.length === 0 ||
+      Date.now() >= deadline
+    ) {
       break
     }
     after = nextCursor

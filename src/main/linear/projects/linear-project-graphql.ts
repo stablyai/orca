@@ -122,13 +122,19 @@ export const ORCA_ISSUE_FIELDS = `
 `
 
 export const PROJECTS_QUERY = `
-  query OrcaLinearProjects($first: Int, $filter: ProjectFilter, $orderBy: PaginationOrderBy) {
-    projects(first: $first, filter: $filter, orderBy: $orderBy) {
+  query OrcaLinearProjects(
+    $first: Int
+    $after: String
+    $filter: ProjectFilter
+    $orderBy: PaginationOrderBy
+  ) {
+    projects(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
       nodes {
         ${ORCA_PROJECT_FIELDS}
       }
       pageInfo {
         hasNextPage
+        endCursor
       }
     }
   }

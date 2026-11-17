@@ -96,6 +96,7 @@ let counts: Map<string, number>
 let signals: (AbortSignal | null | undefined)[]
 let persistent = false
 let dropMutation = false
+let paged = false
 let previousExitCode: typeof process.exitCode
 
 beforeEach(async () => {
@@ -104,6 +105,7 @@ beforeEach(async () => {
   signals = []
   persistent = false
   dropMutation = false
+  paged = false
   previousExitCode = process.exitCode
   for (const key of [
     'ORCA_ENVIRONMENT',
@@ -119,6 +121,10 @@ beforeEach(async () => {
     const operation = /\b(?:query|mutation)\s+(\w+)/.exec(receipt.query)?.[1] ?? 'unknown'
     const count = (counts.get(operation) ?? 0) + 1
     counts.set(operation, count)
+    if (paged) {
+      sendPagedData(operation, receipt.variables ?? {}, response)
+      return
+    }
     const mutation = /^\s*mutation\b/.test(receipt.query)
     if ((mutation && dropMutation) || (!mutation && (persistent || count === 1))) {
       response.destroy()
@@ -209,6 +215,57 @@ afterEach(async () => {
   vi.unstubAllEnvs()
   process.exitCode = previousExitCode
   await server.close()
+})
+
+const PAGED_ROW_COUNT = 60
+
+// Serves PAGED_ROW_COUNT rows through offset cursors so omitted limits must walk every page.
+function sendPagedData(
+  operation: string,
+  variables: Record<string, unknown>,
+  response: Parameters<typeof sendLinearData>[0]
+) {
+  const offset = Number(variables.after ?? 0)
+  const end = Math.min(offset + Number(variables.first), PAGED_ROW_COUNT)
+  const indexes = Array.from({ length: end - offset }, (_, index) => offset + index)
+  const pageInfo = { hasNextPage: end < PAGED_ROW_COUNT, endCursor: String(end) }
+  const pagedIssue = (index: number) => ({
+    ...issue,
+    id: `issue-${index}`,
+    identifier: `ENG-${index}`
+  })
+  if (operation === 'OrcaLinearIssues') {
+    sendLinearData(response, { issues: { nodes: indexes.map(pagedIssue), pageInfo } })
+  } else if (operation === 'OrcaLinearProjects') {
+    const nodes = indexes.map((index) => ({ id: `project-${index}`, name: `Project ${index}` }))
+    sendLinearData(response, { projects: { nodes, pageInfo } })
+  } else if (operation === 'OrcaAgentLinearSearch') {
+    sendLinearData(response, { searchIssues: { nodes: indexes.map(pagedIssue), totalCount: 349 } })
+  } else {
+    response.writeHead(400, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ errors: [{ message: `Unexpected operation ${operation}` }] }))
+  }
+}
+
+it('lists every page when --limit is omitted and reports the search total', async () => {
+  paged = true
+  for (const args of [
+    ['list', '--filter', 'all'],
+    ['project', 'list'],
+    ['search', '--query', 'paged', '--limit', '5']
+  ]) {
+    await main(['linear', ...args, '--workspace', boundary.workspace.id, '--json'])
+    expect(process.exitCode).toBe(previousExitCode)
+  }
+  const [list, projects, search] = vi
+    .mocked(console.log)
+    .mock.calls.map(([value]) => JSON.parse(String(value)).result)
+  expect(list.issues).toHaveLength(60)
+  expect(list).toMatchObject({ truncated: false, meta: { limit: null, hasMore: false } })
+  expect(projects.projects).toHaveLength(60)
+  expect(projects).toMatchObject({ truncated: false, meta: { limit: null, hasMore: false } })
+  expect(search.issues).toHaveLength(5)
+  expect(search).toMatchObject({ truncated: true, meta: { returned: 5, total: 349 } })
 })
 
 it('parses and dispatches issue, search, list and project commands through real recovering read handlers', async () => {
