@@ -152,6 +152,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
               hookEventName: normalized.event.hookEventName,
               isReplay: normalized.event.isReplay,
               hasExplicitPrompt: normalized.event.hasExplicitPrompt,
+              opensTurn: normalized.event.opensTurn,
               launchToken: normalized.event.launchToken
             })
           : 'suppress'

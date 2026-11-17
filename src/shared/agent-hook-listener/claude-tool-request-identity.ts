@@ -67,11 +67,12 @@ export function withClaudeToolRequestId(
   state: HookListenerState,
   paneKey: string,
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  opensTurn = false
 ): Record<string, unknown> {
   const toolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
   const fields = readRequestFields(hookPayload)
-  const ended = endedRequests(eventName, toolUseId, fields.toolAgentId, hookPayload)
+  const ended = endedRequests(eventName, toolUseId, fields.toolAgentId, hookPayload, opensTurn)
   const open =
     ended === 'all'
       ? []
@@ -166,7 +167,8 @@ function endedRequests(
   eventName: unknown,
   toolUseId: string | undefined,
   toolAgentId: string | undefined,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  opensTurn: boolean
 ): 'all' | ((entry: ClaudeToolRequest) => boolean) {
   if (
     eventName === 'SessionStart' &&
@@ -195,9 +197,11 @@ function endedRequests(
     return (entry) => isOwnedCall(entry, toolAgentId) && settled.has(entry.toolUseId)
   }
   // A lead's calls never outlive its turn; background children's can. An injected task notification is not a turn.
+  // A new prompt_id is the next turn even when its prompt event has not arrived yet.
   const leadTurnBoundary =
     toolAgentId === undefined &&
-    (eventName === 'Stop' ||
+    (opensTurn ||
+      eventName === 'Stop' ||
       eventName === 'StopFailure' ||
       (eventName === 'UserPromptSubmit' && isExplicitUserPrompt(hookPayload)))
   return (entry) => leadTurnBoundary && entry.toolAgentId === undefined
