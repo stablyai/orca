@@ -34,6 +34,7 @@ import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -210,6 +211,9 @@ export function createTabsCloseActions(
         closeContentTabThroughLayoutOwner(get, tab, {
           nextActiveTabId,
           closeHere: () => {
+            if (isEditorTabContentType(tab.contentType)) {
+              notifyHostOfMirroredEditorClose(state, worktreeId, tab.entityId, [tab])
+            }
             closeHere()
             retireEditor()
           },
@@ -236,6 +240,10 @@ export function createTabsCloseActions(
           get().recordFeatureInteraction?.('terminal-tabs')
         }
         return { closedTabId: tabId, wasLastTab, worktreeId }
+      }
+      if (isEditorTabContentType(tab.contentType)) {
+        // Why: closeHere removes the unified tab that carries the host's tab id; closeFile's own notify then finds none and the host republishes the tab.
+        notifyHostOfMirroredEditorClose(state, worktreeId, tab.entityId, [tab])
       }
       closeHere()
       retireEditor()
