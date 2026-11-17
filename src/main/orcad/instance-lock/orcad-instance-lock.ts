@@ -24,9 +24,9 @@ import {
 } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import { profileStateAccessMachineIdentity } from '../../persistence/profile-state/access/profile-state-access-identity'
 import { orcadDataRootIsOnLocalDisk } from './orcad-data-root-locality'
-import type { OrcadReclaimHintRuntime } from '../../../shared/orcad-stale-lock-reclaim'
+import type { OrcadReclaimHintRuntime } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stale-lock-reclaim'
 import { reclaimedUnexpectedExit } from '../host-lifecycle/orcad-unexpected-exit'
-import type { OrcadUnexpectedExit } from '../../../shared/orcad-unexpected-exit'
+import type { OrcadUnexpectedExit } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-unexpected-exit'
 import {
   orcadLockHolderLocality,
   orcadLockHolderUnverifiableError

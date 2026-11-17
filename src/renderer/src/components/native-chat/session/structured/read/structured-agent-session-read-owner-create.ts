@@ -1,14 +1,12 @@
 import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
-import {
-  type AgentProviderSessionMetadata,
-  agentProviderSessionsEqual
-} from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
-} from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 
@@ -181,9 +179,10 @@ export function createReadOwner(
   }
 
   let owner: StructuredAgentSessionReadOwner
+  let retained = 0
   const deleteIfUnused = (): void => {
     const subscriptions = activations.size + listeners.size + commandListeners.size
-    if (subscriptions === 0 && !activity.retained()) {
+    if (subscriptions === 0 && retained === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
   }
@@ -199,6 +198,18 @@ export function createReadOwner(
     }
   }
   owner = {
+    retain: () => {
+      adoptStructuredReadOwner(key, owner)
+      retained++
+      let released = false
+      return () => {
+        if (!released) {
+          released = true
+          retained--
+          deleteIfUnused()
+        }
+      }
+    },
     trackSend: activity.trackSend,
     admit: activity.admit,
     publishCreated: (page) => {

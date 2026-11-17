@@ -1,3 +1,4 @@
+import type { GitBlameResult } from '../../../shared/git/blame/git-blame-types'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -11,7 +12,7 @@ import type {
   GitUpstreamStatus
 } from '../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import type {
   GitHistoryItemRef,
   GitHistoryOptions,
@@ -60,7 +61,10 @@ export type GitInspectionApi = {
   atRiskLocalFiles: (args: {
     worktreePath: string
     connectionId?: string
+    /** Lets cancelAtRiskLocalFiles stop the scan once its preview closes. */
+    requestToken?: string
   }) => Promise<WorktreeAtRiskLocalFiles>
+  cancelAtRiskLocalFiles: (args: { requestToken: string }) => Promise<void>
   findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
   refs: (args: {
     worktreePath: string
@@ -155,4 +159,10 @@ export type GitInspectionApi = {
     sha: string
     connectionId?: string
   }) => Promise<string | null>
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    knownHeadOid?: string
+    connectionId?: string
+  }) => Promise<GitBlameResult>
 }

@@ -1,14 +1,17 @@
 import {
   claudeBackgroundArgs,
   claudeTextGenerationToolArgs
-} from '../../../claude-background-run-isolation'
+} from '../../../text-generation/launch/claude-background-run-isolation'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type {
   CommitMessageAgentSpec,
   CommitMessageModel,
   ThinkingLevel
 } from './commit-message-agent-spec'
-import { CLAUDE_MODEL_LIST_ARGS, CLAUDE_MODEL_LIST_STDIN } from '../../../claude-model-list-probe'
+import {
+  CLAUDE_MODEL_LIST_ARGS,
+  CLAUDE_MODEL_LIST_STDIN
+} from '../../../agent-session/options/model-catalog/claude-model-list-probe'
 
 type PrimaryAgentSpecDeps = {
   CLAUDE_THINKING_LEVELS: ThinkingLevel[]

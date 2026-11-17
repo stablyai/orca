@@ -9,14 +9,14 @@ import {
   externalAutomationTargetRemovedError,
   isExternalAutomationProvider,
   type ScopedExternalAutomationRequest
-} from '../../../shared/external-automation-scope'
+} from '../../../shared/automations/external/external-automation-scope'
 import { ownerKey } from '../../../shared/automations/ownership/automation-owner-key'
-import { sanitizeSshTargetGeneration } from '../../../shared/ssh-target-generation'
+import { sanitizeSshTargetGeneration } from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 import type {
   ExternalAutomationProvider,
   ExternalAutomationTarget
 } from '../../../shared/automations/external/external-automation'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget

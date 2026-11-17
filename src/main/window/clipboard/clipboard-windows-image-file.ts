@@ -4,7 +4,7 @@ import type { NativeImage } from 'electron'
 import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
-} from '../../../shared/clipboard-image'
+} from '../../../shared/clipboard/clipboard-image'
 import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
 
 type ClipboardImageFileHandle = Pick<FileHandle, 'close' | 'read' | 'stat'>

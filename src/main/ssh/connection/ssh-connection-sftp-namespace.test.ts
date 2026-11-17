@@ -54,7 +54,7 @@ import type { SftpNamespacePathMapping } from '../file-transfer/sftp/sftp-namesp
 import { getRemoteHostPlatform } from '../remote-host/ssh-remote-platform'
 import './ssh-session-limit-error'
 import '../system-transport/file-transfer/system-ssh-file-transfer'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 const SHELL_HOME = '/var/services/homes/alice'
 const SFTP_HOME = '/homes/alice'

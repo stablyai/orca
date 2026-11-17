@@ -11,7 +11,7 @@ import type {
   SshTargetAddResult,
   SshTargetCreateInput,
   SshTargetUpdateInput
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { FilesystemPathFlavor } from '../../../shared/file-access/filesystem-path-flavor'
 
 export type SshApi = {

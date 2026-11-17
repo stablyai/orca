@@ -5,9 +5,9 @@ import {
   useVirtualizedScrollAnchor,
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   type VirtualizedScrollAnchor
-} from '@/hooks/useVirtualizedScrollAnchor'
-import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-anchor-recording'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+} from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import { getVirtualizedScrollAnchorForOffset } from '@/lib/list-interaction/virtualized-scrolling/virtualized-scroll-anchor-recording'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import {
   rememberCombinedDiffView,

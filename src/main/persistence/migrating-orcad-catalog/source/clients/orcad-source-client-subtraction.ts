@@ -5,10 +5,10 @@ import {
 import { requireOrcadMigrationSshSource } from '../../../../../shared/orcad-migration/orcad-migration-source-kind'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { hostStableKey } from '../../../../../shared/automations/ownership/automation-owner-key'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import type { OrcadMigrationClientStatePayload } from '../../../../../shared/orcad-migration/orcad-migration-client-state'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import {
   MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS,
   type ClientHostedBrowserCloseIntent

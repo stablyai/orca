@@ -1,10 +1,13 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerSnapshotResult
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/computer/computer-use-runtime-types'
 import {
   ensureOrcaRuntimeLaunched,
   ensureNotepadLaunched,
@@ -26,9 +29,25 @@ import {
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', () => {
+  let notepadPath = ''
+
+  async function saveNotepad() {
+    await runOrcaCli([
+      'computer',
+      'hotkey',
+      '--app',
+      getNotepadAppSelector(),
+      '--key',
+      'CmdOrCtrl+S',
+      '--restore-window',
+      '--no-screenshot',
+      '--json'
+    ])
+  }
+
   beforeAll(async () => {
     await ensureOrcaRuntimeLaunched()
-    await ensureNotepadLaunched()
+    notepadPath = await ensureNotepadLaunched()
   })
 
   afterAll(async () => {
@@ -36,29 +55,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
     await stopOrcaRuntime()
   })
 
-  test('Unicode payloads survive paste-text', async () => {
-    const app = getNotepadAppSelector()
-    const unicode = `orca unicode café Ω 漢字 ${Date.now()}`
-    await focusNotepadDocument(app)
-    const pasted = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          app,
-          '--text',
-          unicode,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(pasted.result.snapshot.treeText).toContain(unicode)
-  })
-
-  test('hotkey and paste-text can replace the document selection', async () => {
+  test('hotkey and Unicode paste-text replace the document selection', async () => {
     const app = getNotepadAppSelector()
     const first = `orca-windows-first-${Date.now()}`
     await focusNotepadDocument(app)
@@ -86,24 +83,20 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       '--json'
     ])
 
-    const marker = `orca-windows-replaced-${Date.now()}`
-    const second = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          app,
-          '--text',
-          marker,
-          '--restore-window',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(second.result.snapshot.treeText).toContain(marker)
-    expect(second.result.snapshot.treeText).not.toContain(first)
+    const marker = `orca-windows-replaced-café Ω 漢字 ${Date.now()}`
+    await runOrcaCli([
+      'computer',
+      'paste-text',
+      '--app',
+      app,
+      '--text',
+      marker,
+      '--restore-window',
+      '--no-screenshot',
+      '--json'
+    ])
+    await saveNotepad()
+    await expect.poll(() => readFile(notepadPath, 'utf8')).toBe(marker)
   })
 
   test('click and type-text send synthetic input to the document', async () => {
@@ -144,7 +137,8 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       ).stdout
     )
     expect(typed.result.action?.path).toBe('synthetic')
-    expect(typed.result.snapshot.treeText).toContain(marker.trim())
+    await saveNotepad()
+    await expect.poll(() => readFile(notepadPath, 'utf8')).toContain(marker.trim())
   })
 
   test('a covered window screenshot shows the window, not what covers it', async () => {
@@ -183,6 +177,90 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       expect(await countMagentaPixelRatio(screenshotPath)).toBeLessThan(0.01)
     } finally {
       await closeWindowFixture(cover)
+    }
+  })
+
+  test('a window id keeps its window when another window of the app becomes the main one', async () => {
+    // A topmost second window comes first in z-order, so Process.MainWindowHandle moves to it.
+    const fixture = await launchWindowFixture(
+      [
+        "$form.Text = 'orca-e2e-target'",
+        '$button = New-Object System.Windows.Forms.Button',
+        "$button.Text = 'Target press'",
+        "$button.Add_Click({ $form.Text = 'orca-e2e-pressed' })",
+        '$form.Controls.Add($button)',
+        "$targetPath = Join-Path $PSScriptRoot 'target-window'"
+      ].join('\n'),
+      [
+        '$second = New-Object System.Windows.Forms.Form',
+        "$second.Text = 'orca-e2e-second'",
+        '$second.TopMost = $true',
+        '$second.Show()',
+        '[IO.File]::WriteAllText($targetPath, [string][int64]$form.Handle)'
+      ].join('; ')
+    )
+    try {
+      const targetPath = join(fixture.dir, 'target-window')
+      await vi.waitFor(() => expect(existsSync(targetPath)).toBe(true), {
+        timeout: 15_000,
+        interval: 100
+      })
+      const targetWindowId = Number(await readFile(targetPath, 'utf8'))
+      const main = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'get-app-state',
+            '--app',
+            `pid:${fixture.pid}`,
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      ).result
+      expect(main.snapshot.window.title).toBe('orca-e2e-second')
+      const state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'get-app-state',
+            '--app',
+            `pid:${fixture.pid}`,
+            '--window-id',
+            String(targetWindowId),
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      ).result
+      expect(state.snapshot.window.id).toBe(targetWindowId)
+      expect(state.snapshot.window.title).toBe('orca-e2e-target')
+      const button = findRoleIndex(
+        state.snapshot.treeText,
+        /^\s*(\d+)\s+button Target press(?:,|$)/m
+      )
+      expect(button, state.snapshot.treeText).toBeGreaterThanOrEqual(0)
+      const pressed = parseJsonOutput<{ result: ComputerActionResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'click',
+            '--app',
+            `pid:${fixture.pid}`,
+            '--window-id',
+            String(targetWindowId),
+            '--element-index',
+            String(button),
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      ).result
+      expect(pressed.action?.path).toBe('accessibility')
+      expect(pressed.snapshot.window.id).toBe(targetWindowId)
+      expect(pressed.snapshot.window.title).toBe('orca-e2e-pressed')
+    } finally {
+      await closeWindowFixture(fixture)
     }
   })
 

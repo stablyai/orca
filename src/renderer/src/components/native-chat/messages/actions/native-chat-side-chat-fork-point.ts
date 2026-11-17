@@ -1,4 +1,4 @@
-import { nativeChatRowOffersFork } from '../../../../../../shared/native-chat/native-chat-fork-offer'
+import { nativeChatRowOffersFork } from '../../../../../../shared/native-chat/transcript/turns/native-chat-fork-offer'
 import type { NativeChatMessageSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
 /** Where a side chat forks: the newest response "Fork from this response" offers, or why none is. */
@@ -21,7 +21,7 @@ export function nativeChatSlotOffersFork(
   return nativeChatRowOffersFork(
     {
       message: slot.message,
-      inSubagentSection: slot.depth > 0,
+      inSubagentSection: false,
       turnWorking: slot.activeTurnIsWorking,
       inLatestTurn: slot.turnKey !== undefined && slot.turnKey === offer.latestTurnKey
     },

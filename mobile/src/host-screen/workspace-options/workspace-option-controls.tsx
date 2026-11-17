@@ -1,15 +1,15 @@
 import { useState, type ComponentType } from 'react'
 import { View } from 'react-native'
-import { MobileSearchField } from '../../components/MobileSearchField'
-import { MobileSegmentedControl } from '../../components/MobileSegmentedControl'
+import { MobileSearchField } from '../../components/controls/MobileSearchField'
+import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import * as viewOptions from '../../../../src/shared/workspace-view/workspace-view-options'
 import type {
   WorkspaceViewChoice,
   WorkspaceViewOptionKey
 } from '../../../../src/shared/workspace-view/workspace-view-options'
 import * as hostVisibility from '../../../../src/shared/workspace-view/workspace-host-visibility'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
-import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome-types'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import { withoutPhoneHiddenProperties } from './phone-card-property-choices'

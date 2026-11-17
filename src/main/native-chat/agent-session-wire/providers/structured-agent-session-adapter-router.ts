@@ -57,6 +57,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
 
+  applyPermissionMode: NonNullable<Adapter['applyPermissionMode']> = async (input) => {
+    await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)
+  }
+
+  runningPermissionMode: NonNullable<Adapter['runningPermissionMode']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.runningPermissionMode?.(sessionId)
+
   settlePermissionTransition: NonNullable<Adapter['settlePermissionTransition']> = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
     Promise.resolve(true)
@@ -95,9 +102,6 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
       adapter.stopProviderNaming?.()
     }
   }
-
-  captureConversationTitleOwner: NonNullable<Adapter['captureConversationTitleOwner']> = (record) =>
-    this.liveOwnerOrNull(record.sessionId)?.captureConversationTitleOwner?.(record) ?? null
 
   renameProviderSession: NonNullable<Adapter['renameProviderSession']> = (input) =>
     this.capabilityOwner(
@@ -204,8 +208,10 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   canSetOptionWhileIdle: Adapter['canSetOptionWhileIdle'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
-  readAppliedInputOptions: Adapter['readAppliedInputOptions'] = (input) =>
-    this.liveOwnerOrNull(input.sessionId)?.readAppliedInputOptions?.(input) ?? null
+  captureMessageSteeringInputs: Adapter['captureMessageSteeringInputs'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.captureMessageSteeringInputs?.(input) ?? {
+      kind: 'codex-unavailable'
+    }
 
   projectOptions: Adapter['projectOptions'] = (sessionId, options) =>
     this.liveOwnerOrNull(sessionId)?.projectOptions?.(sessionId, options)

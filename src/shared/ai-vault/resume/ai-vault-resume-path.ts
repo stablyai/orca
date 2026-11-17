@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 
 export function normalizeAiVaultResumeFilePath(
   filePath: string | undefined,

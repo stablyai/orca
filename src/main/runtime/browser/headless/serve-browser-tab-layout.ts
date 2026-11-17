@@ -1,7 +1,7 @@
 // Persist headless browser tabs/pages like window-owned tabs; restart lists saved tabs but restores pages only on first use.
 
-import type { BrowserPage } from '../../../../shared/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { BrowserPage } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
 import { BLANK_BROWSER_TAB_STATE } from '../../../../shared/workspace-layout/persistence/workspace-layout-beside'
 import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'

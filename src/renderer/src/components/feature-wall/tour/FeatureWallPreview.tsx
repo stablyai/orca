@@ -4,8 +4,8 @@ import { ChevronRight } from 'lucide-react'
 import {
   getFeatureWallMediaTile,
   type FeatureWallWorkflow
-} from '../../../../../shared/feature-wall-workflows'
-import type { FeatureWallOpenSourceTelemetry } from '../../../../../shared/telemetry-property-schemas'
+} from '../../../../../shared/feature-education/explore/feature-wall-workflows'
+import type { FeatureWallOpenSourceTelemetry } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { useTranslate } from '@/i18n/use-translate'
 import { getLocalizedFeatureWallTileTitle } from './feature-wall-tour-localized-copy'

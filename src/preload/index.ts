@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/hidden-window-frame-pump'
+import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './renderer/renderer-runtime'
@@ -42,6 +42,7 @@ import { keybindingsApi } from './api/preferences/keybindings-bridge'
 import { codexAccountsApi } from './api/agent-accounts/codex-accounts-bridge'
 import { claudeAccountsApi } from './api/agent-accounts/claude-accounts-bridge'
 import { cliApi } from './api/cli-install/cli-bridge'
+import { orcaUninstallApi } from './api/orca-uninstall/orca-uninstall-bridge'
 import { codexConfigSyncApi } from './api/agent-accounts/codex-config-sync-bridge'
 import { preflightApi } from './api/preflight/preflight-bridge'
 import { notificationsApi } from './api/notifications/notifications-bridge'
@@ -101,6 +102,8 @@ const telemetrySetOptInApi: PreloadApi['telemetrySetOptIn'] = (optedIn) =>
   ipcRenderer.invoke('telemetry:setOptIn', optedIn)
 const telemetryAcknowledgeBannerApi: PreloadApi['telemetryAcknowledgeBanner'] = () =>
   ipcRenderer.invoke('telemetry:acknowledgeBanner')
+const telemetryAssignBrowserExtensionsBannerApi: PreloadApi['telemetryAssignBrowserExtensionsBanner'] =
+  () => ipcRenderer.invoke('telemetry:assignBrowserExtensionsBanner')
 const telemetryGetConsentStateApi: PreloadApi['telemetryGetConsentState'] = () =>
   ipcRenderer.invoke('telemetry:getConsentState')
 
@@ -140,6 +143,7 @@ const api = {
   telemetrySetOptIn: telemetrySetOptInApi,
   telemetryAcknowledgeBanner: telemetryAcknowledgeBannerApi,
   telemetryGetConsentState: telemetryGetConsentStateApi,
+  telemetryAssignBrowserExtensionsBanner: telemetryAssignBrowserExtensionsBannerApi,
   diagnostics: diagnosticsApi,
   settings: settingsApi,
   agentAwake: agentAwakeApi,
@@ -148,6 +152,7 @@ const api = {
   codexAccounts: codexAccountsApi,
   claudeAccounts: claudeAccountsApi,
   cli: cliApi,
+  orcaUninstall: orcaUninstallApi,
   codexConfigSync: codexConfigSyncApi,
   preflight: preflightApi,
   notifications: notificationsApi,

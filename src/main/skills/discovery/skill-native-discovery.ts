@@ -1,14 +1,14 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
   SkillDiscoverySource,
   SkillSourceKind
-} from '../../../shared/skills'
+} from '../../../shared/skills/discovery/skills'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import {
   sortDiscoveredSkills,
@@ -28,7 +28,10 @@ import {
 } from './skill-discovery-stopped-wsl-roots'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
-import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
+import {
+  applyClaudePluginManifestNames,
+  discoverClaudePluginSkillInstalls
+} from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
 import {
@@ -37,10 +40,13 @@ import {
   type SkillScanOutcome
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
-import { skillDirectoryMaxDepth } from '../../../shared/skill-discovery-depth'
+import { skillDirectoryMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
 import { withoutBundledSkillCompatibilityCopies } from './bundled-skill-discovery-name'
 import { readSkillSummary } from './skill-discovery-summary'
-import { bundledSkillNames, requestedBundledSkillName } from '../../../shared/bundled-skill-names'
+import {
+  bundledSkillNames,
+  requestedBundledSkillName
+} from '../../../shared/skills/bundled/bundled-skill-names'
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
@@ -129,6 +135,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),
+        ...(root.pluginName ? { pluginName: root.pluginName } : {}),
         rootPath: root.path,
         directoryPath,
         skillFilePath,
@@ -247,7 +254,9 @@ export async function discoverSkills(args: {
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     ...(pluginCwd && !pluginCwdStopped
       ? await waitForPromiseWithSignal(
-          discoverClaudePluginSkillSources({ homeDir, cwd: pluginCwd, signal: args.signal }),
+          discoverClaudePluginSkillInstalls({ homeDir, cwd: pluginCwd, signal: args.signal }).then(
+            (installs) => applyClaudePluginManifestNames(installs, args.signal)
+          ),
           args.signal
         )
       : [])

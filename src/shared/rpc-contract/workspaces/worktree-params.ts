@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { normalizeExecutionHostId } from '../../execution-host'
+import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../../automations/ownership/automation-workspace-provenance'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
@@ -10,10 +10,10 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../rpc-param-primitives'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
-import { DiffCommentSchema, MobileDiffReviewSchema } from '../../diff-comment-schema'
+import { DiffCommentSchema, MobileDiffReviewSchema } from '../../file-review/diff-comment-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachments/workspace-linked-item-source-context'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
@@ -246,6 +246,17 @@ export const WorktreeRemove = WorktreeSelector.extend({
   // The caller showed that this also destroys the recipe environment Orca created for the workspace.
   // Absent: today's removal, which leaves that environment running. Older hosts strip it.
   destroyHost: z.literal(true).optional()
+})
+
+/** Archive: delete the checkout, keep the branch and the workspace. Not exposed to users yet. */
+export const WorktreeArchive = WorktreeSelector.extend({
+  hostId: OptionalExecutionHostId
+})
+
+/** Restore an archived workspace; `worktree` is its `id:` selector, since Git no longer lists it. */
+export const WorktreeRestore = WorktreeSelector.extend({
+  hostId: OptionalExecutionHostId,
+  setupDecision: z.enum(['run', 'skip', 'inherit']).optional()
 })
 
 export const WorktreePreviewNestedRemoval = WorktreeSelector.extend({

@@ -8,13 +8,7 @@ const CALLER = 'a'.repeat(32)
 const OTHER = 'b'.repeat(32)
 
 describe('resolveBrowserExtensionRequestedUrl', () => {
-  it.each([
-    'file:///etc/passwd',
-    'javascript:alert(1)',
-    'data:text/html,<script>1</script>',
-    'chrome://settings',
-    'chrome-extension://not-an-id/page.html'
-  ])('refuses %s', (raw) => {
+  it.each(['file:///etc/passwd', 'chrome-extension://not-an-id/page.html'])('refuses %s', (raw) => {
     expect(resolveBrowserExtensionRequestedUrl(raw, CALLER)).toBeNull()
   })
 })

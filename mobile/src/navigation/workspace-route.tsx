@@ -1,16 +1,16 @@
 import { useContext, type ReactNode } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
-import { firstParam } from './route-param-reader'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import { firstParam, readWorkspaceRouteExecutionHost } from './route-param-reader'
 import { WorkspaceExecutionHostContext } from './workspace-execution-host'
 import {
   HostStatusGatesContext,
   useOptionalHostProtocolGates
-} from '../components/host-protocol-gates-context'
-import { PageRouteUnavailableScreen } from '../mobile-web-shell/PageRouteUnavailableScreen'
+} from '../components/host-connection/host-protocol-gates-context'
+import { PageRouteUnavailableScreen } from '../mobile-web-shell/presentation/PageRouteUnavailableScreen'
 import { useHostClient } from '../transport/connection/host-client-hooks'
-import { WorkspaceServerContext } from '../worktree/workspace-server-context'
-import { useWorkspaceServer } from '../worktree/workspace-server'
+import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
+import { useWorkspaceServer } from '../worktree/execution-hosts/workspace-server'
 
 const NO_CAPABILITIES: readonly string[] = []
 const UNREACHABLE_SERVER_MESSAGE =
@@ -25,7 +25,7 @@ export function WorkspaceRoute({ children }: { children: ReactNode }) {
   return (
     <WorkspaceExecutionScope
       hostId={firstParam(params.hostId)}
-      executionHost={normalizeExecutionHostId(firstParam(params.executionHost)) ?? undefined}
+      executionHost={readWorkspaceRouteExecutionHost(params.executionHost)}
     >
       {children}
     </WorkspaceExecutionScope>

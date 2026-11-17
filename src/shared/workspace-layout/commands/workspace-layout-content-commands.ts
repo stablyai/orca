@@ -1,4 +1,4 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import { applied, refuse, workspaceOrEmpty, type Applied } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from '../workspace-layout-command-types'
 import { editorOpenFileId } from '../editor-tabs/workspace-layout-editor-open-file-id'

@@ -74,10 +74,22 @@ describe('runOpenCodeWslTextTask', () => {
       return { ok: false, stage: 'aborted' }
     })
 
+    // The distro answers for its own drive mount (here a custom automount root).
+    const resolveGuestPaths = vi.fn(async (_distro: string, paths: readonly string[]) =>
+      paths.map((path) => (path === 'C:\\notes\\context.txt' ? '/qamnt/c/notes/context.txt' : path))
+    )
+
     await expect(
-      runOpenCodeWslTextTask(task(controller.signal), { prepare, spawnAgent: guest.spawnAgent })
+      runOpenCodeWslTextTask(task(controller.signal), {
+        prepare,
+        spawnAgent: guest.spawnAgent,
+        resolveGuestPaths
+      })
     ).rejects.toThrow('canceled by user')
 
     expect(guest.child().exitCode).toBe(0)
+    expect(guest.requests[0]).toMatchObject({
+      runArgs: ['--model', 'anthropic/claude-sonnet', '--file', '/qamnt/c/notes/context.txt']
+    })
   })
 })

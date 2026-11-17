@@ -1,13 +1,13 @@
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from '../../workspaces/workspace-removal-target'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   AgentLaunchPreferences,
   RuntimeAgentSessionRpcCaller,
   RuntimeEnsureAgentSessionRequest,
   RuntimeEnsureAgentSessionResult
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import {
   canonicalizeAgentSessionIdentity,
   type ProviderExecutionNamespace
@@ -16,7 +16,7 @@ import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-a
 import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { withAgentSessionAccountEnv } from '../../agent-session/agent-session-account-env'
+import { withAgentSessionAccountEnv } from '../../agent-session/environment/agent-session-account-env'
 import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-agent-terminal-launch'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -113,7 +113,9 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       providerSession: request.providerSession,
       record: record && worktreeIdsEqual(record.worktreeId, worktreeId) ? record : undefined,
       liveRow: sourcePaneKey
-        ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === sourcePaneKey)
+        ? this.getAgentProviderSessionRowsForPaneFn?.(sourcePaneKey).find(
+            (row) => row.paneKey === sourcePaneKey
+          )
         : undefined
     })
   }

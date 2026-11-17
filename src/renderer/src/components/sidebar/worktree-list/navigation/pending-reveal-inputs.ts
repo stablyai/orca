@@ -1,6 +1,6 @@
-import { supersedeVirtualizedScrollAnchorRestore } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { supersedeVirtualizedScrollAnchorRestore } from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
-import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
+import type { WorktreeOccurrencePlan } from '../../../../../../shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
@@ -10,14 +10,14 @@ import type {
   PendingSidebarWorktreeReveal
 } from '@/store/slices/ui/ui-slice-contract-core'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { RenderRow } from '../listing/render-row'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
+import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
@@ -30,7 +30,7 @@ import {
 } from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 import { useAppStore } from '@/store'
-import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export const MAX_REVEAL_RETRIES = 8
 

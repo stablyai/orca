@@ -6,7 +6,7 @@ import {
 } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import { runPreflightCheck } from '../../../../preflight/agent-detection'
-import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight-remote-windows-terminal-capabilities'
+import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight/preflight-remote-windows-terminal-capabilities'
 
 import {
   assertAgentDetectionHostRunning,
@@ -14,7 +14,7 @@ import {
   refreshAgentsOnHost
 } from '../../../../preflight/workspace-agent-detection'
 import {
-  PreflightAgentDetection,
+  PreflightAgentRefresh,
   PreflightProjectAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
@@ -74,11 +74,11 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.refreshAgents',
     permission: 'workspace',
-    params: PreflightAgentDetection,
+    params: PreflightAgentRefresh,
     handler: async (params, { runtime }) => {
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       await assertAgentDetectionHostRunning(host)
-      return refreshAgentsOnHost(host, hostDetectionOptions(runtime))
+      return refreshAgentsOnHost(host, hostDetectionOptions(runtime), params.userInitiated)
     }
   })
 ]

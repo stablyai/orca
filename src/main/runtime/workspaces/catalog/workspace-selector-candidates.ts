@@ -1,10 +1,13 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   resolveQualifiedFolderWorkspaceResult,
   type QualifiedFolderHostState
 } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { folderIdOfSelector, folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  folderIdOfSelector,
+  folderWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { runtimePathsEqual, type ResolvedWorktree } from './runtime-worktree-path-identity'
 
 /** A selector's match: a repo-backed row, or a folder workspace with its derived host (null when underivable). */

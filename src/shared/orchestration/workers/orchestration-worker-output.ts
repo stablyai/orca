@@ -5,7 +5,10 @@ import type {
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import type { OrchestrationFleetWorker } from '../fleet/orchestration-fleet-projection'
-import type { RuntimeTerminalRead, RuntimeTerminalState } from '../../runtime-types'
+import type {
+  RuntimeTerminalRead,
+  RuntimeTerminalState
+} from '../../terminal/runtime/runtime-terminal-contracts'
 import type { PtyLivenessVerdict } from '../../terminal/pty/lifecycle/pty-liveness-verdict'
 
 export const ORCHESTRATION_WORKER_READ_SOURCES = ['auto', 'transcript', 'terminal'] as const

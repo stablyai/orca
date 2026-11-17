@@ -1,8 +1,9 @@
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type {
   StructuredAgentSessionProviderOpenInput,
@@ -27,7 +28,7 @@ import {
   reportedCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
 import { CodexSkillReport } from '../catalog/codex-structured-skill-report'
-import { codexMessageInputOptions } from '../turns/codex-structured-message-options'
+import { codexMessageInputOptions } from '../../../../shared/agent-session/options/codex-message-compiler'
 import { codexAcquireCatalogAccess } from '../catalog/codex-structured-acquire-catalog'
 import {
   CODEX_DEFAULT_SERVICE_TIER,
@@ -123,22 +124,25 @@ export async function openCodexStructuredSession(
     input.events &&
     (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
   ) {
+    const sink = input.events
     await waitForPromiseWithSignal(
-      catchUpCodexThread({
-        connection,
-        threadId: opened.threadId,
-        sessionId,
-        sink: input.events,
-        returnedTurns,
-        paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
-        subagentExecutions: start.subagentExecutions,
-        onReceipt: (clientMessageId, providerIdentity) =>
-          deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity }),
-        signal: openInput.signal,
-        assertCurrent: current,
-        ...(deps.requestTimeoutMs !== undefined ? { timeoutMs: deps.requestTimeoutMs } : {}),
-        ...(deps.logger ? { logger: deps.logger } : {})
-      }),
+      withStructuredHistoryInvocation(attempt, openInput.signal, (signal) =>
+        catchUpCodexThread({
+          connection,
+          threadId: opened.threadId,
+          sessionId,
+          sink,
+          returnedTurns,
+          paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
+          subagentExecutions: start.subagentExecutions,
+          onReceipt: (clientMessageId, providerIdentity) =>
+            deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity }),
+          signal,
+          assertCurrent: current,
+          ...(deps.requestTimeoutMs !== undefined ? { timeoutMs: deps.requestTimeoutMs } : {}),
+          ...(deps.logger ? { logger: deps.logger } : {})
+        })
+      ),
       openInput.signal
     )
     current()

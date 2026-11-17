@@ -1,4 +1,4 @@
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 
 const MAX_SITES = 12
 const MAX_STACK_FRAMES = 4

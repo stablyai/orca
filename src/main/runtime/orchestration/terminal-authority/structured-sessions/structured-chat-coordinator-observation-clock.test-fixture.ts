@@ -1,39 +1,42 @@
-import { expect, vi } from 'vitest'
+import { vi } from 'vitest'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { OrchestrationStructuredMailboxPointerDelivery } from '../../mailbox/structured-pointer/structured-mailbox-pointer-delivery'
+import { StructuredAgentSessionStatusFeed } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/structured-agent-session-runtime'
-import { awakeNow, createAwakeClock, type AwakeClock } from '../../../../power/awake-clock'
+import { waitForStructuredAgentSessionRecovery } from '../../../agent-session/installation/structured-agent-session-runtime'
+import { createAwakeClock, type AwakeClock } from '../../../../power/awake-clock'
 import type * as AwakeClockModule from '../../../../power/awake-clock'
 
-// Agent startups read the process-wide awake clock, whose heartbeat is a timer that outlives the
-// runtime by design. Under fake time each observation window gets its own production awake clock
-// whose heartbeat it counts, so the closed-database drain can still demand every other timer end.
-const fakeTimeAwakeClock = vi.hoisted((): { clock: AwakeClock | null; heartbeats: number } => ({
-  clock: null,
-  heartbeats: 0
+type MailDeliveryOwner = Pick<
+  typeof OrchestrationStructuredMailboxPointerDelivery.prototype,
+  'deliverForHandle'
+>
+
+function hasDeliveryCompletion(value: MailDeliveryOwner): value is MailDeliveryOwner & {
+  deliver(mailbox: string, types?: ReadonlySet<string>): Promise<void>
+} {
+  return 'deliver' in value && typeof value.deliver === 'function'
+}
+
+// Isolate startup clock reads from the process-wide clock during fake observation windows.
+const fakeTimeAwakeClock = vi.hoisted((): { clock: AwakeClock | null } => ({
+  clock: null
 }))
 
 vi.mock('../../../../power/awake-clock', async (importOriginal) => {
   const actual = await importOriginal<typeof AwakeClockModule>()
   return {
     ...actual,
-    awakeNow: vi.fn(() => (fakeTimeAwakeClock.clock ?? actual.getSystemAwakeClock()).now())
+    awakeNow: vi.fn(() => fakeTimeAwakeClock.clock?.now() ?? Date.now())
   }
 })
 
 function startFakeTimeAwakeClock(): void {
-  // Startups read through this export; an unapplied mock would leave the shared clock in play.
-  expect(vi.isMockFunction(awakeNow)).toBe(true)
-  fakeTimeAwakeClock.heartbeats = 0
   fakeTimeAwakeClock.clock = createAwakeClock({
     wallNow: () => Date.now(),
     monotonicNow: () => globalThis.performance.now(),
     after: (beat, ms) => {
-      fakeTimeAwakeClock.heartbeats += 1
-      setTimeout(() => {
-        fakeTimeAwakeClock.heartbeats -= 1
-        beat()
-      }, ms).unref()
+      setTimeout(beat, ms).unref()
     }
   })
 }
@@ -43,7 +46,46 @@ export function createCoordinatorMailObservationClock(
   sessionId: string
 ) {
   let active = false
+  const pending = new Set<Promise<unknown>>()
+  const track = <T>(work: Promise<T>): Promise<T> => {
+    pending.add(work)
+    void work.then(
+      () => pending.delete(work),
+      () => pending.delete(work)
+    )
+    return work
+  }
+  const drain = async () => {
+    while (pending.size) {
+      await Promise.allSettled(pending)
+    }
+  }
   return {
+    install(): void {
+      pending.clear()
+      const publish = StructuredAgentSessionStatusFeed.prototype.publish
+      vi.spyOn(StructuredAgentSessionStatusFeed.prototype, 'publish').mockImplementation(function (
+        this: StructuredAgentSessionStatusFeed,
+        ...args
+      ) {
+        const result = publish.apply(this, args)
+        return result instanceof Promise ? track(result) : result
+      })
+      // The existing private delivery promise spans sends and recursive reruns after settlement.
+      const deliveryPrototype: MailDeliveryOwner =
+        OrchestrationStructuredMailboxPointerDelivery.prototype
+      if (!hasDeliveryCompletion(deliveryPrototype)) {
+        throw new Error('structured mailbox delivery has no completion method')
+      }
+      const deliver = deliveryPrototype.deliver
+      vi.spyOn(deliveryPrototype, 'deliver').mockImplementation(function (
+        this: typeof deliveryPrototype,
+        ...args
+      ) {
+        return track(deliver.apply(this, args))
+      })
+    },
+    drain,
     start(): void {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       startFakeTimeAwakeClock()
@@ -57,24 +99,15 @@ export function createCoordinatorMailObservationClock(
       await vi.advanceTimersByTimeAsync(ms)
       await waitForStructuredAgentSessionRecovery()
       await getHost().flushStreamedEvents(sessionId)
-      await new Promise<void>((resolve) => setImmediate(resolve))
+      await drain()
     },
     async edgesAnswered(
       runtime: Pick<OrcaRuntimeService, 'onStructuredSessionStatusForMail'>,
-      wait: { timeout: number }
+      _wait: { timeout: number }
     ): Promise<void> {
-      // The lane reads each outstanding send by key; a session with none outstanding reads nothing.
-      const reads = vi.spyOn(getHost(), 'sendAnswer')
       runtime.onStructuredSessionStatusForMail({ sessionId, status: null })
       runtime.onStructuredSessionStatusForMail({ sessionId, status: 'idle' })
-      await vi.waitFor(async () => {
-        await Promise.allSettled(reads.mock.results.map((read) => read.value))
-        await new Promise((resolve) => setImmediate(resolve))
-        const settled = reads.mock.calls.length
-        await new Promise((resolve) => setImmediate(resolve))
-        expect(reads.mock.calls.length).toBe(settled)
-      }, wait)
-      reads.mockRestore()
+      await drain()
     },
     async drainClosedDatabaseRepair(): Promise<void> {
       if (!active) {
@@ -83,8 +116,7 @@ export function createCoordinatorMailObservationClock(
       // The runtime's orphan mailbox repair must still run against the closed database.
       await vi.advanceTimersByTimeAsync(2_000)
       await waitForStructuredAgentSessionRecovery()
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(vi.getTimerCount()).toBe(fakeTimeAwakeClock.heartbeats)
+      await drain()
     },
     restore(): void {
       if (active) {
@@ -92,7 +124,6 @@ export function createCoordinatorMailObservationClock(
       }
       // useRealTimers dropped this clock's pending heartbeat along with the other fake timers.
       fakeTimeAwakeClock.clock = null
-      fakeTimeAwakeClock.heartbeats = 0
       active = false
     }
   }

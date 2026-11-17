@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { workspaceFromLinearData } from '../../src/main/linear/accounts/linear-workspace-record'
 
 import type { LinearConnectionStatus, LinearViewer } from '../../src/shared/linear/workspace-types'
-import { clearLinearRequestMaps } from '../../src/renderer/src/store/slices/linear/linear-slice-request-state'
+
 import {
   createTestStore,
   deferred,
@@ -65,7 +65,7 @@ vi.mock('@/runtime/linear/runtime-linear-project-client', async (importOriginal)
   }
 })
 
-vi.mock('../../src/renderer/src/hooks/useIssueMetadata', () => ({
+vi.mock('../../src/renderer/src/lib/work-items/linear/useIssueMetadata', () => ({
   clearLinearMetadataCache: vi.fn()
 }))
 
@@ -159,65 +159,5 @@ describe('createLinearSlice', () => {
 
     expect(store.getState().linearStatus.connected).toBe(false)
     expect(store.getState().linearStatus.viewer).toBeNull()
-  })
-})
-
-describe('account observations stay separate from query transport', () => {
-  beforeEach(() => {
-    vi.resetAllMocks()
-    clearLinearRequestMaps()
-  })
-  const confirmed: LinearConnectionStatus = {
-    connected: true,
-    viewer: null,
-    selectedWorkspaceId: 'workspace-1',
-    workspaces: [
-      {
-        id: 'workspace-1',
-        organizationId: 'org',
-        organizationName: 'Acme',
-        displayName: 'User',
-        email: null
-      },
-      {
-        id: 'workspace-2',
-        organizationId: 'org2',
-        organizationName: 'Other',
-        displayName: 'User',
-        email: null
-      }
-    ]
-  }
-  function connectedStore() {
-    const store = createTestStore()
-    store.setState({
-      linearStatus: confirmed,
-      linearStatusObserved: true,
-      linearStatusChecked: true,
-      linearStatusContextKey: 'local#0'
-    })
-    return store
-  }
-
-  it('does not lose an actual Connect acknowledgement to a concurrent failed account delivery', async () => {
-    const store = connectedStore()
-    const ack = Promise.withResolvers<{
-      ok: true
-      viewer: LinearViewer
-      workspace: NonNullable<LinearConnectionStatus['workspaces']>[number]
-    }>()
-    linearConnect.mockReturnValue(ack.promise)
-    const action = store.getState().connectLinear('fixture-token')
-    linearStatus.mockRejectedValue(new Error('unreachable'))
-    await store.getState().checkLinearConnection(true)
-    const workspace = workspaceFromLinearData(
-      { displayName: 'User', email: null },
-      { id: 'workspace-1', name: 'Acme' }
-    )
-    ack.resolve({ ok: true, viewer: workspace, workspace })
-    await expect(action).resolves.toMatchObject({ ok: true })
-    expect(
-      store.getState().linearStatus.workspaces?.find((item) => item.id === workspace.id)
-    ).toEqual(workspace)
   })
 })

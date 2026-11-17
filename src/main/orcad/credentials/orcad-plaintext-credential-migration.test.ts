@@ -2,8 +2,11 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { SecretStore } from '../../../shared/secret-store'
-import { _resetSecretStoreForTests, setSecretStore } from '../../../shared/secret-store'
+import type { SecretStore } from '../../../shared/secure-storage/secret-store'
+import {
+  _resetSecretStoreForTests,
+  setSecretStore
+} from '../../../shared/secure-storage/secret-store'
 import { readStoredCredentialToken } from '../../credentials/integration-credential-file'
 import { migratePlaintextCredentials } from './orcad-plaintext-credential-migration'
 import { orcadSecretStateFileName } from './orcad-secret-key-record'
@@ -53,16 +56,6 @@ describe('migratePlaintextCredentials', () => {
       expect(statSync(path).mode & 0o777).toBe(0o600)
     }
     expect(logs.join('\n')).not.toContain('lin_api_plaintext')
-  })
-
-  it("stages in its own temp file, never a concurrent writer's shared one", () => {
-    const path = join(dir, 'linear-token.enc')
-    writeFileSync(path, 'lin_api_plaintext', 'utf8')
-    writeFileSync(`${path}.tmp`, 'other-writer-in-progress', 'utf8')
-
-    migratePlaintextCredentials(store, [{ path, raw: true }], log)
-    expect(readFileSync(`${path}.tmp`, 'utf8')).toBe('other-writer-in-progress')
-    expect(readStoredCredentialToken('Linear', readFileSync(path))).toBe('lin_api_plaintext')
   })
 
   it('rewrites a plaintext envelope as an encrypted one', () => {

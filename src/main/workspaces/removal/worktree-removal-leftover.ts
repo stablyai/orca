@@ -1,11 +1,12 @@
-import { unregisteredFolderRefusal } from '../../../shared/worktree/removal'
+import { unregisteredFolderRefusal } from '../../../shared/worktree/removal/removal'
 import { usesNativeWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
 import type { LocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import { listWorktreesSharedStrict as listWorktreesStrict } from '../../git/worktrees/catalog/worktree-scan-cache'
+import type { GitWorktreeExecOptions } from '../../git/worktrees/worktree-operation-options'
 import {
   getErrorCode,
   normalizeLocalBranchRef
@@ -39,20 +40,26 @@ export function differentCheckoutAtPathError(worktreePath: string): Error {
   )
 }
 
-export async function registeredRemovalCheckout(record: {
-  repoPath: string
-  worktreePath: string
-}): Promise<GitWorktreeInfo | undefined> {
-  return (await listWorktreesStrict(record.repoPath)).find((worktree) =>
+export async function registeredRemovalCheckout(
+  record: {
+    repoPath: string
+    worktreePath: string
+  },
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo | undefined> {
+  return (await listWorktreesStrict(record.repoPath, options)).find((worktree) =>
     areWorktreePathsEqual(worktree.path, record.worktreePath)
   )
 }
 
-export async function isCheckoutRegistered(record: {
-  repoPath: string
-  worktreePath: string
-}): Promise<boolean> {
-  return !!(await registeredRemovalCheckout(record))
+export async function isCheckoutRegistered(
+  record: {
+    repoPath: string
+    worktreePath: string
+  },
+  options: GitWorktreeExecOptions = {}
+): Promise<boolean> {
+  return !!(await registeredRemovalCheckout(record, options))
 }
 
 export function isRecordedCheckout(

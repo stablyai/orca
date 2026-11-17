@@ -85,7 +85,7 @@ import { isWslDistroRegistered } from '../../wsl/discovery/wsl-distro-registry-i
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import { ptyPaneKey } from '../pty/pane/key-state'
 import { tryGetProviderForPty } from '../pty/provider/registry'
-import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
+import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
 /** The move's IPC handlers; its driver reads every move dependency from this module. */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
   setWslMoveReloadableWindow(() => {
@@ -257,8 +257,8 @@ async function connectWslMoveHost(
   if (!service || !(await connectWslMoveHostService(service, userDataPath, distro, mode))) {
     return null
   }
-  const { environment, notCarried } = ensureWslMoveDestinationBrowserLogins({
-    resolveEnvironment: () => resolveEnvironment(userDataPath, environmentId),
+  const { environment, notCarried } = await ensureWslMoveDestinationBrowserLogins({
+    resolveEnvironment: async () => await resolveEnvironment(userDataPath, environmentId),
     resaveConnection: () => service.resaveConnection(environmentId),
     orcaProfileId: activeBrowserRoutePartitionOrcaProfileId,
     resolveHostStorage: wslHostBrowserRouteStorage
@@ -269,7 +269,8 @@ async function connectWslMoveHost(
   }
   const pairingCode = encodePairingOffer(getPreferredPairingOffer(environment))
   const options = environment.runtimeId ? { expectedRuntimeId: environment.runtimeId } : {}
-  const distroGuid = findWslHostDeployment(userDataPath, environmentId)?.distroId ?? undefined
+  const distroGuid =
+    (await findWslHostDeployment(userDataPath, environmentId))?.distroId ?? undefined
   return {
     environmentId,
     name: environment.name,

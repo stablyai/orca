@@ -1,10 +1,14 @@
 import { posix } from 'node:path'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
-import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import { removeHostTree } from '../../filesystem/host-tree-removal'
-import { toLinuxPath } from '../../../shared/wsl-paths'
+import {
+  guestUncPath,
+  resolveWslGuestPaths,
+  wslGuestShellPaths
+} from '../../wsl/filesystem/wsl-guest-drive-path'
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
@@ -51,11 +55,22 @@ function isWslMissingPathError(error: unknown): boolean {
   return error.exitCode === 1 && WSL_MISSING_PATH_STDERR.test(stderr)
 }
 
-export function toLocalWorktreeRuntimePath(
-  targetPath: string,
-  options: LocalWorktreeFilesystemOptions = {}
-): string {
-  return shouldUseWslFilesystem(options) ? toLinuxPath(targetPath) : targetPath
+/** Paths as the filesystem that owns them spells them; drive paths ask their distro for the mount. */
+export async function toLocalWorktreeRuntimePaths(
+  targetPaths: readonly string[],
+  options: LocalWorktreeFilesystemOptions = {},
+  signal?: AbortSignal
+): Promise<string[]> {
+  const distro = options.wslDistro?.trim()
+  return shouldUseWslFilesystem(options) && distro
+    ? resolveWslGuestPaths(distro, targetPaths, signal)
+    : [...targetPaths]
+}
+
+// Exit 2 keeps an unreadable drive mount apart from coreutils' missing-path exit 1.
+function guestCommand(path: string, command: (target: string) => string): string {
+  const { prelude, words } = wslGuestShellPaths([guestUncPath(path)], 2)
+  return `${prelude}${command(words[0])}`
 }
 
 export function getLocalWorktreePathAccess(
@@ -79,9 +94,11 @@ export function getLocalWorktreePathAccess(
       throw error
     })
   const statPath = async (path: string, follow: boolean) => {
-    const target = quotePosixShell(toLinuxPath(path))
     // Shell file tests conflate permission failures with absence; stat preserves the reason.
-    const stdout = await inspect(path, `LC_ALL=C stat ${follow ? '-L ' : ''}-c %F -- ${target}`)
+    const stdout = await inspect(
+      path,
+      guestCommand(path, (target) => `LC_ALL=C stat ${follow ? '-L ' : ''}-c %F -- ${target}`)
+    )
     const kind = stdout.trim()
     return {
       type:
@@ -98,8 +115,10 @@ export function getLocalWorktreePathAccess(
     statPath: (path) => statPath(path, false),
     layoutStatPath: (path) => statPath(path, true),
     realPath: async (path) => {
-      const target = quotePosixShell(toLinuxPath(path))
-      const stdout = await inspect(path, `LC_ALL=C realpath -e -- ${target}`)
+      const stdout = await inspect(
+        path,
+        guestCommand(path, (target) => `LC_ALL=C realpath -e -- ${target}`)
+      )
       const resolved = stdout.replace(/\r?\n$/, '')
       if (!posix.isAbsolute(resolved) || /[\0\r\n]/.test(resolved)) {
         throw new Error('Invalid WSL canonical path')
@@ -107,9 +126,10 @@ export function getLocalWorktreePathAccess(
       return resolved
     },
     readPath: async (path) => {
-      const target = quotePosixShell(toLinuxPath(path))
-      const stdout = await inspect(path, `LC_ALL=C cat -- ${target}`)
-      return stdout
+      return inspect(
+        path,
+        guestCommand(path, (target) => `LC_ALL=C cat -- ${target}`)
+      )
     }
   }
 }
@@ -121,10 +141,14 @@ export async function removeLocalWorktreePath(
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
+    throwIfSignalAborted(signal)
     await removeHostTree(targetPath, { signal })
     return
   }
 
   // Delete guest paths inside their distro; Windows Node cannot safely remove them.
-  await runWslCommand(distro, `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`)
+  await runWslCommand(
+    distro,
+    guestCommand(targetPath, (target) => `rm -rf -- ${target}`)
+  )
 }

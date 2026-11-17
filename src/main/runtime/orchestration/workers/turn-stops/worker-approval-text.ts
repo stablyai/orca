@@ -1,6 +1,6 @@
 /** What a coordinator is told about a worker's permission prompt: who may answer, and how it closed. */
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
 /** With the user's setting on: the coordinator may answer too, and the first answer wins. */
 export function describeCoordinatorAnswer(

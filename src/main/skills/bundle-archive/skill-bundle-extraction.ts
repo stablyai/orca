@@ -8,13 +8,13 @@ import {
   parseSkillBundleManifest,
   type AgentPluginManifestV1,
   type SkillBundleManifestV1
-} from '../../../shared/skill-bundle-manifest'
+} from '../../../shared/skills/packages/skill-bundle-manifest'
 import {
   SKILL_PACKAGE_MAX_MANIFEST_BYTES,
   type SkillPackageFile
-} from '../../../shared/skill-package-manifest'
-import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skill-install-failure'
-import { summarizeSkillMarkdown } from '../../../shared/skill-metadata'
+} from '../../../shared/skills/packages/skill-package-manifest'
+import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skills/installation/skill-install-failure'
+import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
 import { observeSkillPackage } from '../package-archive/skill-package-identity'
 import {
   openSkillTarGzip,

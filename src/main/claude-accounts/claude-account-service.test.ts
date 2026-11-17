@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../shared/constants'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
+import { getDefaultSettings } from '../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import type { ClaudeManagedAccount } from '../../shared/agent-accounts/managed-account-types'
 
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude-command-process'
 

@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { CONNECTOR_SOURCES } from '../../external-conversation-link'
-import { AgentLaunchFields } from '../agent-launch/agent-launch-params'
+import { CONNECTOR_SOURCES } from '../../connectors/external-conversation-link'
+import { AgentLaunch } from '../agent-launch/agent-launch-params'
 
 const ConnectorDelivery = {
   source: z.enum(CONNECTOR_SOURCES),
@@ -13,7 +13,7 @@ export const ConnectorStart = z.object({
   ...ConnectorDelivery,
   /** Admitted by the host's connector agent list, so an unsupported one is a refusal, not invalid. */
   agent: z.string().min(1, 'Missing agent'),
-  target: AgentLaunchFields.shape.target,
+  target: AgentLaunch.shape.target,
   prompt: z.string().min(1, 'Missing prompt')
 })
 

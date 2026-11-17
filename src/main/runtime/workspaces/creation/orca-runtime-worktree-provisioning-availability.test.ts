@@ -1,6 +1,6 @@
-import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import '../../construction/test-context/orca-runtime-test-lifecycle.spec'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   computeWorktreePathMock,
@@ -11,8 +11,8 @@ import { createSetupRunnerScript } from '../../../workspace-hooks/worktree-runne
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import { shouldRunSetupForCreate } from '../../../workspace-hooks/effective-hook-config'
-import { store } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
+import { store } from '../../construction/test-context/orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from '../../construction/test-context/orca-runtime-test-scenario-builders.spec'
 import 'node:os'
 
 describe('host worktree creation while its renderer is unavailable', () => {

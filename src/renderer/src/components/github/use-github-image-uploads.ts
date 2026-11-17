@@ -1,4 +1,4 @@
-import { useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
+import { useOsFileDropOwner } from '@/lib/files/drop/use-os-file-drop-owner'
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'

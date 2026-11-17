@@ -8,7 +8,7 @@ import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/terminal-f
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-layout/pane-pty-resize-hold'
 import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import { releaseRendererPtyVisibilityClaim } from '../pty-transport/delivery/pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -176,6 +176,7 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
+      session.deps.releaseResumeInPlace?.()
       session.discardAgentPreReadyDraft?.()
       session.cleanupKittyFileReader()
       session.disposeSpawnDeferral()

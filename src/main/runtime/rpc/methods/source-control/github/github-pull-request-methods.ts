@@ -16,7 +16,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
     name: 'github.prForBranch',
     permission: 'workspace',
     params: PrForBranch,
-    handler: async (params, { runtime, clientKind }) =>
+    handler: async (params, { runtime, clientKind, signal }) =>
       runtime.getRepoPRForBranch(
         params.repo,
         params.branch,
@@ -26,7 +26,10 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.currentHeadOid,
         params.reason,
         params.userRefresh,
-        clientKind
+        clientKind,
+        signal,
+        params.acceptRevalidationOnly,
+        params.selected
       )
   }),
   defineMethod({
@@ -36,7 +39,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
     handler: async (params, { runtime }) =>
       runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, params.prRepo ?? null, {
         noCache: params.noCache,
-        ...(params.userRefresh === true ? { userRefresh: true } : {})
+        ...(params.userRefresh === true ? { userRefresh: true } : {}),
+        ...(params.reason !== undefined ? { reason: params.reason } : {})
       })
   }),
   defineMethod({

@@ -1,15 +1,13 @@
-import {
-  createStructuredAgentSessionId,
-  structuredAgentSessionCreateParams
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type {
   StructuredAgentSessionCreateParams,
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../../../../shared/agent-session/structured-agent-session-create'
-import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { structuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { structuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { useAppStore } from '@/store/index'
 import {
@@ -21,15 +19,15 @@ import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { StructuredAgentSessionOwnerUnresolvedError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import './structured-agent-session-launch-abandon'
 import './structured-agent-session-launch-create-call'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
@@ -101,7 +99,7 @@ export function createStructuredAgentSessionLaunchIntent(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
-  const sessionId = createStructuredAgentSessionId(agent, createNonSecureContextUuid)
+  const sessionId = createOrcaSessionId(createNonSecureContextUuid)
   if (activate) {
     recordWebSessionFocusIntent(
       structuredAgentSessionFocusOwner(owner.target),

@@ -43,6 +43,10 @@ const {
   finalizePackagedWaylandClipboard
 } = require('./wayland-clipboard-resources.cjs')
 const {
+  ensureBundledProviderExec,
+  finalizePackagedProviderExec
+} = require('./provider-exec-resources.cjs')
+const {
   writeMacBuildCompatibility
 } = require('./scripts/desktop-distribution/macos/mac-build-compatibility.cjs')
 const {
@@ -91,6 +95,10 @@ const {
 const {
   buildMacShipItScheduling
 } = require('./scripts/desktop-distribution/macos/macos-shipit-scheduling.cjs')
+
+const {
+  buildMacNativeAddon
+} = require('./scripts/desktop-distribution/macos/build-macos-native-addon.cjs')
 
 // Dev channels need release bundle ID/signature/notarization so Squirrel.Mac accepts updates and macOS retains app identity.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
@@ -334,6 +342,7 @@ module.exports = {
     'out/package.json',
     'out/cli/**',
     'out/shared/**',
+    'out/main/worker-threads/worker-thread-{entry-path,spawn}.js',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
     'out/main/claude/**',
@@ -351,9 +360,10 @@ module.exports = {
     'out/main/filesystem/macos-tree-clone.js',
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
-    'out/main/plugins/plugin-artifact-validation.js',
-    'out/main/plugins/plugin-content-hash.js',
-    'out/main/plugins/plugin-catalog-release-entry.js',
+    'out/main/plugins/artifacts/plugin-artifact-validation.js',
+    'out/main/plugins/artifacts/plugin-content-hash.js',
+    'out/main/plugins/artifacts/plugin-host-call-validation.js',
+    'out/main/plugins/catalog/plugin-catalog-release-entry.js',
     'out/main/environment-doctor/environment-doctor.js',
     'out/main/environment-doctor/environment-doctor-host.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
@@ -361,12 +371,19 @@ module.exports = {
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
     'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
+    // `orca uninstall` runs the app's cleanup in the CLI process.
+    'out/main/uninstall/orca-{install-identity,uninstall-cleanup}.js',
+    'out/main/daemon/launch/local-terminal-daemon-stop.js',
+    'out/main/cli/cli-installer.js',
+    'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
     'out/main/session-search-worker-entry.js',
+    'out/main/journal-sql-worker-entry.js',
+    'out/main/journal-sql-reader-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',
@@ -394,7 +411,8 @@ module.exports = {
     context,
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
     ensureWaylandClipboard = ensureBundledWaylandClipboard,
-    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from)
+    orcadTemplateDir = join(__dirname, '..', orcadTemplateExtraResource.from),
+    ensureProviderExec = ensureBundledProviderExec
   ) => {
     // The template is the server every SSH host gets, so a dark test template must never ship.
     assertNotDarkBuild([join(__dirname, '..', 'out', 'main'), mobileWebBundleDir, orcadTemplateDir])
@@ -405,6 +423,9 @@ module.exports = {
     assertMobileWebBundleBuilt(mobileWebBundleDir)
     if (context.electronPlatformName === 'linux') {
       ensureWaylandClipboard(context.arch)
+    }
+    if (context.electronPlatformName !== 'win32') {
+      ensureProviderExec(context.electronPlatformName, context.arch)
     }
   },
   afterPack: async (context) => {
@@ -443,6 +464,13 @@ module.exports = {
       const architecture = macSliceArch(context.arch, 'local-build compatibility')
       const schedulingAddon = buildMacShipItScheduling(resourcesDir, architecture)
       await signMacStandaloneHelper(schedulingAddon, 'ShipIt scheduling', context.packager)
+      const menuDeadKeyAddon = buildMacNativeAddon(
+        resourcesDir,
+        architecture,
+        'macos-menu-dead-key',
+        'orca_menu_dead_key.node'
+      )
+      await signMacStandaloneHelper(menuDeadKeyAddon, 'Menu dead-key guard', context.packager)
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {
@@ -475,6 +503,7 @@ module.exports = {
       // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
       // so a cross-built slice could ship the host's pty.node and only fail at runtime.
       finalizePackagedWaylandClipboard(resourcesDir)
+      finalizePackagedProviderExec(resourcesDir, 'linux')
       verifyLinuxGlibcFloor(context.appOutDir, { targetArch })
     }
     verifyPackagedMainRuntimeDeps(resourcesDir)
@@ -549,6 +578,11 @@ module.exports = {
       await signMacStandaloneHelper(
         join(resourcesDir, '..', 'MacOS', 'orca-process-footprint'),
         'orca-process-footprint',
+        context.packager
+      )
+      await signMacStandaloneHelper(
+        finalizePackagedProviderExec(resourcesDir, 'darwin'),
+        'orca-provider-exec',
         context.packager
       )
       await packageMacTerminalHost(join(resourcesDir, '..', '..'), context)
@@ -674,6 +708,11 @@ module.exports = {
       {
         from: 'native/process-footprint-macos/.build/release/orca-process-footprint',
         to: 'MacOS/orca-process-footprint'
+      },
+      // Nested executables belong in Contents/MacOS, where afterPack signs them before the app.
+      {
+        from: 'native/provider-exec/.build/darwin-${arch}/orca-provider-exec',
+        to: 'MacOS/orca-provider-exec'
       }
     ],
     target: [
@@ -714,6 +753,10 @@ module.exports = {
       {
         from: 'native/wayland-clipboard/.build/${arch}/orca-wayland-clipboard',
         to: 'bin/orca-wayland-clipboard'
+      },
+      {
+        from: 'native/provider-exec/.build/linux-${arch}/orca-provider-exec',
+        to: 'bin/orca-provider-exec'
       },
       {
         from: 'resources/linux/bin/orca-ide',

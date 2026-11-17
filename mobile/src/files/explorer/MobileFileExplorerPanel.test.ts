@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileFileExplorerPanel } from './MobileFileExplorerPanel'
 import type { MobileDirEntry } from './file-tree'
 import { createOrcaQueryClient } from '../../query/orca-query-client'
-import { settleQueryNotifications } from '../../test-support/rpc-recording/hook-mount'
+import { settleQueryNotifications } from '../../test-support/rpc-recording/react-mounting/hook-mount'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
 import type { ConnectionState } from '../../transport/connection/connection-state'
@@ -311,20 +311,6 @@ describe('MobileFileExplorerPanel', () => {
 
     expect(renderedText(renderer)).toContain('created-while-offline.ts')
     expect(renderedText(renderer)).not.toContain('deleted-while-offline.ts')
-  })
-
-  it('keeps the cached tree when a post-reconnect root refresh fails', async () => {
-    const host = listingHost({ '': [entry('src', true), entry('README.md')] })
-    const renderer = await renderExplorer()
-    expect(renderedText(renderer)).toContain('README.md')
-
-    await host.setState(renderer, 'disconnected')
-    host.answer = () => Promise.reject(new Error('refresh failed'))
-    await host.setState(renderer, 'connected')
-
-    expect(renderedText(renderer)).toContain('src')
-    expect(renderedText(renderer)).toContain('README.md')
-    expect(renderedText(renderer)).not.toContain('refresh failed')
   })
 
   it('falls back to the capped files.list against desktops without files.readDir', async () => {

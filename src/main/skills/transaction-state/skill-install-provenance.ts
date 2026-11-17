@@ -4,7 +4,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import type {
   ManagedSkillInstall,
   SkillPlacementResult
-} from '../../../shared/skill-install-contract'
+} from '../../../shared/skills/installation/skill-install-contract'
 import { renameSkillPathWithWindowsRetry } from '../filesystem/skill-windows-rename-retry'
 import type { SkillInstalledFileMode } from '../filesystem/skill-install-filesystem'
 import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesystem'

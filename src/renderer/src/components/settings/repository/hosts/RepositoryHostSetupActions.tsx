@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { useCloneFolderOverride } from '../../../sidebar/project-admission/clone-folder/use-clone-folder-override'
 import { getProjectCloneCheckTarget } from '../../../../store/projects/project-host-routing'
 import { Plus, X } from 'lucide-react'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   ProjectHostSetup,
   ProjectHostSetupCreateResult,
   ProjectHostSetupResult
-} from '../../../../../../shared/project-types'
+} from '../../../../../../shared/project/project-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'

@@ -1,12 +1,12 @@
-import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/workspace-activity-facts'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { LiveAgentWorktreeStatus } from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupHostIdentity
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { getWorkspaceStatus } from '../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../shared/workspace/status/workspace-statuses'
 import {
   canQueueWorkspaceCleanupCandidate,
   WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS,
@@ -67,7 +67,7 @@ export type WorkspaceCleanupFacets = {
   isUnread: boolean
   hasComment: boolean
   agentState: WorkspaceCleanupAgentState
-  retainedDoneAgentCount: number
+  finishedAgentCount: number | null
   gitState: WorkspaceCleanupGitState
   upstreamAhead: number | null
   upstreamBehind: number | null
@@ -151,7 +151,7 @@ export function buildWorkspaceCleanupFacets(
     agentState: toWorkspaceCleanupAgentState(
       sources.liveAgentStatusByWorktreeId?.get(candidate.worktreeId)
     ),
-    retainedDoneAgentCount: candidate.localContext.retainedDoneAgentCount,
+    finishedAgentCount: candidate.localContext.finishedAgentCount ?? null,
     gitState: getWorkspaceCleanupGitState(candidate),
     upstreamAhead: toFiniteOrNull(candidate.git.upstreamAhead),
     upstreamBehind: toFiniteOrNull(candidate.git.upstreamBehind),
@@ -196,7 +196,7 @@ function getLocalContextCount(candidate: WorkspaceCleanupCandidate): number {
     context.cleanEditorTabCount +
     context.browserTabCount +
     context.diffCommentCount +
-    context.retainedDoneAgentCount
+    (context.finishedAgentCount ?? 0)
   )
 }
 

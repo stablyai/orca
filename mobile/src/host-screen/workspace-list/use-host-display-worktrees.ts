@@ -5,9 +5,9 @@ import {
   serverHostHealth,
   serverHostHealthLabels,
   withServerHosts
-} from '../../worktree/server-workspaces'
-import { buildWorktreeHostContextOf } from '../../worktree/worktree-host-context-labels'
-import { applyWorktreeRowDisplayState } from '../../worktree/worktree-host-row-identity'
+} from '../../worktree/execution-hosts/server-workspaces'
+import { buildWorktreeHostContextOf } from '../../worktree/row-presentation/worktree-host-context-labels'
+import { applyWorktreeRowDisplayState } from '../../worktree/row-presentation/worktree-host-row-identity'
 import type { HostScreenState } from '../use-host-screen-state'
 
 /** The desktop's platform: its own report, or the paired descriptor's before that lands. */

@@ -1,5 +1,9 @@
-import type { WorkspaceMetadataSet } from '../../../shared/worktree/workspace-metadata-set'
-import type { SparsePresetFailure } from '../../../shared/worktree/sparse-preset-failure'
+import type {
+  FolderWorkspaceCreateInput,
+  FolderWorkspaceCreateResult
+} from '../../../shared/folder-workspaces/folder-workspace-create'
+import type { WorkspaceMetadataSet } from '../../../shared/worktree/metadata/workspace-metadata-set'
+import type { SparsePresetFailure } from '../../../shared/worktree/creation/sparse-preset-failure'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -9,11 +13,14 @@ import type {
   ListDetectedWorktreesArgs,
   ListKnownWorktreesForExecutionHostArgs,
   ProviderRequestId
-} from '../../../shared/detected-worktree-provider-contract'
-import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../../shared/workspace-sleep'
-import type { RetiredNameRegistry } from '../../../shared/worktree/retired-name-registry'
+} from '../../../shared/worktree/catalog/detected-worktree-provider-contract'
+import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type {
+  WorkspaceSleepOutcome,
+  WorkspaceSleepRequest
+} from '../../../shared/workspace/lifecycle/workspace-sleep'
+import type { RetiredNameRegistry } from '../../../shared/worktree/naming/retired-name-registry'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -22,7 +29,7 @@ import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-w
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
-} from '../../../shared/worktree/base-ref-drift-types'
+} from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import type {
   AdoptProvisionedRootArgs,
   CreateWorktreeArgs,
@@ -168,15 +175,7 @@ export type WorktreeApi = {
 export type FolderWorkspacesApi = {
   list: () => Promise<FolderWorkspace[]>
   getPathStatus: (args: FolderWorkspacePathStatusRequest) => Promise<FolderWorkspacePathStatus>
-  create: (args: {
-    projectGroupId: string
-    name?: string
-    folderPath?: string | null
-    connectionId?: string | null
-    linkedTask?: FolderWorkspace['linkedTask']
-    createdWithAgent?: FolderWorkspace['createdWithAgent']
-    pendingFirstAgentMessageRename?: boolean
-  }) => Promise<FolderWorkspace>
+  create: (args: FolderWorkspaceCreateInput) => Promise<FolderWorkspaceCreateResult>
   update: (args: {
     folderWorkspaceId: string
     updates: Partial<
@@ -200,7 +199,11 @@ export type FolderWorkspacesApi = {
       >
     >
   }) => Promise<FolderWorkspace | null>
-  delete: (args: { folderWorkspaceId: string }) => Promise<boolean>
+  delete: (args: {
+    folderWorkspaceId: string
+    runHooks?: boolean
+    allowFailedArchiveHook?: boolean
+  }) => Promise<boolean>
 }
 
 export type SparsePresetsApi = {

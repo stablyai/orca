@@ -7,9 +7,9 @@ import type {
   JiraSavedFilterState,
   JiraSavedFilterMutation
 } from '../../../shared/jira/jira-saved-filters'
-import type { BrowserTabCreateRequest } from '../../../shared/browser-tab-create-request'
+import type { BrowserTabCreateRequest } from '../../../shared/browser/workspaces/browser-tab-create-request'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentLaunchTabPublishReply,
@@ -30,36 +30,36 @@ import type {
   AgentPaneActivityReply,
   AgentPaneActivityRequest
 } from '../../../shared/agent-status/presentation/agent-list-status'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type {
   ProjectMovePauseRequest,
   ProjectMovePauseResponse
-} from '../../../shared/project-move-pause'
+} from '../../../shared/project/move/project-move-pause'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from '../../../shared/worktree/launch-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
+} from '../../../shared/worktree/creation/launch-types'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
-import type { BrowserFindSource } from '../../../shared/browser-find-source'
+import type { BrowserFindSource } from '../../../shared/browser/guest-lifecycle/browser-find-source'
 import type {
   BrowserHistoryNavigateCommand,
   BrowserPageCommandTarget,
   BrowserPageTabShortcut
-} from '../../../shared/browser-page-command-target'
-import type { BrowserPageZoomCommand } from '../../../shared/browser-page-zoom'
+} from '../../../shared/browser/guest-lifecycle/browser-page-command-target'
+import type { BrowserPageZoomCommand } from '../../../shared/browser/site-settings/browser-page-zoom'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
-import type { RuntimeMobileSessionTabMove } from '../../../shared/runtime-session-contracts'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
+import type { RuntimeMobileSessionTabMove } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
-} from '../../../shared/runtime-terminal-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalTabCreateReply } from '../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type {
   TerminalTabCloseRequest,
@@ -68,12 +68,12 @@ import type {
 import type {
   SessionTabCloseRequest,
   SessionTabCloseResponse
-} from '../../../shared/session-tab-close'
-import type { WorkspaceSleepNotice } from '../../../shared/workspace-sleep'
+} from '../../../shared/workspace-layout/client-views/session-tab-close'
+import type { WorkspaceSleepNotice } from '../../../shared/workspace/lifecycle/workspace-sleep'
 import type {
   RemoteCliBrowserScopeQuery,
   RemoteCliBrowserScopeReply
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 
 export type CloseActiveTabPayload = { sourceId: string }
 
@@ -240,6 +240,7 @@ export type UiCommandEventApi = {
       sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
       newLeafId?: string
+      activate?: false
     }) => void
   ) => () => void
   onRenameTerminal: (

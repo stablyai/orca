@@ -1,6 +1,6 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { waitForWorkerAgentReady } from '../../terminal/wait/launched-agent-composer-readiness'
-import { describeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
+import { agentStartupBlockedMessage } from '../../terminal/wait/agent-startup-blocked-message'
 import { buildDispatchPreamble } from '../workers/launch/worker-dispatch-preamble'
 import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-write-guard'
@@ -19,6 +19,7 @@ import {
 import { FederationAttachStartParams } from '../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationWorkerLaunchOnHost } from '../../rpc/methods/orchestration/worker/start/launch/worker-opencode-model-preflight'
+import { reusedWorkerLaunchReceipt } from '../../rpc/methods/orchestration/worker/start/launch/worker-launch-preferences'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -158,6 +159,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
                 `Terminal ${terminalHandle} is not running a recognized agent.`
               )
             }
+            launch.receipt = reusedWorkerLaunchReceipt(runtime, launch.receipt, {
+              address: terminalHandle,
+              terminalHandle,
+              orcaSessionId: null
+            })
             effects.push({
               kind: 'terminal',
               role: 'agent',
@@ -199,7 +205,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           }
           throw new Error(
             wait.blockedReason
-              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
+              ? await agentStartupBlockedMessage(runtime, terminalHandle, wait.blockedReason)
               : `Agent did not become ready (${wait.status}).`
           )
         }

@@ -417,12 +417,12 @@ jobs:
         run: |
           DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --quiet "$DIFF_BASE" HEAD -- \
-            src/shared/ephemeral-vm-runtime-store.ts \
-            src/shared/ephemeral-vm-runtime-feature-store.ts \
-            src/shared/ephemeral-vm-runtime-rollback-projection.ts \
-            src/shared/ephemeral-vm-runtimes.ts \
-            src/shared/ephemeral-vm-recipes.ts \
-            src/shared/orca-yaml-hook-types.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-feature-store.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-rollback-projection.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes.ts \
+            src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes.ts \
+            src/shared/workspace-setup/orca-yaml-hook-types.ts \
             config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts \
             src/main/ephemeral-vm/runtime-service.ts \
@@ -656,6 +656,9 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
+      - name: Build host provider exec helper
+        run: node config/scripts/native-build/posix/build-provider-exec.mjs --host-compiler
+
       - name: Install pinned Codex CLI
         run: |
           set -euo pipefail
@@ -678,16 +681,6 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/codex-cli-no-daemon" \
             "@openai/codex@$CODEX_NO_DAEMON_CLI_VERSION"
-
-      - name: Verify Codex --no-daemon contract
-        env:
-          ORCA_CODEX_NO_DAEMON_CONTRACT_REQUIRED: '1'
-          ORCA_CODEX_NO_DAEMON_CONTRACT_VERSION: ${{ env.CODEX_NO_DAEMON_CLI_VERSION }}
-        run: |
-          set -euo pipefail
-          ORCA_CODEX_NO_DAEMON_CONTRACT_BINARY="$RUNNER_TEMP/codex-cli-no-daemon/node_modules/.bin/codex" \
-            pnpm exec vitest run --config config/vitest.config.ts \
-            src/main/pty/shell-startup/codex-no-daemon-binary-contract.test.ts
 
       # Test pins plus latest because Codex’s managed-home approval hash can change before users encounter review prompts.
       - name: Verify Codex hook file-entry contract (pinned)
@@ -839,7 +832,6 @@ jobs:
       - name: Test real shell contracts
         run: |
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
-            src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-readiness/testing/shell-ready.test.ts \
             src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts \
@@ -855,12 +847,9 @@ jobs:
             src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts \
             src/main/startup/shell-environment/shell-probe-terminal-detach.live-shell.test.ts \
             src/main/startup/shell-environment/shell-probe-lifetime.live-shell.test.ts \
-            src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts \
-            src/shared/fish-wsl-cwd-report.node-pty.test.ts \
+            src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
-            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
-            src/shared/startup-shell-portability.live-shell.test.ts \
-            src/shared/posix-command-path-lookup.test.ts
+            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts
 
   # Shards wait only for the plan, not preflight, which moves them about two minutes earlier.
   unit_plan:

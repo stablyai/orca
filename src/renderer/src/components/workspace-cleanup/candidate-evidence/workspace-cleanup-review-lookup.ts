@@ -3,15 +3,15 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-rev
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
-import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import './workspace-cleanup-host-indexes'
 import { getWorkspaceCleanupCandidateHostId } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

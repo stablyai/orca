@@ -1,7 +1,7 @@
-import { isFolderRepo } from '../../shared/repo-kind'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import {
@@ -9,14 +9,14 @@ import {
   getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost
 } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
@@ -24,7 +24,7 @@ import {
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
-} from '../ipc/preflight-runtime-target'
+} from '../ipc/preflight/preflight-runtime-target'
 import { resolveWorktreeHostRouting } from '../runtime/workspaces/catalog/worktree-launch-host-repo'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
@@ -157,7 +157,8 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
 
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  userInitiated = false
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
@@ -169,7 +170,7 @@ export async function refreshAgentsOnHost(
         ? refreshShellPathAndDetectAgents(host.context, options)
         : refreshShellPathAndDetectAgents(host.context)
     const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
-    notifyAgentsRefreshedOnHost()
+    notifyAgentsRefreshedOnHost(userInitiated && !wsl)
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)

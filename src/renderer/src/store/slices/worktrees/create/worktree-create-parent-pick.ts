@@ -1,4 +1,4 @@
-import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal-visibility'
+import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
@@ -6,8 +6,8 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById
@@ -17,18 +17,18 @@ import {
   isWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import type { AppState } from '../../../types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CreatedWorktreeResult } from './worktree-create-payload'
 
 export type CreateAttemptOutcome = {

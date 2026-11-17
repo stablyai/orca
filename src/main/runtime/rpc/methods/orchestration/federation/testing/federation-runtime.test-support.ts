@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
-import type { RuntimeTerminalShow } from '../../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalShow } from '../../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export function configureFederationWorkerRuntime(
   runtime: OrcaRuntimeService,
