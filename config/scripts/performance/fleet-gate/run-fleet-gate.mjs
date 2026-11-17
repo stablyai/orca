@@ -174,7 +174,8 @@ function launchArgs(buildDir) {
   if (process.platform !== 'linux') {
     return [...keychain, buildDir]
   }
-  const display = virtualDisplay ? [] : ['--ozone-platform=headless']
+  // Pin X11 on Xvfb: Electron otherwise follows the session's Wayland hints and fails without a compositor.
+  const display = virtualDisplay ? ['--ozone-platform=x11'] : ['--ozone-platform=headless']
   return [
     '--no-sandbox',
     '--disable-gpu',
@@ -206,7 +207,14 @@ function isolatedEnv(runDir, userDataDir) {
     Object.entries(process.env).filter(
       ([key]) =>
         !key.startsWith('ORCA_') &&
-        !['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'WAYLAND_DISPLAY', 'DISPLAY'].includes(key)
+        ![
+          'ELECTRON_RUN_AS_NODE',
+          'NODE_OPTIONS',
+          'WAYLAND_DISPLAY',
+          'DISPLAY',
+          'XDG_SESSION_TYPE',
+          'ELECTRON_OZONE_PLATFORM_HINT'
+        ].includes(key)
     )
   )
   return {
