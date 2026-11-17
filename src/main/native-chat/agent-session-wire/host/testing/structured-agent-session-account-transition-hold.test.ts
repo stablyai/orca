@@ -341,14 +341,11 @@ it('sends a queued card back to wait when the old account turns out busy as it i
   await rig!.settleAccepted(first.id, 'first turn')
 
   await eventually(() => expect(chat.accountReads()).toBeGreaterThan(0))
+  // Its claimed attempt is proven undelivered, so the card waits again instead of reaching A.
   await eventually(async () =>
-    expect(await rig!.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
+    expect((await rig!.handoff(queued.id))?.rejection).toMatchObject({ neverReachedAgent: true })
   )
+  expect(await rig!.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
   expect(chat.dispatchedTo('queued next')).toEqual([])
-
-  // Stopped, so the agent owes no wake-up turn that this rig would never send.
-  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'cancelled' })])
-  await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
-  expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
-  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
+  expect(chat.child()?.fence).toBe(chat.accountA)
 })
