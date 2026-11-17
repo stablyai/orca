@@ -69,7 +69,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
     options?: MobileSessionTerminalCreateOptions,
-    surface?: MobileNewTabAgentOption['surface']
+    nativeChatDefault?: boolean
   ): Promise<CreateOutcome | undefined> {
     const sourceFork = options?.sourceChatFork
     const sourceOutcome = (value: CreateOutcome): CreateOutcome | undefined =>
@@ -113,7 +113,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           worktreeId,
           agent,
           options,
-          ...(surface ? { surface } : {}),
+          ...(nativeChatDefault !== undefined ? { nativeChatDefault } : {}),
           lock: clientMutationId,
           activeSessionTabId,
           pendingSelectionRef,

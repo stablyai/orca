@@ -130,7 +130,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         canCreateBrowser={!isFloatingWorkspaceRoute}
         canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
-        onCreateAgent={(agent, surface) => void handleCreateTerminal(agent, undefined, surface)}
+        onCreateAgent={(agent, nativeChatDefault) =>
+          void handleCreateTerminal(agent, undefined, nativeChatDefault)
+        }
         onCreateTerminal={() => void handleCreateTerminal()}
         onCreateBrowser={() => {
           if (browserScreencastSupported !== true) {

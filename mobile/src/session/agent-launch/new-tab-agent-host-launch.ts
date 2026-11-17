@@ -1,7 +1,6 @@
 import type { MobileQuickCommandLaunch } from '../../terminal/quick-commands/quick-commands'
 import type { MobileSessionTab } from '../tabs/mobile-session-tabs'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchSurface } from '../../../../src/shared/agent-launch/contracts/agent-launch-surface'
 import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
@@ -52,8 +51,8 @@ export async function launchNewTabAgentThroughHost(args: {
   worktreeId: string
   agent: TuiAgent
   options: NewTabAgentLaunchOptions | undefined
-  /** Chat or CLI, picked on the New Tab sheet; hosts that can't take a pick drop it. */
-  surface?: AgentLaunchSurface
+  /** Chat or CLI from the New Tab sheet; a chat that can't open here starts the CLI. */
+  nativeChatDefault?: boolean
   lock: string
   activeSessionTabId?: string | null
   pendingSelectionRef: { current: PendingSessionSelection | null }
@@ -76,7 +75,7 @@ export async function launchNewTabAgentThroughHost(args: {
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: args.agent,
-    ...(args.surface ? { surface: args.surface } : {}),
+    ...(args.nativeChatDefault !== undefined ? { nativeChatDefault: args.nativeChatDefault } : {}),
     reservation,
     ...(afterTabId ? { placement: { afterTabId } } : {}),
     ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),

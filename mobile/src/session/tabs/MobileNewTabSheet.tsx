@@ -21,7 +21,6 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileNewTabAgentOption } from '../agent-launch/mobile-new-tab-agent-options'
 import type { NewTabAgentSurfaceChoice } from '../agent-launch/use-mobile-new-tab-agent-options'
-import type { AgentLaunchSurface } from '../../../../src/shared/agent-launch/contracts/agent-launch-surface'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 
 const AGENT_GRID_COLUMNS = 3
@@ -37,7 +36,7 @@ type Props = {
   canCreateBrowser: boolean
   canCreateMarkdownNote: boolean
   onClose: () => void
-  onCreateAgent: (agent: TuiAgent, surface: AgentLaunchSurface | undefined) => void
+  onCreateAgent: (agent: TuiAgent, nativeChatDefault: boolean | undefined) => void
   onCreateTerminal: () => void
   /** Runs after the sheet has gone, so it may open another modal. */
   onCreateBrowser: () => void
@@ -123,7 +122,9 @@ export function MobileNewTabSheet({
               {row.options.map((option) => (
                 <Pressable
                   key={option.agent}
-                  onPress={() => closeAndRun(() => onCreateAgent(option.agent, option.surface))}
+                  onPress={() =>
+                    closeAndRun(() => onCreateAgent(option.agent, option.nativeChatDefault))
+                  }
                   accessibilityRole="button"
                   accessibilityLabel={option.label}
                   style={styles.tile}
@@ -135,7 +136,7 @@ export function MobileNewTabSheet({
                       <Text style={styles.tileLabel} numberOfLines={1}>
                         {option.label}
                       </Text>
-                      {surfaceChoice?.selected === 'chat' && !option.chat ? (
+                      {surfaceChoice?.selected === 'chat' && option.cliOnly ? (
                         <Text style={styles.tileNote} numberOfLines={1}>
                           {t('session.sheets.cliOnly', 'CLI only')}
                         </Text>

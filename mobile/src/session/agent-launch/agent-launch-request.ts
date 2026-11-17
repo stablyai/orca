@@ -61,6 +61,7 @@ export function agentLaunchExistingParams(args: {
   prompt?: AgentLaunchPrompt
   agentArgs?: string
   surface?: 'chat' | 'terminal'
+  nativeChatDefault?: boolean
   launchSource?: string
   paneKey?: string
   sessionId?: string
@@ -72,6 +73,7 @@ export function agentLaunchExistingParams(args: {
     agent: args.agent,
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),
     ...(args.surface ? { surface: args.surface } : {}),
+    ...(args.nativeChatDefault !== undefined ? { nativeChatDefault: args.nativeChatDefault } : {}),
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),
