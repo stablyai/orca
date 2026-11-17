@@ -113,9 +113,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/opencode/model-launch/opencode-launch-model-context-supervision.test.ts',
   'src/main/hermes/hermes-config-remote-adapter.test.ts',
   'src/main/ipc/profiles/orca-profiles-switch-persistence.test.ts',
-  'src/main/ipc/settings-delayed-response.test.ts',
-  'src/main/ipc/session-window-view-save.test.ts',
-  'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
@@ -124,8 +121,7 @@ const NODE_RUNTIME_INCLUDE = [
   // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
   'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
-  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
-  'src/main/ipc/notifications-external-acknowledgement.test.ts'
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

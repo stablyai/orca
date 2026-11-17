@@ -6,7 +6,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import { randomUUID } from 'node:crypto'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-display-name'
+import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktrees/creation/worktree-display-name'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
