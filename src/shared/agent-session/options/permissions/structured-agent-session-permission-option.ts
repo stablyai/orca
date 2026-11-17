@@ -55,6 +55,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   permissionMode: string | null
   permissionOwnSupported?: boolean | null
   launchPermissionMode?: string
+  runningPermissionMode?: string
   reportedPermissionMode?: string | null
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
@@ -73,13 +74,12 @@ export function structuredAgentSessionPermissionDescriptor(state: {
         : current === 'read-only'
           ? 'Read only'
           : (current ?? 'Permissions')
-  // Claude applies a pick on reacquisition; Codex can apply one to its reused child.
-  const activeValue =
-    state.record.agent === 'claude' &&
-    state.launchPermissionMode !== undefined &&
-    state.launchPermissionMode !== current
-      ? state.launchPermissionMode
-      : undefined
+  // A pick the running child has not applied yet takes effect with the next message. Hosts
+  // without a running report only prove Claude's, which applies a pick by restarting.
+  const running =
+    state.runningPermissionMode ??
+    (state.record.agent === 'claude' ? state.launchPermissionMode : undefined)
+  const activeValue = running !== undefined && running !== current ? running : undefined
   return {
     description: label,
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
