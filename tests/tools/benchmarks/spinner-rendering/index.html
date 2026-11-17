@@ -14,10 +14,17 @@
       .spinner-benchmark-baseline {
         animation: spinner-benchmark-spin 1s steps(12, end) infinite;
       }
+      .spinner-benchmark-reference {
+        animation: spinner-benchmark-spin 1.2s linear infinite;
+      }
       @media (prefers-reduced-motion: reduce) {
         .spinner-benchmark-baseline {
           animation: none;
           border-top-color: var(--color-yellow-500);
+        }
+        .spinner-benchmark-reference {
+          animation: none;
+          border-top-color: var(--agent-working);
         }
       }
     </style>

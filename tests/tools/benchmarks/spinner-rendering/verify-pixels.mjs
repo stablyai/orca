@@ -4,12 +4,7 @@ import path from 'node:path'
 import { PNG } from 'pngjs'
 
 const TIMES = [
-  ...Array.from({ length: 12 }, (_, step) => (step * 1000) / 12 + 1),
-  3_600_251,
-  43_200_251,
-  86_399_751,
-  86_399_999,
-  86_400_001,
+  0, 20, 300, 600, 900, 1180, 1200, 1220, 3_600_251, 43_200_251, 86_399_751, 86_399_999, 86_400_001,
   86_400_251
 ]
 
@@ -46,6 +41,7 @@ async function captureRingPixels(page, time) {
   return { rings, screenshot }
 }
 
+/** Checks raster output across theme, zoom, and time without reusing production animation rules. */
 export async function verifyPixels(app, page, outputDir, waitForPhase) {
   let comparisons = 0
   const [minimumZoom, maximumZoom] = await page.evaluate(() => window.spinnerBenchmark.zoomExtremes)
@@ -60,33 +56,33 @@ export async function verifyPixels(app, page, outputDir, waitForPhase) {
         (value) => document.documentElement.classList.toggle('dark', value === 'dark'),
         theme
       )
-      await page.evaluate(() => window.spinnerBenchmark.render({ count: 4, baseline: true }))
+      await page.evaluate(() => window.spinnerBenchmark.render({ count: 4, reference: true }))
       await page.waitForFunction(() =>
-        [...document.querySelectorAll('[data-baseline]')].every(
+        [...document.querySelectorAll('[data-reference]')].every(
           (element) => element.getAnimations()[0]?.startTime === 0
         )
       )
-      const baseline = []
+      const reference = []
       for (const time of TIMES) {
-        baseline.push((await captureRingPixels(page, time)).rings)
+        reference.push((await captureRingPixels(page, time)).rings)
       }
       await page.evaluate(() => window.spinnerBenchmark.render({ count: 4 }))
       await waitForPhase(page)
       for (const [index, time] of TIMES.entries()) {
         const { rings, screenshot } = await captureRingPixels(page, time)
-        const before = baseline[index]
-        assert.equal(rings.width, before.width)
-        assert.equal(rings.height, before.height)
+        const expected = reference[index]
+        assert.equal(rings.width, expected.width)
+        assert.equal(rings.height, expected.height)
         let maxDifference = 0
         for (let channel = 0; channel < rings.data.length; channel++) {
           maxDifference = Math.max(
             maxDifference,
-            Math.abs(rings.data[channel] - before.data[channel])
+            Math.abs(rings.data[channel] - expected.data[channel])
           )
         }
         if (maxDifference > 1) {
-          writeFileSync(path.join(outputDir, 'pixel-before.png'), PNG.sync.write(before))
-          writeFileSync(path.join(outputDir, 'pixel-after.png'), PNG.sync.write(rings))
+          writeFileSync(path.join(outputDir, 'pixel-expected.png'), PNG.sync.write(expected))
+          writeFileSync(path.join(outputDir, 'pixel-actual.png'), PNG.sync.write(rings))
         }
         // Equivalent accumulated angles can round an antialias channel by one level.
         assert.ok(
