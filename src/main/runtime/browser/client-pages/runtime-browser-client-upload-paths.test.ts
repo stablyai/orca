@@ -76,9 +76,9 @@ describe('browser.upload to a page hosted on another device', () => {
   })
 
   it('refuses a file outside the workspace before reaching the client', async () => {
-    const { route, issueClientPageCommand } = uploadTo(['/etc/hosts'])
+    const { route, issueClientPageCommand } = uploadTo(['/srv/work/app/../../../etc/hosts'])
 
-    await expect(route).rejects.toThrow('Cannot upload /etc/hosts')
+    await expect(route).rejects.toThrow('Cannot upload /srv/work/app/../../../etc/hosts')
     expect(issueClientPageCommand).not.toHaveBeenCalled()
   })
 })

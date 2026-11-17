@@ -1,4 +1,5 @@
 import { realpath } from 'node:fs/promises'
+import { posix, win32 } from 'node:path'
 import { actOnRuntimeBrowserInitialization } from './runtime-browser-page-initialization-action'
 import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
@@ -132,10 +133,14 @@ async function toWorkspaceRelativeUploadParams(
       files.push(file)
       continue
     }
+    // Collapse `..` so an escaping path gets this refusal, not the file reader's generic one.
+    const normalized = isWindowsAbsolutePathLike(file)
+      ? win32.normalize(file)
+      : posix.normalize(file)
     // The CLI's cwd is physical, so a workspace saved under a symlink only matches once resolved.
     const relative =
-      relativePathInsideRoot(root, file) ||
-      relativePathInsideRoot(await realpathOrSelf(root), await realpathOrSelf(file))
+      relativePathInsideRoot(root, normalized) ||
+      relativePathInsideRoot(await realpathOrSelf(root), await realpathOrSelf(normalized))
     if (!relative) {
       throw new BrowserError(
         'invalid_argument',
