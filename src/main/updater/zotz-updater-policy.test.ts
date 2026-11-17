@@ -18,9 +18,10 @@ vi.mock('./electron-updater-loader', () => ({ loadElectronAutoUpdater: loadAutoU
 vi.mock('../ipc/ui', () => ({ getTrustedUIRendererWindow: () => trustedWindow }))
 
 describe('Zotz updater policy', () => {
-  it('never reaches electron-updater unless ZOTZ_ENABLE_UPDATER=1', async () => {
-    vi.stubEnv('ZOTZ_ENABLE_UPDATER', '')
+  it('never reaches electron-updater when updates are turned off in settings', async () => {
     const updater = await import('./updater-service')
+    const { applyZotzUpdaterSetting } = await import('./zotz-updater-policy')
+    applyZotzUpdaterSetting({ zotzUpdatesEnabled: false })
 
     updater.setupAutoUpdater(null)
     updater.checkForUpdates()
@@ -31,7 +32,7 @@ describe('Zotz updater policy', () => {
     expect(loadAutoUpdaterMock).not.toHaveBeenCalled()
     expect(showMessageBoxMock).toHaveBeenCalledWith(
       trustedWindow,
-      expect.objectContaining({ message: 'Zotz updates with git pull + build.' })
+      expect.objectContaining({ message: 'Zotz updates are turned off.' })
     )
     expect(() => updater.checkForRemoteServerUpdate('runtime-1')).toThrow(
       'remote_update_manual_required'

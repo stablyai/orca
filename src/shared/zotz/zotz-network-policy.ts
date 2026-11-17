@@ -9,6 +9,8 @@ export type ZotzCloudFeature =
   | 'github-star'
   | 'agent-state-rules'
   | 'wsl-hosts-policy'
+  // orca.dev changelog and nudge campaigns; Zotz release notes come from its own GitHub releases.
+  | 'orca-whats-new'
 
 // push.onorca.dev stays on until Hugo resolves "Decisiones abiertas" #1 in docs/zotz/PLAN.md.
 const ZOTZ_ALLOWED_CLOUD_FEATURES: ReadonlySet<ZotzCloudFeature> = new Set(['push'])

@@ -13766,7 +13766,7 @@
           "version": "v{{version}}",
           "updateAvailable": "v{{version}} available",
           "throughSsh": "Through {{host}} → port {{port}}",
-          "manualUpdate": "Update Orca on the server host",
+          "updatesOff": "Zotz updates are turned off.",
           "defaultChip": "Default",
           "sshTunnelChip": "SSH tunnel",
           "sshDialogTitle": "Connect {{name}} through SSH",
@@ -25802,7 +25802,7 @@
   "zotz": {
     "updater": {
       "manualUpdate": "Zotz updates with git pull + build.",
-      "manualUpdateDetail": "See docs/zotz/UPDATE.md. Set ZOTZ_ENABLE_UPDATER=1 to turn the built-in updater back on."
+      "updatesOffDetail": "Turn them on in Settings → Updates and restart Zotz."
     },
     "machineMode": {
       "autostartRemoveFailed": "Could not remove the sign-in task: {{detail}}",

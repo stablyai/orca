@@ -469,7 +469,7 @@ describe('updater', () => {
     })
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/download/v1.4.36-rc.5'
+      url: 'https://github.com/HugoRodriguezDEV/zotz/releases/download/v1.4.36-rc.5'
     })
     expect(
       sendMock.mock.calls
