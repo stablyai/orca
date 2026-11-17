@@ -1,9 +1,9 @@
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
 import { journalMailSenderKey, type JournalMailCustody } from './journal-writer-host-facts'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
-import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterOperation } from './journal-writer-command'
 import type {

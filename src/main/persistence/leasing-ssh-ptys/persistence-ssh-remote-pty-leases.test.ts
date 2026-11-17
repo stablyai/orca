@@ -9,7 +9,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import '../../../shared/remote-runtime/ssh/ssh-types'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { PtyExitProof } from '../../pty/process-retirement/pty-exit-proof'

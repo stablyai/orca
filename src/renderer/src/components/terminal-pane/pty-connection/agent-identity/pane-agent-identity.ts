@@ -11,7 +11,7 @@ import { createTerminalCommandLifecycle } from '../../emulation/commands/termina
 import { createPaneForegroundAgentTracker } from './foreground-process/pane-foreground-agent-tracker'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
+import { dispatchTerminalCommandFinishedEvent } from '@/lib/terminal/output/terminal-command-finished-event'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   isTuiAgent,

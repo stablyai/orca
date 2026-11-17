@@ -1,4 +1,7 @@
-import type { DiffComment, DiffReviewScope } from '../../../../../src/shared/diff-comment-types'
+import type {
+  DiffComment,
+  DiffReviewScope
+} from '../../../../../src/shared/file-review/diff-comment-types'
 import {
   mobileDiffReviewCommentMatchesItem,
   type MobileDiffReviewQueueItem

@@ -6,6 +6,10 @@ import {
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
 import { TAIL_CHUNK_BYTES } from '../../../../native-chat/transcript-watching/transcript-tail-boundary'
+import type {
+  nativeChatTurnEvidenceObserverForAgent,
+  NativeChatTurnEvidence
+} from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
 import { transcriptFallbackId } from '../../../../native-chat/transcript-streaming/transcript-fallback-id'
 import {
   localTranscriptOffsetStartsInsideRecord,
@@ -31,6 +35,8 @@ type LocalTranscriptReadSuccess = {
   limited: boolean
   clipping: string[]
   warnings: string[]
+  /** An initial page's newest turn marker, from the bytes it decoded. */
+  turn?: NativeChatTurnEvidence
 }
 
 type LocalTranscriptPage = Omit<LocalTranscriptReadSuccess, 'boundaryCheckpoint'>
@@ -42,13 +48,25 @@ type LocalTranscriptReadResult =
 export async function readInitialLocalWorkerTranscriptPage(
   filePath: string,
   limit: number,
-  decode: NativeChatLineDecoder
+  decode: NativeChatLineDecoder,
+  turnObserver: ReturnType<typeof nativeChatTurnEvidenceObserverForAgent>
 ): Promise<LocalTranscriptReadResult> {
   const before = await readLocalTranscriptSourceIdentity(filePath)
   if (!before) {
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
   }
-  const page = await readNativeChatTranscriptTailFile(filePath, limit, decode, false)
+  const page = await readNativeChatTranscriptTailFile(
+    filePath,
+    limit,
+    decode,
+    false,
+    undefined,
+    null,
+    undefined,
+    undefined,
+    false,
+    turnObserver?.observe
+  )
   const after = await readLocalTranscriptSourceIdentity(filePath)
   if (workerTranscriptSourceChanged(before, after, page.consumedTo)) {
     return sourceChanged()
@@ -61,6 +79,10 @@ export async function readInitialLocalWorkerTranscriptPage(
   if (!boundaryCheckpoint) {
     return sourceChanged()
   }
+  const turn =
+    page.malformedRecordCount || page.oversizedRecordCount
+      ? undefined
+      : turnObserver?.result(page.messageOffsets ?? [])
   return {
     ok: true,
     filePath,
@@ -70,7 +92,8 @@ export async function readInitialLocalWorkerTranscriptPage(
     nextOffset: page.consumedTo,
     limited: page.hasMore,
     clipping: [],
-    warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount)
+    warnings: recordWarnings(page.malformedRecordCount, page.oversizedRecordCount),
+    ...(turn ? { turn } : {})
   }
 }
 

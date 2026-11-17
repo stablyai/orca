@@ -1,7 +1,7 @@
 import type {
   MobilePushFilter,
   MobilePushRegisterInput
-} from '../../../../src/shared/mobile-push-contract'
+} from '../../../../src/shared/notifications/mobile-push-contract'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { MobilePushToken } from './push-token'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'

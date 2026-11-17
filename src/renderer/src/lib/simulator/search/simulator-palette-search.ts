@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   getPaletteWorktreeIdentity,
   isPaletteCurrentWorktree,
@@ -6,7 +6,7 @@ import {
 } from '../../workspace/search/palette-repo-resolution'
 import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
-import { compareBaseSensitivityLocaleText } from '../../../../../shared/locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../../../shared/i18n/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,

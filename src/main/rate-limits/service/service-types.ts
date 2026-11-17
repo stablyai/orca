@@ -1,4 +1,7 @@
-import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  UsageReadingAccount
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { ZcodePlanSite } from '../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
@@ -10,6 +13,8 @@ export type InactiveCodexHome = { kind: 'ready'; managedHomePath: string } | { k
 
 export type InactiveCodexAccountInfo = {
   id: string
+  /** Absent when the saved account cannot name its runtime slot, e.g. a WSL account without a distro. */
+  readingAccount?: UsageReadingAccount
   /** May be async: a WSL home is checked before a preview reads it. */
   resolveHome: () => InactiveCodexHome | Promise<InactiveCodexHome>
 }

@@ -10,7 +10,7 @@ import {
   useState
 } from 'react'
 import { cn } from '@/lib/class-names'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
 import {
   distanceFromBottom,
@@ -224,6 +224,13 @@ export function NativeChatToolRunMembers({
 
   // A following reader whose pane shows again goes back to the end.
   const wasVisibleRef = useRef(isVisible)
+  useLayoutEffect(
+    () => () => {
+      wasVisibleRef.current = false
+      isVisibleRef.current = false
+    },
+    []
+  )
   useLayoutEffect(() => {
     if (wasVisibleRef.current !== isVisible) {
       wasVisibleRef.current = isVisible

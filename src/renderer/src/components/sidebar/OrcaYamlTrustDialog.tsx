@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -9,193 +9,21 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import type { OrcaHookTrustKind } from '../../../../shared/orca-hook-trust-entries'
+import type { OrcaHookTrustKind } from '../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
+import {
+  getCreatedBranchCopy,
+  getAutomationReviewCopy,
+  getTitle,
+  getDescription,
+  getScriptHeading
+} from './orca-yaml-trust-copy'
+
 type ScriptKind = OrcaHookTrustKind
-
-type SkippedSetupReviewCopy = {
-  title: string
-  description: string
-  heading: string
-  confirmLabel?: string
-}
-
-/** Copy for a created workspace whose branch has different setup commands than the ones approved. */
-function getCreatedBranchCopy(t: Translate = translate): SkippedSetupReviewCopy {
-  return {
-    title: t(
-      'worktree.setupTrust.branchDiffersTitle',
-      "This workspace's branch has different setup commands"
-    ),
-    description: t(
-      'worktree.setupTrust.branchDiffersBody',
-      "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>."
-    ),
-    heading: t('worktree.setupTrust.branchSetupScript', "Branch's setup script")
-  }
-}
-
-/** Copy for an automation whose run skipped setup because its branch's commands changed. */
-function getAutomationReviewCopy(t: Translate = translate): SkippedSetupReviewCopy {
-  return {
-    title: t(
-      'automations.setupTrust.reviewTitle',
-      'Approve the new setup commands for this automation?'
-    ),
-    description: t(
-      'automations.setupTrust.reviewBody',
-      "A run skipped setup because its branch's <code>orca.yaml</code> setup commands changed. Approving lets later runs use these commands. Only approve if you trust <repo/>."
-    ),
-    heading: t('worktree.setupTrust.branchSetupScript', "Branch's setup script"),
-    confirmLabel: t('automations.setupTrust.approve', 'Approve')
-  }
-}
-
-function getTitle(
-  kind: ScriptKind,
-  repoName: string,
-  previouslyApproved: boolean,
-  t: Translate = translate
-): string {
-  const repo = { repo: repoName }
-  if (previouslyApproved) {
-    switch (kind) {
-      case 'setup':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.setupChangedTitle',
-          "{{repo}}'s setup script changed — run the new version?",
-          repo
-        )
-      case 'archive':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.archiveChangedTitle',
-          "{{repo}}'s archive script changed — run the new version?",
-          repo
-        )
-      case 'issueCommand':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.issueCommandChangedTitle',
-          "{{repo}}'s issue command changed — run the new version?",
-          repo
-        )
-      case 'vmRecipe':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.vmRecipeChangedTitle',
-          "{{repo}}'s VM recipe changed — run the new version?",
-          repo
-        )
-    }
-  }
-  switch (kind) {
-    case 'setup':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.setupRunTitle',
-        'Run setup script from {{repo}}?',
-        repo
-      )
-    case 'archive':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.archiveRunTitle',
-        'Run archive script from {{repo}}?',
-        repo
-      )
-    case 'issueCommand':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.issueCommandRunTitle',
-        'Run issue command from {{repo}}?',
-        repo
-      )
-    case 'vmRecipe':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.vmRecipeRunTitle',
-        'Run VM recipe from {{repo}}?',
-        repo
-      )
-  }
-}
-
-// Templates embed <code>orca.yaml</code> and a <repo/> slot filled by the component.
-function getDescription(
-  kind: ScriptKind,
-  previouslyApproved: boolean,
-  t: Translate = translate
-): string {
-  if (previouslyApproved) {
-    switch (kind) {
-      case 'setup':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.setupChangedBody',
-          '<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace is created.'
-        )
-      case 'archive':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.archiveChangedBody',
-          '<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace is removed.'
-        )
-      case 'issueCommand':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.issueCommandChangedBody',
-          '<code>orca.yaml</code> changed since you last approved. Re-review before it runs when this workspace launches with a linked issue.'
-        )
-      case 'vmRecipe':
-        return t(
-          'auto.components.sidebar.OrcaYamlTrustDialog.vmRecipeChangedBody',
-          '<code>orca.yaml</code> changed since you last approved. Re-review before it runs before provisioning a VM.'
-        )
-    }
-  }
-  switch (kind) {
-    case 'setup':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.setupRunBody',
-        "This repository's <code>orca.yaml</code> runs on your machine when this workspace is created. Only run if you trust <repo/>."
-      )
-    case 'archive':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.archiveRunBody',
-        "This repository's <code>orca.yaml</code> runs on your machine when this workspace is removed. Only run if you trust <repo/>."
-      )
-    case 'issueCommand':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.issueCommandRunBody',
-        "This repository's <code>orca.yaml</code> runs on your machine when this workspace launches with a linked issue. Only run if you trust <repo/>."
-      )
-    case 'vmRecipe':
-      return t(
-        'auto.components.sidebar.OrcaYamlTrustDialog.vmRecipeRunBody',
-        "This repository's <code>orca.yaml</code> runs on your machine before provisioning a VM. Only run if you trust <repo/>."
-      )
-  }
-}
-
-function getScriptHeading(
-  kind: ScriptKind,
-  previouslyApproved: boolean,
-  t: Translate = translate
-): string {
-  switch (kind) {
-    case 'setup':
-      return previouslyApproved
-        ? t('auto.components.sidebar.OrcaYamlTrustDialog.newSetupScript', 'New setup script')
-        : t('auto.components.sidebar.OrcaYamlTrustDialog.setupScript', 'Setup script')
-    case 'archive':
-      return previouslyApproved
-        ? t('auto.components.sidebar.OrcaYamlTrustDialog.newArchiveScript', 'New archive script')
-        : t('auto.components.sidebar.OrcaYamlTrustDialog.archiveScript', 'Archive script')
-    case 'issueCommand':
-      return previouslyApproved
-        ? t('auto.components.sidebar.OrcaYamlTrustDialog.newIssueCommand', 'New issue command')
-        : t('auto.components.sidebar.OrcaYamlTrustDialog.issueCommand', 'Issue command')
-    case 'vmRecipe':
-      return previouslyApproved
-        ? t('auto.components.sidebar.OrcaYamlTrustDialog.newVmRecipe', 'New VM recipe')
-        : t('auto.components.sidebar.OrcaYamlTrustDialog.vmRecipe', 'VM recipe')
-  }
-}
 
 const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const t = useTranslate()
@@ -207,20 +35,6 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const markOrcaHookRepoAlwaysTrusted = useAppStore((s) => s.markOrcaHookRepoAlwaysTrusted)
 
   const isOpen = activeModal === 'confirm-orca-yaml-hooks'
-  const [alwaysTrustState, setAlwaysTrustState] = useState(() => ({
-    isOpen,
-    value: false
-  }))
-
-  // Reset before paint so a new hook prompt never flashes stale Always trust consent.
-  if (alwaysTrustState.isOpen !== isOpen) {
-    setAlwaysTrustState({ isOpen, value: false })
-  }
-  const alwaysTrust = alwaysTrustState.isOpen === isOpen ? alwaysTrustState.value : false
-  const setAlwaysTrust = (value: boolean): void => {
-    setAlwaysTrustState({ isOpen, value })
-  }
-
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
   const repoName =
     typeof modalData.repoName === 'string'
@@ -236,27 +50,25 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           : 'setup'
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
-  const previouslyApproved = modalData.previouslyApproved === true
+  const versionOnly = modalData.versionOnly === true
+  const repoWideTrust = modalData.repoWideTrust === true
+  const automation = modalData.automation === true
+  const previouslyApproved = versionOnly && modalData.previouslyApproved === true
   const reviewCopy =
     modalData.skippedSetupReview === 'created-branch'
       ? getCreatedBranchCopy(t)
       : modalData.skippedSetupReview === 'automation'
         ? getAutomationReviewCopy(t)
         : null
-  const onResolve =
-    typeof modalData.onResolve === 'function'
-      ? (modalData.onResolve as (decision: 'run' | 'skip') => void)
-      : null
+  const onResolve = typeof modalData.onResolve === 'function' ? modalData.onResolve : null
 
   const resolveAndClose = useCallback(
-    (decision: 'run' | 'skip') => {
-      if (decision === 'run' && repoId) {
-        // Repo-wide trust is ignored when the repo id is on two hosts, so keep this script's approval too.
-        // Earlier approvals stay in the repo's bounded history, so a branch's script joins them.
-        if (contentHash) {
+    (decision: 'run' | 'trust' | 'skip') => {
+      if (decision !== 'skip' && repoId) {
+        if (versionOnly && contentHash) {
           markOrcaHookScriptConfirmed(repoId, scriptKind, contentHash)
         }
-        if (alwaysTrust) {
+        if (decision === 'trust') {
           markOrcaHookRepoAlwaysTrusted(repoId)
         }
       }
@@ -264,7 +76,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
       closeModal()
     },
     [
-      alwaysTrust,
+      versionOnly,
       closeModal,
       contentHash,
       markOrcaHookRepoAlwaysTrusted,
@@ -304,7 +116,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
 
         {scriptContent && (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2">
-            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <div className="mb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
               {reviewCopy?.heading ?? getScriptHeading(scriptKind, previouslyApproved, t)}
             </div>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground scrollbar-sleek">
@@ -313,39 +125,40 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
-        <label
-          className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 transition-colors ${
-            alwaysTrust
-              ? 'border-primary/60 bg-primary/5'
-              : 'border-border/70 bg-muted/25 hover:border-border hover:bg-muted/40'
-          }`}
-        >
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-primary"
-            checked={alwaysTrust}
-            onChange={(event) => setAlwaysTrust(event.target.checked)}
-          />
-          <span className="text-xs font-medium text-foreground">
+        {repoWideTrust && (
+          <p className="text-xs text-muted-foreground">
             <Trans
               i18n={i18n}
               defaults={t(
-                'auto.components.sidebar.OrcaYamlTrustDialog.alwaysTrustRepo',
-                'Always trust <code>orca.yaml</code> in <repo/>'
+                'worktree.setupTrust.alwaysTrustScope',
+                'Always trust runs future <code>orca.yaml</code> changes in <repo/> without asking.'
               )}
               components={{ code: <code />, repo: <>{repoName}</> }}
             />
-          </span>
-        </label>
+          </p>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => resolveAndClose('skip')}>
+          <Button variant="ghost" onClick={() => resolveAndClose('skip')}>
             {t('auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd', "Don't run")}
           </Button>
-          <Button onClick={() => resolveAndClose('run')}>
-            {reviewCopy?.confirmLabel ??
-              t('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')}
-          </Button>
+          {(!automation || versionOnly) && (
+            <Button
+              variant={repoWideTrust ? 'secondary' : 'default'}
+              autoFocus={!repoWideTrust}
+              onClick={() => resolveAndClose('run')}
+            >
+              {versionOnly
+                ? t('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')
+                : t('worktree.setupTrust.runOnce', 'Run once')}
+            </Button>
+          )}
+          {/* Why: repo-wide trust is ignored for a repo id on several hosts. */}
+          {repoWideTrust && (
+            <Button autoFocus onClick={() => resolveAndClose('trust')}>
+              {t('worktree.setupTrust.alwaysTrust', 'Always trust')}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

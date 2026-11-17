@@ -1,4 +1,4 @@
-import type { NewTabAgentMenuModel } from '../../tab-bar/new-tab-agent-menu-model'
+import type { NewTabAgentMenuModel } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import { sourceControlModelLabel, sourceControlThinkingLabel } from './source-control-model-label'
 import type { CommitMessageAiSettings } from '../../../../../shared/source-control/ai/generation/commit-message-ai-types'
 import type { CommitMessageAgentCapability } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'

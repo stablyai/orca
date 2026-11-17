@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { useAppStore } from '@/store'
 import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { lineageLaneStatus } from './worktree-card-lineage-lane-status'

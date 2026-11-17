@@ -1,6 +1,6 @@
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { findKnownWorktreeById } from '../worktrees/listing/detected-worktree-meta'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'

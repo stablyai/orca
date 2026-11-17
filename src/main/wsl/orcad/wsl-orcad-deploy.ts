@@ -176,7 +176,9 @@ async function launchOverTransport(
       force: intent === 'force',
       appVersion,
       recordedNodeRuntimeProbe: true,
+      localWslHost: true,
       nodeRuntimeDownload: WSL_NODE_RUNTIME_DOWNLOAD_BUDGET,
+      onInstallLockWait: options.onInstallLockWait,
       ...extra
     }).catch((error: unknown) => {
       if (!signal?.aborted) {

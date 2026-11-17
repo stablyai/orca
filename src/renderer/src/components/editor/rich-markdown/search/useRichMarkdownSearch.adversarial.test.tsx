@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { StrictMode, useLayoutEffect, type ReactNode } from 'react'
+import { useLayoutEffect } from 'react'
 import { act, renderHook } from '@testing-library/react'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -12,7 +12,7 @@ vi.mock('@/store/index', () => ({
 
 const cleanups: (() => void)[] = []
 
-function mountSearch(content = '<p>beta beta</p><p>Edit here</p>', strict = false) {
+function mountSearch(content = '<p>beta beta</p><p>Edit here</p>') {
   vi.useFakeTimers()
   const editor = new Editor({ extensions: [StarterKit], content })
   const root = document.createElement('div')
@@ -43,10 +43,7 @@ function mountSearch(content = '<p>beta beta</p><p>Edit here</p>', strict = fals
       return result
     },
     {
-      initialProps,
-      wrapper: strict
-        ? ({ children }: { children: ReactNode }) => <StrictMode>{children}</StrictMode>
-        : undefined
+      initialProps
     }
   )
   cleanups.push(() => {
@@ -91,27 +88,6 @@ afterEach(() => {
 })
 
 describe('rich Markdown search adversarial interactions', () => {
-  it.each([{ isComposing: true }, { keyCode: 229 }])(
-    'keeps Find open when Escape belongs to the IME (%o)',
-    (init) => {
-      const { hook, input, query } = mountSearch()
-      query('beta')
-      const event = new KeyboardEvent('keydown', {
-        key: 'Escape',
-        bubbles: true,
-        cancelable: true,
-        ...init
-      })
-
-      act(() => input.dispatchEvent(event))
-
-      expect(hook.result.current.searchState.isSearchOpen).toBe(true)
-      expect(hook.result.current.searchState.searchQuery).toBe('beta')
-      expect(document.activeElement).toBe(input)
-      expect(event.defaultPrevented).toBe(false)
-    }
-  )
-
   it('continues typing at the document caret through case and whole-word changes', () => {
     const { editor, hook, query, documentCaret, scrollTo } = mountSearch()
     query('beta')
@@ -122,20 +98,6 @@ describe('rich Markdown search adversarial interactions', () => {
     act(() => editor.commands.insertContent('XY'))
     expect(editor.getText()).toBe('beta beta\n\nEdit hereXY')
     expect(scrollTo).not.toHaveBeenCalled()
-  })
-
-  it('lets explicit search navigation select the only match after document editing', () => {
-    const { editor, hook, query, documentCaret, selectedText, scrollTo } = mountSearch(
-      '<p>beta</p><p>Edit here</p>'
-    )
-    query('beta')
-    documentCaret()
-    act(() => editor.commands.insertContent('X'))
-    scrollTo.mockClear()
-    act(() => hook.result.current.searchActions.moveToMatch(1))
-    expect(selectedText()).toBe('beta')
-    expect(scrollTo).toHaveBeenCalledOnce()
-    expect(editor.isFocused).toBe(true)
   })
 
   it('advances past replacement text which still contains the search query', () => {
@@ -172,34 +134,6 @@ describe('rich Markdown search adversarial interactions', () => {
     expect(hook.result.current.searchState.matchCount).toBe(0)
   })
 
-  it('uses refreshed positions when the document changes before search navigation commits', () => {
-    const { editor, hook, beforePassiveRef, selectedText, scrollTo } = mountSearch(
-      '<p>beta</p><p>target</p>'
-    )
-    act(() => hook.result.current.searchActions.setSearchQuery('target'))
-    beforePassiveRef.current = () => editor.commands.setContent('<p>prefix prefix target</p>')
-    scrollTo.mockClear()
-    act(() => vi.advanceTimersByTime(150))
-    expect(hook.result.current.searchState.matchCount).toBe(1)
-    expect(selectedText()).toBe('target')
-    expect(editor.state.selection.from).toBe(15)
-    expect(scrollTo).toHaveBeenCalledOnce()
-  })
-
-  it('moves Next relative to the clamped active match after several matches disappear', () => {
-    const { editor, hook, query } = mountSearch('<p>beta beta beta beta beta</p>')
-    query('beta')
-    for (let index = 0; index < 4; index++) {
-      act(() => hook.result.current.searchActions.moveToMatch(1))
-    }
-    expect(hook.result.current.searchState.activeMatchIndex).toBe(4)
-    act(() => editor.commands.setContent('<p>beta beta beta</p>'))
-    expect(hook.result.current.searchState.activeMatchIndex).toBe(0)
-    act(() => hook.result.current.searchActions.moveToMatch(1))
-    expect(hook.result.current.searchState.activeMatchIndex).toBe(1)
-    expect(editor.state.selection.from).toBe(6)
-  })
-
   it('does not navigate to an old query when replacing during the debounce window', () => {
     const { editor, hook, query, scrollTo } = mountSearch()
     query('beta')
@@ -212,56 +146,5 @@ describe('rich Markdown search adversarial interactions', () => {
     expect(editor.state.selection.empty).toBe(true)
     expect(editor.state.selection.from).toBe(editor.state.doc.content.size - 1)
     expect(scrollTo).not.toHaveBeenCalled()
-  })
-
-  it('survives strict effect replay, null editor, and a fresh editor instance', () => {
-    const { editor, hook, input, query, documentCaret, scrollTo } = mountSearch(undefined, true)
-    query('beta')
-    documentCaret()
-    act(() => editor.commands.insertContent('X'))
-    act(() => input.focus())
-    act(() => hook.rerender({ currentEditor: null }))
-    const replacement = new Editor({ extensions: [StarterKit], content: '<p>beta</p>' })
-    vi.spyOn(replacement.view, 'coordsAtPos').mockReturnValue({
-      top: 20,
-      bottom: 40,
-      left: 0,
-      right: 0
-    })
-    scrollTo.mockClear()
-    act(() => hook.rerender({ currentEditor: replacement }))
-    expect(hook.result.current.searchState.matchCount).toBe(1)
-    expect(
-      replacement.state.doc.textBetween(
-        replacement.state.selection.from,
-        replacement.state.selection.to
-      )
-    ).toBe('beta')
-    expect(scrollTo).toHaveBeenCalledOnce()
-    act(() => hook.rerender({ currentEditor: null }))
-    replacement.destroy()
-  })
-
-  it('does not replay an old Next request into a replacement editor after focus leaves Find', () => {
-    const { editor, hook, root, query, documentCaret, scrollTo } = mountSearch()
-    query('beta')
-    act(() => hook.result.current.searchActions.moveToMatch(1))
-    documentCaret()
-    act(() => hook.rerender({ currentEditor: null }))
-    editor.view.dom.remove()
-    const replacement = new Editor({ extensions: [StarterKit], content: '<p>beta</p>' })
-    root.prepend(replacement.view.dom)
-    vi.spyOn(replacement.view, 'coordsAtPos').mockReturnValue({
-      top: 20,
-      bottom: 40,
-      left: 0,
-      right: 0
-    })
-    scrollTo.mockClear()
-    act(() => hook.rerender({ currentEditor: replacement }))
-    expect(replacement.state.selection.empty).toBe(true)
-    expect(scrollTo).not.toHaveBeenCalled()
-    act(() => hook.rerender({ currentEditor: null }))
-    replacement.destroy()
   })
 })

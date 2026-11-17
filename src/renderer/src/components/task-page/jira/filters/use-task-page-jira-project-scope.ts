@@ -4,7 +4,7 @@ import type { JiraProjectReference } from '../../../../../../shared/jira/jira-pr
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { resolveJiraSourceHostId } from '../../../../../../shared/jira/jira-source-host'
 import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'
 

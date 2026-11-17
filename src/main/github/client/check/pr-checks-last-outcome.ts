@@ -1,10 +1,10 @@
 import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   reviewRefreshIntervalMs,
   type PRAutoRefreshCadence
-} from '../../../../shared/review-refresh-policy'
+} from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   hostedReviewRepoScope,
   scopeGeneration

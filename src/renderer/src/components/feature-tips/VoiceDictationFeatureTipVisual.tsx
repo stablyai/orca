@@ -1,8 +1,8 @@
 import { useEffect, useState, type JSX } from 'react'
 import { Mic, Square } from 'lucide-react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 
 const TYPE_START_DELAY_MS = 650

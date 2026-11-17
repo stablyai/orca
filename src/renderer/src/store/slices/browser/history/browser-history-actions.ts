@@ -19,7 +19,7 @@ import {
   workspaceDocHistoryEntriesEqual
 } from '../../../../../../shared/workspace-session/workspace-doc-history'
 import { browserPageDocLocationsEqual } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 
 export function createBrowserHistoryActions(

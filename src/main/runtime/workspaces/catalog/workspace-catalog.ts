@@ -2,17 +2,14 @@ import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-rea
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 
 import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
-import {
-  resolveRepoWorktreeRows,
-  resolveScopedWorktreeIdRow,
-  type RepoWorktreeRowDeps
-} from './repo-worktree-row-resolution'
+import { resolveRepoWorktreeRows, type RepoWorktreeRowDeps } from './repo-worktree-row-resolution'
+import { resolveScopedWorktreeIdRow } from './scoped-worktree-row-resolution'
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
@@ -20,16 +17,19 @@ import {
   type ResolvedWorktreeRepoScans,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectResolvedWorktreeLineage } from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import {
   listRuntimeFolderWorkspaces,
   projectRuntimeFolderWorkspaces
 } from './runtime-worktree-filesystem'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'

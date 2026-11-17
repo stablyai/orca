@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../../shared/classified-error'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { IssueInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'

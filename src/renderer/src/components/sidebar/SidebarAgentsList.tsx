@@ -2,19 +2,20 @@ import React, { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarActivityBadge } from './sidebar-activity-badge'
-import { activityThreadStatusId } from '@/components/activity/activity-thread-presentation'
+import { activityThreadStatusId } from '@/components/activity/threads/activity-thread-presentation'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import { hasActivityThreadWorkspace } from '@/components/activity/activity-thread-actions'
-import { useActivityThreadActionBindings } from '@/components/activity/use-activity-thread-action-bindings'
-import { ActivityThreadListPane } from '@/components/activity/activity-thread-list-pane'
-import { useAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
-import { ActivityThreadOptionsMenu } from '@/components/activity/activity-thread-controls'
+import { hasActivityThreadWorkspace } from '@/components/activity/thread-list/activity-thread-actions'
+import { useActivityThreadActionBindings } from '@/components/activity/thread-list/use-activity-thread-action-bindings'
+import { ActivityThreadListPane } from '@/components/activity/thread-list/activity-thread-list-pane'
+import { useAgentPaneThreads } from '@/components/activity/threads/use-agent-pane-threads'
+import '@/components/activity/thread-list/activity-thread-controls'
+import { ActivityThreadOptionsMenu } from '@/components/activity/thread-list/activity-thread-options-menu'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../shared/agents-view-thread-filters'
+} from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,

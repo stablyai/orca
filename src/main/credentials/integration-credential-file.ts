@@ -15,7 +15,7 @@ import { writeRestrictedWindowsFile } from '../../shared/secure-storage/secure-p
 import {
   credentialDecryptionMessage,
   type IntegrationCredentialService
-} from '../../shared/integration-credential-errors'
+} from '../../shared/secure-storage/integration-credential-errors'
 
 // Empty files mean no saved credential; keep status consistent with token reads.
 export function credentialFileHasContent(path: string): boolean {
