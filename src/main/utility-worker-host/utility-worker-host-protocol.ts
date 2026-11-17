@@ -25,11 +25,19 @@ export type UtilityWorkerHostRequest =
 
 export type UtilityWorkerFailure = { name: string; message: string; code?: string }
 
+/** Committed heap of the host isolate and of each worker by its spawn id; null when unknown. */
+export type UtilityWorkerHeapReport = {
+  sampledAt: number
+  hostBytes: number
+  workers: { id: number; bytes: number | null; estimated: boolean }[]
+}
+
 /** Worker messages travel as v8-serialized bytes, split so no IPC message passes the chunk size. */
 export type UtilityWorkerHostEvent =
   | { type: 'ready' }
   | { type: 'message'; id: number; bytes: Uint8Array; more: boolean }
   | { type: 'error'; id: number; error: UtilityWorkerFailure }
   | { type: 'exit'; id: number; code: number }
+  | { type: 'heap'; report: UtilityWorkerHeapReport }
 
 export const UTILITY_WORKER_MESSAGE_CHUNK_BYTES = 32 * 2 ** 20
