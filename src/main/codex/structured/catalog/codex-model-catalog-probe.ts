@@ -130,6 +130,8 @@ export function createCodexModelCatalogProbe(
         assertStructuredAgentResolutionCurrent(runOperation)
         signal?.throwIfAborted()
         await deps.prepareHome?.(accountHomePath)
+        assertStructuredAgentResolutionCurrent(runOperation)
+        signal?.throwIfAborted()
         const run = deps.runSession ?? runCodexAppServerSession
         const successFromListing = (
           listing: Awaited<ReturnType<typeof fetchCodexModelCatalogListing>>,
