@@ -24453,6 +24453,7 @@
     "promptPlaceholderFilesOnly": "プロンプトを追加 (オプション): @ でファイル",
     "workspaceStartupFailed": "{{agent}} を起動できませんでした。この設定の引数を確認して再試行してください。",
     "sameAsTextDefault": "デフォルトと同じ · {{value0}}",
+    "effortDefault": "既定",
     "chatChoicesNote": "CLI フラグがない {{agent}} のモデルまたは推論レベルの選択はチャットに適用されます。",
     "composedChoicesNote": "{{agent}} の推論レベルと速度の選択はモデルの引数に含まれます。"
   },

@@ -23339,6 +23339,7 @@
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案",
     "workspaceStartupFailed": "無法啟動 {{agent}}。請檢查此設定中的引數並重試。",
     "sameAsTextDefault": "與預設值相同 · {{value0}}",
+    "effortDefault": "預設",
     "chatChoicesNote": "沒有 CLI 旗標的 {{agent}} 模型或推理力度選項適用於聊天。",
     "composedChoicesNote": "{{agent}} 的推理力度和速度選項包含在模型引數中。"
   },
