@@ -22377,7 +22377,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "모두 검색",
+      "worktreePalette": "전체 검색",
       "worktreeNavigateUp": "이전 워크트리",
       "worktreeNavigateDown": "다음 워크트리",
       "workspaceCreate": "워크트리 만들기",

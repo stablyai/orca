@@ -22347,7 +22347,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "搜尋全部",
+      "worktreePalette": "全域搜尋",
       "worktreeNavigateUp": "上一個工作樹",
       "worktreeNavigateDown": "下一個工作樹",
       "workspaceCreate": "建立工作樹",
