@@ -98,7 +98,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
       "saveFailed": "Could not save delivery settings. Try again.",
-      "updateDesktopHint": "Pair an updated desktop to receive notifications on this phone."
+      "updateDesktopHint": "Update Orca on your paired hosts to receive notifications on this phone."
     },
     "notificationDisplayTest": {
       "loadFailed": "Could not load paired desktops.",
@@ -218,14 +218,15 @@
     },
     "offline": {
       "waitingFor": "Waiting for {{host}}",
-      "waiting": "Waiting for desktop",
+      "waiting": "Waiting for host",
       "message": "Check that your computer is awake and Orca is running.",
       "reconnect": "Reconnect"
     },
     "noMatch": {
       "title": "No matches",
       "clearSearch": "Clear search"
-    }
+    },
+    "waitingForHost": "Waiting for host…"
   },
   "host": {
     "edit": {
@@ -1047,7 +1048,7 @@
   },
   "components": {
     "agentLaunchNotice": {
-      "updateRequired": "Update Orca on your computer to start an agent from your phone.",
+      "updateRequired": "Update Orca on this host to start an agent from your phone.",
       "statusUnreadable": "Could not read this host's status. Retrying…",
       "copyFailed": "Couldn't copy",
       "copyPrompt": "Copy prompt"
@@ -1166,7 +1167,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "terminal": "Terminal",
       "newAgentSession": "New Agent Session",
-      "updateRequired": "Update Orca on your computer",
+      "updateRequired": "Update Orca on this host",
       "statusUnreadable": "Could not read this host's status. Retrying…",
       "copyNotes": "Copy Notes",
       "sendUnsentNotes": "Send Unsent Notes",
@@ -1337,16 +1338,16 @@
     },
     "protocolBlockScreen": {
       "updateMobileTitle": "Update Orca Mobile",
-      "updateDesktopTitle": "Update Orca on your computer",
+      "updateDesktopTitle": "Update Orca on this host",
       "refreshWorkspaceTitle": "Refresh the mobile workspace",
-      "refreshWorkspaceBody": "The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.",
-      "mobileTooOldAppStore": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
-      "mobileTooOldGooglePlay": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
-      "mobileTooOldGitHubReleases": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
-      "workspaceNeedsUpdateAppStore": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
-      "workspaceNeedsUpdateGooglePlay": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
-      "workspaceNeedsUpdateGitHubReleases": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
-      "desktopTooOldBody": "This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.",
+      "refreshWorkspaceBody": "The workspace cached for this host is older than the host expects. Reconnect to this host to download the current one.",
+      "mobileTooOldAppStore": "This host needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "mobileTooOldGooglePlay": "This host needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
+      "mobileTooOldGitHubReleases": "This host needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
+      "workspaceNeedsUpdateAppStore": "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "workspaceNeedsUpdateGooglePlay": "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
+      "workspaceNeedsUpdateGitHubReleases": "This host's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
+      "desktopTooOldBody": "Orca on this host is too old for your current Orca Mobile app. Update Orca there, then try this host again.",
       "openAppStore": "Open App Store",
       "openGooglePlay": "Open Google Play",
       "openGitHubReleases": "Open GitHub Releases",
@@ -1976,7 +1977,6 @@
   "files": {
     "fileExplorerPanel": {
       "connecting": "Connecting to desktop...",
-      "waiting": "Waiting for desktop...",
       "loadFailed": "Unable to load files",
       "closeFiles": "Close files",
       "backToSession": "Back to session",
@@ -1998,7 +1998,6 @@
     },
     "fileMediaPreview": {
       "loadFailed": "Unable to load media",
-      "waiting": "Waiting for desktop...",
       "downloading": "Downloading {{bytes}} of {{total}}",
       "loading": "Loading media..."
     },
@@ -2011,7 +2010,6 @@
     },
     "filePreviewScreen": {
       "loading": "Loading preview...",
-      "waiting": "Waiting for desktop...",
       "loadFailed": "Unable to load preview",
       "title": "Preview",
       "saveFailed": "Unable to save file",
@@ -2549,7 +2547,7 @@
     },
     "prAiTriageLaunch": {
       "promptNotSent": "The agent started, but the prompt wasn't sent.",
-      "updateRequired": "Update Orca on your computer to start an agent from your phone.",
+      "updateRequired": "Update Orca on this host to start an agent from your phone.",
       "loadFailed": "Could not load the available agents.",
       "emptyPrompt": "This action's saved prompt is empty. Update Source Control AI settings on your computer.",
       "agentStartedIn": "Agent started in {{label}}",
@@ -2559,22 +2557,18 @@
       "reconnecting": "Attach failed (reconnecting)"
     },
     "useDiffReviewCommentActions": {
-      "waitingForDesktop": "Waiting for desktop...",
       "saveStateFailed": "Failed to save review state",
       "saveFailed": "Failed to save review"
     },
     "useDiffReviewController": {
       "missingWorktree": "Missing worktree",
-      "waitingForDesktop": "Waiting for desktop...",
       "loadFailed": "Unable to load review",
       "commitMissing": "Update the Orca app to open commit files here."
     },
     "useDiffReviewDiffLoading": {
-      "waitingForDesktop": "Waiting for desktop...",
       "loadFailed": "Unable to load diff"
     },
     "useDiffReviewGitActions": {
-      "waitingForDesktop": "Waiting for desktop...",
       "actionFailed": "Source control action failed"
     },
     "useDiffReviewInteractions": {
@@ -2583,7 +2577,6 @@
     "useDiffReviewSendActions": {
       "copyFailed": "Unable to copy the review notes",
       "notesCopied": "Review notes copied",
-      "waitingForDesktop": "Waiting for desktop...",
       "sendFailed": "Failed to send notes",
       "inputLocked": "Terminal input is locked",
       "notesSent": "Review notes sent",
@@ -2604,7 +2597,6 @@
       "stopNotSent": "Stop not sent"
     },
     "usePrAiTriage": {
-      "waitingForDesktop": "Waiting for desktop…",
       "launchFailed": "Failed to launch agent"
     },
     "usePrCommentActions": {
@@ -2631,7 +2623,6 @@
       "browserCommandFailed": "Browser command failed"
     },
     "useDiffComments": {
-      "waitingForDesktop": "Waiting for desktop...",
       "saveNotesFailed": "Failed to save review notes",
       "noteAdded": "Note added",
       "saveNoteFailed": "Failed to save note",
@@ -2978,9 +2969,6 @@
       "openInOrca": "Open in Orca browser",
       "openInBrowser": "Open in system browser",
       "copyLink": "Copy link"
-    },
-    "useDiffReviewGitHub": {
-      "waitingForDesktop": "Waiting for desktop..."
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
@@ -3820,7 +3808,6 @@
       "loadFailed": "Failed to load history",
       "loadFilesFailed": "Unable to load commit files",
       "retryFiles": "Retry commit files",
-      "waitingForDesktop": "Waiting for desktop...",
       "noFileChanges": "No file changes",
       "noCommits": "No commits.",
       "loading": "Loading commits…"
@@ -3980,7 +3967,6 @@
       "noBranch": "No branch"
     },
     "useMobileCommitFailureRecovery": {
-      "waitingForDesktop": "Waiting for desktop...",
       "launchFailed": "Failed to launch agent"
     },
     "useMobileCommitMessageGeneration": {
@@ -3990,13 +3976,11 @@
       "branchRequired": "Check out a branch before creating a pull request."
     },
     "useMobileGitRequests": {
-      "waitingForDesktop": "Waiting for desktop...",
       "actionFailed": "Source control action failed",
       "commitFailed": "Commit failed",
       "branchUnavailable": "Branch status unavailable"
     },
     "actionSheetRunners": {
-      "waitingForDesktop": "Waiting for desktop...",
       "noBaseBranch": "No base branch to rebase onto"
     },
     "commitRunners": {
@@ -4005,7 +3989,6 @@
     },
     "loaders": {
       "connectingToDesktop": "Connecting to desktop...",
-      "waitingForDesktop": "Waiting for desktop...",
       "updateDesktop": "Update Orca desktop to use Source Control on mobile.",
       "loadFailed": "Unable to load source control"
     },

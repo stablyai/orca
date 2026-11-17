@@ -150,7 +150,7 @@ export function MobileOfflineState({
       title={
         hostName
           ? t('common.offline.waitingFor', 'Waiting for {{host}}', { host: hostName })
-          : t('common.offline.waiting', 'Waiting for desktop')
+          : t('common.offline.waiting', 'Waiting for host')
       }
       message={
         message ??

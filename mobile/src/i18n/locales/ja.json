@@ -692,7 +692,8 @@
     "retry": "再試行",
     "save": "保存",
     "settings": "設定",
-    "unknown": "不明"
+    "unknown": "不明",
+    "waitingForHost": "ホストの接続待ち…"
   },
   "components": {
     "accountsSnapshot": {
@@ -702,7 +703,7 @@
       "copyFailed": "コピーできませんでした",
       "copyPrompt": "プロンプトをコピー",
       "statusUnreadable": "このホストの状態を読み取れませんでした。再試行中…",
-      "updateRequired": "スマートフォンから Agent を起動するには、コンピュータの Orca を更新してください。"
+      "updateRequired": "スマートフォンから Agent を起動するには、このホストの Orca を更新してください。"
     },
     "agentSpinner": {
       "monitoring": "バックグラウンドタスクを監視中",
@@ -833,7 +834,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "unsentNotes_one": "未送信のメモ {{count}} 件",
       "unsentNotes_other": "未送信のメモ {{count}} 件",
-      "updateRequired": "コンピュータの Orca を更新してください。"
+      "updateRequired": "このホストの Orca を更新してください。"
     },
     "diffReviewFileSummary": {
       "changed": "変更あり",
@@ -963,23 +964,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "ホストに戻る",
-      "desktopTooOldBody": "ペアリング済みのデスクトップアプリは、現在の Orca Mobile に対応していない古いバージョンです。コンピュータの Orca を更新して、このホストへの接続を再試行してください。",
+      "desktopTooOldBody": "このホストの Orca は、現在の Orca Mobile に対応していない古いバージョンです。このホストの Orca を更新して、接続を再試行してください。",
       "getVersion": "Orca {{version}} を入手",
-      "mobileTooOldAppStore": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
-      "mobileTooOldGooglePlay": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。Google Play から Orca Mobile を更新して、このホストへの接続を再試行してください。",
-      "mobileTooOldGitHubReleases": "このデスクトップには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "mobileTooOldAppStore": "このホストには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "mobileTooOldGooglePlay": "このホストには、より新しいバージョンの Orca Mobile が必要です。Google Play から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "mobileTooOldGitHubReleases": "このホストには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。",
       "openAppStore": "App Store を開く",
       "openGooglePlay": "Google Play を開く",
       "openGitHubReleases": "GitHub Releases を開く",
       "refreshRecoveryNote": "このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
-      "refreshWorkspaceBody": "このホスト用にキャッシュされたワークスペースは、デスクトップが必要とするバージョンより古くなっています。このホストに再接続して、最新のワークスペースをダウンロードしてください。",
+      "refreshWorkspaceBody": "このホスト用にキャッシュされたワークスペースは、ホストが必要とするバージョンより古くなっています。このホストに再接続して、最新のワークスペースをダウンロードしてください。",
       "refreshWorkspaceTitle": "モバイルワークスペースを更新",
-      "updateDesktopTitle": "コンピュータの Orca を更新",
+      "updateDesktopTitle": "このホストの Orca を更新",
       "updateMobileTitle": "Orca Mobile を更新",
       "updateRecoveryNote": "すでに更新済みですか？「ホスト」に戻り、接続を更新してください。このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
-      "workspaceNeedsUpdateAppStore": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
-      "workspaceNeedsUpdateGooglePlay": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。Google Play から Orca Mobile を更新して、このホストへの接続を再試行してください。",
-      "workspaceNeedsUpdateGitHubReleases": "このデスクトップのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。"
+      "workspaceNeedsUpdateAppStore": "このホストのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。App Store から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "workspaceNeedsUpdateGooglePlay": "このホストのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。Google Play から Orca Mobile を更新して、このホストへの接続を再試行してください。",
+      "workspaceNeedsUpdateGitHubReleases": "このホストのモバイルワークスペースには、より新しいバージョンの Orca Mobile が必要です。GitHub Releases から Orca Mobile を更新して、このホストへの接続を再試行してください。"
     },
     "richMarkdownEditor": {
       "imageUrl": "画像 URL",
@@ -1394,8 +1395,7 @@
       "emptyState": "ファイルが見つかりません。",
       "loadFailed": "ファイルを読み込めませんでした。",
       "title": "ファイル",
-      "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
-      "waiting": "デスクトップへの接続を待っています…"
+      "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示"
     },
     "fileExplorerRow": {
       "fileUnavailable": "「{{name}}」はモバイルでは利用できません",
@@ -1425,8 +1425,7 @@
     "fileMediaPreview": {
       "downloading": "ダウンロード中（{{bytes}} / {{total}}）",
       "loadFailed": "メディアを読み込めませんでした。",
-      "loading": "メディアを読み込んでいます…",
-      "waiting": "デスクトップへの接続を待っています…"
+      "loading": "メディアを読み込んでいます…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "SSH 接続を確認できませんでした。ホストに再接続して、再試行してください。"
@@ -1465,8 +1464,7 @@
       "saveArtifact": "ターミナルのアーティファクトを保存",
       "saveFailed": "ファイルを保存できませんでした。",
       "stay": "編集を続ける",
-      "title": "プレビュー",
-      "waiting": "デスクトップへの接続を待っています…"
+      "title": "プレビュー"
     },
     "filePreviewSourceText": {
       "previewLabel": "ファイルのプレビュー",
@@ -2337,7 +2335,7 @@
       "emptyPrompt": "この操作用に保存されたプロンプトが空です。コンピュータで「ソース管理 AI」の設定を更新してください。",
       "loadFailed": "利用可能な Agent を読み込めませんでした。",
       "promptNotSent": "Agent は起動しましたが、プロンプトは送信されませんでした。",
-      "updateRequired": "スマートフォンから Agent を起動するには、コンピュータの Orca を更新してください。"
+      "updateRequired": "スマートフォンから Agent を起動するには、このホストの Orca を更新してください。"
     },
     "prSidebarState": {
       "loadFailed": "PR を読み込めませんでした。"
@@ -2532,26 +2530,21 @@
       "noteAdded": "メモを追加しました。",
       "notesCopied": "メモをコピーしました。",
       "saveNoteFailed": "メモの保存に失敗しました。",
-      "saveNotesFailed": "レビューノートの保存に失敗しました。",
-      "waitingForDesktop": "デスクトップへの接続待ち…"
+      "saveNotesFailed": "レビューノートの保存に失敗しました。"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "レビューの保存に失敗しました。",
-      "saveStateFailed": "レビューの状態を保存できませんでした。",
-      "waitingForDesktop": "デスクトップへの接続待ち…"
+      "saveStateFailed": "レビューの状態を保存できませんでした。"
     },
     "useDiffReviewController": {
       "loadFailed": "レビューを読み込めませんでした。",
-      "missingWorktree": "ワークツリーが指定されていません。",
-      "waitingForDesktop": "デスクトップへの接続待ち…"
+      "missingWorktree": "ワークツリーが指定されていません。"
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "差分を読み込めませんでした。",
-      "waitingForDesktop": "デスクトップへの接続待ち…"
+      "loadFailed": "差分を読み込めませんでした。"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "ソース管理の操作に失敗しました。",
-      "waitingForDesktop": "デスクトップへの接続待ち…"
+      "actionFailed": "ソース管理の操作に失敗しました。"
     },
     "useDiffReviewInteractions": {
       "openFailed": "セッションで開けませんでした。"
@@ -2565,8 +2558,7 @@
       "notesSentWithWarning": "レビューノートを送信しました。 {{warning}}",
       "promptNotSent": "Agent は起動しましたが、メモは送信されませんでした。「メモをコピー」でコピーして貼り付けてください。",
       "sendFailed": "メモの送信に失敗しました。",
-      "startingAgent": "Agent を起動中…",
-      "waitingForDesktop": "デスクトップへの接続待ち…"
+      "startingAgent": "Agent を起動中…"
     },
     "useImageAttachment": {
       "attachFailed": "添付に失敗しました。",
@@ -2605,8 +2597,7 @@
       "presetsUnavailable": "Agent プリセットを利用できません"
     },
     "usePrAiTriage": {
-      "launchFailed": "Agent の起動に失敗しました。",
-      "waitingForDesktop": "デスクトップへの接続待ち…"
+      "launchFailed": "Agent の起動に失敗しました。"
     },
     "usePrCommentActions": {
       "actionFailed": "コメントの操作に失敗しました。"
@@ -2857,7 +2848,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "通知の配信設定を読み込めませんでした。再試行するには、この画面を開き直してください。",
       "saveFailed": "通知の配信設定を保存できませんでした。再試行してください。",
-      "updateDesktopHint": "このスマートフォンで通知を受け取るには、更新済みのデスクトップとペアリングしてください。"
+      "updateDesktopHint": "このスマートフォンで通知を受け取るには、ペアリング済みのホストの Orca を更新してください。"
     },
     "notificationDisplayTest": {
       "accepted": "Orca のプッシュサービスが通知を受け付けました。通知が届いているか確認してください。",
@@ -2946,8 +2937,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "リベース先のベースブランチがありません。",
-      "waitingForDesktop": "デスクトップへの接続を待機中…"
+      "noBaseBranch": "リベース先のベースブランチがありません。"
     },
     "actions": {
       "checkingReviewStatus": "レビュー状態を確認中です。",
@@ -3110,8 +3100,7 @@
       "loadFilesFailed": "コミット内のファイルを読み込めません。",
       "noCommits": "コミットがありません。",
       "noFileChanges": "ファイルの変更なし",
-      "retryFiles": "コミット内のファイルの読み込みを再試行",
-      "waitingForDesktop": "デスクトップからの応答を待機中…"
+      "retryFiles": "コミット内のファイルの読み込みを再試行"
     },
     "gitStatus": {
       "conflicts": "競合"
@@ -3178,8 +3167,7 @@
     "loaders": {
       "connectingToDesktop": "デスクトップに接続中…",
       "loadFailed": "ソース管理を読み込めませんでした。",
-      "updateDesktop": "モバイルでソース管理を使うには、デスクトップ版 Orca を更新してください。",
-      "waitingForDesktop": "デスクトップへの接続を待機中…"
+      "updateDesktop": "モバイルでソース管理を使うには、デスクトップ版 Orca を更新してください。"
     },
     "modals": {
       "currentBranch": "現在",
@@ -3364,8 +3352,7 @@
       "windowsBatchUnsafeArguments": "{{label}} の実行に使われる Windows バッチスクリプトは、複数行のプロンプトを引数として受け取れません。設定で Agent の実行ファイルを指定するか、{prompt} を含まないカスタムコマンドを使用して、Orca がプロンプトを stdin に送信できるようにしてください。"
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "Agent の起動に失敗しました。",
-      "waitingForDesktop": "デスクトップへの接続を待機中…"
+      "launchFailed": "Agent の起動に失敗しました。"
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "コミットメッセージの生成に失敗しました。"
@@ -3373,8 +3360,7 @@
     "useMobileGitRequests": {
       "actionFailed": "ソース管理の操作に失敗しました。",
       "branchUnavailable": "ブランチの状態を確認できません。",
-      "commitFailed": "コミットに失敗しました。",
-      "waitingForDesktop": "デスクトップへの接続を待機中…"
+      "commitFailed": "コミットに失敗しました。"
     },
     "conflictActions": {
       "needsNewerHost": "スマートフォンからマージ競合を解決するには、このワークスペースを実行しているコンピューターの Orca を更新してください。",

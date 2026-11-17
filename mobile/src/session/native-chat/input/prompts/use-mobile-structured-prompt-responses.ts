@@ -82,7 +82,7 @@ export function useMobileStructuredPromptResponses(args: {
         if (questionAnswersSupported === null) {
           return send({ answers })
         }
-        onSendError('Update Orca on your computer to send answers this long')
+        onSendError('Update Orca on this host to send answers this long')
         return Promise.resolve(null)
       }
       return send({ optionId })

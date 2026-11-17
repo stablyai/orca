@@ -785,7 +785,7 @@
     },
     "offline": {
       "waitingFor": "正在等待 {{host}}",
-      "waiting": "正在等待桌面",
+      "waiting": "正在等待主机",
       "message": "请确认你的电脑处于唤醒状态，且 Orca 正在运行",
       "reconnect": "重新连接"
     },
@@ -811,7 +811,8 @@
     "retry": "重试",
     "save": "保存",
     "settings": "设置",
-    "unknown": "未知"
+    "unknown": "未知",
+    "waitingForHost": "正在等待主机…"
   },
   "components": {
     "accountsSnapshot": {
@@ -821,7 +822,7 @@
       "copyFailed": "无法复制",
       "copyPrompt": "复制提示",
       "statusUnreadable": "无法读取此主机的状态。正在重试…",
-      "updateRequired": "请先更新电脑上的 Orca，才能从手机启动智能体"
+      "updateRequired": "请先更新此主机上的 Orca，才能从手机启动智能体"
     },
     "agentSpinner": {
       "monitoring": "监控后台任务",
@@ -971,7 +972,7 @@
       "terminalLabel": "{{title}} ({{id}})",
       "unsentNotes_one": "{{count}} 条未发送的备注",
       "unsentNotes_other": "{{count}} 条未发送的备注",
-      "updateRequired": "请更新电脑上的 Orca"
+      "updateRequired": "请更新此主机上的 Orca"
     },
     "diffReviewFileSummary": {
       "changed": "已更改",
@@ -1116,23 +1117,23 @@
     },
     "protocolBlockScreen": {
       "backToHosts": "返回主机列表",
-      "desktopTooOldBody": "已配对的桌面应用版本过旧，无法与当前的 Orca Mobile 兼容。请更新电脑上的 Orca，然后重新连接此主机",
+      "desktopTooOldBody": "此主机上的 Orca 版本过旧，无法与当前的 Orca Mobile 兼容。请更新此主机上的 Orca，然后重新连接",
       "getVersion": "获取 Orca {{version}}",
-      "mobileTooOldAppStore": "此桌面需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
-      "mobileTooOldGooglePlay": "此桌面需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
-      "mobileTooOldGitHubReleases": "此桌面需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机",
+      "mobileTooOldAppStore": "此主机需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
+      "mobileTooOldGooglePlay": "此主机需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
+      "mobileTooOldGitHubReleases": "此主机需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机",
       "openAppStore": "打开 App Store",
       "openGooglePlay": "打开 Google Play",
       "openGitHubReleases": "打开 GitHub Releases",
       "refreshRecoveryNote": "如果仍显示此消息，请移除此主机并重新配对",
-      "refreshWorkspaceBody": "此主机的工作区缓存版本低于桌面要求。请重新连接此主机，下载当前版本",
+      "refreshWorkspaceBody": "此主机的工作区缓存版本低于主机要求。请重新连接此主机，下载当前版本",
       "refreshWorkspaceTitle": "刷新移动端工作区",
-      "updateDesktopTitle": "更新电脑上的 Orca",
+      "updateDesktopTitle": "更新此主机上的 Orca",
       "updateMobileTitle": "更新 Orca Mobile",
       "updateRecoveryNote": "已经更新？请返回“主机”并刷新连接。如果仍显示此消息，请移除此主机并重新配对",
-      "workspaceNeedsUpdateAppStore": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
-      "workspaceNeedsUpdateGooglePlay": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
-      "workspaceNeedsUpdateGitHubReleases": "此桌面的移动端工作区需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机"
+      "workspaceNeedsUpdateAppStore": "此主机的移动端工作区需要更新版本的 Orca Mobile。请从 App Store 更新 Orca Mobile，然后重新连接此主机",
+      "workspaceNeedsUpdateGooglePlay": "此主机的移动端工作区需要更新版本的 Orca Mobile。请从 Google Play 更新 Orca Mobile，然后重新连接此主机",
+      "workspaceNeedsUpdateGitHubReleases": "此主机的移动端工作区需要更新版本的 Orca Mobile。请从 GitHub Releases 更新 Orca Mobile，然后重新连接此主机"
     },
     "richMarkdownEditor": {
       "imageUrl": "图像 URL",
@@ -1608,8 +1609,7 @@
       "loading": "正在加载文件…",
       "loadFailed": "无法加载文件",
       "title": "文件",
-      "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项",
-      "waiting": "等待桌面…"
+      "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
@@ -1641,8 +1641,7 @@
     "fileMediaPreview": {
       "downloading": "正在下载：{{bytes}} / {{total}}",
       "loadFailed": "无法加载媒体",
-      "loading": "正在加载媒体…",
-      "waiting": "等待桌面…"
+      "loading": "正在加载媒体…"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "无法验证 SSH 连接。请重新连接主机后重试"
@@ -1681,8 +1680,7 @@
       "saveArtifact": "保存终端产物",
       "saveFailed": "无法保存文件",
       "stay": "留在此页",
-      "title": "预览",
-      "waiting": "等待桌面…"
+      "title": "预览"
     },
     "filePreviewSourceText": {
       "previewLabel": "文件预览",
@@ -2794,7 +2792,7 @@
       "emptyPrompt": "此操作保存的提示词为空。请在电脑上更新“源代码控制 AI”设置",
       "loadFailed": "无法加载可用的智能体",
       "promptNotSent": "智能体已启动，但提示词未发送",
-      "updateRequired": "请更新电脑上的 Orca，以便从手机启动智能体"
+      "updateRequired": "请先更新此主机上的 Orca，才能从手机启动智能体"
     },
     "prSidebarState": {
       "loadFailed": "无法加载 PR"
@@ -2991,27 +2989,22 @@
       "noteAdded": "笔记已添加",
       "notesCopied": "笔记已复制",
       "saveNoteFailed": "保存笔记失败",
-      "saveNotesFailed": "保存评审笔记失败",
-      "waitingForDesktop": "等待桌面…"
+      "saveNotesFailed": "保存评审笔记失败"
     },
     "useDiffReviewCommentActions": {
       "saveFailed": "保存评审失败",
-      "saveStateFailed": "保存评审状态失败",
-      "waitingForDesktop": "等待桌面连接…"
+      "saveStateFailed": "保存评审状态失败"
     },
     "useDiffReviewController": {
       "loadFailed": "无法加载评审",
       "commitMissing": "请更新 Orca 应用，以便在这里打开提交中的文件",
-      "missingWorktree": "缺少工作树",
-      "waitingForDesktop": "等待桌面连接…"
+      "missingWorktree": "缺少工作树"
     },
     "useDiffReviewDiffLoading": {
-      "loadFailed": "无法加载差异",
-      "waitingForDesktop": "等待桌面连接…"
+      "loadFailed": "无法加载差异"
     },
     "useDiffReviewGitActions": {
-      "actionFailed": "源代码控制操作失败",
-      "waitingForDesktop": "等待桌面连接…"
+      "actionFailed": "源代码控制操作失败"
     },
     "useDiffReviewInteractions": {
       "openFailed": "无法在会话中打开"
@@ -3025,8 +3018,7 @@
       "notesSentWithWarning": "评审笔记已发送。{{warning}}",
       "promptNotSent": "智能体已启动，但笔记未发送。请使用“复制备注”复制后粘贴",
       "sendFailed": "发送笔记失败",
-      "startingAgent": "正在启动智能体…",
-      "waitingForDesktop": "等待桌面连接…"
+      "startingAgent": "正在启动智能体…"
     },
     "useImageAttachment": {
       "attachFailed": "添加附件失败",
@@ -3065,8 +3057,7 @@
       "presetsUnavailable": "智能体预设不可用"
     },
     "usePrAiTriage": {
-      "launchFailed": "启动智能体失败",
-      "waitingForDesktop": "等待桌面…"
+      "launchFailed": "启动智能体失败"
     },
     "usePrCommentActions": {
       "actionFailed": "评论操作失败"
@@ -3269,9 +3260,6 @@
       "openInBrowser": "在系统浏览器中打开",
       "copyLink": "复制链接"
     },
-    "useDiffReviewGitHub": {
-      "waitingForDesktop": "正在等待桌面…"
-    },
     "usePrTextAction": {
       "updateFailed": "无法更新 PR"
     },
@@ -3399,7 +3387,7 @@
     "nativeNotificationDeliverySettings": {
       "loadFailed": "无法加载通知投递设置。请重新打开此页面重试",
       "saveFailed": "无法保存通知投递设置。请重试",
-      "updateDesktopHint": "配对已更新的桌面，即可在此手机上接收通知"
+      "updateDesktopHint": "更新已配对主机上的 Orca，即可在此手机上接收通知"
     },
     "notificationDisplayTest": {
       "accepted": "Orca 推送服务已接受请求。请查看通知",
@@ -3489,8 +3477,7 @@
   },
   "sourceControl": {
     "actionSheetRunners": {
-      "noBaseBranch": "没有可作为变基目标的基础分支",
-      "waitingForDesktop": "正在等待桌面…"
+      "noBaseBranch": "没有可作为变基目标的基础分支"
     },
     "actions": {
       "checkingReviewStatus": "正在检查评审状态",
@@ -3662,8 +3649,7 @@
       "noCommits": "暂无提交",
       "loading": "正在加载提交…",
       "noFileChanges": "无文件更改",
-      "retryFiles": "重试加载提交文件",
-      "waitingForDesktop": "正在等待桌面…"
+      "retryFiles": "重试加载提交文件"
     },
     "gitStatus": {
       "conflicts": "冲突",
@@ -3733,8 +3719,7 @@
     "loaders": {
       "connectingToDesktop": "正在连接桌面…",
       "loadFailed": "无法加载源代码控制",
-      "updateDesktop": "请更新 Orca 桌面端，以在手机上使用源代码控制",
-      "waitingForDesktop": "正在等待桌面…"
+      "updateDesktop": "请更新 Orca 桌面端，以在手机上使用源代码控制"
     },
     "modals": {
       "currentBranch": "当前",
@@ -3954,8 +3939,7 @@
       "windowsBatchUnsafeArguments": "{{label}} 通过 Windows 批处理脚本运行，该脚本无法将多行提示词作为参数接收。请在设置中指定智能体的可执行文件，或使用不含 {prompt} 的自定义命令，让 Orca 通过 stdin 发送提示词"
     },
     "useMobileCommitFailureRecovery": {
-      "launchFailed": "启动智能体失败",
-      "waitingForDesktop": "正在等待桌面…"
+      "launchFailed": "启动智能体失败"
     },
     "useMobileCommitMessageGeneration": {
       "generateFailed": "生成提交信息失败"
@@ -3966,8 +3950,7 @@
     "useMobileGitRequests": {
       "actionFailed": "源代码控制操作失败",
       "branchUnavailable": "无法获取分支状态",
-      "commitFailed": "提交失败",
-      "waitingForDesktop": "正在等待桌面…"
+      "commitFailed": "提交失败"
     },
     "conflictActions": {
       "resolveFile": "{{action}}：{{path}}",

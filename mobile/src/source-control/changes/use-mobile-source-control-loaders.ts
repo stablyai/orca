@@ -257,7 +257,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         message:
           connState === 'connected'
             ? t('sourceControl.loaders.connectingToDesktop', 'Connecting to desktop...')
-            : t('sourceControl.loaders.waitingForDesktop', 'Waiting for desktop...')
+            : t('common.waitingForHost', 'Waiting for host…')
       }
     }
     if (empty === 'empty-error') {
