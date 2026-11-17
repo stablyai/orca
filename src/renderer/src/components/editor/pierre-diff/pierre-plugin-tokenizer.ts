@@ -24,7 +24,7 @@ export class PierrePluginTokenizer implements DiffsEditorTokenizer {
   private paused = false
   private version = -1
   private theme: string
-  private tokens: PluginGrammarTokens | undefined
+  private tokenRanges: Map<number, [number, number][]> | undefined
   private deferred: Map<number, HighlightedToken[]> | undefined
 
   constructor(
@@ -45,7 +45,7 @@ export class PierrePluginTokenizer implements DiffsEditorTokenizer {
   }
 
   tokenize(change: TextDocumentChange): Map<number, HighlightedToken[]> {
-    this.tokens = undefined
+    this.tokenRanges = undefined
     this.request()
     const lines = new Map<number, HighlightedToken[]>()
     for (let line = change.startLine; line <= change.endLine; line += 1) {
@@ -91,23 +91,7 @@ export class PierrePluginTokenizer implements DiffsEditorTokenizer {
   }
 
   getStringCommentRegexpRangesInLine(line: number): [number, number][] | null {
-    if (!this.tokens) {
-      return null
-    }
-    const ranges: [number, number][] = []
-    for (let offset = 0; offset < this.tokens.data.length; offset += 4) {
-      const [tokenLine, start, length, type] = this.tokens.data.subarray(offset, offset + 4)
-      if (tokenLine > line) {
-        break
-      }
-      if (
-        tokenLine === line &&
-        (type <= 2 || PLUGIN_SYNTAX_TOKEN_TYPES[type]?.startsWith('string'))
-      ) {
-        ranges.push([start, start + length])
-      }
-    }
-    return ranges
+    return this.tokenRanges?.get(line) ?? (this.tokenRanges ? [] : null)
   }
 
   private request(): void {
@@ -146,7 +130,20 @@ export class PierrePluginTokenizer implements DiffsEditorTokenizer {
         return
       }
       if (outcome.ok) {
-        this.tokens = outcome.tokens
+        const tokenRanges = new Map<number, [number, number][]>()
+        const data = outcome.tokens.data
+        for (let offset = 0; offset < data.length; offset += 4) {
+          const line = data[offset],
+            start = data[offset + 1],
+            length = data[offset + 2],
+            type = data[offset + 3]
+          if (type <= 2 || PLUGIN_SYNTAX_TOKEN_TYPES[type]?.startsWith('string')) {
+            const ranges = tokenRanges.get(line) ?? []
+            ranges.push([start, start + length])
+            tokenRanges.set(line, ranges)
+          }
+        }
+        this.tokenRanges = tokenRanges
         const painted = this.paint(lines, outcome.tokens)
         if (this.paused) {
           this.deferred = painted

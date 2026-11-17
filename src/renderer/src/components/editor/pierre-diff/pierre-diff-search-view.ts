@@ -12,10 +12,11 @@ export function paintPierreSearchHighlights(
   owner: symbol,
   ranges?: { matches: Range[]; active: Range[] }
 ) {
+  const previous = highlights.get(owner)
   if (ranges) {
     highlights.set(owner, ranges)
-  } else if (!highlights.delete(owner)) {
-    return
+  } else {
+    highlights.delete(owner)
   }
   if (typeof Highlight === 'undefined' || !CSS.highlights) {
     return
@@ -24,11 +25,12 @@ export function paintPierreSearchHighlights(
     ['orca-diff-find', 'matches'],
     ['orca-diff-find-active', 'active']
   ] as const) {
-    const highlight = new Highlight()
-    for (const entry of highlights.values()) {
-      for (const range of entry[key]) {
-        highlight.add(range)
-      }
+    const highlight = CSS.highlights.get(name) ?? new Highlight()
+    for (const range of previous?.[key] ?? []) {
+      highlight.delete(range)
+    }
+    for (const range of ranges?.[key] ?? []) {
+      highlight.add(range)
     }
     if (highlight.size) {
       CSS.highlights.set(name, highlight)
@@ -36,6 +38,40 @@ export function paintPierreSearchHighlights(
       CSS.highlights.delete(name)
     }
   }
+}
+
+export function pierreRowTextRanges(
+  row: HTMLElement,
+  offsets: readonly { start: number; end: number }[]
+): (Range | null)[] {
+  const nodes: { node: Node; start: number; end: number }[] = []
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
+  let node: Node | null
+  let offset = 0
+  while ((node = walker.nextNode())) {
+    const end = offset + (node.textContent?.length ?? 0)
+    nodes.push({ node, start: offset, end })
+    offset = end
+  }
+  let startIndex = 0
+  let endIndex = 0
+  return offsets.map(({ start, end }) => {
+    while (startIndex < nodes.length && nodes[startIndex].end < start) {
+      startIndex++
+    }
+    while (endIndex < nodes.length && nodes[endIndex].end < end) {
+      endIndex++
+    }
+    const first = nodes[startIndex]
+    const last = nodes[endIndex]
+    if (!first || !last) {
+      return null
+    }
+    const range = document.createRange()
+    range.setStart(first.node, start - first.start)
+    range.setEnd(last.node, end - last.start)
+    return range
+  })
 }
 
 export function pierreRowTextRange(row: HTMLElement, start: number, end: number): Range | null {

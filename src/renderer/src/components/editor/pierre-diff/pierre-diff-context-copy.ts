@@ -97,6 +97,14 @@ export function installPierreContextualCopy(
   }
 
   const handleSelectionChange = (): void => {
+    if (!readSelection()) {
+      hideHint()
+      if (primarySelectionTimer !== null) {
+        window.clearTimeout(primarySelectionTimer)
+      }
+      primarySelectionTimer = null
+      return
+    }
     if (selectionKey(readSelection()) !== lastCopiedSelection) {
       lastCopiedSelection = null
     }
@@ -104,7 +112,12 @@ export function installPierreContextualCopy(
     if (primarySelectionTimer !== null) {
       window.clearTimeout(primarySelectionTimer)
     }
-    primarySelectionTimer = window.setTimeout(updatePrimarySelection, PRIMARY_SELECTION_DEBOUNCE_MS)
+    if (isPrimarySelectionEnabled()) {
+      primarySelectionTimer = window.setTimeout(
+        updatePrimarySelection,
+        PRIMARY_SELECTION_DEBOUNCE_MS
+      )
+    }
   }
 
   const handleKeyDown = (event: KeyboardEvent): void => {

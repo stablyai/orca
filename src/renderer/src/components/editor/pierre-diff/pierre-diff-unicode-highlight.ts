@@ -4,7 +4,7 @@ import {
   InvisibleCharacters
 } from 'monaco-editor/esm/vs/base/common/strings.js'
 import { getIntlLocale } from '@/i18n/i18n'
-import { pierreRowTextRange } from './pierre-diff-search-view'
+import { pierreRowTextRanges } from './pierre-diff-search-view'
 
 export type UnicodeHighlightKind = 'invisible' | 'ambiguous'
 export type UnicodeHighlight = { start: number; end: number; kind: UnicodeHighlightKind }
@@ -64,18 +64,6 @@ function getMatcher(includeAmbiguous: boolean): Matcher {
   return matcher
 }
 
-function wordAround(line: string, start: number, end: number): string {
-  let from = start
-  let to = end
-  while (from > 0 && WORD.test(line[from - 1])) {
-    from--
-  }
-  while (to < line.length && WORD.test(line[to])) {
-    to++
-  }
-  return line.slice(from, to)
-}
-
 /**
  * The characters Monaco's unicode highlighter flags in one line: invisible ones always, and
  * ones confusable with ASCII unless the surrounding word is clearly in another script.
@@ -84,24 +72,40 @@ export function findUnicodeHighlights(line: string, includeAmbiguous: boolean): 
   const { pattern, ambiguous } = getMatcher(includeAmbiguous)
   pattern.lastIndex = 0
   const highlights: UnicodeHighlight[] = []
+  let wordEnd = -1
+  let hasAscii = false
+  let hasForeignLetter = false
   for (let match = pattern.exec(line); match; match = pattern.exec(line)) {
     const start = match.index
     const end = start + match[0].length
     const codePoint = match[0].codePointAt(0)!
     const invisible = InvisibleCharacters.isInvisibleCharacter(codePoint)
-    const word = wordAround(line, start, end)
-    let hasAscii = false
-    let hasForeignLetter = false
-    for (const char of word) {
-      const point = char.codePointAt(0)!
-      if (BASIC_ASCII.test(char)) {
-        hasAscii = true
-      } else if (
-        !ambiguous?.isAmbiguous(point) &&
-        !InvisibleCharacters.isInvisibleCharacter(point)
-      ) {
-        hasForeignLetter = true
+    if (start >= wordEnd) {
+      let from = start
+      wordEnd = end
+      while (from > 0 && WORD.test(line[from - 1])) {
+        from--
       }
+      while (wordEnd < line.length && WORD.test(line[wordEnd])) {
+        wordEnd++
+      }
+      hasAscii = false
+      hasForeignLetter = false
+      for (const char of line.slice(from, wordEnd)) {
+        const point = char.codePointAt(0)!
+        if (BASIC_ASCII.test(char)) {
+          hasAscii = true
+        } else if (
+          !ambiguous?.isAmbiguous(point) &&
+          !InvisibleCharacters.isInvisibleCharacter(point)
+        ) {
+          hasForeignLetter = true
+        }
+      }
+    }
+    // A non-word invisible joins both neighbors for this check, not the next word's check.
+    if (!WORD.test(match[0])) {
+      wordEnd = end
     }
     // Same rule as Monaco: a word written in another script is not a spoofing attempt.
     if (!hasAscii && hasForeignLetter) {
@@ -117,24 +121,30 @@ export function findUnicodeHighlights(line: string, includeAmbiguous: boolean): 
 }
 
 const painted = new Map<symbol, Record<UnicodeHighlightKind, Range[]>>()
+const rowsCache = new WeakMap<
+  HTMLElement,
+  { text: string; matcher: Matcher; highlights: UnicodeHighlight[] }
+>()
 
 function paint(owner: symbol, ranges?: Record<UnicodeHighlightKind, Range[]>): void {
+  const previous = painted.get(owner)
   if (ranges) {
     painted.set(owner, ranges)
-  } else if (!painted.delete(owner)) {
-    return
+  } else {
+    painted.delete(owner)
   }
   if (typeof Highlight === 'undefined' || !CSS.highlights) {
     return
   }
   for (const kind of ['invisible', 'ambiguous'] as const) {
-    const highlight = new Highlight()
-    for (const entry of painted.values()) {
-      for (const range of entry[kind]) {
-        highlight.add(range)
-      }
-    }
     const name = `orca-diff-unicode-${kind}`
+    const highlight = CSS.highlights.get(name) ?? new Highlight()
+    for (const range of previous?.[kind] ?? []) {
+      highlight.delete(range)
+    }
+    for (const range of ranges?.[kind] ?? []) {
+      highlight.add(range)
+    }
     if (highlight.size) {
       CSS.highlights.set(name, highlight)
     } else {
@@ -157,14 +167,23 @@ export function paintPierreUnicodeHighlights(
   const ranges: Record<UnicodeHighlightKind, Range[]> = { invisible: [], ambiguous: [] }
   for (const row of rows) {
     const text = row.textContent ?? ''
-    for (const { start, end, kind } of findUnicodeHighlights(text, includeAmbiguous)) {
+    const matcher = getMatcher(includeAmbiguous)
+    let cached = rowsCache.get(row)
+    if (cached?.text !== text || cached.matcher !== matcher) {
+      cached = { text, matcher, highlights: findUnicodeHighlights(text, includeAmbiguous) }
+      rowsCache.set(row, cached)
+    }
+    const offsets = cached.highlights.map(({ start, end, kind }) => {
       // A zero-width character has no box to paint, so mark the character it sits before.
       const next = text.codePointAt(end)
       const visibleEnd =
         kind === 'invisible' && next !== undefined ? end + (next > 0xffff ? 2 : 1) : end
-      const range = pierreRowTextRange(row, start, visibleEnd)
+      return { start, end: visibleEnd, kind }
+    })
+    const resolved = pierreRowTextRanges(row, offsets)
+    for (const [index, range] of resolved.entries()) {
       if (range) {
-        ranges[kind].push(range)
+        ranges[offsets[index].kind].push(range)
       }
     }
   }
