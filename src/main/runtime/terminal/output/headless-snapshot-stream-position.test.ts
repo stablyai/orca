@@ -1,4 +1,4 @@
-import { assert, expect, it } from 'vitest'
+import { assert, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -133,6 +133,7 @@ it('recaptures instead of seeding a snapshot taken before the dropped span', asy
     runtime.onPtyData('pty-stale', 'stale\r\n', 1)
     runtime.notePtyDataGap('pty-stale', 9)
     runtime.onPtyData('pty-stale', 'tail', 2)
+    await vi.waitFor(() => expect(captures).toBe(2))
     for (let i = 0; i < 5; i++) {
       await new Promise((resolve) => setImmediate(resolve))
     }
