@@ -9,7 +9,7 @@ import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-
 import {
   useWslHostsAcceptNewWork,
   useWslHostServerFilesMissing
-} from '../sidebar/use-wsl-hosts-enabled'
+} from '../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { openWslMoveDialog } from './wsl-move-dialog-store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { wslMoveCatalogCandidates, wslMoveTargetForRepo } from './wsl-move-scope-rows'

@@ -3,7 +3,7 @@ import {
   closeLinkActionRequest,
   type LinkActionRequest
 } from '@/components/link-actions/link-action-request'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/comment-markdown-element-renderers'
+import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { useAppStore } from '../../../../store/index'
 import type { NativeChatFileLinkContext } from './native-chat-file-link-context'

@@ -187,6 +187,8 @@ export type AcpDialect = {
   /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
   elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
+  /** The cause, when this agent text only announces a retry of a failed model call. */
+  providerRetry?(text: string): string | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
   promptFailure?(
     error: AcpAgentError,

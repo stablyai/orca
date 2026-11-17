@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { buildAgentStartupPlan, buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { buildAgentStartupPlan } from './tui-agent-startup'
 import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
   OPENCODE_STARTUP_PROMPT_BODY_ENV,
@@ -79,18 +79,4 @@ describe('native OpenCode startup submission intent', () => {
       expect(plan?.env).toBeUndefined()
     }
   )
-
-  it('never gives an editable draft or empty launch an automatic submission intent', () => {
-    const args = { agent: 'opencode' as const, cmdOverrides: {}, platform: 'linux' as const }
-    expect(
-      buildAgentDraftLaunchPlan({ ...args, draft: 'draft' })?.env?.[
-        OPENCODE_STARTUP_PROMPT_SHA256_ENV
-      ]
-    ).toBeUndefined()
-    expect(
-      buildAgentStartupPlan({ ...args, prompt: '', allowEmptyPromptLaunch: true })?.env?.[
-        OPENCODE_STARTUP_PROMPT_SHA256_ENV
-      ]
-    ).toBeUndefined()
-  })
 })

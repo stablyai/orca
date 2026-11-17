@@ -7,6 +7,10 @@ import {
   type BrowserClientAutomationResult as BrowserClientHostCommandResult
 } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
+import {
+  REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES,
+  REMOTE_RUNTIME_REQUEST_ENVELOPE_RESERVE_BYTES
+} from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { browserHostCommandResultIdentity } from './browser-host-command-result-submission'
 
 const BROWSER_HOST_COMMAND_RESULT_TOO_LARGE_CODE = 'browser_host_command_result_too_large'
@@ -27,22 +31,21 @@ export async function stageBrowserHostCommandResult(
   }
   const bytes = Buffer.from(JSON.stringify(result.value), 'utf8')
   const hostStages = command.command.stagedResults === true
+  const identity = browserHostCommandResultIdentity(command)
+  const unstagedMaxBytes = unstagedResultMaxBytes(identity)
   if (
     bytes.byteLength <= BROWSER_CLIENT_AUTOMATION_RESULT_CHUNK_MAX_BYTES ||
-    (!hostStages && bytes.byteLength <= BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES)
+    (!hostStages && bytes.byteLength <= unstagedMaxBytes)
   ) {
     return result
   }
   if (!hostStages || bytes.byteLength > BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES) {
-    const limit = hostStages
-      ? BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES
-      : BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES
+    const limit = hostStages ? BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES : unstagedMaxBytes
     return failed(
       BROWSER_HOST_COMMAND_RESULT_TOO_LARGE_CODE,
       `The result (${formatMegabytes(bytes.byteLength)}) is larger than the ${formatMegabytes(limit)} this server accepts from a page on this device. Use --format jpeg, a selector, or a smaller viewport${hostStages ? '' : ', or update the server'}.`
     )
   }
-  const identity = browserHostCommandResultIdentity(command)
   try {
     for (
       let offset = 0;
@@ -68,6 +71,18 @@ export async function stageBrowserHostCommandResult(
     )
   }
   return { status: 'completed', stagedValueBytes: bytes.byteLength }
+}
+
+// Why: an unstaged value travels in one request with its identity, which must fit the host's inbound frame.
+function unstagedResultMaxBytes(
+  identity: ReturnType<typeof browserHostCommandResultIdentity>
+): number {
+  return Math.min(
+    BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES,
+    REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES -
+      REMOTE_RUNTIME_REQUEST_ENVELOPE_RESERVE_BYTES -
+      Buffer.byteLength(JSON.stringify(identity), 'utf8')
+  )
 }
 
 function failed(errorCode: string, message?: string): BrowserClientHostCommandResult {

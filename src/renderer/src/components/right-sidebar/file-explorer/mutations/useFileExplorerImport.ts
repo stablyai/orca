@@ -4,7 +4,10 @@ import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { useTranslate } from '@/i18n/use-translate'
-import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
+import {
+  createOsFileDropSequence,
+  useOsFileDropOwner
+} from '@/lib/files/drop/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import {
   describeSharedDropFailureReason,

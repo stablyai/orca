@@ -10,7 +10,7 @@ import { searchTerminalQuickCommands } from '@/lib/terminal/quick-commands/termi
 import { useAppStore } from '../../../store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Button } from '../../ui/button'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { getSettingOwnershipSummary } from '../page/setting-ownership'
 import { useTranslate } from '@/i18n/use-translate'
 import { QuickCommandsList } from './QuickCommandsList'
@@ -26,7 +26,7 @@ import {
 import {
   getTerminalQuickCommandHostOptions,
   shouldShowTerminalQuickCommandHostOwnership
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings

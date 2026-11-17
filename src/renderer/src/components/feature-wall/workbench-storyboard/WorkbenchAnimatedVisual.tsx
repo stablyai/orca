@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { JSX } from 'react'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { FeatureWallClickRing } from '../storyboard-interaction/FeatureWallClickRing'

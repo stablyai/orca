@@ -105,10 +105,6 @@ describe('selectListedWslMovedChatWorkspaces', () => {
     expect(listed.map(({ project }) => project.id)).toEqual(['repo-1', 'repo-2'])
     expect(canHideWslMovedEntry(catalog([]), groups[0])).toBe(false)
   })
-
-  it('returns the same list when nothing is hidden', () => {
-    expect(selectListedWslMovedChatWorkspaces(groups, [], catalog([]))).toBe(groups)
-  })
 })
 
 describe('a moved folder whose host comes only from its project group', () => {

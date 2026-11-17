@@ -1,15 +1,6 @@
-import {
-  compareCodexSessionBackfillDates,
-  getCodexSessionBackfillDate,
-  getCodexSessionBackfillDatesBetween,
-  toCodexSessionBackfillDateKey
-} from './codex-session-backfill-scan-dates'
 import { CodexSessionMigrationIgnoredLaunches } from './codex-session-migration-ignored-launches'
 import { CodexSessionMigrationRecentExits } from './codex-session-migration-recent-exits'
-import type {
-  CodexSessionBackfillDate,
-  CodexSessionBackfillOptions
-} from './codex-session-backfill-types'
+import type { CodexSessionBackfillOptions } from './codex-session-backfill-types'
 
 type MigrationRun = (
   options: CodexSessionBackfillOptions,
@@ -34,7 +25,7 @@ export function createCodexSessionMigrationScheduler(args: {
   isEligible: () => boolean
   isQuitting: () => boolean
   resolveSystemCodexHomePathOverride: () => string | undefined
-  prepareScheduledRun?: (scanDates: readonly CodexSessionBackfillDate[]) => boolean | void
+  prepareScheduledRun?: (fullScanRequired: boolean, newFullScanRequest?: boolean) => boolean | void
   finishScheduledRun?: () => void
   startBackfill: MigrationRun
   startIndexHeal: MigrationRun
@@ -43,8 +34,6 @@ export function createCodexSessionMigrationScheduler(args: {
   let scheduledTimer: ReturnType<typeof setTimeout> | null = null
   let scheduledRunGeneration = 0
   let pendingScheduledRunGeneration: number | null = null
-  const scheduledScanDates = new Map<string, CodexSessionBackfillDate>()
-  const pendingScanDates = new Map<string, CodexSessionBackfillDate>()
   let scheduledFullScan = false
   let pendingFullScan = false
   let migrationTask: Promise<void> | null = null
@@ -59,7 +48,6 @@ export function createCodexSessionMigrationScheduler(args: {
   const requestRun = (
     rerunIfActive = false,
     requestedGeneration?: number,
-    requestedScanDates: readonly CodexSessionBackfillDate[] = [],
     requestedFullScan = false
   ): void => {
     if (requestedGeneration !== undefined) {
@@ -67,9 +55,6 @@ export function createCodexSessionMigrationScheduler(args: {
         requestedGeneration,
         pendingScheduledRunGeneration ?? requestedGeneration
       )
-      for (const scanDate of requestedScanDates) {
-        pendingScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
-      }
       pendingFullScan ||= requestedFullScan
     }
     if (args.isQuitting() || !args.isEligible()) {
@@ -82,16 +67,13 @@ export function createCodexSessionMigrationScheduler(args: {
     }
     const isScheduledRun = pendingScheduledRunGeneration !== null
     const activeScheduledRunGeneration = pendingScheduledRunGeneration
-    const runScanDates = [...pendingScanDates.values()].sort(compareCodexSessionBackfillDates)
     let preparationNeedsFullScan = false
     if (isScheduledRun) {
       pendingScheduledRunGeneration = null
-      // Persist dates so abnormal exits recover with a bounded scan.
-      preparationNeedsFullScan = args.prepareScheduledRun?.(runScanDates) === true
+      // Persist launch debt before starting asynchronous publication.
+      preparationNeedsFullScan = args.prepareScheduledRun?.(pendingFullScan) === true
     }
     const fullScanRequired = pendingFullScan || preparationNeedsFullScan
-    const scanDates = !fullScanRequired && runScanDates.length > 0 ? runScanDates : undefined
-    pendingScanDates.clear()
     pendingFullScan = false
     activeRunStopObserved = false
     rerunRequested = false
@@ -107,7 +89,7 @@ export function createCodexSessionMigrationScheduler(args: {
       .startBackfill(
         {
           shouldStop,
-          scanDates,
+          boundedScan: isScheduledRun,
           fullScanRequired,
           ignoreCompletionMarker: isScheduledRun,
           // Live panes keep their dates pending while historical dates can be certified.
@@ -145,9 +127,6 @@ export function createCodexSessionMigrationScheduler(args: {
             pendingScheduledRunGeneration ?? activeScheduledRunGeneration!
           )
           pendingFullScan ||= fullScanRequired
-          for (const scanDate of scanDates ?? []) {
-            pendingScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
-          }
         }
         if (
           isScheduledRun &&
@@ -168,16 +147,10 @@ export function createCodexSessionMigrationScheduler(args: {
   const armScheduledRun = (generation?: number): void => {
     scheduledTimer = setTimeout(() => {
       scheduledTimer = null
-      if (generation !== undefined) {
-        const currentDate = getCodexSessionBackfillDate()
-        scheduledScanDates.set(toCodexSessionBackfillDateKey(currentDate), currentDate)
-      }
-      const scanDates = [...scheduledScanDates.values()].sort(compareCodexSessionBackfillDates)
-      scheduledScanDates.clear()
       const fullScanRequired = scheduledFullScan
       scheduledFullScan = false
       // A launch can invalidate the marker while index healing is still active.
-      requestRun(true, generation, scanDates, fullScanRequired)
+      requestRun(true, generation, fullScanRequired)
     }, args.initialDelayMs ?? 15_000)
   }
 
@@ -187,8 +160,9 @@ export function createCodexSessionMigrationScheduler(args: {
     }
     scheduledRunGeneration += 1
     scheduledFullScan ||= fullScanRequired
-    const launchDate = getCodexSessionBackfillDate()
-    scheduledScanDates.set(toCodexSessionBackfillDateKey(launchDate), launchDate)
+    if (fullScanRequired && args.isEligible() && !args.isQuitting()) {
+      args.prepareScheduledRun?.(true, true)
+    }
     armScheduledRun(scheduledRunGeneration)
   }
 
@@ -236,9 +210,6 @@ export function createCodexSessionMigrationScheduler(args: {
       if (args.isQuitting()) {
         return
       }
-      for (const scanDate of getCodexSessionBackfillDatesBetween(startedAt, new Date())) {
-        scheduledScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
-      }
       scheduleRun()
     },
     scheduleInitialRun(): void {
@@ -253,7 +224,9 @@ export function createCodexSessionMigrationScheduler(args: {
 
 type MigrationFailureCountKey = 'failedDirectories' | 'failedFiles' | 'failedHealAuditRecords'
 
-type MigrationResultFields = Partial<Record<MigrationFailureCountKey, unknown>>
+type MigrationResultFields = Partial<Record<MigrationFailureCountKey, unknown>> & {
+  scanTruncated?: unknown
+}
 
 function isMigrationResultFields(result: unknown): result is MigrationResultFields {
   return typeof result === 'object' && result !== null
@@ -268,6 +241,7 @@ function isIncompleteBackfillResult(result: unknown): boolean {
     return true
   }
   return (
+    result.scanTruncated === true ||
     isStoppedMigrationResult(result) ||
     readPositiveResultCount(result, 'failedFiles') ||
     readPositiveResultCount(result, 'failedDirectories') ||
