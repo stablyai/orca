@@ -11,6 +11,7 @@ import { readJournalDomainSubmissionBody } from './journal-domain-submission-rec
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
+import { JOURNAL_PROVIDER_TURN_ROWS } from './database/journal-provider-turn-index'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -78,9 +79,8 @@ export function readJournalDomainEntity(
         named || sinceFence === undefined
           ? undefined
           : db
-              .prepare(`SELECT owner_fence FROM journal_items INDEXED BY journal_items_kind
-          WHERE session_id=? AND epoch=? AND hidden=0 AND kind='turn'
-          AND NOT (turn_id>='compact:' AND turn_id<'compact;')
+              .prepare(`SELECT owner_fence FROM journal_items INDEXED BY journal_items_newest_provider_turn
+          WHERE session_id=? AND epoch=? AND ${JOURNAL_PROVIDER_TURN_ROWS}
           ORDER BY ordinal DESC LIMIT 1`)
               .get(...prefix)
       return {

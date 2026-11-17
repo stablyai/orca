@@ -9,6 +9,10 @@ import { readJournalSqlPoint } from './journal-sql-point-read'
 import { journalSqlReads } from './journal-sql-reads'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
 import { resolveChatAutomationRun } from '../../automations/observation/automation-chat-run-observation'
+import {
+  JOURNAL_PROVIDER_TURN_INDEX,
+  JOURNAL_PROVIDER_TURN_ROWS
+} from './database/journal-provider-turn-index'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -539,6 +543,7 @@ it('reuses a saved outline after reopen and refuses a cache result from an older
 
 it('counts a Codex thread as exchanged once it has a turn row or an accepted send', async () => {
   const f = domainLifecycleFixture(cleanup)
+  f.db.exec(JOURNAL_PROVIDER_TURN_INDEX)
   const reads = readsOf(f)
   expect(await reads.hasProviderTurn('thread-replied')).toBe(false)
   await f.run({
@@ -593,4 +598,19 @@ it('counts a Codex thread as exchanged once it has a turn row or an accepted sen
     options: { ...options, fence: 2 }
   })
   expect(await reads.hasProviderTurn('thread-other', 2)).toBe(false)
+  expect(await reads.hasProviderTurn('thread-other', 1)).toBe(true)
+})
+
+it('seeks the newest provider turn through its index instead of walking command turns', () => {
+  const f = domainLifecycleFixture(cleanup)
+  f.db.exec(JOURNAL_PROVIDER_TURN_INDEX)
+  const plan = f.db
+    .prepare(
+      `EXPLAIN QUERY PLAN SELECT owner_fence FROM journal_items INDEXED BY journal_items_newest_provider_turn
+      WHERE session_id=? AND epoch=? AND ${JOURNAL_PROVIDER_TURN_ROWS} ORDER BY ordinal DESC LIMIT 1`
+    )
+    .all('chat', 'epoch')
+    .map((row) => String((row as { detail: unknown }).detail))
+  expect(plan.join('\n')).toMatch(/journal_items_newest_provider_turn/)
+  expect(plan.join('\n')).not.toMatch(/TEMP B-TREE/)
 })
