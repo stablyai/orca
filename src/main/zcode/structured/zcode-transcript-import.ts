@@ -7,9 +7,9 @@ import {
 } from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 // zcode keeps conversations in its own SQLite store, not transcript files — a container store,
-// like opencode's. Fork admission only requires the store to resolve; inherited rows replay from
-// the fork snapshot, and session-history adoption stays unwired for zcode, so the lookup stops at
-// store existence rather than parsing rows.
+// like opencode's. Fork admission only requires the store to resolve; adoption additionally
+// proves the session row exists by parsing it through the ai-vault reader worker (never
+// synchronous SQLite on the main thread).
 
 function zcodeCliStore(launchEnv: NodeJS.ProcessEnv): string | null {
   const home =
@@ -27,11 +27,28 @@ export const ZCODE_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
   accountHomeCandidates: ({ selectedAccountHome }) => [selectedAccountHome],
   admitTranscriptPath: async ({ store: dbPath, transcriptPath }) =>
     transcriptPath === dbPath ? dbPath : null,
-  findTranscript: async ({ store: dbPath }) => {
+  findTranscript: async ({ providerSessionId, store: dbPath }) => {
     try {
-      return (await stat(dbPath)).isFile() ? dbPath : null
-    } catch {
-      return null
+      if (!(await stat(dbPath)).isFile()) {
+        return null
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+      ) {
+        return null
+      }
+      throw error
     }
+    const { parseZcodeSqliteSessionViaWorker } =
+      await import('../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn')
+    const session = await parseZcodeSqliteSessionViaWorker({
+      dbPath,
+      sessionId: providerSessionId,
+      platform: process.platform
+    })
+    return session ? dbPath : null
   }
 }

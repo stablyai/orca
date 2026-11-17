@@ -2,12 +2,11 @@ import { close as closeFd, existsSync, openSync, readFileSync, readSync, statSyn
 import { homedir, platform } from 'node:os'
 import { dirname, join, delimiter, resolve as resolvePath } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import type { StructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 
 // zcode's own app-server is the only official chat transport, but which binary to run matters:
 // desktop-bundle runtimes accept the host's account-config push (their models light up), while
-// npm-wrapper runtimes manage "standalone" accounts and refuse it. A start therefore launches the
-// resolved CLI first and retries on a desktop runtime when the push is refused.
+// npm-wrapper runtimes manage "standalone" accounts and refuse it. The bundle is therefore the
+// primary launch; the resolved CLI only serves where no bundle is installed.
 
 /** Desktop bundle runtime paths, searched in order (the desktop app spawns the same file). */
 function bundledRuntimeCandidates(): string[] {
@@ -266,13 +265,3 @@ function runnableNode22(candidate: string): Promise<boolean> {
 }
 
 const node22Verdicts = new Map<string, Promise<boolean>>()
-
-/** The resolved-CLI launch, used when no desktop bundle is installed. */
-export function zcodeCliLaunch(resolved: StructuredAgentCommand): {
-  command: string
-  prefixArgs: string[]
-  args: string[]
-  env: Record<string, string>
-} {
-  return { command: resolved.command, prefixArgs: [], args: [], env: {} }
-}

@@ -7,18 +7,22 @@ import type { StructuredAgentRuntimeMetadata } from '../../runtime/agent-session
 import { ZCODE_STRUCTURED_AGENT } from './launch/zcode-structured-agent-definition'
 import { ZCODE_TRANSCRIPT_IMPORT } from './zcode-transcript-import'
 import { resolveStructuredAgentCommand } from '../../native-chat/agent-launch/structured-agent-command-resolution'
-import type { StructuredAgentSessionHistory } from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import {
+  resumeInvocationFromOptions,
+  type StructuredAgentSessionHistory
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const ZCODE_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['zcode'],
   rowSessionId: (link) => link.handle.nativeId,
-  // zcode chats resume through their provider handles; CLI argv adoption is not wired yet.
-  parseResumeArgs: () => null
+  // `zcode --resume <id>`; zcode chats resume through their provider handles, and a terminal
+  // resume of a chat-owned conversation is refused as a second writer.
+  parseResumeArgs: (args) =>
+    resumeInvocationFromOptions(args, { targetless: [], markers: ['--resume'] })
 }
 
 export const ZCODE_RUNTIME_METADATA: StructuredAgentRuntimeMetadata = {
   definition: ZCODE_STRUCTURED_AGENT,
-  // Forks need the conversation store to resolve; adoption itself stays unwired for zcode.
   transcriptImport: ZCODE_TRANSCRIPT_IMPORT,
   sessionHistory: ZCODE_SESSION_HISTORY,
   // A disposable backend session lists the pushed account's models; sessions report live changes.

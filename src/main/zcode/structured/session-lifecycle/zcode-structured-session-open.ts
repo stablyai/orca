@@ -151,6 +151,7 @@ export async function openZcodeSession(
     }
   }
   session.publishOptionsFromOpen()
+  session.probeCommands()
   return {
     link: {
       linkId: `zcode-${session.deps.acquire.fence}-${providerSessionId}`.slice(0, 128),

@@ -1,40 +1,22 @@
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { AgentSessionIdleConfirmation } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
 import type { ZcodeAppServerConnection } from '../../app-server/zcode-app-server-connection-types'
+import { ZcodeAppServerUnsupportedError } from '../../app-server/zcode-app-server-errors'
+import { createZcodeAppServerCapabilityCache } from '../../app-server/zcode-app-server-capability-cache'
 import { readRecord, readString } from '../catalog/zcode-model-catalog-rows'
-import { formatZcodeModelOption } from '../launch/zcode-structured-launch-resolution'
+import { requestZcodeSkillCatalog } from '../catalog/zcode-skill-catalog'
 import type { ZcodeStructuredLane } from '../timeline/zcode-structured-lane'
 import { ZcodeStructuredOptions } from '../options/zcode-structured-options'
 import { ZcodeStructuredPrompts } from '../prompts/zcode-structured-prompts'
-import { journalZcodeModelSwitchNotice } from './zcode-model-switch-notice'
-import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
-import { ZcodeStructuredTurns, type ZcodeSendSettlement } from '../turns/zcode-structured-turns'
+import { ZcodeStructuredTurns } from '../turns/zcode-structured-turns'
 import { openZcodeSession } from './zcode-structured-session-open'
-import type {
-  ZcodeStructuredLaunch,
-  ZcodeStructuredSessionEvent
-} from './zcode-structured-session-state'
+import { ZcodeRuntimeHeadersAsks } from './zcode-runtime-headers-ask'
+import type { ZcodeStructuredSessionDeps } from './zcode-structured-session-state'
 
 // One zcode app-server child serving one Orca chat. Frames arrive from the spawn handlers; the
 // handshake (runtime preferences, account push, create/resume, subscribe) happens in `open`.
-
-export type ZcodeStructuredSessionDeps = {
-  acquire: StructuredAgentSessionAcquireInput
-  generation: string
-  launch: ZcodeStructuredLaunch
-  logger?: StructuredAgentSessionLogger
-  now: () => number
-  requestTimeoutMs: number | null
-  onEvent: (event: ZcodeStructuredSessionEvent) => void
-  /** The provider session id a resume continues; null creates a new session. */
-  resumeSessionId: string | null
-  /** Orca's plan credentials for the account push and runtime-header asks. */
-  resolveChatCredentials: () => ZcodeChatCredentials | null
-  forceClose: (sessionId: string, reason: string) => void
-  onSettled: (settlement: ZcodeSendSettlement) => void
-}
 
 export class ZcodeStructuredSession {
   readonly options = new ZcodeStructuredOptions()
@@ -47,8 +29,10 @@ export class ZcodeStructuredSession {
   /** The model ids the account push declared; the backend lists only the live selection. */
   declaredModels: readonly { providerId: string; modelId: string }[] = []
   /** The turn id and routed model of the last seen headers ask, for one notice per real switch. */
-  private lastNoticeTurnId: string | null = null
-  private lastTurnModelId: string | null = null
+  private readonly headersAsks = new ZcodeRuntimeHeadersAsks()
+  private readonly capabilities = createZcodeAppServerCapabilityCache()
+  /** The live child's `/` skills, probed once after open; undefined keeps the client catalog. */
+  commands: AgentSessionSlashCommand[] | undefined = undefined
   /** A dispatch is between admission and its write; Stop and restarts treat it as held. */
   dispatchPending = false
   readonly acquisitionGeneration: string
@@ -170,36 +154,16 @@ export class ZcodeStructuredSession {
       return
     }
     if (method === 'interaction/requestProviderRuntimeHeaders') {
-      // The ask names the model this turn runs; a change from the last turn journals the switch.
-      const ask = readRecord(params)
-      const askProvider = readString(ask?.providerId)
-      const askModel =
-        readString(readRecord(ask?.modelSelection)?.modelId) ?? readString(ask?.modelId)
-      const askTurnId = readString(ask?.turnId)
-      if (askProvider && askModel && askTurnId && askTurnId !== this.lastNoticeTurnId) {
-        // First ask of a turn: what this turn routes on. A turn whose model differs from the
-        // previous turn's journals the switch; later asks of the same turn change nothing.
-        const reported = formatZcodeModelOption({ providerId: askProvider, modelId: askModel })
-        const providerSessionId = this.providerSessionId
-        if (
-          providerSessionId &&
-          this.lastTurnModelId !== null &&
-          reported !== this.lastTurnModelId
-        ) {
-          this.emitModelSwitchNotice(providerSessionId, this.lastTurnModelId, reported)
-        }
-        this.lastTurnModelId = reported
-        this.lastNoticeTurnId = askTurnId
-      }
-      const credentials = this.deps.resolveChatCredentials()
-      if (credentials) {
-        this.connection.respond(id, {
-          headersApplied: true,
-          requestAuth: { apiKey: credentials.apiKey }
-        })
-      } else {
-        this.connection.respondWithError(id, -32000, 'no coding plan key is available to Orca')
-      }
+      this.headersAsks.answer({
+        connection: this.connection,
+        params,
+        id,
+        credentials: this.deps.resolveChatCredentials(),
+        options: this.options,
+        lane: this.lane,
+        providerSessionId: this.providerSessionId,
+        now: this.deps.now
+      })
       return
     }
     if (method === 'interaction/requestOfficialMcpAuthHeaders') {
@@ -278,22 +242,6 @@ export class ZcodeStructuredSession {
     return result
   }
 
-  /** One notice per real routing change, parsed from the outgoing headers ask — never from picks. */
-  private emitModelSwitchNotice(providerSessionId: string, from: string, to: string): void {
-    const lane = this.lane
-    if (!lane) {
-      return
-    }
-    journalZcodeModelSwitchNotice({
-      lane,
-      providerSessionId,
-      options: this.options,
-      from,
-      to,
-      at: this.deps.now()
-    })
-  }
-
   private publishOptions(): void {
     this.deps.onEvent({
       type: 'options-reported',
@@ -328,9 +276,61 @@ export class ZcodeStructuredSession {
   startCompaction(turnId: string): void {
     this.compactionTurnId = turnId
   }
-
   cancelCompaction(): void {
     this.compactionTurnId = null
+  }
+
+  /** Probe the live child's skill catalog once; an unsupported method keeps the client catalog. */
+  probeCommands(): void {
+    const providerSessionId = this.providerSessionId
+    if (this.commands !== undefined || !providerSessionId) {
+      return
+    }
+    void this.capabilities
+      .runWithFallback(
+        'skills/referenceCatalog',
+        () =>
+          requestZcodeSkillCatalog(
+            this.connection,
+            {
+              workspace: {
+                workspacePath: this.deps.launch.cwd,
+                workspaceKey: this.deps.launch.cwd
+              },
+              sessionId: providerSessionId
+            },
+            this.deps.requestTimeoutMs
+          ),
+        async () => null,
+        (error) => error instanceof ZcodeAppServerUnsupportedError
+      )
+      .then((commands) => {
+        if (commands !== null) {
+          this.commands = commands
+        }
+      })
+      .catch(() => undefined)
+  }
+
+  /** Fresh idle verdict for the host's sweep: held sends and open prompts keep the child. */
+  idleConfirmation(): AgentSessionIdleConfirmation {
+    return this.turns.heldSends.size > 0 || this.prompts.size > 0 ? 'busy' : 'idle'
+  }
+
+  /** Claim this input's still-unsettled send; its echo or teardown ends the pending window. */
+  armPendingOutput(input: {
+    clientMessageId: string
+    fence: number
+    generation: string
+  }): (() => boolean) | undefined {
+    if (
+      this.ended ||
+      this.deps.acquire.fence !== input.fence ||
+      this.acquisitionGeneration !== input.generation
+    ) {
+      return undefined
+    }
+    return () => this.journalClosed === null && this.turns.heldSends.has(input.clientMessageId)
   }
 
   markEnded(observedAt: number): void {

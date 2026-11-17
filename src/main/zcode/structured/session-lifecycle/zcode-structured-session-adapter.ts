@@ -1,18 +1,6 @@
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { supportsSupervisedProviderChildLocation } from '../../../provider-process/supervised-provider-child-location'
-import { ProviderAcquisitionStarts } from '../../../provider-process/provider-acquisition-starts'
-import {
-  agentSessionAcquireFailure,
-  AgentSessionStartEndings,
-  type AgentSessionStartAnswer,
-  type AgentSessionStartFailure
-} from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
-import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
-import { AgentSessionAcquisitionExitUnprovenError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
-import {
-  launchPreparationFailure,
-  AgentSessionPreSpawnError
-} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import type {
   AgentSessionAcquisition,
   AgentSessionIdleConfirmation,
@@ -21,26 +9,29 @@ import type {
   StructuredAgentSessionSetOptionInput
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
-import { stopAgentSessionProviderRoot } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
+import type { AgentSessionSlashCommand } from '../../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionMcpOperation,
+  AgentSessionMcpResult
+} from '../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { ZcodeStructuredSession } from './zcode-structured-session'
-import { startZcodeStructuredSession, zcodeStartFailure } from './zcode-structured-start'
+import { ZcodeAcquisitions } from './zcode-structured-session-acquisition'
+import { manageZcodeSessionMcp } from '../catalog/zcode-mcp'
+import { closeZcodeSession } from './zcode-structured-session-close'
 import { zcodeCopyConversation, zcodeForkForRewind } from './zcode-structured-session-fork'
 import { dispatchZcodeTurn } from './zcode-structured-session-dispatch'
-import { mintZcodeAcquisitionGeneration } from './zcode-structured-session-state'
-import { ZcodeAppServerRequestError } from '../../app-server/zcode-app-server-errors'
-
-/** zcode's own request refusals are final answers; exits are reported separately. */
-const zcodeStartAnswer: AgentSessionStartAnswer = (cause) =>
-  cause instanceof ZcodeAppServerRequestError ? 'final' : undefined
+import { changeZcodeThreadGoal } from './zcode-structured-session-goal'
 import type { ZcodeStructuredSessionAdapterDeps } from './zcode-structured-session-state'
 
 export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ZcodeStructuredSession>()
-  private readonly starts = new ProviderAcquisitionStarts<never>()
-  private readonly endings = new AgentSessionStartEndings()
-  private readonly retiring = new Set<Promise<void>>()
+  private readonly acquisitions: ZcodeAcquisitions
+  readonly atRestCommands: StructuredAgentSessionAdapter['atRestCommands']
 
-  constructor(private readonly deps: ZcodeStructuredSessionAdapterDeps) {}
+  constructor(private readonly deps: ZcodeStructuredSessionAdapterDeps) {
+    this.atRestCommands = deps.atRestCommands
+    this.acquisitions = new ZcodeAcquisitions(deps, this.sessions)
+  }
 
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
     supportsSupervisedProviderChildLocation(location)
@@ -50,71 +41,10 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     agent
   ) => agent === 'zcode' && this.supportsLocation(location)
 
-  async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
-    const sessionId = input.identity.sessionId
-    const attempt = this.starts.begin(input.signal)
-    try {
-      if (!(await this.starts.stopFailed(sessionId))) {
-        throw new AgentSessionAcquisitionExitUnprovenError(
-          new Error('the previous zcode start has not exited')
-        )
-      }
-      this.acknowledgeSessionRelease(sessionId)
-      // An in-flight retirement still holds the old session row; waiting keeps the ownership
-      // check honest instead of failing a re-acquire that arrives a moment too early.
-      await Promise.all(Array.from(this.retiring))
-      if (this.sessions.has(sessionId)) {
-        throw new AgentSessionPreSpawnError(new Error('zcode session already owns a child'))
-      }
-      const generation = mintZcodeAcquisitionGeneration(this.deps)
-      this.endings.admit(sessionId, generation)
-      let launch
-      try {
-        launch = await this.deps.resolveLaunch({
-          identity: input.identity,
-          spawnToken: input.spawnToken,
-          ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
-        })
-      } catch (error) {
-        throw launchPreparationFailure(error)
-      }
-      const started = await startZcodeStructuredSession({
-        acquire: input,
-        deps: this.deps,
-        launch,
-        generation,
-        events: input.events,
-        forceClose: (id, reason) => void this.forceClose(id, reason),
-        onSettled: (settlement) => this.deps.onDispatchSettledLate?.({ sessionId, ...settlement }),
-        recordStartFailure: (failure) => this.endings.record(sessionId, generation, failure)
-      })
-      this.sessions.set(sessionId, started.session)
-      return { process: started.process, acquisitionGeneration: generation }
-    } catch (error) {
-      this.endings.retire(sessionId, 'acquire')
-      throw agentSessionAcquireFailure(error, zcodeStartAnswer)
-    } finally {
-      this.starts.end(attempt)
-    }
-  }
+  acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
+    this.acquisitions.acquire(input)
 
-  open = async (input: StructuredAgentSessionProviderOpenInput) => {
-    const session = this.sessions.get(input.sessionId)
-    try {
-      if (!session || session.ended) {
-        throw (
-          this.endings.get(input.sessionId, input.acquisitionGeneration) ??
-          new Error(`no live zcode child owns ${input.sessionId}`)
-        )
-      }
-      return await session.open(input.signal)
-    } catch (error) {
-      throw zcodeStartFailure(
-        error,
-        session?.connection.closeResult?.root === 'exited' && !session.closeRequested
-      )
-    }
-  }
+  open: StructuredAgentSessionAdapter['open'] = (input) => this.acquisitions.open(input)
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
     const session = this.live(input.sessionId)
@@ -166,6 +96,84 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
       session.options.adoptProjectionSettings(read.settings)
     }
     return session.options.live(null)
+  }
+
+  /** The applied map a saved pick would produce; undefined falls back to the literal reply. */
+  projectOptions: NonNullable<StructuredAgentSessionAdapter['projectOptions']> = (
+    sessionId,
+    options
+  ) => {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.ended) {
+      return undefined
+    }
+    const applied = session.options.project(options)
+    if (!applied) {
+      return undefined
+    }
+    return { models: session.options.live(null).models, options: applied }
+  }
+
+  /** The live child's probed skills; undefined (unprobed/unsupported) keeps the client catalog. */
+  readCommands = (sessionId: string): AgentSessionSlashCommand[] | undefined => {
+    const session = this.sessions.get(sessionId)
+    return session && !session.ended ? session.commands : undefined
+  }
+
+  /** Live `mcp/list` status reads; resting chats report not-running, writes are unsupported. */
+  manageMcp = (
+    record: Parameters<NonNullable<StructuredAgentSessionAdapter['manageMcp']>>[0],
+    operation: AgentSessionMcpOperation
+  ): Promise<AgentSessionMcpResult> => manageZcodeSessionMcp(this.sessions, record, operation)
+  // readAccountUsage stays codex-only (its wire type, provider gate and copy are codex-specific);
+  // zcode plan usage surfaces through the usage/rate-limit service instead.
+
+  /** A fresh independent text task on an isolated-home backend; absent without naming wiring. */
+  get generateText(): StructuredAgentSessionAdapter['generateText'] {
+    const runs = this.deps.namingRuns
+    return runs
+      ? (input) =>
+          runs.generate({
+            prompt: input.prompt,
+            ...(input.shouldExecute ? { shouldExecute: input.shouldExecute } : {})
+          })
+      : undefined
+  }
+
+  stopProviderNaming = (): void => this.deps.namingRuns?.stopAll()
+
+  /** The lane's open turn; a dead child runs nothing, so restored "running" rows sweep clean. */
+  liveTurnId: NonNullable<StructuredAgentSessionAdapter['liveTurnId']> = (sessionId) =>
+    this.sessions.get(sessionId)?.lane?.openTurnId ?? null
+
+  /** Claim this input's still-unsettled send; its echo or teardown ends the pending window. */
+  capturePendingOutput: NonNullable<StructuredAgentSessionAdapter['capturePendingOutput']> = (
+    input
+  ) => {
+    const session = this.sessions.get(input.sessionId)
+    if (!session || session.ended) {
+      return undefined
+    }
+    return session.armPendingOutput(input)
+  }
+
+  /** Orca's goal changes are one zcode `session/goal` write; the host journals the objective. */
+  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = async (
+    input
+  ) => {
+    const session = this.live(input.sessionId)
+    const providerSessionId = session.providerSessionId
+    if (providerSessionId === null) {
+      throw new Error('zcode session is not open yet')
+    }
+    return changeZcodeThreadGoal({
+      connection: session.connection,
+      providerSessionId,
+      change: input.change,
+      replacesGoal: input.replacesGoal,
+      timeoutMs: this.deps.requestTimeoutMs ?? null,
+      ...(input.signal ? { signal: input.signal } : {})
+    })
   }
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) => {
@@ -224,9 +232,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (!session || session.ended) {
       return undefined
     }
-    const verdict: AgentSessionIdleConfirmation =
-      session.turns.heldSends.size > 0 || session.prompts.size > 0 ? 'busy' : 'idle'
-    return Promise.resolve(verdict)
+    return Promise.resolve(session.idleConfirmation())
   }
 
   holdsDispatch = (sessionId: string): boolean => {
@@ -245,15 +251,15 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
   }
 
   startupEnding = (sessionId: string, generation: string): AgentSessionStartFailure | undefined =>
-    this.endings.get(sessionId, generation)
+    this.acquisitions.startupEnding(sessionId, generation)
 
   retireStartup = (sessionId: string, generation: string): void => {
-    this.endings.retire(sessionId, generation)
+    this.acquisitions.retireStartup(sessionId, generation)
   }
 
   closeSession = (sessionId: string): Promise<boolean> => {
-    this.endings.retire(sessionId)
-    return this.close(sessionId)
+    this.acquisitions.retire(sessionId)
+    return closeZcodeSession(this.sessions, sessionId)
   }
 
   disposeSession = this.closeSession
@@ -261,64 +267,19 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.closeSession(input.sessionId)
 
-  forceCloseSession = (sessionId: string): Promise<boolean> => this.close(sessionId)
+  forceCloseSession = (sessionId: string): Promise<boolean> =>
+    closeZcodeSession(this.sessions, sessionId)
 
   hasOwnedAcquisition = (sessionId: string): boolean => this.sessions.has(sessionId)
 
   acknowledgeSessionRelease(sessionId: string): void {
-    const session = this.sessions.get(sessionId)
-    if (!session?.ended) {
-      return
-    }
-    // Ownership survives until close proves the child exited; release then reports honestly.
-    const retirement = Promise.resolve(
-      session
-        .close()
-        .catch(() => false)
-        .then((stopped) => {
-          if (stopped) {
-            this.sessions.delete(sessionId)
-          }
-        })
-    )
-    this.retiring.add(retirement)
-    void retirement.then(() => this.retiring.delete(retirement))
+    this.acquisitions.acknowledgeSessionRelease(sessionId)
   }
 
-  async closeAll(): Promise<void> {
-    this.endings.clear()
-    await Promise.all(
-      [...this.sessions.keys()].map((sessionId) =>
-        stopAgentSessionProviderRoot(() => this.closeSession(sessionId))
-      )
-    )
-  }
+  closeAll = (): Promise<void> => this.acquisitions.closeAll()
 
-  private async close(sessionId: string): Promise<boolean> {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      return true
-    }
-    const stopped = await session.close().catch(() => false)
-    if (stopped) {
-      this.sessions.delete(sessionId)
-    }
-    return stopped
-  }
-
-  private forceClose = async (sessionId: string, reason: string): Promise<void> => {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      return
-    }
-    session.failureClose = reason
-    session.markJournalClosed(reason)
-    session.markEnded(Date.now())
-    const stopped = await session.close().catch(() => false)
-    if (stopped) {
-      this.sessions.delete(sessionId)
-    }
-  }
+  forceClose = (sessionId: string, reason: string): Promise<void> =>
+    this.acquisitions.forceClose(sessionId, reason)
 
   private live(sessionId: string): ZcodeStructuredSession {
     const session = this.sessions.get(sessionId)

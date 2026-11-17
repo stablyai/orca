@@ -15,6 +15,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
 import { zcodeModelStreamingEvents, zcodeToolUpdatedEvents } from './zcode-tool-stream-translation'
+import { zcodeGoalSetEvents } from './zcode-goal-events'
 
 // zcode session events → provider timeline events. One turn runs at a time; `turn.started`
 // names its input (the provider echo that proves a send landed) and later events carry no
@@ -96,6 +97,8 @@ export class ZcodeTimelineTranslator {
         return this.turnFailed(payload, at)
       case 'turn.steerDrained':
         return this.steerDrained(payload, at)
+      case 'goalSet':
+        return zcodeGoalSetEvents(this.providerSessionId, payload, at)
       default:
         return []
     }

@@ -90,9 +90,6 @@ export function zcodeStructuredLaunchPart(
             pathEnv: environment.PATH ?? environment.Path ?? null,
             ...(environment.HOME ? { homePath: environment.HOME } : {})
           })
-    // A refusal to be retried on the same binary is not a fallback; only the bundle's CLI
-    // sibling (which accepts host pushes the wrapper refuses) is one.
-    const cliFallback = null
     // The provider tables follow the runtime that actually boots: the bundle's own table for a
     // bundled launch, the CLI's for a CLI launch. The bundle's env (its app version) merges in
     // first so a bundled chat keeps the gateway's User-Agent even when a builtin table exists.
@@ -149,8 +146,7 @@ export function zcodeStructuredLaunchPart(
         ...(head && pendingAgentSessionRewindFork(record.rewind, head.handle.nativeId)
           ? { forkedFromKey: agentSessionProviderHandleKey(head.handle) }
           : {}),
-        providerEnv,
-        fallbackRuntime: cliFallback
+        providerEnv
       },
       env,
       // Clear the enclosing desktop's runtime env plus inherited scratch paths.

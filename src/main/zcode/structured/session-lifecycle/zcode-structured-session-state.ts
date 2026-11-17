@@ -4,13 +4,19 @@ import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionAtRestCommands } from '../../../native-chat/agent-session-wire/options/structured-agent-session-at-rest-commands'
+import type {
+  StructuredAgentSessionAcquireInput,
+  StructuredAgentSessionLifecycleEvent
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { StructuredLaunchRequest } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
+import type { ZcodeNamingRuns } from '../naming/zcode-naming-run'
+import type { ZcodeSendSettlement } from '../turns/zcode-structured-turns'
 
-// How a durable session record becomes a zcode app-server process launch.
+// How a durable session record becomes a zcode app-server process launch, and the child's wiring.
 
 export type ZcodeLaunchModel = {
   providerId: string
@@ -36,12 +42,6 @@ export type ZcodeStructuredLaunch = {
   forkedFromKey?: string
   /** Provider tables and app-version env the spawn must carry (agent env additions). */
   providerEnv: Record<string, string>
-  /** The desktop-bundle runtime to retry on when this CLI refuses the account push. */
-  fallbackRuntime: {
-    command: string
-    args: string[]
-    env: Record<string, string>
-  } | null
 }
 
 /** One zcode app-server frame bound to the Orca session it belongs to. */
@@ -57,12 +57,32 @@ export type ZcodeStructuredSessionEvent =
   | StructuredAgentSessionLifecycleEvent
   | { type: 'ended'; sessionId: string; reason: string }
 
+export type ZcodeStructuredSessionDeps = {
+  acquire: StructuredAgentSessionAcquireInput
+  generation: string
+  launch: ZcodeStructuredLaunch
+  logger?: StructuredAgentSessionLogger
+  now: () => number
+  requestTimeoutMs: number | null
+  onEvent: (event: ZcodeStructuredSessionEvent) => void
+  /** The provider session id a resume continues; null creates a new session. */
+  resumeSessionId: string | null
+  /** Orca's plan credentials for the account push and runtime-header asks. */
+  resolveChatCredentials: () => ZcodeChatCredentials | null
+  forceClose: (sessionId: string, reason: string) => void
+  onSettled: (settlement: ZcodeSendSettlement) => void
+}
+
 export type ZcodeStructuredSessionAdapterDeps = {
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<ZcodeStructuredLaunch>
   /** Command settings the chat launch honors; disposable forks launch with the same program. */
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   /** The resolved agent environment disposable forks run under (base + per-agent overlay). */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
+  /** Resting chats' `/` skills, probed over disposable backends the registration owns. */
+  atRestCommands?: StructuredAgentSessionAtRestCommands
+  /** Independent text tasks (chat naming) over isolated-home disposable backends. */
+  namingRuns?: ZcodeNamingRuns
   onEvent?: (event: ZcodeStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
   /** The plan credentials runtime-header asks are answered with; null declines them. */
@@ -94,7 +114,7 @@ export type ZcodeSession = {
   acquisitionGeneration: string
   /** zcode's own session id (`sess_...`); also the provider handle's nativeId. */
   providerSessionId: string
-  /** The command/env this child launched with; a push retry respawns with the fallback. */
+  /** The command/env this child launched with. */
   launch: ZcodeStructuredLaunch
 }
 

@@ -15,8 +15,11 @@ export const ZCODE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     rewind: true,
     fork: 'checkpoint',
     compact: true,
-    threadGoal: false,
+    // One `session/goal` write covers Orca's set/pause/clear; confirmations journal the state.
+    threadGoal: true,
     contextUsage: true,
+    // The panel reads a live child's `mcp/list`; zcode has no client-side toggle/auth RPC.
+    mcpServers: true,
     imagePrompts: false,
     // Mid-turn sends are accepted and queued by the backend itself (steer events report them).
     steering: 'queue',

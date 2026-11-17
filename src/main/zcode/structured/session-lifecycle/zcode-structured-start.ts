@@ -13,6 +13,7 @@ import type { ZcodeAppServerConnection } from '../../app-server/zcode-app-server
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import {
   agentSessionStartFailure,
+  type AgentSessionStartAnswer,
   type AgentSessionStartFailure
 } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { ZcodeAppServerRequestError } from '../../app-server/zcode-app-server-errors'
@@ -27,14 +28,13 @@ import type {
   ZcodeStructuredSessionAdapterDeps
 } from './zcode-structured-session-state'
 
-// Start one zcode app-server child per acquisition, routed to its session from spawn time. A CLI
-// that refuses the host's account push (standalone-account runtimes) is replaced by the desktop
-// bundle's runtime, which accepts it — that push decides the chat's model inventory.
+// Start one zcode app-server child per acquisition, routed to its session from spawn time. The
+// account push decides the chat's model inventory; a CLI that refuses it (standalone-account
+// runtimes) starts anyway — bundle-first launches already prefer the runtime that accepts it.
 
 const STORAGE_READY_TIMEOUT_MS = 15_000
 const STORAGE_READY_ATTEMPT_TIMEOUT_MS = 2_000
 const STORAGE_READY_RETRY_INTERVAL_MS = 1_000
-const ZCODE_APP_SERVER_ARGS = ['app-server', '--stdio']
 
 export type ZcodeStartedChild = {
   session: ZcodeStructuredSession
@@ -59,7 +59,7 @@ export async function startZcodeStructuredSession(input: {
   if (!sink) {
     throw new AgentSessionPreSpawnError(new Error('zcode chats need a journal sink'))
   }
-  let child = await spawnWiredChild(input, logger, input.launch)
+  const child = await spawnWiredChild(input, logger, input.launch)
   // Whether this runtime accepts the host's account push decides its model inventory, so probe
   // it here while the start can still switch to the desktop runtime.
   const table = readZcodeBuiltinTable(
@@ -83,48 +83,7 @@ export async function startZcodeStructuredSession(input: {
     throw error
   })
   child.session.declareModels(probe.declaredModels)
-  if (probe.refusedStandaloneAccount && input.launch.fallbackRuntime) {
-    logger.warn('zcode CLI refused the account push; retrying on the desktop runtime', {
-      scope: 'zcode-account-push',
-      sessionId: acquire.identity.sessionId
-    })
-    child.session.markJournalClosed('replaced by the desktop runtime')
-    // Orca is requesting this close deliberately: without the flag the exit handler would file
-    // an unexpected-exit start failure against the retry's generation.
-    child.session.closeRequested = true
-    await child.connection.close().catch(() => false)
-    const fallback = input.launch.fallbackRuntime
-    const retryLaunch: ZcodeStructuredLaunch = {
-      ...input.launch,
-      command: fallback.command,
-      prefixArgs: [],
-      args: [...fallback.args, ...ZCODE_APP_SERVER_ARGS],
-      providerEnv: { ...input.launch.providerEnv, ...fallback.env }
-    }
-    child = await spawnWiredChild(input, logger, retryLaunch)
-    const retryTable = readZcodeBuiltinTable(
-      retryLaunch.providerEnv.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE ?? null
-    )
-    const retry = await awaitStorageReady(
-      child.connection,
-      child.whenServerAsks,
-      () =>
-        pushZcodeAccountConfig(
-          child.connection,
-          retryTable,
-          deps.resolveChatCredentials(),
-          STORAGE_READY_ATTEMPT_TIMEOUT_MS
-        ),
-      acquire.signal
-    ).catch(async (error: unknown) => {
-      await child.connection.close().catch(() => undefined)
-      throw error
-    })
-    child.session.accountPushed = retry.pushed
-    child.session.declareModels(retry.declaredModels)
-  } else {
-    child.session.accountPushed = probe.pushed
-  }
+  child.session.accountPushed = probe.pushed
   // A rejected process identity (persist failure) must not orphan the running app-server: the
   // adapter owns nothing until sessions.set, so this function closes the child like the
   // readiness path does.
@@ -253,16 +212,16 @@ async function spawnWiredChild(
   return child
 }
 
+/** zcode's own request refusals are final answers; exits are reported separately. */
+export const zcodeStartAnswer: AgentSessionStartAnswer = (cause) =>
+  cause instanceof ZcodeAppServerRequestError ? 'final' : undefined
+
 /**
  * The start's verdict: zcode's own request refusals are final, everything else stays retryable,
  * and a process exit words the start as the agent's failure to boot.
  */
 export function zcodeStartFailure(error: unknown, exited = false): AgentSessionStartFailure {
-  return agentSessionStartFailure(
-    error,
-    (cause) => (cause instanceof ZcodeAppServerRequestError ? 'final' : undefined),
-    exited
-  )
+  return agentSessionStartFailure(error, zcodeStartAnswer, exited)
 }
 
 type ZcodeAccountPushProbe = Awaited<ReturnType<typeof pushZcodeAccountConfig>>
