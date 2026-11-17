@@ -1,14 +1,15 @@
 import { useEffect, useMemo } from 'react'
 import { createUnreadBadgeCountSelector } from '@/attention/unread/unread-badge-count-selector'
 import { useAppStore } from '@/store/index'
+import { createAgentNeedsInputSelector } from '@/components/activity/agent-needs-input-selector'
 import { selectFloatingWorkspaceHasUnread } from '@/store/workspaces/floating/floating-workspace-unread-selector'
 
-function setUnreadDockBadgeCountBestEffort(count: number): void {
+function setUnreadDockBadgeCountBestEffort(count: number, needsInput = false): void {
   const setBadge = window.api?.app?.setUnreadDockBadgeCount
   if (!setBadge) {
     return
   }
-  void setBadge(count).catch(() => {
+  void setBadge(count, needsInput).catch(() => {
     // Dock sync is best-effort chrome; stale badge state should not affect app use.
   })
 }
@@ -27,12 +28,14 @@ export function useUnreadDockBadge(
   const floatingTerminalHasUnread = useAppStore(
     (s) => s.settings?.floatingTerminalEnabled === true && selectFloatingWorkspaceHasUnread(s)
   )
+  const selectAgentNeedsInput = useMemo(() => createAgentNeedsInputSelector(), [])
+  const agentNeedsInput = useAppStore(selectAgentNeedsInput)
   const unreadCount =
     unreadWorkspaceCount + (floatingTerminalHasUnread && !floatingTerminalOpen ? 1 : 0)
 
   useEffect(() => {
-    setUnreadDockBadgeCountBestEffort(unreadCount)
-  }, [unreadCount])
+    setUnreadDockBadgeCountBestEffort(unreadCount, agentNeedsInput)
+  }, [unreadCount, agentNeedsInput])
 
   return clearUnreadDockBadgeCount
 }
