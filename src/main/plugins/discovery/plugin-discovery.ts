@@ -40,6 +40,8 @@ export type ValidDiscoveredPlugin = {
   rootDir: string
   /** `publisher` is always the derived one (the install directory's or the dev folder's). */
   manifest: PluginManifest
+  /** Validated SVG bytes, keyed by panel index and replaced on discovery. */
+  panelIconBytes?: ReadonlyMap<number, Buffer>
   /** Fingerprint of the capabilities and trusted-worker execution tier. */
   consentFingerprint: string
   /** Immutable tree identity included in consent for declarative packs. */
@@ -119,11 +121,12 @@ async function readManifestDir(
     installedPublisher ?? localPluginPublisher(parsed.manifest.publisher)
   )
   const pluginKey = qualifiedPluginKey(manifest)
+  const panelIconBytes = new Map<number, Buffer>()
   if (manifest.manifestVersion === 2) {
-    for (const panel of manifest.contributes.panels) {
+    for (const [index, panel] of manifest.contributes.panels.entries()) {
       if (panel.icon && !canonicalPluginPanelIcon(panel.icon)) {
         try {
-          await readPluginPanelSvg(rootDir, panel.icon)
+          panelIconBytes.set(index, await readPluginPanelSvg(rootDir, panel.icon))
         } catch {
           panel.icon = 'plug'
         }
@@ -177,6 +180,7 @@ async function readManifestDir(
     pluginKey,
     rootDir,
     manifest,
+    panelIconBytes,
     consentFingerprint: fingerprintPluginConsent(
       manifest,
       isDev

@@ -1,5 +1,3 @@
-import { canonicalPluginPanelIcon } from '../../../shared/plugins/contributions/plugin-panel-contribution'
-import { readPluginPanelSvg } from './plugin-panel-svg'
 import { protocol } from 'electron'
 import {
   PLUGIN_IMAGE_SCHEME,
@@ -36,11 +34,8 @@ async function readInstalledImage(
   }
   const panelMatch = /^panel-(\d{1,2})$/.exec(slot)
   if (panelMatch && plugin.manifest.manifestVersion === 2) {
-    const path = plugin.manifest.contributes.panels[Number(panelMatch[1])]?.icon
-    if (!path || canonicalPluginPanelIcon(path)) {
-      return null
-    }
-    return { bytes: await readPluginPanelSvg(plugin.rootDir, path), mimeType: 'image/svg+xml' }
+    const bytes = plugin.panelIconBytes?.get(Number(panelMatch[1]))
+    return bytes ? { bytes, mimeType: 'image/svg+xml' } : null
   }
   const declared = declaredPluginImages(plugin.manifest).find(
     (candidate) => candidate.slot === slot
