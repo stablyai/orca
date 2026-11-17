@@ -52,13 +52,8 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
         if (!spawned && started && this.attempts.get(ptyId) === started) {
           this.exit(ptyId, true)
           this.forget(ptyId)
-        } else if (
-          !started &&
-          workspace &&
-          !workspace.writers.size &&
-          !workspace.reservations.size
-        ) {
-          workspace.finish(null)
+        } else if (!started) {
+          workspace?.refuseUnowned()
         }
       }
     }
@@ -165,7 +160,7 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
     const captured = workspace
     return () => {
       if (!captured.cancelled && this.isTracked(workspaceId, captured)) {
-        captured.finish(null)
+        captured.refuseUnowned()
       }
     }
   }
@@ -192,6 +187,11 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
       completion: answer.promise,
       bound: false,
       cancelled: false,
+      refuseUnowned: () => {
+        if (!workspace.writers.size && !workspace.reservations.size) {
+          workspace.finish(null)
+        }
+      },
       reservations: new Set(),
       writers: new Set(),
       cancel: () => {

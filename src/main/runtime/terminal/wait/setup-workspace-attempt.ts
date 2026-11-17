@@ -10,6 +10,7 @@ export type SetupWorkspaceAttempt = {
   available: Promise<void>
   publish: () => void
   cancel: () => void
+  refuseUnowned: () => void
   cancelled: boolean
   publication?: AbortController
   writerToken?: string

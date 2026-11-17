@@ -256,3 +256,21 @@ it('refuses a captured writer dispatched after workspace removal', async () => {
   expect(completion.forWorkspace('workspace')).toBeUndefined()
   expect(completion.forHandle('late-handle')).toBeUndefined()
 })
+
+it('keeps a shared Setup result when another recipe binding fails before dispatch', async () => {
+  const completion = new SetupTerminalCompletions()
+  const recipe = {
+    runnerScriptPath: '/task/setup.sh',
+    platform: 'posix' as const,
+    nonce: 'same',
+    deadline: Number.MAX_SAFE_INTEGER
+  }
+  const refuseAbandoned = completion.bindRecipe('workspace', recipe)
+  completion.bindRecipe('workspace', recipe)
+  completion.begin('live-pty', 'live-handle', 'same', 'workspace')
+  const result = completion.forWorkspace('workspace')
+  refuseAbandoned()
+  completion.observe('live-pty', '__ORCA_SETUP_COMPLETE__:same:0\n')
+  await expect(result).resolves.toEqual({ exitCode: 0 })
+  completion.forgetWorkspace('workspace')
+})
