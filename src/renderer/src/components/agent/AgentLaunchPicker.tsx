@@ -228,16 +228,14 @@ export const AgentLaunchPicker = memo(
           onSelect: onSelectBlankTerminal
         }
       : null
-    // A search result is a cmdk row, which does not close the menu as a menu item does.
-    const extraChoices = [...(blankTerminal ? [blankTerminal] : []), ...(choices ?? [])].map(
-      (choice) => ({
-        ...choice,
-        onSelect: () => {
-          choice.onSelect()
-          setOpen(false)
-        }
-      })
-    )
+    // A search result or rail tile does not close the menu as a menu item does.
+    const closing = (choice: AgentPickerChoice): AgentPickerChoice => ({
+      ...choice,
+      onSelect: () => {
+        choice.onSelect()
+        setOpen(false)
+      }
+    })
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -318,7 +316,8 @@ export const AgentLaunchPicker = memo(
                 onPaneChange={selectAgent}
                 onPick={pick}
                 onClose={close}
-                choices={extraChoices}
+                choices={choices?.map(closing)}
+                blankTerminal={blankTerminal ? closing(blankTerminal) : undefined}
               />
             ) : model.state === 'settled' ? (
               <AgentLaunchPickerMenu
