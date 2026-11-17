@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { hasAutomationSchedule } from '../../../../../shared/automation-event-triggers'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
@@ -138,7 +139,9 @@ export function NativeChatAutomationSavedRow({
               <span className="block truncate text-sm font-semibold text-foreground">
                 {automation.name}
               </span>
-              <span className="block text-2xs text-muted-foreground">
+              <span
+                className={cn('text-2xs text-muted-foreground', open ? 'block' : 'line-clamp-2')}
+              >
                 {automationReceiptSummary(saved, shortened)}
               </span>
             </span>

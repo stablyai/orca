@@ -3,18 +3,13 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { eventWithPlace } from '@/components/bots/bot-automation-when'
 import { useAutomationCardDetails } from './use-automation-card-details'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import { captureAutomationReceiptSource, openReceiptAutomation } from './automation-receipt-client'
 import { readAutomationReceiptFacts } from '../../../../shared/automations/automation-receipt-facts'
 import { automationReceiptStarts } from '../../../../shared/automations/automation-receipt-summary'
-import {
-  automationReceiptTriggerSummary,
-  receiptInstant,
-  receiptZoneName
-} from './automation-receipt-copy'
+import { receiptInstant, receiptZoneName } from './automation-receipt-copy'
 import { NativeChatAutomationCurrentDetails } from './NativeChatAutomationCurrentDetails'
 
 /** An opened automation card: its live settings, newest runs and actions, read from its host. */
@@ -61,7 +56,7 @@ export function NativeChatAutomationCardDetails({
         : start.extra?.additionalConditions === 'none'
           ? t(
               'components.native-chat.automationSaved.noSavedFilters',
-              'No additional conditions when saved'
+              'No additional conditions when saved.'
             )
           : t(
               'components.native-chat.automationSaved.filtersUnknown',
@@ -83,9 +78,7 @@ export function NativeChatAutomationCardDetails({
     return [
       {
         id: start.trigger.id,
-        text: [eventWithPlace(start.trigger), account, calendar, conditions]
-          .filter(Boolean)
-          .join(' · ')
+        text: [account, calendar, conditions].filter(Boolean).join(' · ')
       }
     ]
   })
@@ -115,9 +108,6 @@ export function NativeChatAutomationCardDetails({
               )
   return (
     <div className="@container mt-3 border-t border-border pt-3">
-      <p className="mb-3 text-xs text-muted-foreground">
-        {automationReceiptTriggerSummary(saved, shortened)}
-      </p>
       {timestamp !== null ? (
         <p className="mb-3 text-xs text-muted-foreground">
           {zone && zone !== viewerZone

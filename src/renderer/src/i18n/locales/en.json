@@ -22314,7 +22314,7 @@
         "openFullPage": "Open page",
         "navigationChanged": "This automation’s host or identity changed. Open it from the Automations list.",
         "savedFilters": "With saved filters",
-        "noSavedFilters": "No additional conditions when saved",
+        "noSavedFilters": "No additional conditions when saved.",
         "filtersUnknown": "Saved conditions weren’t recorded",
         "onlyHostAccount": "The host’s only account",
         "primaryCalendar": "Primary calendar",

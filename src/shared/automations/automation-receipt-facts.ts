@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Automation } from './automation-definition'
 import type { AutomationEventTrigger } from '../automation-event-triggers'
 import { getUtf8ByteLength } from '../text/utf8-byte-limits'
+import { compareCodePoints } from '../sidebar-list/sorting/text-order'
 
 const accountScope = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('host-only') }),
@@ -131,9 +132,7 @@ export function automationReceiptFacts(
       : { kind: 'not-recorded' },
     triggerExtras: { coverage: 'complete', items: [] }
   }
-  for (const trigger of [...(automation.on ?? [])].sort((a, b) =>
-    a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-  )) {
+  for (const trigger of [...(automation.on ?? [])].sort((a, b) => compareCodePoints(a.id, b.id))) {
     const extra = extraFor(trigger)
     if (!extra || result.triggerExtras.items.some((item) => item.triggerId === extra.triggerId)) {
       result.triggerExtras.coverage = 'partial'

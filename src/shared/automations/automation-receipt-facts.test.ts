@@ -93,6 +93,37 @@ it('bounds multibyte account facts in UTF-8, without slicing an identity or acco
   expect(result.triggerExtras.items.length).toBeGreaterThan(0)
 })
 
+it('admits the BMP identity before an astral identity at the UTF-8 byte boundary', () => {
+  const result = automationReceiptFacts({
+    createdAt: 1,
+    on: ['\u{10000}', '\uE000', ...Array.from({ length: 10 }, (_, i) => `g-0${i}`)].map((id) => ({
+      id,
+      source: 'gmail' as const,
+      event: 'new_email' as const,
+      account: '界'.repeat(200)
+    }))
+  })
+  if ('unavailable' in result) {
+    throw new Error('Expected a partial receipt')
+  }
+  expect(result.triggerExtras.coverage).toBe('partial')
+  expect(result.triggerExtras.items.map((extra) => extra.triggerId)).toEqual([
+    'g-00',
+    'g-01',
+    'g-02',
+    'g-03',
+    'g-04',
+    'g-05',
+    'g-06',
+    'g-07',
+    'g-08',
+    'g-09',
+    '\uE000'
+  ])
+  // These eleven extras occupy 7998 bytes; admitting both Unicode identities would need 8713.
+  expect(Buffer.byteLength(JSON.stringify({ receiptFacts: result }))).toBe(7998)
+})
+
 it('ignores the entire extension for unsupported clients, future versions or damaged data', () => {
   const facts = automationReceiptFacts({ createdAt: 1 }, 'UTC')
   expect(readAutomationReceiptFacts(facts, false)).toBeUndefined()
