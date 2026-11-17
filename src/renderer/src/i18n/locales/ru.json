@@ -20090,6 +20090,7 @@
         "availableAfterSessionStarts": "Доступно после запуска сессии.",
         "optionUpdateFailed": "Не удалось изменить параметр",
         "optionValue": {
+          "none": "Нет",
           "fast": "Быстро",
           "minimal": "Минимальный",
           "low": "Низкий",

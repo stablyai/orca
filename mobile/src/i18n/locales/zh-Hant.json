@@ -395,6 +395,7 @@
       "otherDevice": "其他裝置"
     },
     "sessionOptionCopy": {
+      "none": "無",
       "availableAfterSessionStarts": "工作階段開始後可用。",
       "chooseInAgentPicker": "在代理程式選擇器中選擇…",
       "effort": "推理強度",

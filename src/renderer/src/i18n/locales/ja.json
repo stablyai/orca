@@ -19778,6 +19778,7 @@
         "availableAfterSessionStarts": "セッション開始後に利用できます。",
         "optionUpdateFailed": "オプションを更新できませんでした",
         "optionValue": {
+          "none": "なし",
           "ultracode": "Ultracode",
           "fast": "高速",
           "minimal": "最小",
