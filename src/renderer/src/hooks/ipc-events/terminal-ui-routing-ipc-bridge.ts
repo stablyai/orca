@@ -1,5 +1,5 @@
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
-import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import {
   dispatchTerminalPaneSplitRequest,
   queueTerminalPaneSplitRequest

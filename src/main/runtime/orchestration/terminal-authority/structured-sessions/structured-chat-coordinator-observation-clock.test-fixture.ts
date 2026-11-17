@@ -30,7 +30,7 @@ vi.mock('../../../../power/awake-clock', async (importOriginal) => {
   const actual = await importOriginal<typeof AwakeClockModule>()
   return {
     ...actual,
-    awakeNow: vi.fn(() => (fakeTimeAwakeClock.clock ?? actual.getSystemAwakeClock()).now())
+    awakeNow: vi.fn(() => fakeTimeAwakeClock.clock?.now() ?? Date.now())
   }
 })
 

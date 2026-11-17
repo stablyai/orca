@@ -42,6 +42,7 @@ export function getE2ECompletedOnboardingProfile() {
       contextualToursSeenIds: [...SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS],
       contextualToursAutoEligible: false,
       projectOrderManualDefaultNoticeDismissed: true,
+      worktreeCardsIntroNoticeSeen: true,
       // Keep the browser import hint out of split-test pointer paths.
       browserImportHintHidden: true,
       // Suppress the usage-display toast in completed-user fixtures.

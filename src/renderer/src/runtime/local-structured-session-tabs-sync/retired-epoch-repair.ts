@@ -17,7 +17,7 @@ const localRepairLane = createSessionTabsAuthorityRepairLane({
 })
 
 export const scheduleRetiredEpochRepair = localRepairLane.schedule
-export function forgetRetiredEpochRepairsOutside(knownWorktreeIds: ReadonlySet<string>): void {
-  localRepairLane.forget((worktreeId) => !knownWorktreeIds.has(worktreeId))
+export function forgetRetiredEpochRepairsOutside(isKnown: (worktreeId: string) => boolean): void {
+  localRepairLane.forget((worktreeId) => !isKnown(worktreeId))
 }
 export const resetRetiredEpochRepairsForTests = localRepairLane.resetForTests
