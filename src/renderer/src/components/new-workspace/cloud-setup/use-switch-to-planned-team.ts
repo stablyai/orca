@@ -90,8 +90,3 @@ export function useSwitchToPlannedTeam(enabled: boolean): PlannedTeam[] {
     [enabled, key, answer, status]
   )
 }
-
-/** Test seam. */
-export function resetTeamPlansCache(): void {
-  cache.clear()
-}

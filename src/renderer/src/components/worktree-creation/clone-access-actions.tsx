@@ -13,7 +13,7 @@ export type CloneAccessHandlers = {
   copied?: boolean
 }
 
-export type CloneAccessAction = {
+type CloneAccessAction = {
   key: string
   label: string
   icon?: React.ReactNode

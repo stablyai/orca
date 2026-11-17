@@ -119,7 +119,7 @@ export async function unarchiveFromHome(
   })
 }
 
-export function runHomeArchive(w: CloudWorkspace, t: Translate, refresh: () => void): void {
+function runHomeArchive(w: CloudWorkspace, t: Translate, refresh: () => void): void {
   void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
 }
 

@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/orca-billing'
 
 /** Account and service problems a plain-language card can name, each with one way forward. */
-export type VmBuildAccountFailureKind =
+type VmBuildAccountFailureKind =
   | 'plan'
   | 'hoursUsed'
   | 'spendCap'

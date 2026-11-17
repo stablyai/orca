@@ -55,7 +55,7 @@ function agentStatusLine(readiness: CloudAgentReadiness, t: Translate): string {
 }
 
 /** "Your team provides Claude and Codex access · …": one clause per source, agents grouped. */
-export function cloudAgentReadinessSummary(readiness: CloudAgentReadiness, t: Translate): string {
+function cloudAgentReadinessSummary(readiness: CloudAgentReadiness, t: Translate): string {
   const sources: CloudAgentCredentialSource[] = ['team', 'cloud-secret']
   return sources
     .flatMap((source) => {
@@ -82,7 +82,7 @@ export function cloudAgentReadinessSummary(readiness: CloudAgentReadiness, t: Tr
 }
 
 /** "Claude key saved · shared with your team". Says stored, not verified: nothing tested the key yet. */
-export function cloudAgentSavedSummary(saved: CloudAgentSetupSaved, t: Translate): string {
+function cloudAgentSavedSummary(saved: CloudAgentSetupSaved, t: Translate): string {
   const agent =
     saved.agents.length > 1
       ? t('cloudAgentSetup.source.both', 'Claude and Codex')
@@ -110,7 +110,7 @@ function choiceFor(option: KeyOption, draft: CloudAgentSetupDraft): CloudAgentSe
   }
 }
 
-export type CloudAgentSetupViewProps = {
+type CloudAgentSetupViewProps = {
   /** Shown above the choices in the dialog: what already works. */
   readiness: CloudAgentReadiness | null
   canShare: boolean

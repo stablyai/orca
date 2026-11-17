@@ -132,18 +132,6 @@ export function useCloudWorkspaceIdentities(): State {
   return useSyncExternalStore(subscribe, () => state)
 }
 
-export function useCloudWorkspaceNumber(sandboxId: string | null | undefined): number | null {
-  return useSyncExternalStore(subscribe, () =>
-    sandboxId ? (state.bySandbox.get(sandboxId)?.number ?? null) : null
-  )
-}
-
-export function useCloudWorktreeNumber(
-  worktree: { id: string; hostId?: string | null } | null | undefined
-): number | null {
-  return useSyncExternalStore(subscribe, () => (worktree ? cloudNumberForWorktree(worktree) : null))
-}
-
 /** The cloud workspace behind a worktree has had more than one owner. */
 export function useCloudWorktreeOwnerChanged(
   worktree: { id: string; hostId?: string | null } | null | undefined

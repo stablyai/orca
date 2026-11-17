@@ -1,6 +1,6 @@
 import type { RunTargetRowModel, RunTargetSubmenu } from './run-target/run-target-options'
 
-export type RunTargetKeyboardState = {
+type RunTargetKeyboardState = {
   open: boolean
   query: string
   submenu: RunTargetSubmenu | null
@@ -9,7 +9,7 @@ export type RunTargetKeyboardState = {
   armedRow: RunTargetRowModel | null
 }
 
-export type RunTargetKeyboardActions = {
+type RunTargetKeyboardActions = {
   setOpen: (open: boolean) => void
   moveArm: (step: number) => void
   moveItemArm: (step: number) => void

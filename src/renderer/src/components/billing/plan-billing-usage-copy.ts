@@ -19,7 +19,7 @@ import {
 const DEFAULT_WARNING_TONE_PERCENT = 90
 
 /** The included-hours bar turns to the warning tone at billing's last alert level below 100%. */
-export function includedHoursWarningPercent(entitlement: OrcaBillingEntitlement): number {
+function includedHoursWarningPercent(entitlement: OrcaBillingEntitlement): number {
   const below = (usageAlertLevels(entitlement) ?? []).filter((level) => level < 100)
   return below.length > 0 ? Math.max(...below) : DEFAULT_WARNING_TONE_PERCENT
 }
@@ -44,7 +44,7 @@ export function sandboxHoursLeftLine(entitlement: OrcaBillingEntitlement, t: Tra
 }
 
 /** Hours past the included amount this month (billed as overage or not), or 0. */
-export function hoursOverIncludedSeconds(entitlement: OrcaBillingEntitlement): number {
+function hoursOverIncludedSeconds(entitlement: OrcaBillingEntitlement): number {
   if (entitlement.includedSeconds <= 0) {
     return entitlement.overageSeconds
   }

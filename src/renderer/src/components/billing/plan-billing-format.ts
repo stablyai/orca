@@ -50,7 +50,7 @@ export function includedUsagePercent(entitlement: OrcaBillingEntitlement): numbe
   return Math.min(100, Math.round((entitlement.usedSeconds / entitlement.includedSeconds) * 100))
 }
 
-export type PlanBillingTone = 'ok' | 'warning' | 'blocked'
+type PlanBillingTone = 'ok' | 'warning' | 'blocked'
 
 export function planBillingTone(entitlement: OrcaBillingEntitlement): PlanBillingTone {
   if (!entitlement.canStartSandbox) {

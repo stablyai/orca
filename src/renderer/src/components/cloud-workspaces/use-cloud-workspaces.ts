@@ -12,7 +12,7 @@ import { useAppStore } from '@/store'
 /** Presence is live; the list re-reads on this beat while visible (and on focus). */
 const POLL_MS = 8_000
 
-export type CloudWorkspacesState =
+type CloudWorkspacesState =
   | { status: 'loading' }
   | { status: 'unavailable' }
   | { status: 'error'; key: string; error: string; reason?: string }

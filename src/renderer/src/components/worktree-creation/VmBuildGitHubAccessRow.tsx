@@ -15,7 +15,7 @@ import { ownerRequestLabel, useOwnerRequestCopy } from '@/lib/orca-cloud/owner-r
 import { StepIcon } from './WorktreeSetupSteps'
 import { VmBuildGitHubIdentityLine } from './VmBuildGitHubIdentityLine'
 
-export type VmBuildGitHubAccessActions = {
+type VmBuildGitHubAccessActions = {
   open: () => void
   skip: () => void
   /** "Open now, set up later": this create goes on; the next one asks again. */

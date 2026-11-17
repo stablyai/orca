@@ -4,7 +4,7 @@ import { cn } from '@/lib/class-names'
 import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 import { statusLabel } from './plan-billing-copy'
 
-export type PlanHealth = { label: string; dot: 'destructive' | 'warning' | null }
+type PlanHealth = { label: string; dot: 'destructive' | 'warning' | null }
 
 /** Names what is actually wrong (not just Stripe's status) so the badge never says "Active" in red. */
 export function planHealth(entitlement: OrcaBillingEntitlement, t: Translate): PlanHealth {

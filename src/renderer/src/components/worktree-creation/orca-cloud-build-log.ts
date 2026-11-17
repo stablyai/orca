@@ -198,7 +198,7 @@ function awaitingPlanCheck(log: string): boolean {
 }
 
 /** Past this, a still-running "Start sandbox" names what it is waiting on (no silent 30 s). */
-export const PROVISION_STAGE_AFTER_MS = 5_000
+const PROVISION_STAGE_AFTER_MS = 5_000
 
 /**
  * What a "Start sandbox" step that has run past PROVISION_STAGE_AFTER_MS is waiting on, in plain words:

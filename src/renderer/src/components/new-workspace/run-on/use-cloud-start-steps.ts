@@ -23,7 +23,7 @@ import { noteComposerAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-ag
 import { toGitHubSetupStep } from './cloud-start-github-step'
 
 /** Composer-only wording on derived rows: the Agent row (G) from the Orca account's agent setup. */
-export function decorateCloudSetupSteps(
+function decorateCloudSetupSteps(
   steps: readonly CloudSetupStep[],
   agentRow: OrcaCloudAgentSetupRowModel
 ): CloudSetupStep[] {

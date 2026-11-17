@@ -36,14 +36,3 @@ export function getOrcaCloudHoursChip(
         defaultValue_one: '{{hours}} sandbox hour left'
       })
 }
-
-/** Under half an hour of trial left, the hint turns to a warning with the fix. */
-export const ORCA_CLOUD_TRIAL_LOW_SECONDS = 30 * 60
-
-export function isOrcaCloudTrialLow(access: OrcaCloudRunTargetAccess): boolean {
-  return (
-    access.state === 'entitled' &&
-    access.trial === true &&
-    access.remainingSeconds < ORCA_CLOUD_TRIAL_LOW_SECONDS
-  )
-}

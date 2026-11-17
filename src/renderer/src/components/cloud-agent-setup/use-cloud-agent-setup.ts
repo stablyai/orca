@@ -20,7 +20,7 @@ import type { CloudAgentSetupFailure, CloudAgentSetupScope } from './CloudAgentS
 const UNKNOWN: CloudSecretsErrorCode = 'unknown'
 const NOT_CONFIGURED: CloudSecretsErrorCode = 'not_configured'
 
-export type CloudAgentSetupModel =
+type CloudAgentSetupModel =
   | { status: 'loading' }
   | {
       status: 'ready'

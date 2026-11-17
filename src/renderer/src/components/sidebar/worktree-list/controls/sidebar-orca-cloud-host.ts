@@ -57,7 +57,7 @@ export function collapseOrcaCloudHosts(
 }
 
 /** "Asleep", "2 running", or "1 running · 1 asleep": the cloud host as a whole. */
-export function orcaCloudAggregateDetail(running: number, asleep: number, t: Translate): string {
+function orcaCloudAggregateDetail(running: number, asleep: number, t: Translate): string {
   if (running === 0 && asleep > 0) {
     return t('orcaCloudWorkspace.state.asleep', 'Asleep')
   }

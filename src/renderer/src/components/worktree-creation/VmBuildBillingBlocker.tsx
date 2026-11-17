@@ -9,7 +9,7 @@ import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 /** The four ways billing can refuse a create. */
 export type BillingBlockKind = 'plan' | 'hoursUsed' | 'spendCap' | 'payment'
 
-export type BillingBlockerPhase =
+type BillingBlockerPhase =
   | { kind: 'idle' }
   /** A fix elsewhere: the plans dialog (then the console), or the console's billing page for
    *  overage, the spend cap and payment. Re-check on return, or with Check again. */
@@ -101,7 +101,7 @@ export function blockerCopy(
   }
 }
 
-export type VmBuildBillingBlockerViewProps = {
+type VmBuildBillingBlockerViewProps = {
   kind: BillingBlockKind
   /** Billing's refusal reason (plan blocks word "ended" vs "no plan yet" from it). */
   reason?: string | null

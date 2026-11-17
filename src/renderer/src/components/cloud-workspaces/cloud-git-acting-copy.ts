@@ -7,7 +7,7 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
 
 export type CloudGitActing = Pick<CloudWorkspace, 'githubActing' | 'you'>
 
-export type GitActingLine = {
+type GitActingLine = {
   text: string
   /** It falls back to Orca's bot and the viewer hasn't connected GitHub: offer Connect GitHub. */
   connect: boolean

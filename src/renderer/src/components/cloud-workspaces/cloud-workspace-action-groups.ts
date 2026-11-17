@@ -15,7 +15,7 @@ export type CloudWorkspaceAction =
   | 'unarchive'
   | 'delete'
 
-export type CloudWorkspaceActionGroup = {
+type CloudWorkspaceActionGroup = {
   id: 'open' | 'owner' | 'lifecycle' | 'danger'
   actions: CloudWorkspaceAction[]
 }

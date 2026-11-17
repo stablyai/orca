@@ -6,7 +6,7 @@ import { sandboxLimitBody } from './vm-build-limit-copy'
 import { cloneFailedBody, repoOwner } from './vm-build-clone-failure-copy'
 import { localRecipeFailureCopy } from './vm-build-recipe-failure-copy'
 
-export type VmBuildFailureCopyContext = {
+type VmBuildFailureCopyContext = {
   cloud: boolean
   /** How the user knows the repository: its GitHub owner/name, else its name in Orca. */
   repoName: string

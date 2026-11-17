@@ -65,7 +65,7 @@ export function deriveVmBuildAgentSignInRow(
   return run && run.signedIn.length > 0 ? { kind: 'done', agents: run.signedIn } : null
 }
 
-export type VmBuildAgentSignInRowActions = {
+type VmBuildAgentSignInRowActions = {
   signIn: (agents: readonly HostAgentSignInAgent[]) => void
   cancel: () => void
   switchAccount: (agent: HostAgentSignInAgent) => void

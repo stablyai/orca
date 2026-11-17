@@ -8,7 +8,7 @@ import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
  * `unreachable`: it does, but the account check failed (offline); the segment stays visible and
  * aria-disabled so a returning user doesn't think the feature vanished.
  */
-export type OrcaCloudSegmentState = 'hidden' | 'unreachable' | 'enabled'
+type OrcaCloudSegmentState = 'hidden' | 'unreachable' | 'enabled'
 
 export function getOrcaCloudSegmentState(
   availability: OrcaCloudAvailability
