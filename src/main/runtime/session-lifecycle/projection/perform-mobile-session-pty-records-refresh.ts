@@ -24,7 +24,7 @@ import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/l
 
 import { paneHoldsSession } from '../../terminal/surface/main-terminal-surfaces'
 import { recordShownTerminalUserOpen } from '../../terminal/lifecycle/run-terminal-client-use'
-import { resolveChatTabActivation } from '../../agent-session/agent-session-tab-identity'
+import { resolveChatTabActivation } from '../../session-tabs/chat/agent-session-tab-identity'
 export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithRestoredPaneStart {
   protected abstract toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot

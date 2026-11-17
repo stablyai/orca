@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import {
   IntegrationStatusPill,
   type IntegrationStatusTone
-} from '@/components/integration-status-pill'
+} from '@/components/integrations/presentation/integration-status-pill'
 import {
   TASK_PROVIDER_SETUP_STATUS_TONE,
   getTaskProviderCompletedSteps,

@@ -24,6 +24,7 @@ import {
 import type { JournalTimelineItemResolution } from '../../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import type { ClaudeUsageLimitEvidence } from '../journal/claude-usage-limits'
 import type { ClaudeStartedSend } from '../claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 
 /** The ending a person's Stop at the write position would record instead. */
 export type ClaudeStoppedTurnEnd = { check: ClaudeStopCheck; end: ClaudeTurnEnd }
@@ -61,6 +62,7 @@ export class ClaudeOpenTurn {
   private reopenSuppressed = false
   /** Track root work since cycle init; background output may open a turn before that init. */
   private cycleWorkObserved = false
+  private cycleTurn: ClaudeCurrentTurn | null = null
   /** Input choices follow actual work; correlation also includes API errors. */
   inputChoiceWorkObserved = false
   /** The ending of a step a steer cut short, until the steer's own cycle starts. */
@@ -123,6 +125,14 @@ export class ClaudeOpenTurn {
     return this.current !== null && this.cycleWorkObserved
   }
 
+  get ownsLiveProviderCycle(): boolean {
+    return this.current !== null && this.current === this.cycleTurn && this.cycleWorkObserved
+  }
+
+  confirmProviderCycle(): void {
+    this.cycleTurn = this.current
+  }
+
   /** Reset per frame so send ownership cannot leak into later frames. */
   observeStartedSend(send: ClaudeStartedSend | null): void {
     this.startedSend = send
@@ -136,6 +146,7 @@ export class ClaudeOpenTurn {
   observeProviderCycleStart(): void {
     this.steerHandoffEnd = null
     this.cycleWorkObserved = false
+    this.cycleTurn = null
     this.inputChoiceWorkObserved = false
   }
 
@@ -158,8 +169,11 @@ export class ClaudeOpenTurn {
       })
     }
     this.current = turn
+    this.cycleTurn = turn
     this.publish(turn)
     this.deps.sink.setActivity?.(null)
+    // Every open clears, since a relaunch can leave the host holding the last process's guess.
+    this.deps.sink.setPromptSuggestion?.(null)
   }
 
   /** The host already wrote the command row; only publish its eventual end. */
@@ -177,7 +191,9 @@ export class ClaudeOpenTurn {
       })
     }
     this.current = turn
+    this.cycleTurn = turn
     this.deps.sink.setActivity?.(null)
+    this.deps.sink.setPromptSuggestion?.(null)
   }
 
   commandInterruptRequested(turnId: string): void {
@@ -192,6 +208,7 @@ export class ClaudeOpenTurn {
       this.usageLimitEvidence = null
       this.inputChoiceWorkObserved = false
       this.current = null
+      this.cycleTurn = null
     }
   }
 
@@ -227,6 +244,7 @@ export class ClaudeOpenTurn {
     }
     this.suppressReopenOnFailure(readings.ran || readings.stopped)
     this.cycleWorkObserved = false
+    this.cycleTurn = null
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
     // End suppressed work even when no turn is open, at the real settle time.
@@ -243,6 +261,7 @@ export class ClaudeOpenTurn {
         }
       )
       this.current = null
+      this.cycleTurn = null
     }
     this.deps.sink.setActivity?.(null)
   }
@@ -296,5 +315,34 @@ export class ClaudeOpenTurn {
     })
     // Separate keys preserve a queued start publication when the end arrives.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
+  }
+}
+
+// Claude's guesses are a short sentence; a longer one is not worth a frame to every reader.
+const CLAUDE_PROMPT_SUGGESTION_MAX_LENGTH = 1000
+
+/** Takes the CLI's guess at the next prompt off the journal path, so no turn, context or activity
+ *  logic sees it. It arrives after `result`; a turn or a send started since then makes it stale. */
+export function withClaudePromptSuggestions(
+  turn: Pick<ClaudeOpenTurn, 'isOpen'>,
+  sink: Pick<StructuredAgentSessionEventSink, 'setPromptSuggestion'>,
+  handle: (event: ClaudeStructuredSessionEvent) => void
+): (event: ClaudeStructuredSessionEvent) => void {
+  return (event) => {
+    if (event.type !== 'message' || event.message.type !== 'prompt_suggestion') {
+      handle(event)
+      return
+    }
+    const { suggestion, uuid } = event.message
+    const text = typeof suggestion === 'string' ? suggestion.trim() : ''
+    if (
+      !turn.isOpen &&
+      !event.startedSend &&
+      typeof uuid === 'string' &&
+      text &&
+      text.length <= CLAUDE_PROMPT_SUGGESTION_MAX_LENGTH
+    ) {
+      sink.setPromptSuggestion?.({ id: uuid, text })
+    }
   }
 }

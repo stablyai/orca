@@ -11,7 +11,7 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from '../strip/drop-indicator'
-import { sameStringArray } from '@/runtime/web-session-tabs-sync/state-equality-core'
+import { sameStringArray } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-core'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]

@@ -3,7 +3,7 @@ import type {
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
-import { replaceMapEntries } from '@/store/keyed-record-transitions'
+import { replaceMapEntries } from '@/store/record-transitions/keyed-record-transitions'
 import { dismissRuntimeDisconnectedToast } from './runtime-environment-disconnect-toast'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 

@@ -48,7 +48,10 @@ import {
   resolveChatProgramContext
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
-import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import {
+  useDetectedAgents,
+  type AgentDetectionTarget
+} from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/AgentLaunchDefaultsGroup'
 import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'

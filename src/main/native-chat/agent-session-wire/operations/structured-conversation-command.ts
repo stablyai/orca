@@ -167,6 +167,7 @@ async function clearUnderSerialize(
     }
   })
   if (result.ok && command === 'clear') {
+    context.clearPromptSuggestion?.(sessionId)
     try {
       context.publishConversationName?.(sessionId)
     } catch (error) {

@@ -37,7 +37,7 @@ import {
   scheduleLegacyRemoteClipboardFileCleanup
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
-import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-session-attachment-upload'
+import { uploadPasteToAgentSessionAttachments } from '../../ipc/agent-attachments/agent-session-attachment-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
 import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'

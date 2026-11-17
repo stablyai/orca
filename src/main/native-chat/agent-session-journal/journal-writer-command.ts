@@ -112,6 +112,7 @@ export type JournalWriterInputOperation =
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[] }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
+  | { kind: 'queue-steer'; messageId: string }
   | { kind: 'queue-reopen-mark'; fence: number; since?: number }
   | { kind: 'pending-unknown'; fence: number; reason?: string }
   | { kind: 'pending-reject'; fence: number; rejection: AgentJournalDispatchRejection }

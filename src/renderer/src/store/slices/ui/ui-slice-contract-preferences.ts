@@ -236,4 +236,6 @@ export type UISlicePersistence = {
   setBrowserKagiSessionLink: (link: string | null) => void
   browserDevToolsDock: BrowserDevToolsDockLayout
   setBrowserDevToolsDock: (layout: BrowserDevToolsDockLayout) => void
+  browserExtensionSidePanelWidth: number
+  setBrowserExtensionSidePanelWidth: (width: number) => void
 }

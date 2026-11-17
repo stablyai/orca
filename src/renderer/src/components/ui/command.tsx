@@ -6,6 +6,7 @@ import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
@@ -25,8 +26,12 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
       default: '',
       // Why: matches DropdownMenuItem type so a searchable picker reads like its sibling menus.
       menu: '[&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px]',
-      model:
-        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]',
+      // Why: the agent picker's flat pane: a 36px search row over full-width 36px model rows.
+      model: [
+        '[&_[data-cmdk-input-wrapper]]:h-9 [&_[data-cmdk-input-wrapper]]:bg-transparent [&_[data-cmdk-input-wrapper]]:px-2.5 [&_[data-cmdk-input-wrapper]]:py-0 [&_[data-cmdk-input-wrapper]_svg]:size-3.5',
+        '[&_[cmdk-input]]:h-9 [&_[cmdk-input]]:py-0 [&_[cmdk-input]]:text-[13px] [&_[cmdk-group]]:p-0',
+        '[&_[cmdk-item]]:h-9 [&_[cmdk-item]]:rounded-none [&_[cmdk-item]]:px-2.5 [&_[cmdk-item]]:py-0 [&_[cmdk-item]]:text-[13px]'
+      ],
       // Why: a flat launcher card (split-pane landing): field on a divider over a fixed-height list of 36px rows.
       card: [
         'rounded-[12px] border border-border',
@@ -40,7 +45,7 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
   },
   compoundVariants: [
     {
-      density: ['menu', 'model'],
+      density: 'menu',
       className:
         '[&_[cmdk-empty]]:text-[12px] [&_[cmdk-input-wrapper]_svg]:size-3.5 [&_[cmdk-input]]:h-8 [&_[cmdk-input]]:text-[12px] [&_[cmdk-item]]:rounded-md [&_[cmdk-item]]:leading-[17px] [&_[cmdk-item]]:font-[450]'
     }
@@ -93,7 +98,7 @@ function CommandDialog({
 
   return (
     <DialogPrimitive.Root {...props}>
-      <DialogPrimitive.Portal>
+      <DialogPrimitive.Portal container={usePortalContainer() ?? undefined}>
         <DialogOverlay className={overlayClassName} />
         <OverlayFocusScope value={scope}>
           <DialogPrimitive.Content

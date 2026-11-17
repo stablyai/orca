@@ -1,4 +1,4 @@
-import { isIndexKey } from '@/store/keyed-record-index-keys'
+import { isIndexKey } from '@/store/record-transitions/keyed-record-index-keys'
 
 export type TerminalTabOwnerBuckets<T extends { id: string } = { id: string }> = Readonly<
   Record<string, readonly T[]>

@@ -22,5 +22,7 @@ export const PANEL_DESIGN_TOKEN_ALLOWLIST = [
   '--border',
   '--input',
   '--ring',
-  '--radius'
+  '--radius',
+  '--font-sans',
+  '--font-mono'
 ] as const

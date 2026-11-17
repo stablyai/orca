@@ -1,5 +1,5 @@
 import React from 'react'
-import { VirtualizedList } from '@/components/virtualized-list'
+import { VirtualizedList } from '@/components/ui/virtualized-list'
 import type {
   CombinedDiffFileTreeEntry,
   CombinedDiffFileTreeMode

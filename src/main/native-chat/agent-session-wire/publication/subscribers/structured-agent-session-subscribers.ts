@@ -1,6 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { subscriberDeliveryPort } from './agent-session-subscriber-delivery-port'
-import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
 import type {
   AgentSessionSubscribeInput,
@@ -28,9 +27,10 @@ import {
   rememberSubscriberHostWork
 } from './agent-session-subscriber-live-text'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import { rememberSessionActivity } from './structured-agent-session-activity-retention'
+import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
+import { AgentSessionPromptSuggestionDelivery } from './agent-session-prompt-suggestion-delivery'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
@@ -48,6 +48,12 @@ export class AgentSessionSubscribers {
       this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
+  readonly promptSuggestions = new AgentSessionPromptSuggestionDelivery({
+    subscribers: (sessionId) => this.subscribers(sessionId),
+    send: (subscriber, event) => this.enqueue(subscriber, () => this.emit(subscriber, event())),
+    now: () => this.now(),
+    onInterestChanged: (id, wanted) => this.hooks.onPromptSuggestionInterest?.(id, wanted)
+  })
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
@@ -93,6 +99,7 @@ export class AgentSessionSubscribers {
         hostNow
       })
     })
+    this.promptSuggestions.opened(subscriber)
     const { sessionId, id } = subscriber
     return () => this.close(sessionId, id)
   }
@@ -116,13 +123,7 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    if (activity !== undefined) {
-      if (activity) {
-        rememberSessionActivity(this.activityBySession, sessionId, activity)
-      } else {
-        this.activityBySession.delete(sessionId)
-      }
-    }
+    rememberLatestPerSession(this.activityBySession, sessionId, activity)
     this.deliverFrames(sessionId, journal, activity)
     if (activity === undefined) {
       this.hooks.onJournalPublished?.(sessionId, journal)
@@ -136,7 +137,6 @@ export class AgentSessionSubscribers {
     read: readonly AgentJournalRenderItem[] | (() => readonly AgentJournalRenderItem[]),
     targets = this.subscribers(sessionId)
   ): void => {
-    const hostNow = this.now()
     for (const subscriber of targets) {
       // Read at emission, so text never trails a durable frame queued ahead of it.
       this.enqueue(subscriber, () =>
@@ -146,7 +146,7 @@ export class AgentSessionSubscribers {
           fence,
           items: typeof read === 'function' ? read() : read,
           subscribers: [subscriber],
-          hostNow
+          hostNow: this.now()
         })
       )
     }
@@ -156,9 +156,8 @@ export class AgentSessionSubscribers {
   frameHooks = (sessionId: string, journal: AgentSessionJournal) =>
     this.deliveryPort(sessionId, journal).hooks
 
-  async readQueuePublication(sessionId: string): Promise<QueuePublication | undefined> {
-    return (await this.hooks.readQueuePublication?.(sessionId)) ?? undefined
-  }
+  readQueuePublication = async (sessionId: string) =>
+    (await this.hooks.readQueuePublication?.(sessionId)) ?? undefined
 
   deliverFrames(
     sessionId: string,
@@ -331,5 +330,6 @@ export class AgentSessionSubscribers {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
     }
+    this.promptSuggestions.reconcile(subscriber.sessionId)
   }
 }
