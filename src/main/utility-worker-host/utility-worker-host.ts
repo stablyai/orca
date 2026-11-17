@@ -177,7 +177,13 @@ export class UtilityWorkerHost {
         worker.emit('error', new Error(`${this.serviceName} stopped`))
         worker.finish(1)
       } else {
-        worker.adopt(this.spawnInProcess(worker.spawn))
+        // One worker that can't start in-process must not strand the rest.
+        try {
+          worker.adopt(this.spawnInProcess(worker.spawn))
+        } catch (error) {
+          worker.emit('error', error)
+          worker.finish(1)
+        }
       }
     }
   }

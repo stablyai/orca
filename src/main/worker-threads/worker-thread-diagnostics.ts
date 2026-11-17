@@ -86,7 +86,6 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
       live.delete(entry)
     }
   }
-  const mainHeap = getHeapStatistics().total_heap_size
   const ledger = new Map(readWorkerSendLedger().map((slot) => [slot.threadId, slot]))
   const heaps: WorkerHeap[] = await Promise.all(
     [...live].map(async (entry) => ({
@@ -97,6 +96,8 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
     }))
   )
   heaps.sort((a, b) => b.heap - a.heap)
+  // After the worker reads, which can take seconds, so main's figure is current.
+  const mainHeap = getHeapStatistics().total_heap_size
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
   annotateCrashReport(mainHeap, total, heaps, ledger)
   noteMainCageHeap(total, mainHeap)
