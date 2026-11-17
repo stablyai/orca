@@ -19158,6 +19158,7 @@
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
         "optionUpdateFailed": "No se pudo actualizar la opción",
         "optionValue": {
+          "none": "Ninguno",
           "fast": "Rápido",
           "minimal": "Mínimo",
           "low": "Bajo",

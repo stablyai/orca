@@ -395,6 +395,7 @@
       "otherDevice": "別のデバイス"
     },
     "sessionOptionCopy": {
+      "none": "なし",
       "availableAfterSessionStarts": "セッション開始後に利用できます。",
       "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
       "effort": "推論レベル",

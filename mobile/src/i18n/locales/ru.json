@@ -403,6 +403,7 @@
       "otherDevice": "другом устройстве"
     },
     "sessionOptionCopy": {
+      "none": "Нет",
       "availableAfterSessionStarts": "Доступно после запуска сессии.",
       "chooseInAgentPicker": "Выбрать в списке агентов…",
       "effort": "Усилие",
