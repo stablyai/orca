@@ -112,8 +112,13 @@ export function useTabBarItemProjection({
   const orderedIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
   // Why: dnd-kit re-renders every tab when this array's identity changes, and the items rebuild on any tab write.
   const [sortableIds, setSortableIds] = useState(orderedIds)
-  if (!sameStringArray(sortableIds, orderedIds)) {
-    setSortableIds(orderedIds)
+  // Compare once per rebuilt id list: a windowed strip re-renders on scroll without any tab change.
+  const [comparedIds, setComparedIds] = useState(orderedIds)
+  if (comparedIds !== orderedIds) {
+    setComparedIds(orderedIds)
+    if (!sameStringArray(sortableIds, orderedIds)) {
+      setSortableIds(orderedIds)
+    }
   }
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null

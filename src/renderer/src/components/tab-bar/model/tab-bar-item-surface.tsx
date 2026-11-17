@@ -161,6 +161,8 @@ export function renderTabBarItems({
           key={`tab-strip-gap-${segment.start}`}
           aria-hidden
           data-tab-strip-gap=""
+          data-tab-strip-gap-start={segment.start}
+          data-tab-strip-gap-end={segment.end}
           className="flex-none"
           style={{ width: (segment.end - segment.start) * TAB_STRIP_WINDOW_SLOT_PX }}
         />

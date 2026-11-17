@@ -144,6 +144,19 @@ export function useTabStripWindowState(
   return state
 }
 
+/** Scroll-space left of an unmounted tab, measured from its spacer so wider mounted tabs (a rename) count. */
+function unmountedSlotLeft(strip: HTMLElement, index: number): number {
+  for (const gap of strip.querySelectorAll<HTMLElement>(':scope > [data-tab-strip-gap]')) {
+    const start = Number(gap.dataset.tabStripGapStart)
+    if (index >= start && index < Number(gap.dataset.tabStripGapEnd)) {
+      const gapLeft =
+        gap.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft
+      return gapLeft + (index - start) * TAB_STRIP_WINDOW_SLOT_PX
+    }
+  }
+  return index * TAB_STRIP_WINDOW_SLOT_PX
+}
+
 /** Scroll the first opened tab a windowed strip hasn't mounted into view by its index; false when none. */
 export function revealFirstUnmountedTabStripSlot(
   strip: HTMLElement,
@@ -159,7 +172,7 @@ export function revealFirstUnmountedTabStripSlot(
     if (!opened.delete(slotIds[index]) || findTabStripSlot(strip, slotIds[index])) {
       continue
     }
-    const left = index * TAB_STRIP_WINDOW_SLOT_PX
+    const left = unmountedSlotLeft(strip, index)
     const right = left + TAB_STRIP_WINDOW_SLOT_PX
     if (left < strip.scrollLeft) {
       strip.scrollLeft = left
