@@ -82,14 +82,18 @@ export function parsePsOutput(stdout: string): ProcRow[] {
   return rows
 }
 
-// comm= is last and may hold spaces (macOS prints the full executable path).
+// The name column is last and may hold spaces.
 const PS_COMM_COLUMN = /^\s*\S+\s+\S+\s+\S+\s+\S+\s+(.+)$/
 
 const MAX_EXECUTABLE_NAME_CHARS = 64
 
-/** Basename only: paths can carry the user's home directory. */
+/** Basename only (paths can carry the user's home directory), without `.exe` so CIM and typeperf agree. */
 export function executableBasename(value: string | undefined): string | undefined {
-  const base = value?.trim().split(/[\\/]/).pop()
+  const base = value
+    ?.trim()
+    .split(/[\\/]/)
+    .pop()
+    ?.replace(/\.exe$/i, '')
   return base ? base.slice(0, MAX_EXECUTABLE_NAME_CHARS) : undefined
 }
 

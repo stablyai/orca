@@ -1,9 +1,9 @@
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { enumerateHostProcesses } from '../../memory/host-process-index'
 import { getLocalDaemonPid } from '../../memory/local-daemon-pid'
-import type { ProcIndex, ProcRow } from '../../memory/process-index'
+import { collectSubtree, type ProcIndex, type ProcRow } from '../../memory/process-index'
 import { claimPtyProcessTrees } from '../../memory/pty-process-trees'
-import { listRegisteredPtys } from '../../memory/pty-registry'
+import { listRegisteredPtys, type PtyRegistration } from '../../memory/pty-registry'
 import { SYSTEM_MEMORY_KEY_PREFIX } from './system-memory-details'
 
 // Why: app.getAppMetrics() cannot see PTY children (agents, shells), which can own the
@@ -12,6 +12,10 @@ import { SYSTEM_MEMORY_KEY_PREFIX } from './system-memory-details'
 type CrashReportDetails = Record<string, CrashReportDetailValue>
 
 export const PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS = 30_000
+// A steady low-headroom host re-sweeps only this often; a falling one sooner.
+export const PTY_TREE_MEMORY_PLATEAU_RESAMPLE_MS = 5 * 60_000
+const HEADROOM_DROP_MAX_MB = 512
+const HEADROOM_DROP_FRACTION = 0.25
 const PRESSURE_HEADROOM_MAX_MB = 4096
 const PRESSURE_HEADROOM_FRACTION = 0.2
 // Below this, spawning PowerShell could itself tip the host over; keep the earlier sample.
@@ -26,7 +30,7 @@ type PtyTreeMemorySample = {
 }
 
 let sample: PtyTreeMemorySample | null = null
-let lastStartedAtMs: number | null = null
+let lastSweep: { startedAtMs: number; headroomMB: number } | null = null
 let inFlight = false
 let generation = 0
 
@@ -62,39 +66,62 @@ export function hostMemoryHeadroom(
   return { headroomMB: freeMB + reclaimableMB, limitMB }
 }
 
-function underPressure(details: CrashReportDetails, platform: NodeJS.Platform): boolean {
+function pressureHeadroomMB(
+  details: CrashReportDetails,
+  platform: NodeJS.Platform
+): number | null {
   const headroom = hostMemoryHeadroom(details, platform)
   if (!headroom || headroom.headroomMB < MIN_HEADROOM_TO_SAMPLE_MB) {
+    return null
+  }
+  const threshold = Math.min(
+    PRESSURE_HEADROOM_MAX_MB,
+    headroom.limitMB * PRESSURE_HEADROOM_FRACTION
+  )
+  return headroom.headroomMB < threshold ? headroom.headroomMB : null
+}
+
+function sweepDue(headroomMB: number, nowMs: number): boolean {
+  if (!lastSweep) {
+    return true
+  }
+  const elapsedMs = nowMs - lastSweep.startedAtMs
+  if (elapsedMs < PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS) {
     return false
   }
+  const drop = Math.min(HEADROOM_DROP_MAX_MB, lastSweep.headroomMB * HEADROOM_DROP_FRACTION)
   return (
-    headroom.headroomMB <
-    Math.min(PRESSURE_HEADROOM_MAX_MB, headroom.limitMB * PRESSURE_HEADROOM_FRACTION)
+    elapsedMs >= PTY_TREE_MEMORY_PLATEAU_RESAMPLE_MS || headroomMB <= lastSweep.headroomMB - drop
   )
 }
 
-/** Called with each committed host sample; starts at most one sweep per interval, under pressure. */
+/** Called with each host sample; sweeps under pressure, then again only as headroom falls. */
 export function notePreGoneHostMemorySample(
   hostDetails: CrashReportDetails,
   nowMs: number,
   platform: NodeJS.Platform = process.platform
 ): void {
-  const sampledRecently =
-    lastStartedAtMs !== null && nowMs - lastStartedAtMs < PTY_TREE_MEMORY_MIN_SAMPLE_INTERVAL_MS
-  if (inFlight || sampledRecently || !underPressure(hostDetails, platform)) {
+  if (inFlight) {
     return
   }
-  const ptys = listRegisteredPtys()
-  if (!ptys.some((pty) => pty.pid != null)) {
+  const headroomMB = pressureHeadroomMB(hostDetails, platform)
+  if (headroomMB === null || !sweepDue(headroomMB, nowMs)) {
     return
   }
-  lastStartedAtMs = nowMs
+  // Capture what to attribute now: a PTY closing mid-sweep must not erase its evidence.
+  const ptys = listRegisteredPtys().filter((pty) => pty.pid != null)
+  if (ptys.length === 0) {
+    return
+  }
+  const daemonPid = getLocalDaemonPid()
+  lastSweep = { startedAtMs: nowMs, headroomMB }
   inFlight = true
   const startedGeneration = generation
-  void enumerateHostProcesses()
+  // Skip CPU: it would reset the resource view's CPU baseline.
+  void enumerateHostProcesses({ trackCpu: false })
     .then((index) => {
       if (startedGeneration === generation && index.byPid.size > 0) {
-        sample = { details: summarizePtyTreeMemory(index), sampledAtMs: nowMs }
+        sample = { details: summarizePtyTreeMemory(index, ptys, daemonPid), sampledAtMs: nowMs }
       }
     })
     .catch(() => {
@@ -109,31 +136,43 @@ export function notePreGoneHostMemorySample(
 
 const toMB = (bytes: number): number => Math.round(Math.max(0, bytes) / BYTES_PER_MB)
 
-function summarizePtyTreeMemory(index: ProcIndex): CrashReportDetails {
-  const ptys = listRegisteredPtys()
-  const rows: ProcRow[] = claimPtyProcessTrees(index, ptys).flatMap((tree) => tree.rows)
+function sumMemory(rows: readonly ProcRow[]): { memory: number; commit: number | null } {
   let memory = 0
-  let commit = 0
+  let commit: number | null = 0
   for (const row of rows) {
     memory += row.memory
-    commit += row.privateMemory ?? 0
+    // One unreadable counter makes the total unknown, not smaller.
+    commit = commit === null || row.privateMemory === undefined ? null : commit + row.privateMemory
   }
+  return { memory, commit }
+}
+
+function summarizePtyTreeMemory(
+  index: ProcIndex,
+  ptys: readonly PtyRegistration[],
+  daemonPid: number | null
+): CrashReportDetails {
+  const rows: ProcRow[] = claimPtyProcessTrees(index, ptys).flatMap((tree) => tree.rows)
+  const tree = sumMemory(rows)
   const details: CrashReportDetails = {
     [`${KEY_PREFIX}PtyCount`]: ptys.length,
     [`${KEY_PREFIX}ProcessCount`]: rows.length,
     [`${KEY_PREFIX}MemoryMetric`]: index.memoryMetric,
-    [`${KEY_PREFIX}MemoryMB`]: toMB(memory)
+    [`${KEY_PREFIX}MemoryMB`]: toMB(tree.memory)
   }
-  if (index.hasPrivateMemory) {
-    details[`${KEY_PREFIX}CommitMB`] = toMB(commit)
+  if (tree.commit !== null) {
+    details[`${KEY_PREFIX}CommitMB`] = toMB(tree.commit)
   }
-  // The detached terminal daemon parents every PTY and is also invisible to getAppMetrics.
-  const daemonPid = getLocalDaemonPid()
-  const daemon = daemonPid === null ? undefined : index.byPid.get(daemonPid)
-  if (daemon) {
+  // getAppMetrics omits the detached daemon; count it with non-PTY children (console hosts).
+  if (daemonPid !== null && index.byPid.has(daemonPid)) {
+    const ptyPids = new Set(rows.map((row) => row.pid))
+    const daemonRows = collectSubtree(index, daemonPid, ptyPids).flatMap(
+      (pid) => index.byPid.get(pid) ?? []
+    )
+    const daemon = sumMemory(daemonRows)
     details[`${KEY_PREFIX}DaemonMemoryMB`] = toMB(daemon.memory)
-    if (daemon.privateMemory !== undefined) {
-      details[`${KEY_PREFIX}DaemonCommitMB`] = toMB(daemon.privateMemory)
+    if (daemon.commit !== null) {
+      details[`${KEY_PREFIX}DaemonCommitMB`] = toMB(daemon.commit)
     }
   }
   const rank = (row: ProcRow): number => row.privateMemory ?? row.memory
@@ -161,7 +200,7 @@ export function preGonePtyTreeMemoryDetails(nowMs: number): CrashReportDetails {
 
 export function resetPreGonePtyTreeMemoryForTest(): void {
   sample = null
-  lastStartedAtMs = null
+  lastSweep = null
   inFlight = false
   // Invalidate pending sweeps so they cannot repopulate a reset sample.
   generation += 1

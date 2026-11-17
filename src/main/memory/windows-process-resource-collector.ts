@@ -26,7 +26,10 @@ let processBackend: 'cim' | 'typeperf' = 'cim'
 let previousCpuSample: WindowsProcessSample | null = null
 let retryCimAtMs = 0
 
-export async function enumerateWindowsProcessResources(): Promise<WindowsProcessResourceRow[]> {
+/** `trackCpu: false` leaves the resource view's CPU baseline untouched and reports no CPU. */
+export async function enumerateWindowsProcessResources(
+  trackCpu = true
+): Promise<WindowsProcessResourceRow[]> {
   // Reuse one CIM sweep for resources and identity instead of spawning PowerShell twice per poll.
   if (processBackend === 'typeperf') {
     if (performance.now() < retryCimAtMs) {
@@ -37,7 +40,7 @@ export async function enumerateWindowsProcessResources(): Promise<WindowsProcess
 
   const sample = await enumerateWindowsWithCim()
   if (sample) {
-    return applyWindowsCpuSample(sample)
+    return trackCpu ? applyWindowsCpuSample(sample) : sample.rows
   }
   // Back off blocked CIM queries while allowing recovery from transient failures.
   processBackend = 'typeperf'
