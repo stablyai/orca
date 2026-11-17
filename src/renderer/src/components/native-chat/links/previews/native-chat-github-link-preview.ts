@@ -17,6 +17,7 @@ import {
 } from './native-chat-github-route-repo'
 
 const previews = createHoverPreviewCache<GitHubWorkItem>({ freshMs: 60_000, maxEntries: 200 })
+const RESTARTED = Symbol('restarted')
 
 /** Repo ids repeat across hosts, and each host answers with its own GitHub account. */
 export function githubLinkPreviewKey(repo: Repo, link: GitHubIssueOrPRLink): string {
@@ -152,6 +153,17 @@ async function loadPreviewFromCatalog(
     capturedIdentities ??
     new Set(githubPreviewRouteCandidates(repos, routeAuthority).map(githubPreviewRepoIdentity))
   const retired = new Set<string>()
+  // The selected binding, once known; a request under it that was retired and is current again
+  // starts over right away instead of waiting on, or failing with, the retired request.
+  let selected: string | null = null
+  let restart = (): void => {}
+  const restarted = new Promise<typeof RESTARTED>((resolve) => {
+    restart = () => resolve(RESTARTED)
+  })
+  const restored = (): boolean => {
+    const current = selected && retired.has(selected) && read(useAppStore.getState().repos)
+    return !!current && githubPreviewRepoIdentity(current) === selected
+  }
   const stop = useAppStore.subscribe((state, previous) => {
     if (state.repos === previous.repos) {
       return
@@ -165,14 +177,17 @@ async function loadPreviewFromCatalog(
         retired.add(identity)
       }
     }
+    if (restored()) {
+      restart()
+    }
   })
-  let identity: string
   try {
     const repo = await select(repos)
     if (!repo) {
       return null
     }
-    identity = githubPreviewRepoIdentity(repo)
+    const identity = githubPreviewRepoIdentity(repo)
+    selected = identity
     const accepts = () => {
       const currentRepos = useAppStore.getState().repos
       const currentRepo = read(currentRepos)
@@ -184,21 +199,25 @@ async function loadPreviewFromCatalog(
       )
     }
     if (accepts()) {
-      const item = await previews.load(
-        githubLinkPreviewKey(repo, link),
-        () => fetchPreview(repo, link, accepts),
-        accepts
-      )
-      if (accepts()) {
+      const item = await Promise.race([
+        previews.load(
+          githubLinkPreviewKey(repo, link),
+          () => fetchPreview(repo, link, accepts),
+          accepts
+        ),
+        restarted
+      ])
+      if (item !== RESTARTED && accepts()) {
         return item
       }
+    }
+  } catch (error) {
+    if (!restored()) {
+      throw error
     }
   } finally {
     stop()
   }
-  // A binding that changed and came back keeps the card's key, so nothing else would ask again.
-  const current = read(useAppStore.getState().repos)
-  return retired.has(identity) && current && githubPreviewRepoIdentity(current) === identity
-    ? loadPreviewFromCatalog(routeAuthority, link, select, read)
-    : null
+  // The card keeps its key across a binding that changed and came back, so nothing else asks again.
+  return restored() ? loadPreviewFromCatalog(routeAuthority, link, select, read) : null
 }

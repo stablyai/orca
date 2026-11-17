@@ -31,6 +31,8 @@ vi.mock('@/lib/workspace/catalog/repo-slug-index', async () => {
 
 const { useAppStore } = await import('@/store/index')
 const { NativeChatGitHubPeekBody } = await import('./NativeChatGitHubLinkPeek')
+const { loadGitHubLinkPreview, loadRoutedGitHubLinkPreview } =
+  await import('./native-chat-github-link-preview')
 
 const alice: Repo = {
   id: 'router',
@@ -42,7 +44,11 @@ const alice: Repo = {
 }
 const bob: Repo = { ...alice, ghAccount: { host: 'github.com', user: 'bob' } }
 
-type Request = { user: string | undefined; answer: (title: string) => void }
+type Request = {
+  user: string | undefined
+  answer: (title: string) => void
+  fail: (error: Error) => void
+}
 let requests: Request[] = []
 
 beforeEach(() => {
@@ -52,9 +58,10 @@ beforeEach(() => {
   mocks.endpoint.mockReset()
   mocks.endpoint.mockImplementation(
     ({ number }: { number: number }) =>
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
         requests.push({
           user: useAppStore.getState().repos[0]?.ghAccount?.user,
+          fail: reject,
           answer: (title) =>
             resolve({
               type: 'pr',
@@ -81,13 +88,17 @@ const settle = () =>
   })
 
 it.each([
-  { number: 901, source: 'routed', commits: 'separate', requested: ['alice', 'bob', 'alice'] },
-  { number: 902, source: 'routed', commits: 'one', requested: ['alice', 'alice'] },
-  { number: 903, source: 'repo', commits: 'separate', requested: ['alice', 'bob', 'alice'] },
-  { number: 904, source: 'repo', commits: 'one', requested: ['alice', 'alice'] }
+  { number: 901, source: 'routed', commits: 'separate', retired: 'answers' },
+  { number: 902, source: 'routed', commits: 'one', retired: 'answers' },
+  { number: 903, source: 'repo', commits: 'separate', retired: 'answers' },
+  { number: 904, source: 'repo', commits: 'one', retired: 'answers' },
+  { number: 905, source: 'routed', commits: 'one', retired: 'rejects' },
+  { number: 906, source: 'repo', commits: 'one', retired: 'rejects' },
+  { number: 907, source: 'routed', commits: 'one', retired: 'hangs' },
+  { number: 908, source: 'repo', commits: 'one', retired: 'hangs' }
 ] as const)(
-  '$source card shows the current account after A -> B -> A in $commits commit(s) while A is pending',
-  async ({ number, source, commits, requested }) => {
+  '$source card shows the current account after A -> B -> A in $commits commit(s) when the retired A request $retired',
+  async ({ number, source, commits, retired }) => {
     const link = parseGitHubIssueOrPRLink(`https://github.com/acme/private/pull/${number}`)!
     function Card() {
       const repo = useAppStore((state) => state.repos[0])
@@ -114,17 +125,41 @@ it.each([
     }
     await settle()
 
-    // The first Alice request was retired by the switch, so its late answer must not paint.
-    await act(async () => requests[0].answer('retired answer'))
-    await settle()
+    // Recovery asks again without waiting on the retired first request.
+    expect(requests.map((request) => request.user)).toEqual(
+      commits === 'separate' ? ['alice', 'bob', 'alice'] : ['alice', 'alice']
+    )
     for (const request of requests.slice(1)) {
       await act(async () => request.answer(`${request.user} answer`))
     }
     await settle()
+    // Its late outcome must not paint.
+    if (retired === 'answers') {
+      await act(async () => requests[0].answer('retired answer'))
+    } else if (retired === 'rejects') {
+      await act(async () => requests[0].fail(new Error('retired failure')))
+    }
+    await settle()
 
-    expect(requests.map((request) => request.user)).toEqual(requested)
     expect(screen.getByText('alice answer')).toBeTruthy()
     expect(screen.queryByText('retired answer')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
+  }
+)
+
+it.each(['routed', 'repo'] as const)(
+  '%s lookup still fails with its error when the binding never changed',
+  async (source) => {
+    const link = parseGitHubIssueOrPRLink(
+      `https://github.com/acme/private/pull/${source === 'routed' ? 911 : 912}`
+    )!
+    const pending =
+      source === 'routed'
+        ? loadRoutedGitHubLinkPreview('local', link)
+        : loadGitHubLinkPreview(alice, link)
+    await settle()
+    requests[0].fail(new Error('gh failed'))
+    await expect(pending).rejects.toThrow('gh failed')
+    expect(requests).toHaveLength(1)
   }
 )
