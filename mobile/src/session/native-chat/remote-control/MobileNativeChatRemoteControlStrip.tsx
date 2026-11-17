@@ -66,10 +66,10 @@ export function MobileNativeChatRemoteControlStrip({
       <MobileClaudeRemoteControlIcon size={14} surface="panel" />
       <Text style={[styles.text, warn && styles.warning]} numberOfLines={2}>
         <Text style={styles.status}>{t('chat.remoteControl.label', 'Remote Control')}</Text>{' '}
-        {failed ? t('chat.remoteControl.changeFailed', "couldn't change it") : stateText(link, t)}
         {!failed && link?.enabledByDefault
-          ? ` · ${t('chat.remoteControl.onByDefault', 'on by default')}`
+          ? `${t('chat.remoteControl.onByDefault', 'on by default')} · `
           : null}
+        {failed ? t('chat.remoteControl.changeFailed', "couldn't change it") : stateText(link, t)}
       </Text>
       {url ? (
         <StripAction
