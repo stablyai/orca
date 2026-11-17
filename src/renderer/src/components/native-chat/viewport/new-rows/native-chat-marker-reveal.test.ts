@@ -39,4 +39,28 @@ describe('the "New" marker brought into view when the window regains focus', () 
       })
     ).toBe('row')
   })
+
+  // With the marker below the viewport top but its row above it, revealing the row scrolled the
+  // reader upward to the row and stopped the transcript following the reply still streaming.
+  it('reveals the marker instead of a row above the viewport top', () => {
+    expect(
+      nativeChatMarkerRevealTarget({
+        markerTop: 24_100,
+        rowTop: 23_900,
+        scrollTop: 24_000,
+        clientHeight: VIEWPORT_PX
+      })
+    ).toBe('marker')
+  })
+
+  it('still reveals the row when it sits at the viewport top and meets the half-height condition', () => {
+    expect(
+      nativeChatMarkerRevealTarget({
+        markerTop: 24_100,
+        rowTop: 24_000,
+        scrollTop: 24_000,
+        clientHeight: VIEWPORT_PX
+      })
+    ).toBe('row')
+  })
 })

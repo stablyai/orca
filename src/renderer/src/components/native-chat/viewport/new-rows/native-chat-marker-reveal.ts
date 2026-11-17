@@ -37,6 +37,10 @@ export function nativeChatMarkerRevealTarget({
   if (markerTop - (scrollTop + clientHeight) > NATIVE_CHAT_BOTTOM_THRESHOLD_PX) {
     return null
   }
+  // A row above the viewport's top edge would scroll the reader upward; reveal the marker instead.
+  if (rowTop !== null && rowTop < scrollTop) {
+    return 'marker'
+  }
   // Reveal the prompt's row unless it would leave the marker too low in the viewport.
   return markerTop - (rowTop ?? markerTop) < clientHeight / 2 ? 'row' : 'marker'
 }
