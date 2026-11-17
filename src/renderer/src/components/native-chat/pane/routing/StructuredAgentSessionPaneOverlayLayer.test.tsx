@@ -93,7 +93,9 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
         unifiedTabsByWorktree: { [WORKTREE_ID]: ['chat-1', 'chat-3'].map(chatTab) }
       })
     )
-    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) } }))
+    act(() =>
+      mocks.store?.setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) } })
+    )
     expect(mountedChats(view.container)).toEqual(['chat-1'])
   })
 })

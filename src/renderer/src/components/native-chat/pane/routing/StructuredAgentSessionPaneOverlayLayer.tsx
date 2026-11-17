@@ -114,7 +114,9 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       [groups]
     )
     const { structuredTabs, structuredTabIds } = useMemo(() => {
-      const tabs = unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab))
+      const tabs = unifiedTabs.filter((tab): tab is StructuredAgentSessionTab =>
+        isStructuredTab(tab)
+      )
       return { structuredTabs: tabs, structuredTabIds: new Set(tabs.map((tab) => tab.id)) }
     }, [unifiedTabs])
     // Why: a chat holds no view state until it is first shown, and mounting every restored chat runs the renderer out of memory at thousands of tabs.
