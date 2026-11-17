@@ -7,11 +7,17 @@ import {
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
+// One tree kill per worker child: a second could walk a reused PID after the first ended the tree.
+const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<void>>()
 
 /** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. */
 export function killAbandonedWorkerChildTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<void> {
+  const started = child instanceof WorkerThreadChildProcess && workerTreeKills.get(child)
+  if (started) {
+    return started
+  }
   if (
     process.platform !== 'win32' ||
     !child.pid ||
@@ -24,6 +30,20 @@ export function killAbandonedWorkerChildTree(
 }
 
 export function killSpawnedCommandTree(
+  child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
+): Promise<void> {
+  if (!(child instanceof WorkerThreadChildProcess)) {
+    return startTreeKill(child)
+  }
+  let kill = workerTreeKills.get(child)
+  if (!kill) {
+    kill = startTreeKill(child)
+    workerTreeKills.set(child, kill)
+  }
+  return kill
+}
+
+function startTreeKill(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<void> {
   const pid = child.pid
@@ -113,7 +133,7 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
     const onSpawn = (): void => {
       detach()
       clearTimeout(timer)
-      void killSpawnedCommandTree(child).then(settle)
+      void startTreeKill(child).then(settle)
     }
     const onClose = (): void => {
       detach()

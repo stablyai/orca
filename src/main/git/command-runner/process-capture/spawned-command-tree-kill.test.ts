@@ -18,7 +18,7 @@ vi.mock('../../../pty/process-retirement/own-chromium-tree-kill-guard', () => ({
 }))
 
 import { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
-import { killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { killAbandonedWorkerChildTree, killSpawnedCommandTree } from './spawned-command-tree-kill'
 
 const originalPlatform = process.platform
 
@@ -101,6 +101,18 @@ describe('Git command tree termination', () => {
     killer.emit('close', 0)
     await pending
     expect(rootKill).not.toHaveBeenCalled()
+  })
+  it('does not taskkill a worker child again when the worker dies during its tree kill', async () => {
+    const child = new WorkerThreadChildProcess(1, () => true)
+    child.receive({ type: 'spawn', id: 1, pid: 4321 })
+    const killer = childWithPid(5678)
+    spawnMock.mockReturnValue(killer)
+    const cancel = killSpawnedCommandTree(child)
+    const abandoned = killAbandonedWorkerChildTree(child)
+
+    killer.emit('close', 0)
+    await Promise.all([cancel, abandoned])
+    expect(spawnMock).toHaveBeenCalledOnce()
   })
   it('still kills the tree when the worker reports the PID after the wait', async () => {
     vi.useFakeTimers()
