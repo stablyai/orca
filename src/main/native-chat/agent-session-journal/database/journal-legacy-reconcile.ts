@@ -103,14 +103,19 @@ type Adoption = {
  * for good, so while it still matches the saved receipt, no write followed any baseline here.
  */
 function missingBaselines(source: Database.Database, db: Database.Database): [string, string][] {
-  return originalChatIds(source)
+  return originalChatIds(source, 'any')
     .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
     .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
 }
 
-function originalChatIds(source: Database.Database): string[] {
+/** Adoption takes chats in the original's saved order; in any order, the id index alone answers. */
+function originalChatIds(source: Database.Database, order: 'saved' | 'any'): string[] {
   return source
-    .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
+    .prepare(
+      order === 'saved'
+        ? 'SELECT session_id FROM agent_session_records ORDER BY rowid'
+        : 'SELECT session_id FROM agent_session_records'
+    )
     .all()
     .map((row) => String(row.session_id))
 }
@@ -124,7 +129,7 @@ function absorbChats(source: Database.Database, db: Database.Database, pass: Pas
     }
   })
   let complete = true
-  for (const id of originalChatIds(source)) {
+  for (const id of originalChatIds(source, 'saved')) {
     try {
       absorbChat(source, db, id, adoption, pass)
     } catch (error) {
