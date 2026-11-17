@@ -26,6 +26,10 @@ function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function parseWindow(value: unknown): ClaudeStatusLineWindow | null {
   if (typeof value !== 'object' || value === null) {
     return null
