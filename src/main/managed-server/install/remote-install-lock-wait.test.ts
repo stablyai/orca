@@ -7,16 +7,12 @@ const lock: {
   createdAt: number
   stolen: boolean
   holderGoneAt: number | null
-  holderLive: boolean
   probes: number
-  steals: string[]
 } = {
   createdAt: 0,
   stolen: false,
   holderGoneAt: null,
-  holderLive: false,
-  probes: 0,
-  steals: []
+  probes: 0
 }
 vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
   execHostCommand: async (_conn: unknown, _host: unknown, command: string) => {
@@ -28,16 +24,11 @@ vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
     }
     if (command.includes('echo "HOLDER_EXITED')) {
       lock.probes += 1
-      if (lock.holderLive && !holderGone) {
-        return 'HOLDER_LIVE\n'
-      }
       return holderGone ? 'HOLDER_EXITED 1794874229:262443 t-dead\n' : ''
     }
     if (command.includes('.steal')) {
-      lock.steals.push(command)
-      // Mirrors the host's rule: stale once older than the threshold, unless a live holder vetoes.
-      const vetoed = lock.holderLive && !holderGone && command.includes('holder_live')
-      lock.stolen = ageSec > 20 * 60 && !vetoed
+      // Mirrors the host's rule: stale only once older than the threshold.
+      lock.stolen = ageSec > 20 * 60
       return lock.stolen ? 'OK' : 'BUSY'
     }
     if (command.includes('echo "$age"')) {
@@ -50,7 +41,7 @@ vi.mock('../../ssh/remote-exec/remote-host-exec', () => ({
   }
 }))
 
-const { acquireInstallLock, RemoteInstallLockBusyError } = await import('./remote-install-lock')
+const { acquireInstallLock } = await import('./remote-install-lock')
 
 // The mocked exec never reads the transport.
 const conn: RemoteInstallTransport = Object.create(null)
@@ -74,9 +65,7 @@ describe('acquireInstallLock waiting on a held lock', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     lock.stolen = false
     lock.holderGoneAt = null
-    lock.holderLive = false
     lock.probes = 0
-    lock.steals = []
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -114,7 +103,6 @@ describe('acquireInstallLock waiting on a held lock', () => {
 
   it('reports a takeover in seconds, not the age countdown, once a holder reads gone', async () => {
     lock.createdAt = Date.now() - 60_000
-    lock.holderLive = true
     lock.holderGoneAt = Date.now() + 90_000
     const waits: InstallLockWait[] = []
     const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
@@ -125,33 +113,8 @@ describe('acquireInstallLock waiting on a held lock', () => {
       onWait: (wait) => waits.push(wait)
     })
     expect(await settle(acquired, 3 * 60_000)).toBe('done')
-    // While the holder runs, no age takeover is promised.
-    expect(waits[0]?.takeoverInMs).toBeNull()
+    // While the holder runs, the age countdown stands; once it reads gone, seconds.
+    expect(waits[0]?.takeoverInMs).toBe(19 * 60_000)
     expect(waits.at(-1)?.takeoverInMs).toBe(5_000)
-  })
-
-  it('never takes a lock by age while its holder still runs', async () => {
-    lock.createdAt = Date.now() - 25 * 60_000
-    lock.holderLive = true
-    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
-      relayGcClaim: false,
-      waitThroughStaleTakeover: true,
-      owner: { fileName: '.orca-fence-owner', token: 't-next' },
-      probeExitedHolder: true
-    })
-    expect(await settle(acquired, 30 * 60_000)).toBeInstanceOf(RemoteInstallLockBusyError)
-    expect(lock.stolen).toBe(false)
-    expect(lock.steals.every((steal) => steal.includes('holder_live'))).toBe(true)
-  })
-
-  it('keeps the age rules, without the veto, when it does not probe holders', async () => {
-    lock.createdAt = Date.now() - 25 * 60_000
-    lock.holderLive = true
-    const acquired = acquireInstallLock(conn, '/home/u/.orca-remote/orcad-1', undefined, {
-      relayGcClaim: false,
-      owner: { fileName: '.orca-fence-owner', token: 't-next' }
-    })
-    expect(await settle(acquired, 60_000)).toBe('done')
-    expect(lock.steals[0]).not.toContain('holder_live')
   })
 })

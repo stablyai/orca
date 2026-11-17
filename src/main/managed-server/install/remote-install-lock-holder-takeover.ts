@@ -8,13 +8,12 @@ import {
 } from './remote-install-lock-commands'
 import {
   installLockHolderExitedProbeCommand,
-  isInstallLockHolderLive,
   parseInstallLockHolderExit,
   type InstallLockHolderExit
 } from './remote-install-lock-holder-commands'
 
 /** A contender's view of a flock-backed lock across probes; one per acquire attempt. */
-export type HolderTakeoverState = { gone: InstallLockHolderExit | null; live: boolean }
+export type HolderTakeoverState = { gone: InstallLockHolderExit | null }
 
 async function answered(work: Promise<string>, fallback: string): Promise<string> {
   try {
@@ -38,14 +37,14 @@ export async function tryTakeOverExitedHolder(
   staleAfterSeconds: number,
   signal?: AbortSignal
 ): Promise<string | null> {
-  const probed = await answered(
-    execHostCommand(conn, host, installLockHolderExitedProbeCommand(lockDir, owner.fileName), {
-      signal
-    }),
-    ''
+  const seen = parseInstallLockHolderExit(
+    await answered(
+      execHostCommand(conn, host, installLockHolderExitedProbeCommand(lockDir, owner.fileName), {
+        signal
+      }),
+      ''
+    )
   )
-  const seen = parseInstallLockHolderExit(probed)
-  state.live = isInstallLockHolderLive(probed)
   const confirmed =
     seen !== null && state.gone?.dirKey === seen.dirKey && state.gone.token === seen.token
   state.gone = seen
@@ -56,10 +55,7 @@ export async function tryTakeOverExitedHolder(
     execHostCommand(
       conn,
       host,
-      tryStealInstallLockCommand(host, lockDir, staleAfterSeconds, owner, undefined, {
-        exited: seen,
-        vetoLiveHolder: true
-      }),
+      tryStealInstallLockCommand(host, lockDir, staleAfterSeconds, owner, undefined, seen),
       { signal }
     ),
     'BUSY'

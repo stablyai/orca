@@ -21,7 +21,6 @@ import {
   installLockHolderExitedProbeCommand,
   installLockHolderUnmarkCommand,
   installLockReleaseGate,
-  isInstallLockHolderLive,
   parseInstallLockHolderExit
 } from './remote-install-lock-holder-commands'
 import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
@@ -101,23 +100,16 @@ function stealAs(
   staleAfterSeconds = 20 * 60
 ): string {
   return sh(
-    tryStealInstallLockCommand(host, lock, staleAfterSeconds, second, undefined, {
-      exited: seen ?? undefined,
-      vetoLiveHolder: true
-    })
+    tryStealInstallLockCommand(host, lock, staleAfterSeconds, second, undefined, seen ?? undefined)
   ).stdout
 }
-
-// -1 makes every lock stale by age, so only the veto can keep it.
-const stealByAge = (lock: string, vetoLiveHolder: boolean): string =>
-  sh(tryStealInstallLockCommand(host, lock, -1, second, undefined, { vetoLiveHolder })).stdout
 
 describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
   it('keeps a live holder from being taken over, then reclaims it once the holder exits', async () => {
     const lock = lockOwnedBy('t-first')
     const holder = await holdLock(lock)
     expect(readFileSync(join(lock, INSTALL_LOCK_HOLDER_FILENAME), 'utf8')).toBe('held')
-    expect(isInstallLockHolderLive(probe(lock))).toBe(true)
+    expect(probe(lock)).toBe('')
     // Even a forged proof cannot take a lock whose holder still holds it.
     const lockKey = sh(`stat -c %Y:%i '${lock}'`).stdout
     expect(stealAs(lock, { dirKey: lockKey, token: 't-first' })).toBe('BUSY')
@@ -187,9 +179,7 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     holder.stdin.end()
     await exited(holder)
     const seen = parseInstallLockHolderExit(probe(lock)) ?? undefined
-    const command = tryStealInstallLockCommand(host, lock, 20 * 60, second, undefined, {
-      exited: seen
-    })
+    const command = tryStealInstallLockCommand(host, lock, 20 * 60, second, undefined, seen)
     const outputs = await Promise.all(
       Array.from(
         { length: 6 },
@@ -234,24 +224,13 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(stealAs(lock, null)).toBe('BUSY')
   })
 
-  it('reports a running holder as live, and vetoes an age takeover only while it runs', async () => {
-    const lock = lockOwnedBy('t-first')
-    const holder = await holdLock(lock)
-    expect(isInstallLockHolderLive(probe(lock))).toBe(true)
-    expect(stealByAge(lock, true)).toBe('BUSY')
-    // A fenced command the holder left running does not count as a live holder.
-    const straggler = start(`${installLockFenceStatement(lock, first)} echo STARTED; sleep 30`)
-    expect(await line(straggler, 'STARTED')).toBe(true)
-    holder.stdin.end()
-    await exited(holder)
-    expect(isInstallLockHolderLive(probe(lock))).toBe(false)
-    expect(stealByAge(lock, true)).toBe('OK')
-  })
-
-  it('still takes a live holder lock by age for contenders that do not veto', async () => {
+  it('still takes a running holder lock by age, so a frozen window cannot block others', async () => {
     const lock = lockOwnedBy('t-first')
     await holdLock(lock)
-    expect(stealByAge(lock, false)).toBe('OK')
+    // -1 makes the lock stale by age.
+    expect(stealAs(lock, null, -1)).toBe('OK')
+    expect(readFileSync(join(lock, OWNER), 'utf8')).toBe('t-second')
+    expect(sh(`${installLockFenceStatement(lock, first)} echo RAN`).code).toBe(75)
   })
 
   it('clears the mark an unconfirmed holder left once it exits', async () => {
@@ -296,19 +275,9 @@ describe('steal without a holder proof', () => {
   it('carries no flock clauses, as on SSH and in older builds', () => {
     const lock = '/l/.install-lock'
     expect(tryStealInstallLockCommand(host, lock, 20 * 60, second)).not.toMatch(/holder|flock/u)
-    const proofWithoutOwner = { exited: { dirKey: '1:2', token: 't-first' } }
+    const proofWithoutOwner = { dirKey: '1:2', token: 't-first' }
     expect(
       tryStealInstallLockCommand(host, lock, 20 * 60, undefined, undefined, proofWithoutOwner)
     ).not.toMatch(/holder|flock/u)
-  })
-
-  it('adds the live-holder veto only when asked', () => {
-    const lock = '/l/.install-lock'
-    const vetoed = tryStealInstallLockCommand(host, lock, 20 * 60, second, undefined, {
-      vetoLiveHolder: true
-    })
-    expect(vetoed).toContain('"$holder_live" = 1')
-    expect(vetoed).toContain('"$current_holder_live" != 1')
-    expect(vetoed).not.toContain('HOLDER_EXITED_OK')
   })
 })

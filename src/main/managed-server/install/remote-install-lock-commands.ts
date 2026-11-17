@@ -16,7 +16,7 @@ import {
 } from './remote-install-lock-boot-identity'
 import {
   posixHolderStealParts,
-  type InstallLockHolderStealOptions
+  type InstallLockHolderExit
 } from './remote-install-lock-holder-commands'
 
 export function acquireInstallLockParentCommand(
@@ -111,8 +111,8 @@ export function tryStealInstallLockCommand(
   staleAfterSeconds: number,
   owner?: InstallLockOwnerFile,
   exitedOwner?: exitedOwnerSteal.InstallLockExitedOwner,
-  /** POSIX only: rules for flock-backed locks. */
-  holder?: InstallLockHolderStealOptions
+  /** POSIX only: a flock-backed lock generation whose holder a probe found gone. */
+  exitedHolder?: InstallLockHolderExit
 ): string {
   if (!isWindowsRemoteHost(host)) {
     return posixStealInstallLockCommand(
@@ -121,7 +121,7 @@ export function tryStealInstallLockCommand(
       staleAfterSeconds,
       owner,
       exitedOwner,
-      holder
+      exitedHolder
     )
   }
   return windowsStealInstallLockCommand(lockDir, staleAfterSeconds, owner, exitedOwner)
@@ -133,12 +133,10 @@ function posixStealInstallLockCommand(
   staleAfterSeconds: number,
   owner?: InstallLockOwnerFile,
   exitedOwner?: exitedOwnerSteal.InstallLockExitedOwner,
-  holderOptions?: InstallLockHolderStealOptions
+  exitedHolder?: InstallLockHolderExit
 ): string {
   const escapedLockDir = quotePosixShell(lockDir)
-  const holder = posixHolderStealParts(lockDir, owner, holderOptions)
-  const fresh = `[ "\${age:-0}" -le ${staleAfterSeconds} ] 2>/dev/null`
-  const stale = `[ "\${current_age:-0}" -gt ${staleAfterSeconds} ] 2>/dev/null`
+  const holder = posixHolderStealParts(lockDir, owner, exitedHolder)
   const escapedStealLockPrefix = quotePosixShell(`${lockDir}.steal`)
   return [
     posixCurrentBootIdentityAssignment(host, 'current_boot_id'),
@@ -148,7 +146,7 @@ function posixStealInstallLockCommand(
     `${posixLockIdentityAssignment(lockDir, 'lock_key')} && mtime=\${lock_key%%:*} && now=$(date +%s) && age=$((now - mtime)) || age=0;`,
     exitedOwnerSteal.posixCheck(lockDir, exitedOwner, 'age', 'exited'),
     ...(holder.check ? [holder.check] : []),
-    `if ${holder.ageVeto ? `{ ${fresh}${holder.ageVeto}; }` : fresh} && [ "$rebooted" != 1 ] && [ "$exited" != 1 ]${holder.gate}; then echo BUSY; else`,
+    `if [ "\${age:-0}" -le ${staleAfterSeconds} ] 2>/dev/null && [ "$rebooted" != 1 ] && [ "$exited" != 1 ]${holder.gate}; then echo BUSY; else`,
     `steal_root=${escapedStealLockPrefix};`,
     'steal_generation=0;',
     'steal="$steal_root.$steal_generation";',
@@ -169,7 +167,7 @@ function posixStealInstallLockCommand(
     'if [ -n "$current_recorded_boot_id" ] && [ -n "$current_boot_id" ] && [ "$current_recorded_boot_id" != "$current_boot_id" ]; then current_rebooted=1; fi;',
     exitedOwnerSteal.posixClaimCheck(lockDir, exitedOwner, posixLockIdentityAssignment),
     ...(holder.claimCheck ? [holder.claimCheck] : []),
-    `if [ "$current_key" = "$lock_key" ] && { ${holder.currentAgeVeto ? `{ ${stale}${holder.currentAgeVeto}; }` : stale} || [ "$current_rebooted" = 1 ] || [ "$current_exited" = 1 ]${holder.claim}; }; then`,
+    `if [ "$current_key" = "$lock_key" ] && { [ "\${current_age:-0}" -gt ${staleAfterSeconds} ] 2>/dev/null || [ "$current_rebooted" = 1 ] || [ "$current_exited" = 1 ]${holder.claim}; }; then`,
     `lock_tombstone=${escapedLockDir}.tombstone.$$.$(date +%s);`,
     `if [ ! -e "$lock_tombstone" ] && mv ${escapedLockDir} "$lock_tombstone" 2>/dev/null; then`,
     `if mkdir ${escapedLockDir} 2>/dev/null; then`,
