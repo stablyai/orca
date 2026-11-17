@@ -17,6 +17,7 @@ import {
   ptyHostGuardsSendApprovals,
   selectSendApprovalGuardEnvironmentIds
 } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -26,7 +27,12 @@ export type RunningAgentTargetState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
 > &
-  Partial<Pick<AppState, 'runtimePaneTitlesByTabId' | 'runtimeStatusByEnvironmentId'>> & {
+  Partial<
+    Pick<
+      AppState,
+      'runtimePaneTitlesByTabId' | 'runtimeStatusByEnvironmentId' | 'paneForegroundAgentByPaneKey'
+    >
+  > & {
     /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets. */
     sendApprovalGuardEnvironmentIds?: ReadonlySet<string>
   }
@@ -102,6 +108,7 @@ function deriveTerminalAgentSendTargets(
 
   const tabsById = new Map(tabs.map((tab) => [tab.id, tab]))
   const targets: TerminalAgentSendTarget[] = []
+  const statusPaneKeys = new Set<string>()
 
   for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     const parsed = parsePaneKey(paneKey)
@@ -112,11 +119,9 @@ function deriveTerminalAgentSendTargets(
     if (!tab) {
       continue
     }
+    statusPaneKeys.add(paneKey)
 
-    const layoutPtyId =
-      state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-    const ptyId =
-      layoutPtyId && state.ptyIdsByTabId?.[parsed.tabId]?.includes(layoutPtyId) ? layoutPtyId : null
+    const ptyId = liveLeafPtyId(state, parsed.tabId, parsed.leafId)
     let disabledReason: string | undefined
 
     // Idle agents emit no hooks, so row age never disables a live pane; the host's process/screen check gates the send.
@@ -148,7 +153,61 @@ function deriveTerminalAgentSendTargets(
     })
   }
 
+  targets.push(...deriveStatuslessTerminalAgentSendTargets(state, tabs, statusPaneKeys))
   return targets
+}
+
+/** Live panes whose agent hasn't reported yet (hooks first fire on a turn), named per pane by the sidebar's title/process/launch owner. */
+function deriveStatuslessTerminalAgentSendTargets(
+  state: RunningAgentTargetState,
+  tabs: TerminalTab[],
+  statusPaneKeys: Set<string>
+): TerminalAgentSendTarget[] {
+  const targets: TerminalAgentSendTarget[] = []
+  const rows = buildTitleDerivedAgentRows({
+    tabs,
+    runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+    ptyIdsByTabId: state.ptyIdsByTabId,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
+    seenPaneKeys: statusPaneKeys,
+    now: 0
+  })
+  for (const row of rows) {
+    const parsed = parsePaneKey(row.paneKey)
+    const ptyId = parsed ? liveLeafPtyId(state, parsed.tabId, parsed.leafId) : null
+    const title = row.entry.terminalTitle ?? null
+    const titleStatus = detectAgentSendTitleStatus(title)
+    // A launch or shell command title names the agent before its TUI takes input; wait for its own state title.
+    if (!parsed || !ptyId || !titleStatus) {
+      continue
+    }
+    const disabledReason =
+      titleStatus === 'permission'
+        ? 'Agent needs permission'
+        : hookSilentAgentSendRefusal(state, row.tab, ptyId, null, title)
+    targets.push({
+      kind: 'terminal',
+      paneKey: row.paneKey,
+      tabId: parsed.tabId,
+      leafId: parsed.leafId,
+      tab: row.tab,
+      entry: row.entry,
+      ptyId,
+      status: disabledReason ? 'disabled' : 'eligible',
+      ...(disabledReason ? { disabledReason } : {})
+    })
+  }
+  return targets
+}
+
+function liveLeafPtyId(
+  state: RunningAgentTargetState,
+  tabId: string,
+  leafId: string
+): string | null {
+  const layoutPtyId = state.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId] ?? null
+  return layoutPtyId && state.ptyIdsByTabId?.[tabId]?.includes(layoutPtyId) ? layoutPtyId : null
 }
 
 // Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes first-turn chats.
@@ -204,7 +263,7 @@ function resolveLeafTitle(
 const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
 
 /** launchAgent names the tab's original PTY locally; a paired tab's ptyId follows its active pane, so any pane may be the launched one. */
-export function launchAgentMayOwnPane(tab: Pick<TerminalTab, 'ptyId'>, ptyId: string): boolean {
+function launchAgentMayOwnPane(tab: Pick<TerminalTab, 'ptyId'>, ptyId: string): boolean {
   return ptyId === tab.ptyId || isRemoteRuntimePtyId(ptyId)
 }
 

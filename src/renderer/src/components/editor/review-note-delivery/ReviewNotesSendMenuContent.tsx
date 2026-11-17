@@ -13,7 +13,8 @@ import {
 } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectRuntimePaneTitlesForWorktree,
-  selectLivePtyIdsForWorktree
+  selectLivePtyIdsForWorktree,
+  selectPaneForegroundAgentsForWorktree
 } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import { useAppStore } from '@/store/index'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
@@ -111,6 +112,7 @@ export function ReviewNotesSendMenuContent({
         selectTerminalLayoutsForWorktree(state, worktreeId),
         selectLivePtyIdsForWorktree(state, worktreeId),
         selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        selectPaneForegroundAgentsForWorktree(state, worktreeId),
         selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId),
         state.agentStatusEpoch
       ]

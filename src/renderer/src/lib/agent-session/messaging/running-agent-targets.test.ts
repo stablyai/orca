@@ -155,3 +155,35 @@ describe('deriveRunningAgentSendTargets terminal liveness', () => {
     })
   })
 })
+
+describe('deriveRunningAgentSendTargets before the first hook', () => {
+  it('lists a fresh Pi pane that has no status row yet, including the unfocused half of a split', () => {
+    const split: TerminalPaneLayoutNode = {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: LEAF_ID },
+      second: { type: 'leaf', leafId: SIBLING_LEAF_ID }
+    }
+    const base = state(entry({}), ['pty-1', 'pty-2'], 'zsh', split)
+    const fresh: RunningAgentTargetState = {
+      ...base,
+      agentStatusByPaneKey: acceptedAgentStatuses([]),
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: split,
+          activeLeafId: SIBLING_LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1', [SIBLING_LEAF_ID]: 'pty-2' }
+        }
+      },
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: '\u03c0 - orca', 2: 'zsh' } }
+    }
+
+    expect(
+      deriveRunningAgentSendTargets(fresh, 'wt').map((target) => ({
+        paneKey: target.paneKey,
+        status: target.status
+      }))
+    ).toEqual([{ paneKey: PANE_KEY, status: 'eligible' }])
+  })
+})

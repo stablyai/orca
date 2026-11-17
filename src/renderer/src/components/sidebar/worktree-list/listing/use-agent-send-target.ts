@@ -13,6 +13,7 @@ const EMPTY_UNIFIED_TABS_BY_WORKTREE: AppState['unifiedTabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
+const EMPTY_PANE_FOREGROUND_AGENTS: AppState['paneForegroundAgentByPaneKey'] = {}
 const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
 
 // Force the picker’s target workspace visible only while a running agent there can receive the message.
@@ -40,6 +41,9 @@ export function useAgentSendTargetWorktreeId(): string | null {
   const agentTargetRuntimePaneTitlesByTabId = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
   )
+  const agentTargetPaneForegroundAgents = useAppStore((s) =>
+    agentSendPopoverTargetMode ? s.paneForegroundAgentByPaneKey : EMPTY_PANE_FOREGROUND_AGENTS
+  )
   const agentTargetGuardedHosts = useAppStore((s) =>
     agentSendPopoverTargetMode
       ? selectSendApprovalGuardEnvironmentIds(s.runtimeStatusByEnvironmentId)
@@ -59,6 +63,7 @@ export function useAgentSendTargetWorktreeId(): string | null {
             terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
             ptyIdsByTabId: agentTargetPtyIdsByTabId,
             runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId,
+            paneForegroundAgentByPaneKey: agentTargetPaneForegroundAgents,
             sendApprovalGuardEnvironmentIds: agentTargetGuardedHosts
           },
           agentSendPopoverTargetMode.worktreeId
@@ -77,6 +82,7 @@ export function useAgentSendTargetWorktreeId(): string | null {
       agentTargetTerminalLayoutsByTabId,
       agentTargetPtyIdsByTabId,
       agentTargetRuntimePaneTitlesByTabId,
+      agentTargetPaneForegroundAgents,
       agentTargetGuardedHosts
     ]
   )
