@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../../types'
+import { useAppStore } from '@/store'
 import type { EphemeralVmRuntimeRecord } from '../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
-import {
-  createEphemeralVmLifecycleSlice,
-  projectEphemeralVmWorkspaceRuntimes
-} from './ephemeral-vm-lifecycle'
+import { projectEphemeralVmWorkspaceRuntimes } from './ephemeral-vm-lifecycle'
 
 const result: EphemeralVmRuntimeRecord['recipeResult'] = {
   schemaVersion: 1,
@@ -65,24 +61,21 @@ describe('refreshEphemeralVmRuntimes', () => {
   it('publishes a refresh that only moves updatedAt, projectId or the environment build', async () => {
     let records = [record('vm', 'running', { recipeResult: result })]
     vi.stubGlobal('window', { api: { ephemeralVm: { listRuntimes: async () => records } } })
-    const store = create<AppState>()(
-      (...args) => createEphemeralVmLifecycleSlice(...args) as unknown as AppState
-    )
-    const runtime = () => store.getState().ephemeralVmRuntimesByWorkspaceId['ws-1']
-    await store.getState().refreshEphemeralVmRuntimes()
+    const runtime = () => useAppStore.getState().ephemeralVmRuntimesByWorkspaceId['ws-1']
+    await useAppStore.getState().refreshEphemeralVmRuntimes()
 
     records = [record('vm', 'running', { recipeResult: result, updatedAt: 2 })]
-    await store.getState().refreshEphemeralVmRuntimes()
+    await useAppStore.getState().refreshEphemeralVmRuntimes()
     expect(runtime()?.updatedAt).toBe(2)
 
     records = [
       record('vm', 'running', { recipeResult: result, updatedAt: 2, projectId: 'project-1' })
     ]
-    await store.getState().refreshEphemeralVmRuntimes()
+    await useAppStore.getState().refreshEphemeralVmRuntimes()
     expect(runtime()?.projectId).toBe('project-1')
 
     const unchanged = runtime()
-    await store.getState().refreshEphemeralVmRuntimes()
+    await useAppStore.getState().refreshEphemeralVmRuntimes()
     expect(runtime()).toBe(unchanged)
   })
 })
