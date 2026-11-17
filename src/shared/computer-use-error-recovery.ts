@@ -151,7 +151,7 @@ export function computerUseErrorRecoveryData(
       )
     case 'screenshot_failed':
       return recoverWith(
-        'If the accessibility tree is sufficient, rerun without screenshots instead of retrying the same capture: drop `--screenshot` from an action command, or add `--no-screenshot` to `get-app-state`.',
+        'If the accessibility tree is sufficient, rerun without screenshots instead of retrying the same capture: drop `--screenshot`, `--screenshot-format`, `--screenshot-scale` and `--screenshot-max-edge` from an action command, or add `--no-screenshot` to `get-app-state`.',
         'If the message mentions Screen Recording or screenshots permission, run `orca computer permissions --id screenshots --json` and grant access before retrying.',
         'If the message mentions the payload cap, target a smaller/current window or rerun without screenshots as above.'
       )
