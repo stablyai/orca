@@ -13,6 +13,7 @@ import {
   readWorkspaceFileDragSource,
   WORKSPACE_FILE_PATH_MIME
 } from '@/lib/files/drop/workspace-file-drag'
+import { currentWorkspaceFileDragSource } from '@/lib/files/drop/workspace-file-drag-source'
 import { useAppStore } from '@/store'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
@@ -99,11 +100,15 @@ function resolveDropTarget(
       ? { kind: 'notice', message: target.message }
       : { kind: 'navigate', url: target.url }
   }
-  const docTarget = resolveWorkspaceDocAddressTarget(
-    useAppStore.getState(),
-    source.workspaceId,
-    filePath
-  )
+  const state = useAppStore.getState()
+  // The document opens from the workspace's current host, so it must still be the host the drag named.
+  if (
+    currentWorkspaceFileDragSource(state, source.workspaceId)?.executionHostId !==
+    source.executionHostId
+  ) {
+    return { kind: 'notice', message: remoteFileBrowserUnsupportedMessage() }
+  }
+  const docTarget = resolveWorkspaceDocAddressTarget(state, source.workspaceId, filePath)
   if (docTarget.status === 'workspace-doc') {
     return { kind: 'workspace-doc', docLocation: docTarget.docLocation }
   }

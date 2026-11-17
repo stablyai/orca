@@ -151,7 +151,8 @@ export function useBrowserPageNavigationDownloads({
     (event: DragEvent<HTMLDivElement>) => {
       const drop = resolveBrowserPageWorkspaceFileDrop(event, {
         worktreeId,
-        pageRect: webviewRef.current?.getBoundingClientRect() ?? null,
+        // The container stays laid out when a load failure hides the guest.
+        pageRect: webviewRef.current?.parentElement?.getBoundingClientRect() ?? null,
         allowFileUrl: true
       })
       if (drop?.kind === 'notice') {
