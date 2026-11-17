@@ -65,6 +65,7 @@ test('plugins and themes sharing a name show their publishers', async ({ orcaPag
 
     await openSettingsPane(orcaPage, 'plugins')
     const section = orcaPage.locator('[data-settings-section="plugins"]')
+    await section.getByRole('tab', { name: /^Installed/ }).click()
     await expect(section.getByText(/^Catppuccin for Orca/).first()).toBeVisible()
     await orcaPage.screenshot({
       path: join(proofDir ?? testInfo.outputPath(), 'plugin-list.png')
