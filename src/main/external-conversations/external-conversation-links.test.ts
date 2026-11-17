@@ -154,4 +154,30 @@ describe('external conversation links in a legacy profile', () => {
       sshHostId: sshHost
     })
   })
+
+  it('drops a link a refused metadata write moved by stamping its legacy row', () => {
+    const sshHost = 'ssh:conn-1'
+    const keys = ['instance-1', 'instance-2'].map((instanceId) =>
+      canonicalWorktreeIdentity({ executionHostId: sshHost, instanceId })
+    )
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: 'repo-1', path: '/work', connectionId: 'conn-1' })],
+      worktreeMeta: { [WORKTREE]: { externalConversations: [link(FIRST_PANE)] } },
+      worktreeMetaByIdentity: Object.fromEntries(
+        keys.map((key, index) => [key, { instanceId: `instance-${index + 1}`, hostId: sshHost }])
+      ),
+      // Two identities for one locator make an instance-less write ambiguous, so it is refused.
+      worktreeIdentityAliases: { [composeWorktreeHostIdentity(sshHost, WORKTREE)]: keys }
+    })
+    const store = createStore()
+    expect(findLink(store, KEY)?.workspace).toEqual(WORKSPACE)
+
+    expect(() =>
+      store.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE, hostId: sshHost }), {
+        lastActivityAt: 5
+      })
+    ).toThrow('ambiguous')
+    expect(findLink(store, KEY)).toBeNull()
+  })
 })

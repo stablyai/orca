@@ -119,15 +119,9 @@ export function* allLinks(store: ExternalConversationLinkStore): Generator<Linke
 type LinkIndex = {
   byPane: Map<string, LinkedConversation>
   byConversation: Map<string, LinkedConversation>
-  /** Each folder's id and links as indexed, so a folder write that kept them reuses the index. */
-  folderLinks: readonly (readonly [string, unknown])[]
 }
 
-type LinkIndexSlot = {
-  current: LinkIndex | null
-  /** The index a folder-only write set aside until a lookup shows whether folder links moved. */
-  folderHeld: LinkIndex | null
-}
+type LinkIndexSlot = { current: LinkIndex | null }
 
 const linkIndexes = new WeakMap<ExternalConversationLinkStore, LinkIndexSlot>()
 
@@ -140,8 +134,7 @@ function conversationIndexKey(key: ConversationKey): string {
 function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
   const index: LinkIndex = {
     byPane: new Map(),
-    byConversation: new Map(),
-    folderLinks: folderLinkRefs(store)
+    byConversation: new Map()
   }
   // First in scan order wins, as the scans this replaces returned.
   for (const linked of allLinks(store)) {
@@ -156,25 +149,6 @@ function buildLinkIndex(store: ExternalConversationLinkStore): LinkIndex {
   return index
 }
 
-function folderLinkRefs(store: ExternalConversationLinkStore): [string, unknown][] {
-  return (store.getFolderWorkspaces?.() ?? []).map((folder) => [
-    folder.id,
-    folder.externalConversations
-  ])
-}
-
-function sameFolderLinks(store: ExternalConversationLinkStore, index: LinkIndex): boolean {
-  const folders = store.getFolderWorkspaces?.() ?? []
-  return (
-    folders.length === index.folderLinks.length &&
-    folders.every(
-      (folder, i) =>
-        folder.id === index.folderLinks[i][0] &&
-        folder.externalConversations === index.folderLinks[i][1]
-    )
-  )
-}
-
 function hasStateWrites(
   store: ExternalConversationLinkStore
 ): store is ExternalConversationLinkStore &
@@ -186,19 +160,15 @@ function watchLinkWrites(
   store: ExternalConversationLinkStore &
     Required<Pick<ExternalConversationLinkStore, 'onStateWritten'>>
 ): LinkIndexSlot {
-  const slot: LinkIndexSlot = { current: null, folderHeld: null }
-  // Synchronous with the write, so no lookup can see a removed or moved link.
+  const slot: LinkIndexSlot = { current: null }
+  // Synchronous with the write, so no lookup can see a removed or moved link. One metadata row's
+  // write can change which row other locators and hosts resolve to, so any such write drops it.
   store.onStateWritten((dirtyDomains) => {
-    if (dirtyDomains?.length && dirtyDomains.every((domain) => domain === 'folderWorkspaces')) {
-      // Folder sort stamps and unread flags save under this domain on every agent phase change.
-      slot.folderHeld = slot.current ?? slot.folderHeld
-      slot.current = null
-    } else if (
+    if (
       savedWorkspaceCatalog(dirtyDomains) ||
       dirtyDomains?.some((domain) => LINK_DOMAINS.includes(domain))
     ) {
-      // One metadata row's write can change which row other locators and hosts resolve to.
-      slot.current = slot.folderHeld = null
+      slot.current = null
     }
   })
   return slot
@@ -214,10 +184,6 @@ function linkIndex(store: ExternalConversationLinkStore): LinkIndex {
     slot = watchLinkWrites(store)
     linkIndexes.set(store, slot)
   }
-  if (!slot.current && slot.folderHeld && sameFolderLinks(store, slot.folderHeld)) {
-    slot.current = slot.folderHeld
-  }
-  slot.folderHeld = null
   slot.current ??= buildLinkIndex(store)
   return slot.current
 }
