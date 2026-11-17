@@ -280,6 +280,9 @@ importers:
       react-i18next:
         specifier: 17.0.19
         version: 17.0.19(@types/react@19.2.18)(i18next@26.7.2(typescript@7.0.2))(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2)
+      saxes:
+        specifier: 6.0.0
+        version: 6.0.0
       serve-sim:
         specifier: 0.1.47
         version: 0.1.47(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2)
@@ -7543,6 +7546,10 @@ packages:
     resolution: {integrity: sha512-6R3J5M4AcbtLUdZmRv2SygeVaM7IhrLXu9BmnOGmmACak8fiUtOsYNWUS4uK7upbmHIBbLBeFeI//477BKLBzA==}
     engines: {node: '>=11.0.0'}
 
+  saxes@6.0.0:
+    resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
+    engines: {node: '>=v12.22.7'}
+
   scheduler@0.27.0:
     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
 
@@ -8298,6 +8305,9 @@ packages:
   xmlbuilder@15.1.1:
     resolution: {integrity: sha512-yMqGBqtXyeN1e3TGYvgNgDVZ3j84W4cwkOXQswghol6APgZWaff9lnbvN7MHYJOiXsvGPXtjTYJEiC9J2wv9Eg==}
     engines: {node: '>=8.0'}
+
+  xmlchars@2.2.0:
+    resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
   y18n@4.0.3:
     resolution: {integrity: sha512-JKhqTOwSrqNA1NY5lSztJ1GrBiUodLMmIZuLiDaMRJ+itFd+ABVE8XBjOvIWL+rSqNDC74LCSFmlb/U4UZ4hJQ==}
@@ -15056,6 +15066,10 @@ snapshots:
 
   sax@1.6.0: {}
 
+  saxes@6.0.0:
+    dependencies:
+      xmlchars: 2.2.0
+
   scheduler@0.27.0: {}
 
   semver-compare@1.0.0:
@@ -15759,6 +15773,8 @@ snapshots:
   ws@8.22.0(patch_hash=9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14): {}
 
   xmlbuilder@15.1.1: {}
+
+  xmlchars@2.2.0: {}
 
   y18n@4.0.3: {}
 

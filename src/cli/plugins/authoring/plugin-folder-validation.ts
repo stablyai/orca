@@ -1,3 +1,6 @@
+import { z } from 'zod'
+import { readPluginPanelSvg } from '../../../main/plugins/media/plugin-panel-svg'
+import { canonicalPluginPanelIcon } from '../../../shared/plugins/contributions/plugin-panel-contribution'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
@@ -120,6 +123,40 @@ export async function validatePluginTarget(target: string): Promise<PluginValida
     ...strictPluginArtifactWarnings(manifest, manifestTextReader(root)),
     ...hostCalls.warnings
   ]
+  if (manifest.manifestVersion === 2) {
+    for (const panel of manifest.contributes.panels) {
+      if (panel.icon && !canonicalPluginPanelIcon(panel.icon)) {
+        try {
+          await readPluginPanelSvg(root, panel.icon)
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error)
+          const detail = reason.includes('32768-byte') ? 'exceeds 32 KB' : reason
+          warnings.push(
+            `Panel "${panel.title}": icon "${panel.icon}" isn't used (${detail}). Showing the plug icon instead.`
+          )
+        }
+      }
+    }
+  } else {
+    const panels = z
+      .object({
+        contributes: z
+          .object({
+            panels: z
+              .array(z.object({ title: z.string().optional(), icon: z.unknown().optional() }))
+              .optional()
+          })
+          .optional()
+      })
+      .safeParse(raw).data?.contributes?.panels
+    for (const panel of panels ?? []) {
+      if (typeof panel.icon === 'string' && !canonicalPluginPanelIcon(panel.icon)) {
+        warnings.push(
+          `Panel "${panel.title ?? ''}": icon "${panel.icon}" isn't used (custom icons require manifest format 2). Showing the plug icon instead.`
+        )
+      }
+    }
+  }
   return {
     path: root,
     file,

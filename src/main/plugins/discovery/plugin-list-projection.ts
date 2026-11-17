@@ -1,3 +1,4 @@
+import { canonicalPluginPanelIcon } from '../../../shared/plugins/contributions/plugin-panel-contribution'
 import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { needsReconsent } from '../../../shared/plugins/approval/plugin-consent-state'
 import { pluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
@@ -81,6 +82,24 @@ const devChangeCountOf = (plugin: DiscoveredPlugin) =>
   plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
+
+export function projectPluginPanelIcon(
+  icon: string | undefined,
+  manifestVersion: number,
+  pluginKey: string,
+  contentHash: string | null,
+  index: number
+): string {
+  if (!icon) {
+    return 'plug'
+  }
+  return (
+    canonicalPluginPanelIcon(icon) ??
+    (manifestVersion === 2
+      ? pluginInstalledImageUrl(pluginKey, contentHash ?? 'dev', `panel-${index}`)
+      : 'plug')
+  )
+}
 
 export async function buildPluginList(
   service: PluginService,
@@ -189,10 +208,16 @@ export async function buildPluginList(
           kind: capability.kind,
           description: PLUGIN_CAPABILITY_DESCRIPTIONS[capability.kind]
         })),
-        panels: plugin.manifest.contributes.panels.map((panel) => ({
+        panels: plugin.manifest.contributes.panels.map((panel, index) => ({
           id: panel.id,
           title: panel.title,
-          ...(panel.icon ? { icon: panel.icon } : {}),
+          icon: projectPluginPanelIcon(
+            panel.icon,
+            plugin.manifest.manifestVersion,
+            plugin.pluginKey,
+            plugin.contentHash,
+            index
+          ),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({

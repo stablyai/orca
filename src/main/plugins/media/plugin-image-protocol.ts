@@ -32,6 +32,11 @@ async function readInstalledImage(
   if (!isCurrentContent(plugin, contentHash)) {
     return null
   }
+  const panelMatch = /^panel-(\d{1,2})$/.exec(slot)
+  if (panelMatch && plugin.manifest.manifestVersion === 2) {
+    const bytes = plugin.panelIconBytes?.get(Number(panelMatch[1]))
+    return bytes ? { bytes, mimeType: 'image/svg+xml' } : null
+  }
   const declared = declaredPluginImages(plugin.manifest).find(
     (candidate) => candidate.slot === slot
   )
@@ -85,6 +90,9 @@ export function createPluginImageRequestHandler(
               ? 'no-store'
               : 'private, max-age=31536000, immutable',
           'X-Content-Type-Options': 'nosniff',
+          ...(asset.mimeType === 'image/svg+xml'
+            ? { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" }
+            : {}),
           // Why: web fonts load in CORS mode; only the default session handles this scheme, so
           // plugin frames and browser tabs, which use their own sessions, still cannot reach it.
           ...(isFont ? { 'Access-Control-Allow-Origin': '*' } : {})

@@ -1,5 +1,5 @@
-import { createReadStream } from 'node:fs'
-import { realpath, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, open, realpath, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { pathInsidePluginRoot } from '../../../shared/plugins/artifacts/plugin-root-containment'
 
@@ -30,18 +30,81 @@ export async function readContainedPluginArtifactBytes(
   relativePath: string,
   maxBytes: number
 ): Promise<Buffer> {
-  const artifact = await resolveContainedPluginArtifact(rootDir, relativePath, maxBytes)
-  const chunks: Buffer[] = []
-  let totalBytes = 0
-  for await (const chunk of createReadStream(artifact)) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    totalBytes += bytes.byteLength
-    if (totalBytes > maxBytes) {
-      throw new Error(`exceeds the ${maxBytes}-byte artifact limit`)
+  const candidate = resolve(rootDir, ...relativePath.split(/[\\/]/))
+  let expired = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const read = async (): Promise<Buffer> => {
+    const rootReal = await realpath(resolve(rootDir))
+    const before = await lstat(candidate)
+    if (before.isSymbolicLink()) {
+      throw new Error('is a symbolic link')
     }
-    chunks.push(bytes)
+    const handle = await open(
+      candidate,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    )
+    try {
+      if (expired) {
+        throw new Error('artifact read timed out')
+      }
+      const opened = await handle.stat()
+      if (!opened.isFile()) {
+        throw new Error('is not a regular file')
+      }
+      if (opened.size > maxBytes) {
+        throw new Error(`exceeds the ${maxBytes}-byte artifact limit`)
+      }
+      // Why: ancestor replacement remains a shared plugin-asset boundary; handle-bound containment needs a repo-wide fix.
+      const artifactReal = await realpath(candidate)
+      if (!isInsidePluginRoot(rootReal, artifactReal)) {
+        throw new Error('resolves outside the plugin directory')
+      }
+      const after = await stat(artifactReal)
+      if (
+        opened.dev !== after.dev ||
+        opened.ino !== after.ino ||
+        before.dev !== opened.dev ||
+        before.ino !== opened.ino
+      ) {
+        throw new Error('changed while opening')
+      }
+      const chunks: Buffer[] = []
+      let total = 0
+      while (total <= maxBytes) {
+        if (expired) {
+          throw new Error('artifact read timed out')
+        }
+        const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, maxBytes + 1 - total))
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, null)
+        if (bytesRead === 0) {
+          break
+        }
+        chunks.push(chunk.subarray(0, bytesRead))
+        total += bytesRead
+      }
+      if (total > maxBytes) {
+        throw new Error(`exceeds the ${maxBytes}-byte artifact limit`)
+      }
+      return Buffer.concat(chunks, total)
+    } finally {
+      await handle.close()
+    }
   }
-  return Buffer.concat(chunks, totalBytes)
+  try {
+    return await Promise.race([
+      read(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          expired = true
+          reject(new Error('artifact read timed out'))
+        }, 5000)
+      })
+    ])
+  } finally {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
 }
 
 /** Whether a real path lies strictly inside the plugin's real root. */

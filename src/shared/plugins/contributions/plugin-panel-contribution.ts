@@ -6,6 +6,7 @@ import {
   pluginPathFieldDoc,
   pluginFieldDoc,
   PLUGIN_PANEL_UI_SINCE,
+  PLUGIN_PANEL_SVG_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_SOURCE_MODULES_SINCE
 } from '../manifest/plugin-schema-field-docs'
@@ -97,6 +98,11 @@ export const PLUGIN_PANEL_UI_KINDS = ['html', 'components'] as const
 export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
 const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
+export const pluginIconReferenceSchema = z.union([
+  z.enum(PLUGIN_PANEL_ICONS),
+  z.string().min(1).max(1024).meta({ 'x-orca-since': PLUGIN_PANEL_SVG_SINCE })
+])
+
 export const pluginPanelContributionSchema = z
   .object({
     id: pluginIdSchema.meta(
@@ -111,17 +117,14 @@ export const pluginPanelContributionSchema = z
         'Dashboard'
       ])
     ),
-    icon: z
-      .enum(PLUGIN_PANEL_ICONS)
-      .optional()
-      .meta({
-        ...pluginFieldDoc(
-          'Icon shown in the right-sidebar activity bar. Defaults to `plug`.',
-          PLUGIN_SCHEMA_SINCE_V1,
-          ['database']
-        ),
-        [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
-      }),
+    icon: pluginIconReferenceSchema.optional().meta({
+      ...pluginFieldDoc(
+        'Icon shown in the right-sidebar activity bar: a built-in name or, since Orca 1.4.255 with manifest format 2, a plugin-relative SVG path. SVGs must be at most 32 KB, parseable XML with a viewBox, and must not contain a doctype, processing instructions, scripts, foreignObject, event handlers, external hrefs, external CSS URLs, CSS escapes or at-rules. Orca uses only the shape and drops colors; use a 24x24 viewBox with about 2px padding. Invalid icons fall back to `plug`. Example: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 12h16" stroke="black" stroke-width="2"/></svg>`.',
+        PLUGIN_SCHEMA_SINCE_V1,
+        ['database']
+      ),
+      [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_PANEL_ICON_SINCE
+    }),
     entry: pluginRelativePathSchema.meta(
       pluginPathFieldDoc(
         `What the panel runs: an HTML page for \`ui: "html"\`, a \`.js\`/\`.mjs\` module for \`ui: "components"\`. Either may instead be a \`.ts\`/\`.tsx\`/\`.mts\`/\`.jsx\` file, which Orca transpiles when it loads (needs \`engines.orca\` \`>=${PLUGIN_SOURCE_MODULES_SINCE}\`; an \`html\` panel then gets a generated page around it). It is trusted code: install panels you trust.`,
