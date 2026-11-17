@@ -231,8 +231,8 @@ export function TerminalShortcutSettings({
       <SettingsSection
         title={t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
         footer={t(
-          'components.terminalShortcutSettings.moreKeysDescription',
-          'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
+          'components.terminalShortcutSettings.keyRowDescription',
+          'These keys and buttons sit on the terminal key row. Toggle one to show or hide it, and hold the grip to drag it into the order you want. When the keys move to the side rail, the keys it leaves out sit under ⋯.'
         )}
       >
         <DragReorderList
