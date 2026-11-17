@@ -7,11 +7,23 @@ import {
 const items: WorkspaceCreateTaskItem[] = [
   {
     provider: 'github',
-    source: { type: 'issue', repoId: 'repo-1', number: 1, title: 'Task', url: 'https://tasks.test/1' }
+    source: {
+      type: 'issue',
+      repoId: 'repo-1',
+      number: 1,
+      title: 'Task',
+      url: 'https://tasks.test/1'
+    }
   },
   {
     provider: 'gitlab',
-    source: { type: 'issue', repoId: 'repo-1', number: 1, title: 'Task', url: 'https://tasks.test/1' }
+    source: {
+      type: 'issue',
+      repoId: 'repo-1',
+      number: 1,
+      title: 'Task',
+      url: 'https://tasks.test/1'
+    }
   },
   {
     provider: 'linear',

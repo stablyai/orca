@@ -206,16 +206,14 @@ export async function submitFolderWorkspaceCreate({
     ...(setupSupported ? setupApproval : {}),
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
     ...(hostStartsTerminal
-      ? {
-          ...buildFolderWorkspaceHostStartupPayload({
-            quickAgent,
-            note,
-            launchDraftPrompt,
-            agentArgs,
-            sessionOptions,
-            launchSource
-          })
-        }
+      ? buildFolderWorkspaceHostStartupPayload({
+          quickAgent,
+          note,
+          launchDraftPrompt,
+          agentArgs,
+          sessionOptions,
+          launchSource
+        })
       : {}),
     projectGroupId: projectGroup.id,
     name: workspaceName,
