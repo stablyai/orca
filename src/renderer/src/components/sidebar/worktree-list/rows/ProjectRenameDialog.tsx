@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 
 export function ProjectRenameDialog({

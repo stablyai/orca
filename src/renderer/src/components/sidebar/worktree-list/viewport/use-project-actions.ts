@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
