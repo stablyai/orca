@@ -7,6 +7,12 @@ export const CLAUDE_INJECTED_CONFIG_DIR_ENV = 'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
 /** The user's own CLAUDE_CONFIG_DIR an injected value replaced; System default restores it. */
 export const CLAUDE_USER_CONFIG_DIR_ENV = 'ORCA_CLAUDE_USER_CONFIG_DIR'
 
+export const CLAUDE_CHOSEN_ACCOUNT_UNKNOWN_MESSAGE =
+  "A plugin chose a Claude account for this launch that is not one of Orca's saved accounts."
+
+export const CLAUDE_CHOSEN_ACCOUNT_UNSUPPORTED_MESSAGE =
+  'A plugin chose a Claude account for this launch, but Orca runs a chosen account only for Claude in a local terminal on this computer.'
+
 export const CLAUDE_PROFILE_MISSING_MESSAGE =
   "The selected Claude account's folder is missing. Sign in to it again or choose another account."
 

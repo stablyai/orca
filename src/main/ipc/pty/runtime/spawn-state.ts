@@ -61,6 +61,8 @@ export type RuntimePtySpawnState = {
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
   launchCommand: string | undefined
+  /** The saved Claude account an `agent.launch.before` plugin chose; internal, never from args. */
+  pluginAccountId?: string
   claudeAuth: ClaudeRuntimeAuthPreparation | null
   shouldPersistHostSessionBinding: boolean
   hostSessionBinding:

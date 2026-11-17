@@ -13,6 +13,7 @@ import {
   CLAUDE_USER_CONFIG_DIR_ENV
 } from '../../../../shared/agent-accounts/claude/claude-profile-routing'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
+import { prepareChosenClaudeLaunch } from './claude-profile-chosen-launch'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ClaudeManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { probeRecentClaudeCliVersion } from '../../../claude/cli-capabilities/claude-hook-event-versions'
@@ -194,6 +195,16 @@ export class ClaudeProfileRouter {
 
   accountHome(accountId: string): string {
     return this.describe(accountId).home
+  }
+
+  /** Like prepareLaunch(), for a saved host account a launch plugin chose over the selection. */
+  prepareLaunchFor(accountId: string): Promise<ClaudeRuntimeAuthPreparation> {
+    return prepareChosenClaudeLaunch(this, accountId, {
+      envReady: this.envReady,
+      env: () => this.env,
+      profile: (id) => this.describe(id),
+      setUp: (profile) => this.setUp(profile)
+    })
   }
 
   async prepareAccount(accountId: string): Promise<string> {

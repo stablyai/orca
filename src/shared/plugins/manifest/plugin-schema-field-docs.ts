@@ -54,3 +54,6 @@ export function pluginFieldDoc(
     ? { description, 'x-orca-since': since, examples: [...examples] }
     : { description, 'x-orca-since': since }
 }
+
+/** First release that runs an `agent.launch.before` plugin's `accountId`; older releases ignore it. */
+export const PLUGIN_LAUNCH_HOOK_ACCOUNT_SINCE = '1.4.262'

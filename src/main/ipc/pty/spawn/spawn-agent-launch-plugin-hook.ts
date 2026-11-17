@@ -21,11 +21,12 @@ type AgentSpawnArgs = {
  * `agent.launch.before` at the one place every agent terminal starts (window, runtime, CLI,
  * automation, orchestration), before the spawn goes to its host, so SSH, WSL and daemon terminals
  * are decided on this Orca. Restores and resumes are not launches. Throws PluginHookDeniedError.
+ * A chosen `accountId` is returned beside the args, never on them: callers can forge args.
  */
 export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
   args: Args,
   runtime: { ensureStructuredAgentSessionHost(): Promise<void> } | undefined
-): Promise<Args> {
+): Promise<{ args: Args; accountId?: string }> {
   const { launchAgent, command } = args
   if (
     !launchAgent ||
@@ -35,7 +36,7 @@ export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
     args.resumeProviderSession !== undefined ||
     !pluginHookWanted('agent.launch.before')
   ) {
-    return args
+    return { args }
   }
   const kind = args.worktreeId ? workspaceKindForWorktreeId(args.worktreeId) : null
   const decided = await runPluginHook(
@@ -63,5 +64,8 @@ export async function applyAgentLaunchPluginHook<Args extends AgentSpawnArgs>(
     // wsl.exe imports only the variables WSLENV names.
     addWslEnvKeys(env, addedKeys)
   }
-  return { ...args, command: decided.command, ...(env ? { env } : {}) }
+  return {
+    args: { ...args, command: decided.command, ...(env ? { env } : {}) },
+    ...(decided.accountId ? { accountId: decided.accountId } : {})
+  }
 }

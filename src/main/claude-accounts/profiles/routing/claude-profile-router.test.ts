@@ -32,6 +32,10 @@ import {
 } from './claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './claude-observed-config-dirs'
 import { claudeRoutedHomeAsync } from './claude-profile-routed-home'
+import {
+  CLAUDE_CHOSEN_ACCOUNT_UNKNOWN_MESSAGE,
+  CLAUDE_CHOSEN_ACCOUNT_UNSUPPORTED_MESSAGE
+} from '../../../../shared/agent-accounts/claude/claude-profile-routing'
 
 vi.mock('@orca/process-host', () => ({ runProcess: vi.fn() }))
 const command = vi.hoisted(() => ({ path: '/unused-claude' }))
@@ -157,6 +161,44 @@ function claudeShellProbe(root: string): (env: Record<string, string>, rc?: stri
 }
 
 describe('ClaudeProfileRouter', () => {
+  it("keeps a chosen account when a shell startup file exports the user's own folder", async () => {
+    const f = fixture()
+    signIn(f.home('b'), 'b@example.test')
+    const launch = f.router.prepareLaunchFor('b')
+    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
+    f.setup.settle()
+    const chosen = await launch
+    expect(chosen).toMatchObject({
+      configDir: f.home('b'),
+      provenance: 'profile:b',
+      readingAccount: { accountId: 'b', runtime: 'host' }
+    })
+    const own = join(f.root, 'own')
+    const probe = claudeShellProbe(f.root)
+    const pane = { ...f.router.terminalEnv(), ORCA_CLAUDE_USER_CONFIG_DIR: own, ...chosen.envPatch }
+    expect(probe(pane, `export CLAUDE_CONFIG_DIR=${own}\n`)).toBe(f.home('b'))
+  })
+
+  it('runs a chosen account that System default is signed in to on System default', async () => {
+    const f = fixture()
+    signIn(f.userHome, 'b@example.test')
+    const chosen = await f.router.prepareLaunchFor('b')
+    expect(chosen).toMatchObject({ configDir: join(f.userHome, '.claude'), provenance: 'system' })
+    expect(chosen.envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
+    expect(claudeShellProbe(f.root)(chosen.envPatch)).toBe('unset')
+  })
+
+  it('refuses a chosen account it does not have, or keeps in WSL', async () => {
+    const f = fixture()
+    await expect(f.router.prepareLaunchFor('unknown')).rejects.toThrow(
+      CLAUDE_CHOSEN_ACCOUNT_UNKNOWN_MESSAGE
+    )
+    f.settings.claudeManagedAccounts[1].managedAuthRuntime = 'wsl'
+    await expect(f.router.prepareLaunchFor('b')).rejects.toThrow(
+      CLAUDE_CHOSEN_ACCOUNT_UNSUPPORTED_MESSAGE
+    )
+  })
+
   it('runs an account with no login of its own on System default while that is signed in to it', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const f = fixture()

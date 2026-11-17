@@ -48,7 +48,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         await planPaneAgentLaunch(ctx)
       }
       if (!ctx.earlyStablePaneOwner) {
-        ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
+        const launched = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
+        ctx.args = launched.args
+        ctx.pluginAccountId = launched.accountId
       }
       await preparePtyIpcSpawnPreflight(ctx)
       await assemblePtyIpcSpawnEnv(ctx)

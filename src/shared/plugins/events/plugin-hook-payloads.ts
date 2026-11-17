@@ -79,7 +79,9 @@ export const agentLaunchBeforeHookPayloadSchema = z.object({
   /** The command line Orca runs in the terminal's shell; a prompt given at launch is part of it. */
   command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
   /** Starts empty: variables to add or override. Orca never shows the agent's environment. */
-  env: pluginHookEnvSchema
+  env: pluginHookEnvSchema,
+  /** Starts unset; set a saved Claude account's id to launch on it (since `PLUGIN_LAUNCH_HOOK_ACCOUNT_SINCE`). */
+  accountId: z.string().min(1).max(256).optional()
 })
 
 export const agentPromptBeforeHookPayloadSchema = z.object({
@@ -153,10 +155,10 @@ export const PLUGIN_HOOK_SPECS = {
   'agent.launch.before': {
     payload: agentLaunchBeforeHookPayloadSchema,
     result: denyResultSchema,
-    mutable: ['command', 'env'],
+    mutable: ['command', 'env', 'accountId'],
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
-      'Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked.'
+      'Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command`, add `env` or choose a saved Claude account with `accountId` through `next`, or return `{ deny }` to refuse the launch. Orca prepares a chosen account as it does its own selection, and refuses the launch rather than run another account when it cannot (an unknown id, not Claude, a WSL or SSH terminal); `accountId` needs Orca 1.4.262 (`engines.orca`), older Orca ignores it. Choose the account with `accountId`, not `CLAUDE_CONFIG_DIR` in `env`, which the account routing replaces. Restores of saved sessions are not hooked.'
   },
   'agent.prompt.before': {
     payload: agentPromptBeforeHookPayloadSchema,
