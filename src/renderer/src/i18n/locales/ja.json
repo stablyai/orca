@@ -15214,8 +15214,6 @@
             "fileCount_other": "{{value0}} 個のファイル",
             "databaseCount_one": "{{value0}} 個のデータベース",
             "databaseCount_other": "{{value0}} 個のデータベース",
-            "scanning": "{{value0}}をスキャン中",
-            "checking": "{{value0}} を確認中",
             "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み",
             "historyRefreshed": "履歴を更新しました"
           },

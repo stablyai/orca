@@ -11998,8 +11998,6 @@
             "databaseCount_one": "{{value0}} banco de dados",
             "databaseCount_other": "{{value0}} bancos de dados",
             "databaseCount_many": "{{value0}} bancos de dados",
-            "scanning": "Verificando {{value0}}",
-            "checking": "Verificando {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} de {{total}} candidato do histórico verificado",
             "agentCheckedCount_other": "{{agent}}: {{settled}} de {{total}} candidatos do histórico verificados",
             "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos do histórico verificados",

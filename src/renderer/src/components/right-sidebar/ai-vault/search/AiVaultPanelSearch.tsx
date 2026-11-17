@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -67,11 +68,14 @@ export function AiVaultPanelSearch({
   search,
   noAgents,
   listed,
+  historyLoading = false,
   children
 }: {
   search: ReturnType<typeof useAiVaultPanelSearch>
   noAgents: boolean
   listed: boolean
+  /** The session list is still being scanned, so list-only matching is partial. */
+  historyLoading?: boolean
   children: ReactNode
 }) {
   const t = useTranslate()
@@ -170,6 +174,13 @@ export function AiVaultPanelSearch({
   }
   const skippedHosts =
     response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? [], t) : null
+  const partialList =
+    historyLoading && (needsLocalConsent || search.titleOnly)
+      ? t(
+          'sessionSearch.panel.listStillLoading',
+          'Session list loading; results may be incomplete.'
+        )
+      : null
   return (
     <>
       {(message || skippedHosts) && (
@@ -177,6 +188,12 @@ export function AiVaultPanelSearch({
           className="space-y-2 border-b border-sidebar-border px-3 py-3 text-xs text-muted-foreground"
           role="status"
         >
+          {partialList && (
+            <p className="mb-3 flex gap-1.5">
+              <Info className="mt-0.5 size-3 shrink-0" aria-hidden />
+              {partialList}
+            </p>
+          )}
           {message && <p>{message}</p>}
           {skippedHosts && <p>{skippedHosts}</p>}
           {needsLocalConsent ? (

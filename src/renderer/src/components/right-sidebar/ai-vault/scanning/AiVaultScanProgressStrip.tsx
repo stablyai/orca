@@ -45,16 +45,12 @@ function databaseCountLabel(count: number, t: Translate = translate, intlLocale?
 function stripSentence(progress: AiVaultScanProgress, t: Translate = translate): string {
   const value0 = EMPHASIS_TOKEN
   switch (progress.stage) {
+    // Why: this is the history-list scan, not full-text search or indexing.
     case 'finding':
-      return t(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.scanning',
-        'Scanning {{value0}}',
-        { value0 }
-      )
     case 'reading':
       return t(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.checking',
-        'Checking {{value0}}',
+        'auto.components.right.sidebar.AiVaultScanProgressStrip.loadingSessionList',
+        'Loading sessions: {{value0}}',
         { value0 }
       )
     case 'finished':
@@ -83,13 +79,21 @@ function StripText({ progress, active }: StripActivity): React.JSX.Element {
   const sentence =
     active || progress.stage === 'finished' ? stripSentence(progress, t) : EMPHASIS_TOKEN
   const [before, after] = sentence.split(EMPHASIS_TOKEN)
+  const showCount = progress.stage !== 'finished'
+  // Why: below 240px a counted label is visually hidden (still named) so the count fits; the count shrinks only then, so it never overlaps the time.
+  const label = cn(
+    'min-w-0 overflow-hidden text-ellipsis whitespace-pre',
+    showCount && '@max-[240px]/ai-vault:sr-only'
+  )
   return (
-    <span className="min-w-0 truncate">
-      {before}
-      {progress.stage !== 'finished' && (
-        <span className="font-medium text-foreground">{emphasis}</span>
+    <span className="flex min-w-0" title={`${before}${showCount ? emphasis : ''}${after ?? ''}`}>
+      {before ? <span className={label}>{before}</span> : null}
+      {showCount && (
+        <span className="min-w-0 shrink-0 truncate font-medium text-foreground @max-[240px]/ai-vault:shrink">
+          {emphasis}
+        </span>
       )}
-      {after}
+      {after ? <span className={label}>{after}</span> : null}
     </span>
   )
 }

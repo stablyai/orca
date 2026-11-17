@@ -16565,11 +16565,10 @@
             "fileCount_other": "{{value0}} files",
             "databaseCount_one": "{{value0}} database",
             "databaseCount_other": "{{value0}} databases",
-            "scanning": "Scanning {{value0}}",
-            "checking": "Checking {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} of {{total}} history candidate checked",
             "agentCheckedCount_other": "{{agent}}: {{settled}} of {{total}} history candidates checked",
-            "historyRefreshed": "History refreshed"
+            "historyRefreshed": "History refreshed",
+            "loadingSessionList": "Loading sessions: {{value0}}"
           },
           "run": {
             "source": {
@@ -25036,7 +25035,8 @@
       },
       "consentTranscriptIndex": "Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Paired devices can search them too.",
       "noMatchesToShow": "No matching sessions to show.",
-      "titleMatchesOnly": "No full-text matches. Showing sessions whose title or details match."
+      "titleMatchesOnly": "No full-text matches. Showing sessions whose title or details match.",
+      "listStillLoading": "Session list loading; results may be incomplete."
     }
   },
   "sessionHistory": {

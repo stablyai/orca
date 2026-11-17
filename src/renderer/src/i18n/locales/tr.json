@@ -16565,8 +16565,6 @@
             "fileCount_other": "{{value0}} dosya",
             "databaseCount_one": "{{value0}} veritabanı",
             "databaseCount_other": "{{value0}} veritabanı",
-            "scanning": "{{value0}} taranıyor",
-            "checking": "{{value0}} kontrol ediliyor",
             "agentCheckedCount_other": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
             "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
             "historyRefreshed": "Geçmiş yenilendi"

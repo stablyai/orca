@@ -15605,8 +15605,6 @@
             "fileCount_other": "파일 {{value0}}개",
             "databaseCount_one": "데이터베이스 {{value0}}개",
             "databaseCount_other": "데이터베이스 {{value0}}개",
-            "scanning": "{{value0}} 스캔 중",
-            "checking": "{{value0}} 확인 중",
             "agentCheckedCount_one": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인함",
             "agentCheckedCount_other": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨",
             "historyRefreshed": "기록을 새로고침함"

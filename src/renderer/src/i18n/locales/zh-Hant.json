@@ -15041,8 +15041,6 @@
             "fileCount_other": "{{value0}} 個檔案",
             "databaseCount_one": "{{value0}} 個資料庫",
             "databaseCount_other": "{{value0}} 個資料庫",
-            "scanning": "正在掃描 {{value0}}",
-            "checking": "正在檢查 {{value0}}",
             "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄",
             "historyRefreshed": "歷史記錄已重新整理"
           },

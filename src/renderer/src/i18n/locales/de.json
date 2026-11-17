@@ -15241,8 +15241,6 @@
             "fileCount_other": "{{value0}} Dateien",
             "databaseCount_one": "{{value0}} Datenbank",
             "databaseCount_other": "{{value0}} Datenbanken",
-            "scanning": "{{value0}} wird durchsucht",
-            "checking": "{{value0}} wird geprüft",
             "agentCheckedCount_one": "{{agent}}: {{settled}} von {{total}} möglichem Verlaufseintrag geprüft",
             "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft",
             "historyRefreshed": "Verlauf aktualisiert"

@@ -312,6 +312,7 @@ export default function AiVaultPanel({
         search={search}
         noAgents={agents.length === 0}
         listed={filteredSessions.length > 0}
+        historyLoading={loading || stripProgress?.active === true}
       >
         {searching
           ? filteredSessions.length > 0 && (

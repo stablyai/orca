@@ -15694,8 +15694,6 @@
             "databaseCount_few": "{{value0}} базы данных",
             "databaseCount_many": "{{value0}} баз данных",
             "databaseCount_other": "{{value0}} базы данных",
-            "scanning": "Сканирование ({{value0}})",
-            "checking": "Проверка ({{value0}})",
             "agentCheckedCount_one": "{{agent}}: проверено {{settled}} из {{total}} возможной записи истории",
             "agentCheckedCount_few": "{{agent}}: проверено {{settled}} из {{total}} возможных записей истории",
             "agentCheckedCount_many": "{{agent}}: проверено {{settled}} из {{total}} возможных записей истории",

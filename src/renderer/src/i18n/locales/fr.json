@@ -15193,8 +15193,6 @@
             "databaseCount_one": "{{value0}} base de données",
             "databaseCount_other": "{{value0}} bases de données",
             "databaseCount_many": "{{value0}} bases de données",
-            "scanning": "Analyse de {{value0}}",
-            "checking": "Vérification de {{value0}}",
             "agentCheckedCount_one": "{{agent}} : {{settled}} sur {{total}} candidat de l’historique vérifié",
             "agentCheckedCount_other": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés",
             "agentCheckedCount_many": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés",

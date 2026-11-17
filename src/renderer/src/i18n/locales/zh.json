@@ -15707,8 +15707,6 @@
             "fileCount_other": "{{value0}} 个文件",
             "databaseCount_one": "{{value0}} 个数据库",
             "databaseCount_other": "{{value0}} 个数据库",
-            "scanning": "正在扫描 {{value0}}",
-            "checking": "正在检查 {{value0}}",
             "agentCheckedCount_other": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项",
             "historyRefreshed": "历史记录已刷新"
           },
