@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { win32 as pathWin32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import {
   _resetWslNotInstalledLatchForTests,
@@ -18,6 +20,26 @@ const ERROR_SERVICE_DOES_NOT_EXIST = 1060
 const UNKNOWN_INSTALLATION_TTL_MS = 60_000
 
 export type WslInstallation = 'present' | 'absent' | 'unknown'
+
+let serviceBinaryOnDisk: boolean | undefined
+
+/**
+ * Sync, spawn-free hint for readers that run before the service verdict: the inbox component's
+ * LxssManager.dll or the Store/MSI install's wslservice.exe. System32\wsl.exe is the stub, so it doesn't count.
+ * Checked once per process; the service verdict supersedes it.
+ */
+export function wslServiceBinaryOnDisk(): boolean {
+  if (serviceBinaryOnDisk === undefined) {
+    const env = process.env
+    const systemRoot = env.SystemRoot ?? env.SYSTEMROOT ?? env.windir ?? 'C:\\Windows'
+    const programFiles = env.ProgramW6432 ?? env.ProgramFiles ?? 'C:\\Program Files'
+    serviceBinaryOnDisk = [
+      pathWin32.join(systemRoot, 'System32', 'lxss', 'LxssManager.dll'),
+      pathWin32.join(programFiles, 'WSL', 'wslservice.exe')
+    ].some((path) => existsSync(path))
+  }
+  return serviceBinaryOnDisk
+}
 
 let installation: WslInstallation | null = null
 let installationProbe: Promise<WslInstallation> | null = null
@@ -93,7 +115,13 @@ export function peekWslInstallation(): WslInstallation | null {
   if (process.platform !== 'win32') {
     return 'absent'
   }
-  return cachedInstallation()
+  const cached = cachedInstallation()
+  if (cached || unknownUntilMs === 0) {
+    return cached
+  }
+  // Serve the expired unknown while a re-check runs, so sync readers never fall back to "no verdict".
+  void readWslInstallation()
+  return 'unknown'
 }
 
 /** Shared probe. Absent is cached for the process lifetime; unknown only briefly. */
@@ -118,6 +146,7 @@ export function readWslInstallation(): Promise<WslInstallation> {
 }
 
 export function _resetWslInstallationForTests(): void {
+  serviceBinaryOnDisk = undefined
   installation = null
   installationProbe = null
   unknownUntilMs = 0

@@ -8,7 +8,7 @@ import {
   listWslDistrosAsync
 } from './distro-catalog'
 import { isWslAvailableAsync } from './wsl-availability'
-import { readWslInstallation } from './wsl-installation'
+import { peekWslInstallation, readWslInstallation } from './wsl-installation'
 import { isWslNotInstalledLatched } from '@orca/process-host/wsl-not-installed-latch'
 
 const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
@@ -211,14 +211,16 @@ describe('WSL is not installed', () => {
     expect(calls.filter(isWslExe)).toEqual([])
   })
 
-  it('a first sync read on a WSL host answers from the async probe it starts', async () => {
-    runProcessMock.mockImplementation(async (spec: ProcessSpec) =>
-      isServiceQuery(spec) ? exited('', 0) : exited('Ubuntu\n')
-    )
+  it('serves an expired unknown to sync readers while it re-checks', async () => {
+    vi.useFakeTimers()
+    const calls = answerServices({ WSLService: 5, LxssManager: 5 })
     await withPlatformAsync('win32', async () => {
-      expect(listWslDistros()).toEqual([])
-      await vi.waitFor(() => expect(listWslDistros()).toEqual(['Ubuntu']))
+      await readWslInstallation()
+      const first = calls.length
+      await vi.advanceTimersByTimeAsync(60_001)
+      expect(peekWslInstallation()).toBe('unknown')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(calls.length).toBe(first * 2)
     })
-    expect(runProcessSyncMock).not.toHaveBeenCalled()
   })
 })
