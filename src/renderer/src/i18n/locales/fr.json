@@ -22244,6 +22244,15 @@
         "strandedOne": "1 session Claude est peut-être encore sur {{previous}}. Redémarrez-la manuellement pour basculer.",
         "strandedOther": "{{count}} sessions Claude sont peut-être encore sur {{previous}}. Redémarrez-les manuellement pour basculer."
       },
+      "usageLimitSwitch": {
+        "title": "Changer de compte quand Claude atteint une limite d’utilisation",
+        "description": "Sélectionne le compte enregistré dont la limite hebdomadaire se réinitialise le plus tôt dès que le compte actuel a épuisé son utilisation sur 5 heures ou sur la semaine.",
+        "switched": "Passage à {{next}} : {{previous}} a atteint sa limite d’utilisation",
+        "keyword": {
+          "automatic": "automatique",
+          "limit": "limite"
+        }
+      },
       "oauthUsage": {
         "title": "Suivi de l’utilisation de Claude",
         "description": "Utilise votre connexion Claude Code pour consulter l’utilisation, les crédits et les comptes inactifs. Désactivez cette option pour utiliser uniquement les données en direct des sessions de terminal.",

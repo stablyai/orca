@@ -22937,6 +22937,15 @@
         "strandedOne": "1 sessão do Claude pode ainda estar em {{previous}}. Reinicie-a manualmente para trocar.",
         "strandedOther": "{{count}} sessões do Claude podem ainda estar em {{previous}}. Reinicie-as manualmente para trocar."
       },
+      "usageLimitSwitch": {
+        "title": "Trocar de conta quando o Claude atingir um limite de uso",
+        "description": "Seleciona a conta salva cujo limite semanal reinicia primeiro assim que a atual esgota o uso de 5 horas ou o semanal.",
+        "switched": "Trocado para {{next}}: {{previous}} atingiu o limite de uso",
+        "keyword": {
+          "automatic": "automático",
+          "limit": "limite"
+        }
+      },
       "oauthUsage": {
         "title": "Consulta de uso do Claude",
         "description": "Usa seu login do Claude Code para consultar o uso, os créditos e as contas inativas. Desative para usar apenas as leituras em tempo real das sessões do terminal.",

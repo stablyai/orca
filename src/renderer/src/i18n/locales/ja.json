@@ -23015,6 +23015,15 @@
         "strandedOne": "1 件の Claude セッションがまだ {{previous}} で実行中の可能性があります。切り替えるには手動で再起動してください。",
         "strandedOther": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中の可能性があります。切り替えるには手動で再起動してください。"
       },
+      "usageLimitSwitch": {
+        "title": "Claude が使用量の上限に達したらアカウントを切り替える",
+        "description": "現在のアカウントが 5 時間または週間の使用量を使い切ると、週間上限のリセットが最も早い保存済みアカウントを選択します。",
+        "switched": "{{next}} に切り替えました: {{previous}} が使用量の上限に達しました",
+        "keyword": {
+          "automatic": "自動",
+          "limit": "上限"
+        }
+      },
       "oauthUsage": {
         "title": "Claude の使用量の定期取得",
         "description": "Claude Code のログイン情報を使って、使用量、クレジット、非アクティブなアカウントを確認します。オフにすると、実行中のターミナルセッションからの使用量データのみを表示します。",

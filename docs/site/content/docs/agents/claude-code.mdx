@@ -22,6 +22,8 @@ Orca fetches your Claude usage from Anthropic with your existing Claude Code log
 
 Orca supports multiple Claude accounts and can swap between them in one click, matching the Codex flow. Switching accounts works even with live Claude sessions running — Orca holds the in-progress switch behind a guard so you don't trigger overlapping auth refreshes. See [Hot-swap Codex accounts](/docs/agents/codex-hot-swap) — the Claude flow is identical in shape.
 
+With two or more Claude accounts saved, **Settings → AI Provider Accounts → Claude → Switch accounts when Claude reaches a usage limit** makes that switch for you. It is off by default. When the selected account uses up its 5-hour or weekly window, Orca selects the saved account whose weekly limit resets soonest, so usage that expires first is spent first, and passes over accounts it already left at a limit until they reset. Running terminal sessions are handled as after a switch from the phone or the CLI: they restart on the new account unless **When you switch accounts while Claude is running in terminals** is set to **Never restart**.
+
 ## Subagents and teams
 
 Background subagents and Agent Teams teammates can show as expandable child rows under the lead agent in the worktree agent list and [Agent Dashboard](/docs/model/agents-sessions#agent-dashboard). Selecting a child focuses the lead terminal.

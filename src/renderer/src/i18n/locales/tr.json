@@ -22100,6 +22100,15 @@
         "strandedOne": "1 Claude oturumu hâlâ {{previous}} hesabında olabilir. Geçirmek için kendiniz yeniden başlatın.",
         "strandedOther": "{{count}} Claude oturumu hâlâ {{previous}} hesabında olabilir. Geçirmek için kendiniz yeniden başlatın."
       },
+      "usageLimitSwitch": {
+        "title": "Claude bir kullanım sınırına ulaştığında hesap değiştir",
+        "description": "Geçerli hesap 5 saatlik veya haftalık kullanımını bitirdiğinde, haftalık sınırı en erken sıfırlanan kayıtlı hesabı seçer.",
+        "switched": "{{next}} hesabına geçildi: {{previous}} kullanım sınırına ulaştı",
+        "keyword": {
+          "automatic": "otomatik",
+          "limit": "sınır"
+        }
+      },
       "oauthUsage": {
         "title": "Claude kullanımını sorgula",
         "description": "Kullanımı, kredileri ve etkin olmayan hesapları kontrol etmek için Claude Code oturumunuzu kullanır. Yalnızca çalışan terminal oturumlarından gelen canlı verileri kullanmak için kapatın.",

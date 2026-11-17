@@ -21564,6 +21564,15 @@
         "strandedOne": "Es posible que 1 sesión de Claude siga en {{previous}}. Reiníciala manualmente para cambiarla.",
         "strandedOther": "Es posible que {{count}} sesiones de Claude sigan en {{previous}}. Reinícialas manualmente para cambiarlas."
       },
+      "usageLimitSwitch": {
+        "title": "Cambiar de cuenta cuando Claude alcance un límite de uso",
+        "description": "Selecciona la cuenta guardada cuyo límite semanal se restablece antes en cuanto la actual agota su uso de 5 horas o semanal.",
+        "switched": "Se cambió a {{next}}: {{previous}} alcanzó su límite de uso",
+        "keyword": {
+          "automatic": "automático",
+          "limit": "límite"
+        }
+      },
       "oauthUsage": {
         "title": "Consulta de uso de Claude",
         "description": "Usa tu inicio de sesión de Claude Code para consultar el uso, los créditos y las cuentas inactivas. Desactívala para usar solo las lecturas en directo de las sesiones de terminal.",

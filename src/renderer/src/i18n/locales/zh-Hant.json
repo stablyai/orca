@@ -21632,6 +21632,15 @@
         "strandedOne": "1 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。",
         "strandedOther": "{{count}} 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。"
       },
+      "usageLimitSwitch": {
+        "title": "Claude 達到用量上限時切換帳號",
+        "description": "目前帳號用完 5 小時或每週用量後，選擇每週上限最早重設的已儲存帳號。",
+        "switched": "已切換至 {{next}}：{{previous}} 已達用量上限",
+        "keyword": {
+          "automatic": "自動",
+          "limit": "上限"
+        }
+      },
       "oauthUsage": {
         "title": "Claude 用量輪詢",
         "description": "使用 Claude Code 登入憑證查詢用量、額度和非使用中帳戶。關閉後，僅顯示執行中終端機工作階段提供的即時用量。",
