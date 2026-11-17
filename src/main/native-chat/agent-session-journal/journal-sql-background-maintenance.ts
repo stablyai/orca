@@ -152,6 +152,33 @@ export class JournalSqlBackgroundMaintenance {
       } catch (error) {
         this.report(error)
       }
+      try {
+        await this.forgottenChats()
+      } catch (error) {
+        this.report(error)
+      }
+    }
+  }
+
+  /** Rows of chats the record store deleted, page by page like retired epochs. */
+  private async forgottenChats(): Promise<void> {
+    let after: string | null = null
+    while (!this.stopped.signal.aborted) {
+      await setImmediate()
+      const page = await this.readers.database({ kind: 'forgotten-chats', after })
+      if (page.kind !== 'forgotten-chats') {
+        throw new Error('journal reader returned no forgotten chats')
+      }
+      for (const sessionId of page.sessionIds) {
+        await this.pages({ kind: 'chat-discard', sessionId })
+        if (this.stopped.signal.aborted) {
+          return
+        }
+      }
+      if (page.sessionIds.length === 0) {
+        return
+      }
+      after = page.sessionIds.at(-1)!
     }
   }
 
@@ -190,7 +217,7 @@ export class JournalSqlBackgroundMaintenance {
   private async pages(
     operation: Extract<
       JournalSqlMaintenance,
-      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' }
+      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' | 'chat-discard' }
     >,
     limit = Infinity
   ): Promise<void> {

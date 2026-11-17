@@ -75,24 +75,38 @@ describe('WSL availability cache', () => {
 
   it('does not restore a failure after distro discovery disproves it mid-probe', async () => {
     const callbacks = new Map<string, (result: ProcessResult) => void>()
-    runProcessMock.mockImplementation(
-      ({ args }: { args: string[] }) =>
-        new Promise((resolve) => {
-          callbacks.set(args.join(' '), resolve)
-        })
-    )
+    runProcessMock.mockImplementation(({ program, args }: { program?: string; args: string[] }) => {
+      // An installed WSL service still uses wsl.exe. Absence is a separate test.
+      if (program === 'sc.exe' || program?.endsWith('\\sc.exe') || program?.endsWith('/sc.exe')) {
+        return Promise.resolve(exited('SERVICE_NAME: WSLService\n'))
+      }
+      return new Promise((resolve) => {
+        callbacks.set(args.join(' '), resolve)
+      })
+    })
 
     await withPlatformAsync('win32', async () => {
       const staleAvailability = isWslAvailableAsync()
       const distroProbe = listWslDistrosAsync()
-      callbacks.get('--list --quiet')?.(exited('Ubuntu\n'))
+      await vi.waitFor(() => {
+        expect(callbacks.has('--list --quiet')).toBe(true)
+        expect(callbacks.has('--status')).toBe(true)
+      })
+      const resolveList = callbacks.get('--list --quiet')
+      const resolveStatus = callbacks.get('--status')
+      callbacks.delete('--list --quiet')
+      callbacks.delete('--status')
+      resolveList?.(exited('Ubuntu\n'))
       await expect(distroProbe).resolves.toEqual(['Ubuntu'])
 
-      callbacks.get('--status')?.(exited('', 1))
+      resolveStatus?.(exited('', 1))
       await expect(staleAvailability).resolves.toBe(false)
       expect(getCachedWslAvailability()).toBeNull()
 
       const retry = isWslAvailableAsync()
+      await vi.waitFor(() => {
+        expect(callbacks.has('--status')).toBe(true)
+      })
       callbacks.get('--status')?.(exited(''))
       await expect(retry).resolves.toBe(true)
     })

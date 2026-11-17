@@ -8,7 +8,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-title-sanitization'
 import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/snapshots/remote-layout-scrollback-retention'

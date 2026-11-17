@@ -11,7 +11,7 @@ import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
 } from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
-import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
+import { requestTerminalTabRename } from '../components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { useAppStore } from '../store/index'
 import { resolveSidebarHostCycle } from '../components/sidebar/worktree-list/controls/sidebar-host-cycle'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'

@@ -72,6 +72,7 @@ import {
   hydrateOneShotNoticesSeen,
   sanitizeTaskResumeState
 } from './ui-slice-hydration-values'
+import { hydrateWslMovedSection } from './ui-slice-wsl-moved-section-actions'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -264,10 +265,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           usagePercentageDisplayChangeNoticeDismissed:
             ui.usagePercentageDisplayChangeNoticeDismissed === true,
           statusBarCompactChangeNoticeDismissed: ui.statusBarCompactChangeNoticeDismissed !== false,
-          // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
-          usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
-          pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
           ...hydrateOneShotNoticesSeen(ui),
+          ...hydrateWslMovedSection(ui),
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

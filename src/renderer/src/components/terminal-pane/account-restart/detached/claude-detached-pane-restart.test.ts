@@ -2,8 +2,11 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agen
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
+import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { createIpcPtySessionHandlers } from '../../pty-transport/ipc/ipc-pty-session-handlers'
+import { createPtyOutputProcessor } from '../../pty-transport/output/pty-output-processor'
 
 import {
   installCodexDetachedPaneRestartExecutor,
@@ -62,20 +65,6 @@ function seedClaudePane(
   })
 }
 
-function setPaneState(state: AgentStatusEntry['state']): void {
-  const paneKey = makePaneKey('tab-1', LEAF_ID)
-  const entry = useAppStore.getState().agentStatusByPaneKey.get(paneKey)!
-  useAppStore.setState({
-    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: { ...entry, state } }))
-  })
-}
-
-async function settle(): Promise<void> {
-  for (let i = 0; i < 5; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-}
-
 describe('detached Claude account-move restart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 
@@ -124,19 +113,11 @@ describe('detached Claude account-move restart', () => {
     }
   })
 
-  it('restarts a mid-turn session once its turn ends, via the store subscription', async () => {
+  it('interrupts a working session and restarts it at once, via the store subscription', async () => {
     const uninstall = installCodexDetachedPaneRestartExecutor()
     try {
       seedClaudePane({ state: 'working' })
       useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
-      await settle()
-      // Why waiting: Claude's hooks report a permission prompt or question as waiting, mid-turn.
-      setPaneState('waiting')
-      await settle()
-      expect(window.api.pty.spawn).not.toHaveBeenCalled()
-      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'claude' })
-
-      setPaneState('done')
 
       await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
       await vi.waitFor(() => expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({}))
@@ -144,4 +125,46 @@ describe('detached Claude account-move restart', () => {
       uninstall()
     }
   })
+
+  it.each(['claude', 'codex'] as const)(
+    'restarts a queued %s pane after mounted ownership and its handler are released',
+    async (agent) => {
+      seedClaudePane({ state: 'working' })
+      const unregister = registerRuntimeTerminalTab({
+        tabId: 'tab-1',
+        worktreeId: 'wt1',
+        getManager: () => null,
+        getContainer: () => null,
+        getPtyIdForPane: () => OLD_PTY,
+        getTabWideAgentHintLeafId: () => LEAF_ID
+      })
+      const handlers = createIpcPtySessionHandlers({
+        outputProcessor: createPtyOutputProcessor({}),
+        getPtyId: () => OLD_PTY,
+        getCallbacks: () => ({}),
+        getSuppressAttentionEvents: () => false,
+        markExited: () => {}
+      })
+      const uninstall = installCodexDetachedPaneRestartExecutor()
+      try {
+        useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], agent)
+        await Promise.resolve()
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        // No transport bound before the queue; cleanup can also release an existing handler.
+        handlers.registerData(OLD_PTY)
+        unregister()
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        handlers.unregisterAll(OLD_PTY)
+        await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
+        expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+        unregister()
+        await Promise.resolve()
+        expect(window.api.pty.spawn).toHaveBeenCalledTimes(1)
+      } finally {
+        unregister()
+        handlers.unregisterAll(OLD_PTY)
+        uninstall()
+      }
+    }
+  )
 })

@@ -25,7 +25,7 @@ import {
   assertFileReadRange,
   fileRangePage,
   readFileHandleRange
-} from '../../../ipc/filesystem/local-file-range-read'
+} from '../../../filesystem/local-file-io/local-file-range-read'
 
 const OPEN_NOFOLLOW = typeof constants.O_NOFOLLOW === 'number' ? constants.O_NOFOLLOW : 0
 

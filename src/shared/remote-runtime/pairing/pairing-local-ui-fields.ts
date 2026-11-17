@@ -27,7 +27,10 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsReadFilter',
   'agentsGroupBy',
   'activityClearedAtByPaneKey',
-  'manuallyUnreadTurnsByPaneKey'
+  'manuallyUnreadTurnsByPaneKey',
+  // The moved-to-WSL list belongs to the desktop that ran the move; hosts' strict ui.set rejects both.
+  'wslMovedSectionCollapsed',
+  'hiddenWslMovedProjectKeys'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 export type PairingLocalUiField = (typeof PAIRING_LOCAL_UI_FIELDS)[number]

@@ -19,7 +19,7 @@ import type { AgentSessionAttachmentProblem } from '../../../../shared/agent-ses
 import {
   ClaudeDispatchContentError,
   readClaudeImage
-} from '../../../claude/structured/claude-structured-dispatch-content'
+} from '../../../claude/structured/dispatch/claude-structured-dispatch-content'
 
 type ImageLimits = { image: number; total: number }
 const SHRUNK_IMAGE_LIMITS: ImageLimits = {

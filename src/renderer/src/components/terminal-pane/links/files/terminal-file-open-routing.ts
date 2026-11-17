@@ -1,4 +1,8 @@
-import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
+import {
+  downloadAndOpenRemoteTerminalFile,
+  downloadRemoteTerminalFile,
+  downloadRemoteTerminalFolder
+} from './terminal-remote-file-download-open'
 import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import {
@@ -46,6 +50,8 @@ type TerminalFileOpenDeps = {
   wslDistro?: string | null
   /** Shift+modifier: the OS default app, or the other link-routing browser for a local HTML file. */
   openWithSystemDefault?: boolean
+  /** Routes like openWithSystemDefault, but only saves a copy of the file or folder; never opens it. */
+  downloadOnly?: boolean
   /** Where a local HTML file opens, chosen from its popover; otherwise link routing decides. */
   browserDestination?: HttpLinkDestination
   /** The paired-server terminal that printed the link; lets its host grant a file outside workspaces. */
@@ -67,7 +73,8 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { openWithSystemDefault = false, runtimeEnvironmentId } = deps
+  const { runtimeEnvironmentId } = deps
+  const openWithSystemDefault = deps.openWithSystemDefault === true || deps.downloadOnly === true
   let { worktreeId, worktreePath } = deps
   let mappedFilePath = mapTerminalFilePath(
     filePath,
@@ -136,7 +143,10 @@ export function openDetectedFilePath(
     }
 
     try {
-      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, deps)
+      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, {
+        ...deps,
+        openWithSystemDefault
+      })
       if (linkOwner?.kind === 'grant') {
         hostGrant = hostGrantedEditorFields(linkOwner)
         mappedFilePath = linkOwner.absolutePath
@@ -176,6 +186,13 @@ export function openDetectedFilePath(
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
     if (explicitGroupRequest && openWithSystemDefault) {
       refuseExplicitNonEditorRoute()
+      return
+    }
+    // Why: download-only never opens or reveals the path, even one that turned out to be on this computer.
+    if (deps.downloadOnly) {
+      await (statResult.isDirectory
+        ? downloadRemoteTerminalFolder(fileContext, mappedFilePath)
+        : downloadRemoteTerminalFile(fileContext, mappedFilePath, hostGrant))
       return
     }
     // Remote hints promise Orca before resolution; explicit group requests must reach HTML branch to be refused.

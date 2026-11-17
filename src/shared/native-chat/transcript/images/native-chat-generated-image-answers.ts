@@ -1,9 +1,9 @@
 import { normalizeRuntimePathForComparison } from '../../../file-access/cross-platform-path'
-import { routeNativeChatHref } from '../../native-chat-href-routing'
+import { routeNativeChatHref } from '../../file-access/native-chat-href-routing'
 import {
   isGeneratedImageOperation,
   NATIVE_CHAT_GENERATED_IMAGE_PRESENTATION
-} from '../../native-chat-generated-image'
+} from './native-chat-generated-image'
 import type { NativeChatBlock, NativeChatMessage } from '../../native-chat-types'
 import { nativeChatTurnFoldRow } from '../folding/native-chat-turn-fold'
 

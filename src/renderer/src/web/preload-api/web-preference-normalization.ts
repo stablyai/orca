@@ -4,11 +4,11 @@ import {
   syncLegacyMatchTerminalSidebar
 } from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import {
   normalizeAgentDefaultSurface,
   carriedChatUiLaunchSettings
-} from '../../../../shared/native-chat/native-chat-providers'
+} from '../../../../shared/native-chat/settings/native-chat-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
 import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { normalizeAgentActivityDisplayMode } from '../../../../shared/agent-status/presentation/agent-activity-display-mode'
@@ -110,7 +110,9 @@ export function mergeHostWebUIState(
     agentsReadFilter: local.agentsReadFilter,
     agentsGroupBy: local.agentsGroupBy,
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
-    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
+    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey,
+    wslMovedSectionCollapsed: local.wslMovedSectionCollapsed,
+    hiddenWslMovedProjectKeys: local.hiddenWslMovedProjectKeys
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
   return {
     ...mergeWebUIState(local, incoming),

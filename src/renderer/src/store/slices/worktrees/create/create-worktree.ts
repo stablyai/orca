@@ -54,12 +54,10 @@ import {
   type CreateAttemptOutcome
 } from './worktree-create-parent-pick'
 
-type RuntimeTarget = RuntimeClientTarget
-
 async function runCreateAttempt(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  target: RuntimeTarget,
+  target: RuntimeClientTarget,
   clientCreateSettings: ClientWorktreeCreateSettings = {}
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
@@ -268,7 +266,14 @@ export function createCreateWorktree(
           }
           const { result } = outcome
           showWorktreeCreateWarningToast(result.warning)
-          reviewSetupTrustMismatch(get, repoId, creationHostId, result, target)
+          reviewSetupTrustMismatch(
+            get,
+            repoId,
+            creationHostId,
+            result,
+            target,
+            options?.hookTrustContext
+          )
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId

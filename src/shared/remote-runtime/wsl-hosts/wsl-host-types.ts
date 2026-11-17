@@ -4,6 +4,16 @@ import type { WslHostCopyParams } from './wsl-host-failure-copy'
 export const WSL_HOST_STATUS_CHANNEL = 'wslHosts:statusChanged'
 /** Main's capability changed mid-run, such as a live policy block stopping new work. */
 export const WSL_HOST_CAPABILITY_CHANNEL = 'wslHosts:capabilityChanged'
+/** What an in-flight Add waits for, before the host has a status of its own. */
+export const WSL_HOST_ADD_PROGRESS_CHANNEL = 'wslHosts:addProgress'
+
+/** `detail` is null once the Add no longer waits on anything it can name. */
+export type WslHostAddProgress = {
+  distro: string
+  detail: string | null
+  detailCode?: string
+  detailParams?: WslHostCopyParams
+}
 
 export type WslHostDistro = {
   name: string

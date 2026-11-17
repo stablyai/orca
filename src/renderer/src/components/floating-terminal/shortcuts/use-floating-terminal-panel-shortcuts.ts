@@ -8,7 +8,7 @@ import {
 } from '@/components/floating-terminal/shortcuts/floating-workspace-shortcut-policy'
 import { isFloatingWorkspaceTerminalInputTarget } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rename-request'
+import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { resolveTerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
 import { launchFloatingWorkspaceAgentShortcut } from '@/components/agent-tab-shortcut-launch'
 import { useAppStore } from '@/store/index'

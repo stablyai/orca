@@ -5,8 +5,8 @@ import {
   type SubmissionRejectionFact,
   type SubmissionRejectionKind
 } from './agent-session-failure'
-import type { AgentSessionConversationCommand } from '../agent-session-conversation-command'
-import { cliMissingSentence, notSignedInSentence } from '../agent-session-availability-sentences'
+import type { AgentSessionConversationCommand } from '../conversation-context/agent-session-conversation-command'
+import { cliMissingSentence, notSignedInSentence } from './agent-session-availability-sentences'
 import {
   agentCliInstallationFailureWords,
   sayAgentSessionFailureEnglish,
@@ -25,7 +25,7 @@ import { agent, attachmentProblemSentence } from './agent-session-attachment-fai
 import { joinSentences } from '../../text/sentence-joining'
 import { modelUnavailableSentence } from './agent-session-model-failure-words'
 import { quotingPersonDetail } from './agent-session-failure-quoted-detail'
-import { requestTimeoutSeconds } from '../agent-session-request-timeout'
+import { requestTimeoutSeconds } from './agent-session-request-timeout'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
