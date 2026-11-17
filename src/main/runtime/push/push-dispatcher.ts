@@ -9,10 +9,9 @@ import {
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
-import type { z } from 'zod'
 import {
   NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS,
-  type NotificationPushCoverageParams
+  type NotificationPushCoverageRequest
 } from '../../../shared/rpc-contract/notifications/notifications-params'
 import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
 
@@ -34,7 +33,7 @@ type PushDispatcherOptions = {
   resolveCoverage?: PushCoverageResolver
 }
 
-export type PushCoverageRequest = z.infer<typeof NotificationPushCoverageParams>
+export type PushCoverageRequest = NotificationPushCoverageRequest
 
 /** Token digests of phones the alert's execution host pushes itself; empty when it pushes none. */
 export type PushCoverageResolver = (

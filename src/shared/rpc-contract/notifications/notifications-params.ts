@@ -70,3 +70,5 @@ export const NotificationPushCoverageParams = z.object({
   /** A native chat's attention, which host main always pushes. */
   structured: z.boolean().optional()
 })
+
+export type NotificationPushCoverageRequest = z.infer<typeof NotificationPushCoverageParams>

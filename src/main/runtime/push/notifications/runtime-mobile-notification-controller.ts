@@ -20,7 +20,8 @@ import type {
   MobilePushRegisterResult
 } from '../../../../shared/notifications/mobile-push-contract'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
-import type { PushCoverageRequest } from '../push-dispatcher'
+// Shared contract, not the dispatcher: phones typecheck this file and must not pull in Node timers.
+import type { NotificationPushCoverageRequest as PushCoverageRequest } from '../../../../shared/rpc-contract/notifications/notifications-params'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
