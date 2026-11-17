@@ -1,6 +1,6 @@
 import path from 'node:path'
 import ts from 'typescript-api'
-import { createGatedCallCollector } from './gated-call-use-collector.mjs'
+import { createGatedCallCollector, isValueReference } from './gated-call-use-collector.mjs'
 import { unwrap } from '../module-requests/static-module-specifiers.mjs'
 
 // Per-file call counts never see a new caller of an existing sync helper in another file; this
@@ -12,10 +12,8 @@ function moduleKeys(file) {
   return path.posix.basename(key) === 'index' ? [key, path.posix.dirname(key)] : [key]
 }
 
-function isExported(node) {
-  return !!ts
-    .getModifiers?.(node)
-    ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+function hasModifier(node, kind) {
+  return !!ts.getModifiers?.(node)?.some((modifier) => modifier.kind === kind)
 }
 
 function isFunctionLike(node) {
@@ -23,34 +21,75 @@ function isFunctionLike(node) {
   return !!node && (ts.isArrowFunction(node) || ts.isFunctionExpression(node))
 }
 
-/** Top-level functions with their ranges, referenced identifiers, export names and re-exports. */
+function declaredNames(name, into) {
+  if (ts.isIdentifier(name)) {
+    into.add(name.text)
+  } else if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+    for (const element of name.elements) {
+      if (ts.isBindingElement(element)) {
+        declaredNames(element.name, into)
+      }
+    }
+  }
+}
+
+/** Runtime references inside a function body, minus names it declares itself (parameters, locals). */
+function scanBody(node) {
+  const references = new Set()
+  const shadowed = new Set()
+  const visit = (child) => {
+    if (ts.isTypeNode(child) && !ts.isExpressionWithTypeArguments(child)) {
+      return
+    }
+    if (ts.isParameter(child) || ts.isVariableDeclaration(child) || ts.isBindingElement(child)) {
+      declaredNames(child.name, shadowed)
+    } else if ((ts.isFunctionDeclaration(child) || ts.isClassDeclaration(child)) && child.name) {
+      shadowed.add(child.name.text)
+    } else if (ts.isIdentifier(child) && isValueReference(child)) {
+      references.add(child.text)
+    }
+    ts.forEachChild(child, visit)
+  }
+  ts.forEachChild(node, visit)
+  return { references: new Set([...references].filter((name) => !shadowed.has(name))), shadowed }
+}
+
+/** Top-level functions with their ranges, runtime references, export names and re-exports. */
 function scanDeclarations(file, contents) {
   const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
   const functions = []
   const exportNames = new Map()
   const reexports = []
-  const addFunction = (name, node, exported) => {
-    const references = new Set()
-    const visit = (child) => {
-      if (ts.isIdentifier(child)) {
-        references.add(child.text)
-      }
-      ts.forEachChild(child, visit)
-    }
-    ts.forEachChild(node, visit)
-    functions.push({ name, start: node.getStart(source), end: node.getEnd(), references })
-    if (exported) {
-      exportNames.set(name, [...(exportNames.get(name) ?? []), name])
-    }
+  const exportAs = (local, exported) =>
+    exportNames.set(local, [...(exportNames.get(local) ?? []), exported])
+  const addFunction = (name, node) => {
+    functions.push({ name, start: node.getStart(source), end: node.getEnd(), ...scanBody(node) })
   }
   for (const statement of source.statements) {
-    if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
-      addFunction(statement.name.text, statement, isExported(statement))
+    const exported = hasModifier(statement, ts.SyntaxKind.ExportKeyword)
+    const isDefault = hasModifier(statement, ts.SyntaxKind.DefaultKeyword)
+    if (ts.isFunctionDeclaration(statement) && statement.body) {
+      const name = statement.name?.text ?? 'default'
+      addFunction(name, statement)
+      if (exported) {
+        exportAs(name, isDefault ? 'default' : name)
+      }
     } else if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name) && isFunctionLike(declaration.initializer)) {
-          addFunction(declaration.name.text, declaration, isExported(statement))
+          addFunction(declaration.name.text, declaration)
+          if (exported) {
+            exportAs(declaration.name.text, declaration.name.text)
+          }
         }
+      }
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      const target = unwrap(statement.expression)
+      if (target && ts.isIdentifier(target)) {
+        exportAs(target.text, 'default')
+      } else if (isFunctionLike(target)) {
+        addFunction('default', statement)
+        exportAs('default', 'default')
       }
     } else if (
       ts.isExportDeclaration(statement) &&
@@ -60,8 +99,7 @@ function scanDeclarations(file, contents) {
       !statement.moduleSpecifier
     ) {
       for (const element of statement.exportClause.elements) {
-        const local = (element.propertyName ?? element.name).text
-        exportNames.set(local, [...(exportNames.get(local) ?? []), element.name.text])
+        exportAs((element.propertyName ?? element.name).text, element.name.text)
       }
     } else if (
       ts.isExportDeclaration(statement) &&
@@ -86,8 +124,8 @@ function scanDeclarations(file, contents) {
 }
 
 /**
- * `direct`: file -> start offsets of blocking calls, with the API each one is. Returns file -> helper
- * references counted, the helper names used, and where each helper's blocking call is.
+ * `direct`: file -> start offsets of blocking calls, with the call each one reaches. Returns file -> helper
+ * references counted and the helpers used (each with the blocking call it reaches).
  */
 export function collectBlockingHelperUses(sources, direct, { depth = Infinity } = {}) {
   const scans = new Map()
@@ -99,13 +137,16 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
   }
   // file -> helper name -> description of the blocking call it reaches.
   const helpers = new Map()
-  const markSites = (file, sites) => {
+  const markSites = (file, sites, viaHelpers = false) => {
     const { functions } = scan(file)
+    const contents = sources.get(file)
     const marked = helpers.get(file) ?? new Map()
     let added = false
     for (const { position, reaches } of sites) {
       const owner = functions.find((fn) => position >= fn.start && position < fn.end)
-      if (owner && !marked.has(owner.name)) {
+      // A parameter or local named like a helper is a different binding (direct sites may use local requires).
+      const local = /^[\w$]+/.exec(contents.slice(position, position + 200))?.[0]
+      if (owner && !marked.has(owner.name) && !(viaHelpers && owner.shadowed.has(local))) {
         marked.set(owner.name, reaches)
         added = true
       }
@@ -134,9 +175,9 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
       markSites(file, sites)
     }
   }
-  let uses = new Map()
+  const barrels = [...sources.keys()].filter((file) => scan(file).reexports.length > 0)
   for (let round = 0; ; round++) {
-    const families = []
+    // module key -> exported name -> what it reaches
     const reachesByModule = new Map()
     for (const [file, marked] of helpers) {
       const { exportNames } = scan(file)
@@ -151,50 +192,51 @@ export function collectBlockingHelperUses(sources, direct, { depth = Infinity } 
         reachesByModule.set(key, names)
       }
     }
-    // Barrels re-export helpers under their own module key.
-    for (const file of sources.keys()) {
-      for (const { target, names } of scan(file).reexports) {
-        const reached = reachesByModule.get(target)
-        if (!reached) {
-          continue
-        }
+    // Re-exports add no call depth, so barrels (and barrels of barrels) resolve fully every round.
+    for (let changed = true; changed;) {
+      changed = false
+      for (const file of barrels) {
         const own = reachesByModule.get(moduleKeys(file)[0]) ?? new Map()
-        for (const [from, to] of names ?? [...reached.keys()].map((name) => [name, name])) {
-          if (reached.has(from)) {
-            own.set(to, reached.get(from))
+        for (const { target, names } of scan(file).reexports) {
+          const reached = reachesByModule.get(target)
+          const pairs = names ?? [...(reached?.keys() ?? [])].map((name) => [name, name])
+          for (const [from, to] of pairs) {
+            if (reached?.has(from) && !own.has(to)) {
+              own.set(to, reached.get(from))
+              changed = true
+            }
           }
         }
-        for (const key of moduleKeys(file)) {
-          reachesByModule.set(key, own)
+        if (own.size > 0) {
+          for (const key of moduleKeys(file)) {
+            reachesByModule.set(key, own)
+          }
         }
       }
     }
-    const reachesByName = new Map()
-    for (const [key, names] of reachesByModule) {
-      families.push({ modules: [key], advice: Object.fromEntries(names) })
-      for (const [name, reaches] of names) {
-        reachesByName.set(name, reaches)
-      }
-    }
+    const families = [...reachesByModule].map(([key, names]) => ({
+      modules: [key],
+      advice: Object.fromEntries(names)
+    }))
     const collector = createGatedCallCollector(families, 'main blocking helper')
-    const next = new Map()
+    const uses = new Map()
     let grew = false
     for (const [file, contents] of sources) {
-      const { count, symbols, sites } = collector.collectUses(file, contents)
+      const { count, sites } = collector.collectUses(file, contents)
       if (count === 0) {
         continue
       }
-      next.set(file, {
-        count,
-        reaches: symbols.map((name) => `${name} (${reachesByName.get(name)})`)
-      })
-      const reached = sites.map(({ name, position }) => ({
+      const reached = sites.map(({ name, position, module }) => ({
         position,
-        reaches: reachesByName.get(name) ?? name
+        name,
+        reaches: reachesByModule.get(module)?.get(name) ?? name
       }))
-      grew = markSites(file, reached) || grew
+      uses.set(file, {
+        count,
+        reaches: [...new Set(reached.map(({ name, reaches }) => `${name} (${reaches})`))].sort()
+      })
+      grew = markSites(file, reached, true) || grew
     }
-    uses = next
     if (!grew || round + 1 >= depth) {
       return { uses, helpers }
     }

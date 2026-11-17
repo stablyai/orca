@@ -146,9 +146,31 @@ export function collectSqliteCallSites(file, contents) {
     }
     return false
   }
+  // `const insertMany = db.transaction(fn)`: each insertMany() call runs BEGIN/COMMIT.
+  const transactionWrapper = (node) => {
+    node = unwrap(node)
+    return (
+      !!node &&
+      ts.isCallExpression(node) &&
+      (ts.isPropertyAccessExpression(node.expression) ||
+        ts.isElementAccessExpression(node.expression)) &&
+      propertyName(node.expression) === 'transaction' &&
+      instance(node.expression.expression)
+    )
+  }
   for (let changed = true; changed;) {
     changed = false
     for (const node of declarations) {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        !callableConstructors.has(node.name.text) &&
+        transactionWrapper(node.initializer)
+      ) {
+        callableConstructors.add(node.name.text)
+        changed = true
+        continue
+      }
       if (!ts.isIdentifier(node.name) || !(sqliteType(node.type) || instance(node.initializer))) {
         continue
       }

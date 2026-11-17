@@ -3,6 +3,7 @@
 # Startup-only or one-shot uses are fine to keep; per-RPC, per-spawn, per-focus or per-poll uses are the target.
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing calls: pnpm check:main-sync-fs-ratchet --prune
+# Worker threads only: one append before a rare large post, so it survives the receiver aborting.
 1 src/main/agent-hooks/first-work/first-work-rename-runtime.ts
 2 src/main/agent-hooks/installation/configuration/hook-config-write-path.ts
 6 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
@@ -272,13 +273,12 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/worktrees/floating-workspace-directory.ts
 1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
+1 src/main/ipc/worktrees/floating-workspace-directory.ts
 2 src/main/ipc/worktrees/worktree-remote.ts
-2 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 7 src/main/jcode/hook-service.ts
 8 src/main/jira/site-credential-store.ts
 7 src/main/keybindings/keybinding-file-parser.ts
@@ -456,10 +456,10 @@
 2 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 1 src/main/rate-limits/providers/zcode/zcode-usage-credentials.ts
 3 src/main/ripgrep/bundled-ripgrep-path.ts
+1 src/main/runtime/agent-session/installation/structured-agent-session-attachment-wiring.ts
 8 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts
 7 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
-1 src/main/runtime/agent-session/installation/structured-agent-session-attachment-wiring.ts
 1 src/main/runtime/client/navigation/desktop-chat-creation-history.ts
 9 src/main/runtime/host-instance-identity.ts
 4 src/main/runtime/hosts/platform-probe/host-descriptor.ts
@@ -537,7 +537,6 @@
 1 src/main/windows/windows-process-table.ts
 1 src/main/worker-thread-child-process/worker-thread-child-process.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
-# Worker threads only: one append before a rare large post, so it survives the receiver aborting.
 3 src/main/worker-threads/worker-large-send-log.ts
 4 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
@@ -550,6 +549,7 @@
 1 src/main/wsl/execution/wsl-node-runtime-prefetch.ts
 3 src/main/wsl/filesystem/wsl-drive-project-new-default.ts
 9 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
+2 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 2 src/main/wsl/host-lifecycle/wsl-host-automation-wake-store.ts
 4 src/main/wsl/host-lifecycle/wsl-host-e2e-fake-connector.ts
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts

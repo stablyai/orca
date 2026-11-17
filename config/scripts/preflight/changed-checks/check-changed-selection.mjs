@@ -27,6 +27,17 @@ const SOURCE_ROOTS = ['src/', 'mobile/', 'tests/', 'config/']
 const TEST_FILE = /\.(?:test|spec|e2e|bench)\.[cm]?[jt]sx?$/
 const LOCALES = 'src/renderer/src/i18n/'
 
+const MAIN_BLOCKING_GRAPH_INPUTS = [
+  'src/main/',
+  'src/shared/',
+  'src/preload/',
+  'src/packages/',
+  'config/build-plugins/',
+  'config/main-blocking-worker-entries.json',
+  'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs',
+  'config/scripts/workspace/source-exports/'
+]
+
 // Ratchets default to SOURCE_ROOTS; list narrower inputs only where a scan is clearly scoped.
 const RATCHET_INPUTS = {
   'check-daemon-blocking-call-ratchet.mjs': ['src/main/'],
@@ -35,19 +46,9 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
-  'check-main-blocking-helper-ratchet.mjs': [
-    'src/main/',
-    'src/shared/',
-    'src/preload/',
-    'config/main-blocking-worker-entries.json',
-    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
-  ],
-  'check-main-sync-fs-ratchet.mjs': [
-    'src/main/',
-    'src/shared/',
-    'config/main-blocking-worker-entries.json',
-    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
-  ],
+  // Both build the event-loop import graph, so anything that changes graph edges selects them.
+  'check-main-blocking-helper-ratchet.mjs': MAIN_BLOCKING_GRAPH_INPUTS,
+  'check-main-sync-fs-ratchet.mjs': MAIN_BLOCKING_GRAPH_INPUTS,
   'check-main-sync-spawn-ratchet.mjs': [
     'src/main/',
     'src/shared/',

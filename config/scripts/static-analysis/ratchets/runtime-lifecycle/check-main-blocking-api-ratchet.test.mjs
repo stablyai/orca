@@ -130,5 +130,9 @@ describe('main blocking API ratchets', () => {
     ])
     const files = ['src/main/index.ts', 'src/main/worker-only.ts', 'src/main/shared-store.ts']
     expect([...workerOnlyFiles(graph, files)]).toEqual(['src/main/worker-only.ts'])
+    // An event-loop entry a worker imports stays guarded, and so does everything it imports.
+    graph.get(entry).push('src/main/index.ts')
+    graph.set('src/main/index.ts', ['src/main/worker-only.ts'])
+    expect([...workerOnlyFiles(graph, files, ['src/main/index.ts'])]).toEqual([])
   })
 })

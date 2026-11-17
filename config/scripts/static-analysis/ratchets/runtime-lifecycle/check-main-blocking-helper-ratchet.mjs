@@ -59,7 +59,11 @@ export async function main(root = process.cwd(), arg = undefined) {
       pruneCommand:
         'node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune',
       unit: 'blocking helper reference(s)',
-      fix: [OFF_MAIN_ADVICE]
+      fix: [
+        `Each listed helper makes a synchronous fs, child_process or SQLite call, or calls one that does. ${OFF_MAIN_ADVICE}`,
+        'If a helper itself just became blocking, fix it there: every file that calls it is charged.',
+        `A one-shot startup or shutdown call may raise the file's row in ${BASELINE_PATH} with reviewer sign-off and a trailing "# why" note.`
+      ]
     },
     root,
     arg

@@ -155,17 +155,46 @@ export function totalCount(counts) {
   return [...counts.values()].reduce((sum, count) => sum + count, 0)
 }
 
-/** Lowers baseline rows to `current` and keeps their notes; growth still has to be fixed in code. */
+/** Files renamed since the change's base (ORCA_CODE_QUALITY_BASE, else the merge base with origin/main). */
+function renamedSinceBase(root) {
+  try {
+    const base =
+      process.env.ORCA_CODE_QUALITY_BASE ||
+      execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], {
+        cwd: root,
+        encoding: 'utf8'
+      }).trim()
+    return execFileSync('git', ['diff', '-M', '--name-status', '--diff-filter=R', base], {
+      cwd: root,
+      encoding: 'utf8'
+    })
+      .split('\n')
+      .map((line) => line.split('\t'))
+      .filter((parts) => parts.length === 3)
+      .map(([, from, to]) => [from, to])
+  } catch {
+    return []
+  }
+}
+
+/** Lowers baseline rows to `current` and keeps their notes; a renamed file keeps its row. Growth still needs a code fix. */
 export function pruneCountBaseline(root, baselinePath, header, current) {
   const file = path.join(root, baselinePath)
   const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+  const baseline = parseCountBaseline(text)
+  const notes = parseCountNotes(text)
+  for (const [from, to] of renamedSinceBase(root)) {
+    if (baseline.has(from) && !baseline.has(to)) {
+      baseline.set(to, baseline.get(from))
+      if (notes.has(from)) {
+        notes.set(to, notes.get(from))
+      }
+    }
+  }
   const pruned = new Map(
-    [...parseCountBaseline(text)].map(([rel, allowed]) => [
-      rel,
-      Math.min(allowed, current.get(rel) ?? 0)
-    ])
+    [...baseline].map(([rel, allowed]) => [rel, Math.min(allowed, current.get(rel) ?? 0)])
   )
-  fs.writeFileSync(file, formatCountBaseline(pruned, header, parseCountNotes(text)))
+  fs.writeFileSync(file, formatCountBaseline(pruned, header, notes))
   return totalCount(pruned)
 }
 
@@ -192,6 +221,11 @@ export function runCountRatchet(ratchet, root, arg) {
   }
   if (grown.length > 0) {
     console.error(ratchet.fix.join('\n'))
+    if (grown.some(({ allowed }) => allowed === 0) && shrunk.length > 0) {
+      console.error(
+        `A moved or renamed file keeps its allowance: ${ratchet.pruneCommand ?? `pnpm check:${ratchet.name}-ratchet --prune`} carries its row to the new path.`
+      )
+    }
   }
   for (const { file, now, allowed } of shrunk) {
     console.error(`${file}: now ${now}, baseline ${allowed}.`)
