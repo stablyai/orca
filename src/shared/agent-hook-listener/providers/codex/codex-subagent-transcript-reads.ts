@@ -31,7 +31,8 @@ export type CodexSubagentTranscriptReads = {
 async function visitCodexTranscriptCursors(
   state: CodexSubagentTranscriptState,
   visit: (cursor: JsonlCursor, child?: TrackedTranscriptSubagent) => Promise<boolean>,
-  batch: RolloutReadBatch
+  batch: RolloutReadBatch,
+  resolvePaths: boolean
 ): Promise<void> {
   const parent = state.parent
   const parentPath = parent.filePath
@@ -48,6 +49,10 @@ async function visitCodexTranscriptCursors(
       return
     }
     if (!tracked.filePath) {
+      // Hook prefetches leave path discovery to the poll, so a timed-out hook queues no directory reads.
+      if (!resolvePaths) {
+        continue
+      }
       for (const directory of childTranscriptDirectories(parentPath, tracked.startedAt)) {
         if (!entriesByDirectory.has(directory)) {
           entriesByDirectory.set(directory, await readTranscriptDirectoryAsync(directory, batch))
@@ -86,7 +91,8 @@ export async function readCodexSubagentTranscript(
       }
       return bytes !== 'deferred'
     },
-    batch
+    batch,
+    true
   )
   return reads
 }
@@ -101,7 +107,8 @@ export function prefetchCodexSubagentTranscript(
       await prefetchJsonlCursor(reads, cursor)
       return true
     },
-    reads.batch
+    reads.batch,
+    false
   )
 }
 

@@ -25,7 +25,7 @@ vi.mock('node:fs', async (importOriginal) => {
         if (syncFs.recording) {
           syncFs.calls.push(name)
         }
-        return Reflect.apply(value, actual, args)
+        return value.call(actual, ...args)
       }
     }
   }
