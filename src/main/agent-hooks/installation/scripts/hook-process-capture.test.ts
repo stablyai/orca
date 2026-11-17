@@ -72,7 +72,8 @@ describe('Claude outer hook process capture', () => {
             'payload=$(cat)',
             ...buildPosixHookMetadataCacheLines(),
             ...buildHookProcessCapture({ reuseOnToolEvents: true }),
-            'printf "%s" "$orca_agent_process"'
+            'printf "%s" "$orca_agent_process"',
+            'printf "%s" "${LC_ALL-unset}" >&2'
           ].join('\n'),
           { mode: 0o700 }
         )
@@ -85,7 +86,8 @@ describe('Claude outer hook process capture', () => {
             cacheFile,
             `${process.pid} ${token.length}:${token} {"pid":${process.pid},"platform":"darwin","startTime":"cached"}\n`
           )
-        const run = async (payload: string): Promise<string | undefined> => {
+        let lcAllAfter = ''
+        const run = async (payload: string, lcAll?: string): Promise<string | undefined> => {
           const result = await runProcess({
             program: '/bin/sh',
             args: ['-c', `${HOOK_PARENT_CAPTURE}/bin/sh ${quotePosixShell(scriptPath)}`],
@@ -94,17 +96,22 @@ describe('Claude outer hook process capture', () => {
               PATH: '/usr/bin:/bin',
               ORCA_PANE_KEY: 'presence-test-pane',
               ORCA_AGENT_LAUNCH_TOKEN: 'launch-1',
-              ORCA_AGENT_HOOK_ENDPOINT: endpoint
+              ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+              ...(lcAll === undefined ? {} : { LC_ALL: lcAll })
             },
             input: payload,
             timeoutMs: 5000
           })
+          lcAllAfter = result.stderr
           return readAgentProcessIdentity(result.stdout)?.startTime
         }
 
         const toolEvent = '{"hook_event_name": "PostToolUse", "tool_name": "Bash"}'
         await seed('launch-1')
         expect(await run(toolEvent)).toBe('cached')
+        expect(lcAllAfter).toBe('unset')
+        expect(await run(toolEvent, 'en_US.UTF-8')).toBe('cached')
+        expect(lcAllAfter).toBe('en_US.UTF-8')
         const fresh = await run('{"hook_event_name":"SessionStart","agent_type":"tool_name"}')
         expect(fresh).not.toBe('cached')
         expect(
@@ -117,7 +124,9 @@ describe('Claude outer hook process capture', () => {
         expect(await run(toolEvent)).toBe(fresh)
 
         await seed('launch-1')
-        expect(await run('{"hook_event_name":"UserPromptSubmit","prompt":"hi"}')).toBe(fresh)
+        expect(
+          await run('{"hook_event_name":"UserPromptSubmit","prompt":"say \\"tool_name\\": now"}')
+        ).toBe(fresh)
         expect(await run(toolEvent)).toBe(fresh)
 
         await seed('launch-0')
