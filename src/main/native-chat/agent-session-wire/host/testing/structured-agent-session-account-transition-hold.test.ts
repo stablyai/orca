@@ -131,6 +131,11 @@ async function chatOnAccountA() {
     dispatchedTo: (text: string) =>
       current.dispatch.mock.calls
         .filter(([input]) => JSON.stringify(input.body.blocks).includes(text))
+        .map(([input]) => input.fence),
+    /** Every mail dispatch, by fence: the agent is sent a pointer, not the mail's words. */
+    mailDispatchedTo: () =>
+      current.dispatch.mock.calls
+        .filter(([input]) => input.body.from?.orchestration?.message === 'mail-notice')
         .map(([input]) => input.fence)
   }
 }
@@ -186,7 +191,7 @@ it("lets a worker's mail reach its open dispatch past a held send, then moves ac
   const mail = rig!.send('coordinator reply', undefined, { internal: true, from: MAIL })
   await mail.result
   // The reply the dispatch waits on goes to the agent still holding it, on A.
-  await eventually(() => expect(chat.dispatchedTo('coordinator reply')).toEqual([chat.accountA]))
+  await eventually(() => expect(chat.mailDispatchedTo()).toEqual([chat.accountA]))
   expect(chat.dispatchedTo('a new task for you')).toEqual([])
   const mailSend = await rig!.handoffId(mail.id)
   await rig!.settleAccepted(mailSend, 'reply')
@@ -195,7 +200,7 @@ it("lets a worker's mail reach its open dispatch past a held send, then moves ac
   await eventually(() => expect(chat.dispatchedTo('a new task for you')).toHaveLength(1))
   expect(chat.dispatchedTo('a new task for you')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
-  expect(chat.dispatchedTo('coordinator reply')).toEqual([chat.accountA])
+  expect(chat.mailDispatchedTo()).toEqual([chat.accountA])
 })
 
 it('keeps a held send through Stop, and Resume delivers it once on the new account', async () => {
@@ -283,7 +288,7 @@ it('takes a send back from the old account when its work shows up only after the
 
   const mail = rig!.send('mail meanwhile', undefined, { internal: true, from: MAIL })
   await mail.result
-  await eventually(() => expect(chat.dispatchedTo('mail meanwhile')).toEqual([chat.accountA]))
+  await eventually(() => expect(chat.mailDispatchedTo()).toEqual([chat.accountA]))
   await rig!.settleAccepted(await rig!.handoffId(mail.id), 'mail meanwhile')
 
   chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
