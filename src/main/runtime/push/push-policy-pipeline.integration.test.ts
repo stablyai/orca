@@ -206,7 +206,8 @@ it('tells a mirroring desktop which of its phones this host pushes, for alerts i
                 notifications: { ...getDefaultNotificationSettings(), agentTaskComplete }
               })
             }) as never,
-          coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller)
+          coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller),
+          pushesOwnPhoneAlert: () => true
         }
       }
     ).coveredTokenDigests
@@ -214,4 +215,12 @@ it('tells a mirroring desktop which of its phones this host pushes, for alerts i
   // Finishes are off on this host, so its phones get none and the mirror must push them.
   expect(ask(false)).toEqual([])
   expect(ask(true, 'mobile')).toEqual([])
+  // The phone's preferences here still refuse finishes, so this host would not push it one.
+  await h.controller.registerPushDevice({
+    deviceId: h.device.deviceId,
+    platform: 'ios',
+    token: 'test-token',
+    filter: { onlyWhenAgentNeedsInput: true }
+  })
+  expect(ask(true)).toEqual([])
 })

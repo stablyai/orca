@@ -20,6 +20,7 @@ import type {
   MobilePushRegisterResult
 } from '../../../../shared/notifications/mobile-push-contract'
 import { MobileNotificationReplayBuffer } from './mobile-notification-replay'
+import type { PushCoverageRequest } from '../push-dispatcher'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
@@ -68,7 +69,7 @@ export type MobilePushRegistrar = {
   test(deviceId: string): Promise<MobilePushTestResult>
   register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult>
   unregister(deviceId: string): Promise<{ unregistered: boolean }>
-  coveredTokenDigests(tokenDigests: readonly string[]): string[]
+  coveredTokenDigests(request: PushCoverageRequest): string[]
 }
 
 /** Host news for its owner with no agent turn behind it; `id` keys its cooldown and its phone notice. */
@@ -136,8 +137,8 @@ export class RuntimeMobileNotificationController {
   }
 
   /** The subset of these phones this host pushes itself; empty when it pushes none. */
-  coveredPushTokenDigests(tokenDigests: readonly string[]): string[] {
-    return this.pushRegistrar?.coveredTokenDigests(tokenDigests) ?? []
+  coveredPushTokenDigests(request: PushCoverageRequest): string[] {
+    return this.pushRegistrar?.coveredTokenDigests(request) ?? []
   }
 
   /** `bindForget` runs for a connection without a live report, before it is recorded. */

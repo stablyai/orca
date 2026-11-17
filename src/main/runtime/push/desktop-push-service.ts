@@ -9,7 +9,11 @@ import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-s
 import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
-import { PushDispatcher, type PushCoverageResolver } from './push-dispatcher'
+import {
+  PushDispatcher,
+  type PushCoverageRequest,
+  type PushCoverageResolver
+} from './push-dispatcher'
 import { mobilePushTokenDigest } from './push-token-digest'
 import { pushTestResult } from './push-test-result'
 import { PushGatewayClient } from './push-gateway-client'
@@ -199,8 +203,8 @@ export class DesktopPushService {
       : { registered: true, registrationId: result.registrationId }
   }
 
-  coveredTokenDigests(tokenDigests: readonly string[]): string[] {
-    return this.dispatcher.coveredTokenDigests(tokenDigests)
+  coveredTokenDigests(request: PushCoverageRequest): string[] {
+    return this.dispatcher.coveredTokenDigests(request)
   }
 
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {

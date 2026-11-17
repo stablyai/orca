@@ -2,12 +2,18 @@ import { reserveNotificationCooldown } from '../../../shared/notifications/notif
 // Send background push after socket fan-out without making sockets wait or fail on gateway results.
 import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
 import {
+  allowsMobilePushAlertKind,
   allowsMobilePushDelivery,
   mobilePushAlertContent
 } from '../../../shared/notifications/mobile-push-alert'
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
+import type { z } from 'zod'
+import {
+  NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS,
+  type NotificationPushCoverageParams
+} from '../../../shared/rpc-contract/notifications/notifications-params'
 import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
 
 const PUSH_RETRY_DELAY_MS = 2_000
@@ -28,7 +34,7 @@ type PushDispatcherOptions = {
   resolveCoverage?: PushCoverageResolver
 }
 
-export type PushCoverageRequest = { tokenDigests: string[]; source: string; agentState?: string }
+export type PushCoverageRequest = z.infer<typeof NotificationPushCoverageParams>
 
 /** Token digests of phones the alert's execution host pushes itself; empty when it pushes none. */
 export type PushCoverageResolver = (
@@ -89,9 +95,12 @@ export class PushDispatcher {
     }
     // A mirrored session's own host already pushes the phones it has; this copy is for the rest.
     void this.resolveCoverage(event.executionHost, {
-      tokenDigests,
+      // Phones past the cap are not asked about, so they keep this desktop's copy.
+      tokenDigests: tokenDigests.slice(0, NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS),
       source: event.source,
-      ...(event.agentState ? { agentState: event.agentState } : {})
+      ...(event.agentState ? { agentState: event.agentState } : {}),
+      ...(event.paneKey ? { paneKey: event.paneKey } : {}),
+      ...(event.structuredOrigin ? { structured: true } : {})
     })
       .catch((error: unknown) => {
         console.warn('[push] Could not ask the execution host which phones it pushes:', error)
@@ -105,12 +114,17 @@ export class PushDispatcher {
   }
 
   /** The subset of these phones this host pushes; a mirroring host leaves them to it. */
-  coveredTokenDigests(tokenDigests: readonly string[]): string[] {
+  coveredTokenDigests(request: PushCoverageRequest): string[] {
     if (this.stopped || this.deliveryMode === 'disabled') {
       return []
     }
-    const asked = new Set(tokenDigests)
-    return this.liveTokenDigests((registration) => asked.has(registration.tokenDigest ?? ''))
+    const asked = new Set(request.tokenDigests)
+    // A phone whose preferences here refuse this kind of alert is still the mirror's to push.
+    return this.liveTokenDigests(
+      (registration) =>
+        asked.has(registration.tokenDigest ?? '') &&
+        allowsMobilePushAlertKind(registration.filter, request.source, request.agentState)
+    )
   }
 
   private liveTokenDigests(include: (registration: MobilePushRegistration) => boolean): string[] {

@@ -63,10 +63,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   })
   private readonly terminalAgentPhonePush = new TerminalAgentPhonePush({
     // Pending desktop windows seed missed state without announcing it; do not duplicate their phone pushes.
-    hasWindow: () =>
-      this.authoritativeWindowId === null
-        ? this.rendererGraphEpoch === 0
-        : this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID,
+    hasWindow: () => this.hasPhonePushingWindow(),
     readNotificationSettings: () => this.store?.getSettings().notifications,
     readWorkspaceLabels: (worktreeId, paneKey) =>
       this.readTerminalAgentWorkspaceLabels(worktreeId, paneKey),
@@ -128,6 +125,26 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   private readonly worktreeRowsChanges = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? null
     : new WorktreeRowsChanges((event) => this.emitClientEvent(event))
+
+  private hasPhonePushingWindow(): boolean {
+    return this.authoritativeWindowId === null
+      ? this.rendererGraphEpoch === 0
+      : this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID
+  }
+
+  /** Whether this host pushes the alert to its own phones, so a mirroring desktop can leave them to it. */
+  pushesOwnPhoneAlert(alert: { source: string; paneKey?: string; structured?: boolean }): boolean {
+    // Host main pushes native chats; a window pushes every terminal alert it raises.
+    if (alert.structured === true || this.hasPhonePushingWindow()) {
+      return true
+    }
+    // Without a window only hook-reported agent turns reach phones, never bells or title-only turns.
+    return (
+      alert.source === 'agent-task-complete' &&
+      alert.paneKey !== undefined &&
+      this.agentTransitions.latestRow(alert.paneKey) !== null
+    )
+  }
 
   protected onTitleAgentStatusChanged(): void {
     this.worktreeRowsChanges?.changed()
