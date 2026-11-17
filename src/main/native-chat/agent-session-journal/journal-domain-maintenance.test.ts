@@ -158,11 +158,13 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
 function retiredPass(db: Database.Database): string[] {
   const visited: string[] = []
   let after: string | null = null
+  let through: string | null = null
   for (;;) {
-    const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after })
+    const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after, through })
     if (page.kind !== 'retired-heads') {
       throw new Error('expected retired heads')
     }
+    through = page.through
     if (page.heads.length === 0) {
       return visited
     }
@@ -196,7 +198,7 @@ it('visits only chats that can hold retired rows since their last completed pass
 
   db.exec(`UPDATE journal_chat_state SET epoch='replacement' WHERE session_id='session-03'`)
   const [moved] = (() => {
-    const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after: null })
+    const page = readJournalSqlDatabase(db, { kind: 'retired-heads', after: null, through: null })
     return page.kind === 'retired-heads' ? page.heads : []
   })()
   expect(moved).toMatchObject({ sessionId: 'session-03', epoch: 'replacement' })

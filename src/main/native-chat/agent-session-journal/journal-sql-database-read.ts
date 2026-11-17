@@ -23,7 +23,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
-  | { kind: 'retired-heads'; after: string | null }
+  | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'forgotten-chats'; after: string | null }
@@ -34,7 +34,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
-  | { kind: 'retired-heads'; heads: JournalRetiredHead[] }
+  | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
       kind: 'attachment-claims'
       claims: { rowid: number; uploadId: string; sessionId: string }[]
@@ -101,13 +101,22 @@ function read(
       return { kind: 'sessions', sessionIds: rows.map((row) => String(row.session_id)) }
     }
     case 'retired-heads': {
+      // A pass ends at the highest key pending when it began, so later arrivals can't extend it.
+      const through =
+        operation.through ??
+        db.prepare('SELECT max(session_id) AS through FROM journal_retire_pending').get()?.through
+      if (through === null || through === undefined) {
+        return { kind: 'retired-heads', heads: [], through: null }
+      }
       const rows = db
         .prepare(`SELECT pending.session_id,pending.generation,head.epoch FROM journal_retire_pending AS pending
           LEFT JOIN journal_chat_state AS head ON head.session_id=pending.session_id
-          WHERE pending.session_id>? ORDER BY pending.session_id LIMIT 16`)
-        .all(operation.after ?? '')
+          WHERE pending.session_id>? AND pending.session_id<=?
+          ORDER BY pending.session_id LIMIT 16`)
+        .all(operation.after ?? '', through)
       return {
         kind: 'retired-heads',
+        through: String(through),
         heads: rows.map((row) => ({
           sessionId: String(row.session_id),
           epoch: row.epoch === null || row.epoch === undefined ? null : String(row.epoch),
