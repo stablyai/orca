@@ -17,10 +17,9 @@ import { prefetchCodexSubagentTranscript } from './codex-subagent-transcript-rea
 function hookPayload(body: unknown): Record<string, unknown> | undefined {
   const envelope = record(body)
   const raw = envelope?.payload
-  if (typeof raw !== 'string' || typeof body !== 'object' || body === null) {
-    return record(raw)
-  }
-  return record(parseHookPayloadForPrefetch(body, raw))
+  return envelope && typeof raw === 'string'
+    ? record(parseHookPayloadForPrefetch(envelope, raw))
+    : record(raw)
 }
 
 function hookPaneKey(body: unknown): string | undefined {

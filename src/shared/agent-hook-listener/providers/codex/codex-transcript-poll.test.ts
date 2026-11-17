@@ -19,8 +19,8 @@ const syncFs = vi.hoisted((): { recording: boolean; calls: string[] } => ({
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof Fs>()
   const wrapped: Record<string, unknown> = { ...actual }
-  for (const name of Object.keys(actual)) {
-    const value: unknown = Reflect.get(actual, name)
+  for (const [name, exported] of Object.entries(actual)) {
+    const value: unknown = exported
     if (name.endsWith('Sync') && typeof value === 'function') {
       wrapped[name] = (...args: unknown[]) => {
         if (syncFs.recording) {

@@ -18,6 +18,8 @@ const rolloutReadQueue: (() => void)[] = []
 
 // Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
 const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
+// Why: one pane stalled on a slow open must not hold the whole budget and stall every other pane.
+const MAX_BATCH_HELD_ROLLOUT_BYTES = 4 * 1024 * 1024
 let heldRolloutBytes = 0
 
 /** One poll's or hook's reads: whether they are still wanted, and the buffer bytes they hold until released. */
@@ -31,10 +33,11 @@ export class RolloutReadBatch {
     return !this.released && this.isWanted()
   }
 
-  /** At least one read always fits, so a large rollout is never starved. */
+  /** A batch's first read always fits its own cap, and the first read anywhere always fits, so nothing starves. */
   reserve(bytes: number): boolean {
     if (
       this.released ||
+      (this.held > 0 && this.held + bytes > MAX_BATCH_HELD_ROLLOUT_BYTES) ||
       (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES)
     ) {
       return false
@@ -42,6 +45,13 @@ export class RolloutReadBatch {
     heldRolloutBytes += bytes
     this.held += bytes
     return true
+  }
+
+  /** Returns bytes a read already dropped, such as a parsed first-line buffer. */
+  unreserve(bytes: number): void {
+    const returned = Math.min(bytes, this.held)
+    heldRolloutBytes -= returned
+    this.held -= returned
   }
 
   /** Call once the batch is applied or dropped. */
@@ -123,6 +133,8 @@ async function readJsonlFirstRecordAsyncUnslotted(
   } catch (error) {
     return firstRecordError(error)
   } finally {
+    // The buffer is parsed and dropped here, so it holds none of the budget afterwards.
+    batch.unreserve(TRANSCRIPT_LINE_MAX_BYTES)
     await handle?.close().catch(() => {})
   }
 }
