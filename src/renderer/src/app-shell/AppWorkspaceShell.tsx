@@ -8,6 +8,8 @@ import { useHandToBotRequest } from '@/components/bots/hand-to-bot/hand-to-bot-o
 import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import Sidebar from '../components/sidebar/index'
+import { AppRail } from '../components/app-rail/AppRail'
+import { APP_RAIL_WIDTH } from '../components/app-rail/app-rail-layout'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
@@ -18,6 +20,13 @@ import { RightSidebarToggle } from './chrome/RightSidebarToggle'
 import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
+
+// The rail sits left of this column, so the header reaches back over it to keep one traffic-light row.
+function appRailTitlebarOverlapStyle(sidebarOpen: boolean): React.CSSProperties {
+  return sidebarOpen
+    ? { marginLeft: -APP_RAIL_WIDTH, width: `calc(100% + ${APP_RAIL_WIDTH}px)` }
+    : { left: -APP_RAIL_WIDTH }
+}
 
 // Skips the shell render each workspace switch causes; its props only change on toggle.
 const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)
@@ -207,6 +216,19 @@ export function AppWorkspaceShell(props: {
             </div>
           ) : null}
           <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+            {layout.appRailVisible ? (
+              // One stable position across views so a page switch never remounts the rail and drops keyboard focus.
+              <div className="flex min-h-0 shrink-0 flex-col">
+                {/* The left titlebar extends over this gap so the traffic-light row spans rail and list. */}
+                {layout.leftTitlebarChromeLayout.shouldMount ? (
+                  <div className="h-[36px] shrink-0" />
+                ) : null}
+                <AppRail
+                  listVisible={layout.showSidebar && layout.sidebarOpen}
+                  style={layout.leftSidebarStyle}
+                />
+              </div>
+            ) : null}
             {layout.showSidebar ? (
               layout.leftTitlebarChromeLayout.shouldMount ? (
                 /* Remove the collapsed header from flex layout so panes reclaim the left edge. */
@@ -224,7 +246,10 @@ export function AppWorkspaceShell(props: {
                       // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
                       ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
                       // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                      width: layout.sidebarOpen ? '100%' : undefined
+                      width: layout.sidebarOpen ? '100%' : undefined,
+                      ...(layout.appRailVisible
+                        ? appRailTitlebarOverlapStyle(layout.sidebarOpen)
+                        : null)
                     }}
                   >
                     {titlebarLeftControls}

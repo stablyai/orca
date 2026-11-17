@@ -453,6 +453,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalAgentDashboardPopout?: boolean
   /** Experimental: panel beside chats and terminals listing the agents each agent works with; off mounts nothing. */
   experimentalOrchestrationPanel?: boolean
+  /** Experimental: icon-only app rail left of the workspace list for switching between Orca destinations. */
+  experimentalAppRail?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */

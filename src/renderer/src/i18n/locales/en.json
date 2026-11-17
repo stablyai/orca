@@ -9178,6 +9178,12 @@
             "ariaLabel": "Card style",
             "classic": "Classic",
             "experimental": "Experimental"
+          },
+          "appRail": {
+            "title": "App rail",
+            "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+            "copy": "Adds an icon bar to the left of the workspace list. Workspaces, Settings, and Help move onto it, and it stays visible when the list is collapsed.",
+            "toggleLabel": "Toggle app rail"
           }
         },
         "FloatingWorkspacePane": {
@@ -11392,6 +11398,14 @@
             "worktreeCardStyle": {
               "title": "Card style",
               "description": "Choose how workspace cards look in the sidebar."
+            },
+            "appRail": {
+              "title": "App rail",
+              "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+              "rail": "rail",
+              "navigation": "navigation",
+              "sidebar": "sidebar",
+              "icons": "icons"
             }
           }
         },
@@ -29470,5 +29484,10 @@
       "previous": "Previous month",
       "next": "Next month"
     }
+  },
+  "appRail": {
+    "navigationLabel": "App navigation",
+    "workspaces": "Workspaces",
+    "more": "More"
   }
 }
