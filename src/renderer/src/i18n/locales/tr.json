@@ -23746,7 +23746,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "Ajan için izin gerekiyor",
-      "statusStale": "Ajan durumu güncel değil"
+      "approvalUnseen": "Ajan onay bekliyor olabilir",
+      "hostUpdateRequired": "Bu ajana göndermek için bu ana makinedeki Orca’yı güncelleyin"
     }
   },
   "wslDistroHold": {

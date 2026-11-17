@@ -24347,7 +24347,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "Агенту требуется разрешение",
-      "statusStale": "Статус агента устарел"
+      "approvalUnseen": "Возможно, агент ждёт подтверждения",
+      "hostUpdateRequired": "Обновите Orca на этом хосте, чтобы отправлять этому агенту"
     }
   },
   "wslDistroHold": {

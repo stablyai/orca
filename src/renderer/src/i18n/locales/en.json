@@ -23042,6 +23042,8 @@
       "selectedAgentNeedsPermission": "The selected agent needs permission.",
       "activeAgentNeedsPermission": "The active agent needs permission.",
       "statusUnverified": "The {{target}} agent status could not be verified.",
+      "approvalUnseen": "The {{target}} agent may be waiting for approval. Send the notes when its turn ends.",
+      "hostUpdateRequired": "Update Orca on the {{target}} agent's host to send it notes.",
       "notReady": "The {{target}} agent was not ready for input yet.",
       "notWritable": "The {{target}} agent did not accept the notes.",
       "selectedSubmitFailed": "The notes may already be pasted in the selected terminal, but Orca could not submit them.",
@@ -25901,7 +25903,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "Agent needs permission",
-      "statusStale": "Agent status is stale"
+      "approvalUnseen": "Agent may be waiting for approval",
+      "hostUpdateRequired": "Update Orca on this host to send to this agent"
     }
   },
   "wslDistroHold": {

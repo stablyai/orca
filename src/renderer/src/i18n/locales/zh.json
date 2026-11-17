@@ -21978,6 +21978,8 @@
       "selectedAgentNeedsPermission": "所选智能体需要权限",
       "activeAgentNeedsPermission": "当前智能体需要权限",
       "statusUnverified": "无法验证{{target}}智能体的状态",
+      "approvalUnseen": "{{target}}智能体可能正在等待批准。请在其本轮结束后再发送备注。",
+      "hostUpdateRequired": "请更新{{target}}智能体所在主机上的 Orca 后再发送备注。",
       "notReady": "{{target}}智能体尚未准备好接收输入",
       "notWritable": "{{target}}智能体未接受这些备注",
       "selectedSubmitFailed": "备注可能已粘贴到所选终端，但 Orca 无法提交",
@@ -25355,7 +25357,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "智能体需要授权",
-      "statusStale": "智能体状态信息已过期"
+      "approvalUnseen": "智能体可能正在等待批准",
+      "hostUpdateRequired": "请更新此主机上的 Orca 才能发送给此智能体"
     }
   },
   "wslDistroHold": {
