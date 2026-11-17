@@ -2951,7 +2951,6 @@
       "src/main/wsl/filesystem/wsl-drive-unc-conversion-startup.test.ts": 1265,
       "src/main/wsl/filesystem/wsl-drive-unc-identity-rewrite.test.ts": 123,
       "src/main/wsl/filesystem/wsl-drive-unc-state-rewrite.test.ts": 299,
-      "src/main/wsl/execution/wsl-guest-pane-process-script-cost.test.ts": 213,
       "src/main/wsl/execution/wsl-guest-pane-processes.test.ts": 48,
       "src/main/wsl/host-lifecycle/wsl-host-pending-removal.test.ts": 955,
       "src/main/wsl/host-lifecycle/wsl-host-server-stop.test.ts": 407,
