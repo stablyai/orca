@@ -7,6 +7,7 @@ import {
 function candidate(sessionId: string, activity?: ResumeCandidate['activity']): ResumeCandidate {
   return {
     sessionId,
+    workspaceId: 'repo::/repo',
     agent: 'codex',
     trigger: 'quit',
     latestPrompt: 'fix the build',
