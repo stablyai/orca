@@ -16,8 +16,14 @@ export type LegacySessionHold = {
    * waiting to send), kept in this store verbatim before the original goes. Undefined when the
    * store already holds the same.
    */
-  original?: string
+  original?: LegacyOriginal
 }
+
+/**
+ * `identity` is what a person made in it (a name they set, options, permission mode, waiting text),
+ * so bookkeeping an older Orca rewrites on every launch never keeps another copy.
+ */
+export type LegacyOriginal = { value: string; identity: string }
 
 export type LegacyClaim = { uploadId: string; sessionId: string; claimedAt: number }
 
@@ -52,18 +58,12 @@ export function legacySessionHold(
   // since is kept with the original's version.
   const queueDiffers = converted && hasQueue && !queueHeld(source, store, sessionId)
   if (!recorded) {
-    // The reconcile tracks chats by record, so history an older Orca added to a converted chat it
-    // no longer records is read by no pass: it keeps the original. Conversions before the
-    // reconcile left no revision to compare, and older Orcas write no turns to a chat they removed.
-    if (converted && shown !== undefined && shown !== revision) {
-      throw new JournalLegacyRetentionError(
-        'an original chat without a record has history this store lacks',
-        'source-history'
-      )
-    }
+    // An older Orca removes a record only when the person deletes the chat there (or its workspace),
+    // so, like a chat deleted here, turns it saved before that are not held. Text still waiting in
+    // a chat converted here is kept, as for any chat.
     return {
       convert: true,
-      original: queueDiffers ? originalVersion(source, sessionId) : undefined
+      original: queueDiffers ? originalVersion(source, sessionId, true) : undefined
     }
   }
   if (!here?.recorded && !here?.cataloged) {
@@ -71,7 +71,7 @@ export function legacySessionHold(
     // content says whether an older Orca renamed it or queued text in it since, so the original's
     // version is kept.
     if (shown === revision || empty) {
-      return { convert: false, original: originalVersion(source, sessionId) }
+      return { convert: false, original: originalVersion(source, sessionId, true) }
     }
     throw new JournalLegacyRetentionError('an original chat is not in this store yet')
   }
@@ -84,7 +84,7 @@ export function legacySessionHold(
     convert: true,
     original:
       queueDiffers || personEditsDiffer(source, store, sessionId)
-        ? originalVersion(source, sessionId)
+        ? originalVersion(source, sessionId, queueDiffers)
         : undefined
   }
 }
@@ -106,7 +106,7 @@ export function legacyRecordOnlyHold(
     convert: false,
     original:
       !recorded || personEditsDiffer(source, store, sessionId)
-        ? originalVersion(source, sessionId)
+        ? originalVersion(source, sessionId, !recorded)
         : undefined
   }
 }
@@ -230,19 +230,33 @@ function personEditsDiffer(
   return original !== undefined && original !== null && read(store) !== original
 }
 
-/** The original's record and the text it still has waiting to send, verbatim. */
-function originalVersion(source: Database.Database, sessionId: string): string {
-  const record = source
-    .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
-    .get(sessionId)?.record_json
-  const queued = hasTable(source, 'queued_messages')
-    ? source
-        .prepare(
-          "SELECT * FROM queued_messages WHERE session_id=? AND state IN ('waiting','returned')"
-        )
-        .all(sessionId)
-    : []
-  return JSON.stringify({ version: 1, record: record ?? null, queued })
+/** The original's record, and the text it still has waiting to send when that differs, verbatim. */
+function originalVersion(
+  source: Database.Database,
+  sessionId: string,
+  withQueue: boolean
+): LegacyOriginal {
+  const row = source
+    .prepare(
+      `SELECT record_json, ${PERSON_EDITS_SQL} AS edits FROM agent_session_records WHERE session_id=?`
+    )
+    .get(sessionId)
+  const queued =
+    withQueue && hasTable(source, 'queued_messages')
+      ? source
+          .prepare(
+            `SELECT * FROM queued_messages WHERE session_id=? AND state IN ('waiting','returned')
+            ORDER BY position, message_id`
+          )
+          .all(sessionId)
+      : []
+  return {
+    value: JSON.stringify({ version: 1, record: row?.record_json ?? null, queued }),
+    identity: JSON.stringify([
+      row?.edits ?? null,
+      queued.map((message) => [message.message_id, message.body_json, message.options_json])
+    ])
+  }
 }
 
 function hasTable(db: Database.Database, name: string): boolean {
@@ -279,7 +293,8 @@ export function readLegacyProofSessions(
   let bytes = 0
   for (const row of rows) {
     const session = readLegacyProofSession(db, store, tables, row)
-    const size = session.original ? Buffer.byteLength(session.original) : 0
+    // V8 serializes a string with any character past Latin-1 at two bytes per character.
+    const size = (session.original?.value.length ?? 0) * 2
     if (size > LEGACY_ORIGINAL_MAX_BYTES) {
       throw new JournalLegacyRetentionError(
         'an original chat holds more waiting text than one reply can carry',
@@ -296,7 +311,7 @@ export function readLegacyProofSessions(
   return page
 }
 
-/** One reply carries at most 64 MiB of serialized bytes; a page of originals stays well under it. */
+/** One reply carries at most 64 MiB serialized; a page of originals stays well under it. */
 const LEGACY_ORIGINALS_PAGE_BYTES = 16 * 1024 * 1024
 const LEGACY_ORIGINAL_MAX_BYTES = 48 * 1024 * 1024
 

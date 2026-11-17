@@ -44,7 +44,7 @@ export async function completeJournalLegacyProof(
       throw new JournalLegacyRetentionError(page.retained, page.reason)
     }
     const originals = page.sessions.flatMap(({ sessionId, original }) =>
-      original === undefined ? [] : [{ sessionId, value: original }]
+      original === undefined ? [] : [{ sessionId, ...original }]
     )
     if (originals.length > 0) {
       await writer.maintain({ kind: 'legacy-originals-keep', originals })

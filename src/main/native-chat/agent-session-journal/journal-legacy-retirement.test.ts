@@ -5,6 +5,7 @@ import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import { olderOrcaChat, profile } from './journal-legacy-retirement.test-fixture'
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
+import { readLegacyProofSessions } from './journal-legacy-content-proof'
 
 function rename(filename: string, sessionId: string, name: string) {
   const db = new Database(filename)
@@ -110,19 +111,6 @@ it('keeps the original whenever the store cannot prove it holds all of it', asyn
       )
     )
   ).toMatchObject({ phase: 'refused', reason: 'source-orphan' })
-
-  // History an older Orca added to a converted chat it no longer records: no pass absorbs it.
-  const unrecorded = await profile()
-  await unrecorded.convert('unopened')
-  const legacy = new Database(unrecorded.filename)
-  legacy.exec(`DELETE FROM agent_session_records WHERE session_id='unopened';
-    INSERT INTO journal_rows SELECT session_id,epoch,seq+1,ts,row_json FROM journal_rows
-      WHERE session_id='unopened' ORDER BY seq DESC LIMIT 1`)
-  legacy.close()
-  await initializeJournalDomainDatabase(unrecorded.root)
-  await unrecorded.launch().run()
-  expect(companions(unrecorded.filename)).toContain(unrecorded.filename)
-  expect(String(unrecorded.errors.at(-1))).toContain('history this store lacks')
 })
 
 it('finishes a removal stopped after the main file went', async () => {
@@ -260,6 +248,22 @@ it('keeps the original version of what both sides changed, then retires, with no
   expect(original(deletedQueued.db, 'unopened').record).toContain(
     'Renamed after the chat was deleted here'
   )
+
+  // An older Orca rewrites lease bookkeeping in every record each launch; until the original goes,
+  // that keeps no further copy of a chat deleted here.
+  const churn = await profile()
+  churn.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
+  churn.db.exec("DELETE FROM journal_chat_state WHERE session_id='unopened'")
+  const tables = new Set(['agent_session_records', 'queued_messages', 'journal_outcome_epochs'])
+  const kept = readLegacyProofSessions(churn.source(), churn.db, tables, null)[0]!.original!
+  const legacyChurn = new Database(churn.filename)
+  legacyChurn.exec(`UPDATE agent_session_records
+    SET record_json=json_set(record_json,'$.lease.lastRenewedAt',2000)`)
+  legacyChurn.close()
+  await churn.readers.recycleSourceReaders()
+  const after = readLegacyProofSessions(churn.source(), churn.db, tables, null)[0]!.original!
+  expect(after.value).not.toBe(kept.value)
+  expect(after.identity).toBe(kept.identity)
 
   // Text an older Orca queued in a converted chat it no longer records is kept the same way.
   const unrecordedQueued = await profile()

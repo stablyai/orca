@@ -49,7 +49,10 @@ export type JournalPagedMaintenanceKind =
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
   | { kind: 'legacy-claims-absorb'; claims: readonly LegacyClaim[] }
-  | { kind: 'legacy-originals-keep'; originals: readonly { sessionId: string; value: string }[] }
+  | {
+      kind: 'legacy-originals-keep'
+      originals: readonly { sessionId: string; value: string; identity: string }[]
+    }
   | {
       kind: 'legacy-retirement-save'
       value: string
@@ -117,12 +120,13 @@ export function applyJournalSqlMaintenance(
     }
     case 'legacy-originals-keep': {
       // What only the original holds for a chat both sides changed, kept verbatim before it goes.
-      // Keyed by content too, so an original retired later never replaces one kept before.
+      // Keyed by what a person made in it too, so an original retired later never replaces one kept
+      // before, and one differing only in bookkeeping adds nothing.
       const keep = db.prepare(
         'INSERT OR IGNORE INTO agent_session_store_meta(key,value) VALUES(?,?)'
       )
-      for (const { sessionId, value } of operation.originals) {
-        const digest = createHash('sha256').update(value).digest('hex').slice(0, 16)
+      for (const { sessionId, value, identity } of operation.originals) {
+        const digest = createHash('sha256').update(identity).digest('hex').slice(0, 16)
         keep.run(`${JOURNAL_LEGACY_ORIGINAL}${sessionId}:${digest}`, value)
       }
       return true
