@@ -1,6 +1,11 @@
 import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { readAgentSessionErrorRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import {
+  isRecoverableRemoteRuntimeConnectionError,
+  isRuntimeRpcQueueOverloadError,
+  toRemoteRuntimeClientErrorLike
+} from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 
 export type AgentPickerCatalogJob = { index: number }
 export function agentPickerCatalogJobs(entries: AgentPickerEntry[]): AgentPickerCatalogJob[] {
@@ -8,7 +13,19 @@ export function agentPickerCatalogJobs(entries: AgentPickerEntry[]): AgentPicker
     entry.surfaces.length && entry.catalogRead !== 'unsupported' ? [{ index }] : []
   )
 }
-export function agentPickerCatalogFailure(error: unknown): 'unsupported' | 'failed' {
+// Only contact lost or being re-established retries; a timeout or a busy client fails fast.
+function agentPickerCatalogReconnecting(error: unknown): boolean {
+  const like = toRemoteRuntimeClientErrorLike(error)
+  const message = like.message.toLowerCase()
+  return (
+    isRecoverableRemoteRuntimeConnectionError(like) &&
+    !isRuntimeRpcQueueOverloadError(like) &&
+    (like.code === undefined
+      ? !/timed out|limit reached/.test(message)
+      : !['runtime_timeout', 'timeout', 'remote_runtime_busy'].includes(like.code))
+  )
+}
+export function agentPickerCatalogFailure(error: unknown): 'unsupported' | 'failed' | 'retry' {
   // Why: hosts before 1.4.248 refuse a session-less catalog read until something starts their
   // chat host, so that refusal is retryable, not final.
   const refusal = readAgentSessionErrorRefusal(error)
@@ -16,16 +33,19 @@ export function agentPickerCatalogFailure(error: unknown): 'unsupported' | 'fail
     refusal?.code === 'structured_agent_session_unsupported' &&
     refusal.details?.reason === 'hostDisabled'
   ) {
-    return 'failed'
+    return 'retry'
   }
-  return typeof error === 'object' &&
+  if (
+    typeof error === 'object' &&
     error !== null &&
     'code' in error &&
     (error.code === 'method_not_found' ||
       error.code === 'structured_agent_session_unsupported' ||
       error.code === 'forbidden')
-    ? 'unsupported'
-    : 'failed'
+  ) {
+    return 'unsupported'
+  }
+  return agentPickerCatalogReconnecting(error) ? 'retry' : 'failed'
 }
 export function updateAgentPickerCatalog(
   entries: AgentPickerEntry[],

@@ -40,6 +40,9 @@ function refusal(reason: 'hostDisabled' | 'clientCapabilityMissing'): RuntimeRpc
     _meta: meta
   }
 }
+function failure(code: string, message: string): RuntimeRpcResponse<unknown> {
+  return { id: 'r', ok: false, error: { code, message }, _meta: meta }
+}
 const piCatalog: RuntimeRpcResponse<unknown> = {
   id: 'r',
   ok: true,
@@ -67,6 +70,7 @@ const pi: AgentPickerEntry = {
 
 function observe(key: string) {
   let latest: AgentPickerEntry[] = []
+  let invalidate = () => {}
   const reads = agentPickerModelCatalogReads({
     target: { kind: 'environment', environmentId: 'wsl-env' },
     worktree: 'id:repo::/home/me/project'
@@ -74,11 +78,20 @@ function observe(key: string) {
   const stop = observeAgentPickerAcquisition(
     key,
     [pi],
-    { catalog: reads.catalog, support: async () => undefined },
+    {
+      catalog: reads.catalog,
+      refreshOnInvalidation: () => true,
+      subscribeInvalidation: (listener) => {
+        invalidate = listener
+        return () => {}
+      },
+      support: async () => undefined
+    },
     { selected: () => undefined, publish: (entries) => (latest = entries) }
   )
-  return { stop, entry: () => latest[0] }
+  return { stop, entry: () => latest[0], invalidate: () => invalidate() }
 }
+const BACKOFF_TOTAL_MS = AGENT_PICKER_CATALOG_RETRY_DELAYS_MS.reduce((sum, delay) => sum + delay, 0)
 
 describe('agent picker catalog acquisition against a remote runtime', () => {
   beforeEach(() => {
@@ -112,9 +125,7 @@ describe('agent picker catalog acquisition against a remote runtime', () => {
   it('gives up after its bounded retries', async () => {
     mocks.responses.push(...Array.from({ length: 4 }, () => refusal('hostDisabled')))
     const picker = observe('host-never-built')
-    await vi.advanceTimersByTimeAsync(
-      AGENT_PICKER_CATALOG_RETRY_DELAYS_MS.reduce((total, delay) => total + delay, 0)
-    )
+    await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS)
     expect(mocks.calls).toHaveLength(4)
     expect(picker.entry().catalogRead).toBe('failed')
     picker.stop()
@@ -136,5 +147,58 @@ describe('agent picker catalog acquisition against a remote runtime', () => {
     picker.stop()
     await vi.advanceTimersByTimeAsync(20_000)
     expect(mocks.calls).toHaveLength(1)
+  })
+
+  it('retries a read the dropped connection lost', async () => {
+    mocks.responses.push(failure('reconnecting', 'Remote Orca runtime is reconnecting'), piCatalog)
+    const picker = observe('reconnecting')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(picker.entry().catalogRead).toBe('pending')
+    await vi.advanceTimersByTimeAsync(AGENT_PICKER_CATALOG_RETRY_DELAYS_MS[0])
+    expect(mocks.calls).toHaveLength(2)
+    expect(picker.entry().catalogRead).toBe('settled')
+    picker.stop()
+  })
+
+  it.each([
+    ['a generic host error', failure('runtime_error', 'listing crashed')],
+    ['a timeout', failure('runtime_timeout', 'Timed out waiting for the remote Orca runtime')]
+  ])('shows %s at once without retrying', async (_name, response) => {
+    mocks.responses.push(response)
+    const picker = observe(`no-retry-${response.ok ? '' : response.error.code}`)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(picker.entry().catalogRead).toBe('failed')
+    await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS)
+    expect(mocks.calls).toHaveLength(1)
+    picker.stop()
+  })
+
+  it('a refresh during backoff reads at once and drops the pending retry', async () => {
+    mocks.responses.push(refusal('hostDisabled'), piCatalog)
+    const picker = observe('refresh-during-backoff')
+    await vi.advanceTimersByTimeAsync(0)
+    picker.invalidate()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.calls).toHaveLength(2)
+    expect(picker.entry().catalogRead).toBe('settled')
+    await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS)
+    expect(mocks.calls).toHaveLength(2)
+    expect(picker.entry().catalogRead).toBe('settled')
+    picker.stop()
+  })
+
+  it('a reopen during backoff reads at once and drops the pending retry', async () => {
+    mocks.responses.push(refusal('hostDisabled'), piCatalog)
+    const first = observe('reopen-during-backoff')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(first.entry().catalogRead).toBe('pending')
+    first.stop()
+    const reopened = observe('reopen-during-backoff')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.calls).toHaveLength(2)
+    expect(reopened.entry().catalogRead).toBe('settled')
+    await vi.advanceTimersByTimeAsync(BACKOFF_TOTAL_MS)
+    expect(mocks.calls).toHaveLength(2)
+    reopened.stop()
   })
 })

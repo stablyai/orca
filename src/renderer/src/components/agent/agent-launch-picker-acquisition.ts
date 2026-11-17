@@ -233,7 +233,7 @@ class AgentPickerAcquisition {
               if (job === this.jobs[index] && !signal.aborted) {
                 const failure = agentPickerCatalogFailure(error)
                 const retrying =
-                  failure === 'failed' &&
+                  failure === 'retry' &&
                   this.observers.size > 0 &&
                   this.retries.schedule(job, () => {
                     if (job === this.jobs[index] && !signal.aborted && this.observers.size) {
@@ -242,7 +242,7 @@ class AgentPickerAcquisition {
                     }
                   })
                 this.entries = updateAgentPickerCatalog(this.entries, job, {
-                  catalogRead: retrying ? 'pending' : failure
+                  catalogRead: retrying ? 'pending' : failure === 'retry' ? 'failed' : failure
                 })
               }
             })
