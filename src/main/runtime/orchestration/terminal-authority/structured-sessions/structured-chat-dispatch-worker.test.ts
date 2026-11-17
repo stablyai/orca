@@ -9,7 +9,6 @@ import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { sendChatTask } from '../../../rpc/methods/orchestration/chat-task-delivery'
 import {
-  isMailPointer,
   providerFaults,
   type FakeConnection
 } from './structured-chat-coordinator-fake-codex-fixture'
@@ -176,7 +175,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(dispatchCount()).toEqual({ n: 0 })
   })
 
-  it("points the chat at its coordinator's Dispatch mail, which its own check reads once", async ({
+  it("hands the chat its coordinator's mail to the Dispatch whole, so its own check has nothing left", async ({
     onTestFinished
   }) => {
     const accepted = Promise.withResolvers<void>()
@@ -224,19 +223,18 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     )
 
     await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    expect(isMailPointer(turnText(worker.turns[0]!))).toBe(true)
+    expect(turnText(worker.turns[0]!)).toMatch(
+      /Subject: also check the tests\n\[Reply: orca(-dev)? orchestration reply --id msg_\w+ --body "\.\.\."\]/
+    )
     expect(await queuedCardTexts(PEER_CHAT)).toEqual([])
     await settleTurn(PEER_CHAT, 0)
     await accepted.promise
     try {
       expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
-        messages: [{ subject: 'also check the tests' }]
+        messages: []
       })
     } finally {
       release.resolve()
     }
-    expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
-      messages: []
-    })
   })
 })
