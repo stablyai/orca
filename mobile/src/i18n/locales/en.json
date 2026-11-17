@@ -287,7 +287,8 @@
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
       "tryAgain": "Try Again",
-      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again."
+      "codeNoLongerValid": "This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.",
+      "runtimeAccessLink": "This link is for another Orca app. Scan the code in Settings → Mobile on your computer, or run orca pair --mobile on your server."
     },
     "pair": {
       "missingCode": "Missing pairing code",
@@ -1361,13 +1362,18 @@
       "newScriptLabel": "New setup script",
       "scriptLabel": "Setup script",
       "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
       "dontRun": "Don't run",
       "runArchiveTitle": "Run archive script from {{repoName}}?",
       "archiveScriptChangedTitle": "{{repoName}}'s archive script changed",
       "archiveDescription": "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository.",
       "archiveScriptLabel": "Archive script",
-      "newArchiveScriptLabel": "New archive script"
+      "newArchiveScriptLabel": "New archive script",
+      "runOnce": "Run once",
+      "alwaysTrust": "Always trust",
+      "alwaysTrustScope": "Always trust runs future orca.yaml changes in {{repoName}} without asking.",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersDescription": "The workspace was created, but its setup didn't run: its branch's orca.yaml differs from what you approved. Run it in this workspace only if you trust this repository.",
+      "branchSetupLabel": "Branch's setup script"
     },
     "smartWorkspaceAdvancedFields": {
       "name": "Name",
@@ -1961,7 +1967,7 @@
     },
     "stream": {
       "updateApp": "Update the Orca app to stream browser tabs here.",
-      "updateDesktop": "Update desktop Orca to stream browser tabs on mobile.",
+      "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
       "timedOut": "Browser stream timed out."
@@ -2207,7 +2213,8 @@
       "newTab": "New tab",
       "quickCommands": "Quick commands",
       "fileExplorer": "File explorer",
-      "sourceControl": "Source control"
+      "sourceControl": "Source control",
+      "textSize": "Text size"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -2222,7 +2229,7 @@
       "newTab": "New Tab",
       "terminal": "Terminal",
       "browser": "Browser",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "markdownNote": "Markdown Note",
       "sendReviewNotes": "Send Review Notes",
       "notesHint": "Choose an agent session for the current notes.",
@@ -2233,6 +2240,8 @@
       "copyPath": "Copy Path",
       "file": "File",
       "chat": "Chat",
+      "cli": "CLI",
+      "cliOnly": "CLI only",
       "unsavedMarkdown": "Unsaved markdown changes",
       "draftsHint": "Copy or discard phone drafts before leaving.",
       "copyAllAndLeave": "Copy All & Leave",
@@ -2615,7 +2624,7 @@
     "useContentCreateActions": {
       "noteCreateFailed": "Failed to create markdown note",
       "untitledNoteCreateFailed": "Unable to create untitled markdown note",
-      "browserUpdateRequired": "Desktop update required for mobile browser streaming",
+      "browserStreamingUnavailable": "This host can't stream browser tabs",
       "invalidUrl": "Enter a valid URL",
       "browserCreateFailed": "Failed to create browser",
       "browserUnavailable": "Browser page is not available yet.",
@@ -2834,6 +2843,7 @@
       "historyUnreadable": "Orca couldn't read this chat's saved history.",
       "historyUnusable": "Unable to load this chat.",
       "historyUnavailable": "Orca couldn't open this chat's history right now.",
+      "savedInOtherFolder": "This conversation was saved in another folder.",
       "savedByNewerOrca": "Chats were saved by a newer Orca.",
       "updateOrcaToKeepUsing": "Update Orca to keep using them.",
       "chatSavedByNewerOrca": "This chat was saved by a newer Orca.",
@@ -3016,6 +3026,14 @@
       "next": "Next tab",
       "previous": "Previous tab",
       "hint": "Shows all tabs"
+    },
+    "textSizeSheet": {
+      "chatTitle": "Chat text",
+      "size": "Size",
+      "moreChat": "More text settings",
+      "terminalTitle": "Terminal text",
+      "pointsAndColumns": "{{points}} · {{count}} columns",
+      "moreTerminal": "More terminal settings"
     }
   },
   "chat": {
@@ -3591,6 +3609,10 @@
         "failed": "{{count}} failed"
       },
       "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
+    },
+    "selectionQuote": {
+      "action": "Quote",
+      "hint": "Adds the selected text to your message as a quote"
     }
   },
   "sourceControl": {
@@ -4172,6 +4194,11 @@
       "loading": "Loading",
       "downloading": "Downloading",
       "downloadProgress": "Downloading… {{progress}}"
+    },
+    "createdSetupReview": {
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
+      "runFailed": "Could not start setup."
     }
   },
   "tasks": {
@@ -4630,15 +4657,7 @@
       "creating": "Creating...",
       "runSetupAndCreate": "Run setup and create",
       "skipSetupAndCreate": "Skip setup and create",
-      "setupChangedTitle": "{{name}}'s setup script changed",
-      "runSetupTitle": "Run setup from {{name}}?",
-      "trustSubtitle": "This repository's orca.yaml runs on your machine before the workspace starts. Only run it if you trust this repository.",
-      "newSetupScript": "New setup script",
-      "setupScript": "Setup script",
-      "trustFailed": "Failed to trust setup script.",
-      "runHooks": "Run hooks",
-      "alwaysTrustAndRun": "Always trust and run",
-      "dontRun": "Don't run"
+      "trustFailed": "Failed to trust setup script."
     },
     "sparsePresetDraft": {
       "repoRelativeDirectoriesRequired": "Use repo-relative directories, not root, absolute paths, or parent segments.",

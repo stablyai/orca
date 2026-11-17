@@ -102,11 +102,7 @@ export function useTerminalWebViewController(
     [coalesce, postMessage]
   )
 
-  useEffect(() => {
-    return () => {
-      writeCoalescer.clear()
-    }
-  }, [writeCoalescer])
+  useEffect(() => () => writeCoalescer.clear(), [writeCoalescer])
 
   const confirmWebReady = useCallback(
     (notifyParent: boolean) => {
@@ -289,6 +285,7 @@ export function useTerminalWebViewController(
         postMessage({ type: 'clear' })
       },
       fitDimensions,
+      measuredCellBox: () => cellBoxRef.current,
       scrollToBottom() {
         writeCoalescer.flushNow()
         postMessage({ type: 'scroll-to-bottom' })

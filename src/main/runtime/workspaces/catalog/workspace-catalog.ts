@@ -8,11 +8,8 @@ import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-h
 
 import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
-import {
-  resolveRepoWorktreeRows,
-  resolveScopedWorktreeIdRow,
-  type RepoWorktreeRowDeps
-} from './repo-worktree-row-resolution'
+import { resolveRepoWorktreeRows, type RepoWorktreeRowDeps } from './repo-worktree-row-resolution'
+import { resolveScopedWorktreeIdRow } from './scoped-worktree-row-resolution'
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,

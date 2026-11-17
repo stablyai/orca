@@ -201,7 +201,11 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
             localPtyTeardownOwnedExternally: true
           })
         } catch (error) {
-          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+          // The PTY is already dead; its exit may have retired the durable tab, but the renderer copy remains.
+          if (
+            !(error instanceof Error) ||
+            (error.message !== 'workspace_session_unavailable' && error.message !== 'tab_not_found')
+          ) {
             throw error
           }
           this.notifyRendererOfHeadlessTerminalClose(tabId)

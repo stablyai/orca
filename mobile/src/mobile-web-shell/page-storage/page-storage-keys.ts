@@ -49,7 +49,9 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** Terminal font, line spacing and weight. */
   'orca:terminalFontStyle',
   /** Chat text size, font and spacing; a pinch in a chat saves here. */
-  'orca:nativeChatText'
+  'orca:nativeChatText',
+  /** The New Tab sheet's Chat or CLI pick. */
+  'orca:newAgentSurface'
 ] as const
 
 /**
@@ -60,7 +62,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
 export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalSplitLayout',
   'orca:terminalFontStyle',
-  'orca:nativeChatText'
+  'orca:nativeChatText',
+  'orca:newAgentSurface'
 ] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */

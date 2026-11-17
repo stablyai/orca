@@ -26,6 +26,7 @@ import { wslDistroHoldRpcFailure } from '../../../../shared/remote-runtime/wsl-h
 import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
+import { ARTIFACT_RATE_LIMITED_CODE } from '../../../../shared/artifacts/artifacts'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
 import {
@@ -188,6 +189,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   PROJECT_RUNTIME_REPAIR_REQUIRED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
+  // The reset time and limit ride in data; the message already names them for people.
+  ARTIFACT_RATE_LIMITED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
   SHARING_UNAVAILABLE_ON_HOST_CODE,
   AGENT_SKILL_NOT_SHAREABLE_CODE,

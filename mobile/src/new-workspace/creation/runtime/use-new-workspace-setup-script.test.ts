@@ -74,7 +74,6 @@ describe('new workspace setup choices', () => {
       )
     )
     expect(current().setupCommand).toBeNull()
-    expect(current().setupTrust).toBeNull()
     expect(current().setupDecisionChoice).toBeNull()
   })
 })

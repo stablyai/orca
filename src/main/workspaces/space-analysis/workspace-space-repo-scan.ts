@@ -21,7 +21,7 @@ import {
   resolveGitRouteForHost
 } from '../../providers/execution-host-provider-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from '../catalog/repo-worktrees'
-import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { getLocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import {
   WorkspaceSpaceScanCancelledError,

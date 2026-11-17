@@ -1,5 +1,5 @@
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
-import { isTrustedMainRendererSender } from '../../ipc/main-renderer-sender-trust'
+import { isTrustedMainRendererSender } from '../../ipc/renderer-requests/main-renderer-sender-trust'
 import { isDashboardPopoutRenderer } from '../dashboard-popout-window'
 
 let trustedClipboardRendererWebContentsId: number | null = null
