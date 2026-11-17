@@ -6,11 +6,13 @@
  */
 export const JOURNAL_READER_REPLY_CREDIT_BYTES = 64 * 2 ** 20
 /**
- * A leaked credit must never hang a reader. Main still releasing while room never comes is a leak
- * or a starved large reply: post after this. Main releasing nothing is a stall: keep holding.
+ * Main releasing recently while room never comes is a leak or a starved large reply: post after
+ * this. Main releasing nothing lately is a stall: keep holding.
  */
 export const JOURNAL_READER_REPLY_CREDIT_WAIT_MS = 10_000
-/** Main has released nothing for this long: it is hung, and the hang watchdog owns it. */
+/** A release this recent means main is still consuming. */
+const RECENT_RELEASE_MS = 2_000
+/** No wait outlasts this, so a leaked credit can't hang a reader; a main stalled this long is hung. */
 export const JOURNAL_READER_REPLY_STALL_WAIT_MS = 60_000
 const WAIT_SLICE_MS = 100
 const READERS = 16
@@ -77,10 +79,15 @@ export function takeJournalReaderReplyCredit(
 ): boolean {
   const counters = new Int32Array(grant.credit)
   const started = now()
-  const firstWake = Atomics.load(counters, WAKE)
+  let lastWake = Atomics.load(counters, WAKE)
+  let lastReleaseAt = -Infinity
   let granted = true
   while (true) {
     const woken = Atomics.load(counters, WAKE)
+    if (woken !== lastWake) {
+      lastWake = woken
+      lastReleaseAt = now()
+    }
     const held = Atomics.load(counters, TOTAL)
     if (held === 0 || held + bytes <= JOURNAL_READER_REPLY_CREDIT_BYTES) {
       // Readers race for the same room; only the one whose view still holds takes it.
@@ -89,10 +96,11 @@ export function takeJournalReaderReplyCredit(
       }
       continue
     }
-    const waited = now() - started
-    const released = woken !== firstWake
+    const at = now()
+    const waited = at - started
+    const consuming = at - lastReleaseAt < RECENT_RELEASE_MS
     if (
-      (released && waited >= JOURNAL_READER_REPLY_CREDIT_WAIT_MS) ||
+      (consuming && waited >= JOURNAL_READER_REPLY_CREDIT_WAIT_MS) ||
       waited >= JOURNAL_READER_REPLY_STALL_WAIT_MS
     ) {
       granted = false

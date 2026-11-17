@@ -104,6 +104,6 @@ it('holds large replies in their readers while main has not consumed the budget'
     operation: { kind: 'item', itemId: itemIds[0]! }
   })
   expect(JSON.stringify(sample).length).toBeGreaterThan(ITEM_BYTES)
-  // Eight admitted reads of 6 MB would post 48 MB; the credit stops at 32 MB.
+  // Eight admitted reads of 6 MB would post 48 MB; the 64 MB charge (UTF-16 width) stops near 32 MB.
   expect(maxUnconsumed).toBeLessThanOrEqual(33 * MB)
 })
