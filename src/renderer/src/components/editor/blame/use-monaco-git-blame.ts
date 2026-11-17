@@ -74,6 +74,8 @@ export function useMonacoGitBlame(params: {
     let loading = true
     let disposed = false
     let headKey: string | null = null
+    // Blame owed while inactive; the pane loads it once it becomes active.
+    let loadOwed = false
 
     const lineBlameAtCursor = (): LineBlame | null => {
       const loaded = loadedRef.current
@@ -167,6 +169,16 @@ export function useMonacoGitBlame(params: {
       // Invalidate any pending reply first, including when no target resolves below.
       loads.generation += 1
       const generation = loads.generation
+      // Only the active pane runs git: hidden worktrees and other splits stay mounted.
+      if (!isActivePane()) {
+        if (reason === 'headMoved') {
+          loadedRef.current = null
+          mapping = null
+        }
+        loadOwed = true
+        return
+      }
+      loadOwed = false
       const state = useAppStore.getState()
       const file = openFileById(state.openFiles, fileId)
       const target = file ? resolveGitBlameTarget(state, file) : null
@@ -240,10 +252,14 @@ export function useMonacoGitBlame(params: {
       // Commits made in a terminal or in a child repo surface when the user returns to the editor.
       ed.onDidFocusEditorText(() => {
         update()
-        load('focus')
+        load(loadOwed ? 'status' : 'focus')
       })
     ]
     const unsubscribeHead = useAppStore.subscribe((state, previous) => {
+      if (loadOwed && state.activeFileId === fileId && previous.activeFileId !== fileId) {
+        load('status')
+        return
+      }
       const before = headKey ? previous.gitStatusHeadByWorktree[headKey] : undefined
       const after = headKey ? state.gitStatusHeadByWorktree[headKey] : undefined
       if (before === after) {
