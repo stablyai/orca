@@ -28,7 +28,12 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
   ) {
     return false
   }
-  if (value.kind === 'native-page' || value.kind === 'native-signal') {
+  if (
+    value.kind === 'native-page' ||
+    value.kind === 'native-signal' ||
+    value.kind === 'hermes-history' ||
+    value.kind === 'hermes-exists'
+  ) {
     return (
       'dbPath' in value &&
       typeof value.dbPath === 'string' &&
