@@ -11,9 +11,13 @@ it('discovers ZDOTDIR from multi-file config', async () => {
   const { stdout } = await shellScriptTest(`
     # Setup multi-file config
     mkdir -p ~/.config/zsh
-    printf '%s\\n' 'export ZDOTDIR="$HOME/.config/zsh"' > ~/.config/zsh/env
+    cat > ~/.config/zsh/env <<'EOF'
+export ZDOTDIR="$HOME/.config/zsh"
+EOF
 
-    printf '%s\\n' 'source "$HOME/.config/zsh/env"' > ~/.zshenv
+    cat > ~/.zshenv <<'EOF'
+source "$HOME/.config/zsh/env"
+EOF
 
     # Run: check discovered ZDOTDIR
     zsh -c 'env | grep -E "^(ORCA_|ZDOTDIR|HOME)=" | sort'
@@ -54,14 +58,11 @@ it('discovers ZDOTDIR from multi-file config', async () => {
 
 **All shell syntax is supported** because the script is executed directly by bash/zsh, not parsed:
 
+- Heredocs (any delimiter, quoted or unquoted)
 - Pipes, redirects, command substitution
 - Conditionals (`if`, `[[ ]]`, `&&`, `||`)
 - Loops, functions, variables
 - Any valid shell script
-
-Use plain quoted argv for short, fixed input as above. For multiline fixtures,
-create UTF-8 files with a file write/edit tool and copy them into the test setup;
-do not prepare them with heredocs or here-strings, which can hang before execution.
 
 ## Manual replication
 
@@ -70,9 +71,13 @@ To manually replicate a test scenario, copy the shell commands from the test:
 ```bash
 # Setup commands (before # Run: marker):
 mkdir -p ~/.config/zsh
-printf '%s\n' 'export ZDOTDIR="$HOME/.config/zsh"' > ~/.config/zsh/env
+cat > ~/.config/zsh/env <<'EOF'
+export ZDOTDIR="$HOME/.config/zsh"
+EOF
 
-printf '%s\n' 'source "$HOME/.config/zsh/env"' > ~/.zshenv
+cat > ~/.zshenv <<'EOF'
+source "$HOME/.config/zsh/env"
+EOF
 
 # Run command (after # Run: marker):
 zsh -c 'env | grep -E "^(ORCA_|ZDOTDIR|HOME)=" | sort'

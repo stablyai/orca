@@ -25,47 +25,6 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
-## Prepare command input
-
-For all multiline content, use a file write/edit tool to create a UTF-8 file,
-then pass the command's documented file option. This includes creating files,
-worker specs, orchestration send/reply bodies, git commit messages, and PR/comment
-bodies. Never use heredocs or here-strings, including cat/python wrappers or
-command substitutions: they can hang in the shell before the command starts.
-Never insert arbitrary file contents into shell source. For short input, use
-plain argv quoted for the current shell.
-
-After writing the files with your file tool:
-
-```text
-ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body-file "<body-file>"
-ORCA orchestration reply --id <msg_id> --body-file "<answer-file>"
-ORCA orchestration worker-start --spec-file "<task-file>" --worktree current --agent <agent>
-git commit -F "<message-file>"
-gh pr create --body-file "<body-file>"
-```
-
-File paths belong to the CLI's execution host. For a remote command that only
-accepts stdin, use its documented file copy/redirect mechanism, never a heredoc.
-Keep each input file unchanged until the operation and any recovery are resolved.
-Keep the mutation UUID separate from the answered-to `msg_…` id. If send, reply,
-or worker-start fails or times out, follow the recovery commands the CLI prints,
-exactly, with the same request UUID and unchanged body or spec file. To check,
-use the CLI's query (`worker-show` for dispatch-scoped work):
-
-```text
-ORCA orchestration request-show --request <mutation-UUID> --json
-ORCA orchestration worker-show --dispatch <dispatch-id> --json
-```
-
-Use the same caller and receipt host; retain any `--on <server>` shown by the CLI's
-recovery query. If the CLI printed that the request was not sent, follow its printed
-retry command. Otherwise, if the receipt is absent, expired, or inconclusive, do not
-resend; tell your owner. Never resend with a fresh UUID.
-
-Agent launches and terminal sends have no prompt file option: keep their argv
-short and point the agent at a brief saved on its execution host.
-
 ## Full Handoffs
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user expects the result back ("have another agent review this and report") or explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.
@@ -125,6 +84,10 @@ A chat keeps its ID across `/clear`; a terminal agent gets a new one, and its ol
 ## Messaging agents
 
 Send another agent a message with Orca mail, never by typing into its terminal:
+
+Write multiline text with your file tool; use `--body-file`, `--spec-file`, `git commit -F`, or `gh ... --body-file`.
+Never use heredocs or here-strings: heredocs can hang when pipe memory is low.
+If send, reply or worker-start fails, follow the CLI's printed recovery commands exactly; never resend with a new ID.
 
 ```text
 ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> [--type question|dispatch|merge_ready|handoff] --subject "<topic>" --body "<message>" --json

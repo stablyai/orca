@@ -26,48 +26,14 @@ When you report your effort, take it from the dispatch's `--effort` or your proc
 argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 scale
 (claude-opus-5-5: low=5, medium=10, high=15, xhigh=40).
 
-## Prepare command input
+## Recipe
 
 `ORCA` stands for the executable you used to run `skills get`; type it in its
 place and use it for every command.
 
-For all multiline content, use a file write/edit tool to create a UTF-8 file,
-then pass the command's documented file option. This includes creating files,
-worker specs, orchestration send/reply bodies, git commit messages, and PR/comment
-bodies. Never use heredocs or here-strings, including cat/python wrappers or
-command substitutions: they can hang in the shell before the command starts.
-Never insert arbitrary file contents into shell source. For short input, use
-plain argv quoted for the current shell.
-
-After writing the files with your file tool:
-
-```text
-ORCA orchestration worker-start --spec-file "<task-file>" --worktree current --agent <agent>
-ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body-file "<body-file>"
-ORCA orchestration reply --id <msg_id> --body-file "<answer-file>"
-git commit -F "<message-file>"
-gh pr create --body-file "<body-file>"
-```
-
-File paths belong to the CLI's execution host. For a remote command that only
-accepts stdin, use its documented file copy/redirect mechanism, never a heredoc.
-Keep each input file unchanged until the operation and any recovery are resolved.
-Keep the mutation UUID separate from the answered-to `msg_…` id. If send, reply,
-or worker-start fails or times out, follow the recovery commands the CLI prints,
-exactly, with the same request UUID and unchanged body or spec file. To check,
-use the CLI's query (`worker-show` for dispatch-scoped work):
-
-```text
-ORCA orchestration request-show --request <mutation-UUID> --json
-ORCA orchestration worker-show --dispatch <dispatch-id> --json
-```
-
-Use the same caller and receipt host; retain any `--on <server>` shown by the CLI's
-recovery query. If the CLI printed that the request was not sent, follow its printed
-retry command. Otherwise, if the receipt is absent, expired, or inconclusive, do not
-resend; tell your owner. Never resend with a fresh UUID.
-
-## Recipe
+Write multiline text with your file tool; use `--body-file`, `--spec-file`, `git commit -F`, or `gh ... --body-file`.
+Never use heredocs or here-strings: heredocs can hang when pipe memory is low.
+If send, reply or worker-start fails, follow the CLI's printed recovery commands exactly; never resend with a new ID.
 
 ```text
 ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
