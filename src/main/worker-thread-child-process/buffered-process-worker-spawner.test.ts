@@ -254,7 +254,8 @@ describe('buffered Windows processes on the shared worker', () => {
       onChildTerminated: terminated
     })
 
-    await vi.advanceTimersByTimeAsync(8_000)
+    // The launch never completes within the run's budget plus the queue allowance, so the run stops before any PID.
+    await vi.advanceTimersByTimeAsync(30_010 + 8_000)
     expect(rootKill).not.toHaveBeenCalled()
     expect(launchTaskkill).not.toHaveBeenCalled()
     expect(terminated).not.toHaveBeenCalled()
