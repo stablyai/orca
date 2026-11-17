@@ -223,12 +223,6 @@ export async function getWslCliRegistrationCandidates(
   })
 }
 
-/** Distros carrying Orca's own registration record; read from disk, so no `wsl.exe`. */
-export async function listRecordedWslCliDistros(userDataPath: string): Promise<string[]> {
-  await getKeyedSerializedQueueTail(writeQueues, getRegistryPath(userDataPath))
-  return (await readState(userDataPath)).registeredDistros
-}
-
 export function recordWslCliRegistrationObservations(
   userDataPath: string,
   observations: WslCliRegistrationObservation[],

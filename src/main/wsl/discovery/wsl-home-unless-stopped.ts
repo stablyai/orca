@@ -21,15 +21,13 @@ async function homesOf(distros: readonly string[]): Promise<string[]> {
  * lists none and says so (`confirmed: false`): a stale "running" answer plus a cached home would
  * hand a stopped distro's root to the scanner.
  */
-export async function readRunningWslHomeDirsUnlessStopped(
-  scopeDistros: (running: string[]) => string[] = (running) => running
-): Promise<{
+export async function readRunningWslHomeDirsUnlessStopped(): Promise<{
   homes: string[]
   confirmed: boolean
 }> {
   const read = await readConfirmedRunningWslDistros()
   return read.status === 'confirmed'
-    ? { homes: await homesOf(scopeDistros(read.distros)), confirmed: true }
+    ? { homes: await homesOf(read.distros), confirmed: true }
     : { homes: [], confirmed: false }
 }
 

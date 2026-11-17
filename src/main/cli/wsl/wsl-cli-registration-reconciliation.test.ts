@@ -1,70 +1,54 @@
 import { describe, expect, it, vi } from 'vitest'
 import { reconcileManagedWslCliRegistrations } from './wsl-cli-registration-reconciliation'
-import type { LegacyWslDemand } from '../../wsl/discovery/legacy-wsl-demand'
 
-function rig(args: { recorded: string[]; hostDistros: string[]; demand: LegacyWslDemand | null }) {
-  const listDistros = vi.fn(async () => ['Ubuntu', 'Debian'])
-  const listRunningDistros = vi.fn(async () => ['Ubuntu', 'Debian'])
-  const repair = vi.fn(async () => ({
-    changed: false,
-    managed: true,
-    status: { state: 'installed' as const }
-  }))
-  const options = {
-    platform: 'win32' as const,
-    isPackaged: true,
-    userDataPath: '/unused',
-    createInstaller: () => ({ repairManagedRegistration: repair }),
-    getHostLauncherTarget: async () => 'C:\\Orca\\orca.cmd',
-    registry: {
-      getCandidates: (available: string[], context?: { inspectableDistros?: readonly string[] }) =>
-        // Registered distros pass; host distros pass only when inspectable.
-        Promise.resolve(
-          available.filter(
-            (distro) =>
-              args.recorded.includes(distro) || context?.inspectableDistros?.includes(distro)
-          )
-        ),
-      recordObservations: async () => {},
-      listRecorded: async () => args.recorded
-    },
-    listOrcaHostDistros: () => args.hostDistros,
-    listRunningDistros,
-    isDistroRunning: async () => true,
-    deferUntilRunning: () => {},
-    readLegacyDemand: () => args.demand
+// Review repro for #43496: a WSL host distro must stay inspectable at startup without any
+// local project naming it, since nothing re-runs discovery when such a project appears later.
+describe('reconcileManagedWslCliRegistrations', () => {
+  function rig(running: string[]) {
+    const repair = vi.fn(async () => ({
+      changed: true,
+      managed: true,
+      status: { state: 'installed' as const }
+    }))
+    const deferred: string[] = []
+    const options = {
+      platform: 'win32' as const,
+      isPackaged: true,
+      userDataPath: '/unused',
+      listDistros: async () => ['Ubuntu', 'Debian'],
+      createInstaller: () => ({ repairManagedRegistration: repair }),
+      getHostLauncherTarget: async () => 'C:\\Orca\\orca.cmd',
+      registry: {
+        getCandidates: async (
+          available: string[],
+          context?: { inspectableDistros?: readonly string[] }
+        ) => available.filter((distro) => context?.inspectableDistros?.includes(distro)),
+        recordObservations: async () => {}
+      },
+      listOrcaHostDistros: () => ['Ubuntu'],
+      listRunningDistros: async () => running,
+      isDistroRunning: async (distro: string) => running.includes(distro),
+      deferUntilRunning: (distro: string) => {
+        deferred.push(distro)
+      }
+    }
+    return { options, repair, deferred }
   }
-  return { options, listDistros, listRunningDistros, repair }
-}
 
-describe('reconcileManagedWslCliRegistrations scoping', () => {
-  it('runs no wsl.exe for a WSL-host-only user', async () => {
-    const { options, listRunningDistros, repair } = rig({
-      recorded: [],
-      hostDistros: ['Ubuntu'],
-      demand: { distros: [], defaultDistro: false }
-    })
-    const getCandidates = vi.fn(options.registry.getCandidates)
-    await expect(
-      reconcileManagedWslCliRegistrations({
-        ...options,
-        registry: { ...options.registry, getCandidates }
-      })
-    ).resolves.toEqual([])
-    // Returned before the distro list, which is the first `wsl.exe` call.
-    expect(getCandidates).not.toHaveBeenCalled()
-    expect(listRunningDistros).not.toHaveBeenCalled()
-    expect(repair).not.toHaveBeenCalled()
+  it('inspects a running WSL host distro that no local project uses', async () => {
+    const { options, repair } = rig(['Ubuntu'])
+    const results = await reconcileManagedWslCliRegistrations(options)
+    expect(results).toEqual([
+      { distro: 'Ubuntu', outcome: 'repaired', state: 'installed', managed: true }
+    ])
+    expect(repair).toHaveBeenCalledTimes(1)
   })
 
-  it('skips a WSL host distro with no legacy project but still repairs a user-installed CLI', async () => {
-    const { options, listDistros, repair } = rig({
-      recorded: ['Debian'],
-      hostDistros: ['Ubuntu'],
-      demand: { distros: [], defaultDistro: false }
-    })
-    const results = await reconcileManagedWslCliRegistrations({ ...options, listDistros })
-    expect(results.map((result) => result.distro)).toEqual(['Debian'])
-    expect(repair).toHaveBeenCalledTimes(1)
+  it('defers a stopped WSL host distro instead of starting it', async () => {
+    const { options, repair, deferred } = rig([])
+    const results = await reconcileManagedWslCliRegistrations(options)
+    expect(results).toEqual([{ distro: 'Ubuntu', outcome: 'deferred' }])
+    expect(deferred).toEqual(['Ubuntu'])
+    expect(repair).not.toHaveBeenCalled()
   })
 })

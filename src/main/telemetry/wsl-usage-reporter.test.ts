@@ -2,17 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { listRunningDistrosForSnapshot } from './wsl-usage-reporter'
 
 describe('listRunningDistrosForSnapshot', () => {
-  const registrations = [{ distro: 'Ubuntu' }]
-
-  it('probes no running list when no legacy project uses a distro', async () => {
+  it('probes no running list when no Orca project uses WSL', async () => {
     const probe = vi.fn(async () => ['Ubuntu'])
     await expect(
-      listRunningDistrosForSnapshot(
-        registrations,
-        () => null,
-        probe,
-        () => ({ distros: [], defaultDistro: false })
-      )
+      listRunningDistrosForSnapshot([{ distro: 'Ubuntu' }], false, () => null, probe)
     ).resolves.toEqual([])
     expect(probe).not.toHaveBeenCalled()
   })
