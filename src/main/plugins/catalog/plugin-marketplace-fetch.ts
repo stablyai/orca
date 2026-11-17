@@ -210,14 +210,14 @@ async function loadCatalogFiles(
         return false
       }
       if (reads.length > 0 && roundBytes + found.size > CATALOG_BLOB_ROUND_MAX_BYTES) {
-        return readCatalogRound(repository, commit, reads, files, failed)
+        return readCatalogRound(repository, reads, files, failed)
       }
       roundBytes += found.size
       retainedBytes += found.size
       reads.push({ kind: 'blob', path, object: found.object, size: found.size, executable: false })
     }
   }
-  return readCatalogRound(repository, commit, reads, files, failed)
+  return readCatalogRound(repository, reads, files, failed)
 }
 
 async function listCatalogPaths(
@@ -252,7 +252,6 @@ async function listCatalogPaths(
 
 async function readCatalogRound(
   repository: string,
-  commit: string,
   reads: Extract<PluginGitTreeEntry, { kind: 'blob' }>[],
   files: Map<string, CatalogFile>,
   failed: Set<string>
