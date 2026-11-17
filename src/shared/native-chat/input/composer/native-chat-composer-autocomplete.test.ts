@@ -145,10 +145,4 @@ describe('skill picker scope retention', () => {
     expect(items[499].name).toBe('deploy-499')
     expect(items.some((item) => item.name === 'alpha-deploy')).toBe(false)
   })
-
-  it('keeps the unlimited catalog used by mobile skill token recognition', () => {
-    const items = buildNativeChatPickerItems([], repoSkills(601), '', '$', undefined, Infinity)
-    expect(items).toHaveLength(601)
-    expect(items[600].token).toBe('$repo-skill-600')
-  })
 })

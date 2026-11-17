@@ -26,7 +26,7 @@ import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { wholeFileDiffTintClass } from '../monaco-view/whole-file-diff-tint'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import type { EditorTypography } from '../../../../../../shared/editor/editor-typography'

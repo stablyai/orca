@@ -73,8 +73,8 @@
 1 src/renderer/src/components/browser-pane/host-guest/viewport/browser-client-page-position-driver.ts
 1 src/renderer/src/components/contextual-tours/use-contextual-tour.ts
 1 src/renderer/src/components/right-sidebar/plugin-panels/health/plugin-panel-watchdog.ts
-1 src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx
-1 src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.tsx
+1 src/renderer/src/components/maintenance/terminal-daemon/SeveredTerminalDaemonBanner.tsx
+1 src/renderer/src/components/maintenance/terminal-daemon/StalledTerminalDaemonBanner.tsx
 1 src/renderer/src/components/sidebar/workspace-card/activity/prompt-cache-countdown-clock.ts
 1 src/renderer/src/components/status-bar/resources/use-resource-memory-snapshot.ts
 1 src/renderer/src/components/status-bar/host-connections/use-runtime-host-resources.ts
@@ -82,7 +82,7 @@
 1 src/renderer/src/components/terminal-pane/pty-transport/delivery/terminal-delivery-watchdog.ts
 1 src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/RemoteRuntimeRecoveryCard.tsx
 1 src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.ts
-1 src/renderer/src/hooks/use-now.ts
+1 src/renderer/src/lib/window-activity/use-now.ts
 1 src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.ts
 1 src/renderer/src/diagnostics/crash-reporting/crash-diagnostics.ts
 1 src/renderer/src/lib/window-activity/window-visibility-interval.ts

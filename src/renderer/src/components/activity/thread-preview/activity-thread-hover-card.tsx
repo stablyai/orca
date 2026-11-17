@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect } from 'react'
 import { Pencil, StickyNote } from 'lucide-react'
 import { HoverCardContent } from '@/components/ui/hover-card'
-import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
+import { SelectedTextCopyMenu } from '@/components/clipboard/SelectedTextCopyMenu'
 import { useTranslate } from '@/i18n/use-translate'
-import CommentMarkdown from '../../sidebar/CommentMarkdown'
+import CommentMarkdown from '../../comment-markdown/CommentMarkdown'
 import {
   DetailHeader,
   MetadataActionIcon

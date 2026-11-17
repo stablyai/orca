@@ -12,7 +12,7 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 import { useEffect, useMemo, useRef } from 'react'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/source-control/references/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/work-items/linear/linear-issue-url-lookup'
-import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
+import { searchJiraIssuesByKeyOrText } from '@/components/task-page/jira/listing/jira-key-or-text-search'
 import { linearWorkspaceScopeSignature } from '../../../../../shared/linear/workspace-types'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../../shared/new-workspace/smart-workspace-linear-intent'

@@ -1,6 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/class-names'
-import TaskProjectSourceCombobox from '@/components/task-project-source-combobox'
+import TaskProjectSourceCombobox from '@/components/task-page/source-selection/task-project-source-combobox'
 import { normalizeTaskRepoSelection } from '@/components/task-page/task-page-default-repo-selection'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'

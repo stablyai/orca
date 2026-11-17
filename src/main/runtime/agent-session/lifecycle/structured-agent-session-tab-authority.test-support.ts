@@ -31,7 +31,7 @@ import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-s
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../../session-tabs/chat/agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
-import { chatTabCommandsSettled } from '../../orca-runtime-tests/session-layout-apply.test-fixture'
+import { chatTabCommandsSettled } from '../../terminal/layout/session-layout-apply.test-fixture'
 import { stopStructuredAgentSessionRuntime } from '../installation/structured-agent-session-runtime'
 
 export const B = 'chat-b-0002',

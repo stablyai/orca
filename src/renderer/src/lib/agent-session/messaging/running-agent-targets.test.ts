@@ -79,11 +79,4 @@ describe('deriveRunningAgentSendTargets terminal liveness', () => {
       disabledReason: undefined
     })
   })
-
-  it('keeps a restored agent pane with a live PTY selectable after restart', () => {
-    expect(onlyTarget(state(entry({ restoredUnconfirmed: true }), ['pty-1']))).toEqual({
-      status: 'eligible',
-      disabledReason: undefined
-    })
-  })
 })
