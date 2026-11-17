@@ -3,7 +3,7 @@ import { RESTART_READ_RETRY_DELAYS_MS } from './native-chat-remote-restart-offer
 import { requestNativeChatResumeOnRestartDialog } from '../dialogs/native-chat-resume-on-restart-dialog'
 import { useAppStore } from '../../../store/index'
 import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
-import { allResumeSessionIds } from '../tree/native-chat-resume-on-restart-grouping'
+import { launchResumeSessionIds } from '../tree/native-chat-resume-on-restart-grouping'
 import { useEffect, useSyncExternalStore } from 'react'
 import { createNativeChatRestartStore } from './native-chat-restart-runtime-store'
 
@@ -75,7 +75,7 @@ async function loadLaunchOffer(store: NativeChatRestartStore): Promise<void> {
     requestNativeChatResumeOnRestartDialog()
     return
   }
-  await store.continueNativeChatRestartOffer(allResumeSessionIds(offered), 'launch')
+  await store.continueNativeChatRestartOffer(launchResumeSessionIds(offered), 'launch')
 }
 
 export function _resetNativeChatRestartOffer(): void {
