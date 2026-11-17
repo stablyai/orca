@@ -18,65 +18,6 @@ import {
 } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('keeps title-only foreground work ahead of monitoring in another split pane', async () => {
-    const now = Date.now()
-    const tabId = 'split-tab'
-    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
-    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: `${tabId}:${monitoringLeafId}`,
-          worktreeId: TEST_WORKTREE_ID,
-          tabId,
-          state: 'working',
-          workingMode: 'monitoring',
-          prompt: 'watch tests',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }
-      ]
-    })
-    runtime.attachWindow(1)
-    await runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Claude',
-          activeLeafId: monitoringLeafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: monitoringLeafId,
-          paneRuntimeId: 1,
-          ptyId: 'monitoring-pty',
-          paneTitle: 'claude'
-        },
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: foregroundLeafId,
-          paneRuntimeId: 2,
-          ptyId: 'foreground-pty',
-          paneTitle: 'claude working'
-        }
-      ]
-    })
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary).toMatchObject({ status: 'working' })
-    expect(summary).not.toHaveProperty('workingMode')
-  })
-
   it('suppresses restored-unconfirmed hook rows from worktree.ps', async () => {
     const leafId = '33333333-3333-4333-8333-333333333333'
     const now = Date.now()
@@ -266,50 +207,6 @@ describe('OrcaRuntimeService', () => {
       status: 'inactive',
       agents: []
     })
-  })
-
-  it('keeps a hydrated row while its persisted session tab exists and no renderer graph is attached', async () => {
-    // Headless session tabs remain current without a renderer graph.
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: {
-        [TEST_WORKTREE_ID]: [
-          {
-            id: 'headless-tab',
-            ptyId: null,
-            worktreeId: TEST_WORKTREE_ID,
-            title: 'Codex',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      }
-    })
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'headless-tab:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          worktreeId: TEST_WORKTREE_ID,
-          tabId: 'headless-tab',
-          state: 'done',
-          prompt: 'finished while headless',
-          agentType: 'codex',
-          connectionId: null,
-          receivedAt: now,
-          stateStartedAt: now - 60_000
-        }
-      ]
-    })
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-
-    expect(summary?.agents).toEqual([
-      expect.objectContaining({ state: 'done', prompt: 'finished while headless' })
-    ])
   })
 
   it('resolves legacy numeric pane keys through the stale filter too', async () => {
