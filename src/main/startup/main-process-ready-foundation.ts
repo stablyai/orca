@@ -59,6 +59,7 @@ import {
   logWslCliReconciliationResults,
   reconcileManagedWslCliRegistrations
 } from '../cli/wsl/wsl-cli-registration-reconciliation'
+import { setLegacyWslDemandStore } from '../wsl/discovery/legacy-wsl-demand'
 import { createWslCliReconciliationStartupBarrier } from './wsl-startup/wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
@@ -120,27 +121,6 @@ export async function initializeReadyFoundation(): Promise<void> {
       usesMockKeychain: app.commandLine.hasSwitch('use-mock-keychain')
     })
   }
-  // Managed WSL launchers live outside the bundle; reconcile launcher/bridge compatibility after app updates.
-  state.managedWslCliReconciliationStatus = 'pending'
-  state.managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
-    isPackaged: app.isPackaged,
-    userDataPath: canonicalUserDataPath,
-    appVersion: app.getVersion()
-  })
-    .then((results) => {
-      logWslCliReconciliationResults(results)
-      state.managedWslCliReconciliationStatus = 'settled'
-    })
-    .catch((error) => {
-      state.managedWslCliReconciliationStatus = 'failed'
-      console.warn(
-        '[wsl-cli] Managed registration reconciliation discovery failed:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
-  state.managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
-    state.managedWslCliReconciliationReady
-  )
   const profile = ensureActiveOrcaProfile()
   state.activeOrcaProfile = profile
   // Read durable browser hosting ID before window argv stamps it or renderer and lease ownership diverge.
@@ -174,6 +154,29 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
+  // Scopes legacy-bridge WSL background work to distros the user's projects are on.
+  setLegacyWslDemandStore(store)
+  // Managed WSL launchers live outside the bundle; reconcile after app updates. After the store: it scopes the distros.
+  state.managedWslCliReconciliationStatus = 'pending'
+  state.managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
+    isPackaged: app.isPackaged,
+    userDataPath: canonicalUserDataPath,
+    appVersion: app.getVersion()
+  })
+    .then((results) => {
+      logWslCliReconciliationResults(results)
+      state.managedWslCliReconciliationStatus = 'settled'
+    })
+    .catch((error) => {
+      state.managedWslCliReconciliationStatus = 'failed'
+      console.warn(
+        '[wsl-cli] Managed registration reconciliation discovery failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+  state.managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
+    state.managedWslCliReconciliationReady
+  )
   hangWatchdog?.setMenuBarIconSetting(store.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {

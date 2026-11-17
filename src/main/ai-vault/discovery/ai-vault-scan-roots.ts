@@ -7,6 +7,12 @@ import {
   listLastKnownRunningWslHomeDirs,
   readRunningWslHomeDirsUnlessStopped
 } from '../../wsl/discovery/wsl-home-unless-stopped'
+import {
+  currentLegacyWslDemand,
+  filterToLegacyWslDemand,
+  hasLegacyWslDemand
+} from '../../wsl/discovery/legacy-wsl-demand'
+import { resolveWslDefaultDistro } from '../../wsl/discovery/wsl-default-distro'
 import { filterPathsToRunningWslDistrosAsync } from '../../wsl/filesystem/wsl-running-path-filter'
 import type { AiVaultScanOptions } from '../session-scanner-types'
 import { managedOpenCodeAccountDataDirs } from '../../opencode/accounts/opencode-managed-account-data-dirs'
@@ -82,15 +88,30 @@ export function configuredAdditionalCodexHomePaths(): readonly string[] {
   return sources.getAdditionalCodexHomePaths?.() ?? []
 }
 
-/** Trust cached absence of any distro; otherwise a confirmed running list (E9). */
+/**
+ * Trust cached absence of any distro; otherwise a confirmed running list (E9). Only distros with
+ * legacy projects are scanned from Windows: a WSL host's orcad scans its own (#28000).
+ */
 async function scanWslHomeDirs(): Promise<{ homes: string[]; confirmed: boolean }> {
+  const demand = currentLegacyWslDemand()
   if (
     process.platform !== 'win32' ||
-    (hasCachedWslDistros() && getCachedWslDistros()?.length === 0)
+    (hasCachedWslDistros() && getCachedWslDistros()?.length === 0) ||
+    (demand && !hasLegacyWslDemand(demand))
   ) {
     return { homes: [], confirmed: true }
   }
-  return readRunningWslHomeDirsUnlessStopped()
+  if (!demand) {
+    return readRunningWslHomeDirsUnlessStopped()
+  }
+  const defaultDistro = demand.defaultDistro ? await resolveWslDefaultDistro() : null
+  return readRunningWslHomeDirsUnlessStopped((running) =>
+    filterToLegacyWslDemand(
+      running,
+      demand,
+      typeof defaultDistro === 'symbol' ? undefined : defaultDistro
+    )
+  )
 }
 
 /** WSL homes for work that reads inside them: a stopped distro's home is absent, not refused. */

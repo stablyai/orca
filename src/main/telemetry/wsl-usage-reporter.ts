@@ -14,6 +14,11 @@ import { getCachedWslAvailability } from '../wsl/discovery/wsl-availability'
 import { getCachedWslDistros } from '../wsl/discovery/distro-catalog'
 import { listConfirmedRunningWslDistros } from '../wsl/discovery/wsl-background-distro-gate'
 import { filterUserWslDistros } from '../wsl/discovery/wsl-distro-list-output'
+import {
+  currentLegacyWslDemand,
+  hasLegacyWslDemand,
+  type LegacyWslDemand
+} from '../wsl/discovery/legacy-wsl-demand'
 import { peekConfirmedRunningWslDistros } from '../wsl/discovery/wsl-running-distro-cache'
 import { loadWindowsNativeRegistry, WINDOWS_REG_SZ } from '../windows/windows-native-registry'
 import { readWslDistroRegistrations } from '../wsl/discovery/wsl-distro-registry-id'
@@ -133,18 +138,23 @@ async function readWslHostDistros(userDataPath: string): Promise<Map<string, str
   }
 }
 
-/** Reuse a confirmed running list; otherwise one shared probe, and none when no user distro exists. */
+/**
+ * Reuse a confirmed running list; otherwise one shared probe, and none when no user distro exists
+ * or no legacy project uses one (telemetry alone must not run `wsl.exe`, #28167).
+ */
 export async function listRunningDistrosForSnapshot(
   registrations: readonly { distro: string }[] | null,
   peek: () => readonly string[] | null = peekConfirmedRunningWslDistros,
-  probe: () => Promise<string[]> = listConfirmedRunningWslDistros
+  probe: () => Promise<string[]> = listConfirmedRunningWslDistros,
+  readDemand: () => LegacyWslDemand | null = currentLegacyWslDemand
 ): Promise<string[]> {
   const cached = peek()
   if (cached) {
     return [...cached]
   }
   const userNames = filterUserWslDistros((registrations ?? []).map(({ distro }) => distro))
-  return userNames.length > 0 ? probe() : []
+  const demand = readDemand()
+  return userNames.length > 0 && (!demand || hasLegacyWslDemand(demand)) ? probe() : []
 }
 
 export async function gatherWslUsageSnapshotInput(

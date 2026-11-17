@@ -1,19 +1,25 @@
 import type { CliInstallState, CliInstallStatus } from '../../../shared/cli/cli-install-types'
-import { listWslDistrosAsync } from '../../wsl/discovery/distro-catalog'
 import {
   deferUntilWslDistroRunning,
   isWslDistroRunning,
   listConfirmedRunningWslDistros
 } from '../../wsl/discovery/wsl-background-distro-gate'
+import { listWslDistrosAsync } from '../../wsl/discovery/distro-catalog'
 import { CliInstaller } from '../cli-installer'
 import {
   getWslCliRegistrationCandidates,
+  listRecordedWslCliDistros,
   recordWslCliRegistrationObservations,
   type WslCliRegistrationObservation
 } from './wsl-cli-registration-registry'
 import { WslCliInstaller } from './wsl-cli-installer'
 import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
 import { readWslHostDeployments } from '../../../shared/remote-runtime/host-store/runtime-environment-registry'
+import {
+  currentLegacyWslDemand,
+  filterToLegacyWslDemand,
+  type LegacyWslDemand
+} from '../../wsl/discovery/legacy-wsl-demand'
 
 // Why: each repair spawns a guest shell; a small cap bounds the startup fan-out.
 const MAX_CONCURRENT_DISTRO_REPAIRS = 2
@@ -39,6 +45,8 @@ type WslCliRegistrationRegistry = {
     context?: WslCliRegistrationCandidateContext
   ) => Promise<string[]>
   recordObservations: (observations: WslCliRegistrationObservation[]) => Promise<void>
+  /** Distros with Orca's registration record, read without `wsl.exe`. */
+  listRecorded?: () => Promise<string[]>
 }
 
 type WslCliRegistrationReconciliationOptions = {
@@ -56,6 +64,8 @@ type WslCliRegistrationReconciliationOptions = {
   /** Settled read taken right before each repair spawns. */
   isDistroRunning?: (distro: string) => Promise<boolean>
   deferUntilRunning?: (distro: string, key: string, task: () => unknown) => void
+  /** Null (unknown) keeps every host distro inspectable. */
+  readLegacyDemand?: () => LegacyWslDemand | null
 }
 
 export type WslCliRegistrationReconciliationResult =
@@ -89,7 +99,8 @@ export async function reconcileManagedWslCliRegistrations(
       getCandidates: (availableDistros, context) =>
         getWslCliRegistrationCandidates(options.userDataPath, availableDistros, context ?? {}),
       recordObservations: (observations) =>
-        recordWslCliRegistrationObservations(options.userDataPath, observations)
+        recordWslCliRegistrationObservations(options.userDataPath, observations),
+      listRecorded: () => listRecordedWslCliDistros(options.userDataPath)
     } satisfies WslCliRegistrationRegistry)
 
   let createInstaller = options.createInstaller
@@ -111,14 +122,23 @@ export async function reconcileManagedWslCliRegistrations(
     getHostLauncherTarget ??= () => getHostStatus().then((status) => status.launcherPath)
   }
 
+  const hostDistros = await (
+    options.listOrcaHostDistros ?? (async () => await orcaHostDistros(options.userDataPath))
+  )()
+  // A WSL host's own orcad serves its distro; only legacy projects there need the bridge CLI (#28000).
+  const demand = (options.readLegacyDemand ?? currentLegacyWslDemand)()
+  const inspectableDistros = demand
+    ? filterToLegacyWslDemand(hostDistros, demand, undefined)
+    : hostDistros
+  // Orca's own records name every possible candidate: with none, `wsl.exe` has nothing to list.
+  if (!options.listDistros && !(await hasRecordedOrInspectable(registry, inspectableDistros))) {
+    return []
+  }
   const availableDistros = await (options.listDistros ?? listWslDistrosAsync)()
   const currentTarget = getHostLauncherTarget
     ? await getHostLauncherTarget().catch(() => null)
     : null
   const appVersion = options.appVersion ?? ''
-  const inspectableDistros = await (
-    options.listOrcaHostDistros ?? (async () => await orcaHostDistros(options.userDataPath))
-  )()
   const candidates = await registry.getCandidates(availableDistros, {
     currentTarget,
     appVersion,
@@ -215,6 +235,16 @@ export async function reconcileManagedWslCliRegistrations(
     })
   )
   return [...results, ...deferred]
+}
+
+async function hasRecordedOrInspectable(
+  registry: WslCliRegistrationRegistry,
+  inspectable: readonly string[]
+): Promise<boolean> {
+  // A registry that can't list its records keeps the unscoped listing.
+  return (
+    inspectable.length > 0 || !registry.listRecorded || (await registry.listRecorded()).length > 0
+  )
 }
 
 async function orcaHostDistros(userDataPath: string): Promise<string[]> {
