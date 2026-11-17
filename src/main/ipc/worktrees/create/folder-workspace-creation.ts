@@ -7,7 +7,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-display-name'
+import { resolveWorktreeCreateDisplayNameRequest } from '../creation/worktree-display-name'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import {
   isPreparedFolderSetup,

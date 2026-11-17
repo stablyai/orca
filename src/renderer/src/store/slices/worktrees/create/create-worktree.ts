@@ -27,7 +27,7 @@ import {
   WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/workspace-creation/base-ref-update/local-base-ref-suggestion-toast'
-import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
+import { requestWorktreeBaseFallbackNotice } from '@/components/sidebar/workspace-creation/base-ref-update/worktree-base-fallback-notice'
 import { announcePerforceCopy } from '@/components/perforce-copies/perforce-copy-announcement'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
@@ -51,12 +51,10 @@ import {
   type CreateAttemptOutcome
 } from './worktree-create-parent-pick'
 
-type RuntimeTarget = RuntimeClientTarget
-
 async function runCreateAttempt(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  target: RuntimeTarget,
+  target: RuntimeClientTarget,
   settings: HostCreateSettings
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
@@ -265,7 +263,14 @@ export function createCreateWorktree(
           }
           const { result } = outcome
           showWorktreeCreateWarningToast(result.warning)
-          reviewSetupTrustMismatch(get, repoId, creationHostId, result, target)
+          reviewSetupTrustMismatch(
+            get,
+            repoId,
+            creationHostId,
+            result,
+            target,
+            options?.hookTrustContext
+          )
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId

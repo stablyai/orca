@@ -1,7 +1,7 @@
 import type { Store } from '../../persistence/loading-store/store'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
-import { registerLocalLogTailHandlers } from '../local-log-tail'
-import { createSenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
+import { registerLocalLogTailHandlers } from './reads/local-log-tail'
+import { createSenderScopedRequestCancellations } from '../renderer-requests/sender-scoped-request-cancellation'
 import {
   createFilesystemHandlerContext,
   type FilesystemHandlerContext

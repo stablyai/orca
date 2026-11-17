@@ -1,5 +1,5 @@
-import type { PresentationRecordDrafts } from './presentation-record-drafts'
-import type { BrowserInitializationPresentation } from './browser-initialization-presentation'
+import type { PresentationRecordDrafts } from './snapshots/presentation-record-drafts'
+import type { BrowserInitializationPresentation } from './tab-projection/browser-initialization-presentation'
 import type { AppState } from '../../store/types'
 import type { RetiredTerminalTabSweepState } from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'

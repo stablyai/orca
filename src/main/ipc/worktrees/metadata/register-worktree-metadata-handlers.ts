@@ -4,8 +4,8 @@ import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/metadata
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { notifyWorktreesChanged } from '../../worktree-remote'
-import { parseWorktreeId } from '../../worktree-logic'
+import { notifyWorktreesChanged } from '../worktree-remote'
+import { parseWorktreeId } from '../paths/worktree-logic'
 import {
   writeWorktreeSortOrder,
   type WorktreeSortOrderRequest

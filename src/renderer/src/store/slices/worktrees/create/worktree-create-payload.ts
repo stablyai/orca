@@ -35,6 +35,7 @@ export type CreateWorktreeCallOptions = {
   }
   legacyStartup?: () => WorktreeStartupLaunch | undefined
   setupOnly?: boolean
+  hookTrustContext?: 'vm'
   /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
   approvedSetupHash?: string
   approvedSetupHashes?: string[]

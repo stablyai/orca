@@ -9,7 +9,7 @@ import {
 } from '../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
-import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { resolveRepoOwnershipEvidence } from '../../ipc/worktrees/listing/worktree-host-ownership'
 import {
   getFolderWorkspaceInstanceIdentity,

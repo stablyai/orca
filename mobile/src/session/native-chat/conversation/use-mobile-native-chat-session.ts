@@ -3,13 +3,13 @@ import { EMPTY_NATIVE_CHAT_TRANSCRIPT } from '../../../../../src/shared/native-c
 import {
   createNativeChatMerger,
   replaceList
-} from '../../../../../src/shared/native-chat/native-chat-merge'
+} from '../../../../../src/shared/native-chat/transcript/streaming/native-chat-merge'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTranscriptPage } from '../../../../../src/shared/native-chat/native-chat-transcript-frames'
-import { buildNativeChatSubscriptionId } from '../../../../../src/shared/native-chat/native-chat-stream-unsubscribe'
+import type { NativeChatTranscriptPage } from '../../../../../src/shared/native-chat/transcript/streaming/native-chat-transcript-frames'
+import { buildNativeChatSubscriptionId } from '../../../../../src/shared/native-chat/transcript/streaming/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { nativeChatSessionPageRead } from '../agent-session/mobile-native-chat-page-read-operations'
 import {

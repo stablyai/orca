@@ -11,9 +11,9 @@ import {
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  toLocalWorktreeRuntimePaths
 } from '../../../workspaces/removal/local-worktree-filesystem'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,
@@ -50,14 +50,18 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   let canCleanOrphanedDirectory = false
   if (canCleanupUnregisteredOrcaWorktreeDirectory({ meta: removedMeta })) {
     const access = getLocalWorktreePathAccess(args.localOptions)
-    canCleanOrphanedDirectory =
-      !isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome) &&
-      (await canSafelyRemoveOrphanedWorktreeDirectory(
-        toLocalWorktreeRuntimePath(target.path, args.localOptions),
-        toLocalWorktreeRuntimePath(repo.path, args.localOptions),
+    if (!isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome)) {
+      const [runtimeTarget, runtimeRepo] = await toLocalWorktreeRuntimePaths(
+        [target.path, repo.path],
+        args.localOptions
+      )
+      canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+        runtimeTarget,
+        runtimeRepo,
         removalHome,
         access
-      ))
+      )
+    }
   }
   const native = usesNativeWindowsRemoval(target.path, args.localOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {

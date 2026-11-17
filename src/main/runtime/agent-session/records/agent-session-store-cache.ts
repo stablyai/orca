@@ -1,7 +1,7 @@
 import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { isDeepStrictEqual } from 'node:util'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
-import { AgentSessionTabTable } from '../agent-session-tab-table'
+import { AgentSessionTabTable } from './agent-session-tab-table'
 import type { AgentSessionStoreRowWrites } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionStoreRowChanges } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'

@@ -14,7 +14,7 @@ import {
   SSH_KEY
 } from '../../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
-import '../../orca-runtime-tests/workspace-layout-stream-events.test-fixture'
+import './workspace-layout-stream-events.test-fixture'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
 

@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store/index'
-import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,
@@ -96,9 +96,8 @@ export function BrowserToolbarMenuDropdown({
       <DropdownMenuTrigger asChild>
         <Button
           ref={overflow.triggerRef}
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
+          size="icon-xs"
+          variant="muted-field-icon"
           title={menuLabel}
           aria-label={menuLabel}
           data-contextual-tour-target={
@@ -106,7 +105,7 @@ export function BrowserToolbarMenuDropdown({
           }
           data-browser-profile-id={profile.effectiveProfileId}
         >
-          <Ellipsis className="size-4" />
+          <Ellipsis className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -115,18 +114,20 @@ export function BrowserToolbarMenuDropdown({
         data-browser-page-menu-id={browserPageId}
         onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
       >
+        {overflow.annotateToolItems}
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           // Why deferred: focus returning to the ⋯ trigger would pull it out of the find field.
           onSelect={() => overflow.deferUntilClose(pageActions.onFind)}
         >
-          <Search className="mr-2 size-3.5" />
+          <Search className="size-3.5" />
           {t('browser.toolbar.findOnPage', 'Find on page')}
           {findShortcut ? <DropdownMenuShortcut>{findShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <BrowserToolbarZoomRow display={siteDisplay} onZoom={onZoomPage} />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <Monitor className="mr-2 size-3.5" />
+            <Monitor className="size-3.5" />
             {t('auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9', 'Viewport Size')}
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
@@ -160,21 +161,21 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSeparator />
 
         <DropdownMenuItem onSelect={pageActions.onHardReload}>
-          <RotateCcw className="mr-2 size-3.5" />
+          <RotateCcw className="size-3.5" />
           {t('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
           {hardReloadShortcut ? (
             <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
           ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={pageActions.onOpenDevTools}>
-          <SquareCode className="mr-2 size-3.5" />
+          <SquareCode className="size-3.5" />
           {t('auto.components.browser.pane.BrowserPane.ec75d0c412', 'Open browser devtools')}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!pageActions.onOpenExternal}
           onSelect={() => pageActions.onOpenExternal?.()}
         >
-          <ExternalLink className="mr-2 size-3.5" />
+          <ExternalLink className="size-3.5" />
           {t('auto.components.browser.pane.BrowserPane.0f41bf80c7', 'Open in default browser')}
         </DropdownMenuItem>
 
@@ -193,7 +194,7 @@ export function BrowserToolbarMenuDropdown({
             )
           }
         >
-          <History className="mr-2 size-3.5" />
+          <History className="size-3.5" />
           {t('browser.history.menuItem', 'History')}
           {historyShortcut ? <DropdownMenuShortcut>{historyShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
@@ -203,7 +204,7 @@ export function BrowserToolbarMenuDropdown({
             useAppStore.getState().openSettingsPage()
           }}
         >
-          <Settings className="mr-2 size-3.5" />
+          <Settings className="size-3.5" />
           {t('auto.components.browser.pane.BrowserToolbarMenu.a771c2b6c8', 'Browser Settings…')}
         </DropdownMenuItem>
       </DropdownMenuContent>

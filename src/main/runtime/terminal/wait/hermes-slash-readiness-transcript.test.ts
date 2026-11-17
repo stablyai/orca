@@ -5,7 +5,7 @@ import {
   createTranscriptPane,
   TRANSCRIPT_PANE_PTY_ID,
   waitForTranscriptIdle
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+} from './agent-transcript-pane-test-harness'
 import metadata from '../../__fixtures__/hermes-slash-setup.meta.json'
 
 vi.mock('electron', () => ({

@@ -121,7 +121,7 @@ export function NativeChatAssistantMessageRow({
             ) : null
           }
           className={cn(
-            'mt-1 w-fit select-none',
+            'w-fit select-none',
             !latestResponse &&
               fork?.pendingItemId !== message.id &&
               'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',

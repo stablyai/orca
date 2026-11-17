@@ -114,11 +114,7 @@
       "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
-      "defaultText": "Standard (100 %)",
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "largeText": "Groß (125 %)",
-      "largerText": "Größer (150 %)",
-      "largestText": "Am größten (200 %)",
       "leaveAppDescription": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ im Desktop-Banner lässt sich die Größe jederzeit manuell anpassen.",
       "leaveAppHeading": "BEIM VERLASSEN DER APP",
       "noPairedDesktops": "Noch keine Desktops gekoppelt. Einen Desktop koppeln, um das Terminalverhalten festzulegen.",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "Nach {{count}} s",
       "restoreAfterSeconds_other": "Nach {{count}} s",
       "restoreHost": "{{name}} wiederherstellen",
-      "smallerText": "Kleiner (75 %)",
-      "smallestText": "Am kleinsten (50 %)",
-      "textSize": "Textgröße",
-      "textSizeDescription": "Die Textgröße im Terminal anpassen. Bei kleinerer Schrift passen mehr Spalten mit Seitenrändern auf den Bildschirm; größere Schrift zeigt weniger Spalten – zum Verschieben seitlich ziehen. Die Größe lässt sich auch direkt im Terminal durch Zusammenziehen oder Spreizen zweier Finger ändern; dabei wird diese Einstellung aktualisiert. Gilt nur für die Anzeige auf diesem Gerät und ändert das Desktop-Terminal nicht.",
-      "textSizeHeading": "TEXTGRÖSSE",
-      "textSizePickerTitle": "Textgröße im Terminal",
       "title": "Terminal"
     }
   },
@@ -912,7 +902,8 @@
       "copyCode": "Code kopieren",
       "openImage": "Bild öffnen",
       "wrapLines": "Zeilen umbrechen",
-      "disableLineWrap": "Zeilenumbruch deaktivieren"
+      "disableLineWrap": "Zeilenumbruch deaktivieren",
+      "codeLabel": "Code"
     },
     "markdownCallout": {
       "note": "Hinweis",
@@ -1015,7 +1006,6 @@
       "clearSearch": "Suche leeren"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "description": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs ausgeführt. Nur ausführen, wenn das Repository vertrauenswürdig ist.",
       "dontRun": "Nicht ausführen",
       "newScriptLabel": "Neues Einrichtungsskript",
@@ -3915,27 +3905,19 @@
       "reconnecting": "Wird erneut verbunden"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Immer vertrauen und ausführen",
       "creating": "Wird erstellt…",
       "directoriesLabel": "Verzeichnisse",
       "directories_one": "{{count}} Verzeichnis",
       "directories_other": "{{count}} Verzeichnisse",
-      "dontRun": "Nicht ausführen",
       "editSparsePreset": "Voreinstellung für partiellen Checkout bearbeiten",
       "nameLabel": "Name",
       "namePlaceholder": "Renderer-Oberfläche",
-      "newSetupScript": "Neues Einrichtungsskript",
       "newSparsePreset": "Neue Voreinstellung für partiellen Checkout",
-      "runHooks": "Hooks ausführen",
       "runSetupAndCreate": "Einrichten und erstellen",
-      "runSetupTitle": "Einrichtung von {{name}} ausführen?",
-      "setupChangedTitle": "Einrichtungsskript von {{name}} geändert",
-      "setupScript": "Einrichtungsskript",
       "setupSubtitle": "Für {{name}} muss vor dem Erstellen dieses Arbeitsbereichs eine Einrichtungsoption gewählt werden.",
       "setupTitle": "Einrichtungsskript ausführen?",
       "skipSetupAndCreate": "Ohne Einrichtung erstellen",
-      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden.",
-      "trustSubtitle": "Die orca.yaml dieses Repositorys wird vor dem Start des Arbeitsbereichs auf deinem Rechner ausgeführt. Nur ausführen, wenn du diesem Repository vertraust."
+      "trustFailed": "Das Einrichtungsskript konnte nicht als vertrauenswürdig markiert werden."
     },
     "worktreeCreateRetry": {
       "createFailed": "Arbeitsbereich konnte nicht erstellt werden."

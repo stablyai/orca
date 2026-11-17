@@ -1,6 +1,6 @@
 import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections'
 import type { JournalStateQueries } from './journal-state-queries'
-import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import { newestStructuredAgentSessionTurnBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { memoryJournalEchoClaimant } from './projection/journal-item-echo'
 import { memoryLatestAcceptedSendUnopened } from './context-epochs/journal-stop-turn-end'

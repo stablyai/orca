@@ -5,7 +5,7 @@ import {
 } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import MermaidBlock from './MermaidBlock'
 import { useMermaidDiagramExpand } from './use-mermaid-diagram-expand'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 
 type MermaidViewerProps = {
   content: string

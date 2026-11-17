@@ -85,13 +85,12 @@ export function RemoteBrowserPageToolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
+              size="icon-xs"
+              variant="muted-field-icon"
               aria-label={t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
               onClick={onReload}
             >
-              <RefreshCw className="size-4" />
+              <RefreshCw className="size-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
@@ -103,9 +102,8 @@ export function RemoteBrowserPageToolbar({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 opacity-50"
+            size="icon-xs"
+            variant="muted-field-icon"
             aria-disabled="true"
             aria-label={t(
               'auto.components.browser.pane.BrowserPane.deb5293610',
@@ -115,7 +113,7 @@ export function RemoteBrowserPageToolbar({
               event.preventDefault()
             }}
           >
-            <MessageSquarePlus className="size-4" />
+            <MessageSquarePlus className="size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
@@ -130,7 +128,6 @@ export function RemoteBrowserPageToolbar({
         disabled={!frameUrl}
         active={markup.isActive}
         surfaceActive={isActive}
-        className="h-7 w-7"
       />
     </BrowserNavigationControlRow>
   )

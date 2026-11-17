@@ -6,13 +6,9 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import type { AgentJournalApprovalItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
+import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/installation/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
-import { claudeBackgroundTaskIdentity } from '../../claude/background-tasks/claude-background-task-identity'
-import {
-  codexGoalJournalDigest,
-  codexGoalJournalIdentity
-} from '../../codex/structured/journal/codex-goal-journal-identity'
+
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import {
   journalSqlReaderPath,
@@ -139,108 +135,5 @@ it('chooses request incarnations and settles the session from its unsettled rows
   expect((await sql.reads.item('orca:turn'))?.body).toMatchObject({
     state: 'interrupted',
     completedAt: 300
-  })
-})
-
-it("follows a thread's newest saved goal row when choosing a goal identity", async () => {
-  const sql = await journal()
-  const goal = (timeUsedSeconds: number, objective = 'Ship it') => ({
-    kind: 'status' as const,
-    text: `Goal set: ${objective}`,
-    threadGoal: {
-      state: 'set' as const,
-      goal: {
-        objective,
-        status: 'active' as const,
-        tokenBudget: null,
-        tokensUsed: 0,
-        timeUsedSeconds,
-        createdAt: 1,
-        updatedAt: timeUsedSeconds
-      }
-    }
-  })
-  const thread = 'a'.repeat(64)
-  const step = (signature: string, body: ReturnType<typeof goal>) => ({
-    kind: 'resolved-item' as const,
-    resolution: {
-      kind: 'thread-goal' as const,
-      choice: { thread, signature, body, requirePrevious: false }
-    },
-    options: { fence: 1, turnScope: { kind: 'thread' as const }, lifecycle: true },
-    reservedBytes: 8192
-  })
-  const first = 'b'.repeat(64)
-  const second = 'c'.repeat(64)
-  expect(await appendOutcomes(sql, [step(first, goal(0)), step(first, goal(0))])).toEqual({
-    outcomes: [{ kind: 'committed', wrote: true }, { kind: 'dropped' }]
-  })
-  expect(await appendOutcomes(sql, [step(first, goal(60)), step(second, goal(0, 'Next'))])).toEqual(
-    {
-      outcomes: [
-        { kind: 'committed', wrote: true },
-        { kind: 'committed', wrote: true }
-      ]
-    }
-  )
-  const occurrence = codexGoalJournalDigest(JSON.stringify([thread, first]))
-  const firstRow = agentJournalItemKey(codexGoalJournalIdentity(thread, first, occurrence))
-  const secondRow = agentJournalItemKey(
-    codexGoalJournalIdentity(
-      thread,
-      second,
-      codexGoalJournalDigest(JSON.stringify([occurrence, second]))
-    )
-  )
-  expect(await sql.reads.item(firstRow)).toMatchObject({
-    revision: 2,
-    body: { threadGoal: { goal: { timeUsedSeconds: 60 } } }
-  })
-  expect(await sql.reads.item(secondRow)).toMatchObject({
-    revision: 1,
-    body: { text: 'Goal set: Next' }
-  })
-})
-
-it("chooses a background task's generation from its saved incarnations on the writer", async () => {
-  const sql = await journal()
-  const task = (state: 'working' | 'done', parentToolUseId: string) => ({
-    kind: 'resolved-item' as const,
-    resolution: {
-      kind: 'background-task' as const,
-      taskId: 'task-1',
-      toolUseId: parentToolUseId,
-      body: {
-        kind: 'message' as const,
-        role: 'system' as const,
-        blocks: [
-          {
-            type: 'background-task' as const,
-            taskId: 'task-1',
-            kind: 'command' as const,
-            label: 'Build',
-            state,
-            parentToolUseId
-          }
-        ]
-      }
-    },
-    options: { fence: 1, turnScope: { kind: 'thread' as const } },
-    reservedBytes: 8192
-  })
-  await appendOutcomes(sql, [
-    task('working', 'tool-1'),
-    task('done', 'tool-1'),
-    task('working', 'tool-2')
-  ])
-  const first = agentJournalItemKey(claudeBackgroundTaskIdentity('task-1'))
-  const second = agentJournalItemKey(claudeBackgroundTaskIdentity('task-1', 2))
-  expect(await sql.reads.item(first)).toMatchObject({
-    revision: 2,
-    body: { blocks: [{ state: 'done', parentToolUseId: 'tool-1' }] }
-  })
-  expect(await sql.reads.item(second)).toMatchObject({
-    revision: 1,
-    body: { blocks: [{ state: 'working', parentToolUseId: 'tool-2' }] }
   })
 })

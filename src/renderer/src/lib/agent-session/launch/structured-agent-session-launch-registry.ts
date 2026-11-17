@@ -6,7 +6,7 @@ import type { StructuredLaunchFailure } from './structured-agent-session-launch-
 import type {
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId

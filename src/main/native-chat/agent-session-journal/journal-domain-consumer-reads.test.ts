@@ -9,6 +9,7 @@ import { readJournalSqlPoint } from './journal-sql-point-read'
 import { journalSqlReads } from './journal-sql-reads'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
 import { resolveChatAutomationRun } from '../../automations/observation/automation-chat-run-observation'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const cleanup: (() => void)[] = []
@@ -534,4 +535,63 @@ it('reuses a saved outline after reopen and refuses a cache result from an older
   expect(saveJournalDomainOutlineCache(f.db, idle.cache)).toBe(true)
   f.reopen()
   expect(read().outline).toEqual(idle.outline)
+})
+
+it('counts a Codex thread as exchanged once it has a turn row or an accepted send', async () => {
+  const f = domainLifecycleFixture(cleanup)
+  const reads = readsOf(f)
+  expect(await reads.hasProviderTurn('thread-replied')).toBe(false)
+  await f.run({
+    kind: 'item',
+    identity: { provider: 'codex', threadId: 'thread-replied', turnId: 'turn-1', ordinal: 0 },
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Saved reply' }] },
+    options
+  })
+  await f.run({
+    kind: 'submission',
+    input: { clientMessageId: 'send', fence: 1, body: body('Hello'), payloadFingerprint: 'send' }
+  })
+  await f.run({
+    kind: 'dispatch',
+    input: {
+      clientMessageId: 'send',
+      fence: 1,
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: 'thread-sent', turnId: 'turn-2', ordinal: 0 }
+    }
+  })
+  await f.run({
+    kind: 'item',
+    identity: {
+      provider: 'legacy',
+      agent: 'codex',
+      sessionId: 'chat',
+      recordId: 'turn-lifecycle:turn-3'
+    },
+    body: agentJournalTurnBody({
+      turnId: 'turn-3',
+      state: 'running',
+      // Codex replied to turn/start before echoing the send, so Orca's send opens the turn.
+      userItemId: 'orca:send'
+    }),
+    options
+  })
+  expect(await reads.hasProviderTurn('thread-replied')).toBe(true)
+  expect(await reads.hasProviderTurn('thread-sent')).toBe(true)
+  expect(await reads.hasProviderTurn('thread-other')).toBe(false)
+  expect(await reads.hasProviderTurn('thread-other', 1)).toBe(true)
+  expect(await reads.hasProviderTurn('thread-other', 2)).toBe(false)
+  // Orca's own command turn on an empty conversation is not a provider turn.
+  await f.run({
+    kind: 'item',
+    identity: { provider: 'legacy', agent: 'codex', sessionId: 'chat', recordId: 'compact' },
+    body: agentJournalTurnBody({
+      turnId: 'compact:c',
+      state: 'unverifiable',
+      userItemId: 'orca:c'
+    }),
+    options: { ...options, fence: 2 }
+  })
+  expect(await reads.hasProviderTurn('thread-other', 2)).toBe(false)
+  expect(await reads.hasProviderTurn('thread-other', 1)).toBe(true)
 })

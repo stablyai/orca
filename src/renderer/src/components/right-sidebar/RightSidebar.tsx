@@ -8,7 +8,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
 import { ActivityBarButton } from './activity-bar/activity-bar-buttons'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import {
   RIGHT_SIDEBAR_MIN_WIDTH,
   clampRightSidebarPanelWidth,

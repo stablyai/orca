@@ -16,6 +16,19 @@ export function normalizeToModelEol(
   return content.replace(separators, eol)
 }
 
+/** A model without line breaks takes the ending of incoming text that has them, as a fresh load would. */
+function adoptIncomingLineEnding(model: editor.ITextModel, content: string): void {
+  const firstBreak = content.search(/\r\n|\n|\r/)
+  if (firstBreak === -1 || model.getLineCount() > 1) {
+    return
+  }
+  const eol = content.startsWith('\r\n', firstBreak) ? '\r\n' : '\n'
+  if (model.getEOL() !== eol) {
+    // Literal EndOfLineSequence values (LF = 0, CRLF = 1) keep this free of the Monaco runtime.
+    model.setEOL(eol === '\r\n' ? 1 : 0)
+  }
+}
+
 function applyModelEdit(
   editorInstance: editor.IStandaloneCodeEditor,
   model: editor.ITextModel,
@@ -68,6 +81,7 @@ export function syncContentOnMount(
     return false
   }
   const modelContent = currentContentSnapshot ?? model.getValue()
+  adoptIncomingLineEnding(model, content)
   const normalizedContent = normalizeToModelEol(content, model, modelContent)
   if (modelContent === normalizedContent) {
     return false
@@ -88,6 +102,7 @@ export function syncContentUpdate(
     return
   }
   const currentContent = model.getValue()
+  adoptIncomingLineEnding(model, content)
   const normalizedContent = normalizeToModelEol(content, model, currentContent)
   if (currentContent.length === normalizedContent.length) {
     replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, true)
