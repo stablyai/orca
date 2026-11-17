@@ -152,14 +152,26 @@ const GROK_LIVE: AgentSessionModelCatalogResult = {
   models: GROK_MODELS
 }
 
-function GrokSettingsEffort(): React.JSX.Element {
-  const [value, setValue] = useState<AgentDedicatedChoices | undefined>({ model: 'grok-4.7' })
+// A saved level the listing omits (Medium here) is appended to the menu.
+const GROK_LIVE_WITHOUT_MEDIUM: AgentSessionModelCatalogResult = {
+  ...GROK_LIVE,
+  models: GROK_MODELS.map((model) => ({
+    ...model,
+    efforts: model.efforts.filter((effort) => effort.value !== 'medium')
+  }))
+}
+
+function GrokSettingsEffort(props: {
+  initial: AgentDedicatedChoices
+  live: AgentSessionModelCatalogResult
+}): React.JSX.Element {
+  const [value, setValue] = useState<AgentDedicatedChoices | undefined>(props.initial)
   return (
     <div className="min-h-[300px] w-[360px] bg-background p-4">
       <AgentChoiceControls
         agent="grok"
         value={value}
-        liveCatalog={GROK_LIVE}
+        liveCatalog={props.live}
         layout="rows"
         onChange={setValue}
       />
@@ -167,16 +179,29 @@ function GrokSettingsEffort(): React.JSX.Element {
   )
 }
 
+const openLastMenu = async () => {
+  const triggers = document.querySelectorAll<HTMLElement>(
+    'button[role="combobox"], button[aria-haspopup]'
+  )
+  const trigger = [...triggers].at(-1)
+  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  trigger?.click()
+  await settle()
+}
+
 export const grokSettingsEffortMenu = defineFixture({
   width: 400,
-  render: () => <GrokSettingsEffort />,
-  interact: async () => {
-    const triggers = document.querySelectorAll<HTMLElement>(
-      'button[role="combobox"], button[aria-haspopup]'
-    )
-    const trigger = [...triggers].at(-1)
-    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-    trigger?.click()
-    await settle()
-  }
+  render: () => <GrokSettingsEffort initial={{ model: 'grok-4.7' }} live={GROK_LIVE} />,
+  interact: openLastMenu
+})
+
+export const grokSettingsSavedEffortMenu = defineFixture({
+  width: 400,
+  render: () => (
+    <GrokSettingsEffort
+      initial={{ options: { effort: 'medium' } }}
+      live={GROK_LIVE_WITHOUT_MEDIUM}
+    />
+  ),
+  interact: openLastMenu
 })

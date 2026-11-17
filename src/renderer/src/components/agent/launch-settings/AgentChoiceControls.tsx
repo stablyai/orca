@@ -174,9 +174,7 @@ export function AgentChoiceFields({
       {options.map(({ option, route }) => {
         const choices =
           option.kind.type === 'select'
-            ? option.category === 'thought_level'
-              ? orderEffortLevels(option.kind.choices)
-              : option.kind.choices
+            ? option.kind.choices
             : [
                 {
                   value: 'true',
@@ -188,6 +186,16 @@ export function AgentChoiceFields({
                 }
               ]
         const current = selected?.options?.[option.id]
+        const menu = [
+          {
+            value: AGENT_DEFAULT_VALUE,
+            label: defaultLabels?.options?.[option.id] ?? defaultLabel
+          },
+          ...choices,
+          ...(current && !choices.some((choice) => choice.value === current)
+            ? [{ value: current, label: current }]
+            : [])
+        ]
         return (
           <AgentChoiceMenu
             key={option.id}
@@ -197,16 +205,7 @@ export function AgentChoiceFields({
             value={current ?? AGENT_DEFAULT_VALUE}
             disabled={disabled || (option.id === 'effort' && effort?.settable === false)}
             onOpenChange={onOpenChange}
-            choices={[
-              {
-                value: AGENT_DEFAULT_VALUE,
-                label: defaultLabels?.options?.[option.id] ?? defaultLabel
-              },
-              ...choices,
-              ...(current && !choices.some((choice) => choice.value === current)
-                ? [{ value: current, label: current }]
-                : [])
-            ]}
+            choices={option.category === 'thought_level' ? orderEffortLevels(menu) : menu}
             onChange={(next) => {
               const encoded =
                 next === AGENT_DEFAULT_VALUE
