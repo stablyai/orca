@@ -3,21 +3,21 @@ import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdo
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
 import { app, type Event } from 'electron'
-import { killAllPty } from '../../ipc/pty/kill-all'
+import { killAllPty } from '../../ipc/pty/provider/kill-all'
 import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../../agent-hooks/installation/managed-agent-hook-controls'
-import { stopStructuredAgentSessionRuntime } from '../../runtime/agent-session/structured-agent-session-runtime'
-import { setStructuredAgentSessionTeardownTrigger } from '../../runtime/agent-session/structured-agent-session-runtime-teardown'
+import { stopStructuredAgentSessionRuntime } from '../../runtime/agent-session/installation/structured-agent-session-runtime'
+import { setStructuredAgentSessionTeardownTrigger } from '../../runtime/agent-session/installation/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../../runtime/rpc/server/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../../codex/history/index/codex-state-db-backfill-recovery'
-import { stopCodexAccountSessionBridges } from '../../codex/history/bridges/codex-account-session-bridge'
+import { stopCodexAccountHistoryWork } from '../../codex/history/shared-store/codex-account-history-index'
 import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
@@ -138,7 +138,7 @@ function installWillQuitHandler(): void {
     state.pluginUpdateReviewNotices = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
-    stopCodexAccountSessionBridges()
+    stopCodexAccountHistoryWork()
     // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()

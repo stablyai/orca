@@ -3,7 +3,7 @@ import {
   trimRetainedItems,
   mergeSubmissions
 } from '../../../../../../src/shared/agent-session/view/structured-agent-session-item-retention'
-import { agentSessionHasOlderTranscript } from '../../../../../../src/shared/agent-session/agent-session-context-clear'
+import { agentSessionHasOlderTranscript } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import { DEVICE_STORE_MAX_VALUE_LENGTH } from '../../../../device-store/device-store-value-codec'
 import { encodeBase64Bytes } from '../../../../transport/encryption/base64-byte-codec'
 import {

@@ -13,12 +13,12 @@ import {
   resolvePinnedTabLabel
 } from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeMobileSessionTabMove } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   dropTabThroughLayoutOwner,
   type TabDrop
-} from '@/components/tab-group/tab-group-layout-owner-commands'
+} from '@/runtime/workspace-layout/commands/tab-group-layout-owner-commands'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 import { moveTerminalPaneToNewTabForClient } from '@/components/terminal-pane/layout/detach/terminal-pane-move-request-routing'

@@ -7,7 +7,7 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
 } from '../../../shared/ai-vault/search/ai-vault-search-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   decodeMergedSearchCursor,
   encodeMergedSearchCursor,

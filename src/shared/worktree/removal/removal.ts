@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { GitWorktreeInfo, Worktree } from '../types'
 
 export function unregisteredFolderRefusal(worktreePath: string): Error {

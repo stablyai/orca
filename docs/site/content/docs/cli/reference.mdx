@@ -161,7 +161,7 @@ orca workspace cleanup run --json
 orca workspace cleanup report --json
 ```
 
-`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
+`preview` shows what your cleanup rules would remove now and why every other workspace stays. `run` applies the rules now: each workspace is checked again right before removal and nothing is forced. `report` lists recent runs and when the next one is due. With no rule on, nothing is removed. With **Delete chat history with the workspace** on, `run` also deletes Orca, Claude Code and Codex chats from workspaces that no longer exist. Rules are set in Orca settings; these commands never change them. Add `--environment <id>` to run them on a paired server.
 
 ## Ports
 
@@ -239,6 +239,19 @@ close returns a failing `unverifiable` result rather than claiming the processes
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
 
 For long output, use cursor reads. Save `nextCursor` from one stream read, then pass it back with `--cursor` to fetch only new output.
+
+## Agents by ID
+
+```bash
+orca agent list --json
+orca agent show orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json
+orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10
+orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json
+```
+
+Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<id>`), what Copy Orca Session ID copies. `agent list` lists agents in this host's workspaces with their IDs; a terminal agent shows none until it first reports to Orca. A chat keeps its ID across `/clear`; a terminal agent gets a new one. IDs belong to the host that runs the agent: agents on other hosts are not listed, and the output names those hosts with the `--environment` that lists them. A finished terminal agent stays listed as `done` while asleep, even after Orca restarts, unless it was reopened and slept again before doing anything new. An agent put to sleep mid-turn is not listed. After reopening, a terminal agent reappears only once it reports to Orca (for Codex, on its next turn). `agent read` still reads it in all these cases. `agent show` shows a listed sleeping agent's last state and where it wakes when its workspace is reopened.
+
+`agent read` reads the conversation, not a screen: a chat's history, or a terminal agent's own transcript. The agent need not be running and reading never starts it. A terminal agent can be read while Orca knows where its transcript is (it is open, or asleep in a workspace; on Windows, a sleeping WSL agent only once its tab is reopened). The read can start with a state (`state` in `--json`) for the latest turn its own history records: `working` means that history shows an unfinished turn, so its reply may not be there yet, and `done` means the turn ended with its reply in the read. A terminal agent that exited mid-turn may keep reading `working`; check `orca agent show`. No state means unknown, never done. `agent list` and `agent show` report the last state known to Orca, which may differ. To message an agent, use `orca terminal send` or `orca orchestration send`; a sleeping terminal agent can't be messaged, so reopen its workspace first.
 
 ## Chats
 
@@ -473,6 +486,13 @@ Agent status hooks:
 orca agent hooks status --json
 orca agent hooks on --json
 orca agent hooks off --json
+```
+
+Before deleting the app, remove what Orca added outside its own folders (agent hooks, the `orca` command, the background service and `~/.orca/agent-hooks`). Projects, worktrees, chat history and settings stay:
+
+```bash
+orca uninstall
+orca uninstall --yes --json
 ```
 
 ## Agent habits

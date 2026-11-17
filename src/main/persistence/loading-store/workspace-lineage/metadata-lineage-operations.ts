@@ -5,7 +5,7 @@ import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/workt
 import { toWorkspaceLineageRow } from '../../../../shared/worktree/lineage/worktree-lineage-workspace-row'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../workspaces/removal/worktree-removal-repo-owner'

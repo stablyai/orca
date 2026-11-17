@@ -28,7 +28,7 @@
 1 src/main/browser/cookies/chromium/prepare-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 25 src/main/browser/cookies/staging/browser-cookie-staged-import.ts
-8 src/main/codex/history/index/codex-state-db.ts
+5 src/main/codex/history/index/codex-state-db.ts
 3 src/main/foreign-sqlite-readers/readers/cursor-profile.ts
 44 src/main/github/pr-watch/pr-check-event-tables.ts
 14 src/main/github/pr-watch/pr-pending-actions.ts
@@ -95,6 +95,7 @@
 2 src/main/native-chat/agent-session-journal/journal-domain-text-snapshot.ts
 14 src/main/native-chat/agent-session-journal/journal-domain-timeline-reads.ts
 4 src/main/native-chat/agent-session-journal/journal-domain-turn-scope.ts
+20 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
 10 src/main/native-chat/agent-session-journal/journal-fork-capture.ts
 30 src/main/native-chat/agent-session-journal/journal-fork-preparation.ts
 20 src/main/native-chat/agent-session-journal/journal-fork-presentation.ts

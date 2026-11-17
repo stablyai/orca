@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getRepoExecutionHostId } from '../../../../../src/shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import { normalizeSetupHookTrust, readRepoHooksSetupCommand } from '../setup-hook-trust'
+import { readRepoHooksSetupCommand } from '../setup-hook-trust'
 import { newWorkspaceSetupHooksRead } from './new-workspace-operations'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { MobileWorkspaceRepo, SetupHookDetails } from '../forms/new-worktree-modal-types'
@@ -19,7 +19,6 @@ export function useNewWorkspaceSetupScript(args: {
 }): {
   setupCommand: string | null
   setupSource: string | null
-  setupTrust: SetupHookDetails['trust']
   setupRunPolicy: SetupHookDetails['runPolicy']
   setupDecisionChoice: Exclude<WorkspaceCreateSetupDecision, 'inherit'> | null
   setSetupDecisionChoice: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
@@ -82,7 +81,6 @@ export function useNewWorkspaceSetupScript(args: {
             repoId,
             command,
             source: result.source,
-            trust: normalizeSetupHookTrust(result.setupTrust),
             runPolicy
           },
           setupDecisionChoice: null,
@@ -103,7 +101,6 @@ export function useNewWorkspaceSetupScript(args: {
   return {
     setupCommand: activeDetails?.command ?? null,
     setupSource: activeDetails?.source ?? null,
-    setupTrust: activeDetails?.trust ?? null,
     setupRunPolicy: activeDetails?.runPolicy ?? 'run-by-default',
     setupDecisionChoice,
     setSetupDecisionChoice: (setupDecisionChoice) => updateChoices({ setupDecisionChoice }),

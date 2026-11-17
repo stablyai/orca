@@ -12,7 +12,7 @@ import {
   drawTabsFromMain,
   type TabsDrawnFromMain
 } from '../../tabs/tabs-drawn-from-main.test-fixture'
-import '../../../../../../shared/layout-owner-switch'
+import '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (

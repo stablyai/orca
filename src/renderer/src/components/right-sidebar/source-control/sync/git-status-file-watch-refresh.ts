@@ -11,7 +11,7 @@ import type { FsChangedPayload } from '../../../../../../shared/file-watch/files
 import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView
-} from '../../../../../../shared/ui-chrome-types'
+} from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,

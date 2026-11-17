@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/workspace-setup/orca-yaml-hook-types'
@@ -17,6 +20,7 @@ type Consent = {
   client: RpcClient
   executionHost?: ExecutionHostId
   trust: PersistedTrustedOrcaHooks
+  repos: readonly { id: string }[]
   current: () => boolean
   resolve: (decision: 'run' | 'skip' | null) => void
   reject: (failure: unknown) => void
@@ -65,6 +69,7 @@ export function useAutomationSetupConsent(
         await persistSetupHookTrustApproval({
           client: consent.client,
           trust: consent.trust,
+          repos: consent.repos,
           repoId: consent.prompt.repoId,
           contentHash: consent.prompt.contentHash,
           alwaysTrust
@@ -88,6 +93,8 @@ export function useAutomationSetupConsent(
     prompt: confirmation?.prompt ?? null,
     visible: confirmation !== null,
     allowAlwaysTrust: parseExecutionHostId(confirmation?.executionHost)?.kind !== 'runtime',
+    // Unattended runs can't be asked again, so saving setup needs Always trust.
+    allowRunOnce: false,
     busy,
     onRunOnce: () => void approve(false),
     onAlwaysTrust: () => void approve(true),
@@ -122,7 +129,7 @@ export function useAutomationSetupConsent(
         original,
         targets,
         current: sameAuthority,
-        confirm: (prompt, trust) =>
+        confirm: (prompt, trust, repos) =>
           new Promise((resolve, reject) => {
             if (!sameAuthority()) {
               return resolve(null)
@@ -130,6 +137,7 @@ export function useAutomationSetupConsent(
             pending.current = {
               prompt,
               trust,
+              repos,
               client: port,
               executionHost,
               current: sameAuthority,

@@ -1,4 +1,5 @@
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
+import { AgentConversationRefusal } from '../../agent-conversations/agent-conversation-refusal'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
@@ -17,13 +18,13 @@ import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from '../core'
 import { CONNECTOR_REPLY_ERROR_CODES } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../../shared/orchestration/orchestration-federation-error-codes'
-import { computerUseErrorRecoveryData } from '../../../../shared/computer-use-error-recovery'
-import { COMPUTER_ERROR_CODES } from '../../../../shared/computer-use-runtime-types'
+import { computerUseErrorRecoveryData } from '../../../../shared/computer/computer-use-error-recovery'
+import { COMPUTER_ERROR_CODES } from '../../../../shared/computer/computer-use-runtime-types'
 import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
-import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/agent-session-host-authority'
+import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
@@ -206,6 +207,9 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
+  }
+  if (error instanceof AgentConversationRefusal) {
+    return errorResponse(id, meta, error.code, message)
   }
   // A recipe workspace removal keeps its environment's own code (archive hook, PTY stop, selector).
   if (

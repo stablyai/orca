@@ -9,6 +9,23 @@ export type TaskPageJiraBoardSection = {
   issues: JiraIssue[]
 }
 
+// Why: a column's statuses identify it across Jira config edits, its position does not.
+// Keying on the index would orphan every saved lane position the moment Jira inserts a column.
+function jiraBoardColumnKey(
+  column: { name: string; statusIds: string[] },
+  index: number,
+  takenKeys: Set<string>
+): string {
+  const base =
+    column.statusIds.length > 0
+      ? `column:${[...column.statusIds].sort().join(',')}`
+      : `column:${index}:${column.name}`
+  // Two columns sharing a status is malformed board config; fall back to the unique index.
+  const key = takenKeys.has(base) ? `${base}#${index}` : base
+  takenKeys.add(key)
+  return key
+}
+
 // Empty board columns remain available as drop targets.
 export function buildJiraBoardSections(
   issues: readonly JiraIssue[],
@@ -26,8 +43,9 @@ export function buildJiraBoardSections(
     }))
   }
 
+  const takenKeys = new Set<string>()
   const sections: TaskPageJiraBoardSection[] = columns.map((column, index) => ({
-    key: `column:${index}:${column.name}`,
+    key: jiraBoardColumnKey(column, index, takenKeys),
     label: column.name,
     statusIds: [...column.statusIds],
     fromBoard: true,

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   agentSessionLeaseFixture,
@@ -29,10 +29,10 @@ import { openTestAgentSessionRecordStoreSlot } from '../records/agent-session-re
 import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-persistence.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { withChatTabChanges } from '../agent-session-tab-layout'
+import { withChatTabChanges } from '../../session-tabs/chat/agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { chatTabCommandsSettled } from '../../orca-runtime-tests/session-layout-apply.test-fixture'
-import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../installation/structured-agent-session-runtime'
 
 export const B = 'chat-b-0002',
   C = 'chat-c-0003',

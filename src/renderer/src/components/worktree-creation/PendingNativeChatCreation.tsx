@@ -33,7 +33,7 @@ import { deriveWorktreeSetupSteps } from './worktree-setup-steps'
 import { useWorktreeCreationClock } from './worktree-creation-clock'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { usePendingNativeChatOptions } from './use-pending-native-chat-options'
 
 const NO_COMMAND_CAUSES = {

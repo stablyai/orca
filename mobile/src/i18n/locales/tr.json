@@ -114,11 +114,7 @@
       "codeNoLongerValid": "Bu eşleştirme kodunun süresi doldu, kod zaten kullanıldı veya değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
     },
     "terminalSettings": {
-      "defaultText": "Varsayılan (%100)",
       "keepPhoneSize": "Telefon boyutunda tut (varsayılan)",
-      "largeText": "Büyük (%125)",
-      "largerText": "Daha büyük (%150)",
-      "largestText": "En Büyük (%200)",
       "leaveAppDescription": "Telefonunuzda terminal kullanırken Orca, terminali ekranınıza sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için masaüstündeki bildirim çubuğunda Geri yükle seçeneğini her zaman kullanabilirsiniz.",
       "leaveAppHeading": "UYGULAMADAN AYRILDIĞINIZDA",
       "noPairedDesktops": "Henüz eşleştirilmiş masaüstü yok. Terminal davranışını ayarlamak için bir masaüstü eşleştirin.",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "{{count}} sn sonra",
       "restoreAfterSeconds_other": "{{count}} sn sonra",
       "restoreHost": "{{name}} için geri yükleme",
-      "smallerText": "Daha küçük (%75)",
-      "smallestText": "En küçük (%50)",
-      "textSize": "Metin boyutu",
-      "textSizeDescription": "Terminal metninin boyutunu ayarlayın. Küçük boyutlarda, kenarlarda boşluk kalacak şekilde daha fazla sütun sığar; büyük boyutlarda daha az sütun görünür — yatay kaydırmak için yana sürükleyin. Terminalde iki parmakla yakınlaştırma da yapabilirsiniz; bu işlem bu ayarı günceller. Yalnızca bu cihazdaki görünümü etkiler; masaüstü terminalini değiştirmez.",
-      "textSizeHeading": "METİN BOYUTU",
-      "textSizePickerTitle": "Terminal metin boyutu",
       "title": "Terminal"
     }
   },
@@ -912,7 +902,8 @@
       "copyCode": "Kodu kopyala",
       "openImage": "Görseli aç",
       "wrapLines": "Satırları kaydır",
-      "disableLineWrap": "Satır kaydırmayı kapat"
+      "disableLineWrap": "Satır kaydırmayı kapat",
+      "codeLabel": "Kod"
     },
     "markdownCallout": {
       "note": "Not",
@@ -1015,7 +1006,6 @@
       "clearSearch": "Aramayı temizle"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "Her zaman güven ve çalıştır",
       "description": "Bu repository'deki orca.yaml, çalışma alanı başlamadan önce çalıştırılır. Yalnızca bu repository'ye güveniyorsanız çalıştırın.",
       "dontRun": "Çalıştırma",
       "newScriptLabel": "Yeni kurulum betiği",
@@ -3915,27 +3905,19 @@
       "reconnecting": "Yeniden bağlanılıyor"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "Her zaman güven ve çalıştır",
       "creating": "Oluşturuluyor…",
       "directoriesLabel": "Dizinler",
       "directories_one": "{{count}} dizin",
       "directories_other": "{{count}} dizin",
-      "dontRun": "Çalıştırma",
       "editSparsePreset": "Sparse Ön Ayarını Düzenle",
       "nameLabel": "Ad",
       "namePlaceholder": "İşleyici Arayüzü",
-      "newSetupScript": "Yeni kurulum betiği",
       "newSparsePreset": "Yeni Sparse Ön Ayarı",
-      "runHooks": "Hook'ları çalıştır",
       "runSetupAndCreate": "Kurulumu çalıştır ve oluştur",
-      "runSetupTitle": "{{name}} içindeki kurulum çalıştırılsın mı?",
-      "setupChangedTitle": "{{name}} için kurulum betiği değişti",
-      "setupScript": "Kurulum betiği",
       "setupSubtitle": "Bu çalışma alanını oluşturmadan önce {{name}} için bir kurulum seçeneği belirlemeniz gerekiyor.",
       "setupTitle": "Kurulum Betiği Çalıştırılsın mı?",
       "skipSetupAndCreate": "Kurulumu atla ve oluştur",
-      "trustFailed": "Kurulum betiği güvenilir olarak işaretlenemedi.",
-      "trustSubtitle": "Bu repository'nin orca.yaml dosyası, çalışma alanı başlamadan önce makinenizde çalıştırılır. Yalnızca bu repository'ye güveniyorsanız çalıştırın."
+      "trustFailed": "Kurulum betiği güvenilir olarak işaretlenemedi."
     },
     "worktreeCreateRetry": {
       "createFailed": "Çalışma alanı oluşturulamadı"

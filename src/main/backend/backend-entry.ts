@@ -19,7 +19,10 @@ import { dropE2eSpawnLogOutsideE2e } from '../startup/testing/e2e-spawn-log-env'
 import { ignoreInheritedWslHostsGateState } from '../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
+import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 
+// A fatal V8 trap must crash, never spin on a JS fault-signal listener.
+installFatalSignalListenerGuard()
 dropE2eSpawnLogOutsideE2e()
 clearWindowsStdHandleInheritance()
 installWindowsIsolatedSpawner()

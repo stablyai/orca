@@ -68,6 +68,8 @@
 .pane-divider::after {
   content: '';
   position: absolute;
+  /* The line extends into perpendicular dividers for the visual join; the parent divider owns those hits. */
+  pointer-events: none;
   border-radius: 1px;
   background: var(--orca-terminal-divider-color, transparent);
   transition: background 100ms ease;

@@ -9,6 +9,9 @@ import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/
 import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
 import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'
 
+/** Claude fires PermissionRequest just before it reports the block; older wait hooks belong to other prompts. */
+const PERMISSION_HOOK_LEAD_MS = 5_000
+
 export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
   protected abstract recordAgentPromptLifecycleState(
@@ -146,6 +149,18 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       if (prevStatus === 'working' && agentStatus === null) {
         this.confirmPtyAgentExit(ptyId, true)
       }
+      const titleBlocksHooks =
+        identityOnlyTitle || terminalTitleBlocksExplicitAgentStatus(recordedTitle)
+      if (titleBlocksHooks || prevStatus !== agentStatus) {
+        pty.permissionWaitHookedAfterEpochMs =
+          !titleBlocksHooks && agentStatus === 'permission' && observedAtEpochMs !== null
+            ? Math.max(
+                pty.lastAgentStatusRichInvalidatedAtEpochMs ?? 0,
+                pty.lastAgentStatusStartedAtEpochMs ?? 0,
+                observedAtEpochMs - PERMISSION_HOOK_LEAD_MS
+              )
+            : undefined
+      }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
       }
@@ -153,8 +168,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
         this.onTitleAgentStatusChanged()
       }
       if (
-        identityOnlyTitle ||
-        terminalTitleBlocksExplicitAgentStatus(recordedTitle) ||
+        titleBlocksHooks ||
         (prevStatus !== null && agentStatus !== null && prevStatus !== agentStatus)
       ) {
         pty.lastAgentStatusRichInvalidatedAtEpochMs = observedAtEpochMs ?? Date.now()

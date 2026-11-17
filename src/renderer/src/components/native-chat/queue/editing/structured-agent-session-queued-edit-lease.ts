@@ -3,7 +3,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import {
   startQueuedEditLease as startSharedQueuedEditLease,
   type QueuedEditLeaseLoss
-} from '../../../../../../shared/queued-message-edit-lease'
+} from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-lease'
 
 export function startQueuedEditLease(input: {
   target: RuntimeClientTarget

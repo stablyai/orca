@@ -1,7 +1,10 @@
 import { continueFolderLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 
 import type { RepoSlice } from '../repos/repo-state'

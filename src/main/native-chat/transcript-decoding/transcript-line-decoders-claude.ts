@@ -19,7 +19,7 @@ import { claudeInterruptedMessageId } from './transcript-turn-markers'
 import { claudeStopHookFeedbackRow } from '../../claude/structured/journal/claude-stop-hook-feedback'
 import { structuredAgentSessionStatusBlock } from '../../../shared/agent-session/view/structured-agent-session-status-block'
 import { claudeTokenUsage } from '../../claude/context-usage/claude-context-usage'
-import { NATIVE_CHAT_NOTICE_COPY } from '../../../shared/native-chat/native-chat-notice'
+import { NATIVE_CHAT_NOTICE_COPY } from '../../../shared/native-chat/transcript/notices/native-chat-notice'
 import {
   claudeMessageWithoutSyntheticText,
   isClaudeInjectedUserMessage,

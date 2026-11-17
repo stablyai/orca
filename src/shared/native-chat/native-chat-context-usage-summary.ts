@@ -1,4 +1,4 @@
-import type { StructuredAgentContextUsage } from '../agent-session/structured-agent-session-context-usage'
+import type { StructuredAgentContextUsage } from '../agent-session/conversation-context/structured-agent-session-context-usage'
 import {
   deriveNativeChatContextUsage,
   type NativeChatContextWindowLookup

@@ -39,6 +39,8 @@ class OrchestrationDbCore {
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
+    // Before WAL and any table, so a new file returns free pages in bounded steps; an existing one needs a VACUUM.
+    this.db.pragma('auto_vacuum = INCREMENTAL')
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
@@ -76,6 +78,15 @@ class OrchestrationDbCore {
     this.db.exec(`
       DROP INDEX IF EXISTS idx_dispatch_creator_account_work;
       CREATE INDEX IF NOT EXISTS idx_dispatch_contexts_run ON dispatch_contexts(run_id);
+      CREATE INDEX IF NOT EXISTS idx_question_threads_run ON question_threads(run_id);
+      CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_origin
+        ON worker_terminal_resources(origin_dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_task
+        ON attempt_observation_facts(task_id);
+      CREATE INDEX IF NOT EXISTS idx_message_dispatch_provenance_dispatch
+        ON message_dispatch_provenance(dispatch_id);
+      CREATE INDEX IF NOT EXISTS idx_remote_run_links_run ON remote_run_links(run_id);
+      CREATE INDEX IF NOT EXISTS idx_remote_placements_run ON remote_placements(run_id);
       CREATE INDEX IF NOT EXISTS idx_worker_dispatches_agent_terminal_handle
         ON worker_dispatches(agent_terminal_handle) WHERE agent_terminal_handle IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_liveness

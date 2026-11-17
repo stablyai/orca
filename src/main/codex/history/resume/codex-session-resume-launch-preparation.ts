@@ -20,7 +20,7 @@ import {
 } from '../../configuration/homes/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 export function createCodexSessionResumeLaunchPreparation(deps: {
   getRuntimeHome: () => CodexRuntimeHomeService | null
@@ -48,6 +48,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
     }
     if (!isSystemHome) {
+      await deps.getRuntimeHome()?.prepareAccountHistoryForPinnedHome(home)
       // Hook repair may skip or fail before its config mirror applies the guard.
       ensureCodexDaemonSocketGuard(home)
     }
