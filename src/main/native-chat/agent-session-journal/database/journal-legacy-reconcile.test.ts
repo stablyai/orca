@@ -19,6 +19,7 @@ import { JournalSqlConversions } from '../journal-sql-conversions'
 import { journalSqlReaderPath } from '../journal-sql-worker-bundle.test-fixture'
 import { applyJournalSqlMaintenance } from '../journal-sql-maintenance'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
+import { loadAgentSessionStoreTabs } from '../../../runtime/agent-session/records/agent-session-record-rows'
 
 const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -223,11 +224,37 @@ it('fills in revisions for chats converted before they were kept, then still kee
     .map((row) => String(row.session_id))
   expect(copies).toHaveLength(1)
   expect(items(later.db, copies[0]!)).toContain('older-turn')
-  expect(
-    later.db
-      .prepare("SELECT value FROM agent_session_store_meta WHERE key='session_tabs_recorded'")
-      .get()
-  ).toEqual({ value: '1' })
+})
+
+it('shows only the chats an older Orca wrote, never the ones closed here, when tabs were never recorded', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  for (let index = 0; index < 20; index += 1) {
+    olderOrcaChat(original, `closed-${index}`, rows)
+  }
+  // No tab index was ever recorded, so the clients' own tabs decide what is shown.
+  original.prepare('DELETE FROM agent_session_tabs').run()
+  const first = await upgrade(root)
+  expect(await first.convert('closed-0')).toBe('epoch')
+  await first.close()
+
+  // After a downgrade the older Orca continues two chats and starts one.
+  insertJournalRow(original, 'closed-0', turn('older-turn', tip + 1))
+  insertJournalRow(original, 'closed-1', turn('older-turn', tip + 1))
+  olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
+  original.prepare("DELETE FROM agent_session_tabs WHERE session_id='started-older'").run()
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  const [copy] = later.db
+    .prepare(
+      "SELECT session_id FROM agent_session_records WHERE session_id NOT LIKE 'closed-%' AND session_id!='started-older'"
+    )
+    .all()
+    .map((row) => String(row.session_id))
+  expect(tabbedChats(later.db)).toEqual([copy, 'closed-1', 'started-older'])
+  expect(loadAgentSessionStoreTabs(later.db)).toBeNull()
 })
 
 /** As a build from before revisions were kept left the file: no baselines, receipt without WAL identity. */

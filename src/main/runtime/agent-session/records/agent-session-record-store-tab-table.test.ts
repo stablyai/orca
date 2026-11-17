@@ -127,4 +127,38 @@ describe('chat tab table', () => {
     await store.setSessionTabVisibility('session-beta', true, 'tab-alpha')
     expect(store.getSessionTabId('session-beta')).toBe('tab-alpha')
   })
+
+  it("shows a chat an older Orca wrote beside the window's chats, and nothing closed, until tabs are recorded", async () => {
+    const store = await open()
+    for (const [sessionId, fingerprint] of [
+      ['session-alpha', 'fp-1'],
+      ['session-beta', 'fp-2'],
+      ['session-gamma', 'fp-3']
+    ]) {
+      await store.reserveOwner(
+        reserveRequest({
+          sessionId,
+          operation: { callerKey: 'client-1', operationId: operationId(), fingerprint }
+        })
+      )
+    }
+    // Tabs never recorded; the older Orca's write left only its own chat's tab.
+    await withTestAgentSessionDatabase(directory, (db) => {
+      db.prepare('DELETE FROM agent_session_tabs').run()
+      db.prepare("DELETE FROM agent_session_store_meta WHERE key='session_tabs_recorded'").run()
+      db.prepare('INSERT INTO agent_session_tabs VALUES(?,?,0)').run(
+        'structured-agent-session-session-gamma',
+        'session-gamma'
+      )
+    })
+    await closeTestAgentSessionRecordStores()
+    const reopened = await openTestAgentSessionRecordStore(directory, {
+      legacySessionTabIds: ['session-alpha']
+    })
+    expect(reopened.listVisibleSessionIds()).toEqual(['session-alpha', 'session-gamma'])
+    await reopened.initializeSessionTabs()
+    await closeTestAgentSessionRecordStores()
+    const restarted = await openTestAgentSessionRecordStore(directory)
+    expect(restarted.listVisibleSessionIds()).toEqual(['session-alpha', 'session-gamma'])
+  })
 })

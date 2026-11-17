@@ -91,7 +91,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
       args.journalDatabase,
       args.records,
       args.hostId,
-      args.legacySessionTabIds
+      [...new Set([...args.legacySessionTabIds, ...(args.records.unrecordedTabSessionIds ?? [])])]
     )
     return new AgentSessionRecordStore(transactions, args.hostId, args.journalDatabase)
   }

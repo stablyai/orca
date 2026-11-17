@@ -8,7 +8,6 @@ import {
   insertJournalDomainImportPage
 } from '../journal-domain-import-rows'
 import { runJournalTransaction } from './journal-database'
-import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
 import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
@@ -95,7 +94,6 @@ type Adoption = {
   tabbed: Set<string>
   takenTabs: Set<string>
   nextPosition: number
-  tabsRecorded: boolean
 }
 
 /**
@@ -164,8 +162,7 @@ function readAdoption(source: Database.Database, db: Database.Database): Adoptio
     claims,
     tabbed: new Set(tabs.map((row) => String(row.session_id))),
     takenTabs: new Set(tabs.map((row) => String(row.tab_id))),
-    nextPosition: Number(tail?.tail ?? -1) + 1,
-    tabsRecorded: readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined
+    nextPosition: Number(tail?.tail ?? -1) + 1
   }
 }
 
@@ -224,10 +221,8 @@ function adoptChat(
     CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
       '$.conversationCommand') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
-  // The older build wrote this chat, so it is shown even if it was closed here.
-  if (!adoption.tabsRecorded) {
-    recordTabIndex(db, adoption)
-  }
+  // The older build wrote this chat, so it is shown even if it was closed here. Only this chat:
+  // a store that never recorded its tabs shows it beside what its clients show.
   const saved = as === id ? adoption.savedTabs.get(id) : undefined
   addTab(
     db,
@@ -246,20 +241,6 @@ function adoptChat(
   if (as !== id) {
     insertClaims(db, as, adoption.claims.get(id) ?? [])
   }
-}
-
-/**
- * A file that never recorded its tab index shows chats by the ids its clients pass in, which a
- * kept chat can't be among. Recording the index with every chat here shown keeps what was shown.
- */
-function recordTabIndex(db: Database.Database, adoption: Adoption): void {
-  for (const { session_id: id } of db
-    .prepare('SELECT session_id FROM agent_session_records')
-    .all()) {
-    addTab(db, adoption, String(id), structuredAgentSessionTabId(String(id)))
-  }
-  writeMeta(db, AGENT_SESSION_TABS_RECORDED, '1')
-  adoption.tabsRecorded = true
 }
 
 function addTab(db: Database.Database, adoption: Adoption, sessionId: string, tab: string): void {

@@ -68,7 +68,7 @@ export class AgentSessionStoreTransactions {
     private readonly journalDatabase: JournalSqlDatabase,
     loaded: AgentSessionStoreState,
     hostId: string,
-    readonly legacySessionTabIds: readonly string[]
+    private readonly fallbackSessionTabIds: readonly string[]
   ) {
     this.published = {
       ...loaded,
@@ -89,6 +89,11 @@ export class AgentSessionStoreTransactions {
 
   get state(): AgentSessionStoreState {
     return this.published
+  }
+
+  /** What clients show stands in for the tab index only until this store records one. */
+  get legacySessionTabIds(): readonly string[] {
+    return this.published.sessionTabs === null ? this.fallbackSessionTabIds : []
   }
 
   lineageRevision(): object {
