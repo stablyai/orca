@@ -3,7 +3,7 @@ import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/t
 import type { TerminalCreationWork } from './terminal-creation-work'
 import type { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import type { PtyCreationDisposition } from '../../../shared/terminal/pty/lifecycle/pty-creation-disposition'
-import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 

@@ -1,4 +1,3 @@
-import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -11,7 +10,7 @@ const COMPACTION_INTERVAL = 6 * 60 * MINUTE
 
 /** Idle conversion and periodic pruning share one owner; activity never blocks retired cleanup. */
 export class JournalSqlBackgroundMaintenance {
-  private readonly stopped = new AbortController()
+  readonly stopped = new AbortController()
   private running: Promise<void> | undefined
   private discover = false
   private sweep = false
@@ -32,24 +31,7 @@ export class JournalSqlBackgroundMaintenance {
     private readonly onTick?: () => void
   ) {}
 
-  private legacyRetirement?: JournalLegacyRetirement
-
-  ownLegacySource(
-    directory: string,
-    readers: ConstructorParameters<typeof JournalLegacyRetirement>[2]
-  ): void {
-    this.legacyRetirement = new JournalLegacyRetirement(
-      directory,
-      this.writer,
-      readers,
-      this.conversions,
-      () => this.boundary(),
-      this.onError,
-      undefined,
-      undefined,
-      (started) => this.rest(started)
-    )
-  }
+  legacy?: { run(): Promise<void> }
 
   start(): Promise<void> {
     if (this.stopped.signal.aborted) {
@@ -101,7 +83,6 @@ export class JournalSqlBackgroundMaintenance {
   }
 
   stop(): void {
-    this.legacyRetirement?.stop()
     this.stopped.abort()
     clearTimeout(this.timer)
     this.timer = undefined
@@ -111,7 +92,7 @@ export class JournalSqlBackgroundMaintenance {
     await this.running
   }
 
-  private async boundary(): Promise<boolean> {
+  async boundary(): Promise<boolean> {
     while (!this.stopped.signal.aborted) {
       await this.runOrdinaryWork()
       if (this.periodic) {
@@ -128,8 +109,7 @@ export class JournalSqlBackgroundMaintenance {
 
   private async run(): Promise<void> {
     while (!this.stopped.signal.aborted && (this.discover || this.sweep || this.periodic)) {
-      await this.runOrdinaryWork()
-      await this.legacyRetirement?.run()
+      await this.runOrdinaryWork().then(() => this.legacy?.run())
       if (this.discover) {
         this.discover = false
         try {
@@ -174,6 +154,33 @@ export class JournalSqlBackgroundMaintenance {
       } catch (error) {
         this.report(error)
       }
+      try {
+        await this.forgottenChats()
+      } catch (error) {
+        this.report(error)
+      }
+    }
+  }
+
+  /** Rows of chats the record store deleted, page by page like retired epochs. */
+  private async forgottenChats(): Promise<void> {
+    let after: string | null = null
+    while (!this.stopped.signal.aborted) {
+      await setImmediate()
+      const page = await this.readers.database({ kind: 'forgotten-chats', after })
+      if (page.kind !== 'forgotten-chats') {
+        throw new Error('journal reader returned no forgotten chats')
+      }
+      for (const sessionId of page.sessionIds) {
+        await this.pages({ kind: 'chat-discard', sessionId })
+        if (this.stopped.signal.aborted) {
+          return
+        }
+      }
+      if (page.sessionIds.length === 0) {
+        return
+      }
+      after = page.sessionIds.at(-1)!
     }
   }
 
@@ -212,7 +219,7 @@ export class JournalSqlBackgroundMaintenance {
   private async pages(
     operation: Extract<
       JournalSqlMaintenance,
-      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' }
+      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' | 'chat-discard' }
     >,
     limit = Infinity
   ): Promise<void> {
@@ -239,7 +246,7 @@ export class JournalSqlBackgroundMaintenance {
     }
   }
 
-  private async rest(started: number): Promise<void> {
+  async rest(started: number): Promise<void> {
     this.work += performance.now() - started
     if (this.work >= 25) {
       try {

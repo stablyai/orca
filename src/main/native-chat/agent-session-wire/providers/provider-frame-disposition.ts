@@ -1,7 +1,7 @@
 import type { CodexAppServerNotificationMethod } from '../../../codex/app-server/codex-app-server-notification-schema'
 import { CODEX_SUBAGENT_ITEM_TYPE } from '../../../codex/structured/background-work/codex-subagent-activity'
 import { isProviderRecord } from '../../../provider-process/provider-json-record'
-import { readCodexAutoReviewDenial } from '../../../../shared/agent-session/codex-auto-review-denial'
+import { readCodexAutoReviewDenial } from '../../../../shared/agent-session/requests/approvals/codex-auto-review-denial'
 import type { ClaudeStreamJsonFrameKind } from './claude-stream-json-frame-schema'
 
 export type ProviderFrameClassification =

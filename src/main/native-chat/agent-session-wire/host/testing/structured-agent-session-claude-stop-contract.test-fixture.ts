@@ -6,7 +6,7 @@ import type { AgentStatusStructuredSessionSubject } from '../../../../../shared/
 import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import { runClaudeControl } from '../../../../claude/sdk-transport/claude-agent-sdk-control-requests'
 import { ClaudeStructuredSessionAdapter } from '../../../../claude/structured/claude-structured-session-adapter'
-import type { ClaudeStructuredSessionEvent } from '../../../../claude/structured/claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../../../../claude/structured/lifecycle/claude-structured-session-event'
 import {
   fakeClaude,
   PROVIDER_SESSION_ID

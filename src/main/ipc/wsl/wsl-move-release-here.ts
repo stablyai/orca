@@ -159,6 +159,12 @@ async function releaseWslMovesHereNow(
     const ports = createUndoPorts()
     for (const move of released) {
       ports.refocusHere?.(move)
+      try {
+        ports.unhideMovedEntries?.(move)
+      } catch (error) {
+        // Cosmetic and repeated by the startup prune; it must never block the reload below.
+        console.warn('[wsl-move] Could not unhide moved entries after undo:', error)
+      }
     }
     fenceHandedToReload = true
     reloadWslMoveWindowWithWritesHeld(releaseSpawnFence)

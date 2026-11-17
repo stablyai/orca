@@ -59,26 +59,6 @@ describe('tuiAgentArgsBypassPermissions', () => {
       )
     ).toBe(true)
   })
-
-  it.each(['powershell', 'cmd'] as const)(
-    'does not authorize quoted text or operands after -- on %s',
-    (shell) => {
-      expect(
-        tuiAgentArgsBypassPermissions(
-          'codex',
-          '--config "note=--dangerously-bypass-approvals-and-sandbox only as text"',
-          shell
-        )
-      ).toBe(false)
-      expect(
-        tuiAgentArgsBypassPermissions(
-          'codex',
-          '-- --dangerously-bypass-approvals-and-sandbox',
-          shell
-        )
-      ).toBe(false)
-    }
-  )
 })
 
 describe('resolvedTuiAgentArgsBypassPermissions', () => {

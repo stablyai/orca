@@ -5,7 +5,7 @@ import type { AgentSessionConversationView } from '../../../shared/agent-session
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import type { RuntimeNativeChatFileContext } from '../../../shared/native-chat/native-chat-file-context'
+import type { RuntimeNativeChatFileContext } from '../../../shared/native-chat/file-access/native-chat-file-context'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {

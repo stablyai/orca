@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import {
   useCallback,
   useEffect,
@@ -32,8 +32,8 @@ import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
-import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/native-chat-agent-profiles'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
+import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 
 export type MobileNativeChatSessionOptionsController = {

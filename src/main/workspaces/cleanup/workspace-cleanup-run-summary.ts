@@ -70,6 +70,7 @@ export function summarizeWorkspaceCleanupRun(args: {
   startedAt: number
   finishedAt: number
   rows: WorkspaceCleanupRunRow[]
+  chatHistory?: WorkspaceCleanupRun['chatHistory']
   error?: string
 }): WorkspaceCleanupRun {
   const rows = args.rows.filter(
@@ -100,6 +101,7 @@ export function summarizeWorkspaceCleanupRun(args: {
       .sort((a, b) => rowRank(a.row) - rowRank(b.row) || a.index - b.index)
       .slice(0, WORKSPACE_CLEANUP_REPORT_ROW_LIMIT)
       .map(({ row }) => row),
+    ...(args.chatHistory ? { chatHistory: args.chatHistory } : {}),
     ...(args.error ? { error: args.error } : {})
   }
 }

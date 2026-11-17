@@ -1,4 +1,4 @@
-import type { StructuredSessionSurface } from '../../../../agent-session/structured-agent-session-close'
+import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 // Resolve the host launch identity, then commit an at-rest create or the compatible acquired path.
@@ -25,7 +25,7 @@ import type { StructuredAgentSessionCaller } from '../../../../../native-chat/ag
 import type {
   StructuredAgentSessionResumeSource,
   StructuredAgentSessionFirstMessage
-} from '../../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import '../../../../../native-chat/agent-session-wire/options/structured-agent-session-options-read'
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-intent'
 import type { StructuredAgentSessionCreateOptions } from '../../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-create'
@@ -38,7 +38,7 @@ import type { StructuredAgentId } from '../../../../../../shared/agent-session/l
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
-import type { ChatTabPlacement } from '../../../../agent-session/agent-session-tab-layout'
+import type { ChatTabPlacement } from '../../../../session-tabs/chat/agent-session-tab-layout'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
