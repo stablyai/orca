@@ -86,14 +86,14 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
 
   const applySnapshot = useCallback(
     (owner: string, snapshot: ProviderAccountsSnapshot) => {
-      if (snapshot.rateLimits) {
-        apply({ ownerId: owner, snapshot, failure: null })
-      } else {
-        // Why: a host that predates published usage answers without it; say so, never spin.
-        fail(owner, 'usage-not-published')
-      }
+      // Why: a host that predates published usage answers without it; say so, never spin, and keep its roster.
+      apply({
+        ownerId: owner,
+        snapshot,
+        failure: snapshot.rateLimits ? null : 'usage-not-published'
+      })
     },
-    [apply, fail]
+    [apply]
   )
 
   const ownerIdRef = useRef(ownerId)
