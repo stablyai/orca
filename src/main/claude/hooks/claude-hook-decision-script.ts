@@ -28,7 +28,8 @@ export function buildPosixClaudeDecisionModeLines(): string[] {
   return [
     'orca_hook_tool_event= orca_hook_lc=${LC_ALL+1} orca_hook_lc_all=${LC_ALL-}',
     // Elsewhere a literal that fails on its first byte, so other hosts never search for a key they don't use.
-    `orca_hook_tool_glob=_; case "\${OSTYPE-}" in darwin*) orca_hook_tool_glob='*"tool_name":*' ;; esac`,
+    // dash sets no OSTYPE; /proc, which macOS lacks, tells Linux apart without a subprocess.
+    `orca_hook_tool_glob='*"tool_name":*'; case "\${OSTYPE-}" in darwin*) ;; '') [ ! -r /proc/self/stat ] || orca_hook_tool_glob=_ ;; *) orca_hook_tool_glob=_ ;; esac`,
     'LC_ALL=C',
     'case "$payload" in',
     `  *'"hook_event_name":"PreToolUse"'*|*'"hook_event_name": "PreToolUse"'*) orca_hook_decides=${CLAUDE_PRE_TOOL_USE_DECISION}; max_time=8; orca_hook_tool_event=1 ;;`,
