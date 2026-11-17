@@ -3,6 +3,7 @@ import {
   type BrowserClientAutomationResult as BrowserClientHostCommandResult
 } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserExpectedUrlMismatch } from '../../../../shared/browser/client-hosting/browser-expected-url'
+import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 
 export class BrowserClientPageCommandError extends Error {
   readonly expectedUrlMismatch?: BrowserExpectedUrlMismatch
@@ -23,6 +24,10 @@ function browserClientPageCommandFailureCode(error: unknown, signal: AbortSignal
   if (error instanceof BrowserClientPageCommandError) {
     return error.message
   }
+  // The host's own refusal, e.g. an upload path it cannot read, goes back as the host sent it.
+  if (error instanceof RemoteRuntimeClientError) {
+    return error.code
+  }
   return signal.aborted
     ? 'browser_client_page_command_aborted'
     : 'browser_client_page_command_failed'
@@ -34,10 +39,13 @@ export function browserClientPageCommandFailure(
 ): BrowserClientHostCommandResult {
   const mismatch =
     error instanceof BrowserClientPageCommandError ? error.expectedUrlMismatch : undefined
-  const errorMessage =
-    error instanceof BrowserClientPageCommandError && error.detail
-      ? truncateBrowserClientAutomationErrorMessage(error.detail)
-      : undefined
+  const detail =
+    error instanceof BrowserClientPageCommandError
+      ? error.detail
+      : error instanceof RemoteRuntimeClientError
+        ? error.message
+        : undefined
+  const errorMessage = detail ? truncateBrowserClientAutomationErrorMessage(detail) : undefined
   return {
     status: 'failed',
     errorCode: browserClientPageCommandFailureCode(error, signal),

@@ -1,9 +1,9 @@
 import { hideRetainedHostWhileGuestIsBlank } from './browser-client-page-retained-elements'
 import { isWebviewDragPassthroughActive } from '../drag/webview-drag-passthrough'
 import {
-  isBrowserPageRemotelyViewed,
-  onBrowserRemoteViewerChange
-} from '../../../../runtime/browser/ownership/browser-remote-viewer-store'
+  browserPageNeedsPaintRetention,
+  onBrowserGuestPaintRetentionChange
+} from '../retention/browser-page-paint-retention-terms'
 import type { BrowserClientRetainedRendererPage } from './browser-client-page-retained-state'
 
 export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedRendererPage): void {
@@ -13,26 +13,27 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
   // The host lives in <body>, so ancestor opacity hiding a retained inactive pane never reaches it.
   const shown =
     visible && container!.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
-  const viewed = isBrowserPageRemotelyViewed(page.identity.browserPageId)
+  // An agent's capture or input, a phone or a paired viewer needs frames, as for a local page.
+  const retained = browserPageNeedsPaintRetention(page.identity.browserPageId)
   const blank = page.host.dataset.browserClientPageBlank === 'true'
   const viewport = page.host.ownerDocument.defaultView
   const interactive = shown && !blank
   // Chromium needs a sized, onscreen guest to composite even when its desktop pane is hidden.
   const style = {
-    left: visible ? `${bounds!.left}px` : viewed ? '0px' : '-10000px',
+    left: visible ? `${bounds!.left}px` : retained ? '0px' : '-10000px',
     top: visible ? `${bounds!.top}px` : '0px',
     width: visible
       ? `${bounds!.width}px`
-      : viewed
+      : retained
         ? `${Math.max(320, viewport?.innerWidth ?? 0)}px`
         : '1px',
     height: visible
       ? `${bounds!.height}px`
-      : viewed
+      : retained
         ? `${Math.max(240, viewport?.innerHeight ?? 0)}px`
         : '1px',
-    opacity: interactive ? '' : viewed || visible ? '0' : '',
-    visibility: blank && !viewed ? 'hidden' : '',
+    opacity: interactive ? '' : retained || visible ? '0' : '',
+    visibility: blank && !retained ? 'hidden' : '',
     'pointer-events': interactive && !isWebviewDragPassthroughActive() ? 'auto' : 'none'
   }
   for (const [property, value] of Object.entries(style)) {
@@ -54,7 +55,7 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
 
 export function retainBrowserClientPagePaint(page: BrowserClientRetainedRendererPage): () => void {
   syncBrowserClientPagePaintRetention(page)
-  return onBrowserRemoteViewerChange((browserPageId) => {
+  return onBrowserGuestPaintRetentionChange((browserPageId) => {
     if (browserPageId === page.identity.browserPageId) {
       syncBrowserClientPagePaintRetention(page)
     }

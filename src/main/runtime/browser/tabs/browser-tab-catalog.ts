@@ -101,6 +101,22 @@ export class RuntimeBrowserTabCatalog {
     return pages.listPages(workspaceId).find((page) => page.active)
   }
 
+  describeClientHostedBrowserTab(
+    page: RuntimeBrowserClientPage
+  ): BrowserTabListResult['tabs'][number] {
+    const tab = this.listLogicalBrowserTabs(
+      page.workspaceId,
+      this.host.getRuntimeBrowserPageRegistry().listPages(page.workspaceId)
+    ).find((candidate) => candidate.browserPageId === page.browserPageId)
+    if (!tab) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${page.browserPageId} was not found`
+      )
+    }
+    return tab
+  }
+
   describeBrowserTab(
     browserPageId: string,
     explicitWorktreeId?: string
