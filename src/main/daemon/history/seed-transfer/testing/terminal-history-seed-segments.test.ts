@@ -65,7 +65,12 @@ describe('getRecoveredHistorySeedSegments', () => {
           snapshotAnsi: 'ONE\r\nTWO\r\nBOX\r\nFOOTER\x1b[3;3H',
           rehydrateSequences: '',
           rows: 4,
-          modes: { ...ARMED_MODES, mouseTracking: false, mouseTrackingMode: 'none', sgrMouseMode: false }
+          modes: {
+            ...ARMED_MODES,
+            mouseTracking: false,
+            mouseTrackingMode: 'none',
+            sgrMouseMode: false
+          }
         })
       )
       for (const segment of [...segments, '$ ']) {
