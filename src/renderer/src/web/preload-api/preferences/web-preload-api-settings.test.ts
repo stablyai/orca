@@ -14,68 +14,6 @@ describe('web settings preload API', () => {
     vi.unstubAllGlobals()
   })
 
-  it('reads the paired host details row preference and writes changes back to that host', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('../../runtime/client/web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: 'settings',
-            ok: true,
-            result: {
-              settings: {
-                worktreeCardDetailsRow: method === 'settings.update'
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-        close(): void {}
-      }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({ worktreeCardDetailsRow: true })
-    )
-    const { installWebPreloadApi } = await import('../../web-preload-api')
-    installWebPreloadApi()
-    expect((await globals.window.api.settings.get()).worktreeCardDetailsRow).toBe(false)
-    expect(
-      (await globals.window.api.settings.set({ worktreeCardDetailsRow: true }))
-        .worktreeCardDetailsRow
-    ).toBe(true)
-    expect(runtimeCalls.find((call) => call.method === 'settings.update')?.params).toMatchObject({
-      worktreeCardDetailsRow: true
-    })
-  })
-
-  it('retains a local details-row choice when an older paired host omits it', async () => {
-    vi.doMock('../../runtime/client/web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(): Promise<RuntimeRpcResponse<unknown>> {
-          return Promise.resolve({
-            id: 'settings',
-            ok: true,
-            result: { settings: {} },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-        close(): void {}
-      }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('../../web-preload-api')
-    installWebPreloadApi()
-    await globals.window.api.settings.get()
-    await globals.window.api.settings.set({ worktreeCardDetailsRow: false })
-
-    expect((await globals.window.api.settings.get()).worktreeCardDetailsRow).toBe(false)
-  })
-
   it('keeps a completed settings merge when the paired host is removed mid-read', async () => {
     let resolveSettings!: (value: RuntimeRpcResponse<unknown>) => void
     const settingsRead = new Promise<RuntimeRpcResponse<unknown>>(

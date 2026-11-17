@@ -69,6 +69,12 @@ export type Env = {
   INGRESS_TOKENS?: string
   INGRESS_ORIGINS?: string
   INGRESS_SOURCE_CIDRS?: string
+  // Edge-native director endpoints (director-config.ts), dark: answered only for requests to
+  // DIRECTOR_HOSTNAME. Unset (every environment): the Worker routes exactly as without them.
+  DIRECTOR_HOSTNAME?: string
+  DIRECTOR_EDGE_URL?: string
+  DIRECTOR_FRONT_DOOR_URL?: string
+  DIRECTOR_FRONT_DOOR_COUNTRIES?: string
 }
 
 export type EdgeClaims = {

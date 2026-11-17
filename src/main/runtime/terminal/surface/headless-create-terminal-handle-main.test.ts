@@ -7,10 +7,10 @@ vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
 }))
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const { TEST_WORKTREE_ID, TEST_WORKTREE_PATH } =
-  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+  await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
 const { surfaceRuntime } = await import('./terminal-surface-replies.test-fixture')
 
 type Runtime = ReturnType<typeof surfaceRuntime>['runtime']

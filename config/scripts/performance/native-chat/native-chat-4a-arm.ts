@@ -27,7 +27,7 @@ import {
   type ArmSpec
 } from './native-chat-4a-arm-provenance'
 import { installVisibilityProbe } from './native-chat-4a-probes'
-import { releaseModuleLocation } from '../../../../tests/e2e/cross-version-wire/release-module-locations'
+import { releaseModuleLocation } from '../../../../tests/e2e/cross-version-wire/release-checkouts/release-module-locations'
 
 const HARNESS_ROOT = path.resolve(import.meta.dirname, '../../../..')
 const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']

@@ -16,7 +16,7 @@ import { getRenderRowKey } from '../listing/render-row'
 import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
 import { getWorktreeSidebarRevealTopInset } from '../navigation/worktree-sidebar-reveal'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { createSidebarSmoothReveal } from './sidebar-smooth-reveal'
 
 export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualizer>

@@ -4,7 +4,7 @@ import type {
   GoogleCookieClearResult
 } from '../../../../../shared/browser/cookies/browser-google-cookie-clear'
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'
 import {

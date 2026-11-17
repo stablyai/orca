@@ -11,7 +11,7 @@ import {
   type TranscriptPaneOptions,
   TRANSCRIPT_PANE_PTY_ID as PTY_ID,
   waitForTranscriptIdle
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
+} from './agent-transcript-pane-test-harness'
 import { assertTerminalAgentSendable } from '../../rpc/terminal/terminal-agent-send-guard'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 

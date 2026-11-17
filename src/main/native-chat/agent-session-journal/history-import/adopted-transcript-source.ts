@@ -1,4 +1,5 @@
 import { basename, dirname, join } from 'node:path'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -50,7 +51,11 @@ export async function assertAdoptedSourceIdentity(
       ? await samePiDirectory(actual.cwd, source.workspaceCwd)
       : await adoptedDirectoryProbes.matches(source.workspaceCwd, actual.cwd, signal)
   if (!matched) {
-    throw new Error('This conversation belongs to another directory.')
+    throw agentSessionRefusalError(
+      'agent_session_identity_required',
+      { reason: 'transcriptUnreadable', otherFolder: true },
+      'This conversation belongs to another directory.'
+    )
   }
 }
 

@@ -187,6 +187,18 @@ it.each([
       sessionId: 'claude-moved',
       options: { filePath, source: { providerSessionId: 'claude-moved', workspaceCwd } }
     })
-    expect(prepared.ok).toBe(ok)
+    expect(prepared).toMatchObject(
+      ok
+        ? { ok: true }
+        : {
+            ok: false,
+            cause: {
+              refusal: {
+                code: 'agent_session_identity_required',
+                details: { reason: 'transcriptUnreadable', otherFolder: true }
+              }
+            }
+          }
+    )
   }
 )

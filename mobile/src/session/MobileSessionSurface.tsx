@@ -34,6 +34,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
     controller.showRecentSessionCards ||
     controller.showCreateTabDrawer ||
     controller.showTerminalLayout ||
+    controller.textSizeSheet != null ||
     (controller.showQuickCommands && controller.quickCommandsSupported === true) ||
     controller.pendingDiffNotesDelivery != null ||
     controller.actionTarget != null ||
