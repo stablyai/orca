@@ -9,7 +9,7 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../../../core'
-import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { registerBoundPty } from '../../../../terminal/layout/bind-first-pane.test-fixture'
 
 // Host contact loss never proves worker exit; relay only confirmed stops as settled.
 

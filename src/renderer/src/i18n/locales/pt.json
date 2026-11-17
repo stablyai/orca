@@ -554,7 +554,8 @@
         "installLockWait_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca assume em cerca de {{count}} minutos.",
         "installLockWaitGivesUp_one": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minuto.",
         "installLockWaitGivesUp_many": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos.",
-        "installLockWaitGivesUp_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos."
+        "installLockWaitGivesUp_other": "Aguardando outra instalação do Orca nesta distribuição terminar. Se não terminar, o Orca para de esperar em cerca de {{count}} minutos.",
+        "installLockWaitHolderGone": "A outra instalação do Orca nesta distribuição parou. O Orca assume em alguns segundos."
       }
     },
     "agentSummary": {
@@ -21221,6 +21222,7 @@
         "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
         "historyUnusable": "Não foi possível carregar este chat.",
         "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+        "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
         "savedByNewerOrca": "Os chats foram salvos por uma versão mais recente do Orca.",
         "updateOrcaToKeepUsing": "Atualize o Orca para continuar usando-os.",
         "chatSavedByNewerOrca": "Este chat foi salvo por uma versão mais recente do Orca.",
@@ -24116,10 +24118,6 @@
   },
   "agentPicker": {
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
-    "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
-    "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
-    "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",
-    "catalogUnresolved": "Os modelos de {{agent}} não foram carregados. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
     "search": "Pesquisar, por exemplo, Opus 5.5…",
     "configure": "Configurar {{agent}}",
@@ -24138,6 +24136,7 @@
     "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos",
     "workspaceStartupFailed": "Não foi possível iniciar {{agent}}. Verifique os argumentos desta configuração e tente novamente.",
     "sameAsTextDefault": "Igual ao padrão · {{value0}}",
+    "effortDefault": "Padrão",
     "chatChoicesNote": "As escolhas de modelo ou esforço de {{agent}} sem uma flag de CLI se aplicam aos chats.",
     "composedChoicesNote": "As escolhas de esforço e velocidade de {{agent}} estão incluídas no argumento do modelo."
   },

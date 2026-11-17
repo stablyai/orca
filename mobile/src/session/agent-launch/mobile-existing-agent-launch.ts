@@ -65,6 +65,8 @@ export async function launchAgentInExistingWorkspace(args: {
   agent: TuiAgent
   agentArgs?: string
   surface?: 'chat' | 'terminal'
+  /** The phone user's chat preference; the host still opens a chat only where one can run. */
+  nativeChatDefault?: boolean
   prompt?: AgentLaunchPrompt
   /** Model and effort the host applies on whichever route it picks. */
   sessionOptions?: Readonly<Record<string, string>>
@@ -83,6 +85,7 @@ export async function launchAgentInExistingWorkspace(args: {
     ...(args.surface && args.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)
       ? { surface: args.surface }
       : {}),
+    nativeChatDefault: args.nativeChatDefault,
     worktreeId: args.worktreeId,
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
     ...(args.prompt ? { prompt: args.prompt } : {}),

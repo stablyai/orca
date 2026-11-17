@@ -28,7 +28,7 @@ export type ReattachPayloadSession = Pick<
   | 'showSessionRestoredBanner'
   | 'suppressStructuralReplayPtyResize'
   | 'transport'
-  | 'writeFreshShellViewportBlanking'
+  | 'writeFreshShellViewport'
   | 'writeInputModeGround'
   | 'writeReplayEpilogue'
   | 'writeReplayData'

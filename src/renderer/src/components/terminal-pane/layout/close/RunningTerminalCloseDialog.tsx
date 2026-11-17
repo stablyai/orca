@@ -4,7 +4,7 @@ import CloseTerminalDialog from './CloseTerminalDialog'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
-import { revalidateTerminalCloseSleep } from '@/components/terminal/terminal-close-sleep'
+import { revalidateTerminalCloseSleep } from '@/components/terminal/tab-lifecycle/terminal-close-sleep'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 

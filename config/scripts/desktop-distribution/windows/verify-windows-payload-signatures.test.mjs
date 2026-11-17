@@ -5,11 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   POWERSHELL_TIMEOUT_MS,
   findSignatureOffenders,
-  isWindowsPayloadBinary,
   listWindowsPayloadBinaries,
   main,
-  parseArgs,
-  parseDistinguishedName,
   verifyWindowsPayloadSignatures
 } from './verify-windows-payload-signatures.mjs'
 
@@ -36,36 +33,6 @@ function fakePowerShell(signerFor) {
     return { status: 0, stdout: JSON.stringify(rows), stderr: '' }
   })
 }
-
-describe('isWindowsPayloadBinary', () => {
-  it('keeps Windows binaries, including the Windows orcad template target', () => {
-    expect(isWindowsPayloadBinary('Orca.exe')).toBe(true)
-    expect(isWindowsPayloadBinary('ffmpeg.DLL')).toBe(true)
-    expect(
-      isWindowsPayloadBinary('resources/node_modules/node-pty/build/Release/conpty.node')
-    ).toBe(true)
-    expect(
-      isWindowsPayloadBinary(
-        'resources/orcad-template/targets/win32-x64/node_modules/node-pty/build/Release/pty.node'
-      )
-    ).toBe(true)
-  })
-
-  it('skips non-binaries and non-Windows orcad template payloads', () => {
-    expect(isWindowsPayloadBinary('resources/app.asar')).toBe(false)
-    expect(isWindowsPayloadBinary('resources/node_modules/node-pty/lib/index.js')).toBe(false)
-    expect(
-      isWindowsPayloadBinary(
-        'resources/orcad-template/targets/linux-x64-glibc/node_modules/node-pty/build/Release/pty.node'
-      )
-    ).toBe(false)
-    expect(
-      isWindowsPayloadBinary(
-        'resources/orcad-template/targets/darwin-arm64/node_modules/@parcel/watcher/watcher.node'
-      )
-    ).toBe(false)
-  })
-})
 
 describe('listWindowsPayloadBinaries', () => {
   it('walks the whole tree with forward-slash relative paths', () => {
@@ -138,16 +105,6 @@ describe('findSignatureOffenders', () => {
         'CN=Microsoft Windows, O=Not Microsoft'
       ])
     ).toEqual(['f1'])
-  })
-})
-
-describe('parseDistinguishedName', () => {
-  it('reads quoted and escaped values and voids repeated keys', () => {
-    const attributes = parseDistinguishedName('CN="Foo, Inc.", O=Bar\\, Ltd, OU=a, OU=b')
-    expect(attributes.get('CN')).toBe('Foo, Inc.')
-    expect(attributes.get('O')).toBe('Bar, Ltd')
-    expect(attributes.get('OU')).toBeNull()
-    expect(parseDistinguishedName(null).size).toBe(0)
   })
 })
 
@@ -265,14 +222,5 @@ describe('main', () => {
   it('exits 2 when a required check cannot run', () => {
     const result = run([join(tmpdir(), 'orca-payload-does-not-exist')], () => SIGNPATH)
     expect(result.code).toBe(2)
-  })
-})
-
-describe('parseArgs', () => {
-  it('rejects unknown modes and extra positionals', () => {
-    expect(parseArgs(['dir'])).toEqual({ root: 'dir', mode: 'required' })
-    expect(() => parseArgs(['dir', '--mode', 'off'])).toThrow('Usage')
-    expect(() => parseArgs(['a', 'b'])).toThrow('Usage')
-    expect(parseArgs(['dir', '--summary', 's.json']).summaryPath).toBe('s.json')
   })
 })

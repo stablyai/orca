@@ -205,7 +205,7 @@ function runUnshallowInNewTerminalTab(
   // Why lazy: the terminal launchers import the store, which imports this slice.
   void Promise.all([
     import('@/lib/workspace/activation/worktree-activation'),
-    import('@/components/terminal/terminal-tab-create')
+    import('@/components/terminal/tab-lifecycle/terminal-tab-create')
   ]).then(
     ([{ activateAndRevealWorktree }, { createNewTerminalTab }]) => {
       if (

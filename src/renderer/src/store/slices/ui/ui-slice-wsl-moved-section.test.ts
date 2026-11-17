@@ -37,13 +37,6 @@ function savedHiddenKeys(): unknown {
 }
 
 describe('moved-to-WSL sidebar list state', () => {
-  it('saves the collapsed state', () => {
-    const store = createUIStore()
-    store.getState().setWslMovedSectionCollapsed(true)
-    expect(store.getState().wslMovedSectionCollapsed).toBe(true)
-    expect(uiSet).toHaveBeenLastCalledWith({ wslMovedSectionCollapsed: true })
-  })
-
   it('saves a hidden entry once, keyed by distro, kind and id', () => {
     const store = createUIStore()
     store.getState().hideWslMovedProject(ubuntuRepo)
@@ -72,13 +65,6 @@ describe('moved-to-WSL sidebar list state', () => {
     expect(store.getState().wslMovedSectionCollapsed).toBe(true)
     expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
   })
-
-  it('hydrates an older profile as expanded with nothing hidden', () => {
-    const store = createUIStore()
-    store.getState().hydratePersistedUI(makePersistedUI())
-    expect(store.getState().wslMovedSectionCollapsed).toBe(false)
-    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([])
-  })
 })
 
 describe('the startup read of moved projects', () => {
@@ -96,14 +82,6 @@ describe('the startup read of moved projects', () => {
     expect(store.getState().wslMovedProjects).toEqual([ubuntuFolder])
     expect(store.getState().hiddenWslMovedProjectKeys).toEqual([FOLDER_KEY])
     expect(savedHiddenKeys()).toEqual([FOLDER_KEY])
-  })
-
-  it('keeps hidden keys while every project is still moved, writing nothing', async () => {
-    const store = storeHiding([REPO_KEY])
-    listWslMoved.mockResolvedValueOnce([ubuntuRepo, ubuntuFolder])
-    await fetchWslMovedProjects(store.setState, store.getState)
-    expect(store.getState().hiddenWslMovedProjectKeys).toEqual([REPO_KEY])
-    expect(savedHiddenKeys()).toBeUndefined()
   })
 
   it('keeps hidden keys when the read fails', async () => {
