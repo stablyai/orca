@@ -178,6 +178,8 @@ export type RuntimeHeadlessTerminal = {
   rendererSeedSeq?: number
   /** Unfinished escape from skipped seed-covered chunks, written before the next uncovered chunk. */
   rendererSeedEscapeTail?: string
+  /** Output seq a provider snapshot seed covers; queued live bytes at/below it are not rewritten. */
+  providerSeedSeq?: number
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
 }

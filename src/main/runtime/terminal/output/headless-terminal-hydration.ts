@@ -18,6 +18,7 @@ import {
   normalizeTerminalTitle
 } from '../../../../shared/agent-status/title/agent-title-status'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
+import { salvageDroppedDaemonStreamQueries } from '../../../daemon/transport/stream/daemon-stream-query-salvage'
 import { advancePartialEscapeTail } from '../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
@@ -220,15 +221,52 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
       .catch(() => {})
   }
 
-  protected trackHeadlessTerminalData(
-    ptyId: string,
+  /** Splits a live chunk at the provider snapshot seed: `covered` is already in the seed, `uncovered` (null: none) still needs parsing. */
+  private splitAtProviderSeed(
+    state: RuntimeHeadlessTerminal,
     data: string,
     outputSequence: number,
-    forwardQueryReplies = false
+    rawChunk: boolean
+  ): { covered: string; uncovered: string | null } {
+    const seedSeq = state.providerSeedSeq
+    if (seedSeq === undefined) {
+      return { covered: '', uncovered: data }
+    }
+    if (outputSequence <= seedSeq) {
+      return { covered: data, uncovered: null }
+    }
+    state.providerSeedSeq = undefined
+    // Why: the daemon merges emissions, so a chunk can straddle the snapshot; only an untransformed one maps to raw seq.
+    const coveredChars = seedSeq - (outputSequence - data.length)
+    return rawChunk && coveredChars > 0
+      ? { covered: data.slice(0, coveredChars), uncovered: data.slice(coveredChars) }
+      : { covered: '', uncovered: data }
+  }
+
+  protected trackHeadlessTerminalData(
+    ptyId: string,
+    chunkData: string,
+    outputSequence: number,
+    forwardQueryReplies = false,
+    rawChunk = false
   ): void {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const outputObservedAt = Date.now()
     const completion = state.writeChain.then(async () => {
+      const { covered, uncovered: data } = this.splitAtProviderSeed(
+        state,
+        chunkData,
+        outputSequence,
+        rawChunk
+      )
+      // Why: the seed already painted these bytes, but the program still waits on their queries, as with daemon-dropped ones.
+      const coveredQueries = forwardQueryReplies ? salvageDroppedDaemonStreamQueries(covered) : ''
+      if (coveredQueries && state.emulator.partialEscapeTailAnsi === '') {
+        await state.emulator.write(coveredQueries, { forwardQueryReplies: true })
+      }
+      if (data === null) {
+        return
+      }
       // Capture reply ownership at ingestion, then scan inside the chain so live bytes and seeds retain total order.
       state.ownership.scan(data)
       if (state.rendererSeedSeq !== undefined) {

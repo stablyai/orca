@@ -15,6 +15,8 @@ import {
 } from '../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 
+const GAP_RESEED_STALE_RETRIES = 2
+
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   /** SSH and paired-runtime panes run on their host's PTY, so the ConPTY model follows that machine. */
   private windowsPtyForHeadlessPty(ptyId: string): XtermConptyOptions | undefined {
@@ -122,14 +124,36 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     ptyId: string,
     retryLateSeed = true
   ): void {
+    this.reseedHeadlessTerminalFromProvider(ptyId, { retryLateSeed })
+  }
+
+  /** A dropped span leaves only a suffix: reseed from the provider instead of letting the next byte start a torn model. */
+  protected reseedHeadlessTerminalAfterDataGap(ptyId: string): void {
+    this.reseedHeadlessTerminalFromProvider(ptyId, {
+      retryLateSeed: true,
+      gapEndSeq: this.getPtyOutputSequence(ptyId),
+      staleRetries: GAP_RESEED_STALE_RETRIES
+    })
+  }
+
+  private reseedHeadlessTerminalFromProvider(
+    ptyId: string,
+    opts: { retryLateSeed: boolean; gapEndSeq?: number; staleRetries?: number }
+  ): void {
+    const { retryLateSeed, gapEndSeq } = opts
     this.disposeHeadlessTerminal(ptyId)
     this.providerSnapshotPreferredPtys.add(ptyId)
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
     this.headlessTerminals.set(ptyId, state)
+    if (gapEndSeq !== undefined) {
+      // Why: a hidden pane's renderer missed the dropped bytes too, so its seed must not replace this one.
+      this.headlessHydrationState.set(ptyId, 'done')
+    }
     const generation = this.getPtyLifecycleGeneration(ptyId)
     let seedTimedOut = false
     let seeded = false
+    let staleSeed = false
     state.writeChain = state.writeChain
       .then(async () => {
         if (this.headlessTerminals.get(ptyId) !== state) {
@@ -156,9 +180,14 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
               this.providerSnapshotPreferredPtys.delete(ptyId)
             } else {
               // Live bytes moved this model on, so the late image is stale; capture once more.
-              this.replaceHeadlessTerminalAfterExecutionContextChange(ptyId, false)
+              this.reseedHeadlessTerminalFromProvider(ptyId, { ...opts, retryLateSeed: false })
             }
           })
+          return
+        }
+        if (gapEndSeq !== undefined && snapshot.seq < gapEndSeq) {
+          // A capture that began before the gap still holds the dropped span's hole.
+          staleSeed = true
           return
         }
         const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
@@ -183,18 +212,38 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         state.ownership.seedOwner(snapshot.terminalOwner, {
           alternateScreen: state.emulator.isAlternateScreen
         })
+        if (snapshot.pendingEscapeTailAnsi) {
+          await state.emulator.write(snapshot.pendingEscapeTailAnsi)
+        }
         state.outputSequence = snapshot.seq
+        // Why: live bytes queued behind this seed while it was captured are already in it; writing them again doubles frames.
+        state.providerSeedSeq = snapshot.seq
         seeded = true
       })
       .catch(() => {
         // Best-effort: live bytes already chain behind this replacement state.
       })
       .finally(() => {
+        if (this.headlessTerminals.get(ptyId) !== state) {
+          return
+        }
+        if (staleSeed) {
+          // Bounded so a sustained gap storm cannot loop captures; the next gap re-arms it.
+          const staleRetries = opts.staleRetries ?? 0
+          if (staleRetries > 0) {
+            setImmediate(() => {
+              if (this.headlessTerminals.get(ptyId) === state) {
+                this.reseedHeadlessTerminalFromProvider(ptyId, {
+                  ...opts,
+                  staleRetries: staleRetries - 1
+                })
+              }
+            })
+          }
+          return
+        }
         // An unseeded model stays partial, so readers keep preferring the provider; a retry also dropped the bytes its predecessor held.
-        if (
-          this.headlessTerminals.get(ptyId) === state &&
-          (seeded || (retryLateSeed && !seedTimedOut))
-        ) {
+        if (seeded || (retryLateSeed && !seedTimedOut)) {
           this.providerSnapshotPreferredPtys.delete(ptyId)
         }
       })

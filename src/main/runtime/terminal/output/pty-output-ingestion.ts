@@ -37,7 +37,8 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     ptyId: string,
     data: string,
     outputSequence: number,
-    forwardQueryReplies?: boolean
+    forwardQueryReplies?: boolean,
+    rawChunk?: boolean
   ): void
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
   protected abstract scheduleWaitBlockedCheck(ptyId: string, appendedText: string, at: number): void
@@ -113,7 +114,13 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     // Hydrate before tracking live data: publish the seeded state/chain first or a late seed could overwrite live bytes.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
     // The shared tracker processes every title in byte order, preserving coalesced working-to-idle transitions (#1083).
-    this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies)
+    this.trackHeadlessTerminalData(
+      ptyId,
+      data,
+      outputSequence,
+      forwardQueryReplies,
+      !transformed && sequenceChars === data.length
+    )
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     const ptyTailBefore = pty

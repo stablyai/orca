@@ -1,6 +1,7 @@
 import { assert, expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 const grid = { cols: 80, rows: 24 }
 const partial = 'prompt\r\n> \x1b[?'
@@ -84,3 +85,30 @@ it.each([false, true])(
     }
   }
 )
+
+it('reseeds the model from the provider after a dropped span instead of trusting the suffix', async () => {
+  let landSnapshot: (value: PtyProviderBufferSnapshot) => void = () => {}
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: () =>
+      new Promise<PtyProviderBufferSnapshot>((resolve) => {
+        landSnapshot = resolve
+      })
+  })
+  try {
+    runtime.onPtyData('pty-gap', 'stale\r\n', 1)
+    runtime.notePtyDataGap('pty-gap', 9)
+    // Seq 16 -> 20: the daemon captured "ta" of this chunk before it arrived here.
+    runtime.onPtyData('pty-gap', 'tail', 2)
+    landSnapshot({ data: '\x1b[H\x1b[2Jfresh\r\nta', ...grid, seq: 18, source: 'headless' })
+    await new Promise((resolve) => setImmediate(resolve))
+    const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-gap')
+    expect(await replay(snapshot, '')).toEqual(['fresh', 'tail'])
+  } finally {
+    await runtime.onPtyExit('pty-gap', 0)
+  }
+})
