@@ -110,6 +110,8 @@ export const CODEX_STOP_SHARED_SERVER_ARGS = ['app-server', 'daemon', 'stop'] as
 /** What the fix dialog shows the user it runs. */
 export const CODEX_DISABLE_AUTO_START_COMMAND = `codex ${CODEX_DISABLE_SHARED_SERVER_ARGS.join(' ')}`
 export const CODEX_STOP_SHARED_SERVER_COMMAND = `codex ${CODEX_STOP_SHARED_SERVER_ARGS.join(' ')}`
+/** Undoes the disable step; the user runs it by hand. */
+export const CODEX_ENABLE_AUTO_START_COMMAND = `codex features enable ${CODEX_SHARED_SERVER_FEATURE_KEY}`
 
 /** Whether a local pane's Codex is a client of Codex's shared server. */
 export type CodexSharedServerStatus =
