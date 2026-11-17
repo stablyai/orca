@@ -3,12 +3,7 @@ import { join } from 'node:path'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isManagedAgentHookTarget } from '../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
-import {
-  listInstalledServeServiceUnits,
-  removeServeServiceUnit,
-  runServeServiceManager,
-  type ServeServiceRun
-} from '../../shared/remote-runtime/serve-supervisor/serve-service-unit-removal'
+import type { ServeServiceRun } from '../../shared/remote-runtime/serve-supervisor/serve-service-unit-removal'
 import type {
   OrcaUninstallAgentEntry,
   OrcaUninstallHostEntry,
@@ -28,11 +23,20 @@ import {
 import type { OrcaInstallIdentity } from './orca-install-identity'
 import { forgetClaudeAgentViewMarkers } from '../claude/agent-view/agent-view-uninstall'
 import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
+import { describeOrcaUninstallPath } from './orca-uninstall-path-display'
+import {
+  runBackgroundService,
+  runTerminalDaemon,
+  serviceEntry,
+  terminalDaemonEntry
+} from './orca-uninstall-background-processes'
+import { orcaUninstallErrorText as errorText } from './orca-uninstall-error-text'
 
 /** What the desktop app and `orca uninstall` each supply; the cleanup itself is shared. */
 export type OrcaUninstallHost = {
   platform: NodeJS.Platform
   homeDir: string
+  userDataPath: string
   uid: number
   identity: OrcaInstallIdentity
   /** Persists `agentStatusHooksEnabled: false`, so startup reconciliation cannot reinstall. */
@@ -43,31 +47,16 @@ export type OrcaUninstallHost = {
   listHosts: () => Promise<OrcaUninstallHostEntry[]>
   removeHostHooks: (hostId: string) => Promise<void>
   runServiceManager?: ServeServiceRun
+  isTerminalDaemonLive: () => Promise<boolean>
+  /** Ends the daemon and every terminal it runs; throws if one is still running. */
+  stopTerminalDaemon: () => Promise<void>
 }
 
 export const ORCA_UNINSTALL_MANUAL_COMMAND = 'orca uninstall'
 const PLUGIN_AGENTS: ReadonlySet<string> = new Set(['opencode', 'pi', 'omp', 'prime-agent'])
 
-function errorText(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error)).split('\n')[0]
-}
-
 function isOrcaOwnedCli(status: CliInstallStatus | null): status is CliInstallStatus {
   return status !== null && (status.state === 'installed' || status.state === 'stale')
-}
-
-function pathExists(path: string): Promise<boolean> {
-  return access(path).then(
-    () => true,
-    () => false
-  )
-}
-
-async function serviceEntry(host: OrcaUninstallHost): Promise<OrcaUninstallSimpleEntry | null> {
-  const units = await listInstalledServeServiceUnits(host.platform, host.homeDir)
-  return units.length === 0
-    ? null
-    : { location: units.map((unit) => unit.name).join(', '), state: 'present', detail: null }
 }
 
 /** Read-only: lists what Orca added outside its own folders. */
@@ -76,7 +65,7 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     .filter((status) => status.managedHooksPresent)
     .map((status) => ({
       agent: status.agent,
-      paths: status.configPath ? [collapseHomePath(status.configPath, host.homeDir)] : [],
+      paths: status.configPath ? [describeOrcaUninstallPath(status.configPath, host)] : [],
       state: 'present',
       detail: null
     }))
@@ -84,12 +73,13 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     await findPluginHookFiles({ homeDir: host.homeDir })
   ).map((entry) => ({
     ...entry,
-    paths: entry.paths.map((path) => collapseHomePath(path, host.homeDir)),
+    paths: entry.paths.map((path) => describeOrcaUninstallPath(path, host)),
     state: 'present',
     detail: null
   }))
   const cli = await host.getCliStatus().catch(() => null)
   const scripts = join(host.homeDir, '.orca', 'agent-hooks')
+  const scriptsMissing = await access(scripts).catch(() => true)
   return {
     installKind: host.identity.installKind,
     agents: [...registryAgents, ...pluginAgents],
@@ -104,10 +94,11 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
         }
       : null,
     backgroundService: await serviceEntry(host),
-    hookScripts: (await pathExists(scripts))
+    hookScripts: !scriptsMissing
       ? { location: collapseHomePath(scripts, host.homeDir), state: 'present', detail: null }
       : null,
     hosts: await host.listHosts(),
+    terminalDaemon: await terminalDaemonEntry(host),
     otherOrcaBuildName: host.identity.otherOrcaBuildName,
     appPath: host.identity.appPath,
     removeAppCommand: host.identity.removeAppCommand
@@ -209,28 +200,6 @@ async function runCliCommand(
   }
 }
 
-async function runBackgroundService(
-  plan: OrcaUninstallPlan,
-  host: OrcaUninstallHost
-): Promise<OrcaUninstallSimpleEntry | null> {
-  const entry = plan.backgroundService
-  if (!entry || entry.state === 'removed') {
-    return entry
-  }
-  const run = host.runServiceManager ?? runServeServiceManager
-  try {
-    for (const unit of await listInstalledServeServiceUnits(host.platform, host.homeDir)) {
-      await removeServeServiceUnit(unit, run, host.uid)
-    }
-  } catch (error) {
-    return { ...entry, state: 'error', detail: errorText(error) }
-  }
-  const left = await listInstalledServeServiceUnits(host.platform, host.homeDir)
-  return left.length === 0
-    ? { ...entry, state: 'removed', detail: null }
-    : { ...entry, state: 'error', detail: `Still installed: ${left.map((u) => u.name).join(', ')}` }
-}
-
 async function runHookScripts(
   plan: OrcaUninstallPlan,
   host: OrcaUninstallHost
@@ -317,5 +286,7 @@ export async function runOrcaUninstallStep(
       return { ...plan, hookScripts: await runHookScripts(plan, host) }
     case 'ssh-hosts':
       return { ...plan, hosts: await runSshHosts(plan, host, filter) }
+    case 'terminal-daemon':
+      return { ...plan, terminalDaemon: await runTerminalDaemon(plan, host) }
   }
 }

@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/context-menu'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../../store/index'
-import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatShortcutLabel, useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { TerminalTabSplitMenuSection } from '../pane-actions/TerminalTabSplitMenuSection'

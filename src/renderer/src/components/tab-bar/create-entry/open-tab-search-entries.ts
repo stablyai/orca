@@ -113,7 +113,6 @@ export type OpenTabSearchAgentState = Pick<
   | 'terminalLayoutsByTabId'
 >
 
-// Offer every workspace tab across groups, including the active one, to match Cmd+J.
 export function selectOpenTabSearchEntryState(
   state: AppState,
   worktreeId: string
@@ -204,11 +203,15 @@ export function buildOpenTabSearchEntries(
   state: OpenTabSearchEntryState,
   agentState: OpenTabSearchAgentState,
   chatNames: StructuredChatTabNames,
+  excludedTabId: string | null = null,
   t?: Translate
 ): OpenTabSearchEntries {
   const scope = openTabSearchScope(state)
+  const excludedTab = state.unifiedTabsByWorktree[state.worktree.id]?.find(
+    (tab) => tab.id === excludedTabId
+  )
 
-  return {
+  const entries = {
     workspaceTabs: buildSearchableWorkspaceTabEntries({
       ...scope,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,
@@ -242,5 +245,17 @@ export function buildOpenTabSearchEntries(
       },
       t
     )
+  }
+  return {
+    workspaceTabs: entries.workspaceTabs.filter((entry) => entry.tab.id !== excludedTabId),
+    browserPages: entries.browserPages.filter(
+      (entry) =>
+        !(
+          excludedTab?.contentType === 'browser' &&
+          entry.workspace.id === excludedTab.entityId &&
+          entry.workspace.activePageId === entry.page.id
+        )
+    ),
+    simulatorTabs: entries.simulatorTabs.filter((entry) => entry.tab.id !== excludedTabId)
   }
 }

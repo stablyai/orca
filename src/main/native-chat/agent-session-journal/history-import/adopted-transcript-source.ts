@@ -1,4 +1,5 @@
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -11,6 +12,10 @@ import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanner
 import { samePiDirectory } from '../../../pi/rpc/launch/rpc-launch-resolution'
 import { admitTranscriptPath } from '../../transcript-discovery/transcript-path-admission'
 import { adoptedDirectoryProbes } from './adopted-directory-probe'
+import {
+  encodeClaudeProjectPaths,
+  isClaudeProjectOwnBucketName
+} from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
 
 export type AdoptedTranscriptSource = {
   providerSessionId: string
@@ -46,7 +51,11 @@ export async function assertAdoptedSourceIdentity(
       ? await samePiDirectory(actual.cwd, source.workspaceCwd)
       : await adoptedDirectoryProbes.matches(source.workspaceCwd, actual.cwd, signal)
   if (!matched) {
-    throw new Error('This conversation belongs to another directory.')
+    throw agentSessionRefusalError(
+      'agent_session_identity_required',
+      { reason: 'transcriptUnreadable', otherFolder: true },
+      'This conversation belongs to another directory.'
+    )
   }
 }
 
@@ -98,6 +107,13 @@ export function adoptedTranscriptSourceObserver(input: {
       if (input.agent === 'pi' && sessionIdFromFileName(input.filePath) !== sessionId) {
         throw new Error('The saved conversation header does not match its file identity.')
       }
+      // Moved or copied chats keep their old cwd; Claude resumes from the cwd's bucket regardless.
+      if (
+        input.agent === 'claude' &&
+        isClaudeCwdBucket(basename(dirname(input.filePath)), input.source.workspaceCwd)
+      ) {
+        cwd = input.source.workspaceCwd
+      }
       await assertAdoptedSourceIdentity(
         input.source,
         { sessionId, cwd },
@@ -107,6 +123,14 @@ export function adoptedTranscriptSourceObserver(input: {
       )
     }
   }
+}
+
+// Windows file systems resolve bucket names without case, as Claude's own lookup does.
+function isClaudeCwdBucket(bucket: string, cwd: string): boolean {
+  const fold = (name: string) => (process.platform === 'win32' ? name.toLowerCase() : name)
+  return encodeClaudeProjectPaths(cwd).some((encoded) =>
+    isClaudeProjectOwnBucketName(fold(bucket), fold(encoded))
+  )
 }
 
 export async function validateAdoptedOpenCodeSource(

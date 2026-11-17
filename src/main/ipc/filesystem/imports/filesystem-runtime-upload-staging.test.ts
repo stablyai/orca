@@ -2,12 +2,12 @@ import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeImportLimits from '../../runtime-import-limits'
+import type * as RuntimeImportLimits from '../../runtime-transfers/runtime-import-limits'
 
 type RuntimeImportLimitsModule = typeof RuntimeImportLimits
 
 // Scale down gigabyte ceilings: NTFS truncate may allocate the entire oversized fixture.
-vi.mock('../../runtime-import-limits', async (importOriginal) => ({
+vi.mock('../../runtime-transfers/runtime-import-limits', async (importOriginal) => ({
   ...(await importOriginal<RuntimeImportLimitsModule>()),
   REMOTE_IMPORT_MAX_FILE_BYTES: 4 * 1024,
   REMOTE_IMPORT_MAX_TOTAL_BYTES: 16 * 1024

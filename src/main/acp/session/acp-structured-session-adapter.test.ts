@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
@@ -11,6 +12,7 @@ import {
   type AcpAdapterRig
 } from './testing/acp-structured-adapter.test-support'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
@@ -159,6 +161,64 @@ describe('ACP structured session adapter: approvals', () => {
         commit: async () => {}
       })
     ).rejects.toThrow(/no longer waiting/)
+  })
+  it('answers by the mode picked mid-reply: Full access approves, Ask asks again', async () => {
+    const rig = await openAcpAdapterRig({ spec: acpLaunchSpecFor('opencode')! })
+    await rig.acquire({ permissionMode: 'ask' })
+    await send(rig, 'send-1')
+    await rig.frame('session/prompt')
+    const { agent } = rig.child()
+    const ask = (id: number) =>
+      agent.request(id, 'session/request_permission', {
+        sessionId: PROVIDER_SESSION,
+        toolCall: { toolCallId: `call-${id}`, title: 'Run command' },
+        options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' }]
+      })
+    const approvals = async () =>
+      (await rig.rig.rows()).filter((row) => row.body.kind === 'approval').length
+
+    await rig.adapter.applyPermissionMode({ sessionId: SESSION, fence: 1, mode: 'full-access' })
+    expect(await ask(1)).toMatchObject({
+      result: { outcome: { outcome: 'selected', optionId: 'allow-once' } }
+    })
+    expect(await approvals()).toBe(0)
+
+    await rig.adapter.applyPermissionMode({ sessionId: SESSION, fence: 1, mode: 'ask' })
+    void ask(2)
+    await waitFor(async () => expect(await approvals()).toBe(1))
+    expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
+  })
+  it('sets the session mode at once for an agent that enforces its own modes', async () => {
+    const mode = (currentValue: string) => ({
+      id: 'mode',
+      name: 'Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue,
+      options: ['default', 'yolo', 'auto'].map((value) => ({ value, name: value }))
+    })
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('kimi')!,
+      script: (agent) => {
+        agent.on('session/new', (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: [mode('auto')] })
+        )
+        agent.on('session/set_config_option', (frame) => {
+          const { value } = z.object({ value: z.string() }).parse(frame.params)
+          agent.reply(frame, { configOptions: [mode(value)] })
+        })
+      }
+    })
+    await rig.acquire({ permissionMode: 'ask' })
+    expect(rig.adapter.runningPermissionMode(SESSION)).toBe('ask')
+
+    await rig.adapter.applyPermissionMode({ sessionId: SESSION, fence: 1, mode: 'full-access' })
+    expect(rig.sent('session/set_config_option').at(-1)?.params).toMatchObject({
+      configId: 'mode',
+      value: 'auto'
+    })
+    expect(rig.adapter.runningPermissionMode(SESSION)).toBe('full-access')
+    expect(rig.adapter.permissionModeRequiresAcquisition(SESSION, 'full-access')).toBe(false)
   })
 })
 

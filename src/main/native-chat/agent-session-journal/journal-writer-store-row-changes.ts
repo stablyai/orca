@@ -11,7 +11,7 @@ import {
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
 } from '../../runtime/agent-session/records/agent-session-store-row-rules'
-import type { PersistedAgentSessionTab } from '../../runtime/agent-session/agent-session-tab-table'
+import type { PersistedAgentSessionTab } from '../../runtime/agent-session/records/agent-session-tab-table'
 
 type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] }
 

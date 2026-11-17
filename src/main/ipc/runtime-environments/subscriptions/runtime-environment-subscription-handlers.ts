@@ -12,7 +12,7 @@ import {
 } from './runtime-environment-subscription-setup'
 import type * as SubscriptionSetup from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { ipcMain } from 'electron'
-import { abortWhenRendererGone } from '../../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { getRuntimeEnvironmentTransportGeneration } from '../connections/runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from '../requests/runtime-environment-transport-routing'

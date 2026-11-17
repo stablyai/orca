@@ -5,6 +5,13 @@ import { parseWorkspaceKey } from '../../../workspace/identity/workspace-scope'
 export const PTY_SESSION_ID_SEPARATOR = '@@'
 export const WORKTREE_ID_SEPARATOR = '::'
 
+/** Saved local bindings may be qualified by a newer build; provider/history IDs stay raw. */
+export function decodeSavedLocalPtyId(sessionId: string): string {
+  return sessionId.startsWith('local|') && sessionId.length > 'local|'.length
+    ? sessionId.slice('local|'.length)
+    : sessionId
+}
+
 /** Require @@ plus a valid Git/folder workspace identity; arbitrary UUIDs must not invent memory owners. Return null for unminted IDs. */
 export function parsePtySessionId(sessionId: string): { worktreeId: string | null } {
   const idx = sessionId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)

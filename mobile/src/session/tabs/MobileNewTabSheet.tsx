@@ -20,6 +20,8 @@ import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileNewTabAgentOption } from '../agent-launch/mobile-new-tab-agent-options'
+import type { NewTabAgentSurfaceChoice } from '../agent-launch/use-mobile-new-tab-agent-options'
+import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 
 const AGENT_GRID_COLUMNS = 3
 
@@ -27,12 +29,14 @@ type Props = {
   visible: boolean
   workspaceName: string
   agentOptions: readonly MobileNewTabAgentOption[]
+  /** Chat or CLI for the agents below; null where the host can't take a pick. */
+  surfaceChoice: NewTabAgentSurfaceChoice | null
   /** Loading, none, other-server or error; shown instead of the agent grid. */
   agentStatusRow: ActionSheetAction | null
   canCreateBrowser: boolean
   canCreateMarkdownNote: boolean
   onClose: () => void
-  onCreateAgent: (agent: TuiAgent) => void
+  onCreateAgent: (agent: TuiAgent, nativeChatDefault: boolean | undefined) => void
   onCreateTerminal: () => void
   /** Runs after the sheet has gone, so it may open another modal. */
   onCreateBrowser: () => void
@@ -43,6 +47,7 @@ export function MobileNewTabSheet({
   visible,
   workspaceName,
   agentOptions,
+  surfaceChoice,
   agentStatusRow,
   canCreateBrowser,
   canCreateMarkdownNote,
@@ -96,6 +101,20 @@ export function MobileNewTabSheet({
         <SectionHeader title={t('session.sheets.agents', 'Agents')} first />
       ) : null}
       {agentStatusRow ? <ActionSheetContent actions={[agentStatusRow]} /> : null}
+      {showAgentGrid && surfaceChoice ? (
+        <MobileSegmentedControl
+          segments={[
+            { value: 'chat', label: t('session.sheets.chat', 'Chat') },
+            { value: 'terminal', label: t('session.sheets.cli', 'CLI') }
+          ]}
+          selected={surfaceChoice.selected}
+          onSelect={surfaceChoice.onSelect}
+          fill
+          onSheet
+          testIDPrefix="new-tab-agent-surface-"
+          style={styles.surfaceChoice}
+        />
+      ) : null}
       {showAgentGrid ? (
         <View style={styles.grid}>
           {agentRows.map((row) => (
@@ -103,7 +122,9 @@ export function MobileNewTabSheet({
               {row.options.map((option) => (
                 <Pressable
                   key={option.agent}
-                  onPress={() => closeAndRun(() => onCreateAgent(option.agent))}
+                  onPress={() =>
+                    closeAndRun(() => onCreateAgent(option.agent, option.nativeChatDefault))
+                  }
                   accessibilityRole="button"
                   accessibilityLabel={option.label}
                   style={styles.tile}
@@ -115,6 +136,11 @@ export function MobileNewTabSheet({
                       <Text style={styles.tileLabel} numberOfLines={1}>
                         {option.label}
                       </Text>
+                      {surfaceChoice?.selected === 'chat' && option.cliOnly ? (
+                        <Text style={styles.tileNote} numberOfLines={1}>
+                          {t('session.sheets.cliOnly', 'CLI only')}
+                        </Text>
+                      ) : null}
                     </>
                   )}
                 </Pressable>
@@ -180,6 +206,9 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.translucentFill
   },
   tileLabel: { fontSize: 13.5, fontWeight: '600', color: colors.textPrimary, maxWidth: '100%' },
+  // Sits in the tile's gap, so a noted tile keeps the others' height.
+  tileNote: { fontSize: 11, color: colors.textMuted, marginTop: -spacing.xs, maxWidth: '100%' },
+  surfaceChoice: { marginBottom: spacing.sm },
   // Padded like a tile: flex shares space after padding, so a bare spacer would widen its row's tiles.
   tileSpacer: { flex: 1, paddingHorizontal: spacing.sm },
   actions: { marginTop: spacing.lg }

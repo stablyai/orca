@@ -64,8 +64,10 @@ export function buildDefaultSettings(args: {
     editorAutoSave: false,
     editorFormatOnSave: false,
     editorInsertFinalNewline: false,
+    editorEndOfLine: 'auto',
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
+    editorInlineBlame: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
@@ -158,6 +160,7 @@ export function buildDefaultSettings(args: {
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
+    nativeChatComposerSpellcheck: true,
     nativeChatOpenedPullRequests: true,
     nativeChatScrollToLatestOnSend: true,
     nativeChatTurnDiffSummary: true,
