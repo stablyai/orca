@@ -53,9 +53,9 @@ export function getLocalExecutionHostLabel(platform: NodeJS.Platform | null = nu
   return 'This computer'
 }
 
-/** Trims a stored id; blank is absent, since no write path normalizes it. */
+/** Trims a stored id; blank or non-string is absent, since no write or read path validates it. */
 export function normalizeHostPart(value: string | null | undefined): string | null {
-  return value?.trim() || null
+  return typeof value === 'string' ? value.trim() || null : null
 }
 
 export function toSshExecutionHostId(targetId: string): `ssh:${string}` {
