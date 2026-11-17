@@ -42,3 +42,9 @@ export const longNames = defineFixture({
     />
   )
 })
+
+// A long project with a short worktree keeps as much of the project name as fits.
+export const longProject = defineFixture({
+  width: 300,
+  render: () => <Toolbar title={{ repoName: 'orca-e2e-repo-ILyZiY', worktreeName: 'master' }} />
+})

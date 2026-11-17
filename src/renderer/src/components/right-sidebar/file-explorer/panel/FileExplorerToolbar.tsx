@@ -72,11 +72,11 @@ export function FileExplorerToolbar({
         title={title.worktreeName ? `${title.repoName} / ${title.worktreeName}` : title.repoName}
         data-file-explorer-title=""
       >
-        {/* The worktree is what changes between checkouts, so it keeps most of the width. */}
+        {/* The worktree is what changes between checkouts, so the project truncates first; the worktree's cap keeps the project visible. */}
         <span
           className={cn(
             'min-w-0 truncate',
-            title.worktreeName ? 'max-w-[40%] shrink-0 text-muted-foreground' : 'text-foreground'
+            title.worktreeName ? 'text-muted-foreground' : 'text-foreground'
           )}
         >
           {title.repoName}
@@ -84,7 +84,9 @@ export function FileExplorerToolbar({
         {title.worktreeName ? (
           <>
             <span className="shrink-0 px-1 text-muted-foreground">/</span>
-            <span className="min-w-0 truncate text-foreground">{title.worktreeName}</span>
+            <span className="max-w-[70%] shrink-0 truncate text-foreground">
+              {title.worktreeName}
+            </span>
           </>
         ) : null}
       </div>
