@@ -36,10 +36,7 @@ import {
   POSIX_SHELL_STARTUP_CLAIM_ENV,
   POSIX_SHELL_STARTUP_COMMAND_ENV
 } from '../../pty/shell-startup/posix-shell-startup-command'
-import {
-  createShellWrapperStartupClaim,
-  type ShellWrapperStartup
-} from './shell-wrapper-startup-claim'
+import type { ShellWrapperStartup } from './shell-wrapper-startup-claim'
 import {
   discardStagedStartupCommand,
   stageStartupCommand
@@ -75,7 +72,9 @@ export type PtyShellLaunchPlan = {
 
 export function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
-  env: Record<string, string>
+  env: Record<string, string>,
+  /** Created by the caller; without it the command keeps typed delivery. */
+  startupClaimPath: string | null = null
 ): PtyShellLaunchPlan {
   const resolvedWslContext = resolveWslSessionContext(opts)
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
@@ -240,6 +239,7 @@ export function createPtyShellLaunchPlan(
     shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
     if (
       opts.command &&
+      startupClaimPath &&
       opts.shellReadySupported === true &&
       zshWrapperCanRunStartupCommand(shellPath, shellLaunch)
     ) {
@@ -250,14 +250,10 @@ export function createPtyShellLaunchPlan(
         orcaBuiltLine: opts.launchAgent !== undefined
       })
       const line = staging.command.replace(/(\r\n|\r|\n)$/, '')
-      const claimPath =
-        Buffer.byteLength(line) <= MAX_WRAPPER_STARTUP_COMMAND_BYTES
-          ? createShellWrapperStartupClaim()
-          : null
-      if (claimPath) {
+      if (Buffer.byteLength(line) <= MAX_WRAPPER_STARTUP_COMMAND_BYTES) {
         env[POSIX_SHELL_STARTUP_COMMAND_ENV] = line
-        env[POSIX_SHELL_STARTUP_CLAIM_ENV] = claimPath
-        shellWrapperStartup = { staging, claimPath }
+        env[POSIX_SHELL_STARTUP_CLAIM_ENV] = startupClaimPath
+        shellWrapperStartup = { staging, claimPath: startupClaimPath }
       } else {
         discardStagedStartupCommand(staging)
       }

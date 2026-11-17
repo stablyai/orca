@@ -6,7 +6,10 @@ import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { createDaemonPtyEnvironment } from './spawn-environment'
 import { createPtyShellLaunchPlan, type PtyShellLaunchPlan } from './shell-launch-plan'
 import { discardStagedStartupCommand } from '../../../shared/shell/launch/startup-command-staging'
-import { takeShellWrapperStartupClaim } from './shell-wrapper-startup-claim'
+import {
+  createShellWrapperStartupClaim,
+  takeShellWrapperStartupClaim
+} from './shell-wrapper-startup-claim'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './native-pty-spawn'
 import {
   formatPtySpawnError,
@@ -74,7 +77,15 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
   try {
     const size = normalizePtySize(opts.cols, opts.rows)
     const env = createDaemonPtyEnvironment(opts)
-    launch = createPtyShellLaunchPlan(opts, env)
+    // Only a wrapped zsh can use it; the plan decides, and an unused claim is removed below.
+    const startupClaimPath =
+      opts.command && opts.shellReadySupported === true && process.platform !== 'win32'
+        ? await createShellWrapperStartupClaim()
+        : null
+    launch = createPtyShellLaunchPlan(opts, env, startupClaimPath)
+    if (startupClaimPath && !launch.shellWrapperStartup) {
+      void takeShellWrapperStartupClaim(startupClaimPath)
+    }
 
     await preflightPtySpawn({
       validationCwd: launch.validationCwd,
@@ -135,7 +146,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     // No shell will source a staged launch script whose spawn failed.
     if (launch?.shellWrapperStartup) {
       discardStagedStartupCommand(launch.shellWrapperStartup.staging)
-      takeShellWrapperStartupClaim(launch.shellWrapperStartup.claimPath)
+      void takeShellWrapperStartupClaim(launch.shellWrapperStartup.claimPath)
     }
     throw error
   } finally {

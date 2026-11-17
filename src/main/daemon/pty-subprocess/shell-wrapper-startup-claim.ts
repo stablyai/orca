@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { unlinkSync, writeFileSync } from 'node:fs'
+import { unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -14,22 +14,22 @@ export type ShellWrapperStartup = {
 }
 
 // The wrapper and the daemon both unlink this file; unlink succeeds for exactly one of them.
-export function createShellWrapperStartupClaim(): string | null {
+export async function createShellWrapperStartupClaim(): Promise<string | null> {
   const claimPath = join(
     tmpdir(),
     `${STAGED_STARTUP_COMMAND_PREFIX}claim-${randomBytes(8).toString('hex')}.sh`
   )
   try {
-    writeFileSync(claimPath, '', { mode: 0o600, flag: 'wx' })
+    await writeFile(claimPath, '', { mode: 0o600, flag: 'wx' })
     return claimPath
   } catch {
     return null
   }
 }
 
-export function takeShellWrapperStartupClaim(claimPath: string): boolean {
+export async function takeShellWrapperStartupClaim(claimPath: string): Promise<boolean> {
   try {
-    unlinkSync(claimPath)
+    await unlink(claimPath)
     return true
   } catch {
     return false

@@ -33,7 +33,7 @@ export type SessionShellReadyBarrierDeps = {
 
 /** A wrapper-run startup command, typed after timeout only if the wrapper has not claimed it. */
 export type StartupCommandFallback = {
-  claim(): boolean
+  claim(): Promise<boolean>
   build(): string
 }
 
@@ -137,7 +137,7 @@ export class SessionShellReadyBarrier {
   clearPendingWrites(): void {
     this.preReadyStdinQueue = []
     // Claiming also removes the claim file once no shell can take it.
-    this.startupCommandFallback?.claim()
+    void this.startupCommandFallback?.claim()
     this.startupCommandFallback = null
     this.postReadyFlushGate.clear()
   }
@@ -189,12 +189,14 @@ export class SessionShellReadyBarrier {
     this._state = 'timed_out'
     this.releaseDeviceAttributes()
     this.releaseHeldBytes()
+    this.flushPreReadyQueue()
     const fallback = this.startupCommandFallback
     this.startupCommandFallback = null
-    if (fallback?.claim()) {
-      this.preReadyStdinQueue.unshift(fallback.build())
-    }
-    this.flushPreReadyQueue()
+    void fallback?.claim().then((won) => {
+      if (won) {
+        this.deps.subprocess.write(fallback.build())
+      }
+    })
   }
 
   private flushPreReadyQueue(): void {
