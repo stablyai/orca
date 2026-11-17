@@ -1,27 +1,27 @@
-import type { KeybindingDefinition, TabMoveToSplitActionId } from './types'
+import type { KeybindingActionId, KeybindingDefinition } from './types'
 import { platformBindings } from './definitions-support'
 
-// The one direction list: Settings rows, shortcut handlers and the tab menu all map over it, in menu order.
-export const TAB_MOVE_TO_SPLIT_DIRECTIONS = ['right', 'left', 'down', 'up'] as const
+// The one direction table: Settings rows, shortcut handlers and the tab menu all map over it, in menu order.
+export const TAB_MOVE_TO_SPLIT_ACTIONS = [
+  { direction: 'right', id: 'tab.moveToSplitRight' },
+  { direction: 'left', id: 'tab.moveToSplitLeft' },
+  { direction: 'down', id: 'tab.moveToSplitDown' },
+  { direction: 'up', id: 'tab.moveToSplitUp' }
+] as const satisfies readonly { direction: string; id: KeybindingActionId }[]
 
-export type TabMoveToSplitDirection = (typeof TAB_MOVE_TO_SPLIT_DIRECTIONS)[number]
+export type TabMoveToSplitAction = (typeof TAB_MOVE_TO_SPLIT_ACTIONS)[number]
+export type TabMoveToSplitDirection = TabMoveToSplitAction['direction']
 
-export function tabMoveToSplitActionId(direction: TabMoveToSplitDirection): TabMoveToSplitActionId {
-  return `tab.moveToSplit.${direction}`
-}
-
-/** The direction whose shortcut this event matches, if any. */
-export function matchTabMoveToSplitDirection(
-  matches: (actionId: TabMoveToSplitActionId) => boolean
-): TabMoveToSplitDirection | undefined {
-  return TAB_MOVE_TO_SPLIT_DIRECTIONS.find((direction) =>
-    matches(tabMoveToSplitActionId(direction))
-  )
+/** The move-to-split action whose shortcut this event matches, if any. */
+export function matchTabMoveToSplitAction(
+  matches: (actionId: KeybindingActionId) => boolean
+): TabMoveToSplitAction | undefined {
+  return TAB_MOVE_TO_SPLIT_ACTIONS.find(({ id }) => matches(id))
 }
 
 export function buildTabMoveToSplitKeybindingDefinitions(): KeybindingDefinition[] {
-  return TAB_MOVE_TO_SPLIT_DIRECTIONS.map((direction) => ({
-    id: tabMoveToSplitActionId(direction),
+  return TAB_MOVE_TO_SPLIT_ACTIONS.map(({ direction, id }) => ({
+    id,
     title: `Move active tab to split ${direction}`,
     group: 'Tabs',
     scope: 'tabs',

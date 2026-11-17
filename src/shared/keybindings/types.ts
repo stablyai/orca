@@ -1,6 +1,5 @@
 import type { KeybindingReasonCode } from './keybinding-diagnostic-copy'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { TabMoveToSplitDirection } from './tab-move-to-split-definitions'
 
 export type KeybindingScope =
   | 'global'
@@ -25,7 +24,6 @@ export type KeybindingMatchOptions = {
 }
 
 export type AgentTabActionId = `tab.newAgent.${TuiAgent}`
-export type TabMoveToSplitActionId = `tab.moveToSplit.${TabMoveToSplitDirection}`
 export type PluginKeybindingActionId = `plugin:${string}`
 
 export type KeybindingActionId =
@@ -77,7 +75,10 @@ export type KeybindingActionId =
   | 'tab.reopenClosed'
   | 'tab.moveLeft'
   | 'tab.moveRight'
-  | TabMoveToSplitActionId
+  | 'tab.moveToSplitRight'
+  | 'tab.moveToSplitLeft'
+  | 'tab.moveToSplitDown'
+  | 'tab.moveToSplitUp'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
   | 'tab.nextAllTypes'

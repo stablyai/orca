@@ -1,8 +1,7 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
 import {
   toVisibleTabType,
-  type Tab,
-  type TabGroup
+  type Tab
 } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store/index'
 import {
@@ -33,6 +32,7 @@ import { reorderTabInGroup } from '@/runtime/workspace-layout/commands/tab-group
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { TabMoveToSplitDirection } from '../../../../../shared/keybindings/tab-move-to-split-definitions'
 import { moveTabToNewPaneColumn } from '../../../components/tab-bar/pane-actions/tab-move-to-pane-column'
+import { selectActiveTabForWorktree } from '@/store/slices/tabs/active-tab-selection'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -139,25 +139,20 @@ function closeFocusedSplitLanding(state: TabState): boolean {
   return true
 }
 
-function findFocusedGroup(state: TabState, worktreeId: string): TabGroup | undefined {
-  const groupId = state.activeGroupIdByWorktree[worktreeId]
-  return (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
-}
-
 /** Move the focused group's active tab into a new split, as the tab menu's Move Tab to Split does. */
 function moveActiveTabToSplit(
   worktreeId: string | null,
   direction: TabMoveToSplitDirection
 ): boolean {
-  const group = worktreeId ? findFocusedGroup(useAppStore.getState(), worktreeId) : undefined
-  if (!worktreeId || !group?.activeTabId) {
+  const tab = worktreeId ? selectActiveTabForWorktree(useAppStore.getState(), worktreeId) : null
+  if (!worktreeId || !tab) {
     return false
   }
   return (
     moveTabToNewPaneColumn({
       worktreeId,
-      unifiedTabId: group.activeTabId,
-      groupId: group.id,
+      unifiedTabId: tab.id,
+      groupId: tab.groupId,
       direction
     }) !== false
   )
@@ -169,7 +164,10 @@ export function moveActiveTab(worktreeId: string | null, direction: -1 | 1): boo
     return false
   }
   const state = useAppStore.getState()
-  const group = findFocusedGroup(state, worktreeId)
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === groupId
+  )
   const tabId = group?.activeTabId
   if (!group || !tabId) {
     return false
@@ -266,12 +264,23 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     }
     return handleSwitchRecentTab()
   }
-  if (command.type === 'move' || command.type === 'move-to-split') {
+  if (command.type === 'move') {
     const floatingPanelOwned = command.floatingPanelOwned || isFloatingWorkspacePanelFocused()
-    const worktreeId = floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId
-    return command.type === 'move'
-      ? moveActiveTab(worktreeId, command.direction)
-      : moveActiveTabToSplit(worktreeId, command.direction)
+    return moveActiveTab(
+      floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId,
+      command.direction
+    )
+  }
+  if (command.type === 'move-to-split') {
+    const floatingPanelOwned = command.floatingPanelOwned || isFloatingWorkspacePanelFocused()
+    // The workbench stays mounted behind Settings, Tasks and Activity; leave the chord to the visible view.
+    if (!floatingPanelOwned && state.activeView !== 'terminal') {
+      return false
+    }
+    return moveActiveTabToSplit(
+      floatingPanelOwned ? FLOATING_TERMINAL_WORKTREE_ID : state.activeWorktreeId,
+      command.direction
+    )
   }
   if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)

@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => {
   return state
 })
 
-vi.mock('../../../store/index', () => ({
-  useAppStore: (select: (state: { keybindings: KeybindingOverrides }) => unknown) =>
+vi.mock('@/store/retained-views/app-state-view', () => ({
+  useAppStateValue: (select: (state: { keybindings: KeybindingOverrides }) => unknown) =>
     select({ keybindings: mocks.keybindings })
 }))
 vi.mock('./tab-move-to-pane-column', () => ({
@@ -53,8 +53,8 @@ describe('TabWorkspaceLayoutMenuSection shortcuts', () => {
 
   it('shows each bound chord on its own direction', () => {
     mocks.keybindings = {
-      'tab.moveToSplit.left': ['Mod+Alt+ArrowLeft'],
-      'tab.moveToSplit.up': ['Mod+Alt+ArrowUp']
+      'tab.moveToSplitLeft': ['Mod+Alt+ArrowLeft'],
+      'tab.moveToSplitUp': ['Mod+Alt+ArrowUp']
     }
     expect(renderShortcuts()).toEqual(['', 'Ctrl+Alt+←', '', 'Ctrl+Alt+↑'])
   })

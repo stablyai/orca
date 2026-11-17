@@ -1,8 +1,5 @@
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import {
-  matchTabMoveToSplitDirection,
-  tabMoveToSplitActionId
-} from '../../../shared/keybindings/tab-move-to-split-definitions'
+import { matchTabMoveToSplitAction } from '../../../shared/keybindings/tab-move-to-split-definitions'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 
 type TabMoveShortcutContext = {
@@ -37,17 +34,17 @@ export function handleTerminalWorkspaceTabMoveShortcut({
     }
     return
   }
-  const splitDirection = event.repeat ? undefined : matchTabMoveToSplitDirection(matchShortcut)
-  // Claim the chord only when a tab moved, so an unmovable layout lets it reach the focused surface.
+  const split = event.repeat ? undefined : matchTabMoveToSplitAction(matchShortcut)
+  // Claim the chord only when a tab moved, so an unmovable layout or hidden workbench lets it reach the focused surface.
   if (
-    splitDirection &&
+    split &&
     dispatchWorkspaceTabCommand({
       type: 'move-to-split',
-      direction: splitDirection,
+      direction: split.direction,
       floatingPanelOwned: floatingWorkspaceFocused
     })
   ) {
     event.preventDefault()
-    notifyTerminalCapture(tabMoveToSplitActionId(splitDirection))
+    notifyTerminalCapture(split.id)
   }
 }
