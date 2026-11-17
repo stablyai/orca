@@ -43,10 +43,10 @@ export class RuntimeEmulatorCommands {
       host,
       () => this.requireEmulatorBridge(),
       (worktreeId, info, focus) => {
-        this.notifyRendererEmulatorAutoAttach(worktreeId, info)
         if (focus) {
           this.notifyRendererEmulatorPaneFocus(worktreeId)
         }
+        this.notifyRendererEmulatorAutoAttach(worktreeId, info)
       }
     )
   }

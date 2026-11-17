@@ -42,6 +42,7 @@ export function registerContentCreationIpcBridge(
       return
     }
     ensureSimulatorTab(worktreeId, {
+      placement: 'rightSplit',
       surfacePane: true,
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
