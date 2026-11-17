@@ -297,14 +297,13 @@ export async function resolveScopedWorktreeIdRow(
   const comparisonKey = worktreeIdentityKey(worktreeId)
   const metaById = store.getAllWorktreeMeta() ?? {}
   const equivalentIds = new Set<string>()
-  const unsavedIds = new Set<string>()
+  const discoveryIds = new Set<string>()
   for (const git of ownerScan?.worktrees ?? []) {
     const id = composeWorktreeId(repo.id, git.path)
     if (worktreeIdentityKey(id) === comparisonKey) {
       equivalentIds.add(id)
-    } else if (!metaById[id]) {
-      // A checkout never saved must still be stamped, or a stalled scan's stored fallback misses it.
-      unsavedIds.add(id)
+    } else if (needsDiscoveryJoin(metaById[id], ownerCount)) {
+      discoveryIds.add(id)
     }
   }
   const candidates = joinScannedRowsWhere(
@@ -312,7 +311,7 @@ export async function resolveScopedWorktreeIdRow(
     repo,
     ownerScan,
     ownerCount,
-    (id) => equivalentIds.has(id) || unsavedIds.has(id)
+    (id) => equivalentIds.has(id) || discoveryIds.has(id)
   )
   const exact = candidates.find((worktree) => worktree.id === worktreeId)
   const equivalent = candidates.filter(
@@ -362,12 +361,17 @@ export async function resolveScopedWorktreeIdRow(
         relatedRepo,
         scan,
         count,
-        (id) => relatedIds.has(id) || !metaById[id]
+        (id) => relatedIds.has(id) || needsDiscoveryJoin(metaById[id], count)
       )
     })
   )
   const projected = projectResolvedWorktreeLineage([...ownerRows, ...otherRows.flat()], lineageById)
   return projected[ownerRows.findIndex((row) => row.id === target.id)] ?? null
+}
+
+/** Rows a full join would save or host-migrate; a stalled scan's stored fallback finds only those. */
+function needsDiscoveryJoin(saved: WorktreeMeta | undefined, repoOwnerCount: number): boolean {
+  return saved ? !saved.hostId || !saved.instanceId : repoOwnerCount === 1
 }
 
 /** Join the scanned Git checkouts `keep` admits; a folder repo has no scan and lists all its rows. */
