@@ -191,7 +191,7 @@ export function readJournalDomainItems(
         .prepare(`SELECT item.payload_json,item.ordinal FROM json_each(?) chosen
         CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=?
           AND item.item_id=chosen.value ORDER BY CAST(chosen.key AS INTEGER)`)
-        .all(JSON.stringify(chosen.map((header) => header.item_id)), ...prefix)
+        .iterate(JSON.stringify(chosen.map((header) => header.item_id)), ...prefix)
       const next = headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
       return { kind: 'items-by-kind', ...budgetItemsByKindPage(page, next) }
     }

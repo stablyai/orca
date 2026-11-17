@@ -7,20 +7,22 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
  */
 export const ITEMS_BY_KIND_PAGE_JSON_BUDGET = 8 * 2 ** 20
 
-/** `rows` are the chosen items in ordinal order; `nextOrdinal` resumes after the last chosen. */
+/** `rows` are the chosen items in ordinal order, read lazily so rows past the budget stay unread. */
 export function budgetItemsByKindPage(
-  rows: readonly Record<string, unknown>[],
+  rows: Iterable<Record<string, unknown>>,
   nextOrdinal: number | null,
   budget = ITEMS_BY_KIND_PAGE_JSON_BUDGET
 ): { items: AgentJournalRenderItem[]; nextOrdinal: number | null } {
   const items: AgentJournalRenderItem[] = []
   let used = 0
+  let lastKept = -1
   for (const row of rows) {
     const json = String(row.payload_json)
     if (items.length > 0 && used + json.length > budget) {
-      return { items, nextOrdinal: Number(rows[items.length - 1]!.ordinal) }
+      return { items, nextOrdinal: lastKept }
     }
     used += json.length
+    lastKept = Number(row.ordinal)
     items.push(JSON.parse(json))
   }
   return { items, nextOrdinal }
