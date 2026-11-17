@@ -4341,7 +4341,9 @@
             "detailedTooltip": "막대, 레이블, 백분율을 포함한 전체 사용량",
             "compactTooltip": "간략한 사용량: 제공자별 요약 하나",
             "notChecked": "확인 안 됨",
-            "modelWeeklyLimit": "{{model}} 주간 한도: {{usage}}"
+            "modelWeeklyLimit": "{{model}} 주간 한도: {{usage}}",
+            "resetsIn": "{{duration}} 후 초기화",
+            "resetsNow": "지금 초기화"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} 업데이트 중",
@@ -7373,6 +7375,9 @@
             "modeAriaLabel": "에이전트 대시보드 열기 모드",
             "modeInWindow": "윈도우 내",
             "modePopout": "팝업"
+          },
+          "worktreeCardStyle": {
+            "title": "카드 스타일"
           }
         },
         "FloatingWorkspacePane": {
@@ -14299,8 +14304,8 @@
             "databaseCount_other": "데이터베이스 {{value0}}개",
             "scanning": "{{value0}} 스캔 중",
             "checking": "{{value0}} 확인 중",
-            "scanned": "{{value0}} 스캔함",
-            "agentCheckedCount_other": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨"
+            "agentCheckedCount_other": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨",
+            "historyRefreshed": "기록을 새로고침함"
           },
           "run": {
             "source": {
@@ -20668,6 +20673,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "새 카드 사용해 보기",
+      "dismiss": "나중에",
+      "body": "모든 카드에 에이전트 상태, 읽지 않음 점, 하위 요약이 표시됩니다.",
+      "switchBack": "<path>워크스페이스 옵션 › 카드 스타일</path>에서 언제든지 되돌릴 수 있습니다",
+      "switchLabel": "카드 스타일",
+      "classic": "클래식",
+      "new": "새 카드",
+      "keep": "새 카드 유지",
+      "useClassic": "클래식 사용",
+      "laterToast": "워크스페이스 옵션 › 카드 스타일에서 언제든지 새 카드를 사용해 볼 수 있습니다",
+      "saveFailedToast": "카드 스타일을 저장하지 못했습니다. 다시 시도하세요.",
+      "keptTitle": "새 카드가 켜졌습니다",
+      "keptBody": "여기 카드 스타일에서 변경하세요."
+    },
     "revealFiltered": {
       "title": "숨겨진 워크스페이스를 공개하시겠습니까?",
       "description": "활성 워크스페이스는 사이드바에 숨겨져 있습니다. 이를 공개하면 이를 숨기는 필터만 조정됩니다.",
@@ -21248,7 +21268,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "색인화된 기록에 일치하는 세션이 없습니다. 다른 쿼리나 범위를 시도해 보세요.",
       "loadMore": "더 많은 경기 로드",
       "indexedHistory": "색인된 기록",
       "hostsSkipped": "검색되지 않음: {{value0}}",
@@ -21281,7 +21300,9 @@
         "unreachable": "연결할 수 없음",
         "scopeNotFound": "해당 호스트에서 검색 범위를 찾을 수 없음",
         "agentNotSupported": "지원되지 않는 에이전트"
-      }
+      },
+      "consentTranscriptIndex": "검색은 세션 세부 정보와 메시지 미리보기에서 일치 항목을 찾습니다. 전체 대화를 검색하려면 전체 텍스트 검색을 켜세요(로컬 기록을 가리지 않고 색인화함). 페어링된 장치에서도 검색할 수 있습니다.",
+      "noMatchesToShow": "표시할 일치하는 세션이 없습니다."
     }
   },
   "sessionHistory": {

@@ -76,6 +76,21 @@
     "failed": "Die Datei konnte nicht geöffnet werden."
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Probiere die neuen Karten aus",
+      "dismiss": "Nicht jetzt",
+      "body": "Agentenstatus, Ungelesen-Punkte und Zusammenfassungen untergeordneter Elemente auf jeder Karte.",
+      "switchBack": "Jederzeit zurückwechseln unter <path>Arbeitsbereichsoptionen › Kartenstil</path>",
+      "switchLabel": "Kartenstil",
+      "classic": "Klassisch",
+      "new": "Neu",
+      "keep": "Neue behalten",
+      "useClassic": "Klassisch verwenden",
+      "laterToast": "Die neuen Karten jederzeit ausprobieren unter Arbeitsbereichsoptionen › Kartenstil",
+      "saveFailedToast": "Kartenstil konnte nicht gespeichert werden. Versuche es erneut.",
+      "keptTitle": "Neue Karten sind aktiv",
+      "keptBody": "Hier unter Kartenstil änderbar."
+    },
     "revealFiltered": {
       "title": "Ausgeblendeten Arbeitsbereich anzeigen?",
       "description": "Der aktive Arbeitsbereich ist in der Seitenleiste ausgeblendet. Beim Anzeigen werden nur die Filter angepasst, die ihn ausblenden.",
@@ -4939,7 +4954,9 @@
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
             "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
             "notChecked": "Nicht geprüft",
-            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}"
+            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}",
+            "resetsIn": "Zurücksetzung in {{duration}}",
+            "resetsNow": "Zurücksetzung jetzt"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",
@@ -8054,6 +8071,9 @@
             "modeAriaLabel": "Öffnungsmodus des Agenten-Dashboards",
             "modeInWindow": "Im Fenster",
             "modePopout": "Separates Fenster"
+          },
+          "worktreeCardStyle": {
+            "title": "Kartenstil"
           }
         },
         "FloatingWorkspacePane": {
@@ -14986,9 +15006,9 @@
             "databaseCount_other": "{{value0}} Datenbanken",
             "scanning": "{{value0}} wird durchsucht",
             "checking": "{{value0}} wird geprüft",
-            "scanned": "{{value0}} durchsucht",
             "agentCheckedCount_one": "{{agent}}: {{settled}} von {{total}} möglichem Verlaufseintrag geprüft",
-            "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft"
+            "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft",
+            "historyRefreshed": "Verlauf aktualisiert"
           },
           "run": {
             "source": {
@@ -21549,7 +21569,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Keine passenden Sitzungen im indexierten Verlauf. Eine andere Suchanfrage oder einen anderen Suchbereich verwenden.",
       "loadMore": "Weitere Treffer laden",
       "indexedHistory": "Indexierter Verlauf",
       "hostsSkipped": "Nicht durchsucht: {{value0}}",
@@ -21585,7 +21604,9 @@
         "unreachable": "nicht erreichbar",
         "scopeNotFound": "Suchbereich dort nicht gefunden",
         "agentNotSupported": "Agent nicht unterstützt"
-      }
+      },
+      "consentTranscriptIndex": "Die Suche berücksichtigt Sitzungsdetails und Nachrichtenvorschauen. Um vollständige Unterhaltungen zu durchsuchen, die Volltextsuche aktivieren (indexiert lokale Transkripte, ohne Schwärzung). Gekoppelte Geräte können sie ebenfalls durchsuchen.",
+      "noMatchesToShow": "Keine passenden Sitzungen zum Anzeigen."
     }
   },
   "sessionHistory": {

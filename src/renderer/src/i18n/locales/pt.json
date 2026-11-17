@@ -460,6 +460,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Experimente os novos cartões",
+      "dismiss": "Agora não",
+      "body": "Status do agente, pontos de não lido e resumos dos filhos em cada cartão.",
+      "switchBack": "Volte quando quiser em <path>Opções do espaço de trabalho › Estilo dos cartões</path>",
+      "switchLabel": "Estilo dos cartões",
+      "classic": "Clássico",
+      "new": "Novo",
+      "keep": "Manter novo",
+      "useClassic": "Usar clássico",
+      "laterToast": "Experimente os novos cartões quando quiser em Opções do espaço de trabalho › Estilo dos cartões",
+      "saveFailedToast": "Não foi possível salvar o estilo dos cartões. Tente novamente.",
+      "keptTitle": "Os novos cartões estão ativados",
+      "keptBody": "Altere aqui, em Estilo dos cartões."
+    },
     "revealFiltered": {
       "title": "Exibir espaço de trabalho oculto?",
       "description": "O espaço de trabalho ativo está oculto na barra lateral. Exibi-lo ajustará apenas os filtros que o ocultam.",
@@ -812,7 +827,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Nenhuma sessão correspondente no histórico indexado. Tente outra busca ou outro escopo.",
       "loadMore": "Carregar mais resultados",
       "indexedHistory": "Histórico indexado · melhores resultados",
       "hostsSkipped": "Não pesquisado: {{value0}}",
@@ -852,7 +866,8 @@
         "scopeNotFound": "escopo de busca não encontrado nesse host",
         "agentNotSupported": "agente não compatível"
       },
-      "consent": "Ativar a busca em texto completo? O Orca cria um índice neste computador a partir das transcrições locais dos agentes, incluindo conversas completas. O conteúdo não é ocultado. Clientes pareados autenticados podem pesquisá-lo."
+      "consentTranscriptIndex": "A busca considera os detalhes das sessões e as prévias das mensagens. Para pesquisar conversas completas, ative a busca em texto completo (indexa as transcrições locais, sem ocultar conteúdo). Dispositivos pareados também podem pesquisá-las.",
+      "noMatchesToShow": "Nenhuma sessão correspondente para mostrar."
     }
   },
   "menu": {
@@ -3692,7 +3707,9 @@
             "compactTooltip": "Uso condensado: somente a janela mais restrita",
             "footerDetailAria": "Detalhe do rodapé de uso",
             "notChecked": "Não verificado",
-            "modelWeeklyLimit": "Limite semanal do {{model}}: {{usage}}"
+            "modelWeeklyLimit": "Limite semanal do {{model}}: {{usage}}",
+            "resetsIn": "Redefinição em {{duration}}",
+            "resetsNow": "Redefinição agora"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Atualizando {{value0}}/{{value1}}",
@@ -5986,6 +6003,9 @@
             "modeAriaLabel": "Modo de abertura do Painel de Agentes",
             "modeInWindow": "Na própria janela",
             "modePopout": "Janela separada"
+          },
+          "worktreeCardStyle": {
+            "title": "Estilo dos cartões"
           }
         },
         "RuntimePairingUrlGenerator": {
@@ -11610,11 +11630,11 @@
             "databaseCount_other": "{{value0}} bancos de dados",
             "databaseCount_many": "{{value0}} bancos de dados",
             "scanning": "Verificando {{value0}}",
-            "scanned": "Verificação concluída: {{value0}}",
             "checking": "Verificando {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} de {{total}} candidato do histórico verificado",
             "agentCheckedCount_other": "{{agent}}: {{settled}} de {{total}} candidatos do histórico verificados",
-            "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos do histórico verificados"
+            "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos do histórico verificados",
+            "historyRefreshed": "Histórico atualizado"
           },
           "run": {
             "source": {

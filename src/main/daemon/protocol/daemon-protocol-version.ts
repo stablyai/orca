@@ -1,6 +1,7 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
 // v59 lets the signed macOS host start native provider owners whose pipes stay with the app;
-// it skips v57-v58, which ad hoc builds of an earlier host route used.
+// it skips v58, which ad hoc builds of an earlier host route used.
+// v57 starts a session's output sequence at its first attach, so a Windows restore snapshot no longer lands 20 chars past the stream.
 // v56 accepts `reportFocusLost`; v55 daemons from 1.4.251 predate it and reject the request.
 // v55 observes the foreground group at the physical PTY owner.
 // v54 reads the macOS process table in process instead of forking setuid ps on every poll (#31783).

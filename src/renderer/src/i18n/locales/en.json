@@ -86,16 +86,17 @@
       "dismiss": "Dismiss"
     },
     "worktreeCardsIntroNotice": {
-      "title": "New card style",
-      "experimental": "Experimental",
+      "title": "Try the new cards",
       "dismiss": "Not now",
-      "previewBody": "Agent status, unread dots and child summaries on every card. This is a preview of your list.",
-      "classicBody": "Back to your current cards. Flip to New to preview again.",
+      "body": "Agent status, unread dots and child summaries on every card.",
+      "switchBack": "Switch back anytime in <path>Workspace options › Card style</path>",
       "switchLabel": "Card style",
       "classic": "Classic",
       "new": "New",
       "keep": "Keep new",
+      "useClassic": "Use classic",
       "laterToast": "Try the new cards any time from Workspace options › Card style",
+      "saveFailedToast": "Couldn't save the card style. Try again.",
       "keptTitle": "New cards are on",
       "keptBody": "Change it here, under Card style."
     },
@@ -5722,7 +5723,9 @@
             "compactTooltip": "Condensed usage: one summary per provider",
             "footerDetailAria": "Usage footer detail",
             "notChecked": "Not checked",
-            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}"
+            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}",
+            "resetsIn": "Resets in {{duration}}",
+            "resetsNow": "Resets now"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -16060,9 +16063,9 @@
             "databaseCount_other": "{{value0}} databases",
             "scanning": "Scanning {{value0}}",
             "checking": "Checking {{value0}}",
-            "scanned": "Scanned {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} of {{total}} history candidate checked",
-            "agentCheckedCount_other": "{{agent}}: {{settled}} of {{total}} history candidates checked"
+            "agentCheckedCount_other": "{{agent}}: {{settled}} of {{total}} history candidates checked",
+            "historyRefreshed": "History refreshed"
           },
           "run": {
             "source": {
@@ -22748,9 +22751,9 @@
           "updateFailed": "Couldn't update the setting on {{host}}.",
           "unsupported": "Update Orca on {{host}} to use this setting there.",
           "confirmTitle": "Delete chat history from deleted workspaces?",
-          "confirmDescription": "Orca will delete Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
+          "confirmDescription": "Orca will delete Orca, Claude Code and Codex chats from workspaces that no longer exist, including ones deleted before today. Chats from workspaces you still have are kept. Deleted chats can't be recovered.",
           "deleteWithWorkspace": "Delete chat history with the workspace",
-          "deleteWithWorkspaceDescription": "Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+          "deleteWithWorkspaceDescription": "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
         }
       },
       "repository": {
@@ -23629,14 +23632,12 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "No matching sessions in the indexed history. Try another query or scope.",
       "loadMore": "Load more matches",
       "indexedHistory": "Indexed history",
       "hostsSkipped": "Not searched: {{value0}}",
       "sortRelevance": "Most relevant",
       "sortNewest": "Newest",
       "sortResultsAriaLabel": "Sort results: {{value0}}",
-      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
       "titleOnly": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
@@ -23666,7 +23667,9 @@
         "unreachable": "unreachable",
         "scopeNotFound": "scope not found there",
         "agentNotSupported": "agent not supported"
-      }
+      },
+      "consentTranscriptIndex": "Search matches session details and message previews. To search full conversations, enable full-text search (indexes local transcripts, unredacted). Paired devices can search them too.",
+      "noMatchesToShow": "No matching sessions to show."
     }
   },
   "sessionHistory": {

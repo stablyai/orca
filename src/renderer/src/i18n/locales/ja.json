@@ -4904,7 +4904,9 @@
             "detailedTooltip": "バー・ラベル・パーセントを含む完全な使用状況",
             "compactTooltip": "簡潔な使用状況：プロバイダーごとに1つの概要",
             "notChecked": "未確認",
-            "modelWeeklyLimit": "{{model}} の週間上限: {{usage}}"
+            "modelWeeklyLimit": "{{model}} の週間上限: {{usage}}",
+            "resetsIn": "{{duration}}後にリセット",
+            "resetsNow": "今リセット"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}}を更新中",
@@ -7990,6 +7992,9 @@
             "modeAriaLabel": "Agent ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
             "modePopout": "ポップアウト"
+          },
+          "worktreeCardStyle": {
+            "title": "カードのスタイル"
           }
         },
         "FloatingWorkspacePane": {
@@ -15108,8 +15113,8 @@
             "databaseCount_other": "{{value0}} 個のデータベース",
             "scanning": "{{value0}}をスキャン中",
             "checking": "{{value0}} を確認中",
-            "scanned": "{{value0}}をスキャン済み",
-            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み"
+            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み",
+            "historyRefreshed": "履歴を更新しました"
           },
           "run": {
             "source": {
@@ -22046,6 +22051,21 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "新しいカードを試す",
+      "dismiss": "後で",
+      "body": "すべてのカードに Agent の状態、未読ドット、子の概要を表示します。",
+      "switchBack": "<path>ワークスペースのオプション › カードのスタイル</path> からいつでも元に戻せます",
+      "switchLabel": "カードのスタイル",
+      "classic": "クラシック",
+      "new": "新しい",
+      "keep": "新しいものを使う",
+      "useClassic": "クラシックを使う",
+      "laterToast": "ワークスペースのオプション › カードのスタイル からいつでも新しいカードを試せます",
+      "saveFailedToast": "カードのスタイルを保存できませんでした。もう一度お試しください。",
+      "keptTitle": "新しいカードを使用中です",
+      "keptBody": "ここの カードのスタイル で変更できます。"
+    },
     "revealFiltered": {
       "title": "隠されたワークスペースを明らかにしますか?",
       "description": "アクティブなワークスペースはサイドバーに表示されません。これを表示すると、それを非表示にしているフィルターのみが調整されます。",
@@ -22666,14 +22686,12 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "インデックス付けされた履歴に一致するセッションがありません。別のクエリまたはスコープを試してください。",
       "loadMore": "さらに一致をロードする",
       "indexedHistory": "インデックス付き履歴",
       "hostsSkipped": "検索されていません: {{value0}}",
       "sortRelevance": "最も関連性の高い",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
-      "consent": "全文検索を有効にしますか？Orca は、会話の全文を含むローカルの Agent トランスクリプトから、このコンピュータ上にインデックスを作成します。内容はマスキングされません。ペアリングされた認証済みクライアントは、このインデックスを検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
       "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
@@ -22700,7 +22718,9 @@
         "unreachable": "接続不可",
         "scopeNotFound": "そのホストに検索範囲が見つかりません",
         "agentNotSupported": "Agent 未対応"
-      }
+      },
+      "consentTranscriptIndex": "検索ではセッションの詳細とメッセージのプレビューが照合されます。会話の全文を検索するには、全文検索を有効にしてください（ローカルのトランスクリプトをマスキングせずにインデックス化します）。ペアリングされたデバイスからも検索できます。",
+      "noMatchesToShow": "表示できる一致するセッションはありません。"
     }
   },
   "sessionHistory": {

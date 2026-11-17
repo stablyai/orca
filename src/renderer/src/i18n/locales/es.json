@@ -4436,7 +4436,9 @@
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
             "compactTooltip": "Uso condensado: un resumen por proveedor",
             "notChecked": "Sin comprobar",
-            "modelWeeklyLimit": "Límite semanal de {{model}}: {{usage}}"
+            "modelWeeklyLimit": "Límite semanal de {{model}}: {{usage}}",
+            "resetsIn": "Se restablece en {{duration}}",
+            "resetsNow": "Se restablece ahora"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -7661,6 +7663,9 @@
             "modeAriaLabel": "Modo de apertura del Panel de agentes",
             "modeInWindow": "En ventana",
             "modePopout": "Ventana emergente"
+          },
+          "worktreeCardStyle": {
+            "title": "Estilo de tarjeta"
           }
         },
         "FloatingWorkspacePane": {
@@ -14675,10 +14680,10 @@
             "databaseCount_many": "{{value0}} bases de datos",
             "scanning": "Analizando {{value0}}",
             "checking": "Comprobando {{value0}}",
-            "scanned": "Analizados {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} de {{total}} candidato del historial comprobado",
             "agentCheckedCount_other": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados",
-            "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados"
+            "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados",
+            "historyRefreshed": "Historial actualizado"
           },
           "ssh": {
             "unrestored": {
@@ -21594,6 +21599,21 @@
     "failed": "No se pudo abrir el archivo."
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "Prueba las nuevas tarjetas",
+      "dismiss": "Ahora no",
+      "body": "Estado del agente, puntos de no leído y resúmenes de elementos secundarios en cada tarjeta.",
+      "switchBack": "Puedes volver cuando quieras en <path>Opciones de espacio de trabajo › Estilo de tarjeta</path>",
+      "switchLabel": "Estilo de tarjeta",
+      "classic": "Clásico",
+      "new": "Nuevo",
+      "keep": "Mantener nuevo",
+      "useClassic": "Usar clásico",
+      "laterToast": "Prueba las nuevas tarjetas cuando quieras en Opciones de espacio de trabajo › Estilo de tarjeta",
+      "saveFailedToast": "No se pudo guardar el estilo de tarjeta. Inténtalo de nuevo.",
+      "keptTitle": "Las nuevas tarjetas están activas",
+      "keptBody": "Cámbialo aquí, en Estilo de tarjeta."
+    },
     "revealFiltered": {
       "title": "¿Mostrar el espacio de trabajo oculto?",
       "description": "El espacio de trabajo activo está oculto en la barra lateral. Mostrarlo solo ajustará los filtros que lo ocultan.",
@@ -21803,7 +21823,6 @@
   "sessionSearch": {
     "panel": {
       "retry": "Probar de nuevo",
-      "noMatches": "No hay sesiones coincidentes en el historial indexado. Prueba otra consulta o ámbito.",
       "loadMore": "Cargar más coincidencias",
       "indexedHistory": "Historial indexado",
       "hostsSkipped": "Sin buscar: {{value0}}",
@@ -21841,7 +21860,9 @@
         "unreachable": "inaccesible",
         "scopeNotFound": "ámbito de búsqueda no encontrado allí",
         "agentNotSupported": "agente no compatible"
-      }
+      },
+      "consentTranscriptIndex": "La búsqueda coincide con los detalles de las sesiones y las vistas previas de los mensajes. Para buscar en conversaciones completas, activa la búsqueda de texto completo (indexa las transcripciones locales, sin ocultar contenido). Los dispositivos emparejados también pueden buscar en ellas.",
+      "noMatchesToShow": "No hay sesiones coincidentes para mostrar."
     }
   },
   "sessionHistory": {

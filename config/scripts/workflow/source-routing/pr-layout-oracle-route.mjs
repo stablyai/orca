@@ -33,7 +33,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/renderer/src/runtime/hosts/wsl/wsl-host-availability.ts',
   'src/renderer/src/lib/workspace/ownership/workspace-runtime-environment.ts',
   'src/renderer/src/components/tab-group/drag/tab-drag-drop-commit.ts',
-  'src/renderer/src/app-shell/use-runtime-graph-sync.ts',
+  'src/renderer/src/runtime/sync-runtime-graph/use-runtime-graph-sync.ts',
   'src/renderer/src/runtime/sync-runtime-graph',
   'src/renderer/src/runtime/web-session-tabs-sync',
   // Other layout writers the stack edits.

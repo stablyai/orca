@@ -19,6 +19,7 @@ import {
   setActiveMarkdownPreviewSearchMatch,
   type MarkdownPreviewSearchInstance
 } from './markdown-preview-search'
+import { useMarkdownPreviewAnnotations } from '../review/markdown-preview-annotation-context'
 
 type SearchReveal = {
   client: MarkdownPreviewDocumentClient
@@ -53,6 +54,8 @@ export function useMarkdownPreviewSearchReveal({
   scrollMarks: ProgrammaticScrollMarks
 }): () => void {
   const reveal = useRef<SearchReveal | null>(null)
+  // Why: review-note changes add or remove the block wrapper, detaching the highlighted ranges.
+  const annotations = useMarkdownPreviewAnnotations()
   const [navigationRequest, setNavigationRequest] = useState(0)
   const navigate = useCallback(() => {
     reveal.current = null
@@ -141,6 +144,7 @@ export function useMarkdownPreviewSearchReveal({
     return () => clearMarkdownPreviewSearchHighlights(searchInstance)
   }, [
     activeMatch,
+    annotations,
     blocks,
     bodyRef,
     client,

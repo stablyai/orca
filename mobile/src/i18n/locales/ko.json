@@ -1002,7 +1002,6 @@
       "clearSearch": "검색 지우기"
     },
     "setupHookTrustDrawer": {
-      "alwaysTrustAndRun": "항상 신뢰하고 실행",
       "description": "워크스페이스가 시작되기 전에 이 저장소의 orca.yaml이 실행됩니다. 이 저장소를 신뢰하는 경우에만 실행하세요.",
       "dontRun": "실행 안 함",
       "newScriptLabel": "새 설정 스크립트",
@@ -3902,27 +3901,19 @@
       "reconnecting": "다시 연결 중"
     },
     "workspaceTrustDrawers": {
-      "alwaysTrustAndRun": "항상 신뢰하고 실행",
       "creating": "만드는 중…",
       "directoriesLabel": "디렉터리",
       "directories_one": "디렉터리 {{count}}개",
       "directories_other": "디렉터리 {{count}}개",
-      "dontRun": "실행 안 함",
       "editSparsePreset": "스파스 프리셋 편집",
       "nameLabel": "이름",
       "namePlaceholder": "렌더러 UI",
-      "newSetupScript": "새 설정 스크립트",
       "newSparsePreset": "새 스파스 프리셋",
-      "runHooks": "후크 실행",
       "runSetupAndCreate": "설정 실행 후 만들기",
-      "runSetupTitle": "{{name}}의 설정 스크립트를 실행하시겠습니까?",
-      "setupChangedTitle": "{{name}}의 설정 스크립트가 변경되었습니다",
-      "setupScript": "설정 스크립트",
       "setupSubtitle": "{{name}}의 워크스페이스를 만들려면 먼저 설정 스크립트 실행 여부를 선택해야 합니다.",
       "setupTitle": "설정 스크립트를 실행하시겠습니까?",
       "skipSetupAndCreate": "설정 건너뛰고 만들기",
-      "trustFailed": "설정 스크립트 신뢰 설정에 실패했습니다.",
-      "trustSubtitle": "워크스페이스가 시작되기 전에 이 저장소의 orca.yaml이 컴퓨터에서 실행됩니다. 이 저장소를 신뢰하는 경우에만 실행하세요."
+      "trustFailed": "설정 스크립트 신뢰 설정에 실패했습니다."
     },
     "worktreeCreateRetry": {
       "createFailed": "워크스페이스를 생성하지 못했습니다."

@@ -49,6 +49,7 @@ export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.
 function TabBarCreateEntrySession({
   agentOptions = EMPTY_AGENT_OPTIONS,
   agentPickerEntries,
+  excludedTabId,
   groupId,
   menuOpen,
   menuOptions = EMPTY_MENU_OPTIONS,
@@ -86,6 +87,7 @@ function TabBarCreateEntrySession({
   const terminalQueryMode = rawQueryOversized || forcedSearch.forced
   const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
+    excludedTabId,
     query,
     worktreeId,
     retainedResultId: pinnedOptionId

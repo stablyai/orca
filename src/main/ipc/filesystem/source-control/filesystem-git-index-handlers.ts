@@ -15,7 +15,7 @@ import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registere
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalRepoForRegisteredWorktree
-} from '../../local-worktree-runtime-options'
+} from '../../worktrees/local-worktree-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import { validateGitRelativeFilePath } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
