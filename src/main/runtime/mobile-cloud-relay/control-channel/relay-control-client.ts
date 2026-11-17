@@ -9,7 +9,6 @@ import {
   RelayDrainMessageSchema,
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
-  RELAY_HOST_CAPABILITY_HEADERS,
   encodeRelayHostHello,
   parseRelayControlMessage,
   type RelayHostHelloAckMessage,
@@ -21,6 +20,7 @@ import type { DeviceCredentialInstallAuthorization } from './relay-control-reque
 import { answerRelayHostChallenge } from './relay-host-proof'
 import { RelayControlLiveness } from './relay-control-liveness'
 import { closeRelayControlSocket } from './relay-control-socket-close'
+import { createRelayControlSocket } from './relay-control-socket-factory'
 import { controlWebSocketUrl } from './relay-control-url'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
@@ -56,14 +56,7 @@ export class RelayControlClient {
     this.requests = new RelayControlRequests(options.onPendingChanged, (timeout) =>
       this.liveness.noteRequestTimeout(timeout)
     )
-    this.createSocket =
-      options.createSocket ??
-      ((url, token) =>
-        new WebSocket(url, {
-          headers: { authorization: `Bearer ${token}`, ...RELAY_HOST_CAPABILITY_HEADERS },
-          perMessageDeflate: false,
-          maxPayload: 64 * 1024
-        }))
+    this.createSocket = options.createSocket ?? createRelayControlSocket
   }
 
   connect(): Promise<RelayHostHelloAckMessage> {
@@ -256,6 +249,11 @@ export class RelayControlClient {
             ? invalid.reason
             : `invalid host challenge: ${invalid.reason} origin=${this.relayOrigin}`
         )
+        return
+      }
+      // Connect race: only the first path to deliver a valid challenge answers; the rest close unanswered.
+      if (this.options.claimChallenge?.() === false) {
+        this.closeNow()
         return
       }
       this.socket?.send(
