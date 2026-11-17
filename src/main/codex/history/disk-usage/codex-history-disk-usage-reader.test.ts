@@ -6,9 +6,11 @@ const before = { bytes: 11_000, rollouts: 3, complete: true }
 const after = { bytes: 2_000, rollouts: 1, complete: true }
 
 /** A walk that ends with `usage`, or rejects as soon as its signal aborts. */
-function walk(
-  usage: CodexHistoryDiskUsage
-): { measure: (signal: AbortSignal) => Promise<CodexHistoryDiskUsage>; finish: () => void; aborted: () => boolean } {
+function walk(usage: CodexHistoryDiskUsage): {
+  measure: (signal: AbortSignal) => Promise<CodexHistoryDiskUsage>
+  finish: () => void
+  aborted: () => boolean
+} {
   let finish!: () => void
   let signal: AbortSignal | null = null
   return {

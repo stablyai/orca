@@ -2,7 +2,9 @@ import type { CodexHistoryDiskUsage } from '../../../../shared/workspace-cleanup
 
 export type CodexHistoryDiskUsageReader = {
   /** `measure` runs only when no reusable or current walk exists; its signal aborts an obsolete walk. */
-  read: (measure: (signal: AbortSignal) => Promise<CodexHistoryDiskUsage>) => Promise<CodexHistoryDiskUsage>
+  read: (
+    measure: (signal: AbortSignal) => Promise<CodexHistoryDiskUsage>
+  ) => Promise<CodexHistoryDiskUsage>
   /** History shrank: the running walk is stopped and no later read returns one from before now. */
   forget: () => void
 }
