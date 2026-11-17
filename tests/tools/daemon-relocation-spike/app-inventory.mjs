@@ -1,14 +1,5 @@
-// Locates the daemon-host inputs inside a packaged win-unpacked build.
-//
-// Layout the packager produces (see config/electron-builder.config.cjs and
-// config/packaged-runtime-node-modules.cjs):
-//   <app-dir>/Orca.exe                         electron binary (run as node)
-//   <app-dir>/icudtl.dat                       ICU data (needed even as node)
-//   <app-dir>/snapshot_blob.bin                V8 snapshot
-//   <app-dir>/v8_context_snapshot.bin          V8 context snapshot
-//   <app-dir>/*.dll                            electron/GPU runtime DLLs
-//   <app-dir>/resources/app.asar.unpacked/out/main/daemon-entry.js  (+ chunks/)
-//   <app-dir>/resources/app.asar.unpacked/node_modules/node-pty/**  native + conpty
+// Inventory win-unpacked daemon inputs: Orca.exe, ICU/V8 snapshots, DLLs, daemon-entry/chunks and packaged node-pty/ConPTY.
+// See electron-builder.config.cjs and packaged-runtime-node-modules.cjs for layout.
 
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -16,8 +7,7 @@ import { basename, join } from 'node:path'
 export const RUNTIME_DATA_FILES = ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']
 export const HOST_EXE = 'Orca.exe'
 
-// Windows arch dir names node-pty prebuilds ship under; build/Release is the
-// packaged rebuild location and takes precedence.
+// Prefer packaged build/Release over node-pty architecture prebuild directories.
 const NODE_PTY_NATIVE_CANDIDATES = ['build/Release', 'prebuilds/win32-x64', 'prebuilds/win32-arm64']
 
 function fileEntry(dir, name) {
@@ -38,16 +28,13 @@ function listTopLevelDlls(appDir) {
   return dlls.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Resolve the app.asar.unpacked root: everything the forked daemon-entry
-// require-closure resolves (chunks, node-pty) lives under it, so the copied
-// host must mirror it verbatim.
+// Mirror unpacked require-closure paths verbatim under the copied host.
 function resolveUnpackedRoot(appDir) {
   const candidate = join(appDir, 'resources', 'app.asar.unpacked')
   return existsSync(candidate) ? candidate : null
 }
 
-// getDaemonEntryPath() in daemon-init.ts probes daemon-entry.js at the unpacked
-// root first, then out/main — mirror that resolution order here.
+// Mirror getDaemonEntryPath’s unpacked-root then out/main probe order.
 function resolveDaemonEntry(unpackedRoot) {
   if (!unpackedRoot) {
     return { name: 'daemon-entry.js', path: '', exists: false, size: 0, relFromUnpacked: '' }
@@ -68,8 +55,7 @@ function resolveDaemonEntry(unpackedRoot) {
 }
 
 function resolveNodePty(unpackedRoot, appDir) {
-  // Prefer the unpacked-root copy (what the daemon require-closure resolves);
-  // fall back to a resources-level copy some builds also stage.
+  // Prefer the require-resolved unpacked copy; some builds also stage a resources-level copy.
   const roots = []
   if (unpackedRoot) {
     roots.push(join(unpackedRoot, 'node_modules', 'node-pty'))
@@ -101,11 +87,7 @@ function resolveNodePty(unpackedRoot, appDir) {
   return { exists: false, packageDir: '', nativeDir: '', nativeRel: '', conptyNode: null }
 }
 
-/**
- * Discover every daemon-host input in `appDir`. Never throws for missing files;
- * each entry carries an `exists` flag so the caller can print a full report and
- * decide whether the chosen tier is buildable.
- */
+// Report every input with exists flags, including missing ones, so callers can assess each copy tier.
 export function inventoryAppDir(appDir) {
   const unpackedRoot = resolveUnpackedRoot(appDir)
   return {
@@ -119,7 +101,6 @@ export function inventoryAppDir(appDir) {
   }
 }
 
-/** Human-readable inventory dump for the run report. */
 export function formatInventory(inv) {
   const lines = []
   const kib = (n) => `${(n / 1024).toFixed(1)} KiB`

@@ -1,11 +1,17 @@
+import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
-import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
-import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
-import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
-import { DiffCommentSchema } from '../../../shared/diff-comment-schema'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'
+import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachments/workspace-attachment-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
+import { DiffCommentSchema } from '../../../shared/file-review/diff-comment-schema'
+import { normalizeExecutionHostId } from '../../../shared/execution-host/execution-host'
+import {
+  FolderWorkspaceHookCreateShape,
+  FolderWorkspaceDelete,
+  assertFolderWorkspaceStartup
+} from '../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -18,9 +24,11 @@ export const ProjectGroupCreateArgs = z.object({
 export const ProjectGroupUpdateArgs = z.object({
   groupId: z.string().min(1),
   updates: z.object({
+    hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
+    rootProjectOrder: z.number().finite().nullable().optional(),
     color: z.string().nullable().optional(),
     parentGroupId: z.string().min(1).nullable().optional()
   })
@@ -30,10 +38,8 @@ export const ProjectGroupSelectorArgs = z.object({
   groupId: z.string().min(1)
 })
 
-export const ProjectGroupMoveProjectArgs = z.object({
-  projectId: z.string().min(1),
-  groupId: z.string().nullable(),
-  order: z.number().finite().optional()
+export const ProjectGroupUpdateManyArgs = z.object({
+  mutations: z.array(ProjectGroupUpdateArgs)
 })
 
 export const ProjectHostSetupExistingFolderIpcArgs = z.object({
@@ -56,7 +62,11 @@ export const ProjectHostSetupExistingFolderIpcArgs = z.object({
 const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('inherit-global') }),
   z.object({ kind: z.literal('windows-host') }),
-  z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
+  z.object({
+    kind: z.literal('wsl'),
+    distro: z.string().min(1),
+    git: z.literal('windows-host').optional()
+  })
 ])
 
 export const ProjectUpdateIpcArgs = z.object({
@@ -66,19 +76,29 @@ export const ProjectUpdateIpcArgs = z.object({
   })
 })
 
+const IpcExecutionHostId = z
+  .string()
+  .min(1)
+  .transform((value, ctx) => {
+    const hostId = normalizeExecutionHostId(value)
+    if (!hostId) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+      return z.NEVER
+    }
+    return hostId
+  })
+
+// Omitted host retains legacy behavior: move the first matching project ID.
+export const ProjectGroupMoveProjectArgs = z.object({
+  projectId: z.string().min(1),
+  groupId: z.string().nullable(),
+  order: z.number().finite().optional(),
+  hostId: IpcExecutionHostId.optional()
+})
+
 export const ProjectHostSetupCreateIpcArgs = z.object({
   projectId: z.string().min(1),
-  hostId: z
-    .string()
-    .min(1)
-    .transform((value, ctx) => {
-      const hostId = normalizeExecutionHostId(value)
-      if (!hostId) {
-        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-        return z.NEVER
-      }
-      return hostId
-    }),
+  hostId: IpcExecutionHostId,
   setupId: z.string().min(1).optional(),
   path: z.string().optional(),
   kind: z.enum(['git', 'folder']).optional(),
@@ -91,6 +111,7 @@ export const ProjectHostSetupCreateIpcArgs = z.object({
 
 export const ProjectHostSetupUpdateIpcArgs = z.object({
   setupId: z.string().min(1),
+  hostId: IpcExecutionHostId.optional(),
   updates: z.object({
     displayName: z.string().optional(),
     path: z.string().optional(),
@@ -105,7 +126,8 @@ export const ProjectHostSetupUpdateIpcArgs = z.object({
 })
 
 export const ProjectHostSetupDeleteIpcArgs = z.object({
-  setupId: z.string().min(1)
+  setupId: z.string().min(1),
+  hostId: IpcExecutionHostId.optional()
 })
 
 const FolderWorkspaceLinkedTaskArgs = WorkspaceLinkedItemSchema.nullable()
@@ -131,6 +153,7 @@ function assertFolderWorkspaceLinkedSourceContextMatch(
 
 export const FolderWorkspaceCreateArgs = z
   .object({
+    ...FolderWorkspaceHookCreateShape,
     projectGroupId: z.string().min(1),
     name: z.string().optional(),
     folderPath: z.string().nullable().optional(),
@@ -143,6 +166,7 @@ export const FolderWorkspaceCreateArgs = z
     pendingFirstAgentMessageRename: z.boolean().optional()
   })
   .superRefine(assertFolderWorkspaceLinkedSourceContextMatch)
+  .superRefine(assertFolderWorkspaceStartup)
 
 export const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),
@@ -174,6 +198,8 @@ export const FolderWorkspaceUpdateArgs = z.object({
 export const FolderWorkspaceSelectorArgs = z.object({
   folderWorkspaceId: z.string().min(1)
 })
+
+export const FolderWorkspaceDeleteArgs = FolderWorkspaceDelete
 
 export const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
   z.object({

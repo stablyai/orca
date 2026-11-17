@@ -9,7 +9,7 @@ import {
   type Placement
 } from '@floating-ui/dom'
 import type { CSSProperties } from 'react'
-import type { ContextualTourStepPlacement } from '../../../../shared/contextual-tours'
+import type { ContextualTourStepPlacement } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 
 export type ContextualTourPanelPlacement = 'top' | 'right' | 'bottom' | 'left'
 
@@ -25,11 +25,9 @@ const ARROW_PADDING = 16
 const ARROW_WIDTH = 18
 const ARROW_HEIGHT = 8
 
-// Why: frames of no movement before the tracker parks. Long enough to ride out
-// a dropped frame mid-animation, short enough to stop within a few hundred ms.
+// Park after enough still frames to tolerate dropped animation frames without polling indefinitely.
 const MOTION_SETTLE_FRAMES = 12
-// Why: safety net for movement that fires no observer at all (a stubbed or
-// unsupported IntersectionObserver). 4 rect reads/s instead of one per frame.
+// Probe eventless movement at 4Hz if IntersectionObserver cannot wake the tracker.
 const PARKED_PROBE_MS = 250
 
 const FALLBACK_PLACEMENTS = {
@@ -44,8 +42,7 @@ export const CONTEXTUAL_TOUR_ARROW_SIZE = {
   height: ARROW_HEIGHT
 } as const
 
-// Why: keep the arrow just outside the panel border. Letting it overlap the
-// border makes the callout look like it is colliding with the tip card outline.
+// Keep arrow placement outside the panel’s matching border so their outlines remain continuous.
 export const CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH = 1
 
 export async function getContextualTourFloatingPosition(args: {
@@ -53,28 +50,26 @@ export async function getContextualTourFloatingPosition(args: {
   floatingElement: HTMLElement
   panelHost: HTMLElement | null
   preferredPlacement?: ContextualTourStepPlacement
+  /** Align the panel with the target's start edge instead of centering it. */
+  alignStart?: boolean
   targetElement: Element
 }): Promise<ContextualTourFloatingPosition> {
   const initialPlacement = args.preferredPlacement ?? 'right'
+  const aligned = (side: ContextualTourPanelPlacement): Placement =>
+    args.alignStart ? `${side}-start` : side
   const boundary = getContextualTourCollisionBoundary(args.panelHost)
   const result = await computePosition(args.targetElement, args.floatingElement, {
-    // Why: the strategy must match the panel's actual CSS position — hosted
-    // panels are absolute children of the dialog/sheet, floating ones fixed.
-    // computePosition returns coordinates relative to the panel's offsetParent,
-    // so the result is applied to left/top as-is in both cases.
+    // Match hosted absolute/floating fixed CSS; apply offsetParent-relative coordinates without subtracting the host again.
     strategy: args.panelHost ? 'absolute' : 'fixed',
-    placement: initialPlacement,
+    placement: aligned(initialPlacement),
     middleware: [
       offset(PANEL_GAP),
       flip({
         boundary,
         padding: COLLISION_PADDING,
-        fallbackPlacements: FALLBACK_PLACEMENTS[initialPlacement]
+        fallbackPlacements: FALLBACK_PLACEMENTS[initialPlacement].map(aligned)
       }),
-      // Why: crossAxis lets the panel slide over the target when no placement
-      // fits (e.g. a tall step panel inside a small dialog host) — a partial
-      // overlap keeps the panel's buttons reachable instead of letting the
-      // host's overflow clipping cut them off.
+      // Allow target overlap when nothing fits so host overflow clipping cannot hide panel buttons.
       shift({ boundary, padding: COLLISION_PADDING, crossAxis: true }),
       arrow({ element: args.arrowElement, padding: ARROW_PADDING })
     ]
@@ -96,6 +91,7 @@ export function watchContextualTourFloatingPosition(args: {
   floatingElement: HTMLElement
   panelHost: HTMLElement | null
   preferredPlacement?: ContextualTourStepPlacement
+  alignStart?: boolean
   targetElement: Element
   onPosition: (position: ContextualTourFloatingPosition) => void
 }): () => void {
@@ -106,13 +102,11 @@ export function watchContextualTourFloatingPosition(args: {
     const sequence = ++updateSequence
     void getContextualTourFloatingPosition(args)
       .then((position) => {
-        // Why: computePosition is async; a stale resolve after dispose or a
-        // newer frame must not overwrite the latest panel position.
+        // Ignore async positions from disposed trackers or superseded frames.
         if (disposed || sequence !== updateSequence) {
           return
         }
-        // Why: an unchanged position must not re-render the panel — ancestor
-        // scrolling recomputes far more often than the panel actually moves.
+        // Suppress unchanged positions; ancestor scroll recomputes must not trigger React commits.
         if (arePositionsEqual(lastDelivered, position)) {
           return
         }
@@ -123,10 +117,7 @@ export function watchContextualTourFloatingPosition(args: {
   }
 
   const tracker = createTargetMotionTracker(args.targetElement, update)
-  // Why: tour targets move with layout animation (sidebar slide, pane resize).
-  // autoUpdate's own observers report that the target moved; the tracker then
-  // follows it frame by frame until it settles, instead of polling every frame
-  // for the tour's whole life the way `animationFrame: true` does.
+  // Observers wake frame tracking only during motion; animationFrame:true would poll throughout the tour’s life.
   const stopAutoUpdate = autoUpdate(args.targetElement, args.floatingElement, () => {
     update()
     tracker.wake()

@@ -1,56 +1,86 @@
-import { useCallback } from 'react'
+import { useShellStorage } from '../platform/shell-storage/shell-storage'
+import { settleSessionPreferenceRead } from './session-preference-read'
+import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import {
-  loadTerminalAutocompleteEnabled,
-  loadTerminalLinkOpenMode,
-  loadTerminalTextScale
+  loadLinkOpenMode,
+  loadTerminalFontStyle,
+  loadTerminalTextScale,
+  saveTerminalFontStyle,
+  saveTerminalTextScale
 } from '../storage/preferences'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import {
+  sameTerminalFontStyle,
+  type TerminalFontStyle
+} from '../terminal/preferences/terminal-font-style'
+import { terminalFontDefaults } from '../terminal/preferences/terminal-font-defaults'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
-export function useMobileSessionPreferenceFocus(scope: MobileSessionKeyboardStateModel) {
-  const { setTerminalTextScale, setAutocompleteEnabled, setTerminalLinkOpenMode } = scope
-  // Why: pick up Settings → Terminal text size on return; panes stay mounted and update in place.
+export function useMobileSessionPreferenceFocus(
+  scope: Pick<
+    MobileSessionKeyboardStateModel,
+    | 'setTerminalTextScale'
+    | 'terminalTextScaleRevisionRef'
+    | 'setTerminalFontStyle'
+    | 'setLinkOpenMode'
+  >
+) {
+  const {
+    setTerminalTextScale,
+    terminalTextScaleRevisionRef,
+    setTerminalFontStyle,
+    setLinkOpenMode
+  } = scope
+  const shellStorage = useShellStorage()
+  const [terminalPreferencesReady, setTerminalPreferencesReady] = useState(false)
+  // Reload on Settings return without dropping readiness or remounting terminal panes.
   useFocusEffect(
     useCallback(() => {
       let active = true
-      void loadTerminalTextScale().then((scale) => {
+      const scaleRevision = terminalTextScaleRevisionRef.current
+      const defaults = terminalFontDefaults()
+      void settleSessionPreferenceRead(
+        Promise.all([
+          loadTerminalTextScale(defaults.textScale),
+          loadLinkOpenMode(),
+          loadTerminalFontStyle(defaults.fontStyle)
+        ])
+      ).then((preferences) => {
         if (active) {
-          setTerminalTextScale(scale)
+          if (preferences) {
+            const [scale, linkMode, fontStyle] = preferences
+            if (terminalTextScaleRevisionRef.current === scaleRevision) {
+              setTerminalTextScale(scale)
+            }
+            setTerminalFontStyle((current) =>
+              sameTerminalFontStyle(current, fontStyle) ? current : fontStyle
+            )
+            setLinkOpenMode(linkMode)
+          }
+          setTerminalPreferencesReady(true)
         }
       })
       return () => {
         active = false
       }
-    }, [])
+    }, [shellStorage])
   )
-
-  // Why: pick up the Settings → Terminal autocomplete toggle when returning here.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true
-      void loadTerminalAutocompleteEnabled().then((enabled) => {
-        if (active) {
-          setAutocompleteEnabled(enabled)
-        }
-      })
-      return () => {
-        active = false
-      }
-    }, [])
+  // Pinch reports a whole-point size; persist it so it sticks across panes and launches and outranks a pending read.
+  const commitPinchedTextScale = useCallback(
+    (scale: number) => {
+      terminalTextScaleRevisionRef.current += 1
+      setTerminalTextScale(scale)
+      void saveTerminalTextScale(scale)
+    },
+    [setTerminalTextScale, terminalTextScaleRevisionRef]
   )
-
-  // Why: link routing is a phone-local choice; reload after Settings → Browser.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true
-      void loadTerminalLinkOpenMode().then((mode) => {
-        if (active) {
-          setTerminalLinkOpenMode(mode)
-        }
-      })
-      return () => {
-        active = false
-      }
-    }, [])
+  // The session's Text size sheet picks a font here, as Terminal settings does.
+  const commitTerminalFontStyle = useCallback(
+    (style: TerminalFontStyle) => {
+      setTerminalFontStyle(style)
+      void saveTerminalFontStyle(style)
+    },
+    [setTerminalFontStyle]
   )
+  return { terminalPreferencesReady, commitPinchedTextScale, commitTerminalFontStyle }
 }

@@ -1,23 +1,28 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
-import { selectProjectGroupRemovalTargets } from '../slices/project-group-removal-targets'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import {
   isProjectGroupJoinableFromCatalog,
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
-} from '../slices/project-group-owner-routing'
-import { findRepoForHost, repoMatchesHostIdentity } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
-import { findIndexedProjectGroupOwner } from '@/lib/worktree-runtime-owner-index'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+} from './project-group-owner-routing'
+import {
+  findRepoForHost,
+  isSameRepoRow,
+  repoMatchesHostIdentity
+} from '../repos/repo-host-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { createProjectGroupOwnerUpdate } from './project-group-owner-update'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { createProjectGroupOnHost } from './project-group-create-on-host'
+import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY } from '../../../../shared/project/groups/project-group-nesting-capability'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -46,9 +51,7 @@ export function createProjectGroupMutationActions(
   | 'deleteProjectGroupWithContainedProjects'
   | 'moveProjectToGroup'
 > {
-  const updateOnOwnerHost = createProjectGroupOwnerUpdate(set, get)
-
-  const createOnTarget = createProjectGroupOnHost(set)
+  const createOnTarget = createProjectGroupOnHost(set, get)
 
   return {
     createProjectGroup: async (name, hostId) => {
@@ -74,6 +77,16 @@ export function createProjectGroupMutationActions(
         if (!parent || !target) {
           return null
         }
+        // Why: an older host drops parentGroupId and would create a top-level group instead.
+        if (
+          target.kind === 'environment' &&
+          !(await runtimeEnvironmentSupportsCapability(
+            target.environmentId,
+            PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY
+          ))
+        ) {
+          return null
+        }
         return await createOnTarget(target, {
           name,
           createdFrom: 'manual',
@@ -87,34 +100,14 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    updateProjectGroup: async (groupId, updates, options) => {
-      try {
-        return await updateOnOwnerHost(groupId, updates, options?.hostId)
-      } catch (err) {
-        console.error('Failed to update project group:', err)
-        return false
-      }
-    },
+    updateProjectGroup: (groupId, updates, options) =>
+      get().updateProjectGroups([{ groupId, updates, hostId: options?.hostId }]),
 
-    moveProjectGroup: async (groupId, parentGroupId, options) => {
-      try {
-        // Why: no tabOrder, so the host appends the group after its new siblings. An older host
-        // drops parentGroupId yet still answers with the unmoved group.
-        return await updateOnOwnerHost(
-          groupId,
-          { parentGroupId },
-          options?.hostId,
-          (group) => (group.parentGroupId ?? null) === parentGroupId
-        )
-      } catch (err) {
-        console.error('Failed to move project group:', err)
-        return false
-      }
-    },
+    moveProjectGroup: (groupId, parentGroupId, options) =>
+      get().updateProjectGroups([{ groupId, updates: { parentGroupId }, hostId: options?.hostId }]),
 
     deleteProjectGroup: async (groupId, options) => {
       try {
-        // Why: deletion targets the group's owner host (see updateProjectGroup); focus may be elsewhere.
         const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
         const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
         if (!target) {
@@ -186,8 +179,7 @@ export function createProjectGroupMutationActions(
 
       const removedProjectIds: string[] = []
       const failedProjectRemovals: ProjectRemovalFailure[] = []
-      // Why: members were captured before the cascade cleared membership; a same-id row on another
-      // host outside the group must survive, so each member row is removed on its own host.
+      // Cascade captured members by host; same-ID rows outside this group on other hosts must survive.
       const membersById = new Map<string, Repo[]>()
       for (const member of targets.projects) {
         const row = findRepoForHost(get().repos, member.id, { hostId: member.hostId })
@@ -205,7 +197,10 @@ export function createProjectGroupMutationActions(
         const removableHostIds = removable.map((row) => getRepoExecutionHostId(row))
         for (const hostId of removableHostIds) {
           try {
-            await get().removeProject(projectId, { hostId })
+            await get().removeProject(projectId, {
+              hostId,
+              confirmedDiscards: options.confirmedDiscards
+            })
           } catch (err) {
             console.error('Failed to remove contained project:', err)
           }
@@ -235,11 +230,12 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    moveProjectToGroup: async (projectId, groupId, order, hostId) => {
+    moveProjectToGroup: async (project, groupId, order) => {
       try {
-        const repo = findRepoForHost(get().repos, projectId, { settings: get().settings, hostId })
-        const target = repo ? ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(repo)) : null
-        if (!target) {
+        const repo = get().repos.find((candidate) => isSameRepoRow(candidate, project))
+        const repoHostId = repo ? getRepoExecutionHostId(repo) : null
+        const target = repoHostId ? ipcOrRuntimeTargetForHostId(repoHostId) : null
+        if (!repo || !repoHostId || !target) {
           return false
         }
         if (groupId && !isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)) {
@@ -249,15 +245,17 @@ export function createProjectGroupMutationActions(
         const moved =
           target.kind === 'local'
             ? await window.api.projectGroups.moveProject({
-                projectId,
+                projectId: repo.id,
                 groupId,
-                order
+                order,
+                hostId: repoHostId
               })
             : (
                 await callRuntimeRpc<{ repo: Repo | null }>(
                   target,
                   'projectGroup.moveProject',
-                  { repo: projectId, groupId, order },
+                  // Why connectionId: the server's own twins differ only by their SSH target there.
+                  { repo: repo.id, groupId, order, connectionId: repo.connectionId ?? null },
                   { timeoutMs: 15_000 }
                 )
               ).repo
@@ -267,8 +265,8 @@ export function createProjectGroupMutationActions(
         const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
         const movedHostId = getRepoExecutionHostId(ownedMoved)
         set((s) => {
-          const nextRepos = s.repos.map((repo) =>
-            repoMatchesHostIdentity(repo, projectId, movedHostId) ? ownedMoved : repo
+          const nextRepos = s.repos.map((candidate) =>
+            isSameRepoRow(candidate, repo) ? ownedMoved : candidate
           )
           return {
             repos: nextRepos,

@@ -1,0 +1,61 @@
+import { splitRemoteBranchName } from '../remotes/git-remote-branch-name'
+import type { GitHistoryItemRef } from './git-history-types'
+
+type DedupeRemoteTrackingRefsOptions = {
+  preserveRefIds?: ReadonlySet<string> | readonly string[]
+}
+
+// Hide remote/local duplicate pills only on the same commit; divergent branches remain visible.
+export function dedupeRemoteTrackingRefs(
+  refs: readonly GitHistoryItemRef[],
+  options: DedupeRemoteTrackingRefsOptions = {}
+): GitHistoryItemRef[] {
+  const localBranchNames = new Set(
+    refs.filter((ref) => ref.category === 'branches').map((ref) => ref.name)
+  )
+  if (localBranchNames.size === 0) {
+    return [...refs]
+  }
+  const preserveRefIds = new Set(options.preserveRefIds ?? [])
+  const matchingRemoteCounts = countUnambiguousMatchingRemoteBranches(refs, localBranchNames)
+  return refs.filter((ref) => {
+    if (ref.category !== 'remote branches') {
+      return true
+    }
+    if (preserveRefIds.has(ref.id)) {
+      return true
+    }
+    if (isAmbiguousRemoteTrackingRef(ref.name)) {
+      return true
+    }
+    const split = splitRemoteBranchName(ref.name)
+    if (!split || !localBranchNames.has(split.branchName)) {
+      return true
+    }
+    // Without configured upstream identity, multiple matching remotes remain distinct context.
+    return matchingRemoteCounts.get(split.branchName) !== 1
+  })
+}
+
+function isAmbiguousRemoteTrackingRef(refName: string): boolean {
+  // Without configured remotes, foo/bar/main ambiguously splits as foo + bar/main or foo/bar + main.
+  return refName.split('/').length > 2
+}
+
+function countUnambiguousMatchingRemoteBranches(
+  refs: readonly GitHistoryItemRef[],
+  localBranchNames: ReadonlySet<string>
+): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const ref of refs) {
+    if (ref.category !== 'remote branches' || isAmbiguousRemoteTrackingRef(ref.name)) {
+      continue
+    }
+    const split = splitRemoteBranchName(ref.name)
+    if (!split || !localBranchNames.has(split.branchName)) {
+      continue
+    }
+    counts.set(split.branchName, (counts.get(split.branchName) ?? 0) + 1)
+  }
+  return counts
+}

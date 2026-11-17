@@ -1,14 +1,9 @@
-/**
- * A phone paired directly with `orca serve` still lists a `terminal.create` terminal after the
- * serve process restarts (an update does this), both in its first tab-stream snapshot and in a
- * tab list. Regression oracle for #26022: the cold-start hydrate used to keep only serve-minted
- * PTYs, so CLI and agent terminals vanished from the phone.
- */
+// #26022: after serve restart, retain CLI/agent daemon PTYs beside serve-minted terminals in both the phone’s first stream snapshot and tab list.
 import { expect, test } from './helpers/orca-app'
 import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import type { PairedMobileClient } from './helpers/paired-mobile-client'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 function sortedPtyIds(ids: (string | null | undefined)[]): string[] {
   return ids.flatMap((id) => (id ? [id] : [])).sort()

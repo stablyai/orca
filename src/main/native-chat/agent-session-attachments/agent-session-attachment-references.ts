@@ -1,9 +1,10 @@
-// How the host recognizes its own attachment store in what a client sends: a stored file is
-// `<store root>/<upload id>/<name>`, and only the upload id is needed to know which upload it is.
-
 import { isAbsolute, join, relative, sep } from 'node:path'
-import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../shared/agent-session-attachments'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_SESSION_ATTACHMENTS_DIR_NAME,
+  sanitizeAgentSessionAttachmentName
+} from '../../../shared/agent-session/agent-session-attachments'
+import type { AgentSessionExpiredAttachment } from '../../../shared/agent-session/failures/agent-session-expired-attachments'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export const AGENT_SESSION_ATTACHMENT_PART_FILE = '.upload.part'
 
@@ -18,8 +19,7 @@ export function isAgentSessionAttachmentUploadId(value: string): boolean {
   return UPLOAD_ID.test(value)
 }
 
-/** The upload a stored file belongs to, or null for anything that is not exactly a committed file
- *  directly in an upload directory of this store. */
+/** Accept only committed files directly inside this store's upload directories. */
 export function parseAgentSessionAttachmentStorePath(
   root: string,
   filePath: string
@@ -44,7 +44,7 @@ export function parseAgentSessionAttachmentStorePath(
   return { uploadId, name }
 }
 
-// A root preceded by one of these is the tail of some other, longer path.
+// Reject store-root matches embedded inside longer paths.
 const PATH_CHARACTER = /[\w.~\\/-]/
 
 function normalizedRoot(root: string, platform: NodeJS.Platform): string {
@@ -52,19 +52,20 @@ function normalizedRoot(root: string, platform: NodeJS.Platform): string {
   return platform === 'win32' ? forward.toLowerCase() : forward
 }
 
-/**
- * The uploads of this host's store a message body names, in image paths and file references in its
- * text alike. Only a path that starts with this host's exact store root counts: matched on the
- * decoded body by `<store root>/<upload id>`, so quoting or a file name with spaces cannot hide one,
- * and Windows paths match with either separator and in any case. Any other mention of a store
- * path (another server's, a `~` form, a bare name) is only text.
- */
-export function agentSessionAttachmentReferences(
+type AttachmentReference = {
+  uploadId: string
+  block: AgentJournalMessageItem['blocks'][number]
+  text: string
+  rootStart: number
+  idEnd: number
+}
+
+/** Match exact decoded store roots; quoting/spaces cannot hide references and Windows accepts either separator. */
+function* attachmentReferences(
   root: string,
   body: AgentJournalMessageItem,
-  platform: NodeJS.Platform = process.platform
-): Set<string> {
-  const uploadIds = new Set<string>()
+  platform: NodeJS.Platform
+): Generator<AttachmentReference> {
   const ownRoot = normalizedRoot(root, platform)
   const pattern = new RegExp(
     `${AGENT_SESSION_ATTACHMENTS_DIR_NAME}[\\\\/](${UPLOAD_ID_SOURCE})(?![0-9a-z-])`,
@@ -86,9 +87,56 @@ export function agentSessionAttachmentReferences(
         !PATH_CHARACTER.test(text.charAt(rootStart - 1)) &&
         normalizedRoot(text.slice(rootStart, rootEnd), platform) === ownRoot
       ) {
-        uploadIds.add(uploadId)
+        yield { uploadId, block, text, rootStart, idEnd: match.index + match[0].length }
       }
     }
   }
+}
+
+export function agentSessionAttachmentReferences(
+  root: string,
+  body: AgentJournalMessageItem,
+  platform: NodeJS.Platform = process.platform
+): Set<string> {
+  const uploadIds = new Set<string>()
+  for (const { uploadId } of attachmentReferences(root, body, platform)) {
+    uploadIds.add(uploadId)
+  }
   return uploadIds
+}
+
+/** An image block is the whole path; a text reference ends at its quote, or at whitespace because only paths without any go unquoted. */
+function referencedFileName({ block, text, rootStart, idEnd }: AttachmentReference): string | null {
+  if (!/[\\/]/.test(text.charAt(idEnd))) {
+    return null
+  }
+  const rest = text.slice(idEnd + 1)
+  const opening = text.charAt(rootStart - 1)
+  const end =
+    block.type === 'image-ref'
+      ? -1
+      : opening === '"' || opening === "'"
+        ? rest.indexOf(opening)
+        : rest.search(/\s/)
+  const name = (end === -1 ? rest : rest.slice(0, end)).split(/[\\/]/)[0]
+  return name ? sanitizeAgentSessionAttachmentName(name) : null
+}
+
+/** Each listed upload with the file name the message gave it, or its id when it gave none, since an expired upload has nothing left on disk to read one from. */
+export function agentSessionAttachmentReferenceNames(
+  root: string,
+  body: AgentJournalMessageItem,
+  uploadIds: readonly string[],
+  platform: NodeJS.Platform = process.platform
+): AgentSessionExpiredAttachment[] {
+  const names = new Map<string, string>()
+  for (const reference of attachmentReferences(root, body, platform)) {
+    if (!names.has(reference.uploadId)) {
+      const name = referencedFileName(reference)
+      if (name) {
+        names.set(reference.uploadId, name)
+      }
+    }
+  }
+  return uploadIds.map((uploadId) => ({ uploadId, name: names.get(uploadId) ?? uploadId }))
 }

@@ -1,10 +1,18 @@
-import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { RuntimeMobileSessionTabGroup } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  structuredAgentSessionHostTabId,
+  isReopenedChatTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import {
   getActiveTabNavOrder,
   getGroupVisibleTabOrder,
   type VisibleTabRef
-} from '../../components/tab-bar/group-tab-order'
+} from '../../lib/workspace/tabs/order/group-tab-order'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isEditorSurfaceTab } from './mobile-session-surfaces'
 
@@ -185,17 +193,29 @@ export function buildMobileSessionGroupProjection(
     if (visibleOrder.length === 0) {
       continue
     }
-    const tabOrder = visibleOrder.map((item) => item.tabId ?? item.id)
-    const tabOrderSet = new Set(tabOrder)
+    // Publish chat session IDs like main’s rows; window tab IDs have no main position and sort chats last on mobile.
+    const publishedIdByTabId = new Map(
+      visibleOrder.map((item) => [
+        item.tabId ?? item.id,
+        item.type === 'agent-session'
+          ? (() => {
+              const actual = inputs.hostTabIds.get(item.tabId ?? item.id)
+              return actual && isReopenedChatTabId(actual)
+                ? actual
+                : structuredAgentSessionHostTabId(item.id)
+            })()
+          : (item.tabId ?? item.id)
+      ])
+    )
     for (const item of visibleOrder) {
       order.push(item)
     }
     tabGroups.push({
       id: group.id,
-      activeTabId:
-        group.activeTabId && tabOrderSet.has(group.activeTabId) ? group.activeTabId : null,
-      tabOrder,
-      recentTabIds: group.recentTabIds?.filter((tabId) => tabOrderSet.has(tabId)) ?? []
+      activeTabId: (group.activeTabId && publishedIdByTabId.get(group.activeTabId)) ?? null,
+      tabOrder: [...publishedIdByTabId.values()],
+      recentTabIds:
+        group.recentTabIds?.flatMap((tabId) => publishedIdByTabId.get(tabId) ?? []) ?? []
     })
   }
   const validGroupIds = new Set(tabGroups.map((group) => group.id))

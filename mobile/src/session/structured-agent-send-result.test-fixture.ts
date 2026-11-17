@@ -1,10 +1,7 @@
-// The shape a real host answers `agentSession.send` with: the durable submission row
-// IS the answer, and its `dispatchState` is the only thing that says whether the
-// message landed. A fixture that omits it lets a client claim delivery from `ok`
-// alone, which is the bug these tests exist to hold shut.
+// Include the durable submission and dispatchState: ok alone proves no message delivery.
 
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
+import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
 
 export function structuredSendResultFixture(
   dispatchState: AgentJournalDispatchState,

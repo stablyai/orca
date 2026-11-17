@@ -1,12 +1,10 @@
 import type { DetailComment } from './mobile-tasks-provider-detail-types'
-import type {
-  TuiAgent,
-  TaskProvider,
-  GitHubProjectSettings,
-  GitHubProjectRef
-} from './mobile-tasks-dependencies'
-import type { GitHubProjectSortDirection } from '../../../src/shared/github/project-types'
-import type { JiraIssueFilter } from '../../../src/shared/jira-types'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import type { TaskProvider } from '../../../src/shared/work-items/task-providers'
+import type { GitHubProjectSettings } from './project-board/github-project-reference'
+import type { GitHubProjectIdentity as GitHubProjectRef } from '../../../src/shared/github/projects/project-identity'
+import type { GitHubProjectSortDirection } from '../../../src/shared/github/projects/project-types'
+import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'
 
 export type GitHubTaskKind = 'issues' | 'prs'
 
@@ -155,6 +153,11 @@ export type GitHubProjectRow = {
     labels: Array<{ name: string; color: string }>
     assignees: Array<{ login: string; name: string | null }>
     parentIssue?: { number: number; title: string; url: string } | null
+    subIssuesProgress?: { completed: number; total: number; percentCompleted: number } | null
+    linkedPullRequests?: {
+      pullRequests: { number: number; title: string; url: string }[]
+      totalCount: number
+    } | null
   }
   fieldValuesByFieldId?: Record<string, GitHubProjectFieldValue>
   updatedAt: string

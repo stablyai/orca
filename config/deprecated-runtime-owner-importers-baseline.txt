@@ -1,9 +1,0 @@
-# Renderer files that import getRuntimeEnvironmentIdForWorktree / resolveRuntimeOwnerForWorktree.
-# This is a RATCHET: the list may only SHRINK. Both resolvers read an ambiguous (two-host)
-# worktree as "not a runtime", which callers treat as local.
-# Prune after migrating a file: pnpm check:deprecated-runtime-owner-ratchet --prune
-src/renderer/src/components/terminal-workspace-model.ts
-src/renderer/src/lib/agent-hibernation-coordinator.ts
-src/renderer/src/store/slices/terminal-tab-retirement.ts
-src/renderer/src/store/terminals/terminal-pane-hibernation.ts
-src/renderer/src/store/terminals/terminal-shutdown.ts

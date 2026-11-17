@@ -1,4 +1,2 @@
-/** Negotiated, never inferred from the desktop version: a build can ship without a bundle.
- *  Zod-free and dependency-free so `protocol-version.ts` can name it without pulling a schema
- *  library into the phone's capability path. */
+/** Negotiate explicitly: a desktop version may ship without a bundle. Dependency/Zod-free for the phone protocol-version capability path. */
 export const MOBILE_WEB_BUNDLE_CAPABILITY = 'mobileWeb.bundle.v1'

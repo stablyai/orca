@@ -1,26 +1,27 @@
 import {
   buildMobileProjectSectionCatalog,
   type MobileProjectSectionCatalog
-} from '../../../../shared/mobile-project-sections-contract'
-import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+} from '../../../../shared/sidebar-list/catalog/mobile-project-sections-contract'
+import type { ProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-projection'
+import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import type { AppState } from '@/store/types'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 
 type CatalogSource = {
   repos: AppState['repos']
-  projectGroups: AppState['projectGroups'] | undefined
   projection: ProjectHostSetupProjection
   projectOrderBy: AppState['projectOrderBy']
+  projectGroups: AppState['projectGroups']
   catalog: MobileProjectSectionCatalog
 }
 
 let cachedCatalogSource: CatalogSource | null = null
 
-/** What the sidebar groups Project headers by: state.repos in its order and the selector's projection. */
+/** What the sidebar groups Project headers by: state.repos in its order, the selector's projection and project groups. */
 export function getProjectSectionCatalogFromState(
-  state: Pick<AppState, 'repos' | 'projects' | 'projectHostSetups' | 'projectOrderBy'> &
-    Partial<Pick<AppState, 'projectGroups'>>
+  state: Pick<
+    AppState,
+    'repos' | 'projects' | 'projectHostSetups' | 'projectOrderBy' | 'projectGroups'
+  >
 ): MobileProjectSectionCatalog | null {
   // Why: graph publication must not fail on a store slice that holds no repo catalog.
   if (!Array.isArray(state.repos)) {
@@ -31,9 +32,9 @@ export function getProjectSectionCatalogFromState(
   if (
     cached &&
     cached.repos === state.repos &&
-    cached.projectGroups === state.projectGroups &&
     cached.projection === projection &&
-    cached.projectOrderBy === state.projectOrderBy
+    cached.projectOrderBy === state.projectOrderBy &&
+    cached.projectGroups === state.projectGroups
   ) {
     return cached.catalog
   }
@@ -41,14 +42,13 @@ export function getProjectSectionCatalogFromState(
     state.repos,
     projection,
     state.projectOrderBy,
-    // Switch point: a phone reading the feed lists folder workspaces under these.
-    ORCA_SIDEBAR_INPUTS_IS_MAIN ? state.projectGroups : undefined
+    state.projectGroups
   )
   cachedCatalogSource = {
     repos: state.repos,
-    projectGroups: state.projectGroups,
     projection,
     projectOrderBy: state.projectOrderBy,
+    projectGroups: state.projectGroups,
     catalog
   }
   return catalog

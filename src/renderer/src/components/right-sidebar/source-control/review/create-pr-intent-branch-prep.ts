@@ -1,6 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { isBehindOnlyUpstream } from '../../../../../../shared/git-upstream-status'
-import { readCommitDraftForWorktree, writeCommitDraftForWorktree } from '../commit/commit-drafts'
+import { isBehindOnlyUpstream } from '../../../../../../shared/git/remotes/git-upstream-status'
 import {
   getCreatePrIntentCommitFailureNoticeMessage,
   type CreatePrIntentRunToken
@@ -8,36 +7,32 @@ import {
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlCommitAction } from '../commit/use-commit-action'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
+import type { CreatePrIntentNotice } from '../commit/commit-area-types'
 import type { SourceControlRemoteActionRunner } from '../sync/use-remote-action-runner'
 import type { CreatePrIntentRunSnapshot } from './create-pr-intent-run-snapshot'
 import type { SourceControlCreatePrIntentCommitMessage } from './use-create-pr-intent-commit-message'
 
-/**
- * Gets the branch to a committed, ff-current state before eligibility is read. Returns false when
- * the intent must stop — the caller has nothing left to clean up beyond its own finally block.
- */
+/** Prepare a committed fast-forward-current branch; false stops the intent with only caller finally cleanup remaining. */
 export async function runCreatePrIntentBranchPrep({
-  commitDraftsRef,
-  commitErrorsRef,
   generateCommitMessageForCreatePrIntent,
   handleCommit,
+  operationStore,
   operationTarget,
   runRemoteAction,
-  setCreatePrIntentNoticeForWorktree,
+  setCreatePrIntentNotice,
   snapshot,
   token,
-  updateCommitDrafts
+  updateCommitDraft
 }: {
-  commitDraftsRef: SourceControlWorktreeOperationState['commitDraftsRef']
-  commitErrorsRef: SourceControlWorktreeOperationState['commitErrorsRef']
   generateCommitMessageForCreatePrIntent: SourceControlCreatePrIntentCommitMessage['generateCommitMessageForCreatePrIntent']
   handleCommit: SourceControlCommitAction['handleCommit']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   operationTarget: SourceControlOperationTarget
   runRemoteAction: SourceControlRemoteActionRunner['runRemoteAction']
-  setCreatePrIntentNoticeForWorktree: SourceControlWorktreeOperationState['setCreatePrIntentNoticeForWorktree']
+  setCreatePrIntentNotice: (notice: CreatePrIntentNotice | null) => void
   snapshot: CreatePrIntentRunSnapshot
   token: CreatePrIntentRunToken
-  updateCommitDrafts: SourceControlWorktreeOperationState['updateCommitDrafts']
+  updateCommitDraft: SourceControlWorktreeOperationState['updateCommitDraft']
 }): Promise<boolean> {
   const { abortIfStale, refreshIntentSnapshot, stageLatestIntentPaths } = snapshot
 
@@ -45,9 +40,9 @@ export async function runCreatePrIntentBranchPrep({
     return false
   }
 
-  // Why: fast-forward behind-only before commit so a dirty worktree can't become ahead+behind and dead-end at the sync-first stop; --ff-only never auto-merges.
+  // Fast-forward behind-only before commit to avoid creating divergence; ff-only never auto-merges.
   if (isBehindOnlyUpstream(snapshot.upstreamStatus)) {
-    setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+    setCreatePrIntentNotice({
       tone: 'muted',
       message: translate(
         'auto.components.right.sidebar.SourceControl.createPrIntentFastForwarding',
@@ -64,7 +59,7 @@ export async function runCreatePrIntentBranchPrep({
       return false
     }
     if (earlyFfResult.status !== 'ok') {
-      setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+      setCreatePrIntentNotice({
         tone: 'destructive',
         message: translate(
           'auto.components.right.sidebar.SourceControl.createPrIntentRemoteFailed',
@@ -87,9 +82,9 @@ export async function runCreatePrIntentBranchPrep({
     return true
   }
 
-  let message = readCommitDraftForWorktree(commitDraftsRef.current, token.worktreeId).trim()
+  let message = operationStore.getState().draft.trim()
   if (!message) {
-    setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+    setCreatePrIntentNotice({
       tone: 'muted',
       message: translate(
         'auto.components.right.sidebar.SourceControl.8d8f5c6c94',
@@ -101,7 +96,7 @@ export async function runCreatePrIntentBranchPrep({
       return false
     }
     if (!generated.ok || !generated.message) {
-      setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+      setCreatePrIntentNotice({
         tone: generated.reason === 'settings' ? 'muted' : 'destructive',
         message: translate(
           generated.reason === 'settings'
@@ -115,12 +110,8 @@ export async function runCreatePrIntentBranchPrep({
       })
       return false
     }
-    const draftAfterGeneration = readCommitDraftForWorktree(
-      commitDraftsRef.current,
-      token.worktreeId
-    ).trim()
-    if (draftAfterGeneration) {
-      setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+    if (operationStore.getState().draft.trim()) {
+      setCreatePrIntentNotice({
         tone: 'muted',
         message: translate(
           'auto.components.right.sidebar.SourceControl.fda060d6ce',
@@ -130,10 +121,10 @@ export async function runCreatePrIntentBranchPrep({
       return false
     }
     message = generated.message
-    updateCommitDrafts((prev) => writeCommitDraftForWorktree(prev, token.worktreeId, message))
+    updateCommitDraft(message)
   }
 
-  setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+  setCreatePrIntentNotice({
     tone: 'muted',
     message: translate(
       'auto.components.right.sidebar.SourceControl.b75cb1fd0c',
@@ -149,15 +140,15 @@ export async function runCreatePrIntentBranchPrep({
     return false
   }
   if (!committed) {
-    // Why: pre-commit/lint hooks may rewrite tracked files before failing; re-stage those outputs so retrying Create PR doesn't strand changes.
+    // Failed hooks may rewrite tracked files; restage their outputs so Create PR retries retain those changes.
     if (await refreshIntentSnapshot()) {
       await stageLatestIntentPaths()
     }
     if (abortIfStale()) {
       return false
     }
-    const commitFailure = commitErrorsRef.current[token.worktreeId] ?? null
-    setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+    const commitFailure = operationStore.getState().commitError
+    setCreatePrIntentNotice({
       tone: 'destructive',
       message: getCreatePrIntentCommitFailureNoticeMessage(commitFailure, {
         fallback: translate(

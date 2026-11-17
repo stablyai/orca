@@ -1,11 +1,4 @@
-/**
- * A workspace's default tabs are applied once, even across a crash (layout-owner build only).
- *
- * The window marks a workspace's default tabs applied before its tabs' terminals start; the mark
- * reached disk only through the window's debounced save or a terminal's first start. The crash
- * here lands before both: main withholds the window's saves and every terminal start, then dies
- * hard. Default tabs are handed to the relaunched window again, as a repeated activation would.
- */
+// Crash before debounced saves or terminal starts can persist default-tab marks; relaunch must not apply the defaults again.
 
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -22,7 +15,6 @@ const TITLES = TEMPLATES.map((template) => template.title)
 
 type DefaultTabs = { tabs: { title: string }[]; runCommands: false }
 
-/** Drops every window save and holds every terminal start, as a crash inside both would. */
 async function withholdSavesAndTerminalStarts(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ ipcMain }) => {
     for (const channel of ['session:set', 'session:patch']) {
@@ -98,7 +90,6 @@ async function waitForWorktree(page: Page, worktreeId: string): Promise<void> {
     .toBe(true)
 }
 
-/** Applies `first` default tabs, crashes before anything saves or starts, then offers TEMPLATES. */
 async function crashThenOfferTemplates(
   testRepoPath: string,
   testInfo: Parameters<typeof createRestartSession>[0],

@@ -1,50 +1,67 @@
-import { expect } from 'vitest'
-import type { Mock } from 'vitest'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
-import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
-import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
+import { expect, type Mock } from 'vitest'
+
+import {
+  getPreferredPairedRuntimeConnection,
+  type KnownRuntimeEnvironment
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { createRuntimeEnvironmentStatusOwner } from './status/runtime-environment-status-owner'
+import type { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
+import { isRuntimeEnvironmentManuallyDisconnected } from './connectivity/runtime-environment-manual-disconnect'
 
 /** Keep IPC tests on the production owner while replacing only its transport. */
 export function withRuntimeStatusOwners<T extends Record<string, Mock>>(transport: T) {
   const owners = new Map<string, RuntimeHostStatusOwner>()
+  const ownerFor = (
+    profile: string,
+    environment: KnownRuntimeEnvironment
+  ): RuntimeHostStatusOwner => {
+    let owner = owners.get(environment.id)
+    if (!owner || owner.read().retired) {
+      owner = createRuntimeEnvironmentStatusOwner(profile, environment, {
+        isReady: () =>
+          transport.getRemoteRuntimeSharedControlDiagnostics?.(environment.id)?.state === 'ready',
+        request: (signal) =>
+          transport.sendRemoteRuntimeSharedControlRequest(
+            environment.id,
+            undefined,
+            'status.get',
+            undefined,
+            15_000,
+            undefined,
+            signal
+          ),
+        establish: () => {
+          transport.ensureRemoteRuntimeSharedControlConnection?.(
+            environment.id,
+            getPreferredPairedRuntimeConnection(environment)
+          )
+          transport.reconnectRemoteRuntimeSharedControlConnection?.(environment.id)
+        },
+        pause: () => transport.pauseRemoteRuntimeSharedControlRetry?.(environment.id)
+      })
+      owners.set(environment.id, owner)
+      if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+        owner.dispose()
+      }
+    }
+    return owner
+  }
   return {
     ...transport,
-    getRuntimeEnvironmentStatusOwner: (profile: string, selector: string) => {
-      const environment = resolveEnvironment(profile, selector)
-      let owner = owners.get(environment.id)
-      if (!owner || owner.read().retired) {
-        owner = createRuntimeEnvironmentStatusOwner(profile, environment, {
-          isReady: () =>
-            transport.getRemoteRuntimeSharedControlDiagnostics?.(environment.id)?.state === 'ready',
-          request: (signal) =>
-            transport.sendRemoteRuntimeSharedControlRequest(
-              environment.id,
-              undefined,
-              'status.get',
-              undefined,
-              15_000,
-              undefined,
-              signal
-            ),
-          establish: () => {
-            transport.ensureRemoteRuntimeSharedControlConnection?.(
-              environment.id,
-              getPreferredPairedRuntimeConnection(environment)
-            )
-            transport.reconnectRemoteRuntimeSharedControlConnection?.(environment.id)
-          },
-          pause: () => transport.pauseRemoteRuntimeSharedControlRetry?.(environment.id)
-        })
-        owners.set(environment.id, owner)
-        if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-          owner.dispose()
-        }
-      }
-      return owner
+    getRuntimeEnvironmentStatusOwner: async (profile: string, selector: string) =>
+      ownerFor(profile, await resolveEnvironment(profile, selector)),
+    withRuntimeEnvironmentStatusOwner: async <T>(
+      profile: string,
+      selector: string,
+      consume: (environment: KnownRuntimeEnvironment, owner: RuntimeHostStatusOwner) => T
+    ): Promise<T> => {
+      const environment = await resolveEnvironment(profile, selector)
+      return consume(environment, ownerFor(profile, environment))
     },
+    getRuntimeEnvironmentStatusSnapshot: (environmentId: string) =>
+      owners.get(environmentId)?.read() ?? null,
     getRuntimeEnvironmentStatusSnapshots: () => [...owners.values()].map((owner) => owner.read()),
     resetRuntimeEnvironmentStatusOwners: () => {
       owners.forEach((owner) => owner.dispose())
@@ -70,7 +87,6 @@ export function pairingCode(
   })
 }
 
-/** Resolves the `ipcMain.handle` callback a suite registered for `channel`. */
 export function channelHandlerLookup(handleMock: Mock) {
   return function handler<TArgs, TResult>(
     channel: string

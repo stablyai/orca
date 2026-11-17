@@ -3,15 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      /* The host injects Orca design tokens as CSS custom properties, so
-         panels can match the app without any access to it. */
+      /* The host injects Orca design tokens as CSS custom properties. */
       body {
         margin: 0;
         padding: 12px;
         font-family: system-ui, sans-serif;
         font-size: 13px;
-        color: var(--foreground, #ddd);
-        background: var(--background, transparent);
+        color: var(--orca-foreground, #ddd);
+        background: var(--orca-background, transparent);
       }
       h1 {
         font-size: 14px;
@@ -21,21 +20,17 @@
         display: block;
         margin: 6px 0;
         padding: 6px 10px;
-        border: 1px solid var(--border, #555);
+        border: 1px solid var(--orca-border, #555);
         border-radius: 6px;
-        background: var(--secondary, #2a2a2a);
-        color: var(--foreground, #ddd);
+        background: var(--orca-secondary, #2a2a2a);
+        color: var(--orca-foreground, #ddd);
         cursor: pointer;
         font: inherit;
-      }
-      select {
-        margin: 6px 0;
-        max-width: 100%;
       }
       .status {
         margin-top: 10px;
         min-height: 1.4em;
-        color: var(--muted-foreground, #999);
+        color: var(--orca-muted-foreground, #999);
         white-space: pre-wrap;
       }
     </style>
@@ -44,81 +39,41 @@
     <h1>Hello Orca 👋</h1>
     <p>Panel + worker command + events, gated by consent.</p>
     <button id="ctx">Read workspace context</button>
-    <select id="terms" hidden></select>
-    <button id="send" hidden>Type "echo hi from plugin" into selected terminal</button>
     <button id="notify">Show a notification</button>
     <p class="status" id="status"></p>
     <script>
       'use strict'
-      var seq = 0
-      var pending = {}
+      // Orca injects a frozen window.orca before this script runs.
       var statusEl = document.getElementById('status')
-      var termsEl = document.getElementById('terms')
-
-      function call(action, params) {
-        return new Promise(function (resolve) {
-          var requestId = 'req-' + ++seq
-          pending[requestId] = resolve
-          // The panel frame is an opaque origin, so '*' is the only usable
-          // targetOrigin; the host verifies the sending window instead.
-          window.parent.postMessage(
-            { type: 'orca-panel-action', requestId: requestId, action: action, params: params },
-            '*'
-          )
-        })
-      }
-
-      window.addEventListener('message', function (event) {
-        var data = event.data
-        if (!data || data.type !== 'orca-panel-action-result') return
-        var resolve = pending[data.requestId]
-        if (!resolve) return
-        delete pending[data.requestId]
-        resolve(data)
-      })
 
       document.getElementById('ctx').addEventListener('click', function () {
-        call('workspace.readContext').then(function (result) {
-          if (!result.ok) {
-            statusEl.textContent = 'context failed: ' + (result.error || result.errorCode)
-            return
+        orca.host.call('workspace.readContext').then(
+          function (context) {
+            if (!context) {
+              statusEl.textContent = 'No workspace is focused.'
+              return
+            }
+            var count = context.terminals.length
+            var terminals = count === 1 ? 'terminal' : 'terminals'
+            statusEl.textContent = `${context.displayName} on branch ${context.branch} · ${count} ${terminals}`
+          },
+          function (error) {
+            statusEl.textContent = `context failed: ${error.code}: ${error.message}`
           }
-          if (!result.value) {
-            statusEl.textContent = 'no focused worktree'
-            return
-          }
-          statusEl.textContent = result.value.displayName + ' on branch ' + result.value.branch
-          termsEl.innerHTML = ''
-          result.value.terminals.forEach(function (terminal) {
-            var option = document.createElement('option')
-            option.value = terminal.id
-            option.textContent = terminal.id
-            termsEl.appendChild(option)
-          })
-          termsEl.hidden = result.value.terminals.length === 0
-          document.getElementById('send').hidden = result.value.terminals.length === 0
-        })
-      })
-
-      document.getElementById('send').addEventListener('click', function () {
-        // Explicit terminal id — the API has no "active terminal" target.
-        call('terminal.sendText', {
-          terminalId: termsEl.value,
-          text: 'echo hi from plugin',
-          enter: true
-        }).then(function (result) {
-          statusEl.textContent = result.ok
-            ? 'typed (accepted=' + result.value.accepted + ')'
-            : 'send failed: ' + (result.error || result.errorCode)
-        })
+        )
       })
 
       document.getElementById('notify').addEventListener('click', function () {
-        call('notifications.show', { title: 'Hello from the panel' }).then(function (result) {
-          statusEl.textContent = result.ok
-            ? 'notification delivered=' + result.value.delivered
-            : 'notify failed: ' + (result.error || result.errorCode)
-        })
+        orca.host.call('notifications.show', { title: 'Hello from the panel' }).then(
+          function (result) {
+            statusEl.textContent = result.delivered
+              ? 'Notification shown.'
+              : 'Notifications are turned off.'
+          },
+          function (error) {
+            statusEl.textContent = `notify failed: ${error.code}: ${error.message}`
+          }
+        )
       })
     </script>
   </body>

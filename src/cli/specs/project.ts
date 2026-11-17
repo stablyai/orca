@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -36,7 +36,8 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
-      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
+      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.',
+      "--project takes a project id or an existing project's name. A remote-backed Git folder's project id usually comes from its remote: github:owner/repo, github:<host>/owner/repo for GitHub Enterprise, or git:<host>/<path> for other remotes."
     ],
     examples: [
       'orca project setup-existing-folder --project github:stablyai/orca --host local --path ~/orca',
@@ -47,10 +48,19 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-clone'],
     summary: 'Make a project available on a host by cloning a repository',
     usage:
-      'orca project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
+      'orca project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--folder-name <name>] [--display-name <name>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'project',
+      'host',
+      'url',
+      'destination',
+      'folder-name',
+      'display-name'
+    ],
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
+      '--folder-name sets the folder created inside --destination; it defaults to the repository name from the URL.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],
@@ -90,10 +100,11 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-update'],
     summary: 'Update project host setup metadata',
     usage:
-      'orca project setup-update --setup <setup-id> [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]',
+      'orca project setup-update --setup <setup-id> [--host <host>] [--display-name <name>] [--path <path>] [--worktree-base-path <path>] [--git-username <name>] [--kind git|folder] [--state ready|not-set-up|setting-up|error|unsupported] [--method legacy-repo|imported-existing-folder|cloned|provisioned] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'setup',
+      'host',
       'display-name',
       'path',
       'worktree-base-path',
@@ -104,6 +115,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Repo-backed setups mirror safe fields onto the repo record.',
+      '--host picks the setup when the project is set up on more than one host under the same setup id.',
       'Path and availability state changes are only supported for independent setup records.'
     ],
     examples: [
@@ -115,8 +127,8 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-delete'],
     destructive: true,
     summary: 'Remove a project host setup',
-    usage: 'orca project setup-delete --setup <setup-id> [--force] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'setup', 'force'],
+    usage: 'orca project setup-delete --setup <setup-id> [--host <host>] [--force] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'setup', 'host', 'force'],
     notes: [
       'Independent setups are removed directly.',
       'Repo-backed setups remove the registered repo compatibility record.',

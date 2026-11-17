@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/oxlint/configuration_schema.json",
-  "plugins": [],
+  "plugins": ["react", "react-perf", "unicorn", "oxc", "import"],
   "categories": {
     "correctness": "off",
     "suspicious": "off",
@@ -18,19 +18,25 @@
     {
       "name": "quadratic-buffer-concat",
       "specifier": "../config/oxlint-plugins/quadratic-buffer-concat.mjs"
-    },
-    {
-      "name": "sort-comparator-performance",
-      "specifier": "../config/oxlint-plugins/sort-comparator-performance.mjs"
     }
   ],
   "rules": {
     "app-store-performance/require-selector": "warn",
+    "app-store-performance/no-whole-hot-map-selector": "warn",
     "app-store-performance/no-identity-selector": "warn",
     "app-store-performance/no-fresh-selector-result": "warn",
     "app-store-performance/no-nested-fresh-under-shallow": "warn",
     "quadratic-buffer-concat/no-loop-carried-concat": "warn",
-    "sort-comparator-performance/no-repeated-collator": "warn"
+    "eslint/no-await-in-loop": "warn",
+    "oxc/no-map-spread": "warn",
+    "unicorn/prefer-set-has": "warn",
+    "react/no-array-index-key": "warn",
+    "react-perf/jsx-no-new-function-as-prop": "warn",
+    "react-perf/jsx-no-new-object-as-prop": "warn",
+    "react-perf/jsx-no-new-array-as-prop": "warn",
+    "react-perf/jsx-no-jsx-as-prop": "warn",
+    "import/no-cycle": "warn",
+    "oxc/no-barrel-file": "warn"
   },
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "**/*.test.*", "**/*.spec.*"]
 }

@@ -1,7 +1,7 @@
 import {
   resolveProcessExitCause,
   type TerminalExitCause
-} from '../../../shared/terminal-exit-cause'
+} from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
@@ -34,17 +34,12 @@ export class PtyPreListenerEvents {
     }
   }
 
-  acceptExit(args: {
-    exitCode: number
-    signal?: number
-    hostReportsChildExitStatus: boolean
-  }): void {
-    const cause = resolveProcessExitCause(args)
+  acceptExit(code: number, cause: TerminalExitCause): void {
     if (this.onExitCb) {
       this.flushData()
-      this.onExitCb(args.exitCode, cause)
+      this.onExitCb(code, cause)
     } else {
-      this.pendingExitCode = args.exitCode
+      this.pendingExitCode = code
       this.pendingExitCause = cause
     }
   }

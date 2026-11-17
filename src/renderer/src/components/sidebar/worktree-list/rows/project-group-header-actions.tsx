@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ellipsis, Plus } from 'lucide-react'
+import { Ellipsis, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -9,17 +9,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { getFolderWorkspacePathStatusDescription } from '@/lib/folder-workspace-path-status'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { canCreateProjectSubgroup } from '../../../../../../shared/project-group-nesting'
-import { REPO_HEADER_ACTION_BUTTON_CLASS } from '../../repo-header-action-button-class'
-import { ProjectGroupMoveSubmenu } from '../../ProjectGroupMoveSubmenu'
-import { selectProjectGroupCatalog } from '../../project-group-move-targets'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { getFolderWorkspacePathStatusDescription } from '@/lib/workspace/paths/folder-workspace-path-status'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import { canCreateProjectSubgroup } from '../../../../../../shared/project/groups/project-group-nesting'
+import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
+import { ProjectGroupMoveSubmenu } from './ProjectGroupMoveSubmenu'
+import { selectProjectGroupCatalog } from './project-group-move-targets'
+import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -32,6 +35,7 @@ export type ProjectGroupHeaderActions = {
   onCreateSubgroup: (parentGroupId: string, parentName: string, hostId?: ExecutionHostId) => void
   onMove: (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  onRefresh?: (projectGroup: ProjectGroup) => void
 }
 
 type ProjectGroupHeaderMenuProps = {
@@ -43,7 +47,7 @@ type ProjectGroupHeaderMenuProps = {
 }
 
 export function ProjectGroupHeaderMenu(props: ProjectGroupHeaderMenuProps): React.JSX.Element {
-  const { label } = props
+  const t = useTranslate()
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -53,10 +57,10 @@ export function ProjectGroupHeaderMenu(props: ProjectGroupHeaderMenuProps): Reac
           size="icon-xs"
           className={REPO_HEADER_ACTION_BUTTON_CLASS}
           data-repo-header-action=""
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.WorktreeList.79465e9034',
             'Group actions for {{value0}}',
-            { value0: label }
+            { value0: props.label }
           )}
           onClick={(event) => event.stopPropagation()}
           onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -90,8 +94,10 @@ function ProjectGroupHeaderMenuItems({
   projectGroups,
   actions
 }: ProjectGroupHeaderMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const groupId = projectGroup.id
-  const hostId = getProjectGroupHostId(projectGroup)
+  const hostId = getRepoExecutionHostId(projectGroup)
+  const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, actions.onRefresh)
   // Why: the level comes from the host's whole catalog; row depth reads 0 when a filter hides a parent.
   const canCreateSubgroup = canCreateProjectSubgroup(
     selectProjectGroupCatalog(projectGroups, hostId),
@@ -99,14 +105,20 @@ function ProjectGroupHeaderMenuItems({
   )
   return (
     <>
+      {onRefresh ? (
+        <DropdownMenuItem onSelect={onRefresh}>
+          <RefreshCw className="size-3.5" />
+          {t('auto.components.sidebar.WorktreeList.refreshProjectGroup', 'Refresh projects')}
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuItem onSelect={() => actions.onRename(groupId, label, hostId)}>
-        {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
+        {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
       </DropdownMenuItem>
       <DropdownMenuItem
         disabled={!canCreateSubgroup}
         onSelect={() => actions.onCreateSubgroup(groupId, label, hostId)}
       >
-        {translate(
+        {t(
           'auto.components.sidebar.worktree.list.rows.project.group.header.actions.dd93986e77',
           'New subgroup'
         )}
@@ -116,14 +128,14 @@ function ProjectGroupHeaderMenuItems({
         movingGroup={projectGroup}
         onSelect={(parentGroupId) => actions.onMove(groupId, parentGroupId, hostId)}
       >
-        {translate('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+        {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
       </ProjectGroupMoveSubmenu>
       <DropdownMenuSeparator />
       <DropdownMenuItem
         variant="destructive"
         onSelect={() => actions.onDelete(groupId, label, hostId)}
       >
-        {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
+        {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
       </DropdownMenuItem>
     </>
   )
@@ -142,7 +154,8 @@ export function ProjectGroupCreateWorkspaceButton({
   disabled: boolean
   onCreate: (projectGroup: ProjectGroup) => void
 }): React.JSX.Element {
-  const createLabel = translate(
+  const t = useTranslate()
+  const createLabel = t(
     'auto.components.sidebar.WorktreeList.bd37a57ac8',
     'Create workspace for {{value0}}',
     { value0: label }
@@ -178,7 +191,7 @@ export function ProjectGroupCreateWorkspaceButton({
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
         {pathStatus?.exists === false
-          ? getFolderWorkspacePathStatusDescription(pathStatus)
+          ? getFolderWorkspacePathStatusDescription(pathStatus, t)
           : createLabel}
       </TooltipContent>
     </Tooltip>

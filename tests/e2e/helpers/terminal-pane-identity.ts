@@ -1,3 +1,5 @@
+import type { RuntimeTerminalSummary } from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import { makePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import type { Page } from '@stablyai/playwright-test'
 
 export type PaneIdentitySnapshot = {
@@ -19,9 +21,7 @@ export type ActivePaneHookDescriptor = {
   worktreeId: string
 }
 
-// Why: worktree restoration can render the terminal surface before the legacy
-// global activeTabId settles. Prefer the active worktree's saved terminal tab
-// pointer, then fall back to the first terminal tab.
+// Restoration may mount before global activeTabId settles; prefer the worktree’s saved tab, then its first terminal.
 export async function resolveActiveTabId(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     const store = window.__store
@@ -48,8 +48,6 @@ export async function resolveActiveTabId(page: Page): Promise<string | null> {
   })
 }
 
-// Why: reads the buffer through the SerializeAddon that the PaneManager
-// already loads for every terminal pane (exposed via VITE_EXPOSE_STORE).
 export async function getTerminalContent(page: Page, charLimit = 4000): Promise<string> {
   const tabId = await resolveActiveTabId(page)
   if (!tabId) {
@@ -112,4 +110,50 @@ export async function readPaneIdentitySnapshot(page: Page): Promise<PaneIdentity
       ptyIdsByLeafId: store.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
     }
   }, tabId)
+}
+
+export type TerminalIdentity = Pick<
+  RuntimeTerminalSummary,
+  'handle' | 'incarnationId' | 'leafId' | 'ptyId' | 'tabId'
+>
+
+export function terminalIdentity(terminal: RuntimeTerminalSummary): TerminalIdentity {
+  const { handle, incarnationId, leafId, ptyId, tabId } = terminal
+  return { handle, incarnationId, leafId, ptyId, tabId }
+}
+
+export function liveTerminalIdentity(terminal: RuntimeTerminalSummary) {
+  return {
+    ...terminalIdentity(terminal),
+    connected: terminal.connected,
+    writable: terminal.writable
+  }
+}
+
+export function runtimeTerminalPaneKeys(
+  originals: readonly RuntimeTerminalSummary[],
+  agentHandle: string | null,
+  canaryHandle: string
+): string[] {
+  try {
+    return originals.map(({ leafId, tabId }) => makePaneKey(tabId, leafId))
+  } catch (error) {
+    const identities = originals.map((terminal) => ({
+      handle: terminal.handle,
+      ptyId: terminal.ptyId ?? null,
+      incarnationId: terminal.incarnationId ?? null,
+      tabId: terminal.tabId ?? null,
+      leafId: terminal.leafId ?? null,
+      orphaned: terminal.orphaned ?? null,
+      recordedPaneKey: terminal.recordedPaneKey ?? null
+    }))
+    throw new Error(
+      `Runtime terminal inventory has an invalid pane identity: ${JSON.stringify({
+        identities,
+        agentHandle,
+        canaryHandle
+      })}`,
+      { cause: error }
+    )
+  }
 }

@@ -1,7 +1,7 @@
 import { opendir } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import path from 'node:path'
-import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
+import type { WarpThemeImportSkippedFile } from '../../shared/terminal-themes/terminal-custom-themes'
 import { sortDirectoryEntriesByName } from './directory-entry-order'
 
 export const MAX_THEME_FILES = 200
@@ -69,7 +69,7 @@ function reportPreviewBudgetExpired(
 }
 
 export function sanitizeReadError(fallback: string): string {
-  // Why: importer previews cross the IPC boundary, so filesystem paths must stay in main.
+  // Preview results cross IPC; keep filesystem paths in main.
   return fallback
 }
 

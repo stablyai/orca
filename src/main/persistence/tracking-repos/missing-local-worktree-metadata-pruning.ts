@@ -1,16 +1,20 @@
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getRepoKind } from '../../../shared/repo-kind'
-import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/ssh-types'
-import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getRepoKind } from '../../../shared/repository/repo-kind'
+import { sshRemotePtyLeaseAllowsReattach } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../../shared/worktree/id'
-import { isWslUncPath } from '../../../shared/wsl-paths'
-import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
-import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 import {
   addPersistedSessionWorktreeOwners,
-  createWorktreeOwnerCandidateCollector
+  createWorktreeOwnerCandidateCollector,
+  type WorktreeOwnerCandidateCollector
 } from '../restoring-sessions/session-worktree-ownership'
 import {
   indexMetadataAliasesForWorktreeIds,
@@ -33,6 +37,15 @@ function collectPersistedWorkspaceOwners(
 ): Set<string> {
   const collector = createWorktreeOwnerCandidateCollector(candidateIds, platform)
   addPersistedSessionWorktreeOwners(state, collector)
+  addNonSessionWorkspaceOwners(state, collector)
+  return collector.owners
+}
+
+/** Owners outside saved session layout: a live lease, automation or phone selection still uses the workspace. */
+export function addNonSessionWorkspaceOwners(
+  state: PersistedState,
+  collector: WorktreeOwnerCandidateCollector
+): void {
   const add = collector.addOwner
   add(state.ui.lastActiveWorktreeId)
   for (const selections of Object.values(state.mobileClientTabSelectionsByDeviceId ?? {})) {
@@ -41,10 +54,7 @@ function collectPersistedWorkspaceOwners(
     }
   }
   for (const lease of state.sshRemotePtyLeases) {
-    // A lease that can never be reattached is a routing tombstone, not a claim on a workspace:
-    // `terminated` is the operator close, and an `expired` row marked `supersededBy` /
-    // `relayIdRecycled` already lost its pane to a newer lease. Counting them as owners pinned
-    // their worktree's metadata row permanently, so the prune could never make progress (#17775).
+    // Unreattachable routing tombstones own no workspace; counting them pinned metadata forever (#17775).
     if (!sshRemotePtyLeaseAllowsReattach(lease)) {
       continue
     }
@@ -63,10 +73,9 @@ function collectPersistedWorkspaceOwners(
       add(run.workspaceId)
     }
   }
-  return collector.owners
 }
 
-function repoStillMatches(
+export function repoStillMatches(
   state: PersistedState,
   expected: NativeLocalWorktreeMetadataScanExpectation['repo']
 ): boolean {
@@ -86,7 +95,7 @@ function repoStillMatches(
   )
 }
 
-function routingStillMatches(
+export function routingStillMatches(
   state: PersistedState,
   expected: NativeLocalWorktreeMetadataScanExpectation
 ): boolean {
@@ -100,7 +109,7 @@ function routingStillMatches(
   )
 }
 
-function isValidCandidateId(
+export function isValidCandidateId(
   repoId: string,
   worktreeId: string,
   platform: NodeJS.Platform
@@ -117,19 +126,7 @@ function isValidCandidateId(
   )
 }
 
-/**
- * The captured candidates a delete could still accept, decided without touching the disk.
- *
- * Why this exists: the caller `stat`s every candidate whose path Git no longer lists, then discovers
- * here that most of them are refused anyway — pinned by a persisted session, or structurally
- * unremovable on this host. Those verdicts are pure functions of persisted state, so paying for the
- * filesystem first inverts the cheap and expensive halves of the decision. On a store with ~1.4k
- * dangling rows that was the bulk of a permanent `stat` storm (#17775).
- *
- * Deliberately advisory: `pruneSessionlessMissingLocalWorktreeMetadataForRepo` re-checks everything
- * authoritatively against the capture, so a disagreement here costs at most a wasted `stat` or a row
- * lingering one more pass — it can never widen what gets deleted.
- */
+/** Prefilter before stat; authoritative deletion rechecks everything, so this cannot widen removal. */
 export function selectProbeableLocalWorktreeMetadataCandidates(
   state: PersistedState,
   scan: NativeLocalWorktreeMetadataScanExpectation,
@@ -188,10 +185,11 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     }
     delete state.worktreeLineageById[worktreeId]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
+    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(worktreeId)]
     removedIds.push(worktreeId)
   }
   if (removedIds.length > 0) {
-    // Why: a global sweep could delete unrelated unaliased rows from another repo or host.
+    // Limit identity cleanup to removed rows or unrelated repo/host metadata could disappear.
     pruneUnreferencedWorktreeIdentityMeta(state, removedIdentityKeys)
   }
   return removedIds

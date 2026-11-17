@@ -1,6 +1,6 @@
 import { test, expect } from './helpers/orca-app'
-import { RuntimeClient } from '../../src/cli/runtime-client'
-import type { RuntimeStatus } from '../../src/shared/runtime-types'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { RuntimeStatus } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { waitForSessionReady } from './helpers/store'
 
 type NavigationProbe = {

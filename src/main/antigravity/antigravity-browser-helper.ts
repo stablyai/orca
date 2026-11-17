@@ -1,9 +1,8 @@
-// The Antigravity server opens its Google sign-in page through BROWSER. Orca points that at a
-// one-line program run by its own executable in Node mode, which prints the link on error output
-// instead: the link is captured either way, and no browser opens on the host.
+// Capture sign-in URLs on stderr so remote hosts never open a browser.
 
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 import { runProcess } from '@orca/process-host'
+import { scrubAntigravityAcpEnvironment } from './antigravity-acp-environment-sanitizer'
 
 export const ANTIGRAVITY_BROWSER_MARKER = '__ORCA_ANTIGRAVITY_AUTH_URL__'
 
@@ -13,34 +12,55 @@ const HELPER_SOURCE =
   `"${ANTIGRAVITY_BROWSER_MARKER}"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))`
 const PREFLIGHT_URL = 'https://example.invalid/orca-antigravity-browser-preflight'
 
-// Python splits BROWSER with shlex.
+// Escape colons for Python’s BROWSER list before shlex parses the command.
 
-// Node mode is set in the command itself: the provider supervisor strips ELECTRON_RUN_AS_NODE from
-// the server, which keeps it out of the agent's own tools.
+// The supervisor strips Node mode from the server, so set it only for this helper.
 const executable = process.execPath.replaceAll('\\', '\\\\').replaceAll(':', '\\072')
 const shell = `exec /usr/bin/env ELECTRON_RUN_AS_NODE=1 "$(printf %b ${quotePosixShellDoubleQuotedApostrophe(executable)})" -e ${quotePosixShellDoubleQuotedApostrophe(HELPER_SOURCE)} -- "$1"`
 const BROWSER_ARGV = ['/bin/sh', '-c', shell, '--', '%s']
-export const ANTIGRAVITY_BROWSER_COMMAND = BROWSER_ARGV.map(
-  quotePosixShellDoubleQuotedApostrophe
+const WINDOWS_BROWSER_ARGV = [process.execPath, '-e', HELPER_SOURCE, '--', '%s']
+const POSIX_BROWSER_COMMAND = BROWSER_ARGV.map(quotePosixShellDoubleQuotedApostrophe).join(' ')
+const WINDOWS_BROWSER_COMMAND = WINDOWS_BROWSER_ARGV.map(
+  (arg) => `'${arg.replaceAll("'", `'"'"'`)}'`
 ).join(' ')
-const usable = !/[\r\n\0]|%s/.test(process.execPath)
+const usable =
+  !/[\r\n\0]|%s/.test(process.execPath) &&
+  (process.platform !== 'win32' || !process.execPath.includes(';'))
 
-/** The exact template the server's Python browser controller executes. */
+export const ANTIGRAVITY_BROWSER_COMMAND =
+  process.platform === 'win32' ? WINDOWS_BROWSER_COMMAND : POSIX_BROWSER_COMMAND
+
 export const antigravityBrowserArgv = (link: string): string[] =>
-  BROWSER_ARGV.map((arg) => (arg === '%s' ? link : arg))
+  (process.platform === 'win32' ? WINDOWS_BROWSER_ARGV : BROWSER_ARGV).map((arg) =>
+    arg === '%s' ? link : arg
+  )
 
-/** Runs the helper once as the server would; checked before every server start, since a broken
- *  helper would let the server open a browser on this host. */
+export const antigravityBrowserHelperPreflightPassed = (result: {
+  readonly code: number | null
+  readonly stdout: string
+  readonly stderr: string
+  readonly outputTruncated?: boolean
+}): boolean =>
+  result.code === 0 &&
+  result.stdout === '' &&
+  !result.outputTruncated &&
+  result.stderr === `${ANTIGRAVITY_BROWSER_MARKER}${JSON.stringify(PREFLIGHT_URL)}\n`
+
+/** Check before each server start: a broken helper could let Python launch a real browser. */
 export async function antigravityBrowserHelperWorks(): Promise<boolean> {
   if (!usable) {
     return false
   }
   const [program = '', ...args] = antigravityBrowserArgv(PREFLIGHT_URL)
-  const spec = { program, args, timeoutMs: 5_000, maxOutputBytes: 4_096 }
+  const env: Record<string, string | undefined> = { ...process.env }
+  scrubAntigravityAcpEnvironment(env, process.env)
+  const spec = {
+    program,
+    args,
+    ...(process.platform === 'win32' ? { env: { ...env, ELECTRON_RUN_AS_NODE: '1' } } : {}),
+    timeoutMs: 5_000,
+    maxOutputBytes: 4_096
+  }
   const result = await runProcess(spec).catch(() => null)
-  return (
-    result?.code === 0 &&
-    result.stdout === '' &&
-    result.stderr === `${ANTIGRAVITY_BROWSER_MARKER}${JSON.stringify(PREFLIGHT_URL)}\n`
-  )
+  return result !== null && antigravityBrowserHelperPreflightPassed(result)
 }

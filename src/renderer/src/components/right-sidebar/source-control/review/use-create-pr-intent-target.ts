@@ -1,63 +1,79 @@
-import { useCallback, useEffect } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
+import { useCallback, useEffect, useRef } from 'react'
+import { useAppStore } from '@/store/index'
+import { worktreeCopyPushTarget } from '@/lib/workspace/ownership/worktree-git-copy'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
-import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 
-/**
- * Tracks what the user is currently looking at so an in-flight Create PR run can tell whether the
- * panel has since moved on, and pins each of the run's git calls to the host it started from.
- */
+/** Track foreground ownership and pin in-flight Git calls to their original host. */
 export function useSourceControlCreatePrIntentTarget({
   activeRepoId,
-  activeRepoTarget,
   activeWorktreeId,
   branchName,
-  createPrIntentCurrentTargetRef,
   effectiveBaseRef,
-  worktreeMap,
+  operationStore,
   worktreePath
 }: {
   activeRepoId: string | null
-  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   branchName: string
-  createPrIntentCurrentTargetRef: SourceControlWorktreeOperationState['createPrIntentCurrentTargetRef']
   effectiveBaseRef: string | null
-  worktreeMap: SourceControlWorktreeContext['worktreeMap']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   worktreePath: string | null
 }) {
+  const previousOperationStoreRef = useRef(operationStore)
   useEffect(() => {
-    createPrIntentCurrentTargetRef.current = {
-      repoId: activeRepoId ?? null,
-      worktreeId: activeWorktreeId ?? null,
-      worktreePath,
-      branch: branchName,
-      baseRef: effectiveBaseRef ?? null
+    // Navigating to another owner backgrounds the previous run; unmounting alone does not.
+    if (previousOperationStoreRef.current !== operationStore) {
+      previousOperationStoreRef.current.setState({ createPrIntentTarget: {} })
+      previousOperationStoreRef.current = operationStore
     }
-  }, [
-    activeRepoId,
-    activeWorktreeId,
-    branchName,
-    createPrIntentCurrentTargetRef,
-    effectiveBaseRef,
-    worktreePath
-  ])
+    operationStore.setState({
+      createPrIntentTarget: {
+        repoId: activeRepoId ?? null,
+        worktreeId: activeWorktreeId ?? null,
+        worktreePath,
+        branch: branchName,
+        baseRef: effectiveBaseRef ?? null
+      }
+    })
+  }, [activeRepoId, activeWorktreeId, branchName, effectiveBaseRef, operationStore, worktreePath])
 
   const getCreatePrIntentOperationTarget = useCallback(
-    (token: CreatePrIntentRunToken): SourceControlOperationTarget => ({
-      // Why: Create PR intent continues after navigation; pin git commands to the worktree/host that started the sequence.
-      target: activeRepoTarget,
-      worktreeId: token.worktreeId,
-      worktreePath: token.worktreePath,
-      connectionId: getConnectionId(token.worktreeId) ?? undefined,
-      pushTarget: worktreeMap.get(token.worktreeId)?.pushTarget
-    }),
-    [activeRepoTarget, worktreeMap]
+    (token: CreatePrIntentRunToken): SourceControlOperationTarget =>
+      createPrIntentOperationTarget(
+        token,
+        // Why the pinned copy's row: a same-path twin's push target names another remote and branch.
+        worktreeCopyPushTarget(
+          useAppStore.getState(),
+          token.worktreeId,
+          token.pinnedCopy?.hostId ?? null
+        )
+      ),
+    []
   )
 
   return { getCreatePrIntentOperationTarget }
+}
+
+/**
+ * Pins a Create PR run's calls to the copy and transport captured when it started, never
+ * re-resolved: a copy that did not resolve gets no transport, so the run refuses instead of
+ * committing or pushing on a same-path twin's checkout.
+ */
+export function createPrIntentOperationTarget(
+  token: CreatePrIntentRunToken,
+  pushTarget: SourceControlOperationTarget['pushTarget']
+): SourceControlOperationTarget {
+  const copy = token.pinnedCopy
+  return {
+    worktreeId: token.worktreeId,
+    worktreePath: token.worktreePath,
+    pushTarget,
+    target: copy?.transport ?? null,
+    connectionId: copy?.connectionId,
+    ownerHostId: copy?.hostId ?? null
+  }
 }
 
 export type SourceControlCreatePrIntentTarget = ReturnType<

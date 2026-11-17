@@ -1,14 +1,11 @@
-/**
- * A second orcad template that differs from the first only in its build identity, so a relaunch
- * with it stands in for an app update that bundles a newer orcad.
- */
+// Change only template build identity to model an app update bundling a newer orcad.
 import { createHash } from 'node:crypto'
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   ORCAD_VERSION
-} from '../../../src/shared/orcad-artifacts'
+} from '../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts'
 
 const ENTRY = 'orcad.js'
 

@@ -1,19 +1,14 @@
-/**
- * Readers for each place the workspace layout shows up besides the live stream: the saved profile,
- * what the window draws (DOM), and what a paired client or the CLI is told (runtime RPC).
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../src/shared/execution-host'
+} from '../../../src/shared/execution-host/execution-host'
 import { readPersistedProfileState } from './persisted-profile-state'
-import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
-import type { RuntimeTerminalListResult } from '../../../src/shared/runtime-terminal-contracts'
-import type { WorkspaceSessionState } from '../../../src/shared/workspace-session-state-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalListResult } from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { WorkspaceSessionState } from '../../../src/shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceLayoutPartition } from './workspace-layout-oracle-model'
 
 type ProfileRoot = {

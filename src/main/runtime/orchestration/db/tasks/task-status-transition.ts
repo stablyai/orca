@@ -1,7 +1,8 @@
 import { OrchestrationError } from '../../orchestration-error'
-import type { TaskRow, TaskStatus } from '../../types'
+import type { TaskRow, TaskStatus } from '../orchestration-records'
 import { settleActiveDispatchesForTask } from '../dispatch-context/dispatch-completion'
 import type { OrchestrationDb } from '../orchestration-db'
+import { remoteHoldOnTask } from '../remote-owned/remote-placements'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -20,7 +21,7 @@ export function updateTaskStatus(
   const terminalStatus = status === 'completed' || status === 'failed'
   const requiresActiveDispatch = status === 'dispatched'
   const permitsActiveDispatch = terminalStatus || requiresActiveDispatch
-  // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot stale the snapshot.
+  // Reserve the WAL writer before lifecycle reads to avoid a stale snapshot.
   const transaction = beginLifecycleWriteTransaction(this.db, UPDATE_TASK_STATUS_SAVEPOINT)
   try {
     const task = this.getTask(id)
@@ -28,21 +29,22 @@ export function updateTaskStatus(
       commitLifecycleWriteTransaction(this.db, transaction)
       return undefined
     }
-    const active = this.db
+    const localActive = this.db
       .prepare(
         `SELECT id FROM dispatch_contexts
          WHERE task_id = ? AND status IN ('pending', 'dispatched')
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(id) as { id: string } | undefined
-    // Why: a supervised worker owns its Task for as long as it is alive. Every status this
-    // function lets past the active-Dispatch check must clear the same worker check, or the Task
-    // re-opens under a worker whose own lifecycle can no longer settle it (#16904 relay wedge).
-    // A no-op re-assert of `dispatched` re-opens nothing and stays legal.
+    // A Task placed on a paired server is held by its attempt there exactly as by a local one.
+    const remote = remoteHoldOnTask(this, id)
+    const remoteDispatch = { id: remote?.dispatchId ?? '(a start on a paired server)' }
+    const active = localActive ?? (remote?.active ? remoteDispatch : undefined)
+    // A live supervised worker forbids Task reopening; a dispatched no-op remains legal (#16904).
     const reopensUnderWorker = requiresActiveDispatch && task.status !== 'dispatched'
     const activeWorker =
       terminalStatus || reopensUnderWorker
-        ? (this.db
+        ? ((this.db
             .prepare(
               `SELECT active.id
              FROM dispatch_contexts active
@@ -51,7 +53,8 @@ export function updateTaskStatus(
                AND worker.state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')
              ORDER BY active.rowid DESC LIMIT 1`
             )
-            .get(id) as { id: string } | undefined)
+            .get(id) as { id: string } | undefined) ??
+          (remote?.liveWorker ? remoteDispatch : undefined))
         : undefined
     if (activeWorker) {
       throw new OrchestrationError(
@@ -94,8 +97,7 @@ export function updateTaskStatus(
         throw error
       }
       const current = this.getTask(id)
-      // A concurrent writer may have already applied the requested status;
-      // preserve idempotency for that race, but never hide an invalid edge.
+      // A concurrent identical update is idempotent; invalid lifecycle edges still fail.
       if (!current || current.status !== status) {
         throw error
       }

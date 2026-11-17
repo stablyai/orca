@@ -1,11 +1,4 @@
-/**
- * Running a snapshot capture, restore or clear on the host.
- *
- * A closed channel is not a stopped command: sshd keeps a pty-less child running, and these
- * commands print nothing until they finish. So a timeout, abort or dropped channel leaves the
- * work unconfirmed, which keeps the activation fence fresh instead of letting a second restore
- * or a launch follow. Only the command's own answer, or its exit, is a verdict.
- */
+// SSH channel closure does not prove host mutation exit; only command output or exit may release the activation fence.
 import { ORCAD_STATE_MUTATION_DEADLINE_SECONDS } from './orcad-state-snapshot'
 import {
   ORCAD_STATE_MUTATION_BUSY,
@@ -18,7 +11,7 @@ import {
 } from '../../ssh/remote-exec/remote-exec-command'
 import { isOrcadFenceLost, OrcadFenceLostError } from '../activation/orcad-activation-fence-scope'
 
-// Longer than the host's own deadline, so the host kills the work before the client gives up.
+// Let the host deadline kill workload before client observation times out.
 export const ORCAD_STATE_MUTATION_CLIENT_TIMEOUT_MS =
   (ORCAD_STATE_MUTATION_DEADLINE_SECONDS + 60) * 1000
 
@@ -26,7 +19,7 @@ function unconfirmed(error: Error): Error & { sshChannelCloseConfirmed: false } 
   return Object.assign(error, { sshChannelCloseConfirmed: false as const })
 }
 
-/** Never aborted: cancelling the request would only stop the client from seeing the outcome. */
+/** Do not abort observation: caller cancellation cannot stop host-side mutation. */
 export async function execOrcadStateMutation(
   target: OrcadRemoteExecTarget,
   command: string
@@ -38,7 +31,7 @@ export async function execOrcadStateMutation(
       timeoutMs: ORCAD_STATE_MUTATION_CLIENT_TIMEOUT_MS
     })
   } catch (error) {
-    // A termination error carries this flag; an exit-status error means the command finished.
+    // Channel termination flags uncertainty; exit-status errors prove completion.
     if (error instanceof Error && 'sshChannelCloseConfirmed' in error) {
       throw unconfirmed(error)
     }
@@ -61,14 +54,14 @@ export async function execOrcadStateMutation(
   return output
 }
 
-/** A finished command that failed reads as `fallback`; an unconfirmed one propagates. */
+/** Fall back only for finished failures; unconfirmed mutation remains fenced. */
 export function execOrcadStateMutationOr(
   target: OrcadRemoteExecTarget,
   command: string,
   fallback = ''
 ): Promise<string> {
   return execOrcadStateMutation(target, command).catch((error: unknown) => {
-    // A lost fence is a refusal, never a failed capture to fall back from.
+    // Lost ownership is a refusal, never a capture failure eligible for fallback.
     if (isUnconfirmedSshCommandTermination(error) || error instanceof OrcadFenceLostError) {
       throw error
     }

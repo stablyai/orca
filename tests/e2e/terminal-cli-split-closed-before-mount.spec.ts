@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Page } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveTerminalManager } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
@@ -32,7 +32,7 @@ async function runCliSplit(
     await execFileAsync(
       process.execPath,
       [
-        path.join(repoRoot, 'config', 'scripts', 'orca-dev.mjs'),
+        path.join(repoRoot, 'config', 'scripts', 'development', 'launch', 'orca-dev.mjs'),
         'terminal',
         'split',
         '--terminal',
@@ -88,9 +88,39 @@ async function handleFor(
   return handle
 }
 
-// Main closes the split's tab while the window is too busy to mount the split: the CLI hears so
-// once the close lands, not after its 10 s wait.
-test('a CLI split whose tab closes before it mounts answers promptly', async ({
+/** Keeps the renderer busy for `ms`, as a window too busy to mount anything. */
+async function stallRenderer(page: Page, ms: number): Promise<void> {
+  await page.evaluate((stallMs) => {
+    setTimeout(() => {
+      const until = performance.now() + stallMs
+      while (performance.now() < until) {
+        // Busy renderer.
+      }
+    }, 0)
+  }, ms)
+}
+
+function windowLeafIdsOf(page: Page, tabId: string): Promise<string[]> {
+  return page.evaluate((id) => {
+    const collect = (node: unknown): string[] => {
+      if (typeof node !== 'object' || node === null) {
+        return []
+      }
+      if ('leafId' in node && typeof node.leafId === 'string') {
+        return [node.leafId]
+      }
+      return [
+        ...('first' in node ? collect(node.first) : []),
+        ...('second' in node ? collect(node.second) : [])
+      ]
+    }
+    return collect(window.__store?.getState().terminalLayoutsByTabId[id]?.root)
+  }, tabId)
+}
+
+// The window is stalled past the old 10 s wait: main still starts the split's terminal, its
+// command runs, and the window shows the pane from main's layout once it is free.
+test('a CLI split runs its command while the window is stalled, and the window shows the pane', async ({
   electronApp,
   orcaPage
 }, testInfo) => {
@@ -105,36 +135,28 @@ test('a CLI split whose tab closes before it mounts answers promptly', async ({
   const tabId = await createActiveTab(orcaPage, worktreeId)
   const source = await handleFor(client, worktreeId, tabId)
   await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabId, { parkDelayMs: PARKING_DELAY_MS })
-  await orcaPage.evaluate(() => {
-    window.addEventListener(
-      'orca-background-mount-terminal-worktree',
-      () => {
-        const until = performance.now() + 2_500
-        while (performance.now() < until) {
-          // Busy renderer.
-        }
-      },
-      { once: true, capture: true }
-    )
-  })
-  const startedAt = Date.now()
-  const split = runCliSplit(userDataDir, source, 'echo never')
-  // The CLI starts and main writes the pane while the window stalls on the split's mount.
-  await new Promise((resolve) => setTimeout(resolve, 800))
-  const closeStartedAt = Date.now()
-  const closed = await client.call('terminal.closeTab', { terminal: source }).then(
-    () => 'ok',
-    (error: unknown) => String(error)
-  )
-  const outcome = await split
-  const elapsedMs = Date.now() - startedAt
-  const report = { closed, closeAfterMs: closeStartedAt - startedAt, elapsedMs, outcome }
-  await testInfo.attach('split-closed-tab.json', {
-    body: JSON.stringify(report, null, 2),
-    contentType: 'application/json'
-  })
-  expect(outcome.ok).toBe(false)
-  // Failed because of the close, not some earlier CLI failure.
-  expect(outcome.ok ? '' : outcome.error).toContain('split_pane_closed')
-  expect(elapsedMs).toBeLessThan(6_000)
+  await stallRenderer(orcaPage, 11_000)
+  const marker = testInfo.outputPath(`split-ran-${Date.now()}`)
+  mkdirSync(path.dirname(marker), { recursive: true })
+  const outcome = await runCliSplit(userDataDir, source, `touch '${marker}'`)
+  expect(outcome).toEqual({ ok: true })
+  await expect.poll(() => existsSync(marker), { timeout: 30_000 }).toBe(true)
+  let tabLeafIds: string[] = []
+  await expect
+    .poll(async () => {
+      const listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
+        worktree: `id:${worktreeId}`,
+        limit: 200
+      })
+      tabLeafIds = listed.result.terminals
+        .filter((t) => t.tabId === tabId)
+        .map((t) => t.leafId)
+        .sort()
+      return tabLeafIds.length
+    })
+    .toBe(2)
+  // Past the stall, the window holds both panes main has.
+  await expect
+    .poll(async () => (await windowLeafIdsOf(orcaPage, tabId)).sort(), { timeout: 30_000 })
+    .toEqual(tabLeafIds)
 })

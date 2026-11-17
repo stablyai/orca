@@ -1,8 +1,3 @@
-/**
- * Host-created manual split restore, and an
- * agent pane slept through the sidebar so quit and relaunch resume it.
- */
-
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -10,15 +5,14 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
-import type { RuntimeTerminalListResult } from '../../../src/shared/runtime-types'
-import type { RuntimeWorktreeCreateResult } from '../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeTerminalListResult } from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeWorktreeCreateResult } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { activateWorkspaceByClick, sleepWorkspaceViaSidebar } from './slept-workspace-probe'
 import { ensureTerminalVisible, waitForSessionReady } from './store'
 import { splitActiveTerminalPane, waitForActiveTerminalManager } from './terminal'
 import { waitForBoundPanes, type FolderWorkspaceSetup } from './terminal-layout-journeys'
 import { bootstrapFirstLaunch, seededRepoPathOrSkip } from './terminal-restart-persistence'
 
-/** Create and split a host terminal, then leave it for the reactivation layout check. */
 export async function addHostCreatedSplitWorktree(
   page: Page,
   userDataDir: string
@@ -42,6 +36,7 @@ export async function addHostCreatedSplitWorktree(
   const created = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
     repo: `id:${added.result.repo.id}`,
     name: 'parity-setup',
+    branchNameOverride: 'parity-setup',
     noParent: true,
     activate: false,
     setupDecision: 'skip'
@@ -66,7 +61,6 @@ export async function addHostCreatedSplitWorktree(
   }
 }
 
-/** Reopens the host-split worktree once both terminals are running. */
 export async function openHostSplitWorktree(page: Page, userDataDir: string): Promise<string> {
   let setupWorktreeId: string | undefined
   await expect
@@ -103,7 +97,6 @@ export async function openHostSplitWorktree(page: Page, userDataDir: string): Pr
   return setupWorktreeId!
 }
 
-/** A slept agent pane, through the user's sidebar Sleep, so the quit and relaunch resume it. */
 export async function sleepAgentPane(page: Page, worktreeId: string): Promise<void> {
   await splitActiveTerminalPane(page, 'vertical')
   await waitForBoundPanes(page, 2)

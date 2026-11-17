@@ -1,17 +1,16 @@
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  wrapPosixHookCommand,
-  type HookDefinition
-} from '../agent-hooks/installer-utils'
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
-import { COPILOT_EVENTS } from './copilot-managed-hook-definitions'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
+import { COPILOT_EVENTS, getPosixManagedCommand } from './copilot-managed-hook-definitions'
 import { getManagedScript } from './copilot-managed-script'
 
 function getRemoteManagedHookDefinition(command: string): HookDefinition {
@@ -59,18 +58,14 @@ export async function installCopilotHooksRemote(
       const cleaned = removeManagedCommands(current, isManagedCommand)
       nextHooks[eventName] = [
         ...cleaned,
-        getRemoteManagedHookDefinition(
-          wrapPosixHookCommand(remoteScriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
-        )
+        getRemoteManagedHookDefinition(getPosixManagedCommand(remoteScriptPath, eventName))
       ]
     }
 
     config.version = 1
     delete config.disableAllHooks
     config.hooks = nextHooks
-    // Why: SSH remotes use POSIX scripts regardless of Orca's local OS. Write
-    // the script before hooks/orca.json so a partial install cannot point
-    // Copilot at a missing managed command.
+    // SSH uses POSIX scripts on every local OS; publish the script before config can reference it.
     await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
     await writeHooksJsonRemote(sftp, remoteConfigPath, config)
 

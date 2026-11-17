@@ -1,9 +1,9 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getRepoKind } from '../../../shared/repo-kind'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoKind } from '../../../shared/repository/repo-kind'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   composeWorktreeHostIdentity,
@@ -11,7 +11,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 
 type CapturedLocalRepoIdentity = Readonly<
   Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> & {
@@ -203,15 +203,7 @@ function aliasesStillMatch(
   })
 }
 
-/**
- * Whether the local host is structurally allowed to drop this row, ignoring concurrent-change checks.
- *
- * Pure over persisted state — no filesystem, no expectation — so a caller can decide *before* paying
- * for a `stat` whether a delete could ever accept the row. Several of these predicates reject the
- * same row on every pass forever (a locator also known on a remote host keeps a second alias; a
- * legacy row pinned to another host; identity rows that drifted or dangle), which is what turned the
- * prune into an unbounded no-progress loop in #17775.
- */
+/** Reject structurally unremovable rows before filesystem probes; repeated refusals caused #17775. */
 export function isLocallyRemovableWorktreeMetadataRow(
   state: PersistedState,
   worktreeId: string,
@@ -227,6 +219,10 @@ export function isLocallyRemovableWorktreeMetadataRow(
     return false
   }
   const canonical = identityKeys?.[0] ? state.worktreeMetaByIdentity?.[identityKeys[0]] : undefined
+  // An archived workspace's checkout is missing on purpose; its row is the workspace.
+  if (legacy?.archivedCheckout || canonical?.archivedCheckout) {
+    return false
+  }
   return !(
     (legacy?.hostId && legacy.hostId !== LOCAL_EXECUTION_HOST_ID) ||
     (canonical?.hostId && canonical.hostId !== LOCAL_EXECUTION_HOST_ID) ||

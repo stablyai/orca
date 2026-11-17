@@ -1,0 +1,199 @@
+import { agentBrowserSetMediaArguments } from '../../../browser/agent-browser/protocol/agent-browser-set-media-arguments'
+import { agentBrowserWaitArguments } from '../../../browser/agent-browser/protocol/agent-browser-wait-arguments'
+import {
+  assertAgentBrowserPassthroughStaysOnPage,
+  splitAgentBrowserCommandLine
+} from '../../../browser/agent-browser/protocol/agent-browser-passthrough-arguments'
+
+export function externalChromiumWaitCommand(
+  params: Record<string, unknown>
+): ReturnType<typeof agentBrowserWaitArguments> {
+  const optional = (key: string): string | undefined =>
+    params[key] ? String(params[key]) : undefined
+  return agentBrowserWaitArguments({
+    selector: optional('selector'),
+    timeout: typeof params.timeout === 'number' ? params.timeout : undefined,
+    text: optional('text'),
+    url: optional('url'),
+    load: optional('load'),
+    fn: optional('fn'),
+    state: optional('state')
+  })
+}
+
+function cookieSetArguments(params: Record<string, unknown>): string[] {
+  const args = ['cookies', 'set', String(params.name ?? ''), String(params.value ?? '')]
+  for (const [key, flag] of [
+    ['domain', '--domain'],
+    ['path', '--path'],
+    ['sameSite', '--sameSite'],
+    ['expires', '--expires']
+  ] as const) {
+    if (params[key] != null) {
+      args.push(flag, String(params[key]))
+    }
+  }
+  if (params.secure) {
+    args.push('--secure')
+  }
+  if (params.httpOnly) {
+    args.push('--httpOnly')
+  }
+  return args
+}
+
+export function externalChromiumCommandArguments(
+  method: string,
+  params: Record<string, unknown>
+): string[] | null {
+  const text = (key: string): string => String(params[key] ?? '')
+  const optional = (key: string): string[] => (params[key] == null ? [] : [String(params[key])])
+  switch (method) {
+    case 'browserClick':
+      return ['click', text('element')]
+    case 'browserDblclick':
+      return ['dblclick', text('element')]
+    case 'browserScroll':
+      return ['scroll', text('direction'), ...optional('amount')]
+    case 'browserHover':
+      return ['hover', text('element')]
+    case 'browserDrag':
+      return ['drag', text('from'), text('to')]
+    case 'browserUpload':
+      return ['upload', text('element'), ...((params.files as string[] | undefined) ?? [])]
+    case 'browserCheck':
+      return [params.checked === false ? 'uncheck' : 'check', text('element')]
+    case 'browserFocus':
+      return ['focus', text('element')]
+    case 'browserKeypress':
+      return ['press', text('key')]
+    case 'browserScrollIntoView':
+      return ['scrollintoview', text('element')]
+    case 'browserGet':
+      return ['get', text('what'), ...optional('selector')]
+    case 'browserIs':
+      return ['is', text('what'), text('selector')]
+    case 'browserKeyboardInsertText':
+      return ['keyboard', 'inserttext', text('text')]
+    case 'browserMouseMove':
+      return ['mouse', 'move', text('x'), text('y')]
+    case 'browserMouseDown':
+      return ['mouse', 'down', ...optional('button')]
+    case 'browserMouseClick':
+      if (
+        params.radius != null ||
+        (Array.isArray(params.modifiers) && params.modifiers.length > 0)
+      ) {
+        return null
+      }
+      return ['mouse', 'click', text('x'), text('y'), ...optional('button')]
+    case 'browserMouseUp':
+      return ['mouse', 'up', ...optional('button')]
+    case 'browserMouseWheel':
+      return ['mouse', 'wheel', text('dy'), ...optional('dx')]
+    case 'browserFind':
+      return ['find', text('locator'), text('value'), text('action'), ...optional('text')]
+    case 'browserSetDevice':
+      return ['set', 'device', text('name')]
+    case 'browserSetOffline':
+      return ['set', 'offline', ...optional('state')]
+    case 'browserSetHeaders':
+      return ['set', 'headers', text('headers')]
+    case 'browserSetCredentials':
+      return ['set', 'credentials', text('user'), text('pass')]
+    case 'browserSetMedia':
+      return agentBrowserSetMediaArguments(params.colorScheme, params.reducedMotion)
+    case 'browserClipboardRead':
+      return ['clipboard', 'read']
+    case 'browserClipboardWrite':
+      return ['clipboard', 'write', text('text')]
+    case 'browserDialogAccept':
+      return ['dialog', 'accept', ...optional('text')]
+    case 'browserDialogDismiss':
+      return ['dialog', 'dismiss']
+    case 'browserStorageLocalGet':
+      return ['storage', 'local', 'get', text('key')]
+    case 'browserStorageLocalSet':
+      return ['storage', 'local', 'set', text('key'), text('value')]
+    case 'browserStorageLocalClear':
+      return ['storage', 'local', 'clear']
+    case 'browserStorageSessionGet':
+      return ['storage', 'session', 'get', text('key')]
+    case 'browserStorageSessionSet':
+      return ['storage', 'session', 'set', text('key'), text('value')]
+    case 'browserStorageSessionClear':
+      return ['storage', 'session', 'clear']
+    case 'browserDownload':
+      return ['download', text('selector'), text('path')]
+    case 'browserHighlight':
+      return ['highlight', text('selector')]
+    case 'browserCookieGet':
+      return ['cookies', 'get']
+    case 'browserSetGeolocation':
+      return ['set', 'geo', text('latitude'), text('longitude')]
+    case 'browserInterceptDisable':
+      return ['network', 'unroute']
+    case 'browserInterceptList':
+    case 'browserNetworkLog':
+      return ['network', 'requests']
+    case 'browserConsoleLog':
+      return ['console']
+    case 'browserCaptureStart':
+      return ['network', 'har', 'start']
+    case 'browserCaptureStop':
+      return ['network', 'har', 'stop']
+    case 'browserExec': {
+      const args = splitAgentBrowserCommandLine(text('command'))
+      assertAgentBrowserPassthroughStaysOnPage(args)
+      return args
+    }
+    case 'browserSetViewport':
+      if (
+        params.mobile === true ||
+        (params.deviceScaleFactor != null && params.deviceScaleFactor !== 1)
+      ) {
+        return null
+      }
+      return ['set', 'viewport', text('width'), text('height')]
+    case 'browserCookieSet':
+      return cookieSetArguments(params)
+    case 'browserInterceptEnable':
+      return ['network', 'route', (params.patterns as string[] | undefined)?.[0] ?? '**/*']
+    default:
+      return null
+  }
+}
+
+export function normalizeExternalChromiumCommandResult(
+  method: string,
+  params: Record<string, unknown>,
+  result: unknown
+): unknown {
+  switch (method) {
+    case 'browserClick':
+      return { clicked: String(params.element) }
+    case 'browserScroll':
+      return { scrolled: params.direction }
+    case 'browserHover':
+      return { hovered: String(params.element) }
+    case 'browserDrag':
+      return { dragged: { from: params.from, to: params.to } }
+    case 'browserUpload':
+      return { uploaded: Array.isArray(params.files) ? params.files.length : 0 }
+    case 'browserCheck':
+      return { checked: params.checked !== false }
+    case 'browserFocus':
+      return { focused: String(params.element) }
+    case 'browserKeypress':
+      return { pressed: String(params.key) }
+    case 'browserSetViewport':
+      return {
+        width: params.width,
+        height: params.height,
+        deviceScaleFactor: 1,
+        mobile: false
+      }
+    default:
+      return result
+  }
+}

@@ -1,23 +1,15 @@
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import {
-  getWorktreeIdFromHostIdentity,
-  isWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
-import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
+import { worktreeWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { sessionFieldsRemovedWithWorkspace } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
+import { markdownFileIdCandidates } from '../../orca-profiles/project-transfer/profile-session-markdown-transfer'
 
-/**
- * The census fields this path deletes by indexing the owner key.
- *
- * Two classified fields are handled separately below: the topology revision is keyed by repo
- * rather than by owner, so removing one owner advances it instead of dropping it; and the recency
- * map also holds host-qualified keys, so it is scanned rather than indexed.
- */
-export const OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER =
-  SESSION_FIELDS_PRUNED_BY_OWNER_KEY.filter(
-    (field) => field !== 'terminalTopologyRevisionByRepoId' && field !== 'lastVisitedAtByWorktreeId'
-  )
+const OWNER_KEYED_FIELDS = sessionFieldsRemovedWithWorkspace('ownerKey')
+const OWNER_TAB_KEYED_FIELDS = sessionFieldsRemovedWithWorkspace('ownerTabKey')
+
+/** IDs a removed workspace's files may use in markdownFrontmatterVisible. */
+export type RemovedOwnerFileIds = Set<string>
 
 export function createMinimalPersistedTerminalTab(args: {
   worktreeId: string
@@ -46,22 +38,40 @@ export function cloneWorkspaceSessionState(session: WorkspaceSessionState): Work
   return structuredClone(session)
 }
 
-// Owner-keyed deletes only; pane-key-scanned collections live in deleteScannedSessionFieldsForOwners so a batch prune scans each once.
+// Keep owner-indexed deletion separate so batch pruning scans pane-keyed collections only once.
 export function deleteOwnerKeyedSessionFields(
   next: WorkspaceSessionState,
   ownerKey: string,
   removedTabIds: Set<string>,
-  options: { advanceTerminalTopologyRevision?: boolean } = {}
+  options: { advanceTerminalTopologyRevision?: boolean } = {},
+  removedFileIds: RemovedOwnerFileIds = new Set()
 ): void {
-  const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
+  // Why both: unified terminal tabs can outlive their legacy row, and their layouts key by entityId.
+  const ownerTabIds = new Set((next.tabsByWorktree?.[ownerKey] ?? []).map((tab) => tab.id))
+  for (const tab of next.unifiedTabs?.[ownerKey] ?? []) {
+    if (tab.contentType === 'terminal') {
+      ownerTabIds.add(tab.entityId)
+      ownerTabIds.add(tab.id)
+    }
+  }
   if (next.tabsByWorktree) {
     delete next.tabsByWorktree[ownerKey]
   }
-  for (const tab of removedTerminalTabs) {
-    removedTabIds.add(tab.id)
-    delete next.terminalLayoutsByTabId[tab.id]
-    if (next.activeTabId === tab.id) {
+  for (const tabId of ownerTabIds) {
+    removedTabIds.add(tabId)
+    for (const field of OWNER_TAB_KEYED_FIELDS) {
+      const record = next[field] as Record<string, unknown> | undefined
+      if (record) {
+        delete record[tabId]
+      }
+    }
+    if (next.activeTabId === tabId) {
       next.activeTabId = null
+    }
+  }
+  for (const file of next.openFilesByWorktree?.[ownerKey] ?? []) {
+    for (const id of markdownFileIdCandidates(file.filePath, ownerKey, file.runtimeEnvironmentId)) {
+      removedFileIds.add(id)
     }
   }
   if (options.advanceTerminalTopologyRevision) {
@@ -81,24 +91,18 @@ export function deleteOwnerKeyedSessionFields(
       delete next.browserPagesByWorkspace[workspace.id]
     }
   }
-  // Driven by the same census the repo-removal path uses, so a field added to the session type
-  // cannot be dropped there and forgotten here -- which is how the client-hosted rows were missed.
-  for (const field of OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER) {
+  // Share the removal census so new fields cannot be pruned on only one path.
+  for (const field of OWNER_KEYED_FIELDS) {
     const record = next[field] as Record<string, unknown> | undefined
     if (record) {
       delete record[ownerKey]
     }
   }
-  // Scanned, not indexed: this map also holds `${executionHostId}|${worktreeId}` keys.
-  if (next.lastVisitedAtByWorktreeId) {
-    for (const key of Object.keys(next.lastVisitedAtByWorktreeId)) {
-      const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
-      if (key === ownerKey || rawId === ownerKey) {
-        delete next.lastVisitedAtByWorktreeId[key]
-      }
-    }
-  }
-  if (next.activeWorkspaceKey === ownerKey) {
+  // Worktree owners are raw ids, but the active key stores their canonical worktree: form.
+  if (
+    next.activeWorkspaceKey === ownerKey ||
+    next.activeWorkspaceKey === worktreeWorkspaceKey(ownerKey)
+  ) {
     next.activeWorkspaceKey = null
   }
   if (next.activeWorktreeId === ownerKey) {

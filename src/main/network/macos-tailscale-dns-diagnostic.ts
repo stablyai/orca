@@ -14,23 +14,16 @@ type CacheEntry = {
 
 let cache: CacheEntry | null = null
 
-// Symbolic errno/Chromium codes carry the weight because they are locale-independent; the
-// English phrases only add coverage, so a localized or reworded string costs the hint, never
-// a wrong message. Deliberately over-inclusive: a false candidate re-reads cached DNS state,
-// a missed one silently drops the diagnostic that explains a broken connection.
+// Prefer locale-independent error codes; broad candidates only reread cached state, while misses hide useful hints.
 const NETWORK_LOOKUP_FAILURE_RE =
   /\b(?:ENOTFOUND|ENODATA|EAI_AGAIN|EAI_FAIL|EAI_NODATA|EAI_NONAME|ESERVFAIL|ERR_NAME_NOT_RESOLVED|ERR_NAME_RESOLUTION_FAILED|getaddrinfo)\b|lookup address|nodename nor servname|name resolution|name or service not known|no address associated with hostname|(?:could not|couldn't|cannot|can't|unable to|failed to) resolve|dns|websocket|connection refused/i
 
 const MAGIC_DNS_HINT =
   'macOS is using Tailscale MagicDNS (100.100.100.100) as the only global DNS resolver; add an upstream DNS server to the active network service or configure Tailscale global nameservers, then retry.'
 
-/**
- * Single source of truth for "could a DNS sample explain this failure?". The probe-admission
- * gate and the hint decision must never disagree — a gate stricter than the hint test silently
- * loses the diagnostic for a genuine DNS failure.
- */
+/** Probe admission and hint display must share eligibility so genuine DNS failures retain diagnostics. */
 export function isMacTailscaleDnsHintCandidate(message: string, detail?: string | null): boolean {
-  // Already hinted: re-wrapping a hinted message would match on its own "DNS" text.
+  // Avoid matching the hint’s own DNS text on repeated wrapping.
   if (message.endsWith(MAGIC_DNS_HINT)) {
     return false
   }
@@ -86,8 +79,7 @@ function readMacTailscaleDnsDiagnostic(now = Date.now()): DnsDiagnostic | null {
   return diagnostic
 }
 
-// Why: Claude/Codex own the failing API transports, so Orca can only point
-// users at the macOS resolver configuration that makes those transports fail.
+// Provider-owned transports prevent direct repair; explain the macOS resolver state instead.
 function appendMagicDnsHint(message: string, diagnostic: DnsDiagnostic | null): string {
   return diagnostic ? `${message} ${MAGIC_DNS_HINT}` : message
 }
@@ -103,7 +95,6 @@ export function withMacTailscaleDnsHintForDiagnostic(
 }
 
 export function withMacTailscaleDnsHint(message: string, detail?: string | null): string {
-  // The hint only describes macOS resolver state, so nothing off darwin can produce it.
   if (process.platform !== 'darwin') {
     return message
   }

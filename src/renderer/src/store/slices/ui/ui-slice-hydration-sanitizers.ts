@@ -1,20 +1,26 @@
-import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-explorer-display-root'
+import { isProjectGroupHookTrustKey } from '../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
+  ActivityBarPosition,
   TaskViewPresetId,
   TopLevelView,
   VisibleWorkspaceHostIds,
   StatusBarItem
-} from '../../../../../shared/ui-chrome-types'
-import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
-import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
-import { isTopLevelView } from '../../../../../shared/top-level-view'
-import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status-freshness'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
+
+import {
+  type WorkspaceCleanupDismissal,
+  WORKSPACE_CLEANUP_CLASSIFIER_VERSION
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import { isTopLevelView } from '../../../../../shared/ui-chrome/top-level-view'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
-import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
-import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
+import { persistedUIValuesEqual } from '../../../../../shared/collections/persisted-ui-equality'
+import '../../../../../shared/orca-profiles/constants'
+import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
@@ -70,7 +76,7 @@ export function hydrateTrustedOrcaHooks(
   }
   const next: PersistedTrustedOrcaHooks = {}
   for (const [repoId, entry] of Object.entries(sanitized)) {
-    if (validRepoIds.has(repoId)) {
+    if (validRepoIds.has(repoId) || isProjectGroupHookTrustKey(repoId)) {
       next[repoId] = entry
     }
   }
@@ -102,6 +108,11 @@ export function sanitizePersistedSidebarWidth(
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
+// Any other value would hide the activity bar entirely, since the layout renders only Top or Side.
+export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosition {
+  return position === 'side' ? 'side' : 'top'
+}
+
 export function sanitizePaneKeyTimestampRecord(
   value: unknown,
   maxAgeMs: number = AGENT_STATUS_HYDRATE_MAX_AGE_MS
@@ -125,10 +136,7 @@ export function sanitizePaneKeyTimestampRecord(
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
 
-/** Cleared-at cutoffs must outlive any persisted status entry they guard: main prunes entries
- *  at AGENT_STATUS_HYDRATE_MAX_AGE_MS from receivedAt, and cutoff values trail receipt time, so pruning them
- *  on the same clock can resurrect a cleared entry. Double the TTL keeps the guard alive past
- *  every entry it can still shadow. */
+/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
   return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
 }
@@ -245,14 +253,19 @@ export function hydrateUnexpectedSignoutDismissal(
   }
 }
 
-/** Normalizes persisted explorer records before hydration, including malformed or absent legacy values. */
-export function sanitizeExplorerPreferences(
+/** Normalizes persisted per-worktree explorer and notification records before hydration, including malformed or absent legacy values. */
+export function sanitizePerWorktreePreferences(
   ui: PersistedUIState
-): Pick<AppState, 'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree'> {
+): Pick<
+  AppState,
+  'explorerDisplayRootByWorktree' | 'showDotfilesByWorktree' | 'notificationsMutedByWorktree'
+> {
   return {
     explorerDisplayRootByWorktree: normalizeExplorerDisplayRootByWorktree(
       ui.explorerDisplayRootByWorktree
     ),
-    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree)
+    showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
+    // Same persisted shape as the dotfile map: a per-worktree boolean opt-in record.
+    notificationsMutedByWorktree: sanitizeShowDotfilesByWorktree(ui.notificationsMutedByWorktree)
   }
 }

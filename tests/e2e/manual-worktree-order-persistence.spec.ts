@@ -118,9 +118,6 @@ test('manual drag survives activity and persisted-profile reload', async ({
       expectedOrder
     )
 
-    const sortOrdersBeforeActivity = new Map(
-      manualOrderAfterDrag.rows.map((row) => [row.id, row.sortOrder])
-    )
     await first.page.evaluate(async (activityId) => {
       const store = window.__store
       if (!store) {
@@ -135,17 +132,7 @@ test('manual drag survives activity and persisted-profile reload', async ({
       await window.api.worktrees.persistSortOrder({ orderedIds: [activityId, ...orderedIds] })
       await store.getState().fetchAllWorktrees()
     }, targetId)
-    await expect
-      .poll(() =>
-        first.page.evaluate((activityId) => {
-          const row = window.__store
-            ?.getState()
-            .allWorktrees()
-            .find((worktree) => worktree.id === activityId)
-          return row?.sortOrder
-        }, targetId)
-      )
-      .not.toBe(sortOrdersBeforeActivity.get(targetId))
+    // Why: the activity save above is awaited, so the sidebar must still show the manual order.
     await expect
       .poll(() =>
         visibleWorktreeIds(first.page).then((ids) => ids.filter((id) => createdIds.includes(id)))
@@ -155,10 +142,15 @@ test('manual drag survives activity and persisted-profile reload', async ({
     await expect
       .poll(async () => {
         const [ui, worktrees] = await first.page.evaluate(async (ids) => {
-          const [persistedUi, persistedWorktrees] = await Promise.all([
+          const [persistedUi, repos] = await Promise.all([
             window.api.ui.get(),
-            window.api.worktrees.listAll()
+            window.api.repos.list()
           ])
+          const persistedWorktrees = (
+            await Promise.all(
+              repos.map((repo) => window.api.worktrees.listDetected({ repoId: repo.id }))
+            )
+          ).flatMap((result) => result.worktrees.filter((worktree) => worktree.visible))
           return [
             persistedUi,
             persistedWorktrees

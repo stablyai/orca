@@ -9,11 +9,7 @@ declare global {
   var __e2eGraphPublicationGate: GraphPublicationGate | undefined
 }
 
-/**
- * Holds a relaunched desktop host's renderer graph publication so a paired client deterministically
- * meets the host in the window between its RPC server accepting calls and its first published tab
- * graph. Install via `session.launch({ beforeFirstWindow })`.
- */
+// Hold initial renderer graph publication so paired calls deterministically reach an accepting host with no published tabs.
 export async function holdWindowGraphPublication(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ ipcMain }, channel) => {
     const gate: GraphPublicationGate = { held: true, published: 0 }
@@ -41,10 +37,7 @@ export async function holdWindowGraphPublication(app: ElectronApplication): Prom
   }, GRAPH_CHANNEL)
 }
 
-/**
- * Releases the hold and returns how many graph publications completed before release. Zero proves
- * every client call so far met a host that had published nothing.
- */
+// Require zero publications before release to prove earlier calls saw no renderer graph.
 export async function releaseWindowGraphPublication(app: ElectronApplication): Promise<number> {
   return app.evaluate(() => {
     const gate = globalThis.__e2eGraphPublicationGate

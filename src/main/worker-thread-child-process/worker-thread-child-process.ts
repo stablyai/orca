@@ -1,8 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
-import { LazyWorkerThreadHost, type WorkerThreadFactory } from '../lazy-worker-thread-host'
-import { currentWorkerEntryLayout, resolveWorkerThreadEntryPath } from '../worker-thread-entry-path'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
+import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
+import type { WorkerThreadFactory } from '../worker-threads/worker-thread-transport'
+import {
+  currentWorkerEntryLayout,
+  resolveWorkerThreadEntryPath
+} from '../worker-threads/worker-thread-entry-path'
 import type {
   WorkerThreadChildErrorPayload,
   WorkerThreadChildEvent,
@@ -10,13 +15,9 @@ import type {
   WorkerThreadChildSpec
 } from './worker-thread-child-process-protocol'
 
-// Why (#27362): libuv creates processes inline on the calling loop, and on
-// Windows CreateProcessW can spend seconds in code integrity hashing a large,
-// uncached binary. Spawning from a worker thread keeps that off the UI loop.
-// Like the port-scan worker (#11161) this fails closed rather than spawning
-// in-process when no worker can be started.
+// #27362: Windows code-integrity hashing can block CreateProcessW for seconds on the calling loop. Spawn in a worker and fail closed if unavailable (#11161).
 
-// Starting a worker costs a few ms; a few minutes covers back-to-back probes.
+// Amortize worker startup across nearby probes.
 export const IDLE_TEARDOWN_MS = 2 * 60_000
 
 const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
@@ -55,6 +56,9 @@ class WorkerThreadChildStdin extends EventEmitter {
 
 /** Main-thread stand-in for a piped ChildProcess whose real process lives on the worker. */
 export class WorkerThreadChildProcess extends EventEmitter {
+  ownedGroupStopping = false
+  ownedGroupTerminated = false
+  closed = false
   pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
@@ -77,23 +81,37 @@ export class WorkerThreadChildProcess extends EventEmitter {
     return this.send({ type: 'kill', id: this.id, signal })
   }
 
+  stopOwnedGroup(): void {
+    this.ownedGroupStopping = true
+    this.send({ type: 'stop-owned-group', id: this.id })
+  }
+
   receive(event: WorkerThreadChildEvent): void {
     switch (event.type) {
+      case 'group-terminated':
+        this.ownedGroupTerminated = true
+        this.emit('group-terminated')
+        return
       case 'spawn':
         this.pid = event.pid
         this.emit('spawn')
         return
       case 'stdout':
       case 'stderr':
-        this[event.type].emit(
-          'data',
-          Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
-        )
+        try {
+          this[event.type].emit(
+            'data',
+            Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
+          )
+        } finally {
+          this.send({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
+        }
         return
       case 'error':
         this.emitErrorIfObserved(event.error)
         return
       case 'spawn-error':
+        this.emit('group-terminated')
         this.emitErrorIfObserved(event.error)
         this.receive({ type: 'exit', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
         this.receive({ type: 'close', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
@@ -104,12 +122,12 @@ export class WorkerThreadChildProcess extends EventEmitter {
         this.emit('exit', event.code, event.signal)
         return
       case 'close':
+        this.closed = true
         this.emit('close', event.code, event.signal)
     }
   }
 
-  // Why: a late error after the caller detached would otherwise throw inside the
-  // worker message handler and surface as an uncaught main-process exception.
+  // Ignore unobserved late errors after caller detach or EventEmitter would throw fatally into main.
   private emitErrorIfObserved(payload: WorkerThreadChildErrorPayload): void {
     if (this.listenerCount('error') > 0) {
       this.emit('error', toError(payload))
@@ -177,10 +195,16 @@ export class WorkerThreadChildProcessHost {
     if (!child) {
       return
     }
-    if (event.type === 'close' || event.type === 'spawn-error') {
+    child.receive(event)
+    if (event.type === 'close') {
+      this.post({ type: 'release', id: event.id })
+    }
+    if (
+      event.type === 'spawn-error' ||
+      (child.closed && (!child.ownedGroupStopping || child.ownedGroupTerminated))
+    ) {
       this.forget(event.id)
     }
-    child.receive(event)
   }
 
   private forget(id: number): void {
@@ -190,9 +214,7 @@ export class WorkerThreadChildProcessHost {
     }
   }
 
-  // Why no 'close': the worker's death closes each child's stdin, which is its
-  // graceful stop, but nothing here can observe the exit, so callers' drain
-  // windows (and the Codex home lock they hold) still run their course.
+  // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.
   private abandonAll(message: string): void {
     const abandoned = [...this.children.values()]
     this.children.clear()
@@ -208,16 +230,15 @@ function defaultWorkerFactory(): Worker {
     currentWorkerEntryLayout(__dirname),
     WORKER_ENTRY_FILENAME
   )
-  // Why: throw synchronously so spawn() fails closed instead of waiting on a worker that never loads.
+  // Reject missing worker synchronously so spawning fails closed instead of awaiting impossible readiness.
   if (!existsSync(workerPath)) {
     throw new Error(`Child process worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-child-process-spawner' })
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null
 
-/** Spawns a piped child from the shared worker thread so process creation never blocks the main loop. */
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
   sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost.spawn(spec)

@@ -4,8 +4,7 @@ import { getActiveTabId } from './store'
 
 export const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 
-// Why: split groups and hidden worktrees keep extra tab bars mounted, so the "+" has to come from
-// the active group's strip; the pre-layout titlebar fallback has no strip to scope to.
+// Scope + to the active group: hidden worktrees keep extra strips mounted; the legacy titlebar has none.
 async function activeTabBarRoot(page: Page): Promise<Locator> {
   const groupId = await page.evaluate(() => {
     const state = window.__store?.getState()
@@ -33,7 +32,8 @@ export async function createTerminalTabFromMenu(page: Page): Promise<string> {
 
   await tabBar.getByRole('button', { name: 'New tab' }).click()
   await page
-    .getByRole('menuitem', { name: /New Terminal/i })
+    .getByRole('menu')
+    .getByRole('button', { name: /New Terminal/i })
     .first()
     .click()
 

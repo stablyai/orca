@@ -1,21 +1,33 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-unsaved-files'
+import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
-import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { selectProjectGroupRemovalTargets } from '@/store/project-groups/project-group-removal-targets'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
+} from '../../../../../../shared/execution-host/execution-host'
+import { refreshFolderProjectGroup } from './project-group-folder-refresh'
 import type { ProjectGroupHeaderActions } from './project-group-header-actions'
+import { useProjectGroupNestingActions } from './use-project-group-nesting-actions'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
-  | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+  | {
+      type: 'rename'
+      groupId: string
+      currentName: string
+      hostId?: ExecutionHostId
+    }
   | { type: 'create-subgroup'; parentGroupId: string; parentName: string; hostId?: ExecutionHostId }
 
 export type ProjectGroupDeleteDialogState = {
@@ -54,48 +66,18 @@ function reportProjectGroupDeleteFailures(result: {
       ),
       {
         description: translate(
-          'auto.components.sidebar.WorktreeList.f94466bc39',
-          '{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.',
+          'auto.components.sidebar.WorktreeList.groupProjectsRemained',
+          '{{remaining}} of {{count}} contained projects remained after deleting the group.',
           {
-            value0: result.failedProjectRemovals.length,
-            value1: requestedCount,
-            value2: requestedCount === 1 ? '' : 's'
+            remaining: result.failedProjectRemovals.length,
+            count: requestedCount,
+            defaultValue_one:
+              '{{remaining}} of {{count}} contained project remained after deleting the group.'
           }
         )
       }
     )
   }
-}
-
-// Why: a falsy result also covers RPC timeout/disconnect, so the copy must not assert the host refused.
-function reportProjectGroupMoveFailure(): void {
-  toast.error(
-    translate(
-      'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.009a0dfef9',
-      'Failed to move group'
-    ),
-    {
-      description: translate(
-        'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.b1ba3948b3',
-        "Orca could not confirm the move with the group's host. Recheck the group after reconnecting, or update Orca on that host."
-      )
-    }
-  )
-}
-
-function reportProjectSubgroupCreateFailure(): void {
-  toast.error(
-    translate(
-      'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.8269fcd14a',
-      'Failed to create subgroup'
-    ),
-    {
-      description: translate(
-        'auto.components.sidebar.worktree.list.rows.use.project.group.dialogs.daf08d9e4e',
-        "Orca could not confirm the new group with the parent group's host. Recheck the sidebar after reconnecting."
-      )
-    }
-  )
 }
 
 // Create/rename/move/delete flows for project groups, including the contained-project fan-out.
@@ -107,13 +89,12 @@ export function useProjectGroupDialogs(args: {
   const { repos, repoMap, projectGroups } = args
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
-  const createProjectSubgroup = useAppStore((s) => s.createProjectSubgroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
-  const moveProjectGroup = useAppStore((s) => s.moveProjectGroup)
-  const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
+  const { handleMoveProjectGroup, submitProjectSubgroup } = useProjectGroupNestingActions()
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
+  const refreshingGroupIds = useRef(new Set<string>())
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
 
@@ -126,14 +107,53 @@ export function useProjectGroupDialogs(args: {
       if (repo.projectGroupId === groupId) {
         return
       }
-      void moveProjectToGroup(repo.id, groupId, undefined, getRepoExecutionHostId(repo))
+      void moveProjectToGroup(repo, groupId)
     },
     [moveProjectToGroup]
   )
 
   const handleRemoveProjectFromGroup = useCallback(
     (repo: Repo) => {
-      void moveProjectToGroup(repo.id, null, undefined, getRepoExecutionHostId(repo))
+      void moveProjectToGroup(repo, null)
+    },
+    [moveProjectToGroup]
+  )
+
+  const handleRefreshProjectGroup = useCallback(
+    async (group: ProjectGroup): Promise<void> => {
+      if (refreshingGroupIds.current.has(group.id)) {
+        return
+      }
+      refreshingGroupIds.current.add(group.id)
+      // Why: scans of large folders can take seconds; show progress so repeat clicks aren't silently ignored.
+      const loadingToastId = toast.loading(
+        translate(
+          'auto.components.sidebar.WorktreeList.projectGroupRefreshing',
+          'Refreshing {{group}}…',
+          { group: group.name }
+        )
+      )
+      try {
+        await refreshFolderProjectGroup(group, {
+          getRepos: () => useAppStore.getState().repos,
+          getProjectGroups: () => useAppStore.getState().projectGroups,
+          scanNestedRepos: useAppStore.getState().scanNestedRepos,
+          importNestedRepos: useAppStore.getState().importNestedRepos,
+          moveProjectToGroup
+        })
+      } catch (error) {
+        console.error('Failed to refresh project group:', error)
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.projectGroupRefreshScanFailed',
+            'Could not scan this project group'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
+      } finally {
+        toast.dismiss(loadingToastId)
+        refreshingGroupIds.current.delete(group.id)
+      }
     },
     [moveProjectToGroup]
   )
@@ -152,39 +172,19 @@ export function useProjectGroupDialogs(args: {
     []
   )
 
-  const handleMoveProjectGroup = useCallback(
-    async (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => {
-      if (await moveProjectGroup(groupId, parentGroupId, { hostId })) {
-        // Why: the new parent may be collapsed; revealing opens it so the group doesn't vanish.
-        revealSidebarRow(getProjectGroupHeaderKey(groupId))
-      } else {
-        reportProjectGroupMoveFailure()
-      }
-    },
-    [moveProjectGroup, revealSidebarRow]
-  )
-
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!nameDialog) {
         return
       }
       if (nameDialog.type === 'create-subgroup') {
-        const group = await createProjectSubgroup(name, nameDialog.parentGroupId, {
-          hostId: nameDialog.hostId
-        })
-        if (group) {
-          revealSidebarRow(getProjectGroupHeaderKey(group.id))
-        } else {
-          reportProjectSubgroupCreateFailure()
-        }
+        await submitProjectSubgroup(name, nameDialog.parentGroupId, nameDialog.hostId)
         return
       }
       if (nameDialog.type === 'create-from-repo') {
-        const hostId = getRepoExecutionHostId(nameDialog.repo)
-        const group = await createProjectGroup(name, hostId)
+        const group = await createProjectGroup(name, getRepoExecutionHostId(nameDialog.repo))
         if (group) {
-          await moveProjectToGroup(nameDialog.repo.id, group.id, undefined, hostId)
+          await moveProjectToGroup(nameDialog.repo, group.id)
         }
         return
       }
@@ -209,14 +209,7 @@ export function useProjectGroupDialogs(args: {
         )
       }
     },
-    [
-      createProjectGroup,
-      createProjectSubgroup,
-      moveProjectToGroup,
-      nameDialog,
-      revealSidebarRow,
-      updateProjectGroup
-    ]
+    [createProjectGroup, moveProjectToGroup, nameDialog, submitProjectSubgroup, updateProjectGroup]
   )
 
   const deleteTargets = useMemo(() => {
@@ -241,6 +234,21 @@ export function useProjectGroupDialogs(args: {
   )
   const removeContainedProjects =
     deleteProjectCount > 0 && deleteDialog?.removeContainedProjects === true
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
+  const deleteUnsavedTargets = useMemo(
+    () =>
+      removeContainedProjects && deleteTargets
+        ? projectRemovalTargets(
+            { worktreesByRepo, detectedWorktreesByRepo },
+            deleteTargets.projects.map((project) => ({
+              repoId: project.id,
+              hostId: project.hostId
+            }))
+          )
+        : [],
+    [deleteTargets, detectedWorktreesByRepo, removeContainedProjects, worktreesByRepo]
+  )
 
   const handleDeleteProjectGroup = useCallback(
     (groupId: string, groupName: string, hostId?: ExecutionHostId) => {
@@ -253,30 +261,39 @@ export function useProjectGroupDialogs(args: {
     if (!deleteDialog) {
       return
     }
+    const confirmedDiscards = confirmUnsavedDiscard(useAppStore.getState, deleteUnsavedTargets)
     try {
       reportProjectGroupDeleteFailures(
         await deleteProjectGroupWithContainedProjects(deleteDialog.groupId, {
           removeContainedProjects,
-          hostId: deleteDialog.hostId
+          hostId: deleteDialog.hostId,
+          confirmedDiscards
         })
       )
     } finally {
       // Why: deleting contained projects can unmount this dialog before its close handler runs, so the parent owns cleanup.
       setDeleteDialog(null)
     }
-  }, [deleteProjectGroupWithContainedProjects, removeContainedProjects, deleteDialog])
+  }, [
+    deleteProjectGroupWithContainedProjects,
+    removeContainedProjects,
+    deleteDialog,
+    deleteUnsavedTargets
+  ])
 
   const projectGroupActions = useMemo<ProjectGroupHeaderActions>(
     () => ({
       onRename: handleRenameProjectGroup,
       onCreateSubgroup: handleCreateProjectSubgroup,
       onMove: handleMoveProjectGroup,
-      onDelete: handleDeleteProjectGroup
+      onDelete: handleDeleteProjectGroup,
+      onRefresh: handleRefreshProjectGroup
     }),
     [
       handleCreateProjectSubgroup,
       handleDeleteProjectGroup,
       handleMoveProjectGroup,
+      handleRefreshProjectGroup,
       handleRenameProjectGroup
     ]
   )
@@ -290,13 +307,11 @@ export function useProjectGroupDialogs(args: {
     deleteSubgroupCount,
     deleteProjectNames,
     removeContainedProjects,
+    deleteUnsavedTargets,
     handleCreateGroupFromRepo,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
-    handleRenameProjectGroup,
-    handleMoveProjectGroup,
     handleSubmitProjectGroupName,
-    handleDeleteProjectGroup,
     handleConfirmDeleteProjectGroup,
     projectGroupActions
   }

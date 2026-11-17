@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { stripAnsiEscapeSequences } from '../../src/shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../src/shared/terminal/protocol/escape/ansi-escape-sequences'
 import { test, expect } from './helpers/orca-app'
 import {
   runNodeScriptInTerminal,
@@ -171,9 +171,7 @@ process.stdout.write(${JSON.stringify(`${marker}\n`)})
       }, blocked.tabId)
       expect(remountResult).toMatchObject({ remounted: true })
 
-      // Keep the original pre-spawn attempt gated until React has committed the
-      // successor pane. Releasing earlier lets a loaded CI renderer finish the
-      // old mount's teardown before the replacement reaches its connect path.
+      // Hold the old pre-spawn attempt until successor commit; otherwise loaded CI can finish old teardown before replacement connect.
       await expect
         .poll(
           () =>

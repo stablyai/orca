@@ -21,7 +21,7 @@ import {
 } from './helpers/browser-split-guest-probes'
 import { startBrowserSplitPageServer } from './helpers/browser-split-page-server'
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
+// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/workspace/identity/floating-workspace-id.ts.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const FLOATING_PANEL = '[data-floating-terminal-panel]'
 const isMac = process.platform === 'darwin'
@@ -38,7 +38,11 @@ async function openFloatingBrowser(
       if (!store) {
         throw new Error('Store unavailable')
       }
-      store.setState({ settings: { ...store.getState().settings, floatingTerminalEnabled: true } })
+      const settings = store.getState().settings
+      if (!settings) {
+        throw new Error('Settings are not loaded')
+      }
+      store.setState({ settings: { ...settings, floatingTerminalEnabled: true } })
       const state = store.getState()
       const tab = state.createBrowserTab(worktreeId, initialUrl, {
         activate: true,

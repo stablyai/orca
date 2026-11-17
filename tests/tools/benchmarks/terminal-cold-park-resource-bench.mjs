@@ -1,17 +1,7 @@
 #!/usr/bin/env node
-// Cold-park RESOURCE-BENEFIT benchmark: answers "is cold parking worth having?"
-// by measuring what it actually saves at many-worktree scale — renderer JS
-// heap, live WebGL contexts, and mounted pane managers — with parking OFF vs
-// ON in the SAME app session (toggled via the terminalHiddenViewParking
-// setting). The companion reveal-cost bench measures the price you pay on
-// reveal; this measures the benefit you get while backgrounded.
-//
-// Method: create N worktrees each with one terminal primed with scrollback,
-// leave one foreground and background the rest, then read resources in two
-// states:
-//   off — parking disabled: every hidden terminal stays fully mounted
-//   on  — parking enabled: hidden terminals past the (shrunk) hysteresis park
-// The off−on delta is the resource win parking buys.
+// Compare parking OFF→ON in one app session at many-worktree scale: JS heap, WebGL contexts and mounted managers.
+// Prime each terminal’s scrollback, leave one active, then measure the delta after shortened hysteresis parks hidden views.
+// Companion reveal benchmark measures the return cost.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
@@ -42,9 +32,7 @@ import {
 const rootDir = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const PARK_DELAY_MS = 1_500
 const SETTLE_AFTER_PARK_MS = 4_000
-// Short root so the daemon Unix socket fits under the macOS 104-char limit;
-// the default /var/folders tmp path overruns it and the daemon fails, leaving
-// terminals non-snapshot-backed and therefore unparkable.
+// Keep root short for macOS’s ~104-char Unix socket limit; longer temp paths break daemon startup and snapshot-backed parking.
 const shortRoot = path.join(os.homedir(), '.ocpr')
 
 function parseArgs() {
@@ -280,13 +268,9 @@ async function setParkingEnabled(page, enabled) {
 
 const toMB = (bytes) => (bytes == null ? null : Math.round((bytes / 1048576) * 10) / 10)
 
-/** Force GC repeatedly (detached xterm buffers are typed arrays that GC lazily),
- *  then read whole-app process memory (main+renderer via getAppMetrics), renderer
- *  JS heap, and pane/WebGL counts. */
+// Force repeated GC for lazily reclaimed xterm typed arrays, then read app process memory, renderer heap and pane/WebGL counts.
 async function measureResources(page, cdp) {
-  // Why: one collectGarbage rarely reclaims freshly detached xterm typed-array
-  // buffers; drive several passes with settle gaps so the parked delta reflects
-  // reclaimed memory, not GC lag.
+  // Repeat GC with settling gaps so delayed collection cannot hide released typed-array storage.
   for (let i = 0; i < 4; i++) {
     await cdp.send('HeapProfiler.collectGarbage').catch(() => undefined)
     await sleep(400)
@@ -307,8 +291,7 @@ async function measureResources(page, cdp) {
       }
     }
     const mem = performance?.memory ?? null
-    // Whole-app process memory (main + renderer + other) from getAppMetrics —
-    // the number that captures the daemon-snapshot cost the renderer heap can't.
+    // Use getAppMetrics process memory to include main’s daemon-snapshot cost, absent from renderer heap.
     const snapshot = await window.api?.memory?.getSnapshot?.().catch(() => null)
     return {
       paneManagerCount: managers?.size ?? 0,
@@ -379,23 +362,20 @@ async function main() {
     const primary = worktrees.find((w) => w.isMainWorktree) ?? worktrees[0]
     const anotherWorktree = worktrees.find((w) => w.id !== primary.id)
 
-    // Ensure parking is OFF while we mount + prime every terminal, so all N
-    // stay fully mounted for the baseline measurement.
+    // Keep parking off while mounting/filling every terminal for baseline.
     await setParkingEnabled(page, false)
     for (const wt of worktrees) {
       await activateWorktreeTerminal(page, wt.id)
       await waitForBoundTerminal(page, wt.id)
       await primeScrollback(page, wt.id, args.scrollbackLines)
     }
-    // Foreground the primary; the other N-1 are now backgrounded but — with
-    // parking OFF — still fully mounted.
+    // Activate primary while all other views remain mounted under disabled parking.
     await activateWorktreeTerminal(page, primary.id)
     await sleep(SETTLE_AFTER_PARK_MS)
     report.states.parkingOff = await measureResources(page, cdp)
     console.log(`[cold-park-res] parkingOff: ${JSON.stringify(report.states.parkingOff)}`)
 
-    // Turn parking ON; the backgrounded worktrees pass the shrunk hysteresis
-    // and park. Nudge a re-evaluation by toggling focus so the park timers arm.
+    // Enable parking and toggle focus to reevaluate shortened hysteresis.
     await setParkingEnabled(page, true)
     await sleep(PARK_DELAY_MS + 500)
     // Re-focus primary to trigger the park policy effect re-run for the others.
@@ -428,10 +408,7 @@ async function main() {
     if (launched) {
       try {
         await stopDevApp(launched.child)
-        // Why: stopDevApp SIGTERMs only the top-level vite child on macOS/Linux;
-        // the spawned electron process tree (main, GPU, renderer, helpers)
-        // survives and accumulates across runs until the machine saturates.
-        // Best-effort reap the whole tree rooted at the launcher pid.
+        // stopDevApp kills only top-level Vite on macOS/Linux; reap surviving Electron descendants so repeated benches cannot saturate the machine.
         if (launched.child?.pid && process.platform !== 'win32') {
           try {
             execFileSync('pkill', ['-9', '-P', String(launched.child.pid)], { stdio: 'ignore' })

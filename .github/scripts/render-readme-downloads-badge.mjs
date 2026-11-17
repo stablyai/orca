@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isAgentStateRulesTag } from '../../config/scripts/release-tag-patterns.mjs'
+import { isAgentStateRulesTag } from '../../config/scripts/release/versioning/release-tag-patterns.mjs'
 
 const repository = process.env.GITHUB_REPOSITORY ?? 'stablyai/orca'
 const token = process.env.GITHUB_TOKEN

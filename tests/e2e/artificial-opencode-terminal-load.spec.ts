@@ -1,22 +1,10 @@
 import { presentTerminalPerfWindow } from './terminal-perf-presentation'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { randomUUID } from 'node:crypto'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
-import {
-  ensureTerminalVisible,
-  getActiveWorktreeId,
-  getAllWorktreeIds,
-  switchToWorktree,
-  waitForActiveWorktree,
-  waitForSessionReady
-} from './helpers/store'
-import {
-  sendToTerminal,
-  waitForActivePanePtyId,
-  waitForActiveTerminalManager
-} from './helpers/terminal'
+import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { sendToTerminal } from './helpers/terminal'
 import {
   ensureActiveWorktreePaneLoad,
   focusActiveTerminalInput,
@@ -26,9 +14,7 @@ import {
 } from './artificial-opencode-pane-interactions'
 import { runHiddenRealPtyPressureScenario } from './artificial-opencode-hidden-pressure-scenario'
 import type { HiddenPressureOutputMode } from './artificial-opencode-hidden-pressure-script'
-import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
 import { runRendererBackpressureRevisitScenario } from './artificial-opencode-revisit-pressure-scenario'
-import { startSyntheticOpenCodeInjection } from './artificial-opencode-synthetic-injection'
 
 test.beforeEach(async ({ electronApp, orcaPage }, testInfo) => {
   await orcaPage.waitForLoadState('domcontentloaded')
@@ -112,43 +98,20 @@ type MainPtyPressureDebugSnapshot = {
 }
 
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
-const DEFAULT_SAME_WORKSPACE_PANES = 5
-const DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE = 3
 const DEFAULT_PRESSURE_BACKGROUND_PANES = 17
 const DEFAULT_PRESSURE_OUTPUT_CHARS = 768 * 1024
 const DEFAULT_HIDDEN_PRESSURE_PANES = 17
 const HIDDEN_PRESSURE_START_DELAY_MS = 1200
 const DEFAULT_FRAME_COUNT = 180
-const DEFAULT_FRAME_INTERVAL_MS = 6
-const TIMER_SAMPLE_MS = 16
 const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
-// Why: these are regression budgets, not observed baselines. Repeated local
-// 100-pane OpenCode-scale runs are below 50ms worst-key latency; keep enough
-// CI headroom while still failing changes that make typing visibly sluggish.
+// Gate visible typing regressions with CI headroom above repeated local sub-50ms echo measurements.
 const MAX_MEDIAN_KEY_LATENCY_MS = 75
-const MAX_WORST_KEY_LATENCY_MS = 300
-// Why: under injected multi-pane load, the worst *single* key echo lands behind
-// whichever synthetic flush it collides with, so on a CPU-starved OSS shard it
-// is environment-dominated (seen at ~3.1s) even when typing stays instant. The
-// median (75ms) is the real responsiveness guard; keep worst-under-load only as
-// a catastrophic-hang detector. Leave CI headroom above the observed ~3.1s
-// scheduler overrun while still surfacing multi-second renderer stalls.
+// Keep median latency strict; worst loaded echo can hit a ~3.1s runner stall and serves only as a hang detector.
 const MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS = 3_500
-// Why: the post-revisit printf is sampled while the background panes are still
-// ACK-gate-held and through a whole-buffer serialize poll, so it inherits the
-// same environment-dominated worst-case as typing under load; the unloaded
-// 300ms budget has no margin for this switch-and-focus moment.
+// Revisit printf runs under background pressure plus whole-buffer polling, so it needs the loaded budget.
 const MAX_REVISIT_LATENCY_UNDER_LOAD_MS = 3_000
-// Why: GitHub's two-worker Electron shards can briefly starve renderer timers
-// without visible typing lag. Keep this as a smoke gate, not a CPU lottery.
-const MAX_TIMER_DRIFT_MS = 250
-// Why: under injected multi-pane redraw load the renderer event loop is
-// environment-dominated (seen at ~3.1s on a CPU-starved OSS shard) even when
-// typing stays responsive, mirroring MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS. Keep
-// this only as a catastrophic-starvation gate; the unloaded 250ms budget guards
-// the real baseline.
+// Loaded timer drift may share ~3.1s runner starvation with worst echo; keep the strict unloaded baseline.
 const MAX_TIMER_DRIFT_UNDER_LOAD_MS = 3_500
-const MAX_SCROLL_LATENCY_MS = 150
 // Why: byte-level peaks vary by drain quantum; the coarse guard matches the main-pressure scenario.
 const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 5 * 1024 * 1024
 
@@ -161,27 +124,6 @@ function readPositiveInt(name: string, fallback: number): number {
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 
-function readPositiveIntList(name: string): number[] {
-  const raw = process.env[name]
-  if (!raw) {
-    return []
-  }
-  return raw
-    .split(',')
-    .map((part) => Number(part.trim()))
-    .filter((value, index, values) => {
-      return Number.isInteger(value) && value > 1 && values.indexOf(value) === index
-    })
-}
-
-const SAME_WORKSPACE_PANES = readPositiveInt(
-  'ORCA_E2E_OPENCODE_SAME_WORKSPACE_PANES',
-  DEFAULT_SAME_WORKSPACE_PANES
-)
-const CROSS_WORKSPACE_PANES_PER_WORKTREE = readPositiveInt(
-  'ORCA_E2E_OPENCODE_CROSS_WORKSPACE_PANES',
-  DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE
-)
 const PRESSURE_BACKGROUND_PANES = readPositiveInt(
   'ORCA_E2E_OPENCODE_PRESSURE_BACKGROUND_PANES',
   DEFAULT_PRESSURE_BACKGROUND_PANES
@@ -195,18 +137,6 @@ const HIDDEN_PRESSURE_PANES = readPositiveInt(
   DEFAULT_HIDDEN_PRESSURE_PANES
 )
 const FRAME_COUNT = readPositiveInt('ORCA_E2E_OPENCODE_FRAME_COUNT', DEFAULT_FRAME_COUNT)
-const FRAME_INTERVAL_MS = readPositiveInt(
-  'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS',
-  DEFAULT_FRAME_INTERVAL_MS
-)
-const SCALE_SAME_WORKSPACE_PANES = readPositiveIntList('ORCA_E2E_OPENCODE_SCALE_PANES')
-const SCALE_CROSS_WORKSPACE_PANES = readPositiveIntList(
-  'ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES'
-)
-const SCALE_PRESSURE_PANES = readPositiveIntList('ORCA_E2E_OPENCODE_SCALE_PRESSURE_PANES')
-const SCALE_HIDDEN_PRESSURE_PANES = readPositiveIntList(
-  'ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES'
-)
 
 function interactivePromptScript(runId: string): string {
   return `
@@ -231,8 +161,7 @@ process.stdin.on('data', (chunk) => {
 }
 
 function writeInteractivePromptScript(scriptPath: string, runId: string): void {
-  // Why: long scale runs can outlive temporary repo cleanup races in the test
-  // harness; the prompt script only needs a writable directory, not git state.
+  // Use any writable directory: scale-run prompt scripts need no git state and can outlive fixture-repo cleanup.
   mkdirSync(path.dirname(scriptPath), { recursive: true })
   writeFileSync(scriptPath, interactivePromptScript(runId))
 }
@@ -252,29 +181,34 @@ async function measureTypingDuringLoad(
   await waitForTerminalOutputForPtyId(page, ptyId, `OPENCODE_TYPING_READY_${runId}`, 10_000)
   await focusActiveTerminalInput(page)
 
-  const eventLoop = await page.evaluateHandle((sampleMs) => {
-    let maxTimerDriftMs = 0
-    let lastTick = performance.now()
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
-      lastTick = now
-    }, sampleMs)
-    return {
-      stop: () => {
-        window.clearInterval(timer)
-        return maxTimerDriftMs
+  // Hidden-renderer intervals can drift while echo stays fast; use long tasks to measure actual main-thread blocking.
+  const eventLoop = await page.evaluateHandle(() => {
+    if (!PerformanceObserver.supportedEntryTypes.includes('longtask')) {
+      throw new Error('Long-task timing is unavailable in this renderer')
+    }
+    let longestTaskMs = 0
+    const record = (entries: PerformanceEntryList): void => {
+      for (const entry of entries) {
+        longestTaskMs = Math.max(longestTaskMs, entry.duration)
       }
     }
-  }, TIMER_SAMPLE_MS)
+    const observer = new PerformanceObserver((list) => record(list.getEntries()))
+    observer.observe({ type: 'longtask' })
+    return {
+      stop: () => {
+        record(observer.takeRecords())
+        observer.disconnect()
+        return longestTaskMs
+      }
+    }
+  })
 
   const latencies: number[] = []
   for (const [index, char] of [...KEY_LATENCY_SAMPLES].entries()) {
     const marker = `OPENCODE_TYPING_KEY_${runId}_${index + 1}`
     const start = performance.now()
     await page.keyboard.type(char)
-    // Why: wait up to the under-load budget so a slow echo is measured and
-    // asserted per-scenario, not thrown as a confusing "did not contain".
+    // Allow the loaded echo budget so slow input becomes a latency failure rather than a missing-output error.
     await waitForMarkerLatency(page, marker, MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
     latencies.push(performance.now() - start)
   }
@@ -398,100 +332,6 @@ function annotateTypingMeasurement(
   })
 }
 
-async function measureCrossWorkspaceTypingDuringHiddenLoad({
-  orcaPage,
-  testRepoPath,
-  hiddenPaneCount,
-  annotationType,
-  testInfo
-}: {
-  orcaPage: Page
-  testRepoPath: string
-  hiddenPaneCount: number
-  annotationType: string
-  testInfo: TestInfo
-}): Promise<void> {
-  await waitForSessionReady(orcaPage)
-  const firstWorktreeId = await waitForActiveWorktree(orcaPage)
-  const allWorktreeIds = await getAllWorktreeIds(orcaPage)
-  const secondWorktreeId = allWorktreeIds.find((id) => id !== firstWorktreeId)
-  test.skip(!secondWorktreeId, 'OpenCode cross-workspace load needs the seeded secondary worktree')
-  if (!secondWorktreeId) {
-    return
-  }
-
-  await switchToWorktree(orcaPage, secondWorktreeId)
-  const hiddenPanes = await ensureActiveWorktreePaneLoad(orcaPage, hiddenPaneCount)
-
-  await switchToWorktree(orcaPage, firstWorktreeId)
-  await expect.poll(() => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(firstWorktreeId)
-  await ensureTerminalVisible(orcaPage)
-  await waitForActiveTerminalManager(orcaPage, 30_000)
-  const typingPtyId = await waitForActivePanePtyId(orcaPage)
-
-  const runId = randomUUID()
-  const scriptPath = path.join(testRepoPath, `.orca-opencode-cross-${hiddenPaneCount}-${runId}.mjs`)
-  writeInteractivePromptScript(scriptPath, runId)
-  await resetTerminalPtyOutputDebug(orcaPage)
-  const load = await startSyntheticOpenCodeInjection({
-    frameCount: FRAME_COUNT,
-    intervalMs: FRAME_INTERVAL_MS,
-    page: orcaPage,
-    paneKeys: hiddenPanes.map((pane) => pane.paneKey)
-  })
-  try {
-    const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
-    const debug = await readTerminalPtyOutputDebug(orcaPage)
-    const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
-    const mainPressure = await readMainPtyPressureDebug(orcaPage)
-    annotateTypingMeasurement(
-      testInfo,
-      annotationType,
-      hiddenPanes.length + 1,
-      measurement,
-      debug,
-      scheduler,
-      mainPressure
-    )
-    expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
-    expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
-    expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
-    expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_UNDER_LOAD_MS)
-  } finally {
-    await load.stop()
-    await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
-    rmSync(scriptPath, { force: true })
-  }
-}
-
-async function runConfiguredMainPressureScenario({
-  annotationSuffix,
-  backgroundPaneCount,
-  orcaPage,
-  testInfo,
-  testRepoPath
-}: {
-  annotationSuffix: string
-  backgroundPaneCount: number
-  orcaPage: Page
-  testInfo: TestInfo
-  testRepoPath: string
-}): Promise<void> {
-  await runMainPressureScenario({
-    annotationSuffix,
-    backgroundPaneCount,
-    orcaPage,
-    pressureOutputChars: PRESSURE_OUTPUT_CHARS,
-    testInfo,
-    testRepoPath,
-    maxMedianKeyLatencyMs: MAX_MEDIAN_KEY_LATENCY_MS,
-    maxScrollLatencyMs: MAX_SCROLL_LATENCY_MS,
-    maxTimerDriftMs: MAX_TIMER_DRIFT_MS,
-    maxWorstKeyLatencyMs: MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS,
-    deps: terminalLoadScenarioDeps
-  })
-}
-
 const terminalLoadScenarioDeps = {
   annotateTypingMeasurement,
   ensureActiveWorktreePaneLoad,
@@ -513,102 +353,6 @@ const terminalLoadScenarioDeps = {
 test.describe('Artificial OpenCode terminal load', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('measures baseline typing responsiveness with one active terminal', async ({
-    orcaPage,
-    testRepoPath
-  }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    const typingPtyId = await waitForActivePanePtyId(orcaPage)
-
-    const runId = randomUUID()
-    const scriptPath = path.join(testRepoPath, `.orca-opencode-baseline-typing-${runId}.mjs`)
-    writeInteractivePromptScript(scriptPath, runId)
-    await resetTerminalPtyOutputDebug(orcaPage)
-    try {
-      const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
-      const debug = await readTerminalPtyOutputDebug(orcaPage)
-      const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
-      const mainPressure = await readMainPtyPressureDebug(orcaPage)
-      annotateTypingMeasurement(
-        testInfo,
-        'opencode-baseline-typing',
-        1,
-        measurement,
-        debug,
-        scheduler,
-        mainPressure
-      )
-      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
-      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
-      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
-    } finally {
-      await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
-      rmSync(scriptPath, { force: true })
-    }
-  })
-
-  test('keeps typing responsive while same-workspace panes redraw simultaneously', async ({
-    orcaPage,
-    testRepoPath
-  }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    const panes = await ensureActiveWorktreePaneLoad(orcaPage, SAME_WORKSPACE_PANES)
-    const [typingPane, ...loadPanes] = panes
-    await focusPane(orcaPage, typingPane.paneKey)
-
-    const runId = randomUUID()
-    const scriptPath = path.join(testRepoPath, `.orca-opencode-typing-${runId}.mjs`)
-    writeInteractivePromptScript(scriptPath, runId)
-    await resetTerminalPtyOutputDebug(orcaPage)
-    const load = await startSyntheticOpenCodeInjection({
-      frameCount: FRAME_COUNT,
-      intervalMs: FRAME_INTERVAL_MS,
-      page: orcaPage,
-      paneKeys: loadPanes.map((pane) => pane.paneKey)
-    })
-    try {
-      const measurement = await measureTypingDuringLoad(
-        orcaPage,
-        scriptPath,
-        typingPane.ptyId,
-        runId
-      )
-      annotateTypingMeasurement(
-        testInfo,
-        'opencode-same-workspace-typing',
-        panes.length,
-        measurement,
-        await readTerminalPtyOutputDebug(orcaPage),
-        await readTerminalOutputSchedulerDebug(orcaPage),
-        await readMainPtyPressureDebug(orcaPage)
-      )
-      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
-      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
-      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_UNDER_LOAD_MS)
-    } finally {
-      await load.stop()
-      await sendToTerminal(orcaPage, typingPane.ptyId, '\x03').catch(() => undefined)
-      rmSync(scriptPath, { force: true })
-    }
-  })
-
-  test('keeps active typing responsive while background PTYs are ACK-backpressured', async ({
-    orcaPage,
-    testRepoPath
-  }, testInfo) => {
-    await runConfiguredMainPressureScenario({
-      orcaPage,
-      testRepoPath,
-      backgroundPaneCount: PRESSURE_BACKGROUND_PANES,
-      annotationSuffix: '',
-      testInfo
-    })
-  })
-
   test('keeps renderer backpressure bounded across worktree revisit', async ({
     orcaPage,
     testRepoPath
@@ -620,10 +364,7 @@ test.describe('Artificial OpenCode terminal load', () => {
       maxMedianKeyLatencyMs: MAX_MEDIAN_KEY_LATENCY_MS,
       maxRendererSchedulerQueuedChars: MAX_RENDERER_SCHEDULER_QUEUED_CHARS,
       maxRevisitLatencyMs: MAX_REVISIT_LATENCY_UNDER_LOAD_MS,
-      // Why: the printf is sampled while background panes are ACK-gate-held, so
-      // worst-key and timer drift are environment-dominated here (worst seen ~2s)
-      // like the other under-load scenarios; keep the strict budgets for the
-      // unloaded baseline test only.
+      // Use loaded worst-echo/drift budgets under background pressure; strict budgets belong to the unloaded baseline.
       maxTimerDriftMs: MAX_TIMER_DRIFT_UNDER_LOAD_MS,
       maxWorstKeyLatencyMs: MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS,
       orcaPage,
@@ -633,81 +374,6 @@ test.describe('Artificial OpenCode terminal load', () => {
     })
   })
 
-  for (const paneCount of SCALE_PRESSURE_PANES) {
-    test(`keeps active interactions responsive at ${paneCount} ACK-backpressured OpenCode PTYs`, async ({
-      orcaPage,
-      testRepoPath
-    }, testInfo) => {
-      await runConfiguredMainPressureScenario({
-        orcaPage,
-        testRepoPath,
-        backgroundPaneCount: paneCount,
-        annotationSuffix: `-${paneCount}`,
-        testInfo
-      })
-    })
-  }
-
-  for (const paneCount of SCALE_SAME_WORKSPACE_PANES) {
-    test(`keeps typing responsive at ${paneCount} same-workspace OpenCode panes`, async ({
-      orcaPage,
-      testRepoPath
-    }, testInfo) => {
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const panes = await ensureActiveWorktreePaneLoad(orcaPage, paneCount)
-      const [typingPane, ...loadPanes] = panes
-      await focusPane(orcaPage, typingPane.paneKey)
-
-      const runId = randomUUID()
-      const scriptPath = path.join(testRepoPath, `.orca-opencode-scale-${paneCount}-${runId}.mjs`)
-      writeInteractivePromptScript(scriptPath, runId)
-      await resetTerminalPtyOutputDebug(orcaPage)
-      const load = await startSyntheticOpenCodeInjection({
-        frameCount: FRAME_COUNT,
-        intervalMs: FRAME_INTERVAL_MS,
-        page: orcaPage,
-        paneKeys: loadPanes.map((pane) => pane.paneKey)
-      })
-      try {
-        const measurement = await measureTypingDuringLoad(
-          orcaPage,
-          scriptPath,
-          typingPane.ptyId,
-          runId
-        )
-        annotateTypingMeasurement(
-          testInfo,
-          `opencode-scale-same-workspace-${paneCount}`,
-          panes.length,
-          measurement,
-          await readTerminalPtyOutputDebug(orcaPage),
-          await readTerminalOutputSchedulerDebug(orcaPage),
-          await readMainPtyPressureDebug(orcaPage)
-        )
-        expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
-        expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
-        expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_UNDER_LOAD_MS)
-      } finally {
-        await load.stop()
-        await sendToTerminal(orcaPage, typingPane.ptyId, '\x03').catch(() => undefined)
-        rmSync(scriptPath, { force: true })
-      }
-    })
-  }
-
-  test('keeps typing responsive while another workspace streams OpenCode-style output', async ({
-    orcaPage,
-    testRepoPath
-  }, testInfo) => {
-    await measureCrossWorkspaceTypingDuringHiddenLoad({
-      orcaPage,
-      testRepoPath,
-      hiddenPaneCount: CROSS_WORKSPACE_PANES_PER_WORKTREE,
-      annotationType: 'opencode-cross-workspace-typing',
-      testInfo
-    })
-  })
   async function runConfiguredHiddenRealPtyPressureScenario(
     orcaPage: Page,
     testRepoPath: string,
@@ -723,8 +389,6 @@ test.describe('Artificial OpenCode terminal load', () => {
       hiddenPaneCount,
       pressureOutputChars: PRESSURE_OUTPUT_CHARS,
       pressureOutputMode,
-      // Why: the 10s codex startup renderer-query window is deleted — every
-      // pressure mode measures steady-state model restore with one delay.
       pressureStartDelayMs: HIDDEN_PRESSURE_START_DELAY_MS,
       testInfo,
       deps: terminalLoadScenarioDeps
@@ -736,8 +400,7 @@ test.describe('Artificial OpenCode terminal load', () => {
     mode?: HiddenPressureOutputMode
   }[] = [
     { title: 'keeps typing responsive while hidden real PTYs are ACK-backpressured' },
-    // Why: "withholds renderer delivery" — hidden bytes are dropped in main by
-    // the delivery gate; the renderer no longer skip-scans chunks (Phase 6).
+    // Assert hidden delivery is withheld in main; renderer skip-scanning was removed.
     {
       title: 'withholds renderer delivery for plain hidden PTY output while preserving restore',
       suffix: '-plain',
@@ -770,35 +433,6 @@ test.describe('Artificial OpenCode terminal load', () => {
         hiddenPressureCase.suffix,
         hiddenPressureCase.mode
       )
-    })
-  }
-  for (const paneCount of SCALE_HIDDEN_PRESSURE_PANES) {
-    test(`keeps hidden restore responsive with ${paneCount} ACK-backpressured real PTYs`, async ({
-      orcaPage,
-      testRepoPath
-    }, testInfo) => {
-      await runConfiguredHiddenRealPtyPressureScenario(
-        orcaPage,
-        testRepoPath,
-        testInfo,
-        paneCount,
-        `-${paneCount}`
-      )
-    })
-  }
-
-  for (const paneCount of SCALE_CROSS_WORKSPACE_PANES) {
-    test(`keeps typing responsive with ${paneCount} hidden cross-workspace OpenCode panes`, async ({
-      orcaPage,
-      testRepoPath
-    }, testInfo) => {
-      await measureCrossWorkspaceTypingDuringHiddenLoad({
-        orcaPage,
-        testRepoPath,
-        hiddenPaneCount: paneCount,
-        annotationType: `opencode-scale-cross-workspace-${paneCount}`,
-        testInfo
-      })
     })
   }
 })

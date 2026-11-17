@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'
-import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { launchPairedWebClient, type PairedWebClient } from './helpers/paired-electron-client'
@@ -128,7 +128,7 @@ test('reveals a parked paired terminal once, at the pane grid rather than the ho
       }
     }
     // Why the extra worktrees: the most recent TERMINAL_WORKTREE_HOT_RETAIN_LIMIT worktrees stay warm.
-    const worktrees = []
+    const worktrees: Awaited<ReturnType<typeof createTerminalWorktree>>[] = []
     for (let index = 0; index <= WARM_WORKTREE_COUNT; index += 1) {
       worktrees.push(await createTerminalWorktree(index))
     }

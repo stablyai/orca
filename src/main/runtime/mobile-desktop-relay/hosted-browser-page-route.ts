@@ -1,23 +1,19 @@
 import { z } from 'zod'
 import type { RpcRequest } from '../rpc/core'
-import { browserScreencastSubscriptionPageId } from '../browser-screencast-subscription-id'
+import { browserScreencastSubscriptionPageId } from '../browser/screencast/browser-screencast-subscription-id'
 
 const BrowserCallParams = z.looseObject({
   page: z.string().optional(),
   subscriptionId: z.string().optional()
 })
 
-/**
- * The call rewritten for this desktop's own runtime when the page it targets is a client-placed
- * page this desktop renders for that server, or null when the call belongs to the server.
- * Why: the server cannot screencast a page it does not render; the desktop serves it as its renderer does.
- */
+/** Rewrite calls for locally rendered client-placed pages; their server cannot screencast them. */
 export function localHostedBrowserPageRequest(
   request: RpcRequest,
   environmentId: string,
   hostsBrowserPage: (environmentId: string, browserPageId: string) => boolean
 ): RpcRequest | null {
-  // Why: tabCreate's page is the id for a new page, and placing pages is the server's.
+  // tabCreate names a new page; the server owns placement.
   if (!request.method.startsWith('browser.') || request.method === 'browser.tabCreate') {
     return null
   }
@@ -25,10 +21,11 @@ export function localHostedBrowserPageRequest(
   if (!parsed.success) {
     return null
   }
-  // The selector names the server's workspace, which this desktop cannot resolve; the page id is stable.
+  // Server workspace selectors cannot resolve here; page ids are stable.
   const { worktree: _serverSelector, ...params } = parsed.data
   const page =
-    request.method === 'browser.screencast.unsubscribe'
+    request.method === 'browser.screencast.unsubscribe' ||
+    request.method === 'browser.screencast.ack'
       ? browserScreencastSubscriptionPageId(params.subscriptionId ?? '')
       : params.page || null
   if (page === null || !hostsBrowserPage(environmentId, page)) {

@@ -1,7 +1,10 @@
 import { join } from 'node:path'
-import { findGrokChatHistoryByCwd, resolveGrokHomeDir } from '../../shared/grok-session-paths'
+import {
+  findGrokChatHistoryByCwd,
+  resolveGrokHomeDir
+} from '../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { directoryTranscriptImport } from '../native-chat/structured-agent-cli-conversations'
+import { directoryTranscriptImport } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const GROK_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   conversationStore: ({ accountHomePath }) => join(accountHomePath, 'sessions'),
@@ -11,6 +14,10 @@ export const GROK_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     resolveGrokHomeDir()
   ],
   findTranscript: async ({ providerSessionId, store, workspaceCwd, strictErrors }) =>
-    (await findGrokChatHistoryByCwd({ sessionId: providerSessionId, cwd: workspaceCwd, sessionsDir: store })) ??
+    (await findGrokChatHistoryByCwd({
+      sessionId: providerSessionId,
+      cwd: workspaceCwd,
+      sessionsDir: store
+    })) ??
     resolveSessionFilePath('grok', providerSessionId, { grokSessionsDir: store, strictErrors })
 })

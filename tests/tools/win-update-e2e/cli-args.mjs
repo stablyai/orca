@@ -1,8 +1,4 @@
-// Argument parsing for `node run.mjs`.
-//
-// Two installer sources are accepted per side: a local path (--from/--to) or a
-// GitHub release tag (--from-release/--to-release) that the harness downloads
-// via `gh release download`. Exactly one profile (--expect) is required.
+// Accept local installer or gh release tag per side; require one --expect profile.
 
 import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
@@ -24,10 +20,10 @@ Installer source (version N, then N+1) — path or release tag on each side:
 
 Required:
   --expect <profile>       Assertion profile: "cold-restore" or "survival"
-                           cold-restore = today's behavior (daemon killed by the
-                             installer sweep, app cold-restores scrollback, no
-                             flashing). survival = Phase 1 target (daemon PID
-                             unchanged, sessions still interactive).
+                           cold-restore = daemon killed by the installer sweep,
+                             app cold-restores scrollback, no flashing.
+                           survival = daemon PID unchanged, sessions still
+                             interactive.
 
 Options:
   --install-dir <path>     Isolated-install mode: install the test build into
@@ -108,12 +104,7 @@ function looksLikeHarnessInstall(dir) {
   return existsSync(path.join(dir, 'Orca.exe')) && existsSync(path.join(dir, 'Uninstall Orca.exe'))
 }
 
-/**
- * Validate --install-dir for isolated-install mode. The NSIS /D override must be
- * the last, unquoted argument, so the path cannot contain spaces. It must also
- * not overlap the default install location (that would defeat isolation) and
- * must not clobber an unrelated non-empty directory.
- */
+// Isolated /D must be last/unquoted, spaces-free, disjoint from the real install and not an unrelated nonempty directory.
 export function validateInstallDir(installDir) {
   const errors = []
   if (!path.isAbsolute(installDir)) {
@@ -139,8 +130,7 @@ export function validateInstallDir(installDir) {
     try {
       entries = readdirSync(installDir)
     } catch (err) {
-      // Fail closed: an unreadable existing directory must not be treated as
-      // empty/safe to overwrite.
+      // Refuse unreadable existing directories rather than assume they are safe to overwrite.
       errors.push(
         `--install-dir "${installDir}" could not be read (${err.message}). ` +
           `Refusing to treat an unreadable directory as safe to overwrite.`

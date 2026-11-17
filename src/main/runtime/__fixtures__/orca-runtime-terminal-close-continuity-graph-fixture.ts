@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import {
   CANARY_LEAF_ID,
@@ -13,7 +13,7 @@ import {
   canarySyncedLeaf,
   canarySyncedTab
 } from './orca-runtime-terminal-close-continuity-state-fixture'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 export type CloseContinuityGraphOptions = {
   ptyId: string
@@ -152,7 +152,7 @@ export function createCloseContinuityGraphFixture({
         [makePaneKey(TAB_ID, SIBLING_LEAF_ID)]: SIBLING_INCARNATION_ID
       }
     })
-    runtime.syncWindowGraph(1, {
+    return runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: TAB_ID,

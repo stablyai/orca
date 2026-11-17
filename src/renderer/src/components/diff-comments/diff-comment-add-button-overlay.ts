@@ -1,5 +1,7 @@
-import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor } from 'monaco-editor'
+// Why: a value import of 'monaco-editor' here would evaluate Monaco ahead of its NLS pack
+// (see monaco-nls-import-order.test.ts); the enum module carries no localized labels.
+import { EditorOption } from 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js'
 import type { RefObject } from 'react'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
 import { toDiffCommentLineTarget } from './diff-comment-line-range'
@@ -48,7 +50,7 @@ export function installDiffCommentAddButtonOverlay({
   editorDomNode.appendChild(plus)
 
   const getLineHeight = (): number => {
-    const h = editor.getOption(monaco.editor.EditorOption.lineHeight)
+    const h = editor.getOption(EditorOption.lineHeight)
     return typeof h === 'number' && h > 0 ? h : 19
   }
 
@@ -86,17 +88,14 @@ export function installDiffCommentAddButtonOverlay({
     editor,
     editorDomNode,
     commentableLineSet,
-    // A press on the "+" itself has no Monaco gutter target, so it resolves through the line the
-    // button is parked on.
+    // Presses on the overlay have no Monaco gutter position; use its parked line.
     resolvePressLine: (event) =>
       event.target instanceof Node && plus.contains(event.target)
         ? hoverLineRef.current
         : getGutterPressLine(editor, event),
     onDragChange: ({ dragging: isDragging, focusLine }) => {
       dragging = isDragging
-      // Why: inert while dragging so it can't punch a hit-test hole in the band the pointer is
-      // sweeping — but it still rides the growing end of the selection, which is the only thing
-      // telling the user the drag is live.
+      // Disable hit testing during selection drag to avoid a hole in the swept band; keep following the growing endpoint as feedback.
       plus.style.pointerEvents = isDragging ? 'none' : ''
       editorDomNode.classList.toggle('orca-diff-comment-range-dragging', isDragging)
       if (isDragging && focusLine !== null) {

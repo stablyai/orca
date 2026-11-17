@@ -1,11 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
-/**
- * Screen state over a stored value, changed optimistically and saved one write at a time.
- *
- * A focus or AppState refresh that races an in-flight save must not overwrite the optimistic
- * state, and a refused save must not leave the screen showing a change the store never took.
- */
+// Serialize optimistic saves; refresh must not overwrite pending choices, and rejected writes must reconcile to storage.
 export function useSerializedStoredState<T>(
   initial: T | (() => T),
   load: () => Promise<T>,
@@ -38,8 +33,7 @@ export function useSerializedStoredState<T>(
         )
         .then((refused) => {
           pendingWritesRef.current -= 1
-          // Why: a refused write left the store as it was; show what it holds. A write still
-          // queued owns the screen, and a read started now could land after it and undo it.
+          // Read back refused writes only once queued writes no longer own the screen, or the read could undo newer optimism.
           if (refused && pendingWritesRef.current === 0) {
             refresh()
           }
@@ -48,7 +42,7 @@ export function useSerializedStoredState<T>(
     [refresh, save]
   )
 
-  /** A value another writer already stored; refreshes that read before it landed are dropped. */
+  // External writes invalidate refreshes started before they landed.
   const adoptStored = useCallback((stored: T) => {
     writeSeqRef.current += 1
     setValue(stored)

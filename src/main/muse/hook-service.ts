@@ -1,27 +1,26 @@
 import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 
-// Muse runs managed hooks with an explicit environment allowlist. The installer
-// persists Orca's hook coordinates in that allowlist so events stay attributed.
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import {
-  buildWindowsAgentHookCurlPostCommand,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+// Muse allowlists hook environment variables; persist Orca coordinates to preserve attribution.
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   readTextFileRemote,
-  writeManagedScriptRemote,
   writeTextFileRemoteAtomic
-} from '../agent-hooks/installer-utils-remote'
+} from '../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+  buildWindowsHookEnvironmentGuardLines
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   buildMuseManagedHooksFile,
   getMuseConfigPath,
@@ -37,6 +36,7 @@ import {
   refreshMuseManagedHooksFile
 } from './hook-settings'
 import {
+  hasOrcaEnvVars,
   MUSE_MANAGED_HOOK_ENV_VARS,
   parseMuseSettingsText,
   readMuseSettingsSource,
@@ -52,7 +52,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('muse'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -61,8 +60,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('muse'),
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
-    // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race can't leak shell parse errors into agent transcripts (fail-open).
+    // Reload live coordinates for PTYs surviving restarts; silence source-file races to keep hooks fail-open.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -70,7 +68,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: redirect on `fi` covers the whole if-statement (both transport branches); `|| spool` keeps the fail-open spool fallback.
+    // Redirect the entire transport branch and spool failed posts without blocking agents.
     ...buildPosixAgentHookPostCommand('muse').map((line, index, lines) =>
       index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
     ),
@@ -209,7 +207,7 @@ export class MuseHookService {
     }
     const scriptPath = getMuseManagedScriptPath()
     const command = getMuseManagedCommand(scriptPath)
-    // Write the script and managed hooks file first so settings.json never points at missing files.
+    // Publish script/hooks before settings can point at them.
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(
       managedHooksPath,
@@ -225,7 +223,6 @@ export class MuseHookService {
     return this.getStatus()
   }
 
-  // Install the Muse hook on an SSH execution host, where the shell contract is POSIX.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getMuseRemoteConfigPath(remoteHome)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/muse-hook.sh`
@@ -254,7 +251,7 @@ export class MuseHookService {
         }
       }
       const command = getMuseRemoteManagedCommand(remoteScriptPath)
-      // Write the script and managed hooks file first so settings.json never points at missing files.
+      // Publish script/hooks before settings can point at them.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeTextFileRemoteAtomic(
         sftp,
@@ -297,7 +294,9 @@ export class MuseHookService {
         detail: 'Could not read Muse settings.json'
       }
     }
-    if (source.config.managed_hooks_path === managedHooksPath) {
+    // Builds before the env-var cleanup dropped only the pointer; finish those too.
+    const pointer = source.config.managed_hooks_path
+    if (pointer === managedHooksPath || (pointer === undefined && hasOrcaEnvVars(source.config))) {
       const nextText = serializeMuseSettings(source.text, undefined)
       if (source.text !== nextText) {
         writeHooksJson(configPath, source.config, { serialized: nextText })
@@ -307,9 +306,7 @@ export class MuseHookService {
       if (existsSync(managedHooksPath)) {
         unlinkSync(managedHooksPath)
       }
-    } catch {
-      // best effort
-    }
+    } catch {}
     return this.getStatus()
   }
 }

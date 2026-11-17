@@ -1,16 +1,7 @@
-/**
- * Zustand store inspection helpers for Orca E2E tests.
- *
- * Why: In dev mode, Orca exposes `window.__store` (the Zustand useAppStore).
- * Reading store state gives tests reliable access to app state without
- * fragile DOM scraping.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import type { BrowserTabSummary, ExplorerFileSummary } from './runtime-types'
 
-/** Read a value from the Zustand store. Returns the raw JS value. */
 export async function getStoreState<T>(page: Page, selector: string): Promise<T> {
   return page.evaluate((selector) => {
     const store = window.__store
@@ -19,7 +10,6 @@ export async function getStoreState<T>(page: Page, selector: string): Promise<T>
     }
 
     const state = store.getState()
-    // Support dot-notation selectors like 'activeWorktreeId' or 'tabsByWorktree'
     return selector.split('.').reduce<unknown>((value, key) => {
       if (value && typeof value === 'object') {
         return (value as Record<string, unknown>)[key]
@@ -30,22 +20,18 @@ export async function getStoreState<T>(page: Page, selector: string): Promise<T>
   }, selector)
 }
 
-/** Get the active worktree ID. */
 export async function getActiveWorktreeId(page: Page): Promise<string | null> {
   return getStoreState<string | null>(page, 'activeWorktreeId')
 }
 
-/** Get the active tab ID. */
 export async function getActiveTabId(page: Page): Promise<string | null> {
   return getStoreState<string | null>(page, 'activeTabId')
 }
 
-/** Get the active tab type ('terminal' | 'editor' | 'browser'). */
 export async function getActiveTabType(page: Page): Promise<string | null> {
   return getStoreState<string | null>(page, 'activeTabType')
 }
 
-/** Get all terminal tabs for a given worktree. */
 export async function getWorktreeTabs(
   page: Page,
   worktreeId: string
@@ -64,15 +50,7 @@ export async function getWorktreeTabs(
   }, worktreeId)
 }
 
-/**
- * Get the tab bar order for a worktree.
- *
- * Why: split groups manage tab order via group.tabOrder on each TabGroup,
- * not the legacy tabBarOrderByWorktree field. Read from the active group's
- * tabOrder so drag-reorder assertions work with the split-group model.
- * Falls back to the legacy field for worktrees that haven't been absorbed
- * into the split-group model yet.
- */
+// Read the active split group’s tabOrder; use the legacy field only before split-group absorption.
 export async function getTabBarOrder(page: Page, worktreeId: string): Promise<string[]> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
@@ -102,7 +80,6 @@ export async function getTabBarOrder(page: Page, worktreeId: string): Promise<st
   }, worktreeId)
 }
 
-/** Get browser tabs for a given worktree. */
 export async function getBrowserTabs(
   page: Page,
   worktreeId: string
@@ -122,7 +99,6 @@ export async function getBrowserTabs(
   }, worktreeId)
 }
 
-/** Get open editor files for a given worktree. */
 export async function getOpenFiles(
   page: Page,
   worktreeId: string
@@ -144,7 +120,6 @@ export async function getOpenFiles(
   }, worktreeId)
 }
 
-/** Wait until the workspace session is ready. Uses expect.poll for proper Playwright waiting. */
 export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promise<void> {
   await expect
     .poll(async () => getStoreState<boolean>(page, 'workspaceSessionReady'), {
@@ -154,13 +129,7 @@ export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promi
     .toBe(true)
 }
 
-/**
- * Wait until the deferred startup worktree scan has completed.
- *
- * Why: hydration fires an unawaited full catalog refresh after
- * `workspaceSessionReady`; a fixture seeded before it lands is silently
- * overwritten when it does.
- */
+// Wait past hydration’s unawaited catalog refresh or it overwrites newly seeded fixtures.
 export async function waitForStartupWorktreeRefresh(page: Page, timeoutMs = 60_000): Promise<void> {
   await expect
     .poll(async () => getStoreState<boolean>(page, 'startupWorktreeRefreshCompleted'), {
@@ -170,7 +139,6 @@ export async function waitForStartupWorktreeRefresh(page: Page, timeoutMs = 60_0
     .toBe(true)
 }
 
-/** Wait until a worktree is active and return its ID. */
 export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Promise<string> {
   let activeWorktreeId: string | null = null
   await expect
@@ -192,9 +160,7 @@ export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Pro
             return null
           }
 
-          // Why: isolated E2E sessions can hydrate worktree rows without
-          // restoring a selection. Re-try store activation as worktrees load
-          // instead of relying on sidebar option click hit targets.
+          // Hydration may load rows without selection; retry store activation rather than hidden-window clicks.
           state.setActiveWorktree(firstWorktree.id)
           state = store.getState()
           return state.activeWorktreeId
@@ -211,7 +177,6 @@ export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Pro
   return activeWorktreeId!
 }
 
-/** Get all worktree IDs across all repos. */
 export async function getAllWorktreeIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
@@ -225,7 +190,6 @@ export async function getAllWorktreeIds(page: Page): Promise<string[]> {
   })
 }
 
-/** Switch to a different worktree via the store. Returns the new worktree ID or null. */
 export async function switchToOtherWorktree(
   page: Page,
   currentWorktreeId: string
@@ -248,7 +212,6 @@ export async function switchToOtherWorktree(
   }, currentWorktreeId)
 }
 
-/** Switch to a specific worktree via the store. */
 export async function switchToWorktree(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((id) => {
     const store = window.__store
@@ -260,16 +223,9 @@ export async function switchToWorktree(page: Page, worktreeId: string): Promise<
   }, worktreeId)
 }
 
-/**
- * Ensure the active tab is a terminal and that the first terminal tab exists.
- *
- * Why: the first terminal tab is created by a renderer effect after session
- * hydration. Waiting on store state is more reliable than DOM visibility in
- * hidden-window mode and avoids racing that initial auto-create step.
- */
+// Wait for the post-hydration terminal effect through store state because hidden-window visibility is unreliable.
 export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Promise<void> {
-  // Why the grace: in a layout-owner build the first tab arrives a frame after activation; a tab
-  // made here meanwhile would be a second one.
+  // Give layout-owner publication a frame to create the first tab before creating a duplicate.
   const createAfter = Date.now() + Math.min(5_000, timeoutMs / 2)
   await expect
     .poll(
@@ -286,8 +242,7 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
             if (!firstWorktree) {
               return false
             }
-            // Why: reload-based specs can briefly clear the active worktree
-            // after session readiness while worktrees are already loaded.
+            // Reload can clear selection after readiness even though worktree rows are loaded.
             state.setActiveWorktree(firstWorktree.id)
             state = store.getState()
             worktreeId = state.activeWorktreeId ?? firstWorktree.id
@@ -301,9 +256,7 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
           if (!shownTab && !mayCreate) {
             return false
           }
-          // Why: fresh isolated E2E profiles may not have finished the UI-driven
-          // auto-create effect yet. Use the same store action to create the first
-          // terminal tab so terminal-focused specs start from a stable baseline.
+          // Use the production create action if the fresh profile’s auto-create effect has not finished.
           const activeTab = shownTab ?? state.createTab(worktreeId)
           state.setActiveTab(activeTab.id)
           if (state.activeTabType !== 'terminal') {
@@ -323,7 +276,6 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
     .toBe(true)
 }
 
-/** Check if a worktree exists in the store. */
 export async function worktreeExists(page: Page, name: string): Promise<boolean> {
   return page.evaluate((name) => {
     const store = window.__store
