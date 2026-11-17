@@ -126,10 +126,13 @@ export function structuredAgentSessionOwnerInputs(state: WorktreeRuntimeOwnerSta
   ]
 }
 
+/** The catalog maps the owner-input compare reads. */
+export type OwnerCatalogState = Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>
+
 /** Compares owner inputs; a worktree map that only replaced rows in place (a title write) moves no owner. */
 export function structuredAgentSessionOwnerInputsMoved(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
-  previous: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  state: OwnerCatalogState,
+  previous: OwnerCatalogState,
   inputs: readonly unknown[],
   previousInputs: readonly unknown[]
 ): boolean {

@@ -10,56 +10,59 @@ type WorktreeSnapshot = {
   allWorktrees: Worktree[]
   worktreeMap: Map<string, Worktree>
   worktreesById: Map<string, Worktree[]>
+  /** Slot of each row in allWorktrees, so a replaced row is found without a scan. */
+  positions: Map<Worktree, number>
 }
 
 // Why: Zustand reruns selectors on every write, so identity projections need
 // cross-render caching without pinning replaced store snapshots in memory.
 const worktreeSnapshotCache = new WeakMap<AppState['worktreesByRepo'], WorktreeSnapshot>()
 
-// The last built map, so an in-place row replacement (a title write) patches instead of rescanning.
-let lastSnapshot: {
-  worktreesByRepo: AppState['worktreesByRepo']
-  snapshot: WorktreeSnapshot
-} | null = null
+// Weak so a replaced catalog and its index stay collectable; a title write reads the new rows while the old ones are still live.
+let lastIndexedRows: WeakRef<AppState['worktreesByRepo']> | null = null
 
 function getWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
   const cachedSnapshot = worktreeSnapshotCache.get(worktreesByRepo)
   if (cachedSnapshot) {
     return cachedSnapshot
   }
-  const replaced =
-    lastSnapshot && replacedWorktreeRows(worktreesByRepo, lastSnapshot.worktreesByRepo)
+  const previousRows = lastIndexedRows?.deref()
+  const previousSnapshot = previousRows && worktreeSnapshotCache.get(previousRows)
+  const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
   const snapshot =
-    lastSnapshot && replaced
-      ? patchWorktreeSnapshot(lastSnapshot.snapshot, replaced)
+    previousSnapshot && replaced
+      ? patchWorktreeSnapshot(previousSnapshot, replaced)
       : buildWorktreeSnapshot(worktreesByRepo)
   worktreeSnapshotCache.set(worktreesByRepo, snapshot)
-  lastSnapshot = { worktreesByRepo, snapshot }
+  lastIndexedRows = new WeakRef(worktreesByRepo)
   return snapshot
 }
 
-/** Same membership, so only replaced rows move; every other entry keeps its slot. */
+/** Same membership, so only replaced rows move, in place; the retired map shares this snapshot and is never read for membership again. */
 function patchWorktreeSnapshot(
-  previous: WorktreeSnapshot,
+  snapshot: WorktreeSnapshot,
   replaced: readonly ReplacedWorktreeRow[]
 ): WorktreeSnapshot {
-  if (replaced.length === 0) {
-    return previous
-  }
-  const swaps = new Map(replaced.map(({ before, after }) => [before, after]))
-  const swap = (worktree: Worktree): Worktree => swaps.get(worktree) ?? worktree
-  const worktreeMap = new Map(previous.worktreeMap)
-  const worktreesById = new Map(previous.worktreesById)
   for (const { before, after } of replaced) {
-    if (worktreeMap.get(before.id) === before) {
-      worktreeMap.set(before.id, after)
+    const position = snapshot.positions.get(before)
+    if (position !== undefined) {
+      snapshot.allWorktrees[position] = after
+      snapshot.positions.delete(before)
+      snapshot.positions.set(after, position)
     }
-    const rows = worktreesById.get(before.id)
+    if (snapshot.worktreeMap.get(before.id) === before) {
+      snapshot.worktreeMap.set(before.id, after)
+    }
+    const rows = snapshot.worktreesById.get(before.id)
     if (rows?.includes(before)) {
-      worktreesById.set(before.id, rows.map(swap))
+      // New per-id array so selectors returning one workspace's rows see the change.
+      snapshot.worktreesById.set(
+        before.id,
+        rows.map((row) => (row === before ? after : row))
+      )
     }
   }
-  return { allWorktrees: previous.allWorktrees.map(swap), worktreeMap, worktreesById }
+  return snapshot
 }
 
 function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): WorktreeSnapshot {
@@ -73,9 +76,11 @@ function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Wo
   const allWorktrees: Worktree[] = []
   const worktreeMap = new Map<string, Worktree>()
   const worktreesById = new Map<string, Worktree[]>()
+  const positions = new Map<Worktree, number>()
   // Recover IDs from keys: snapshot getters and retained selectors require one ID read per row.
   for (const [identity, worktree] of byHostAndId) {
     const worktreeId = getWorktreeIdFromHostIdentity(identity)
+    positions.set(worktree, allWorktrees.length)
     allWorktrees.push(worktree)
     // First host wins for legacy bare-ID lookups, matching buildWorktreeByIdIndex/.find; freshness cannot resolve distinct owners.
     if (!worktreeMap.has(worktreeId)) {
@@ -88,7 +93,7 @@ function buildWorktreeSnapshot(worktreesByRepo: AppState['worktreesByRepo']): Wo
       worktreesById.set(worktreeId, [worktree])
     }
   }
-  return { allWorktrees, worktreeMap, worktreesById }
+  return { allWorktrees, worktreeMap, worktreesById, positions }
 }
 
 export function getIndexedAllWorktrees(worktreesByRepo: AppState['worktreesByRepo']): Worktree[] {

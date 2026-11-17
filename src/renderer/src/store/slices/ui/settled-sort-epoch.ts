@@ -24,13 +24,15 @@ function countLiveWorktrees(worktreesByRepo: AppState['worktreesByRepo']): numbe
 export function createLiveWorktreeCounter(): (
   worktreesByRepo: AppState['worktreesByRepo']
 ) => number {
-  let counted: AppState['worktreesByRepo'] | null = null
+  // Weak so the counter never keeps a replaced catalog alive.
+  let counted: WeakRef<AppState['worktreesByRepo']> | null = null
   let count = 0
   return (worktreesByRepo) => {
-    if (!counted || replacedWorktreeRows(worktreesByRepo, counted) === null) {
+    const previous = counted?.deref()
+    if (!previous || replacedWorktreeRows(worktreesByRepo, previous) === null) {
       count = countLiveWorktrees(worktreesByRepo)
     }
-    counted = worktreesByRepo
+    counted = new WeakRef(worktreesByRepo)
     return count
   }
 }

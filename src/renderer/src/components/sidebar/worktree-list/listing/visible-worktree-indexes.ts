@@ -10,32 +10,31 @@ type WorktreesByRepo = Record<string, Worktree[]>
 
 /** Cache non-archived rows by host identity to preserve twins and avoid repeated lineage/cycle scans. */
 const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Worktree>>()
-let lastLineage: { worktreesByRepo: WorktreesByRepo; index: Map<string, Worktree> } | null = null
+// Weak so a replaced catalog's lineage index stays collectable.
+let lastLineageRows: WeakRef<WorktreesByRepo> | null = null
 
 export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
   const cached = lineageAncestorIndexCache.get(worktreesByRepo)
   if (cached) {
     return cached
   }
-  const replaced = lastLineage && replacedWorktreeRows(worktreesByRepo, lastLineage.worktreesByRepo)
+  const previousRows = lastLineageRows?.deref()
+  const previousIndex = previousRows && lineageAncestorIndexCache.get(previousRows)
+  const replaced = previousRows && replacedWorktreeRows(worktreesByRepo, previousRows)
   const index =
-    lastLineage && replaced
-      ? patchLineageAncestorIndex(lastLineage.index, replaced)
+    previousIndex && replaced
+      ? patchLineageAncestorIndex(previousIndex, replaced)
       : buildLineageAncestorIndex(worktreesByRepo)
   lineageAncestorIndexCache.set(worktreesByRepo, index)
-  lastLineage = { worktreesByRepo, index }
+  lastLineageRows = new WeakRef(worktreesByRepo)
   return index
 }
 
-// Archive state is unchanged for replaced rows, so a row is indexed exactly when its predecessor was.
+// Archive state is unchanged for replaced rows, so a row is indexed exactly when its predecessor was; updated in place.
 function patchLineageAncestorIndex(
-  previous: Map<string, Worktree>,
+  index: Map<string, Worktree>,
   replaced: readonly ReplacedWorktreeRow[]
 ): Map<string, Worktree> {
-  if (replaced.length === 0) {
-    return previous
-  }
-  const index = new Map(previous)
   for (const { before, after } of replaced) {
     const identity = getWorktreeHostIdentity(before)
     if (index.get(identity) === before) {
