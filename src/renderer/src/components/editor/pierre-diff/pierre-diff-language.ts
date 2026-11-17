@@ -154,7 +154,7 @@ function acquirePluginSyntax(
       return { default: grammars }
     })
   }
-  for (const entry of [...pluginLanguages.values()]) {
+  for (const entry of pluginLanguages.values()) {
     if (entry.refs === 0 && isSupersededPluginLanguage(entry)) {
       retirePluginLanguage(entry)
     }
