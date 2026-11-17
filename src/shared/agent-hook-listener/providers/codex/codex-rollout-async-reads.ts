@@ -21,6 +21,16 @@ const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
 // Why: one pane stalled on a slow open must not hold the whole budget and stall every other pane.
 const MAX_BATCH_HELD_ROLLOUT_BYTES = 4 * 1024 * 1024
 let heldRolloutBytes = 0
+const batchesHoldingBytes = new Set<RolloutReadBatch>()
+
+// Why: a cleared pane's batch can wait forever on a stalled open; its bytes are as good as dropped, so they must not block other panes.
+function releaseAbandonedBatches(): void {
+  for (const batch of batchesHoldingBytes) {
+    if (!batch.wanted()) {
+      batch.release()
+    }
+  }
+}
 
 /** One poll's or hook's reads: whether they are still wanted, and the buffer bytes they hold until released. */
 export class RolloutReadBatch {
@@ -35,15 +45,18 @@ export class RolloutReadBatch {
 
   /** A batch's first read always fits its own cap, and the first read anywhere always fits, so nothing starves. */
   reserve(bytes: number): boolean {
-    if (
-      this.released ||
-      (this.held > 0 && this.held + bytes > MAX_BATCH_HELD_ROLLOUT_BYTES) ||
-      (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES)
-    ) {
+    if (this.released || (this.held > 0 && this.held + bytes > MAX_BATCH_HELD_ROLLOUT_BYTES)) {
       return false
+    }
+    if (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES) {
+      releaseAbandonedBatches()
+      if (heldRolloutBytes > 0 && heldRolloutBytes + bytes > MAX_HELD_ROLLOUT_BYTES) {
+        return false
+      }
     }
     heldRolloutBytes += bytes
     this.held += bytes
+    batchesHoldingBytes.add(this)
     return true
   }
 
@@ -59,6 +72,7 @@ export class RolloutReadBatch {
     heldRolloutBytes -= this.held
     this.held = 0
     this.released = true
+    batchesHoldingBytes.delete(this)
   }
 }
 
