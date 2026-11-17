@@ -62,9 +62,10 @@ describe('tui-idle on an agent with no rest signal', () => {
     vi.useFakeTimers()
     const write = (chunk: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
     const readyScreen = '─ ready │ 3s\r\n❯ Ask me anything…\r\n'
-    write(`\x1b]133;A\x07~/repo % hermes\r\n\x1b]133;C\x07${readyScreen}`)
+    const shellRunsHermes = '\x1b]133;A\x07~/repo % hermes\r\n\x1b]133;C\x07\x1b]0;hermes\x07'
+    write(`${shellRunsHermes}${readyScreen}`)
     // The first Hermes exits; the shell starts a second one that has not painted yet.
-    write('\x1b]133;D;0\x07\x1b]133;A\x07~/repo % hermes\r\n\x1b]133;C\x07')
+    write(`\x1b]133;D;0\x07${shellRunsHermes}`)
     await runtime.readTerminal(handle, { screen: true })
     const settled = vi.fn()
     const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60_000 })

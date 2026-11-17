@@ -56,9 +56,10 @@ describe.skipIf(process.platform === 'win32')('DaemonPtyAdapter.requestRepaint',
   it('asks nothing of a daemon that predates the request', async () => {
     const adapter = await start(57)
     const { id } = await adapter.spawn({ cols: 80, rows: 24 })
-    subprocess.resize.mockClear()
+    const resize = vi.mocked(subprocess.resize)
+    resize.mockClear()
     await adapter.requestRepaint(id)
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    expect(subprocess.resize).not.toHaveBeenCalled()
+    // Why no wait: a daemon that is asked shrinks the PTY before it answers.
+    expect(resize).not.toHaveBeenCalled()
   })
 })
