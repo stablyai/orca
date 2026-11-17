@@ -310,11 +310,7 @@ afterEach(async () => {
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export {
-  isMailPointer,
-  isWholeMail,
-  turnText
-} from './structured-chat-coordinator-fake-codex-fixture'
+export { isWholeMail, turnText } from './structured-chat-coordinator-fake-codex-fixture'
 
 export function restartRuntime(): void {
   runtime = startRuntime()
