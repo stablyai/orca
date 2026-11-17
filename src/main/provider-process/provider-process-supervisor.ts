@@ -239,15 +239,12 @@ export function supervisedPosixLaunch(
   // Keep prompts in argv: Linux caps individual env strings at 128 KiB; Node startup options belong only in the spec.
   const supervisorEnv = { ...childEnv }
   const nodeEnv: Record<string, string> = {}
-  for (const key of PROVIDER_ONLY_NODE_ENV_KEYS) {
+  for (const key of [...PROVIDER_ONLY_NODE_ENV_KEYS, 'ELECTRON_RUN_AS_NODE'] as const) {
     const value = supervisorEnv[key]
     delete supervisorEnv[key]
     if (value !== undefined) {
       nodeEnv[key] = value
     }
-  }
-  if (childEnv.ELECTRON_RUN_AS_NODE === '1') {
-    nodeEnv.ELECTRON_RUN_AS_NODE = '1'
   }
   const supervisorSpec = Buffer.from(
     JSON.stringify({

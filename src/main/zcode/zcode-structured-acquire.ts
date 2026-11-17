@@ -5,9 +5,9 @@
 import { randomUUID } from 'node:crypto'
 import { zcodeProviderHandle } from './zcode-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
-import {
-  type AgentSessionAcquisition,
-  type StructuredAgentSessionAcquireInput
+import type {
+  AgentSessionAcquisition,
+  StructuredAgentSessionAcquireInput
 } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
