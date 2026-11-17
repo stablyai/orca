@@ -42,6 +42,23 @@ export function loadBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string
 ): BrowserSessionMeta {
+  return (
+    readBrowserSessionMeta(resolveMetadataPath, defaultPartition) ?? {
+      defaultSource: null,
+      pendingCookieDbPath: null,
+      pendingCookieImports: {},
+      profiles: [],
+      enabledExtensionIdsByProfileId: {},
+      pinnedExtensionIdsByProfileId: {}
+    }
+  )
+}
+
+/** The saved metadata, or null when it can't be read or parsed (missing included). */
+function readBrowserSessionMeta(
+  resolveMetadataPath: () => string,
+  defaultPartition: string
+): BrowserSessionMeta | null {
   try {
     const raw = readFileSync(resolveMetadataPath(), 'utf-8')
     const data = JSON.parse(raw)
@@ -75,14 +92,7 @@ export function loadBrowserSessionMeta(
       pinnedExtensionIdsByProfileId: parseEnabledExtensionIds(data?.pinnedExtensionIdsByProfileId)
     }
   } catch {
-    return {
-      defaultSource: null,
-      pendingCookieDbPath: null,
-      pendingCookieImports: {},
-      profiles: [],
-      enabledExtensionIdsByProfileId: {},
-      pinnedExtensionIdsByProfileId: {}
-    }
+    return null
   }
 }
 
@@ -101,10 +111,14 @@ export function loadBrowserExtensionEnabledIds(
   const path = resolveMetadataPath()
   let byProfileId = enabledExtensionIdsByPath.get(path)
   if (!byProfileId) {
-    byProfileId = loadBrowserSessionMeta(
+    // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
+    byProfileId = readBrowserSessionMeta(
       () => path,
       defaultPartition
-    ).enabledExtensionIdsByProfileId
+    )?.enabledExtensionIdsByProfileId
+    if (!byProfileId) {
+      return []
+    }
     enabledExtensionIdsByPath.set(path, byProfileId)
   }
   return [...(byProfileId[profileId] ?? [])]
