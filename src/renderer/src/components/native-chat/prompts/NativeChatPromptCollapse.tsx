@@ -11,12 +11,15 @@ export function NativeChatPromptCollapseToggle({
   expanded,
   disabled = false,
   onToggle,
-  ref
+  ref,
+  wantsFocus = false
 }: {
   expanded: boolean
   disabled?: boolean
   onToggle: () => void
   ref?: Ref<HTMLButtonElement>
+  /** Names this control as the pane's prompt focus target, as an open card is. */
+  wantsFocus?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const label = expanded
@@ -27,6 +30,7 @@ export function NativeChatPromptCollapseToggle({
       <TooltipTrigger asChild>
         <Button
           ref={ref}
+          data-native-chat-prompt-card-focus={wantsFocus || undefined}
           type="button"
           variant="ghost"
           size="icon-xs"
@@ -73,7 +77,12 @@ export function NativeChatPromptStrip({
           className="flex items-center gap-2 rounded-lg border border-input bg-card py-1 pr-1.5 pl-3.5 shadow-xs"
         >
           <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{title}</p>
-          <NativeChatPromptCollapseToggle ref={toggleRef} expanded={false} onToggle={onExpand} />
+          <NativeChatPromptCollapseToggle
+            ref={toggleRef}
+            wantsFocus={takeFocus}
+            expanded={false}
+            onToggle={onExpand}
+          />
         </div>
       </div>
     </div>

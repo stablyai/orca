@@ -148,6 +148,7 @@ export function MobileNativeChatPromptCard({
         question={question}
         onAnswer={async (text) => (await onAnswerQuestion?.(text)) ?? false}
         onCancel={onCancelPrompt}
+        onCollapse={onCollapsePrompt}
       />
     ) : null
   const arrival = usePromptCardArrival(card !== null)

@@ -50,7 +50,8 @@ export function NativeChatStructuredPromptCard({
             onCancel={onCancel}
             onCollapse={() => setCollapsed(true)}
             shouldFocus={shouldFocus && !collapsed}
-            answerInputRef={answerInputRef}
+            // Detached while collapsed so a paste cannot edit the hidden draft.
+            answerInputRef={collapsed ? undefined : answerInputRef}
           />
         </div>
         {/* No composer follows the strip, so it keeps the card's bottom gutter. */}

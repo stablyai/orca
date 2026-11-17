@@ -36,17 +36,17 @@ export function useMobileNativeChatPromptCards({
     structured?.cancelPrompt ?? (async () => false),
     onSendResolved
   )
-  // Only a stepped question folds: a structured permission keeps its card until it is answered.
-  const stepped = structured && !structured.permission ? structured.question : null
-  const steppedKey = stepped?.questions ? mobileChatQuestionKey(stepped) : null
+  // Only a question folds: a structured permission keeps its card until it is answered.
+  const shown = structured && !structured.permission ? structured.question : null
+  const shownKey = shown ? mobileChatQuestionKey(shown) : null
   const [collapsedKey, setCollapsedKey] = useState<string | null>(null)
-  const steppedTitle = stepped?.questions?.[0]?.question ?? stepped?.question ?? ''
-  const collapsedStepped = useMemo<MobileNativeChatCollapsedPrompt | null>(
+  const shownTitle = shown?.questions?.[0]?.question ?? shown?.question ?? ''
+  const collapsedQuestion = useMemo<MobileNativeChatCollapsedPrompt | null>(
     () =>
-      steppedKey !== null && collapsedKey === steppedKey
-        ? { title: steppedTitle, expand: () => setCollapsedKey(null), holdsInput: true }
+      shownKey !== null && collapsedKey === shownKey
+        ? { title: shownTitle, expand: () => setCollapsedKey(null), holdsInput: true }
         : null,
-    [collapsedKey, steppedKey, steppedTitle]
+    [collapsedKey, shownKey, shownTitle]
   )
   const presentation = useMobileNativeChatPromptPresentation({
     ...terminal,
@@ -61,12 +61,12 @@ export function useMobileNativeChatPromptCards({
     // A card's X stops its turn; a Pi dialog can open with no turn running, and then nothing can.
     handleNativeChatCancelPrompt: structured?.turnId ? cancel : undefined,
     collapseNativeChatPrompt: structured
-      ? steppedKey === null
+      ? shownKey === null
         ? undefined
-        : () => setCollapsedKey(steppedKey)
+        : () => setCollapsedKey(shownKey)
       : presentation.permission?.startupDialog
         ? undefined
         : presentation.collapsePrompt,
-    nativeChatCollapsedPrompt: structured ? collapsedStepped : presentation.collapsed
+    nativeChatCollapsedPrompt: structured ? collapsedQuestion : presentation.collapsed
   }
 }
