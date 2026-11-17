@@ -100,6 +100,21 @@ Un auto-update del Orca original pisaría el fork o reiniciaría la app a media 
 
 ---
 
+## Fase 3b — Updates desde los releases de Zotz
+
+Reemplaza la regla "Zotz no se auto-actualiza" de la Fase 3: el actualizador de Orca se reapunta a `HugoRodriguezDEV/zotz`. Spec completo en [`UPDATES-SPEC.md`](./UPDATES-SPEC.md).
+
+- [ ] CI publica releases versionados `v1.4.<parche×100 + build>` (estables, con `latest*.yml`, `.blockmap` y `zip` de macOS) en vez de `desktop-latest`.
+- [ ] El actualizador usa `ZOTZ_RELEASE_REPO` en lugar de `stablyai/orca`; changelog y nudges de `orca.dev` apagados; solo canal estable.
+- [ ] Encendido por default con switch en Ajustes; revisa cada 6 h y descarga en segundo plano; nunca reinicia sola.
+- [ ] Modo servidor: instala solo tras 10 min sin agentes corriendo ni en cola.
+- [ ] macOS sin firma: solo aviso con enlace al `.dmg`.
+- [ ] Única instalación manual de la primera versión versionada; borrar `desktop-latest`.
+
+**Listo cuando:** un cambio mergeado a `main` llega a la MSI como "Hay una versión nueva", se instala al reiniciar y, en modo servidor, nunca interrumpe a un agente.
+
+---
+
 ## Fase 4 — Agentes: Claude Code, Codex y Antigravity con acceso total
 
 Orca ya trae casi todo:
@@ -217,6 +232,23 @@ Los agentes tienen acceso total **a la MSI**; que esa máquina no tenga nada que
 | Tope por terminal              | `src/main/daemon/process-scopes/terminal-memory-limits.ts` (`ORCA_TERMINAL_MEMORY_MAX`)                                                                 | Tope duro vía **cgroups**, opt-in, **solo Linux**.                                                                                                                                                           | Nada en Windows ni macOS; no hay UI.                              |
 | Árbol de procesos por terminal | `process-growth-breaker.ts` (scopes por terminal)                                                                                                       | Ya agrupa descendientes por terminal.                                                                                                                                                                        | Solo cuenta procesos, no RSS.                                     |
 
+### Decisiones de diseño (2026-11-17)
+
+- **Cola:** FIFO multinivel con relleno y envejecimiento.
+  - Tres niveles: manual › remota › automatización. Dentro de cada nivel, orden de llegada.
+  - Si la cabeza no cabe, puede entrar el primero de atrás que sí quepa (relleno). Cuando la cabeza lleva 10 min o la rebasaron 3 veces, se le reserva la memoria (envejecimiento).
+  - "Pedir cambios" regresa la tarea al frente de su nivel.
+  - La cola se guarda en disco y sobrevive reinicios. FIFO puro se descartó: la cabeza bloquea la fila aunque haya memoria para otros, y no tiene prioridades.
+  - Estructura de datos en `src/shared/zotz/agent-queue/` y `src/main/zotz/zotz-agent-queue-store.ts`.
+- **Las tareas en cola no abren terminal:** la terminal se crea cuando la tarea entra. Así no aplica el límite de 5 min de `createOrAttach` del daemon.
+- **Tablero de la cola**, distinto del kanban de agentes de Orca, con columnas por ciclo de vida de la tarea:
+  - **Backlog:** la cola real, numerada, con la siguiente tarea resaltada y por qué espera.
+  - **In Progress:** corriendo; los pausados se quedan aquí con ⏸.
+  - **Review:** el agente terminó; la sesión abierta sigue contando como memoria ocupada, con botón "Liberar memoria".
+  - **Done:** su pico alimenta el libro de estimaciones.
+  - Arriba, barra de RAM con la línea del mínimo libre.
+- **Pausar no libera RAM:** la pausa frena a un agente que crece; lo que protege la máquina es no admitir lo que no cabe.
+
 ### 8a. Medir la memoria de verdad
 
 Nuevo `src/main/daemon/admission/zotz-memory-pressure.ts`:
@@ -309,6 +341,7 @@ Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-
 | 1 Rebrand + 1b logo     | 0          | M                                      |
 | 2 Telemetría y red      | 0          | M                                      |
 | 3 Updates               | 0          | S                                      |
+| 3b Updates desde Zotz   | 3          | M                                      |
 | 4 Agentes               | 1          | S                                      |
 | 5 Nodo 24/7 Windows     | 1, 3       | L                                      |
 | 6 Tailscale             | 5          | S                                      |
