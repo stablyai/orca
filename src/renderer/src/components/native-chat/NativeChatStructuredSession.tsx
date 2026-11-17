@@ -66,6 +66,7 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
+import { NativeChatWorkerAutoCloseBanner } from '@/components/native-chat/worker-lifetime/NativeChatWorkerAutoCloseBanner'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -197,7 +198,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
   const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const canMention = composerShown && install.unavailableHint === undefined
-  const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const rootInput = useNativeChatRootInputRouting({
     tabId: props.tabId,
     rootRef,
@@ -276,6 +276,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       data-native-chat-scheme={appearanceStyle.colorScheme}
     >
       {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
+      <NativeChatWorkerAutoCloseBanner pane={props} />
       <NativeChatCrewFrame
         panel={<NativeChatCrewPanel {...props} composerRef={composerRef} canMention={canMention} />}
       >
@@ -363,7 +364,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           />
           {prompt || subagentOpen ? null : (
             <NativeChatStructuredComposerTabStrips
-              tabId={props.tabId}
               runtimeContext={imageRuntimeContext}
               threadGoal={controller.threadGoal}
               transport={transport}
@@ -380,7 +380,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             key={prompt ? `${prompt.itemId}:${prompt.revision}` : undefined}
             prompt={prompt}
             promptResponse={promptResponse}
-            onCancel={cancelPrompt}
+            onCancel={() => cancelStructuredPrompt(controller, prompt)}
             shouldFocus={!promptsUnanswerable && props.isVisible && props.isFocusedGroup}
             answerInputRef={questionAnswerInputRef}
           />

@@ -20932,8 +20932,6 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporärer Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten",
         "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
         "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",

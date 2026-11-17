@@ -79,18 +79,7 @@ const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: s
   }
 }
 
-/** The strip across the top of a terminal pane, with its actions and optional Dismiss; neutral is plain state, without the warning icon. */
-export function PaneTopWarningBanner({
-  title,
-  body,
-  tone = 'warning',
-  icon,
-  badge,
-  primaryAction,
-  onDismiss,
-  onDontShowAgain,
-  onShown
-}: {
+export type PaneTopBannerProps = {
   title: string
   body?: React.ReactNode
   tone?: PaneTopBannerTone
@@ -102,9 +91,32 @@ export function PaneTopWarningBanner({
   onDismiss?: () => void
   onDontShowAgain?: () => void
   onShown?: () => void
+}
+
+/** The strip across the top of a terminal pane, with its actions and optional Dismiss; neutral is plain state, without the warning icon. */
+export function PaneTopWarningBanner(props: PaneTopBannerProps): React.JSX.Element {
+  const ref = useReservePaneTopSpace()
+  return <PaneTopBanner {...props} ref={ref} className="pane-top-banner" />
+}
+
+/** The pane-top banner's look without the terminal's height reservation, for panes that lay it out in flow. */
+export function PaneTopBanner({
+  title,
+  body,
+  tone = 'warning',
+  icon,
+  badge,
+  primaryAction,
+  onDismiss,
+  onDontShowAgain,
+  onShown,
+  ref,
+  className
+}: PaneTopBannerProps & {
+  ref?: React.Ref<HTMLDivElement>
+  className?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const ref = useReservePaneTopSpace()
   useEffect(() => {
     onShown?.()
   }, [onShown])
@@ -117,8 +129,9 @@ export function PaneTopWarningBanner({
       role="status"
       // Why pr-24: an agent pane floats four controls (hand off, chat, split, close) over its top-right corner.
       className={cn(
-        'pane-top-banner @container border-b py-2 pr-24 pl-3 text-xs',
-        toneClasses.stripClass
+        '@container border-b py-2 pr-24 pl-3 text-xs',
+        toneClasses.stripClass,
+        className
       )}
     >
       {/* Wrap actions in narrow panes using disjoint container-query properties so unlayered utilities cannot override them. */}
