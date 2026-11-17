@@ -64,6 +64,30 @@ describe('orchestration agent views', () => {
     vi.restoreAllMocks()
   })
 
+  it('shows the account a worker was launched under, and nothing from an older host', async () => {
+    const shown = {
+      dispatch: { id: 'ctx_1', taskId: 'task_1', runId: 'run_1', status: 'dispatched' },
+      worker: {
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        stage: 'agent_ready',
+        agentTerminalHandle: null
+      }
+    }
+    const managed = await run('worker-show', [['dispatch', 'ctx_1']], {
+      ...shown,
+      account: { provider: 'claude', route: 'managed', accountId: 'acct_b' }
+    })
+    expect(managed.stdout).toContain('account="claude managed account acct_b"')
+    const system = await run('worker-show', [['dispatch', 'ctx_1']], {
+      ...shown,
+      account: { provider: 'claude', route: 'system' }
+    })
+    expect(system.stdout).toContain('account="claude system login"')
+    const older = await run('worker-show', [['dispatch', 'ctx_1']], shown)
+    expect(older.stdout).not.toContain('account=')
+  })
+
   it('escapes terminal control bytes in worker-written fields', async () => {
     const { stdout } = await run('worker-start', [['task', 'task_1']], {
       ...OLDER_RUNTIME_START,

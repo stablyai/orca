@@ -20,6 +20,7 @@ import { readStructuredWorkerOutput } from '../structured-workers/orchestration-
 import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { readExactWorkerOutput } from './output/worker-output'
+import { workerLaunchAccount } from './observation/worker-launch-account'
 import { exposeWorkerTerminalResource } from './release/worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
@@ -84,7 +85,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         observation: exposeObservation(observation),
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
         autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource),
-        coordinatedFrom: db.getPeerRun(dispatch.run_id)?.home_label ?? null
+        coordinatedFrom: db.getPeerRun(dispatch.run_id)?.home_label ?? null,
+        account: workerLaunchAccount(dispatch.process_incarnation)
       }
     }
   }),

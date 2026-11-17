@@ -46,6 +46,11 @@ export type WorkerShowResult = {
   autoReleaseAt?: string | null
   /** The paired Orca whose Run here coordinates this worker. */
   coordinatedFrom?: string | null
+  /** The account the host launched this worker's chat under; absent from older hosts. */
+  account?:
+    | { provider: string; route: 'managed'; accountId: string }
+    | { provider: string; route: 'system' }
+    | null
 }
 
 /** A worker a paired server runs, as this Orca names that server and last heard from it. */
@@ -73,6 +78,7 @@ type WorkerShowFields = {
   lastError?: string
   autoReleaseAt?: string
   coordinatedFrom?: string
+  account?: string
   next?: string
 }
 
@@ -119,6 +125,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
           : (value.worker.lastError ?? undefined),
       autoReleaseAt: value.autoReleaseAt ?? undefined,
       coordinatedFrom: value.coordinatedFrom ?? undefined,
+      account: accountField(value.account),
       next: value.projection ? renderOrchestrationArgv(value.projection.nextAction.argv) : undefined
     }
   }
@@ -243,6 +250,15 @@ function workerListWarnings(value: WorkerListResult): string[] {
         `worker observations from ${error.name} (${error.environmentId}) are incomplete: ${error.code}; dispatches=${error.dispatchIds.join(',') || 'none'}`
     )
   ]
+}
+
+function accountField(account: WorkerShowResult['account']): string | undefined {
+  if (!account) {
+    return undefined
+  }
+  return account.route === 'managed'
+    ? `${account.provider} managed account ${account.accountId}`
+    : `${account.provider} system login`
 }
 
 // Descriptive categories like root_completion or stale owe the coordinator nothing; --full keeps them.
