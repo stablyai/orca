@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { ServeSimOwnedSessions } from './serve-sim-owned-session'
+import { execServeSimCommand } from './serve-sim-execution'
 
 const A = 'A0000000-0000-0000-0000-000000000001'
 const B = 'B0000000-0000-0000-0000-000000000002'
@@ -14,7 +15,11 @@ describe('owned iOS helper sessions', () => {
       join(dir, 'middleware.js'),
       `
       export function simMiddleware({ device }) {
-        const handler = async (_req, res) => { res.end(device) }
+        const handler = async (req, res) => {
+          if (req.url.startsWith('/api/event-log')) {
+            res.end(JSON.stringify({events: [{device: new URL(req.url, 'http://localhost').searchParams.get('device')}]}))
+          } else { res.end(device) }
+        }
         handler.handleUpgrade = (_req, socket) => socket.destroy()
         return handler
       }
@@ -31,13 +36,37 @@ describe('owned iOS helper sessions', () => {
     let second: Awaited<ReturnType<typeof sessions.start>> | undefined
     try {
       ;[first, second] = await Promise.all([
-        sessions.start(A, executable, async () => {}),
-        sessions.start(B, executable, async () => {})
+        sessions.start(
+          A,
+          executable,
+          async () => {},
+          async () => true
+        ),
+        sessions.start(
+          B,
+          executable,
+          async () => {},
+          async () => true
+        )
       ])
       expect(first.streamUrl).not.toEqual(second.streamUrl)
       expect(await (await fetch(first.streamUrl)).text()).toBe(A)
       expect(await (await fetch(second.streamUrl)).text()).toBe(B)
       expect(sessions.stateRoot(A)).not.toEqual(sessions.stateRoot(B))
+      expect(
+        await (await fetch(new URL(`/api/event-log?device=${B}`, first.streamUrl))).json()
+      ).toEqual({ events: [{ device: A }] })
+      expect(
+        await execServeSimCommand(
+          {
+            command: process.execPath,
+            baseArgs: [resolve('node_modules/serve-sim/dist/serve-sim.js')],
+            usesElectronAsNode: false
+          },
+          ['event-log', '--json', '-d', A],
+          { json: true, stateRoot: sessions.stateRoot(A) }
+        )
+      ).toEqual({ events: [{ device: A }] })
       expect((await fetch(first.streamUrl.replace(A, B))).status).toBe(404)
       expect(
         (await fetch(first.streamUrl.replace('/stream.mjpeg', `/../${B}/stream.mjpeg`))).status
@@ -46,6 +75,15 @@ describe('owned iOS helper sessions', () => {
       expect(await (await fetch(second.streamUrl)).text()).toBe(B)
       expect(sessions.owns(first)).toBe(false)
       expect(sessions.owns(second)).toBe(true)
+      await expect(sessions.stop(A, first.helperPid)).resolves.toBeUndefined()
+      const replacement = await sessions.start(
+        A,
+        executable,
+        async () => {},
+        async () => true
+      )
+      await expect(sessions.stop(A, first.helperPid)).rejects.toThrow('helper changed')
+      await sessions.stop(A, replacement.helperPid)
     } finally {
       if (first && sessions.owns(first)) {
         await sessions.stop(A, first.helperPid)
@@ -53,6 +91,48 @@ describe('owned iOS helper sessions', () => {
       if (second && sessions.owns(second)) {
         await sessions.stop(B, second.helperPid)
       }
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('shares readiness for concurrent starts of the same device', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-middleware-concurrent-'))
+    writeFileSync(
+      join(dir, 'middleware.js'),
+      `export function simMiddleware() {
+      const handler = async (_req, res) => res.end('ok'); handler.handleUpgrade = () => {}; return handler
+    }`
+    )
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
+    const sessions = new ServeSimOwnedSessions()
+    const executable = {
+      command: process.execPath,
+      baseArgs: [join(dir, 'serve-sim.js')],
+      usesElectronAsNode: false
+    }
+    let complete: ((value: boolean) => void) | undefined
+    const readiness = new Promise<boolean>((resolve) => {
+      complete = resolve
+    })
+    const first = sessions.start(
+      A,
+      executable,
+      async () => {},
+      () => readiness
+    )
+    const second = sessions.start(
+      A,
+      executable,
+      async () => {},
+      async () => false
+    )
+    complete?.(true)
+    const [a, b] = await Promise.all([first, second])
+    try {
+      expect(a).toEqual(b)
+      expect(await (await fetch(a.streamUrl)).text()).toBe('ok')
+    } finally {
+      await sessions.stop(A, a.helperPid)
       rmSync(dir, { recursive: true, force: true })
     }
   })

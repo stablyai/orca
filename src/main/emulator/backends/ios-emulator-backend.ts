@@ -1,6 +1,5 @@
 import { platform } from 'node:os'
 import { EmulatorError } from '../emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
   ensureSimulatorBooted,
@@ -186,24 +185,21 @@ export class IosEmulatorBackend implements EmulatorBackend {
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
     const udid = await this.resolveDeviceId(deviceId)
-    const info = await this.sessions.start(udid, this.serveSimExecutable, async () => {
-      const existing = await listServeSimHelperProcessesForDevice(udid, { includeOrphaned: true })
-      if (existing.length > 0) {
-        throw new EmulatorError(
-          'emulator_helper_failed',
-          `Simulator ${udid} already has an external serve-sim helper.`
-        )
-      }
-      await ensureSimulatorBooted(udid)
-    })
-    if (!(await this.waitForEndpointReady(info.streamUrl))) {
-      await this.sessions.stop(udid, info.helperPid)
-      throw new EmulatorError(
-        'emulator_helper_failed',
-        emulatorFailureText('serveSimEndpointUnreachable')
-      )
-    }
-    return info
+    return this.sessions.start(
+      udid,
+      this.serveSimExecutable,
+      async () => {
+        const existing = await listServeSimHelperProcessesForDevice(udid, { includeOrphaned: true })
+        if (existing.length > 0) {
+          throw new EmulatorError(
+            'emulator_helper_failed',
+            `Simulator ${udid} already has an external serve-sim helper.`
+          )
+        }
+        await ensureSimulatorBooted(udid)
+      },
+      (info) => this.waitForEndpointReady(info.streamUrl)
+    )
   }
 
   async stopHelperForDevice(

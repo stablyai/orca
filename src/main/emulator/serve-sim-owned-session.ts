@@ -21,6 +21,11 @@ const { createServer } = require('node:http');
   const route = req => {
     try {
       const url = new URL(req.url, 'http://127.0.0.1');
+      if (req.method === 'GET' && url.pathname === '/api/event-log') {
+        url.searchParams.set('device', device);
+        req.url = url.pathname + url.search;
+        return true;
+      }
       if (!url.pathname.startsWith(prefix)) return false;
       req.url = url.pathname.slice(token.length) + url.search;
       return true;
@@ -54,17 +59,26 @@ export class ServeSimOwnedSessions {
   async start(
     udid: string,
     executable: ServeSimExecutable,
-    prepare: () => Promise<void>
+    prepare: () => Promise<void>,
+    ready: (info: EmulatorSessionInfo) => Promise<boolean>
   ): Promise<EmulatorSessionInfo> {
     const current = this.sessions.get(udid)
     if (current && current.child.exitCode === null && current.child.signalCode === null) {
+      if (!(await ready(current.info))) {
+        throw new EmulatorError(
+          'emulator_helper_failed',
+          'The existing simulator helper is not reachable.'
+        )
+      }
       return current.info
     }
     const pending = this.starting.get(udid)
     if (pending) {
       return pending
     }
-    const start = this.startNew(udid, executable, prepare).finally(() => this.starting.delete(udid))
+    const start = this.startNew(udid, executable, prepare, ready).finally(() =>
+      this.starting.delete(udid)
+    )
     this.starting.set(udid, start)
     return start
   }
@@ -72,7 +86,8 @@ export class ServeSimOwnedSessions {
   private async startNew(
     udid: string,
     executable: ServeSimExecutable,
-    prepare: () => Promise<void>
+    prepare: () => Promise<void>,
+    ready: (info: EmulatorSessionInfo) => Promise<boolean>
   ): Promise<EmulatorSessionInfo> {
     if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(udid)) {
       throw new EmulatorError('emulator_device_not_found', `Invalid simulator UDID: ${udid}`)
@@ -158,6 +173,12 @@ export class ServeSimOwnedSessions {
           wsUrl: info.wsUrl
         })
       )
+      if (!(await ready(info)) || child.exitCode !== null || child.signalCode !== null) {
+        throw new EmulatorError(
+          'emulator_helper_failed',
+          'Simulator helper stream is not reachable.'
+        )
+      }
       const session: OwnedSession = { info, child, stateRoot, lock }
       this.sessions.set(udid, session)
       child.once('exit', () => {
@@ -234,6 +255,9 @@ export class ServeSimOwnedSessions {
   async stop(udid: string, helperPid?: number): Promise<void> {
     const session = this.sessions.get(udid)
     if (!session) {
+      if (helperPid !== undefined) {
+        return
+      }
       throw new EmulatorError('emulator_no_active', `No owned simulator helper for ${udid}.`)
     }
     if (helperPid !== undefined && session.info.helperPid !== helperPid) {

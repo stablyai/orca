@@ -1,7 +1,15 @@
 import { runProcess } from '@orca/process-host'
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync
+} from 'node:fs'
 import { platform, tmpdir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { basename, delimiter, dirname, join } from 'node:path'
+import { resolveExecutableCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
@@ -115,7 +123,29 @@ export function resolveServeSimExecutable(): ServeSimExecutable {
     return { command: process.execPath, baseArgs: [nodeModulesEntry], usesElectronAsNode: true }
   }
 
-  return { command: 'serve-sim', baseArgs: [], usesElectronAsNode: false }
+  return (
+    resolvePathServeSimExecutable() ?? {
+      command: 'serve-sim',
+      baseArgs: [],
+      usesElectronAsNode: false
+    }
+  )
+}
+
+export function resolvePathServeSimExecutable(): ServeSimExecutable | null {
+  const command = resolveExecutableCommand('serve-sim')
+  if (!command) {
+    return null
+  }
+  try {
+    const entry = realpathSync(command)
+    if (basename(entry) !== 'serve-sim.js' || !existsSync(join(dirname(entry), 'middleware.js'))) {
+      return null
+    }
+    return { command: process.execPath, baseArgs: [entry], usesElectronAsNode: true }
+  } catch {
+    return null
+  }
 }
 
 // Why: `--kill [device]` has an optional value; a detached udid is dropped and serve-sim kills every stream.
