@@ -100,10 +100,10 @@ export class WorkerThreadChildProcess extends EventEmitter {
     return this.send({ type: 'kill', id: this.id, signal }) && !exited
   }
 
-  /** The reader is done; later output stays on the worker instead of crossing to this thread. */
-  discardOutput(): void {
+  /** The reader is done with one stream or both; later output stays on the worker instead of crossing to this thread. */
+  discardOutput(stream?: 'stdout' | 'stderr'): void {
     if (!this.closed) {
-      this.send({ type: 'discard-output', id: this.id })
+      this.send({ type: 'discard-output', id: this.id, ...(stream ? { stream } : {}) })
     }
   }
 

@@ -16,6 +16,10 @@ vi.mock('./worker-thread-child-process', async (original) => {
   }
 })
 
+vi.mock('../pty/process-retirement/own-chromium-tree-kill-guard', () => ({
+  admitSelfInitiatedTreeKill: () => true
+}))
+
 import { spawnBufferedProcessOnWorker } from './buffered-process-worker-spawner'
 import {
   WORKER_CHILD_ABANDONED_CODE,
@@ -64,6 +68,83 @@ afterEach(() => {
 })
 
 describe('buffered Windows processes on the shared worker', () => {
+  it('withdraws an aborted run the worker has not started instead of launching it', async () => {
+    const sent: unknown[] = []
+    const child = new WorkerThreadChildProcess(1, (message) => {
+      sent.push(message)
+      return true
+    })
+    worker.spawn.mockReturnValue(child)
+    const controller = new AbortController()
+    const pending = runProcess({
+      program: 'gh.exe',
+      args: ['--version'],
+      signal: controller.signal
+    })
+    controller.abort()
+    expect(sent).toContainEqual({ type: 'cancel-spawn', id: 1 })
+    expect(sent).not.toContainEqual(expect.objectContaining({ type: 'kill' }))
+    child.receive({ type: 'exit', id: 1, code: null, signal: 'SIGTERM' })
+    child.receive({ type: 'close', id: 1, code: null, signal: 'SIGTERM' })
+    await expect(pending).resolves.toMatchObject({ code: null, signal: 'SIGTERM' })
+  })
+
+  it('stops forwarding a stream once its head capture is full', async () => {
+    const sent: unknown[] = []
+    const child = new WorkerThreadChildProcess(1, (message) => {
+      sent.push(message)
+      return true
+    })
+    worker.spawn.mockReturnValue(child)
+    const pending = runProcess({ program: 'gh.exe', args: ['run', 'view'], maxOutputBytes: 4 })
+    child.receive({ type: 'spawn', id: 1, pid: 4242 })
+    child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('abcdefgh') })
+    child.receive({ type: 'stderr', id: 1, chunk: new TextEncoder().encode('warn') })
+    expect(sent).toContainEqual({ type: 'discard-output', id: 1, stream: 'stdout' })
+    expect(sent).not.toContainEqual(
+      expect.objectContaining({ type: 'discard-output', stream: 'stderr' })
+    )
+    child.receive({ type: 'exit', id: 1, code: 0, signal: null })
+    child.receive({ type: 'close', id: 1, code: 0, signal: null })
+    await expect(pending).resolves.toMatchObject({
+      stdout: 'abcd',
+      stderr: 'warn',
+      outputTruncated: true
+    })
+  })
+
+  it('ends the live tree of a run whose worker died before reporting it terminated', async () => {
+    const child = new WorkerThreadChildProcess(1, () => true)
+    const taskkill = new WorkerThreadChildProcess(2, () => true)
+    worker.spawn.mockReturnValueOnce(child).mockReturnValueOnce(taskkill)
+    const terminated = vi.fn()
+    const pending = runProcess({
+      program: 'gh.exe',
+      args: ['api', 'user'],
+      onChildTerminated: terminated
+    })
+    child.receive({ type: 'spawn', id: 1, pid: 4242 })
+    child.receive({
+      type: 'error',
+      id: 1,
+      error: {
+        message: 'Child process worker exited with code 1',
+        code: WORKER_CHILD_ABANDONED_CODE
+      }
+    })
+    await vi.waitFor(() =>
+      expect(worker.spawn).toHaveBeenLastCalledWith({
+        program: 'taskkill',
+        args: ['/pid', '4242', '/t', '/f']
+      })
+    )
+    expect(terminated).not.toHaveBeenCalled()
+    taskkill.receive({ type: 'spawn', id: 2, pid: 777 })
+    taskkill.receive({ type: 'close', id: 2, code: 0, signal: null })
+    await expect(pending).rejects.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
+    expect(terminated).toHaveBeenCalledOnce()
+  })
+
   it('starts the deadline when the worker creates the process, not while the launch is queued', async () => {
     vi.useFakeTimers()
     const child = new WorkerThreadChildProcess(1, () => true)
@@ -128,7 +209,8 @@ describe('buffered Windows processes on the shared worker', () => {
     'settles abandonment after a swallowed stdin error (barrier %s)',
     async (barrier) => {
       const child = new WorkerThreadChildProcess(1, () => true)
-      worker.spawn.mockReturnValue(child)
+      const taskkill = new WorkerThreadChildProcess(2, () => true)
+      worker.spawn.mockReturnValueOnce(child).mockReturnValueOnce(taskkill)
       const controller = new AbortController()
       const terminated = vi.fn()
       const pending = runProcess({
@@ -156,6 +238,11 @@ describe('buffered Windows processes on the shared worker', () => {
         id: 1,
         error: { message: 'worker died', code: WORKER_CHILD_ABANDONED_CODE }
       })
+      if (!barrier) {
+        // The started child's tree is ended before the run reports it gone.
+        await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalledTimes(2))
+        taskkill.receive({ type: 'close', id: 2, code: 0, signal: null })
+      }
       await outcome
       expect(terminated).toHaveBeenCalledOnce()
     }

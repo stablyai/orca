@@ -1,7 +1,7 @@
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
 import { createPosixGroupTermination, PROCESS_EXIT_GRACE_MS } from './posix-group-termination'
 
-import { createOutputSink } from './bounded-output-sink'
+import { captureRunProcessOutput } from './run-process-output'
 import { createChildTerminationReporter } from './child-termination-reporter'
 
 import type {
@@ -10,7 +10,6 @@ import type {
   ProcessSpec,
   ProcessResult
 } from './process-spec'
-import { DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 import { selectBufferedProcessSpawn } from './process-spawn-selection'
 import { startProcessDeadline } from './run-process-deadline'
 import { createProcessTreeActions, terminate } from './run-process-tree-actions'
@@ -28,7 +27,6 @@ export function runProcess(
     spec.onChildTerminated?.()
     return Promise.resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
   }
-  const maxOutputBytes = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
   return new Promise<ProcessResult>((resolve, reject) => {
     const terminationReporter = createChildTerminationReporter(spec.onChildTerminated)
@@ -44,8 +42,9 @@ export function runProcess(
       return
     }
 
-    const stdout = createOutputSink(maxOutputBytes, outputCapture)
-    const stderr = createOutputSink(maxOutputBytes, outputCapture)
+    const { stdout, stderr } = captureRunProcessOutput(spec, child, hosted, outputCapture, () =>
+      stopAndSettle()
+    )
     let timedOut = false
     let settled = false
     let barrierStopping = false
@@ -56,6 +55,7 @@ export function runProcess(
     let deferredClose: { code: number | null; signal: NodeJS.Signals | null } | null = null
     let deferredError: Error | null = null
     let rootExitedBeforeBarrier = false
+    let abandoned = false
     const nativeGroupTermination =
       spec.terminationBarrier === true && process.platform !== 'win32'
         ? createPosixGroupTermination(child, () => {
@@ -78,22 +78,6 @@ export function runProcess(
       act()
     }
 
-    child.stdout?.on('data', (chunk: Buffer | string) => {
-      stdout.write(chunk)
-      if (spec.killOnOutputLimit && stdout.truncated()) {
-        stopAndSettle()
-      }
-    })
-    child.stderr?.on('data', (chunk: Buffer | string) => {
-      stderr.write(chunk)
-      spec.onStderr?.(chunk)
-      if (spec.killOnOutputLimit && stderr.truncated()) {
-        stopAndSettle()
-      }
-      if (typeof spec.terminationBarrier === 'object') {
-        spec.terminationBarrier.observeStderr?.(chunk)
-      }
-    })
     // Stream errors (including stdin EPIPE) are otherwise uncaught; the exit still reaches callers.
     for (const stream of [child.stdin, child.stdout, child.stderr]) {
       stream?.on('error', () => {})
@@ -152,6 +136,9 @@ export function runProcess(
 
     // Barrier callers wait for termination evidence, bounded by a final deadline.
     const stopAndSettle = (): void => {
+      if (abandoned) {
+        return
+      }
       if (nativeGroupTermination) {
         if (barrierStopping) {
           return
@@ -176,6 +163,12 @@ export function runProcess(
             (terminated) => terminated && markBarrierTerminationVerified()
           )
         }
+      } else if (hosted?.withPid) {
+        // A hosted run still queued is withdrawn before it starts; one underway is stopped once its PID arrives.
+        void hosted.withPid(() => {
+          terminate(child)
+          return Promise.resolve(true)
+        })
       } else {
         terminate(child)
       }
@@ -254,8 +247,15 @@ export function runProcess(
         return
       }
       if (hosted?.isAbandonedError?.(error)) {
-        terminationReporter.report()
-        settle(() => reject(error))
+        // The run now ends with this error once its tree is stopped; nothing else may settle it.
+        abandoned = true
+        clearDeadline()
+        clearTimeout(graceTimer)
+        clearTimeout(barrierDeadlineTimer)
+        void (hosted.killAbandonedTree?.() ?? Promise.resolve()).then(() => {
+          terminationReporter.report()
+          settle(() => reject(error))
+        })
         return
       }
       terminationReporter.reportIf(!child.pid)

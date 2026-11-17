@@ -6,6 +6,7 @@ import {
   spawnProcessOnWorkerThread
 } from './worker-thread-child-process'
 import { runOnceWorkerReportsPid } from './worker-child-pid-wait'
+import { killAbandonedWorkerChildTree } from '../git/command-runner/process-capture/spawned-command-tree-kill'
 
 export function spawnBufferedProcessOnWorker(spec: ProcessSpec): BufferedProcessSpawn | undefined {
   const stdio = spec.stdio
@@ -35,6 +36,9 @@ export function spawnBufferedProcessOnWorker(spec: ProcessSpec): BufferedProcess
   return {
     child,
     withPid: (action) => runOnceWorkerReportsPid(child, action),
+    discardOutput: (stream) => child.discardOutput(stream),
+    // A dead worker can no longer stop the run; end its live tree from here before reporting it gone.
+    killAbandonedTree: () => killAbandonedWorkerChildTree(child),
     isAbandonedError: isAbandonedWorkerChildError,
     isStdinWriteError: isWorkerChildStdinWriteError
   }

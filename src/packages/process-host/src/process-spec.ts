@@ -21,6 +21,10 @@ export type BufferedProcessChild = ProcessChild & {
 export type BufferedProcessSpawn = {
   child: BufferedProcessChild
   withPid?: (action: () => Promise<boolean>) => Promise<boolean>
+  /** Stops forwarding a stream nothing reads any more. */
+  discardOutput?: (stream: 'stdout' | 'stderr') => void
+  /** Ends a still-running tree whose host died; resolves once that attempt is over. */
+  killAbandonedTree?: () => Promise<void>
   isAbandonedError?: (error: unknown) => boolean
   isStdinWriteError?: (error: unknown) => boolean
 }
