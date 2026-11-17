@@ -9,8 +9,13 @@ type PtySize = { cols: number; rows: number }
  *  sends no SIGWINCH. It lives beside the PTY so the way back survives a lost client, and only the
  *  PTY moves, so the grid attaches read stays real. A real resize meanwhile owns the grid. */
 export class SessionRepaintNudge {
-  /** The grid the nudge in flight restores; a request on another grid starts its own. */
+  /** The grid the nudge in flight restores; a request meanwhile shares that nudge. */
   private inFlight: PtySize | null = null
+
+  /** A real resize owns the grid: the nudge in flight neither restores nor absorbs later requests. */
+  retire(): void {
+    this.inFlight = null
+  }
 
   request(
     readGrid: () => PtySize | null,
@@ -19,24 +24,19 @@ export class SessionRepaintNudge {
   ): void {
     const grid = readGrid()
     // Why not Windows: ConPTY answers a resize by replaying its own viewport, not the program's paint.
-    if (process.platform === 'win32' || !grid || grid.cols < 1 || grid.rows < 1) {
+    if (process.platform === 'win32' || this.inFlight || !grid || grid.cols < 1 || grid.rows < 1) {
       return
     }
     const { cols, rows } = grid
-    if (this.inFlight?.cols === cols && this.inFlight.rows === rows) {
-      return
-    }
     const nudge = { cols, rows }
     this.inFlight = nudge
     resizePty(cols, rows > TERMINAL_VIEWPORT_MIN_ROWS ? rows - 1 : rows + 1)
     setTimeout(() => {
-      if (this.inFlight !== nudge) {
-        return
-      }
-      this.inFlight = null
-      const current = readGrid()
-      if (isLive() && current?.cols === cols && current.rows === rows) {
-        resizePty(cols, rows)
+      if (this.inFlight === nudge) {
+        this.inFlight = null
+        if (isLive()) {
+          resizePty(cols, rows)
+        }
       }
     }, REPAINT_RESTORE_MS).unref?.()
   }

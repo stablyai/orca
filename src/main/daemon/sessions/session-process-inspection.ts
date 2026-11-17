@@ -10,7 +10,7 @@ export abstract class SessionProcessInspection {
   readonly processNameIsSpawnFile: boolean
   readonly shellIsRootChild: boolean
 
-  private readonly repaintNudge = new SessionRepaintNudge()
+  protected readonly repaintNudge = new SessionRepaintNudge()
 
   abstract get isAlive(): boolean
   abstract getAppliedSize(): { cols: number; rows: number } | null
