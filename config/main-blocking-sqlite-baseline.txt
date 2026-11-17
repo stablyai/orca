@@ -165,7 +165,7 @@
 2 src/main/persistence/profile-state/recovery/profile-state-section-repair.ts
 3 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
 2 src/main/runtime/agent-session/records/agent-session-record-lineage.ts
-40 src/main/runtime/agent-session/records/agent-session-record-rows.ts
+38 src/main/runtime/agent-session/records/agent-session-record-rows.ts
 23 src/main/runtime/orchestration/db/dispatch-context/presentation-completion-source.ts
 6 src/main/runtime/orchestration/db/dispatch-row-writer.ts
 1 src/main/runtime/orchestration/db/federation/federated-stub-home-run-backfill.ts

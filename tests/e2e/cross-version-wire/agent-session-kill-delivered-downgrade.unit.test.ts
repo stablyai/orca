@@ -166,8 +166,8 @@ test(`${RELEASE_REF} keeps the converted records readable and writable; the upgr
     if (!restored) {
       throw new Error('the upgraded chat must remain readable')
     }
-    // Opening the store is a restart: loaded leases stay unreconciled until ownership is proved.
-    expect(restored).toEqual({ ...stopped, lease: { ...stopped?.lease, unreconciled: true } })
+    // Opening the store is a restart, but a released lease nothing can hold stays as saved.
+    expect(restored).toEqual(stopped)
     const conversation = agentSessionConversationView(restored)
     expect(agentSessionLeaseOwnerVerdict(restored.lease)).toBe('exited')
     expect(agentSessionLeasePossiblyWriting(restored.lease)).toBe(false)
