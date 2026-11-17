@@ -95,9 +95,9 @@ test('embedded browser omits unusable FedCM and reaches the popup fallback', asy
         { targetBrowserTabId: browserTabId, script: expression }
       )
 
-    await expect
-      .poll(() => readGuest<string>('document.title'), { timeout: 10_000 })
-      .toBe('FedCM fallback oracle')
+    await expect(async () => {
+      expect(await readGuest<string>('document.title')).toBe('FedCM fallback oracle')
+    }).toPass({ timeout: 10_000 })
     const capabilities = await readGuest<{
       hasIdentityCredential: boolean
       hasIdentityProvider: boolean

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
 import { recordElectronShutdownTiming } from './electron-shutdown-timing'
 import type { ElectronApplication } from '@stablyai/playwright-test'
+import { getElectronProcessForE2E } from './electron-process-handle'
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
 const PROCESS_EXIT_TIMEOUT_MS = 5_000
@@ -172,7 +173,7 @@ export async function forceQuitElectronAppForE2E(
   app: ElectronApplication,
   options: { preserveDaemons?: boolean } = {}
 ): Promise<void> {
-  const proc = app.process()
+  const proc = getElectronProcessForE2E(app)
   const pid = proc.pid
   if (pid) {
     if (options.preserveDaemons) {
@@ -208,7 +209,7 @@ export async function forceQuitElectronAppForE2E(
 
 // Stop serve like a supervisor so its detached PTYs survive; macOS vetoes unmarked app.quit and ordinary close may kill the daemon (#15537).
 export async function stopServeElectronAppForE2E(app: ElectronApplication): Promise<void> {
-  const proc = app.process()
+  const proc = getElectronProcessForE2E(app)
   // Why: Windows has no catchable SIGTERM, and its serve has no native-quit veto to bypass.
   if (process.platform === 'win32' || !proc.pid) {
     await closeElectronAppForE2E(app)
@@ -233,7 +234,7 @@ export async function closeElectronAppForE2E(
   app: ElectronApplication,
   options: { cleanupDaemonsForUserDataDir?: string } = {}
 ): Promise<void> {
-  const proc = app.process()
+  const proc = getElectronProcessForE2E(app)
   const started = performance.now()
   let rootExitMs: number | null = hasExited(proc) ? 0 : null
   let pipesClosedMs: number | null = null

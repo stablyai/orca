@@ -1,4 +1,5 @@
 import type { ElectronApplication } from '@stablyai/playwright-test'
+import { getElectronProcessForE2E } from '../../../desktop/electron-fixtures/electron-process-handle'
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 
 type ServeReady = {
@@ -120,7 +121,7 @@ export async function readServeReadiness(
   app: ElectronApplication,
   options: { requirePairingOffer: boolean }
 ): Promise<RuntimeDesktopPairingOffer | null> {
-  const child = app.process()
+  const child = getElectronProcessForE2E(app)
   const stdout = child.stdout
   if (!stdout) {
     throw new Error('Headless runtime stdout is unavailable')

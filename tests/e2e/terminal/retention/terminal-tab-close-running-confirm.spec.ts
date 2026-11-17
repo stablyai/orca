@@ -22,8 +22,10 @@ function countRenderedTabs(page: Page): Promise<number> {
   return page.locator(SORTABLE_TAB).count()
 }
 
-function closeDialogTitle(page: Page) {
-  return page.getByText(/Stop running command\?|Stop this agent\?/)
+function closeDialog(page: Page) {
+  return page.getByRole('dialog').filter({
+    has: page.getByRole('button', { name: /^Stop and close$/i })
+  })
 }
 
 test.describe.configure({ mode: 'serial' })
@@ -60,9 +62,9 @@ test('the tab X button applies the same running-process confirmation as Cmd+W', 
 
   await focusActiveTerminalInput(orcaPage)
   await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w')
-  await expect(closeDialogTitle(orcaPage)).toBeVisible({ timeout: 15_000 })
+  await expect(closeDialog(orcaPage)).toBeVisible({ timeout: 15_000 })
   await orcaPage.getByRole('button', { name: /^Cancel$/ }).click()
-  await expect(closeDialogTitle(orcaPage)).toBeHidden()
+  await expect(closeDialog(orcaPage)).toBeHidden()
   await expect(busyTab).toBeVisible()
   const tabsBefore = await countRenderedTabs(orcaPage)
 
@@ -72,7 +74,7 @@ test('the tab X button applies the same running-process confirmation as Cmd+W', 
 
   expect(
     {
-      confirmDialogVisible: await closeDialogTitle(orcaPage).isVisible(),
+      confirmDialogVisible: await closeDialog(orcaPage).isVisible(),
       tabStillPresent: (await countRenderedTabs(orcaPage)) === tabsBefore
     },
     'X-button close must apply the same running-process confirmation as Cmd+W'

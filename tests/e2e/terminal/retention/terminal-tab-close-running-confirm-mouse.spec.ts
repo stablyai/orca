@@ -18,8 +18,10 @@ import {
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 
-function closeDialogTitle(page: Page) {
-  return page.getByText(/Stop running command\?|Stop this agent\?/)
+function closeDialog(page: Page) {
+  return page.getByRole('dialog').filter({
+    has: page.getByRole('button', { name: /^Stop and close$/i })
+  })
 }
 
 async function startBusyTerminal(page: Page): Promise<string> {
@@ -57,9 +59,9 @@ test('middle-clicking a busy tab prompts, and cancelling keeps the tab', async (
 
   await busyTab.click({ button: 'middle' })
 
-  await expect(closeDialogTitle(orcaPage)).toBeVisible({ timeout: 15_000 })
+  await expect(closeDialog(orcaPage)).toBeVisible({ timeout: 15_000 })
   await orcaPage.getByRole('button', { name: /^Cancel$/ }).click()
-  await expect(closeDialogTitle(orcaPage)).toBeHidden()
+  await expect(closeDialog(orcaPage)).toBeHidden()
   await expect(busyTab).toBeVisible()
   expect(await orcaPage.locator(SORTABLE_TAB).count()).toBe(tabsBefore)
 })
@@ -71,11 +73,11 @@ test('confirming the X-button prompt closes the busy tab', async ({ orcaPage }) 
 
   await busyTab.hover()
   await busyTab.getByRole('button', { name: /^Close tab /i }).click()
-  await expect(closeDialogTitle(orcaPage)).toBeVisible({ timeout: 15_000 })
-  await orcaPage.getByRole('button', { name: /^Stop and Close$/ }).click()
+  await expect(closeDialog(orcaPage)).toBeVisible({ timeout: 15_000 })
+  await orcaPage.getByRole('button', { name: /^Stop and close$/i }).click()
 
   await expect(busyTab).toHaveCount(0, { timeout: 15_000 })
-  await expect(closeDialogTitle(orcaPage)).toBeHidden()
+  await expect(closeDialog(orcaPage)).toBeHidden()
 })
 
 test('Cmd+W on a busy single-pane tab raises exactly one dialog', async ({ orcaPage }) => {
@@ -85,11 +87,11 @@ test('Cmd+W on a busy single-pane tab raises exactly one dialog', async ({ orcaP
 
   await focusActiveTerminalInput(orcaPage)
   await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+w' : 'Control+w')
-  await expect(closeDialogTitle(orcaPage)).toBeVisible({ timeout: 15_000 })
-  await orcaPage.getByRole('button', { name: /^Stop and Close$/ }).click()
+  await expect(closeDialog(orcaPage)).toBeVisible({ timeout: 15_000 })
+  await orcaPage.getByRole('button', { name: /^Stop and close$/i }).click()
 
   await expect(busyTab).toHaveCount(0, { timeout: 15_000 })
   // Reject duplicate pane and delegated closeTerminalTab confirmations.
   await orcaPage.waitForTimeout(1_500)
-  await expect(closeDialogTitle(orcaPage)).toBeHidden()
+  await expect(closeDialog(orcaPage)).toBeHidden()
 })

@@ -105,7 +105,35 @@ for (const newCardStyle of [false, true]) {
     await orcaPage.waitForTimeout(550)
     await parent.getByRole('button', { name: 'Show 53 child workspaces' }).click()
     await expect(parent.getByRole('button', { name: 'Hide 53 child workspaces' })).toBeVisible()
-    await expect(parent.locator('[role="option"]')).toHaveCount(53)
-    await expect(parent.locator('[role="option"]').first()).toContainText('Child 0')
+    const firstChild = sidebar.locator(
+      `[role="option"][data-worktree-id=${JSON.stringify(childIds[0]!)}]`
+    )
+    await expect(firstChild).toBeVisible()
+    await expect(firstChild).toContainText('Child 0')
+    await sidebar.evaluate((element) => {
+      element.scrollTop = 0
+    })
+    const revealedChildIds = new Set<string>()
+    await expect
+      .poll(async () => {
+        const mountedIds = await sidebar.locator('[role="option"][data-worktree-id]').evaluateAll(
+          (options, expectedIds) =>
+            options.flatMap((option) => {
+              const id = option.getAttribute('data-worktree-id')
+              return id && expectedIds.includes(id) ? [id] : []
+            }),
+          childIds
+        )
+        for (const id of mountedIds) {
+          revealedChildIds.add(id)
+        }
+        if (revealedChildIds.size < 53) {
+          await sidebar.evaluate((element) => {
+            element.scrollTop += element.clientHeight / 2
+          })
+        }
+        return revealedChildIds.size
+      })
+      .toBe(53)
   })
 }
