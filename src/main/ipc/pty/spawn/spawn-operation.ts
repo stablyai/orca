@@ -125,7 +125,9 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
         ctx.result,
         {
           paneKey: facts.savedResumePaneKey ?? null,
-          saved: savedResumeRecord(ctx.deps.store, facts.savedResumePaneKey ?? null)
+          saved: savedResumeRecord(ctx.deps.store, facts.savedResumePaneKey ?? null),
+          connectionId: args.connectionId,
+          spawnIntent: args.spawnIntent
         },
         ctx.expectedWslDistro
       )

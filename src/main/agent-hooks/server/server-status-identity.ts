@@ -71,6 +71,7 @@ export function toAgentStatusIpcPayload(
     ...pickHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
+    ...(entry.agentPresence?.ended ? { agentProcessEnded: true as const } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...(entry.observation ? { observation: entry.observation } : {}),

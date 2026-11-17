@@ -139,17 +139,17 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         untouched.push(resolvedPaneKey)
         continue
       }
-      const resumeRow = options?.preserveResumeIdentity
+      const retained = options?.preserveResumeIdentity
         ? this.toRetainedProviderSessionRow(
             this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
               | EnrichedAgentHookEventPayload
               | undefined
           )
         : null
-      const retained =
-        resumeRow && options?.endedPresence
-          ? { ...resumeRow, agentPresence: options.endedPresence }
-          : resumeRow
+      if (retained) {
+        const presence = options?.endedPresence ?? retained.agentPresence
+        retained.agentPresence = { ...presence, agent: retained.payload.agentType!, ended: true }
+      }
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined

@@ -11,8 +11,70 @@ import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/agent-sessi
 import { recordConversationKey } from '../../../native-chat/conversation-adoption/structured-conversation-key'
 import type { StructuredAgentCliSourceRoute } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import { OrcaRuntimeWithGetWorktreePs } from '../../workspaces/process-listing/workspace-process-listing'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { terminalOrphanExecutionOwnersEqual } from '../../terminal/adoption/terminal-orphan-owner'
+import { terminalResumeRowMatches } from '../../../ipc/pty/host-env/saved-resume-ownership'
+import { resolveObservedAgentStatusBinding } from '../../../ipc/agent-hooks/agent-status-ipc-boundary'
 
 export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithGetWorktreePs {
+  async isTerminalProviderSessionHeld(
+    row: AgentStatusIpcPayload,
+    connectionId: string | null,
+    wslDistro: string | null,
+    restoringPtyId?: string
+  ): Promise<boolean> {
+    const pty = this.getPtyRecordForPaneKey(row.paneKey)
+    if (
+      row.agentProcessEnded ||
+      !pty ||
+      pty.ptyId === restoringPtyId ||
+      !terminalOrphanExecutionOwnersEqual({ connectionId, wslDistro }, pty) ||
+      (row.worktreeId && row.worktreeId !== pty.worktreeId)
+    ) {
+      return false
+    }
+    const incarnationId = pty.incarnationId
+    const generation = this.getPtyLifecycleGeneration(pty.ptyId)
+    const observed = this.readObservedAgentStatusPaneIdentityFn?.(row.paneKey)
+    if (
+      observed?.kind === 'observed' &&
+      resolveObservedAgentStatusBinding(row.paneKey, this, observed).kind === 'unresolved'
+    ) {
+      return false
+    }
+    const observation = this.readHookCliWriterObservationFn?.(row)
+    try {
+      if (observation && (await observation.presence()) === 'exited' && observation.current()) {
+        return false
+      }
+    } catch {
+      // Missing process evidence cannot release a conversation a PTY may still own.
+    }
+    try {
+      const live = this.ptyController?.probePtyLiveness
+        ? await this.ptyController.probePtyLiveness(pty.ptyId)
+        : this.ptyController?.hasPty?.(pty.ptyId)
+      if (live === false) {
+        return false
+      }
+    } catch {
+      // A failed owner probe is unknown, not an exit.
+    }
+    // A delayed probe must not assign an old conversation to a replacement process or row.
+    return (
+      this.getPtyRecordForPaneKey(row.paneKey) === pty &&
+      terminalOrphanExecutionOwnersEqual({ connectionId, wslDistro }, pty) &&
+      pty.incarnationId === incarnationId &&
+      this.getPtyLifecycleGeneration(pty.ptyId) === generation &&
+      this.getAgentProviderSessionRows().some(
+        (current) =>
+          current.paneKey === row.paneKey &&
+          !current.agentProcessEnded &&
+          terminalResumeRowMatches(current, row.agentType, row.providerSession)
+      )
+    )
+  }
+
   getStructuredAgentCliSourceRoute(source: {
     workspaceId: string
     paneKey: string
