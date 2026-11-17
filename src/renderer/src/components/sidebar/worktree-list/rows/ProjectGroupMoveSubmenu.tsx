@@ -31,7 +31,7 @@ export function ProjectGroupMoveSubmenu(
   props: ProjectGroupMoveSubmenuProps
 ): React.JSX.Element | null {
   const t = useTranslate()
-  const targets =
+  const destinations =
     'movingGroup' in props
       ? getProjectGroupMoveTargetsForGroup(props.projectGroups, props.movingGroup)
       : getProjectGroupMoveTargetsForProject(props.projectGroups, props.movingProject)
@@ -41,8 +41,8 @@ export function ProjectGroupMoveSubmenu(
       : null
   // Why: a group menu drops a submenu with nothing to pick; project menus keep their lone current group.
   const hidden = topLevel
-    ? topLevel.disabled && targets.every((target) => target.disabled)
-    : targets.length === 0
+    ? topLevel.disabled && destinations.every((destination) => destination.disabled)
+    : destinations.length === 0
   if (hidden) {
     return null
   }
@@ -57,10 +57,10 @@ export function ProjectGroupMoveSubmenu(
               <DropdownMenuItem disabled={topLevel.disabled} onSelect={topLevel.select}>
                 {t('auto.components.sidebar.ProjectGroupMoveSubmenu.5f1e73c267', 'Top level')}
               </DropdownMenuItem>
-              {targets.length > 0 ? <DropdownMenuSeparator /> : null}
+              {destinations.length > 0 ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
-          {targets.map(({ group, depth, disabled }) => (
+          {destinations.map(({ group, depth, disabled }) => (
             <DropdownMenuItem
               key={group.id}
               disabled={disabled}

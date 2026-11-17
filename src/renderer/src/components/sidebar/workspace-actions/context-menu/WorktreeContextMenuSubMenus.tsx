@@ -103,7 +103,7 @@ export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextM
   if (!repo) {
     return null
   }
-  const moveTargets = getProjectGroupMoveTargetsForProject(projectGroups, repo)
+  const destinationGroups = getProjectGroupMoveTargetsForProject(projectGroups, repo)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={isDeleting}>
@@ -121,7 +121,7 @@ export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextM
             {t('auto.components.sidebar.WorktreeContextMenu.d35dfeae58', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
-        {moveTargets.length > 0 ? (
+        {destinationGroups.length > 0 ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>
@@ -131,7 +131,7 @@ export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextM
               value={repo.projectGroupId ?? ''}
               onValueChange={model.handleMoveProjectToGroup}
             >
-              {moveTargets.map(({ group, depth, disabled }) => (
+              {destinationGroups.map(({ group, depth, disabled }) => (
                 <DropdownMenuRadioItem
                   key={group.id}
                   value={group.id}
