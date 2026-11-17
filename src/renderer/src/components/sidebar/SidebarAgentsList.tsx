@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarActivityBadge } from './sidebar-activity-badge'
@@ -43,6 +43,12 @@ export default function SidebarAgentsList({
 }: SidebarAgentsListProps): React.JSX.Element | null {
   useTranslation()
   const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeTabId = useAppStore((s) =>
+    s.activeWorktreeId
+      ? (s.activeTabIdByWorktree[s.activeWorktreeId] ?? s.activeTabId)
+      : s.activeTabId
+  )
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
 
   const threads = useAgentPaneThreads({
@@ -53,7 +59,20 @@ export default function SidebarAgentsList({
     showChildAgents,
     badgeOnly: !active
   })
-  const { selectedPaneKeyIsLive, visibleThreads } = threads
+  const { selectedPaneKeyIsLive, visibleThreads, allThreads } = threads
+
+  // Sync selection when an external action (such as clicking a notification) opens another agent.
+  useEffect(() => {
+    if (!activeWorktreeId || !activeTabId) {
+      return
+    }
+    const matching = allThreads.find(
+      (thread) => thread.worktree.id === activeWorktreeId && thread.tab.id === activeTabId
+    )
+    if (matching && matching.paneKey !== selectedPaneKey) {
+      setSelectedPaneKey(matching.paneKey)
+    }
+  }, [activeWorktreeId, activeTabId, allThreads, selectedPaneKey])
 
   if ((!active && selectedPaneKey !== null) || !selectedPaneKeyIsLive) {
     // Reset selection when leaving Activity or when its pane vanishes.
