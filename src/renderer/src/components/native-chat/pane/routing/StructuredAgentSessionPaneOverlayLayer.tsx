@@ -130,8 +130,8 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         ? [group.activeTabId]
         : []
     )
-    if (newlyShownTabIds.length > 0) {
-      // Rebuild from live mounted chats so closed tabs' ids don't accumulate.
+    // A closed chat leaves a recorded id with no mounted tab; drop it so a reopened tab waits to be shown.
+    if (newlyShownTabIds.length > 0 || mountedTabs.length < shownTabIds.size) {
       setShownTabIds(new Set([...mountedTabs.map((tab) => tab.id), ...newlyShownTabIds]))
     }
 
