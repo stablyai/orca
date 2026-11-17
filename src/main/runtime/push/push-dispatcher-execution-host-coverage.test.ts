@@ -1,7 +1,17 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import type { PushSendResult } from './push-gateway-client'
 import { createHarness, flush, notification, registration } from './push-dispatcher.test-fixture'
+
+const NOW = 1_800_000_000_000
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 const refused = (registrationId: string): PushSendResult[] => [
   { registrationId, status: 'rate_limited' }
@@ -59,12 +69,12 @@ function hosts(
       .length
   return {
     hostSends: async (overrides: Partial<MobileNotificationEvent> = {}) => {
-      host.dispatcher.enqueue(notification({ emittedAt: Date.now(), ...overrides }))
+      host.dispatcher.enqueue(notification({ emittedAt: NOW, ...overrides }))
       await flush()
     },
     mirrorSends: async (overrides: Partial<MobileNotificationEvent> = {}) => {
       mirror.dispatcher.enqueue(
-        notification({ emittedAt: Date.now(), executionHost: 'runtime:env-b', ...overrides })
+        notification({ emittedAt: NOW, executionHost: 'runtime:env-b', ...overrides })
       )
       await flush()
     },
@@ -115,7 +125,7 @@ it('collapses a burst across both hosts as the host collapses its own', async ()
   const h = hosts()
   await h.hostSends()
   await h.mirrorSends()
-  await h.hostSends({ notificationId: 'agent:two', emittedAt: Date.now() + 2_000 })
+  await h.hostSends({ notificationId: 'agent:two', emittedAt: NOW + 2_000 })
   await h.mirrorSends({ notificationId: 'agent:two' })
   expect(h.sharedPhonePushes()).toEqual([1, 0])
 })
