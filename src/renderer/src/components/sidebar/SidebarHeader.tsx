@@ -78,14 +78,14 @@ const SidebarHeader = React.memo(function SidebarHeader({
         >
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex shrink-0">
+              <span className="inline-flex shrink-0 text-muted-foreground">
                 <PopoverAnchor asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
                     className={cn(
-                      'w-8 text-muted-foreground',
+                      'w-auto min-w-8',
                       agentsViewActive &&
                         'bg-foreground/10 text-foreground hover:bg-foreground/15 dark:hover:bg-foreground/15'
                     )}
@@ -94,12 +94,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     aria-describedby={activityBadgeId}
                     onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
                   >
-                    <span className="relative h-5 w-6 shrink-0">
-                      <Bell className="absolute left-0 top-1 size-3" />
+                    <span className="flex items-center gap-0.5 px-1">
+                      <Bell className="size-3" />
                       <span
                         id={activityBadgeId}
                         ref={activityBadgeTarget}
-                        className="pointer-events-none absolute inset-0"
+                        className="pointer-events-none flex items-center"
                       />
                     </span>
                   </Button>
