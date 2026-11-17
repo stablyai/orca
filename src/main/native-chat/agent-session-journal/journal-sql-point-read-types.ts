@@ -81,6 +81,7 @@ export type JournalSqlPointRead = {
     | { kind: 'submission-body'; clientMessageId: string; family?: true }
     | { kind: 'acceptance'; clientMessageId: string }
     | { kind: 'item-provenance'; itemId: string }
+    | { kind: 'native-automation-receipt'; itemId: string }
     | { kind: 'has-recorded-item'; itemId: string }
     | { kind: 'has-items' }
     | { kind: 'presentation-removed'; itemId: string }
@@ -141,6 +142,7 @@ export type JournalSqlPointReadResult =
       kind: 'item-provenance'
       provenance: JournalItemEcho & { ownerFence?: number; executionOwner?: number }
     }
+  | { kind: 'native-automation-receipt'; item: AgentJournalRenderItem | null }
   | { kind: 'has-recorded-item'; recorded: boolean }
   | { kind: 'has-items'; hasItems: boolean }
   | { kind: 'presentation-removed'; removed: boolean }

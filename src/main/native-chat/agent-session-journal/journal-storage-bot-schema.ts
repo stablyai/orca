@@ -1,6 +1,7 @@
 import { BotMemoryUpdatedNoteSchema } from '../../../shared/bots/bot-memory-updated-note'
 // What a bot's chat adds to a saved journal, declared so strict storage keeps it.
 import { z } from 'zod'
+import { storedAutomationReceiptFacts } from '../../../shared/automations/automation-receipt-facts'
 import { storedRefusalReference } from './durable-rows/journal-storage-refusal-schema'
 
 const text = z.string().optional()
@@ -99,6 +100,7 @@ const resultPlace = { ref: text, label: text }
 
 /** What an automation-saved card keeps of the automation, and where its results go. */
 export const storedAutomationSaved = {
+  receiptFacts: storedAutomationReceiptFacts,
   automation: z.object({
     id: z.string(),
     name: z.string(),

@@ -6,7 +6,30 @@ import { makeAutomationResultNote } from '../../../../../shared/bots/bot-automat
 import { NativeChatAutomationResultRow } from './NativeChatAutomationResultRow'
 import { NativeChatAutomationRunRow } from './NativeChatAutomationRunRow'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
-import { NativeChatWaitEndedRow, NativeChatWaitRow } from './NativeChatWaitRow'
+import { NativeChatWaitEndedRow } from './NativeChatWaitRow'
+
+function NativeChatWaitRow({
+  messageId,
+  automation,
+  once,
+  timestamp
+}: {
+  messageId: string
+  automation: Parameters<typeof NativeChatAutomationSavedRow>[0]['saved']['automation']
+  once: NonNullable<
+    Parameters<typeof NativeChatAutomationSavedRow>[0]['saved']['automation']['once']
+  >
+  timestamp: number | null
+  ended?: unknown
+}): React.JSX.Element {
+  return (
+    <NativeChatAutomationSavedRow
+      saved={{ change: 'created', automation: { ...automation, once } }}
+      timestamp={timestamp}
+      disclosureId={messageId}
+    />
+  )
+}
 
 const AT = new Date(2026, 10, 16, 18, 41).getTime()
 const min = (n: number): number => AT + n * 60_000

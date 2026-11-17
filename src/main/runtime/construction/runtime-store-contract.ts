@@ -105,6 +105,7 @@ export type RuntimeStore = {
   listAutomationsForScope?: Store['listAutomationsForScope']
   assertAutomationOwnerFence?: Store['assertAutomationOwnerFence']
   automationOwnerPrecondition?: Store['automationOwnerPrecondition']
+  automationEffectiveTimeZone?: Store['automationEffectiveTimeZone']
   automationChangeSelector?: Store['automationChangeSelector']
   listAutomationRuns?: Store['listAutomationRuns']
   listAutomationRunsByAutomation?: Store['listAutomationRunsByAutomation']

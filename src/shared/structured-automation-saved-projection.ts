@@ -3,6 +3,7 @@ import { agentJournalItemRowOrigin } from './agent-session/journal/agent-session
 import { agentJournalLinkageFields } from './agent-session/journal/agent-session-journal-producer'
 import type { NativeChatMessage } from './native-chat/native-chat-types'
 import { projectStructuredAgentStartItem } from './native-chat/transcript/messages/structured-agent-start-projection'
+import { readAutomationReceiptFacts } from './automations/automation-receipt-facts'
 import { readAutomationRunMessage } from './automations/automation-run-message'
 import { readAgentSessionRefusalReference } from './agent-session/failures/agent-session-wire-refusals'
 import { agentSessionRefusalCauseParts } from './agent-session/failures/agent-session-refusal-notice'
@@ -35,7 +36,10 @@ export function projectAutomationRunNotStartedItem(
 }
 
 /** A saved automation or a wait's ending, drawn by the desktop and the phone; null for anything else. */
-export function projectAutomationSavedItem(item: AgentJournalRenderItem): NativeChatMessage | null {
+export function projectAutomationSavedItem(
+  item: AgentJournalRenderItem,
+  supportsGoogleTriggers = true
+): NativeChatMessage | null {
   if (item.body.kind === 'wait-ended') {
     const { kind: _kind, ...waitEnded } = item.body
     return {
@@ -55,7 +59,13 @@ export function projectAutomationSavedItem(item: AgentJournalRenderItem): Native
     ...agentJournalLinkageFields(item),
     role: 'system',
     blocks: [],
-    automationSaved: saved
+    ...(item.shortened ? { shortened: true as const } : {}),
+    automationSaved: {
+      ...saved,
+      receiptFacts: item.shortened
+        ? undefined
+        : readAutomationReceiptFacts(saved.receiptFacts, supportsGoogleTriggers)
+    }
   }
 }
 
@@ -77,7 +87,8 @@ export function projectBotItemNoteItem(item: AgentJournalRenderItem): NativeChat
 /** Orca's transcript cards (a started worker, a saved automation or ended wait, an added tool, a run
  *  that couldn't start); every other row as usual. */
 export function projectStructuredOrcaCardItem(
-  item: AgentJournalRenderItem
+  item: AgentJournalRenderItem,
+  supportsGoogleTriggers = true
 ): NativeChatMessage | null {
   if (item.body.kind === 'tool-added') {
     const { kind: _kind, ...toolAdded } = item.body
@@ -95,5 +106,8 @@ export function projectStructuredOrcaCardItem(
   if (item.body.kind === 'bot-item-note') {
     return projectBotItemNoteItem(item)
   }
-  return projectAutomationSavedItem(item) ?? projectStructuredAgentStartItem(item)
+  return (
+    projectAutomationSavedItem(item, supportsGoogleTriggers) ??
+    projectStructuredAgentStartItem(item)
+  )
 }

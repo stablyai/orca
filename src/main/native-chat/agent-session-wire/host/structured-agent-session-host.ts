@@ -316,6 +316,8 @@ export class StructuredAgentSessionHost {
   captureAgentStartDestination = this.startJournal.captureAgentStartDestination
   appendAgentStart = this.startJournal.appendAgentStart
 
+  nativeAutomationReceipt = this.startJournal.nativeAutomationReceipt
+
   currentWork = this.clientDelivery.readCurrentWork
   currentWorkAtRest = this.reads.currentWorkAtRest
   readCurrentRequests: Background['currentRequests'] = (req) => this.background.currentRequests(req)

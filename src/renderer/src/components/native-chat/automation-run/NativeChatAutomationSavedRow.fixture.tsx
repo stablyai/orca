@@ -1,9 +1,8 @@
-import { defineFixture } from '../../../component-fixtures/component-fixture'
-import {
-  EVENT_ONLY_SCHEDULE,
-  type AutomationEventTrigger
-} from '../../../../../shared/automation-event-triggers'
-import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
+import { defineFixture, type ComponentFixture } from '../../../component-fixtures/component-fixture'
+import { EVENT_ONLY_SCHEDULE } from '../../../../../shared/automation-event-triggers'
+import { automationReceiptFacts } from '../../../../../shared/automations/automation-receipt-facts'
+import { botAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
+import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { makeAutomation, makeRun } from '../../automations/automations-page-fixtures'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visual-owner'
@@ -12,189 +11,166 @@ import {
   useNativeChatDisclosures
 } from '../messages/disclosure/native-chat-disclosure-store'
 
-type Saved = NonNullable<NativeChatMessage['automationSaved']>
-
-const HELP = 'slack:T1:C1'
-const SLACK: AutomationEventTrigger = {
-  id: 'on-1',
-  source: 'slack',
-  event: 'message',
-  in: [HELP],
-  names: { [HELP]: '#help' }
-}
-const DAILY = { dtstart: 0, rrule: 'FREQ=DAILY;BYHOUR=8;BYMINUTE=30' }
-
-const triage: Saved = {
-  change: 'created',
-  resultsTo: 'chat',
-  automation: {
-    id: 'auto-triage',
-    name: 'Slack triage',
-    enabled: true,
-    nextRunAt: 0,
-    updatedAt: 0,
+const SAVED_AT = Date.parse('2026-11-16T01:12:00Z')
+const ZONE = 'America/Los_Angeles'
+const base = makeAutomation({
+  createdAt: SAVED_AT,
+  updatedAt: SAVED_AT,
+  nextRunAt: SAVED_AT + 86400000,
+  name: 'Morning briefing',
+  rrule: '0 9 * * 1-5',
+  dtstart: SAVED_AT,
+  timezone: ZONE,
+  timezoneExplicit: true,
+  prompt: 'Summarize the changes that need attention.',
+  bot: { botId: 'bot-receipt', runsIn: 'new', resultsTo: 'chat' }
+})
+const scenarios = {
+  schedule: { ...base, id: 'schedule' },
+  event: {
+    ...base,
+    id: 'event',
+    name: 'Triage incident messages',
     ...EVENT_ONLY_SCHEDULE,
-    workspaceId: null,
-    on: [SLACK],
-    bot: { botId: 'bot-1' }
+    on: [
+      {
+        id: 's',
+        source: 'slack',
+        event: 'message',
+        in: ['slack:T1:C1'],
+        names: { 'slack:T1:C1': '#incidents' },
+        textContains: 'urgent'
+      }
+    ]
+  },
+  wait: {
+    ...base,
+    id: 'wait',
+    name: 'Follow up on the release reply',
+    ...EVENT_ONLY_SCHEDULE,
+    once: { by: SAVED_AT + 86400000 },
+    on: [{ id: 'g', source: 'github', event: 'comment', subject: 'acme/website#482' }]
+  },
+  paused: { ...base, id: 'paused', name: 'Weekly summary', enabled: false, rrule: '0 15 * * 5' },
+  failed: {
+    ...base,
+    id: 'failed',
+    name: 'Watch release CI',
+    ...EVENT_ONLY_SCHEDULE,
+    on: [{ id: 'ci', source: 'github', event: 'ci_failed', in: ['acme/website'] }]
+  },
+  missing: { ...base, id: 'missing', name: 'Previous morning briefing' },
+  longName: {
+    ...base,
+    id: 'longName',
+    name: 'A longer automation name for reviewing the release checklist and following up on every unresolved item'
   }
-}
+} satisfies Record<string, Automation>
 
-const digest: Saved = {
-  change: 'created',
-  resultsTo: 'chat',
-  automation: {
-    id: 'auto-digest',
-    name: 'Morning digest',
-    enabled: true,
-    nextRunAt: 0,
-    updatedAt: 0,
-    ...DAILY,
-    workspaceId: null,
-    bot: { botId: 'bot-1' }
-  }
-}
+type Scenario = keyof typeof scenarios
+const OWNER = {
+  target: { kind: 'local' },
+  sessionId: 'fixture-chat',
+  worktreeId: 'folder:receipt',
+  tabId: 'fixture-tab'
+} as const
 
-const minutesAgo = (minutes: number): number => Date.now() - minutes * 60_000
-
-/** The host's answers: the triage automation with two runs, the digest with none, a deleted one missing. */
-function stubHost(): void {
-  const records = {
-    'auto-triage': makeAutomation({
-      id: 'auto-triage',
-      name: 'Slack triage',
-      prompt: 'Read the message, label it, reply in thread.',
-      agentId: 'claude',
-      ...EVENT_ONLY_SCHEDULE,
-      on: [SLACK],
-      bot: { botId: 'bot-1', runsIn: 'new', resultsTo: 'chat' }
-    }),
-    'auto-digest': makeAutomation({
-      id: 'auto-digest',
-      name: 'Morning digest',
-      prompt: 'Summarize what changed overnight in #eng and open PRs.',
-      agentId: 'claude',
-      ...DAILY,
-      bot: { botId: 'bot-1', runsIn: 'new', resultsTo: 'chat' }
-    })
-  }
-  const runs = {
-    'auto-triage': [
-      makeRun({
-        id: 'r1',
-        automationId: 'auto-triage',
-        title: '#help · “login broken”',
-        createdAt: minutesAgo(2)
-      }),
-      makeRun({
-        id: 'r2',
-        automationId: 'auto-triage',
-        title: '#help · “invite me”',
-        createdAt: minutesAgo(60)
-      })
-    ],
-    'auto-digest': []
-  }
+function stubHost(scenario: Scenario): void {
+  const automation = scenarios[scenario]
   const runtime: unknown = window.api.runtime
   Reflect.set(window.api, 'runtime', {
     ...(typeof runtime === 'object' ? runtime : {}),
-    call: async ({ method, params }: { method: string; params: Record<string, string> }) => {
-      if (method === 'automation.show') {
-        const automation = Object.entries(records).find(([id]) => id === params.id)?.[1]
-        return automation
-          ? { ok: true, result: { automation } }
-          : { ok: false, error: { code: 'runtime_error', message: 'Automation not found.' } }
+    call: async ({ method }: { method: string }) => {
+      if (method === 'agentSession.automationReceipt') {
+        return {
+          ok: true,
+          result:
+            scenario === 'missing'
+              ? { status: 'missing' }
+              : {
+                  status: 'ready',
+                  automation,
+                  owner: { selector: { kind: 'self' } },
+                  effectiveZone: ZONE
+                }
+        }
       }
       if (method === 'automation.runs') {
         return {
           ok: true,
           result: {
-            runs: Object.entries(runs).find(([id]) => id === params.automationId)?.[1] ?? []
+            runs:
+              scenario === 'failed'
+                ? [
+                    makeRun({
+                      id: 'failed-run',
+                      automationId: 'failed',
+                      title: 'Release CI',
+                      createdAt: SAVED_AT + 1000,
+                      status: 'dispatch_failed',
+                      error: 'The host could not start the run.'
+                    })
+                  ]
+                : []
           }
         }
       }
-      return { ok: false, error: { code: 'runtime_error', message: 'not in this fixture' } }
+      return { ok: false, error: { code: 'runtime_error', message: 'Not in this fixture' } }
     }
   })
 }
 
-const OWNER = {
-  target: { kind: 'local' },
-  sessionId: 's1',
-  worktreeId: 'folder:fw-1',
-  tabId: 'tab-1'
-} as const
-
-function Chat({ cards }: { cards: Saved[] }): React.JSX.Element {
+function Receipt({ scenario }: { scenario: Scenario }): React.JSX.Element {
   const disclosures = useNativeChatDisclosures()
+  const automation = scenarios[scenario]
   return (
     <NativeChatVisualOwnerContext.Provider value={OWNER}>
       <NativeChatDisclosureContext.Provider value={disclosures}>
-        <div className="flex flex-col gap-3 p-4">
-          {cards.map((card) => (
-            <NativeChatAutomationSavedRow
-              key={card.automation.id}
-              saved={card}
-              timestamp={minutesAgo(3)}
-              disclosureId={card.automation.id}
-            />
-          ))}
+        <div className="p-4">
+          <NativeChatAutomationSavedRow
+            saved={{
+              change: 'created',
+              automation: botAutomationFacts(automation),
+              receiptFacts: automationReceiptFacts(automation, ZONE),
+              resultsTo: 'chat'
+            }}
+            timestamp={SAVED_AT}
+            disclosureId={automation.id}
+          />
         </div>
       </NativeChatDisclosureContext.Provider>
     </NativeChatVisualOwnerContext.Provider>
   )
 }
 
-async function clickToggle(name: string): Promise<void> {
-  const toggle = [...document.querySelectorAll('button[aria-expanded]')].find((button) =>
-    button.textContent?.includes(name)
-  )
-  if (toggle instanceof HTMLElement) {
-    toggle.click()
-  }
-  // Let the host's answer land before the shot.
-  await new Promise((resolve) => setTimeout(resolve, 400))
+function receiptFixture(scenario: Scenario, width: number): ComponentFixture {
+  return defineFixture({
+    width,
+    setup: () => stubHost(scenario),
+    render: () => <Receipt scenario={scenario} />,
+    ...(scenario === 'failed' || scenario === 'missing'
+      ? {
+          interact: async (frame: HTMLElement) => {
+            frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
+            // The fixture host resolves immediately; allow its React commit before capture.
+            await new Promise((resolve) => setTimeout(resolve, 100))
+          }
+        }
+      : {})
+  })
 }
 
-export const collapsed = defineFixture({
-  width: 640,
-  setup: stubHost,
-  render: () => <Chat cards={[triage]} />
-})
-
-export const expanded = defineFixture({
-  width: 640,
-  setup: stubHost,
-  render: () => <Chat cards={[triage]} />,
-  interact: () => clickToggle('Slack triage')
-})
-
-export const expandedNarrow = defineFixture({
-  width: 380,
-  setup: stubHost,
-  render: () => <Chat cards={[triage]} />,
-  interact: () => clickToggle('Slack triage')
-})
-
-export const secondCardOpen = defineFixture({
-  width: 640,
-  setup: stubHost,
-  render: () => <Chat cards={[triage, digest]} />,
-  interact: async () => {
-    await clickToggle('Slack triage')
-    await clickToggle('Morning digest')
-  }
-})
-
-export const deleted = defineFixture({
-  width: 640,
-  setup: stubHost,
-  render: () => (
-    <Chat
-      cards={[
-        { ...triage, automation: { ...triage.automation, id: 'auto-gone', name: 'Old triage' } }
-      ]}
-    />
-  ),
-  interact: () => clickToggle('Old triage')
-})
+export const scheduleWide = receiptFixture('schedule', 640)
+export const scheduleNarrow = receiptFixture('schedule', 380)
+export const eventWide = receiptFixture('event', 640)
+export const eventNarrow = receiptFixture('event', 380)
+export const waitWide = receiptFixture('wait', 640)
+export const waitNarrow = receiptFixture('wait', 380)
+export const pausedWide = receiptFixture('paused', 640)
+export const pausedNarrow = receiptFixture('paused', 380)
+export const failedWide = receiptFixture('failed', 640)
+export const failedNarrow = receiptFixture('failed', 380)
+export const missingWide = receiptFixture('missing', 640)
+export const missingNarrow = receiptFixture('missing', 380)
+export const longNameWide = receiptFixture('longName', 640)
+export const longNameNarrow = receiptFixture('longName', 380)

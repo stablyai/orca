@@ -198,6 +198,7 @@ function read(
     case 'submission-body':
     case 'acceptance':
     case 'item-provenance':
+    case 'native-automation-receipt':
     case 'has-recorded-item':
     case 'presentation-removed':
     case 'canonical-item-id':

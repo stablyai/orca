@@ -1178,6 +1178,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.approveAutoReviewDenial': AutoReviewApprovalParams,
+  'agentSession.automationReceipt': ItemParams,
   'agentSession.cancel': CancelParams,
   'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
   'agentSession.close': OptionsParams,

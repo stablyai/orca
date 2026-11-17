@@ -126,7 +126,9 @@ export const AUTOMATION_METHODS = [
             plugin.assertActive
           )
         : await context.runtime.createAutomation(input)
-      recordAutomationSavedCard(caller, 'created', automation)
+      recordAutomationSavedCard(caller, 'created', automation, () =>
+        context.runtime.automationEffectiveTimeZone(automation)
+      )
       return { automation: automationForClient(automation, context) }
     }
   }),
@@ -142,7 +144,9 @@ export const AUTOMATION_METHODS = [
         expectedWorkspaceMode: params.expectedWorkspaceMode
       })
       const caller = chatOfCaller(params.callerSessionId, context)
-      recordAutomationSavedCard(caller, 'updated', automation)
+      recordAutomationSavedCard(caller, 'updated', automation, () =>
+        context.runtime.automationEffectiveTimeZone(automation)
+      )
       return { automation: automationForClient(automation, context) }
     }
   }),

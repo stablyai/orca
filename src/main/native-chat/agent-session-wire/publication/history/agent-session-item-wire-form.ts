@@ -58,6 +58,20 @@ export function shortenedAgentJournalItem(
   if (bytes <= maxBytes) {
     return item
   }
+  if (item.body.kind === 'automation-saved' && item.body.receiptFacts) {
+    const withoutExtras: AgentJournalRenderItem = {
+      ...item,
+      body: { ...item.body, receiptFacts: { version: 1, unavailable: 'item-budget' } }
+    }
+    if (jsonBytes(withoutExtras) <= maxBytes) {
+      return withoutExtras
+    }
+    const { receiptFacts: _receiptFacts, ...baseBody } = item.body
+    item = { ...item, body: baseBody }
+    if (jsonBytes(item) <= maxBytes) {
+      return item
+    }
+  }
   const budget = maxBytes - (jsonBytes({ ...item, body: null, shortened: true }) - jsonBytes(null))
   let body = shortenJsonStringsToFit(item.body, budget)
   if (body === null && item.body.kind === 'tool-call') {

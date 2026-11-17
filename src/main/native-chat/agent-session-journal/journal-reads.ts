@@ -88,6 +88,7 @@ export type AgentSessionJournalReads = {
   itemProvenance(
     itemId: string
   ): Promise<JournalItemEcho & { ownerFence?: number; executionOwner?: number }>
+  nativeAutomationReceipt(itemId: string): Promise<AgentJournalRenderItem | null>
   hasRecordedItem(itemId: string): Promise<boolean>
   hasItems(): Promise<boolean>
   presentationRemoved(itemId: string): Promise<boolean>

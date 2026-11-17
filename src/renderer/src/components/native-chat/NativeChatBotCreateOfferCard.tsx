@@ -33,7 +33,7 @@ import {
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import { NativeChatCardFrame, NativeChatCardStatus } from './NativeChatCardFrame'
-import { NativeChatCardFact } from './NativeChatAutomationCardDetails'
+import { NativeChatCardFact } from './NativeChatCardFact'
 import { NativeChatExpandable } from './messages/disclosure/NativeChatExpandable'
 import { NativeChatEventOpenButton } from './messages/events/NativeChatEventOpenButton'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'

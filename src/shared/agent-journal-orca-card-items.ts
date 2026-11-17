@@ -25,6 +25,7 @@ export type AgentJournalAgentStartItem = PublicAgentStartItem & {
 export type AgentJournalAutomationSavedItem = {
   kind: 'automation-saved'
   change: 'created' | 'updated'
+  receiptFacts?: unknown
   automation: BotAutomationFacts
   /** A bot automation's destination; absent for a project automation, whose results stay in its runs. */
   resultsTo?: AutomationBotResultsTo

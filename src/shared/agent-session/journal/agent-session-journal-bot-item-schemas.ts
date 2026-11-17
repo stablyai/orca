@@ -2,6 +2,7 @@
 // couldn't start, and an item note.
 
 import * as z from 'zod'
+import { storedAutomationReceiptFacts } from '../../automations/automation-receipt-facts'
 
 const AutomationRef = z.object({ id: z.string().min(1), name: z.string() })
 
@@ -11,6 +12,7 @@ export const BOT_JOURNAL_ITEM_BODIES = [
     kind: z.literal('automation-saved'),
     // Open like `sentAs`: a change a newer host writes still draws as a saved automation.
     change: z.string().min(1),
+    receiptFacts: storedAutomationReceiptFacts,
     automation: AutomationRef
   }),
   z.object({

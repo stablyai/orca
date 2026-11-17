@@ -1,73 +1,84 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AUTOMATIONS_CHANGED_EVENT } from '@/components/automations/events/automations-changed-window-event'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useAppStore } from '@/store'
 import {
-  isAutomationNotFoundError,
-  listRecentAutomationRunsForTarget,
-  showAutomationForTarget,
-  type AutomationHostTarget
-} from '@/components/automations/hosts/automation-host-client'
-import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+  onRuntimeEnvironmentRevisionsChanged,
+  onRuntimeEnvironmentsRetired
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { subscribeAutomationDefinitionAcknowledgements } from '@/components/automations/events/automation-definition-acknowledgements'
+import { subscribeAutomationHostInvalidation } from '@/components/automations/hosts/automation-host-invalidation-window-events'
+import type { AutomationReceiptSource } from './automation-receipt-client'
+import { automationReceiptSourceCurrent } from './automation-receipt-client'
+import {
+  AutomationCardDetailsController,
+  receiptDetailsTransport
+} from './automation-card-details-controller'
 
-export const AUTOMATION_CARD_RECENT_RUNS = 3
-
-export type AutomationCardDetails =
-  | { status: 'loading' }
-  | { status: 'deleted' }
-  | { status: 'error' }
-  | { status: 'ready'; automation: Automation; runs: AutomationRun[] }
-
-/** An opened card's automation and newest runs from its host; re-read when automations change, never polled. */
-export function useAutomationCardDetails(
-  /** The chat's host; null for this computer. */
-  environmentId: string | null,
-  automationId: string
-): {
-  details: AutomationCardDetails
-  reload: () => void
-  replace: (next: Automation) => void
-} {
-  const [details, setDetails] = useState<AutomationCardDetails>({
-    status: 'loading'
-  })
-  const reads = useRef(0)
-  const load = useCallback(async (): Promise<void> => {
-    // Only the latest read lands, so a slow earlier one cannot overwrite it.
-    const read = ++reads.current
-    const target: AutomationHostTarget =
-      environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
-    try {
-      const [automation, runs] = await Promise.all([
-        showAutomationForTarget(target, automationId),
-        listRecentAutomationRunsForTarget(target, automationId, AUTOMATION_CARD_RECENT_RUNS)
-      ])
-      if (read === reads.current) {
-        setDetails({ status: 'ready', automation, runs })
-      }
-    } catch (error) {
-      if (read === reads.current) {
-        setDetails({
-          status: isAutomationNotFoundError(error) ? 'deleted' : 'error'
-        })
-      }
-    }
-  }, [automationId, environmentId])
-
+/** Mounted only by an intentional disclosure; folded receipts acquire nothing. */
+export function useAutomationCardDetails(source: AutomationReceiptSource | null) {
+  const controller = useMemo(
+    () => new AutomationCardDetailsController(source ? receiptDetailsTransport(source) : null),
+    [source]
+  )
+  const details = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
   useEffect(() => {
-    void load()
-    const reload = (): void => void load()
-    window.addEventListener(AUTOMATIONS_CHANGED_EVENT, reload)
-    return () => {
-      window.removeEventListener(AUTOMATIONS_CHANGED_EVENT, reload)
-      // Nothing lands after the card closes.
-      reads.current += 1
+    controller.start()
+    if (!source) {
+      return controller.dispose
     }
-  }, [load])
-
-  const replace = useCallback((next: Automation) => {
-    setDetails((current) =>
-      current.status === 'ready' ? { ...current, automation: next } : current
+    const refreshKnown = (): void => {
+      const status = controller.getSnapshot().status
+      if (status !== 'unverified' && status !== 'mismatch') {
+        controller.changed()
+      }
+    }
+    const unsubscribe = subscribeAutomationHostInvalidation((event) => {
+      const authority = event.authority
+      const matches =
+        source.target.kind === 'local'
+          ? authority.kind === 'desktop'
+          : authority.kind === 'runtime' && authority.environmentId === source.target.environmentId
+      if (matches && event.reason !== 'usage') {
+        refreshKnown()
+      }
+    })
+    const unsubscribeStore = useAppStore.subscribe((state, previous) => {
+      if (
+        state.runtimeStatusByEnvironmentId === previous.runtimeStatusByEnvironmentId &&
+        state.runtimeEnvironments === previous.runtimeEnvironments
+      ) {
+        return
+      }
+      if (!automationReceiptSourceCurrent(source)) {
+        controller.invalidate()
+      }
+    })
+    const unsubscribeAcks = subscribeAutomationDefinitionAcknowledgements(
+      ({ target, automationId }) => {
+        if (
+          source.automationId === automationId &&
+          source.target.kind === target.kind &&
+          (source.target.kind === 'local' ||
+            (target.kind === 'environment' && source.target.environmentId === target.environmentId))
+        ) {
+          refreshKnown()
+        }
+      }
     )
-  }, [])
-  return { details, reload: () => void load(), replace }
+    const invalidateEnvironment = (ids: readonly string[]): void => {
+      if (source.target.kind === 'environment' && ids.includes(source.target.environmentId)) {
+        controller.invalidate()
+      }
+    }
+    const unsubscribeRetired = onRuntimeEnvironmentsRetired(invalidateEnvironment)
+    const unsubscribeRepaired = onRuntimeEnvironmentRevisionsChanged(invalidateEnvironment)
+    return () => {
+      unsubscribe()
+      unsubscribeStore()
+      unsubscribeAcks()
+      unsubscribeRetired()
+      unsubscribeRepaired()
+      controller.dispose()
+    }
+  }, [controller, source])
+  return { details, controller }
 }

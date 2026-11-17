@@ -53,6 +53,7 @@ import {
 } from '../../scheduling-automations/automation-run-operations'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
+  automationEffectiveScheduleZone,
   disableAutomations as disableAutomationsOperation,
   getLatestAutomationOccurrence as getLatestAutomationOccurrenceOperation
 } from '../../scheduling-automations/automation-schedule-operations'
@@ -118,6 +119,11 @@ export class AutomationPersistence {
   automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
     const runtime = this[automationPersistenceContext].runtime
     return automationOwnerPreconditionOperation(runtime.state, runtime.storageAuthority, id)
+  }
+
+  automationEffectiveTimeZone(automation: Automation): string {
+    const { storageAuthority } = this[automationPersistenceContext].runtime
+    return automationEffectiveScheduleZone(automation, storageAuthority)
   }
 
   automationChangeSelector(id: string): AutomationChangeSelector | null {
@@ -291,21 +297,13 @@ export function getAutomationRunOperations(owner: AutomationPersistence): Automa
     recordManualRun: () =>
       owner[automationPersistenceContext].preferences.recordFeatureInteraction('automation-run'),
     getWorkspaceDisplayName: (workspaceId) =>
-      getAutomationRunWorkspaceDisplayName(owner, workspaceId)
+      workspaceId
+        ? normalizeAutomationRunWorkspaceDisplayName(
+            owner[automationPersistenceContext].runtime.state.worktreeMeta[workspaceId]
+              ?.displayName ?? getWorktreePathBasenameFromId(workspaceId)
+          )
+        : null
   }
-}
-
-export function getAutomationRunWorkspaceDisplayName(
-  owner: AutomationPersistence,
-  workspaceId: string | null | undefined
-): string | null {
-  if (!workspaceId) {
-    return null
-  }
-  return normalizeAutomationRunWorkspaceDisplayName(
-    owner[automationPersistenceContext].runtime.state.worktreeMeta[workspaceId]?.displayName ??
-      getWorktreePathBasenameFromId(workspaceId)
-  )
 }
 
 function markAutomationDomains(owner: AutomationPersistence): void {

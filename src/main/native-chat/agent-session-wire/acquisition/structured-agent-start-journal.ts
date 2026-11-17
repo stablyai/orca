@@ -129,5 +129,11 @@ export function structuredAgentStartJournal(
     }
   }
 
-  return { captureAgentStartDestination, appendAgentStart }
+  const nativeAutomationReceipt = async (sessionId: string, itemId: string) => {
+    const { journal } = await conversation(sessionId)
+    const item = await journal.reads.nativeAutomationReceipt(itemId)
+    return item?.body.kind === 'automation-saved' ? item.body : null
+  }
+
+  return { captureAgentStartDestination, appendAgentStart, nativeAutomationReceipt }
 }

@@ -1,77 +1,72 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { CalendarClock, ChevronDown, ChevronUp, Zap } from 'lucide-react'
+import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { openBotAutomation } from '@/components/bots/bot-automation-open'
-import { botAutomationWhen } from '@/components/bots/bot-automation-when'
-import { useBotForWorkspace } from '@/components/bots/bot-workspace'
-import { botAgentLabel } from '@/components/bots/bot-presentation'
-import { launchModelLabel } from '@/components/agent/AgentLaunchPicker'
-import { webhookResultsTo, webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
-import { automationHookId } from '../../../../../shared/automation-event-triggers'
-import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import { botErrorMessage } from '@/components/bots/bot-presentation'
+import { hasAutomationSchedule } from '../../../../../shared/automation-event-triggers'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import { automationRowMark } from '../../../../../shared/automations/automation-chat-row'
-import { useAutomationRunWording } from './automation-run-wording'
+import { NativeChatCardAvatar, NativeChatCardFrame } from '../NativeChatCardFrame'
+import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
 import {
   useNativeChatVisualOwner,
   type NativeChatVisualOwner
 } from '../media/visuals/native-chat-visual-owner'
 import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
+import { NativeChatExpandable } from '../messages/disclosure/NativeChatExpandable'
 import { NativeChatAutomationCardDetails } from '../NativeChatAutomationCardDetails'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-composer-focus-intent'
-import { NativeChatAutomationRowFrame, ROW_NOTE } from './NativeChatAutomationRowFrame'
-import { RUN_LINK_BUTTON } from './automation-run-link-button'
-import { NativeChatWebhookSetupCard } from './NativeChatWebhookSetupCard'
+import { automationReceiptSummary } from '../automation-receipt-copy'
+import {
+  captureAutomationReceiptSource,
+  openReceiptAutomation,
+  readAutomationReceipt
+} from '../automation-receipt-client'
 
-// Every automation card in a chat shares this prefix, so opening one closes the rest.
 const AUTOMATION_CARD_DISCLOSURE = 'automation-card:'
-
 type AutomationSaved = NonNullable<NativeChatMessage['automationSaved']>
 
-function results(saved: AutomationSaved): string {
-  return saved.resultsTo === undefined
-    ? translate('components.native-chat.automationSaved.resultsInRuns', 'results in each run')
-    : webhookResultsTo(saved.resultsTo)
-}
-
-/** "on Codex · gpt-6.1-terra" for a bot automation on its own agent; nothing on the bot's. */
-function ownAgent(saved: AutomationSaved): string | null {
-  const setup = saved.agentSetup
-  if (!setup) {
-    return null
-  }
-  const name = [botAgentLabel(setup.agent), launchModelLabel(setup.agent, setup.launch?.model)]
-    .filter(Boolean)
-    .join(' · ')
-  return translate('components.native-chat.automationSaved.onAgent', 'on {{name}}', { name })
-}
-
-/** Adds "Change “<name>” so that " to this chat's unsent message, with the caret after it. */
 function draftChangeInChat(owner: NativeChatVisualOwner, name: string): void {
   requestNativeChatComposerFocus(owner.tabId ?? structuredAgentSessionTabId(owner.sessionId), {
     append: translate(
       'components.native-chat.automationSaved.editDraft',
       'Change “{{name}}” so that ',
-      {
-        name
-      }
+      { name }
     )
   })
 }
 
-/** The automation this chat's agent created or edited, as its row: what it saved; opens in place to
- *  its live settings. */
+async function openCardAutomation(
+  owner: NativeChatVisualOwner | null,
+  itemId: string | undefined,
+  saved: AutomationSaved,
+  shortened: boolean
+): Promise<boolean> {
+  const source = shortened ? null : captureAutomationReceiptSource(owner, itemId, saved)
+  if (!source) {
+    return false
+  }
+  const result = await readAutomationReceipt(source)
+  return (
+    result.status === 'ready' &&
+    openReceiptAutomation(source, result.automation, result.owner, null)
+  )
+}
+
+/** A saved receipt. Only an intentional disclosure or Open acquires current data. */
 export function NativeChatAutomationSavedRow({
   saved,
   timestamp,
-  disclosureId
+  disclosureId,
+  shortened = false
 }: {
   saved: AutomationSaved
   timestamp: number | null
-  /** The transcript row's id, so the row stays open while it scrolls out of view. */
   disclosureId?: string
+  shortened?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
@@ -83,28 +78,22 @@ export function NativeChatAutomationSavedRow({
     AUTOMATION_CARD_DISCLOSURE
   )
   const toggle = useRef<HTMLButtonElement>(null)
-  const wording = useAutomationRunWording(automation)
-  const hookId = automationHookId(automation)
-  const botName = useBotForWorkspace(owner?.worktreeId ?? null)?.name ?? webhookUnknownBotName()
-  const when = botAutomationWhen(automation)
-  const facts = [
-    when,
-    ownAgent(saved),
-    results(saved),
-    ...(automation.enabled ? [] : [t('components.native-chat.automationSaved.paused', 'paused')])
-  ].filter(Boolean)
-  const label = wording.say(saved.change === 'updated' ? 'updatedAutomation' : 'createdAutomation')
-  const status = automation.enabled ? when : wording.say('paused')
-  if (hookId && owner) {
-    // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
-    return (
-      <NativeChatWebhookSetupCard
-        target={owner.target}
-        hookId={hookId}
-        botName={botName}
-        name={automation.name}
-      />
-    )
+  const [opening, setOpening] = useState(false)
+  const Icon = hasAutomationSchedule(automation) ? CalendarClock : Zap
+  const Chevron = open ? ChevronUp : ChevronDown
+  const openFull = (): void => {
+    setOpening(true)
+    void openCardAutomation(owner, disclosureId, saved, shortened)
+      .then((opened) => {
+        if (!opened) {
+          setOpen(true)
+        }
+      })
+      .catch((error: unknown) => {
+        toast.error(botErrorMessage(error))
+        setOpen(true)
+      })
+      .finally(() => setOpening(false))
   }
   return (
     <div
@@ -117,46 +106,64 @@ export function NativeChatAutomationSavedRow({
         }
       }}
     >
-      <NativeChatAutomationRowFrame
-        mark={automationRowMark(automation)}
-        lead={label}
-        name={automation.name}
-        status={status}
-        timestamp={timestamp}
-        open={open}
-        onToggle={() => setOpen(!open)}
-        toggleRef={toggle}
-        // Live settings and controls, never cut.
-        clampDetails={false}
+      <NativeChatCardFrame
+        avatar={
+          <NativeChatCardAvatar>
+            <Icon className="size-4 text-muted-foreground" aria-hidden />
+          </NativeChatCardAvatar>
+        }
+        heading={
+          saved.change === 'updated'
+            ? t('components.native-chat.automationSaved.updated', 'Updated automation')
+            : t('components.native-chat.automationSaved.created', 'Created automation')
+        }
+        trailing={
+          <NativeChatMessageTimestamp timestamp={timestamp} className="text-muted-foreground" />
+        }
       >
-        <>
-          <p className={ROW_NOTE}>{facts.join(' · ')}</p>
+        <div className="flex items-end justify-between gap-3">
+          <button
+            ref={toggle}
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className="flex min-w-0 flex-1 items-end justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-foreground">
+                {automation.name}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {automationReceiptSummary(saved, shortened)}
+              </span>
+            </span>
+            <Chevron className="mb-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+          </button>
+          {!open ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={opening}
+              onClick={() => void openFull()}
+            >
+              {t('components.native-chat.automationSaved.open', 'Open')}
+            </Button>
+          ) : null}
+        </div>
+        <NativeChatExpandable open={open}>
           {open ? (
             <NativeChatAutomationCardDetails
-              automationId={automation.id}
-              environmentId={
-                owner?.target.kind === 'environment' ? owner.target.environmentId : null
-              }
+              saved={saved}
+              timestamp={timestamp}
+              owner={owner}
+              itemId={disclosureId}
+              shortened={shortened}
               onEditInChat={owner ? () => draftChangeInChat(owner, automation.name) : null}
             />
           ) : null}
-          <div className="mt-2">
-            <button
-              type="button"
-              className={RUN_LINK_BUTTON}
-              onClick={() =>
-                openBotAutomation(
-                  getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
-                  automation.id,
-                  null
-                )
-              }
-            >
-              {wording.say('openAutomation')}
-            </button>
-          </div>
-        </>
-      </NativeChatAutomationRowFrame>
+        </NativeChatExpandable>
+      </NativeChatCardFrame>
     </div>
   )
 }

@@ -8,6 +8,10 @@ import {
   nextAutomationOccurrenceAfter
 } from '../../../shared/automations/scheduling/automation-schedule-occurrences'
 import type { AutomationStorageAuthority } from './automation-owner-projection'
+import {
+  automationScheduleCalendar,
+  LOCAL_SCHEDULE_CALENDAR
+} from '../../../shared/automations/scheduling/automation-schedule-calendar'
 
 /**
  * The zone an automation's hours are read in; undefined reads the host's own clock. A desktop
@@ -19,6 +23,16 @@ export function automationScheduleZone(
   authority: AutomationStorageAuthority
 ): string | undefined {
   return automation.timezoneExplicit || authority === 'runtime' ? automation.timezone : undefined
+}
+
+export function automationEffectiveScheduleZone(
+  automation: Pick<Automation, 'timezone' | 'timezoneExplicit'>,
+  authority: AutomationStorageAuthority
+): string {
+  const zone = automationScheduleZone(automation, authority)
+  return zone && automationScheduleCalendar(zone) !== LOCAL_SCHEDULE_CALENDAR
+    ? zone
+    : Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
 /** A new automation's first run, read in the zone its hours belong to. */

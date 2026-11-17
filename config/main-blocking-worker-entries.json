@@ -32,5 +32,6 @@
   "src/main/bots/bot-items-store.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/bots/bot-item-waiting-ask-keep.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
-  "src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main."
+  "src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
+  "src/main/native-chat/agent-session-journal/database/journal-native-automation-receipts.ts": "Journal SQL writer procedures: schema setup and native receipt witnesses run on the existing writer worker's owned connection and transaction; no Electron-main caller."
 }

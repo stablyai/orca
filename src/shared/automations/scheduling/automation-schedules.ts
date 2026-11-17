@@ -21,7 +21,7 @@ export type AutomationScheduleDescriptor =
   | { kind: 'daily'; hour: number; minute: number }
   | { kind: 'weekdays'; hour: number; minute: number }
   | { kind: 'weekly'; hour: number; minute: number; dayOfWeek: number }
-  // `expression` carries a scheduler-valid RRULE no preset sentence can name (#24985).
+  // Keep a scheduler-valid rule when no preset sentence can name it.
   | { kind: 'custom'; expression?: string }
   | { kind: 'invalid' }
 
@@ -37,17 +37,20 @@ const EN_DAY_NAMES = [
 ] as const
 
 /** Clock-time portion of a schedule label; numeric shape follows the OS region by convention. */
-export function formatAutomationScheduleTime(hour: number, minute: number): string {
-  return formatTime(hour, minute)
+export function formatAutomationScheduleTime(
+  hour: number,
+  minute: number,
+  omitZeroMinutes = false
+): string {
+  return formatTime(hour, minute, omitZeroMinutes)
 }
 
-function formatTime(hour: number, minute: number): string {
-  const date = new Date()
-  date.setHours(hour, minute, 0, 0)
+function formatTime(hour: number, minute: number, omitZeroMinutes = false): string {
   return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
+    minute: omitZeroMinutes && minute === 0 ? undefined : '2-digit',
+    timeZone: 'UTC'
+  }).format(Date.UTC(2000, 0, 1, hour, minute))
 }
 
 function getSingleSetValue(values: Set<number>): number | null {
@@ -179,7 +182,10 @@ export function describeAutomationSchedule(
     const trimmed = scheduleExpression.trim()
     const schedule = parseSchedule(trimmed)
     if (schedule.kind === 'cron') {
-      return toScheduleDescriptor(classifyParsedCronSchedule(schedule))
+      const descriptor = toScheduleDescriptor(classifyParsedCronSchedule(schedule))
+      return descriptor.kind === 'custom'
+        ? { ...descriptor, expression: escapeTerminalControlCharacters(trimmed, true) }
+        : descriptor
     }
     const rrule = tryParseAutomationRrule(trimmed)
     if (rrule === null) {

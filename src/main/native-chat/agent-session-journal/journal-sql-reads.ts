@@ -252,6 +252,8 @@ export function journalSqlReads(
       return executionOwner ?? ownerFence
     },
     itemProvenance: provenance,
+    nativeAutomationReceipt: async (itemId) =>
+      (await read({ kind: 'native-automation-receipt', itemId })).item,
     hasRecordedItem: async (itemId) => (await read({ kind: 'has-recorded-item', itemId })).recorded,
     hasItems: async () => (await read({ kind: 'has-items' })).hasItems,
     presentationRemoved: async (itemId) =>

@@ -5,12 +5,33 @@ import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
 import type { BotAutomationFacts } from '../../../../shared/bots/bot-automation-rows'
 import { EVENT_ONLY_SCHEDULE } from '../../../../shared/automation-event-triggers'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { NativeChatAutomationSavedRow } from '../native-chat/automation-run/NativeChatAutomationSavedRow'
 import { NativeChatVisualOwnerContext } from '../native-chat/media/visuals/native-chat-visual-owner'
-import {
-  NativeChatWaitEndedRow,
-  NativeChatWaitRow
-} from '../native-chat/automation-run/NativeChatWaitRow'
+import { NativeChatWaitEndedRow } from '../native-chat/automation-run/NativeChatWaitRow'
 import BotActivityPanel from './BotActivityPanel'
+
+function NativeChatWaitRow({
+  messageId,
+  automation,
+  once,
+  timestamp
+}: {
+  messageId: string
+  automation: Parameters<typeof NativeChatAutomationSavedRow>[0]['saved']['automation']
+  once: NonNullable<
+    Parameters<typeof NativeChatAutomationSavedRow>[0]['saved']['automation']['once']
+  >
+  timestamp: number | null
+  ended?: unknown
+}): React.JSX.Element {
+  return (
+    <NativeChatAutomationSavedRow
+      saved={{ change: 'created', automation: { ...automation, once } }}
+      timestamp={timestamp}
+      disclosureId={messageId}
+    />
+  )
+}
 
 const ranger: Bot = {
   id: 'bot-ranger',

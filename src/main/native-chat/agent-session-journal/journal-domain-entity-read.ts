@@ -27,6 +27,7 @@ export type JournalDomainEntityRead = Extract<
       | 'submission-body'
       | 'acceptance'
       | 'item-provenance'
+      | 'native-automation-receipt'
       | 'has-recorded-item'
       | 'has-items'
       | 'presentation-removed'
@@ -190,6 +191,21 @@ export function readJournalDomainEntity(
             epoch: journalContextEpoch(scope.epoch, Number(row!.context_boundary))
           }
         }
+      }
+    }
+    case 'native-automation-receipt': {
+      const native = db
+        .prepare(`SELECT i.payload_json FROM journal_items i
+        JOIN journal_native_automation_receipts n
+          ON n.session_id=i.session_id AND n.epoch=i.epoch AND n.item_id=i.item_id AND n.revision=i.revision
+        WHERE i.session_id=? AND i.epoch=? AND i.item_id=? AND i.hidden=0 AND i.kind='automation-saved'`)
+        .get(...prefix, operation.itemId)
+      const item: AgentJournalRenderItem | null = native
+        ? JSON.parse(String(native.payload_json))
+        : null
+      return {
+        kind: operation.kind,
+        item
       }
     }
     case 'item-provenance': {

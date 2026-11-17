@@ -1,9 +1,14 @@
 import { useEffect } from 'react'
+import {
+  automationNavigationGuardCurrent,
+  automationNavigationRowMatches,
+  automationNavigationRowEligibility,
+  rejectAutomationNavigation
+} from '../automation-navigation-guard'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { workspaceCatalogConfirmsAbsence } from '@/store/workspaces/catalog/workspace-catalog-absence'
 import {
-  getAutomationAuthorityTarget,
   getAutomationHostTargetKey,
   getAutomationListedTargetFromHostId
 } from '../hosts/automation-host-client'
@@ -84,7 +89,8 @@ export function useAutomationRunPageState({
     externalAutomationEntries,
     hostCatalog,
     selectAutomationRow,
-    scopedExternal
+    scopedExternal,
+    capturedAutomationOwners
   } = list
   const { selectedRuns, selectedRunsReady, selectedRunsNotice, selectedAutomationRunPage } = setup
 
@@ -131,6 +137,13 @@ export function useAutomationRunPageState({
       return
     }
     const pending = pendingAutomationRunNavigation
+    if (
+      pending.expectedDefinition &&
+      !automationNavigationGuardCurrent(pending.expectedDefinition)
+    ) {
+      rejectAutomationNavigation({ setSelectedAutomationRunPageId, setIsDetailOpen, setPageView })
+      return
+    }
     // Why: a new request replaces any earlier missing-run result; it is resolved from scratch.
     setRunNotFound(null)
     if (pending.runId) {
@@ -167,16 +180,26 @@ export function useAutomationRunPageState({
       setPageView('run')
       return
     }
-    const pendingRow = visibleRows.find(
-      (row) =>
-        row.automation.id === pending.automationId &&
-        (!row.catalogRef ||
-          getAutomationHostTargetKey(getAutomationAuthorityTarget(row.catalogRef.authority)) ===
-            pendingTargetKey)
+    const pendingRow = visibleRows.find((row) =>
+      automationNavigationRowMatches(pending, row, pendingTargetKey)
     )
     if (!pendingRow) {
       if (hostCatalog.resolution.effective.kind !== 'all') {
         hostCatalog.selectHost(ALL_AUTOMATION_HOSTS_FILTER)
+      } else if (pending.expectedDefinition && hostCatalog.rows.answered) {
+        rejectAutomationNavigation({ setSelectedAutomationRunPageId, setIsDetailOpen, setPageView })
+      }
+      return
+    }
+    const eligibility = automationNavigationRowEligibility(
+      pending,
+      pendingRow,
+      capturedAutomationOwners,
+      hostCatalog.rows.answered
+    )
+    if (eligibility !== 'ready') {
+      if (eligibility === 'changed') {
+        rejectAutomationNavigation({ setSelectedAutomationRunPageId, setIsDetailOpen, setPageView })
       }
       return
     }
@@ -232,6 +255,7 @@ export function useAutomationRunPageState({
     hostCatalog,
     selectAutomationRow,
     visibleRows,
+    capturedAutomationOwners,
     pendingAutomationRunNavigation,
     pageView,
     runtimeEnvironments,
@@ -284,14 +308,13 @@ export function useAutomationRunPageState({
   const canRerunSelectedAutomationRunPage =
     selectedAutomationRunPage !== null &&
     canRerunAutomationRun({ automation: selected, run: selectedAutomationRunPage })
-  const isSelectedAutomationRunPageRerunPending =
-    selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
 
   return {
     selectedAutomationRunPageWorkspaceName,
     selectedAutomationRunPageWorkspaceActionLabel,
     canRerunSelectedAutomationRunPage,
-    isSelectedAutomationRunPageRerunPending
+    isSelectedAutomationRunPageRerunPending:
+      selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
   }
 }
 

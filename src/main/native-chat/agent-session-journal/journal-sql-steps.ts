@@ -1,4 +1,5 @@
 import { checkpointJournalRequestEvents } from './journal-writer-request-events'
+import { recordNativeAutomationReceipt } from './database/journal-native-automation-receipts'
 import type { JournalSqlMessage } from './journal-sql-message-commit'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -249,6 +250,7 @@ function writeStep(
     command.facts?.stopSettle
   )
   const snapshot = step.kind === 'resolved-item' && step.resolution.kind === 'text-snapshot'
+  recordNativeAutomationReceipt(db, target, step, written)
   const commit: JournalDomainLifecycleCommit = {
     ...written,
     ...(snapshot ? { invalidatedItemIds: [] } : {}),

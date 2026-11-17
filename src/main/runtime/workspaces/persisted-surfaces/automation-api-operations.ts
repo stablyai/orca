@@ -188,6 +188,10 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     return this.automation.ownerPrecondition(id)
   }
 
+  automationEffectiveTimeZone(automation: Automation): string | undefined {
+    return this.automation.effectiveTimeZone(automation)
+  }
+
   setAutomationService(service: AutomationService): void {
     this.automation.setService(service)
   }

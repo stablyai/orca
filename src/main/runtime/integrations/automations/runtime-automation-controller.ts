@@ -127,6 +127,10 @@ export class RuntimeAutomationController {
     return this.store?.automationOwnerPrecondition?.(id) ?? null
   }
 
+  effectiveTimeZone(automation: Automation): string | undefined {
+    return this.store?.automationEffectiveTimeZone?.(automation)
+  }
+
   show(id: string): Automation {
     const automation = this.list().find((entry) => entry.id === id)
     if (!automation) {

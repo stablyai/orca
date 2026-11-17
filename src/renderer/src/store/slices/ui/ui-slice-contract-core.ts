@@ -13,6 +13,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
   AutomationRunPageOrigin,
@@ -25,6 +26,7 @@ export type PendingAutomationRunNavigation = {
   automationId: string
   runId: string | null
   hostId?: ExecutionHostId
+  expectedDefinition?: { owner: AutomationOwnerRef; createdAt: number; runtimeId?: string }
   /** With runId null: open the automation's run history instead of its detail. */
   paneTab?: 'overview' | 'runs'
   /** With a runId: where Escape returns; defaults to the automation detail. */

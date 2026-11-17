@@ -120,7 +120,7 @@ export function eventLabel(trigger: AutomationEventKind): string {
 }
 
 /** "On a Slack message in a thread in #orca": an event and where, so two events read apart. */
-function eventWithPlace(trigger: BotAutomationTrigger): string {
+export function eventWithPlace(trigger: BotAutomationTrigger): string {
   const place = isConnectorTriggerFacts(trigger)
     ? (subjectPhrase(trigger) ?? placesPhrase(trigger))
     : null

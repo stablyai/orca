@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react'
-import { useNow } from '@/lib/window-activity/use-now'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { botTarget } from '@/lib/bot-hosts'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
-import { useBotActivity, useBotActivityRead } from '@/components/bots/use-bot-activity'
+import { useBotActivity } from '@/components/bots/use-bot-activity'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { botAutomationWhen } from '@/components/bots/bot-automation-when'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
@@ -14,11 +13,9 @@ import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automati
 import {
   automationRowMark,
   waitRowLabel,
-  waitRowState,
   waitRowStatus,
   waitRowThen,
   waitRowTime,
-  waitHostRead,
   type WaitRowState
 } from '../../../../../shared/automations/automation-chat-row'
 import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
@@ -128,59 +125,6 @@ function WaitRow({
         ) : null}
       </>
     </NativeChatAutomationRowFrame>
-  )
-}
-
-/** A wait the bot started, as its row: Waiting, then Cancelled when cancelled while it waited, or
- *  Wait over once it ran or its deadline passed. */
-export function NativeChatWaitRow({
-  messageId,
-  automation,
-  once,
-  ended,
-  endedOn,
-  timestamp
-}: {
-  messageId: string
-  automation: BotAutomationFacts
-  once: AutomationOnce
-  /** How it ended, when its run or card is in this chat. */
-  ended?: WaitEnding
-  /** The rules it had when it ended, which an edit may have changed. */
-  endedOn?: BotAutomationFacts['on']
-  timestamp: number | null
-}): React.JSX.Element {
-  const owner = useNativeChatVisualOwner()
-  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
-  // A minute clock only while a deadline may still pass here, so the row turns Wait over then.
-  const now = useNow(60_000, !ended && once.by !== undefined)
-  // Its host's waits, so a wait that ran or went in another chat stops reading Waiting here.
-  const activity = useBotActivityRead(ended ? null : bot)
-  const host = useMemo(() => (bot ? waitHostRead(bot.id, activity) : null), [bot, activity])
-  return (
-    <WaitRow
-      messageId={messageId}
-      automation={automation}
-      once={once}
-      state={
-        waitRowState(
-          {
-            automationSaved: { automation },
-            savedWaitEnded: ended,
-            savedWaitEndedOn: endedOn,
-            timestamp
-          },
-          bot?.cancelledWaits,
-          now,
-          host
-        ) ?? {
-          kind: 'waiting',
-          once
-        }
-      }
-      madeAt={timestamp}
-      bot={bot}
-    />
   )
 }
 

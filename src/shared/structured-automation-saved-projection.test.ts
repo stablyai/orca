@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from './agent-session/journal/agent-session-journal-types'
-import { projectAutomationRunNotStartedItem } from './structured-automation-saved-projection'
 
 const HOST_SENTENCE = 'Your Hermes CLI on this computer is 0.20.5. Chats need 0.23.0 or newer.'
 
@@ -50,4 +48,96 @@ describe('projectAutomationRunNotStartedItem', () => {
     expect(shown?.refusal).toBeUndefined()
     expect(shown?.error).toBe(HOST_SENTENCE)
   })
+})
+
+import { z } from 'zod'
+import { projectStructuredOrcaCardItem, projectAutomationRunNotStartedItem } from './structured-automation-saved-projection'
+import { projectStructuredItemToNativeChat } from './agent-session/view/structured-agent-session-projection'
+import { isAdmissibleAgentJournalRenderItem } from './agent-session/journal/agent-session-journal-schemas'
+import type { AgentJournalRenderItem, AgentJournalItemBody } from './agent-session/journal/agent-session-journal-types'
+import { storedItem } from '../main/native-chat/agent-session-journal/durable-rows/journal-storage-schema'
+import { strictStorage } from '../main/native-chat/agent-session-journal/durable-rows/journal-storage-strict'
+
+const item: AgentJournalRenderItem = {
+  itemId: 'orca:receipt',
+  revision: 1,
+  sequence: 2,
+  observedAt: 100,
+  body: {
+    kind: 'automation-saved',
+    change: 'created',
+    automation: {
+      id: 'a',
+      name: 'Calendar reminder',
+      enabled: true,
+      nextRunAt: 0,
+      updatedAt: 100,
+      dtstart: 253370764800000,
+      rrule: 'FREQ=DAILY',
+      workspaceId: null,
+      on: [{ id: 'c', source: 'calendar', event: 'starting_soon' }]
+    },
+    receiptFacts: {
+      version: 1,
+      automationCreatedAt: 10,
+      zone: { kind: 'not-recorded' },
+      triggerExtras: {
+        coverage: 'complete',
+        items: [
+          {
+            triggerId: 'c',
+            additionalConditions: 'none',
+            google: {
+              kind: 'calendar',
+              minutesBefore: 60,
+              account: { kind: 'host-only' },
+              calendar: 'primary'
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+it('round-trips the saved delta through strict storage and the desktop projection while the phone still omits the receipt', () => {
+  const stored: unknown = strictStorage(storedItem).parse(JSON.parse(JSON.stringify(item)))
+  if (!isAdmissibleAgentJournalRenderItem(stored)) {
+    throw new Error('Unreadable journal item')
+  }
+  expect(projectStructuredOrcaCardItem(stored)?.automationSaved).toMatchObject({
+    receiptFacts: {
+      triggerExtras: {
+        coverage: 'complete',
+        items: [{ triggerId: 'c', google: { minutesBefore: 60 } }]
+      }
+    }
+  })
+  // This is the default projection used by the actual mobile transcript; scope stays desktop-only.
+  expect(projectStructuredItemToNativeChat(stored)).toBeNull()
+})
+
+it('consumes shortened and unsupported-reader evidence rather than claiming complete trigger facts', () => {
+  expect(projectStructuredOrcaCardItem({ ...item, shortened: true })).toMatchObject({
+    shortened: true,
+    automationSaved: { receiptFacts: undefined }
+  })
+  expect(projectStructuredOrcaCardItem(item, false)?.automationSaved?.receiptFacts).toBeUndefined()
+})
+
+it('keeps future optional facts readable and compatible with the original saved-item decoder', () => {
+  // The original public saved-body schema at 3f73ded4; older clients strip unknown keys.
+  const legacy = z.object({
+    kind: z.literal('automation-saved'),
+    change: z.string().min(1),
+    automation: z.object({ id: z.string().min(1), name: z.string() })
+  })
+  expect(legacy.parse(item.body)).toEqual({
+    kind: 'automation-saved',
+    change: 'created',
+    automation: { id: 'a', name: 'Calendar reminder' }
+  })
+  const future = { ...item, body: { ...item.body, receiptFacts: { version: 2, other: true } } }
+  expect(isAdmissibleAgentJournalRenderItem(future)).toBe(true)
+  expect(projectStructuredOrcaCardItem(future)?.automationSaved?.receiptFacts).toBeUndefined()
 })

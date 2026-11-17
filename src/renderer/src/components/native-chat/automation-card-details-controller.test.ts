@@ -1,0 +1,212 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { makeAutomation } from '@/components/automations/automations-page-fixtures'
+import type { AutomationReceiptRead } from '../../../../shared/automations/automation-receipt-read'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { WebhookKey } from '../../../../shared/rpc-contract/webhooks-params'
+import { AutomationCardDetailsController } from './automation-card-details-controller'
+import { deleteAutomationForTarget } from '@/components/automations/hosts/automation-host-client'
+import { subscribeAutomationDefinitionAcknowledgements } from '@/components/automations/events/automation-definition-acknowledgements'
+
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: async () => ({}) }))
+afterEach(() => vi.useRealTimers())
+
+const automation = makeAutomation({
+  id: 'a',
+  createdAt: 10,
+  once: { by: 5000 },
+  enabled: true,
+  on: [{ id: 'wh-wh_7Kx2pQ9mZbV4tL1r', source: 'webhook', event: 'call', rev: 1 }]
+})
+const present: AutomationReceiptRead = {
+  status: 'ready',
+  automation,
+  owner: { selector: { kind: 'self' } }
+}
+const deferred = <T>() => Promise.withResolvers<T>()
+
+function rig() {
+  let read: () => Promise<AutomationReceiptRead> = async () => present
+  let runs: () => Promise<AutomationRun[]> = async () => []
+  let remove: () => Promise<void> = async () => {}
+  let current = true
+  let key: () => Promise<WebhookKey> = async () => ({
+    key: 'secret',
+    url: 'https://hooks.test/current'
+  })
+  const controller = new AutomationCardDetailsController({
+    current: () => current,
+    read: () => read(),
+    runs: () => runs(),
+    remove: () => remove(),
+    update: async (_automation, _owner, enabled) => ({ ...automation, enabled }),
+    run: async () => {},
+    webhookKey: () => key()
+  })
+  return {
+    controller,
+    read: (next: typeof read) => {
+      read = next
+    },
+    runs: (next: typeof runs) => {
+      runs = next
+    },
+    remove: (next: typeof remove) => {
+      remove = next
+    },
+    retire: () => {
+      current = false
+      controller.invalidate()
+    },
+    key: (next: typeof key) => {
+      key = next
+    }
+  }
+}
+
+function settled(controller: AutomationCardDetailsController, status: string): Promise<void> {
+  if (controller.getSnapshot().status === status) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const unsubscribe = controller.subscribe(() => {
+      if (controller.getSnapshot().status === status) {
+        unsubscribe()
+        resolve()
+      }
+    })
+  })
+}
+
+it('keeps a successful definition when only history reports not-found', async () => {
+  const { controller, runs } = rig()
+  runs(async () => {
+    throw new Error('Automation not found.')
+  })
+  await controller.reload()
+  expect(controller.getSnapshot()).toMatchObject({
+    status: 'ready',
+    automation: { id: 'a' },
+    runs: null
+  })
+})
+
+it('copies only under the binding and mutation generation that requested the webhook key', async () => {
+  const { controller, key, retire } = rig()
+  await controller.reload()
+  let clipboard = ''
+  await controller.copyWebhookUrl((url) => {
+    clipboard = url
+  })
+  expect(clipboard).toBe('https://hooks.test/current')
+  const old = deferred<WebhookKey>()
+  key(() => old.promise)
+  const copying = controller.copyWebhookUrl((url) => {
+    clipboard = url
+  })
+  retire()
+  old.resolve({ key: 'old-secret', url: 'https://hooks.test/obsolete' })
+  await copying
+  expect(clipboard).toBe('https://hooks.test/current')
+})
+
+it('accepts only the latest definition read within the same mutation generation', async () => {
+  const { controller, read } = rig()
+  const old = deferred<AutomationReceiptRead>()
+  const latest = deferred<AutomationReceiptRead>()
+  read(() => old.promise)
+  const r0 = controller.reload()
+  read(() => latest.promise)
+  const r1 = controller.reload()
+  latest.resolve({ ...present, automation: { ...automation, enabled: false } })
+  await r1
+  old.resolve(present)
+  await r0
+  expect(controller.getSnapshot()).toMatchObject({
+    status: 'ready',
+    automation: { enabled: false }
+  })
+})
+
+it('fences a pre-Cancel reply and preserves the acknowledgement across a post-ack missing read', async () => {
+  const { controller, read } = rig()
+  await controller.reload()
+  const old = deferred<AutomationReceiptRead>()
+  const reconcile = deferred<AutomationReceiptRead>()
+  read(() => old.promise)
+  const r0 = controller.reload()
+  read(() => reconcile.promise)
+  await controller.remove()
+  old.resolve(present)
+  await r0
+  expect(controller.getSnapshot()).toEqual({ status: 'loading', acknowledgement: 'cancelled' })
+  const missing = settled(controller, 'missing')
+  reconcile.resolve({ status: 'missing' })
+  await missing
+  expect(controller.getSnapshot()).toEqual({ status: 'missing', acknowledgement: 'cancelled' })
+})
+
+it('does not revive a deleted definition from late history when reconciliation fails', async () => {
+  const { controller, read, runs } = rig()
+  read(async () => ({ ...present, automation: { ...automation, once: undefined } }))
+  await controller.reload()
+  const oldRuns = deferred<AutomationRun[]>()
+  runs(() => oldRuns.promise)
+  const r0 = controller.reload()
+  // Wait for the public transport boundary, without clock-based ordering.
+  await Promise.resolve()
+  read(async () => {
+    throw new Error('Disconnected')
+  })
+  await controller.remove()
+  await settled(controller, 'error')
+  oldRuns.resolve([])
+  await r0
+  expect(controller.getSnapshot()).toEqual({ status: 'error', acknowledgement: 'deleted' })
+})
+
+it('rejects an in-flight acknowledgement after its owner binding is retired', async () => {
+  const { controller, remove, retire } = rig()
+  await controller.reload()
+  const ack = deferred<void>()
+  remove(() => ack.promise)
+  const cancel = controller.remove()
+  retire()
+  ack.resolve()
+  await cancel
+  expect(controller.getSnapshot()).toEqual({ status: 'unverified' })
+})
+
+it('fences pre-ack reads through the shared delete caller, independent of a wall-clock rollback', async () => {
+  const { controller, read } = rig()
+  read(async () => ({ ...present, automation: { ...automation, enabled: false } }))
+  await controller.reload()
+  const old = deferred<AutomationReceiptRead>()
+  const reconcile = deferred<AutomationReceiptRead>()
+  read(() => old.promise)
+  const r0 = controller.reload()
+  read(() => reconcile.promise)
+  const unsubscribe = subscribeAutomationDefinitionAcknowledgements(({ automationId }) => {
+    if (automationId === 'a') {
+      controller.changed()
+    }
+  })
+  try {
+    vi.useFakeTimers()
+    vi.setSystemTime(1000)
+    await deleteAutomationForTarget({ id: 'a', runContext: null }, { kind: 'local' })
+    vi.setSystemTime(0)
+    old.resolve(present)
+    await r0
+    expect(controller.getSnapshot()).toMatchObject({
+      status: 'ready',
+      automation: { enabled: false }
+    })
+    const missing = settled(controller, 'missing')
+    reconcile.resolve({ status: 'missing' })
+    await missing
+    expect(controller.getSnapshot()).toEqual({ status: 'missing' })
+  } finally {
+    unsubscribe()
+    controller.dispose()
+  }
+})
