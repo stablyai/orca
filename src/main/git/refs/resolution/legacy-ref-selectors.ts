@@ -6,10 +6,11 @@ import { resolveBaseRefSearchSelector } from './base-ref-search-selector'
 /** canonical: full refs; git-short: Git's short name, qualified only when ambiguous; unqualified: ambiguous refs omitted. */
 export type RepoSearchRefSelectorForm = 'canonical' | 'git-short' | 'unqualified'
 
-// Windows caps a command line at 32K, and WSL's login-shell fallback repeats the command three times.
-const MAX_PATTERN_CHARS_PER_CALL = 6_000
-// Each nested POSIX single-quoting level grows an apostrophe from 1 to 4 characters; budget two levels.
-const QUOTED_APOSTROPHE_CHARS = 16
+// WSL's login-shell fallback quotes each pattern twice and repeats the command three times; Windows caps it at 32K.
+const MAX_PATTERN_CHARS_PER_CALL = 4_000
+const PATTERN_QUOTING_CHARS = 10
+// Quotes are the only ref-name characters shell or Windows quoting grows; such refs keep their full name.
+const QUOTE_CHARACTER = /['"]/
 
 /** Older clients display refName raw, so give one page the selectors pre-snapshot hosts sent. */
 export async function toGitShortRefSelectors(
@@ -18,7 +19,10 @@ export async function toGitShortRefSelectors(
   git: LocalGitExecOptions = {}
 ): Promise<BaseRefSearchResult[]> {
   const shortByRef = new Map<string, string>()
-  for (const patterns of chunkByLength(refDetails.map(({ refName }) => refName))) {
+  const lookups = refDetails
+    .map(({ refName }) => refName)
+    .filter((ref) => !QUOTE_CHARACTER.test(ref))
+  for (const patterns of chunkByLength(lookups)) {
     try {
       const { stdout } = await gitExecFileAsync(
         ['for-each-ref', '--format=%(refname)%00%(refname:short)', ...patterns],
@@ -47,8 +51,7 @@ function chunkByLength(refNames: string[]): string[][] {
   let chunk: string[] = []
   let length = 0
   for (const refName of refNames) {
-    const apostrophes = refName.split("'").length - 1
-    const quotedLength = refName.length + 1 + apostrophes * (QUOTED_APOSTROPHE_CHARS - 1)
+    const quotedLength = refName.length + PATTERN_QUOTING_CHARS
     if (chunk.length > 0 && length + quotedLength > MAX_PATTERN_CHARS_PER_CALL) {
       chunks.push(chunk)
       chunk = []
