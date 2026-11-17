@@ -10,6 +10,8 @@ export type AgentSessionCapabilities = {
   compactInstructions?: boolean
   /** `/compact` runs while background tasks keep running; absent, it waits for them to end. */
   compactBesideBackgroundTasks?: boolean
+  /** Summarize the conversation on request: offers the `/recap` command. */
+  recap?: boolean
   /** `/mcp` opens Orca's panel for the agent's MCP servers (`agentSession.mcp`). */
   mcpServers?: boolean
   /** A goal the user can set and change on the thread. */

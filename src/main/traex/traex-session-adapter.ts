@@ -21,7 +21,7 @@ import { TraexSession } from './traex-session'
 import type { TraexSessionAdapterDeps } from './traex-session-contract'
 export type { TraexSessionAdapterDeps } from './traex-session-contract'
 import { dispatchTraexMessage } from './traex-message-dispatch'
-import { TraexRequestError } from './traex-protocol'
+import { TraexRequestError, traexRecord, traexText } from './traex-protocol'
 import { prepareTraexRewind, recoverTraexRewind, rewindTraexSession } from './traex-rewind'
 import { changeTraexThreadGoal } from './traex-thread-goal'
 import { cancelTraexTurn } from './traex-turn-cancel'
@@ -188,6 +188,21 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
   ) => stopTraexBackgroundTasks(this.session(input.sessionId, input.fence), input)
+
+  recap: NonNullable<StructuredAgentSessionAdapter['recap']> = async (input) => {
+    const session = this.session(input.sessionId, input.fence)
+    session.timeline!.beginCommand(input.command)
+    try {
+      const result = traexRecord(
+        await session.connection.request('thread/recap', { threadId: session.threadId })
+      )
+      session.extras.awaitRecap(input.command, traexText(result.turnId) ?? null)
+    } catch (error) {
+      session.extras.failRecap(input.command, error)
+      throw error
+    }
+    return { state: 'accepted', providerIdentity: null }
+  }
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) => {
     const session = this.session(input.sessionId, input.fence)

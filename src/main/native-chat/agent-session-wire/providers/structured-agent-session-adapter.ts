@@ -4,6 +4,8 @@ import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
 } from '../../../../shared/agent-session/agent-session-mcp'
+import type { StructuredAgentSessionCommandRun } from './structured-agent-session-command-run'
+export type { StructuredAgentSessionCommandRun } from './structured-agent-session-command-run'
 import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
 import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
 import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
@@ -22,8 +24,7 @@ import type { AgentSessionRewindReason } from '../../../../shared/agent-session/
 
 import type {
   AgentJournalAnsweredTurnIdentity,
-  AgentJournalMessageItem,
-  AgentJournalTurnItem
+  AgentJournalMessageItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
@@ -72,17 +73,6 @@ export type AgentSessionAcquisition = {
   acquisitionGeneration: string
   /** The account home this child launched under, when its launch follows the selection. */
   accountHome?: AgentSessionAccountHome
-}
-
-/** The host creates the command’s running turn; the child translator ends it and writes its result. */
-export type StructuredAgentSessionCommandRun = {
-  clientMessageId: string
-  turnId: string
-  identity: AgentJournalItemIdentity
-  resultIdentity: AgentJournalItemIdentity
-  running: AgentJournalTurnItem
-  /** Only agents declaring `compactInstructions` receive this. */
-  instructions?: string
 }
 
 /** Commands may answer in place without echoing provider items. */
@@ -254,6 +244,12 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   >
   /** Return provider compaction admission; translator ends the command turn unless child-exit recovery does first. */
   compact?(input: {
+    sessionId: string
+    fence: number
+    command: StructuredAgentSessionCommandRun
+  }): Promise<AgentSessionCommandAdmission>
+  /** Return provider recap admission; its text arrives through the adapter's own frames. */
+  recap?(input: {
     sessionId: string
     fence: number
     command: StructuredAgentSessionCommandRun

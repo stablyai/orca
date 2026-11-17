@@ -25,6 +25,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionCompactCommandText,
+  agentSessionRecapCommandText,
   type AgentSessionConversationCommand
 } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -49,16 +50,31 @@ import {
 
 export const STRUCTURED_AGENT_SESSION_COMPACT_COMMAND = 'compact'
 
-export function structuredAgentSessionCompactBody(instructions?: string): AgentJournalMessageItem {
+export function structuredAgentSessionCommandBody(
+  command: AgentSessionConversationCommand,
+  instructions?: string
+): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: agentSessionCompactCommandText(instructions) }],
+    blocks: [
+      {
+        type: 'text',
+        text:
+          command === 'recap'
+            ? agentSessionRecapCommandText()
+            : agentSessionCompactCommandText(instructions)
+      }
+    ],
     command: {
-      name: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+      name: command,
       ...(instructions ? { instructions } : {})
     }
   }
+}
+
+export function structuredAgentSessionCompactBody(instructions?: string): AgentJournalMessageItem {
+  return structuredAgentSessionCommandBody(STRUCTURED_AGENT_SESSION_COMPACT_COMMAND, instructions)
 }
 
 type AwaitedSubmission = Pick<
@@ -88,8 +104,9 @@ export function structuredAgentSessionAwaitedCommand(
     }
   }
   const body = oldest && journal.itemBody(agentJournalSubmissionKey(oldest.clientMessageId))
-  return body?.kind === 'message' && body.command?.name === STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
-    ? STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
+  return body?.kind === 'message' &&
+    (body.command?.name === 'compact' || body.command?.name === 'recap')
+    ? body.command.name
     : undefined
 }
 
@@ -146,13 +163,15 @@ export async function handOverStructuredAgentSessionCommand(
   body: AgentJournalMessageItem
 ): Promise<void> {
   const { clientMessageId } = submission
+  const command: AgentSessionConversationCommand =
+    body.command?.name === 'recap' ? 'recap' : STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
   const blocked = await commandBlocked(ctx, body)
   if (blocked) {
     const refused = {
       state: 'rejected' as const,
       ...agentSessionFailureWords(blocked, {
         ...ctx.failureTextContext,
-        command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+        command,
         surface: 'rejection'
       })
     }
@@ -162,24 +181,18 @@ export async function handOverStructuredAgentSessionCommand(
       return
     }
     // Queued commands need an explicit result row because no RPC waits on refusal.
-    await refuseQueuedCommand(
-      ctx,
-      submission,
-      blocked,
-      refused,
-      STRUCTURED_AGENT_SESSION_COMPACT_COMMAND
-    )
+    await refuseQueuedCommand(ctx, submission, blocked, refused, command)
     return
   }
   const { turn, running } = await openCommandTurn(ctx, submission)
   const instructions = body.command?.instructions
   let admission: AgentSessionCommandAdmission
   try {
-    admission = await ctx.adapter.compact!({
-      sessionId: ctx.sessionId,
-      fence: ctx.fence,
-      command: { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
-    })
+    const run = { clientMessageId, ...turn, running, ...(instructions ? { instructions } : {}) }
+    admission =
+      command === 'recap'
+        ? await ctx.adapter.recap!({ sessionId: ctx.sessionId, fence: ctx.fence, command: run })
+        : await ctx.adapter.compact!({ sessionId: ctx.sessionId, fence: ctx.fence, command: run })
   } catch (error) {
     // Ready-child writes can lose replies after running; never infer non-delivery from throws.
     await settleUnsentCommand(ctx, clientMessageId, {
@@ -193,7 +206,10 @@ export async function handOverStructuredAgentSessionCommand(
       ctx,
       clientMessageId,
       admission,
-      agentSessionFailureFact('compactionFailed', { detail: admission.rejection.detail })
+      agentSessionFailureFact(
+        command === 'recap' ? 'commandRefused' : 'compactionFailed',
+        command === 'recap' ? undefined : { detail: admission.rejection.detail }
+      )
     )
   } else if (admission.state !== 'admitted') {
     // Unknown writes leave lifecycle settlement to provider frames or child exit.
@@ -252,7 +268,8 @@ async function commandBlocked(
   ctx: StructuredAgentSessionCommandHandoverContext,
   body: AgentJournalMessageItem
 ): Promise<SubmissionRejectionFact | null> {
-  if (body.command?.name !== STRUCTURED_AGENT_SESSION_COMPACT_COMMAND) {
+  const command = body.command?.name
+  if (command !== 'compact' && command !== 'recap') {
     return agentSessionFailureFact('commandRefused')
   }
   const record = ctx.record()
@@ -261,7 +278,12 @@ async function commandBlocked(
   }
   // Validate capability even if a client sends an unadvertised command or instructions.
   const capabilities = ctx.agents.capabilities(record.provider)
-  if (!capabilities?.compact || (body.command.instructions && !capabilities.compactInstructions)) {
+  const instructions = body.command?.instructions
+  if (
+    (command === 'compact' && !capabilities?.compact) ||
+    (command === 'recap' && !capabilities?.recap) ||
+    (instructions && !capabilities?.compactInstructions)
+  ) {
     return agentSessionFailureFact('commandRefused')
   }
   const childWork = () => ({ views: ctx.childWork(), open: ctx.childWorkOpen() })

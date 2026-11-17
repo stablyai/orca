@@ -279,7 +279,11 @@ export async function readStructuredAgentSessionOptions(
             supported: false,
             reason: 'unsupported'
           }),
-    conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
+    conversationCommands: [
+      'clear',
+      ...(capabilities?.compact ? (['compact'] as const) : []),
+      ...(capabilities?.recap ? (['recap'] as const) : [])
+    ],
     ...(capabilities?.compact && capabilities.compactInstructions
       ? { compactInstructions: true }
       : {}),

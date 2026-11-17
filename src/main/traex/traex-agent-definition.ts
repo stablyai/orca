@@ -9,6 +9,7 @@ export const TRAEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     fork: 'checkpoint',
     compact: true,
     compactInstructions: true,
+    recap: true,
     threadGoal: true,
     contextUsage: true,
     imagePrompts: true,

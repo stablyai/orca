@@ -67,6 +67,29 @@ export function traexNotificationNotice(
         }
       : traexFailureNotice(params)
   }
+  if (method === 'model/verificationWarning') {
+    const verifications = Array.isArray(params.verifications)
+      ? params.verifications.filter((entry): entry is string => typeof entry === 'string')
+      : []
+    return {
+      kind: 'status',
+      text: verifications.length
+        ? `Model verification required: ${verifications.join(', ')}.`
+        : 'Model verification required.',
+      tone: 'warning'
+    }
+  }
+  if (method === 'model/loopDetectedRecovering') {
+    const attempt = typeof params.attempt === 'number' ? params.attempt : null
+    const max = typeof params.maxAttempts === 'number' ? params.maxAttempts : null
+    return {
+      kind: 'status',
+      text: `Model loop detected; compacting and retrying${
+        attempt !== null && max !== null ? ` (attempt ${attempt}/${max})` : ''
+      }.`,
+      tone: 'warning'
+    }
+  }
   if (['warning', 'guardianWarning', 'configWarning', 'deprecationNotice'].includes(method)) {
     const text = ['configWarning', 'deprecationNotice'].includes(method)
       ? [traexText(params.summary), traexText(params.details)].filter(Boolean).join('\n\n') ||

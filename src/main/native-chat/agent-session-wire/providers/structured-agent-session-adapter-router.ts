@@ -114,6 +114,14 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return compact(input)
   }
 
+  recap: NonNullable<Adapter['recap']> = (input) => {
+    const recap = this.owner(input.sessionId).recap
+    if (!recap) {
+      throw new Error('Recap is unavailable for this provider.')
+    }
+    return recap(input)
+  }
+
   cancelTurn: Adapter['cancelTurn'] = (input) => this.owner(input.sessionId).cancelTurn(input)
 
   changeThreadGoal: NonNullable<Adapter['changeThreadGoal']> = (input) => {

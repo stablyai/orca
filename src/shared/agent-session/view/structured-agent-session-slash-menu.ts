@@ -11,7 +11,8 @@ const COMPACT_INSTRUCTIONS_HINT = '[instructions]'
 
 export const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear conversation context' },
-  { name: 'compact', description: 'Compact conversation context' }
+  { name: 'compact', description: 'Compact conversation context' },
+  { name: 'recap', description: 'Show a recap of this conversation' }
 ]
 
 /** Orca's MCP panel, offered where the host manages this agent's servers. */

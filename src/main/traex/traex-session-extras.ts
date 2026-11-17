@@ -1,4 +1,6 @@
 import type { TraexSession } from './traex-session'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { ProviderTimelineItemBody } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type {
   StructuredAgentSessionLogFields,
   StructuredAgentSessionLogger
@@ -13,6 +15,10 @@ import { traexRecord, traexText } from './traex-protocol'
 export class TraexSessionExtras {
   readonly windowsSandbox: TraexWindowsSandbox
   private naming: TraexThreadNaming | null = null
+  private pendingRecap: {
+    command: StructuredAgentSessionCommandRun
+    providerTurnId: string | null
+  } | null = null
 
   constructor(
     private readonly session: TraexSession,
@@ -50,6 +56,14 @@ export class TraexSessionExtras {
       }
       return true
     }
+    if (method === 'recap/generated' && params.threadId === this.session.threadId) {
+      this.finishRecap(params, true)
+      return true
+    }
+    if (method === 'recap/failed' && params.threadId === this.session.threadId) {
+      this.finishRecap(params, false)
+      return true
+    }
     if (method === 'account/rateLimits/updated') {
       this.observeRateLimits(traexRecord(params.rateLimits))
       return true
@@ -63,6 +77,70 @@ export class TraexSessionExtras {
       return true
     }
     return false
+  }
+
+  awaitRecap(command: StructuredAgentSessionCommandRun, providerTurnId: string | null): void {
+    this.pendingRecap = { command, providerTurnId }
+  }
+
+  failRecap(command: StructuredAgentSessionCommandRun, error: unknown): void {
+    this.pendingRecap = null
+    this.finishRecapTurn(
+      command,
+      {
+        kind: 'status',
+        text: `Recap failed${error instanceof Error ? `: ${error.message}` : ''}.`,
+        tone: 'warning'
+      },
+      false
+    )
+  }
+
+  private finishRecap(params: Record<string, unknown>, ok: boolean): void {
+    const pending = this.pendingRecap
+    if (!pending) {
+      return
+    }
+    const providerTurnId = traexText(params.turnId)
+    if (pending.providerTurnId && providerTurnId !== pending.providerTurnId) {
+      return
+    }
+    this.pendingRecap = null
+    this.finishRecapTurn(
+      pending.command,
+      ok
+        ? {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: traexText(params.text) ?? 'Recap unavailable.' }]
+          }
+        : { kind: 'status', text: 'Recap failed.', tone: 'warning' },
+      ok
+    )
+  }
+
+  private finishRecapTurn(
+    command: StructuredAgentSessionCommandRun,
+    body: ProviderTimelineItemBody,
+    ok: boolean
+  ): void {
+    const thread = this.session.threadId
+    if (!thread) {
+      return
+    }
+    this.session.timeline?.apply({
+      type: 'item.close',
+      item: `recap:${command.turnId}`,
+      body,
+      join: { thread, turn: command.turnId }
+    })
+    this.session.timeline?.apply({
+      type: 'turn.end',
+      turn: command.turnId,
+      at: Date.now(),
+      state: 'completed',
+      outcome: ok ? 'success' : 'failure'
+    })
   }
 
   private observeRateLimits(snapshot: Record<string, unknown>): void {
@@ -98,6 +176,7 @@ export class TraexSessionExtras {
   }
 
   dispose(): void {
+    this.pendingRecap = null
     this.naming?.dispose()
     this.windowsSandbox.dispose()
   }
