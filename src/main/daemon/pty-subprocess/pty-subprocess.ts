@@ -6,6 +6,7 @@ import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { createDaemonPtyEnvironment } from './spawn-environment'
 import { createPtyShellLaunchPlan, type PtyShellLaunchPlan } from './shell-launch-plan'
 import { discardStagedStartupCommand } from '../../../shared/shell/launch/startup-command-staging'
+import { takeShellWrapperStartupClaim } from './shell-wrapper-startup-claim'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './native-pty-spawn'
 import {
   formatPtySpawnError,
@@ -122,9 +123,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       env,
       startupCommandDeliveredInShellArgs:
         spawned.startupCommandDeliveredInShellArgs ?? launch.startupCommandDeliveredInShellArgs,
-      ...(launch.shellWrapperStartupStaging
-        ? { shellWrapperStartupStaging: launch.shellWrapperStartupStaging }
-        : {}),
+      ...(launch.shellWrapperStartup ? { shellWrapperStartup: launch.shellWrapperStartup } : {}),
       reportsChildExitStatus: spawned.reportsChildExitStatus,
       requestedCwd: opts.cwd,
       sessionId: opts.sessionId,
@@ -134,7 +133,10 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     })
   } catch (error) {
     // No shell will source a staged launch script whose spawn failed.
-    discardStagedStartupCommand(launch?.shellWrapperStartupStaging ?? undefined)
+    if (launch?.shellWrapperStartup) {
+      discardStagedStartupCommand(launch.shellWrapperStartup.staging)
+      takeShellWrapperStartupClaim(launch.shellWrapperStartup.claimPath)
+    }
     throw error
   } finally {
     await work.finish()

@@ -8,7 +8,8 @@ import { TerminalHost } from '../terminal-host'
 const ZSH = '/bin/zsh'
 const describeZsh = process.platform !== 'win32' && existsSync(ZSH) ? describe : describe.skip
 const SESSION_ID = 'startup-type-ahead'
-const COMMAND = `bash -c 'read -r line; printf "AGENT_GOT:[%s]\\n" "$line"'`
+// The split marker counts real starts; a typed fallback echoes the command text more than once.
+const COMMAND = `bash -c 'printf "AGENT_%s\\n" STARTED; read -r line; printf "AGENT_GOT:[%s]\\n" "$line"'`
 // Past the typed-line budget, so the launch is staged as a short script invocation.
 const LONG_COMMAND = `${COMMAND} # ${'x'.repeat(2_000)}`
 
@@ -70,17 +71,22 @@ describeZsh('typing while an agent tab starts', () => {
   // Real shells; the late-marker case outlasts a shortened readiness timeout.
   it.each([
     ['the shell never reaches a line editor', 'unsetopt zle\n', undefined],
-    ['shell startup outlasts the readiness timeout', 'sleep 1.5\n', 500]
+    ['shell startup outlasts the readiness timeout', 'sleep 1.5\n', 500],
+    [
+      'the profile execs a fresh shell',
+      'if [[ -z "${ORCA_TEST_REEXEC:-}" ]]; then export ORCA_TEST_REEXEC=1; exec /bin/zsh -l -i; fi\n',
+      1_500
+    ]
   ])(
     'starts the agent exactly once when %s',
     async (_label, zshrc, shellReadyTimeoutMs) => {
       const tab = await start(zshrc, COMMAND, shellReadyTimeoutMs)
-      await vi.waitFor(() => expect(tab.output()).toContain(COMMAND), { timeout: 8_000 })
+      await vi.waitFor(() => expect(tab.output()).toContain('AGENT_STARTED'), { timeout: 8_000 })
       tab.host.write(SESSION_ID, 'late\r')
       await vi.waitFor(() => expect(tab.output()).toContain('AGENT_GOT:[late]'), {
         timeout: 5_000
       })
-      expect(tab.output().split(COMMAND).length - 1).toBe(1)
+      expect(tab.output().split('AGENT_STARTED').length - 1).toBe(1)
       expect(tab.output()).not.toContain('command not found')
     },
     15_000

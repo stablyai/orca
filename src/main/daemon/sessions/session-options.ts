@@ -1,3 +1,4 @@
+import type { StartupCommandFallback } from './session-shell-ready-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { PtyStartupIngressIntent } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
@@ -23,5 +24,7 @@ export type SessionOptions = {
   // Let the host reap exited sessions and their scrollback emulators.
   onExit?: (code: number) => void
   startupIngress?: PtyStartupIngressIntent
+  /** The shell wrapper runs the startup command; this types it only if readiness times out unclaimed. */
+  startupCommandFallback?: StartupCommandFallback
   ownerBackend?: PtyOwnerBackend
 }

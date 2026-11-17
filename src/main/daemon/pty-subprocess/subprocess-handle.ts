@@ -1,4 +1,4 @@
-import type { StartupCommandStaging } from '../../../shared/shell/launch/startup-command-staging'
+import type { ShellWrapperStartup } from './shell-wrapper-startup-claim'
 import { createDaemonPtyPhysicalOwner } from './daemon-pty-physical-owner'
 import type { DisposableNativePty } from './native-pty-spawn'
 import type * as pty from 'node-pty'
@@ -32,7 +32,7 @@ export function createDaemonPtySubprocessHandle(args: {
   spawnCwd: string
   env: Record<string, string>
   startupCommandDeliveredInShellArgs: boolean
-  shellWrapperStartupStaging?: StartupCommandStaging
+  shellWrapperStartup?: ShellWrapperStartup
   reportsChildExitStatus: boolean
   requestedCwd?: string
   sessionId: string
@@ -153,9 +153,7 @@ export function createDaemonPtySubprocessHandle(args: {
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
-    ...(args.shellWrapperStartupStaging
-      ? { shellWrapperStartupStaging: args.shellWrapperStartupStaging }
-      : {}),
+    ...(args.shellWrapperStartup ? { shellWrapperStartup: args.shellWrapperStartup } : {}),
     observeForeground: () => observePtyForeground(proc, () => !dead && !ioFailed && !masterRetired),
     getForegroundProcess: foreground.getForegroundProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,

@@ -1,6 +1,9 @@
 import { FISH_CWD_REPORT_BLOCK } from '../../../shared/shell/fish-cwd-report'
 import { SHELL_STARTUP_FEATURE_ENV } from './shell-startup-features'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './posix-shell-startup-command'
+import {
+  POSIX_SHELL_STARTUP_CLAIM_ENV,
+  POSIX_SHELL_STARTUP_COMMAND_ENV
+} from './posix-shell-startup-command'
 
 export const ZSH_WRAPPER_DIR_MARKER_FILE = '.orca-shell-wrapper'
 
@@ -70,10 +73,13 @@ export function getZshShellReadyMarkerRegistrationBlock(
   const startupCommandBlock = supportsStartupCommand
     ? `
   if (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
-    BUFFER="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
-    CURSOR=\${#BUFFER}
+    local __orca_startup_line="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
     builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
-    zle accept-line
+    if __orca_claim_startup_command; then
+      BUFFER="$__orca_startup_line"
+      CURSOR=\${#BUFFER}
+      zle accept-line
+    fi
   fi`
     : ''
   return `# Preserve the original user widget across re-sourcing; builtin/completion widgets cannot chain as plain functions.
@@ -115,3 +121,15 @@ function __orca_shell_ready_marker --on-event fish_prompt
 ${readyMarkerBlock}  functions -e __orca_shell_ready_marker
 ${startupCommandBlock}end`
 }
+
+// Unlinking the host's claim file is atomic, so a timed-out host fallback and this wrapper never both run the command.
+export const ZSH_STARTUP_COMMAND_CLAIM_BLOCK = `__orca_claim_startup_command() {
+  local __orca_claim="\${${POSIX_SHELL_STARTUP_CLAIM_ENV}-}"
+  builtin unset ${POSIX_SHELL_STARTUP_CLAIM_ENV}
+  [[ -n "$__orca_claim" ]] || return 0
+  if builtin zmodload -F zsh/files b:zf_rm 2>/dev/null; then
+    zf_rm -- "$__orca_claim" 2>/dev/null
+  else
+    command rm -- "$__orca_claim" 2>/dev/null
+  fi
+}`

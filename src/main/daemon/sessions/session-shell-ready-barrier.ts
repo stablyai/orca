@@ -26,8 +26,15 @@ export type SessionShellReadyBarrierDeps = {
   installDeviceAttributesFilter(): void
   releaseDeviceAttributesFilter(): void
   acceptStartupIngress(data: string): void
+  startupCommandFallback?: StartupCommandFallback
   /** Use an injected file-log sink because detached daemon stdio is ignored. */
   reportReadinessEvent?(event: string, details: Record<string, unknown>): void
+}
+
+/** A wrapper-run startup command, typed after timeout only if the wrapper has not claimed it. */
+export type StartupCommandFallback = {
+  claim(): boolean
+  build(): string
 }
 
 /** Strip startup markers and hold startup commands until shell readiness resolves. */
@@ -37,12 +44,14 @@ export class SessionShellReadyBarrier {
   private readyTimer: ReturnType<typeof setTimeout> | null = null
   private releaseDeviceAttributesResponder: (() => void) | null = null
   private preReadyStdinQueue: string[] = []
+  private startupCommandFallback: StartupCommandFallback | null = null
   private readonly postReadyFlushGate: PostReadyFlushGate
 
   constructor(private readonly deps: SessionShellReadyBarrierDeps) {
     if (deps.shellReadySupported) {
       this._state = 'pending'
       this.scanState = createShellStartupOutputScanState()
+      this.startupCommandFallback = deps.startupCommandFallback ?? null
       // Answer startup DA1 locally so shells waiting for it can reach their ready marker.
       this.releaseDeviceAttributesResponder = installDeviceAttributesResponder({
         parser: deps.responderParser,
@@ -127,6 +136,9 @@ export class SessionShellReadyBarrier {
 
   clearPendingWrites(): void {
     this.preReadyStdinQueue = []
+    // Claiming also removes the claim file once no shell can take it.
+    this.startupCommandFallback?.claim()
+    this.startupCommandFallback = null
     this.postReadyFlushGate.clear()
   }
 
@@ -143,6 +155,8 @@ export class SessionShellReadyBarrier {
   private transitionToReady(postMarkerBytesObserved = false): void {
     this._state = 'ready'
     this.scanState = null
+    // The marker and the wrapper's claim come from the same line-init hook.
+    this.startupCommandFallback = null
     this.clearReadyTimer()
     if (this.preReadyStdinQueue.length === 0) {
       return
@@ -175,6 +189,11 @@ export class SessionShellReadyBarrier {
     this._state = 'timed_out'
     this.releaseDeviceAttributes()
     this.releaseHeldBytes()
+    const fallback = this.startupCommandFallback
+    this.startupCommandFallback = null
+    if (fallback?.claim()) {
+      this.preReadyStdinQueue.unshift(fallback.build())
+    }
     this.flushPreReadyQueue()
   }
 

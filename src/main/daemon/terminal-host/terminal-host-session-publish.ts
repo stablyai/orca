@@ -4,6 +4,7 @@ import type { SubprocessHandle } from '../sessions/session-subprocess-handle'
 import type { WslGuestRoot } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 import { buildStartupCommandSubmission } from '../../../shared/shell/launch/startup-command-submission'
 import {
+  discardStagedStartupCommand,
   stageStartupCommand,
   startupStagingFailureNotice,
   type StartupCommandStaging
@@ -17,6 +18,7 @@ import {
   terminalSessionExitCode
 } from './terminal-host-returned-process'
 import { shellPathSupportsPtyStartupBarrier } from '../shell-readiness/shell-ready'
+import { takeShellWrapperStartupClaim } from '../pty-subprocess/shell-wrapper-startup-claim'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import { resolveDaemonSessionScrollbackRows } from '../sessions/daemon-session-scrollback-window'
@@ -79,7 +81,7 @@ export async function spawnAndPublishSession(
       ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
     })
     // Claim the wrapper's staged script now so every later failure path still unlinks it.
-    staging.current = subprocess.shellWrapperStartupStaging
+    staging.current = subprocess.shellWrapperStartup?.staging
     // External implementations returning a handle have transferred an actual resource.
     physical = observeReturnedTerminalProcess(subprocess, opts.sessionId, deps.spawnGate)
     if (!lowerReported) {
@@ -110,6 +112,19 @@ export async function spawnAndPublishSession(
   let recordRoot = (root: WslGuestRoot): void => {
     heldRoot = root
   }
+  const wrapperStartup = opts.command ? subprocess.shellWrapperStartup : undefined
+  const wrapperCommand = opts.command
+  // A profile that execs another shell never reaches the wrapper; type the line only if the wrapper never claimed it.
+  const startupCommandFallback =
+    wrapperStartup && wrapperCommand
+      ? {
+          claim: () => takeShellWrapperStartupClaim(wrapperStartup.claimPath),
+          build: () => {
+            discardStagedStartupCommand(wrapperStartup.staging)
+            return buildSubmission(wrapperCommand)
+          }
+        }
+      : undefined
   const session = new Session({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -123,6 +138,7 @@ export async function spawnAndPublishSession(
       wslDistro
     }),
     shellReadySupported,
+    ...(startupCommandFallback ? { startupCommandFallback } : {}),
     scrollback: resolveDaemonSessionScrollbackRows(),
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
@@ -188,7 +204,7 @@ export async function spawnAndPublishSession(
 
   // The wrapper runs the command at its first prompt (or first precmd without zle), so nothing is typed
   // ahead of the user and early keystrokes queue for the agent.
-  const startupCommandByWrapper = Boolean(opts.command && subprocess.shellWrapperStartupStaging)
+  const startupCommandByWrapper = wrapperStartup !== undefined
   const startupCommandWritten =
     Boolean(opts.command) &&
     !subprocess.startupCommandDeliveredInShellArgs &&
@@ -207,9 +223,9 @@ export async function spawnAndPublishSession(
   } catch {
     // Diagnostics must never turn a live PTY into a failed create.
   }
-  if (startupCommandWritten && opts.command) {
+  const buildSubmission = (command: string): string => {
     staging.current = stageStartupCommand({
-      command: opts.command,
+      command,
       shellPath: subprocess.shellPath,
       orcaBuiltLine: opts.launchAgent !== undefined
     })
@@ -226,11 +242,13 @@ export async function spawnAndPublishSession(
       }
     }
     // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
-    session.writeStartupCommand(
-      buildStartupCommandSubmission(staging.current.command, {
-        bracketedPasteSafe: shellReadySupported
-      })
-    )
+    return buildStartupCommandSubmission(staging.current.command, {
+      bracketedPasteSafe: shellReadySupported
+    })
+  }
+  const command = opts.command
+  if (command && startupCommandWritten) {
+    session.writeStartupCommand(buildSubmission(command))
   }
 
   return {

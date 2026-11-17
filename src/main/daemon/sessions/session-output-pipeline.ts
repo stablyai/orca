@@ -44,6 +44,7 @@ export function createSessionShellReady(
     shellReadySupported: opts.shellReadySupported,
     ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
     shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
+    ...(opts.startupCommandFallback ? { startupCommandFallback: opts.startupCommandFallback } : {}),
     installDeviceAttributesFilter: () => output.installDeviceAttributesFilter(),
     releaseDeviceAttributesFilter: () => output.releaseDeviceAttributesFilter(),
     acceptStartupIngress: observeRoot

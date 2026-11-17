@@ -1,6 +1,8 @@
 import { basename, win32 as pathWin32 } from 'node:path'
 
 export const POSIX_SHELL_STARTUP_COMMAND_ENV = 'ORCA_POSIX_SHELL_STARTUP_COMMAND'
+/** A file the wrapper must unlink before it runs the command, so a host fallback can never run it too. */
+export const POSIX_SHELL_STARTUP_CLAIM_ENV = 'ORCA_POSIX_SHELL_STARTUP_CLAIM'
 
 export function supportsPosixShellStartupCommand(shellPath: string): boolean {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()

@@ -14,6 +14,7 @@ import {
   getZshShellReadyMarkerRegistrationBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
   ZSH_FEATURE_CHANNEL_BLOCK,
+  ZSH_STARTUP_COMMAND_CLAIM_BLOCK,
   ZSH_USER_ZSHENV_SOURCE_BLOCK,
   ZSH_ZDOTDIR_HANDBACK_BLOCK
 } from './shell-templates'
@@ -169,8 +170,10 @@ ${ZSH_DEFERRED_LINE_INIT_CLEANUP_BLOCK}
 const ZSH_NO_ZLE_STARTUP_COMMAND_BLOCK = `  if [[ ! -o zle ]] && (( \${+${POSIX_SHELL_STARTUP_COMMAND_ENV}} )); then
     builtin typeset __orca_command="\$${POSIX_SHELL_STARTUP_COMMAND_ENV}"
     builtin unset ${POSIX_SHELL_STARTUP_COMMAND_ENV}
-    builtin print -r -- "$__orca_command"
-    builtin eval "$__orca_command"
+    if __orca_claim_startup_command; then
+      builtin print -r -- "$__orca_command"
+      builtin eval "$__orca_command"
+    fi
   fi`
 
 export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
@@ -181,6 +184,7 @@ export function buildZshStartupHook(spec: ZshStartupHookSpec): string {
     SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
     spec.osc133CommandMarkers ? ZSH_OSC133_FUNCTION_BLOCK : null,
     ZSH_CWD_REPORT_BLOCK,
+    spec.startupCommandDelivery ? ZSH_STARTUP_COMMAND_CLAIM_BLOCK : null,
     ZSH_DEFERRED_LINE_INIT_BLOCK,
     buildDeferredInit(spec),
     ZSH_USER_ZSHENV_SOURCE_BLOCK
