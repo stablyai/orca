@@ -111,7 +111,7 @@ export const TERMINAL_SHORTCUT_SPECIAL_KEY_DEFINITIONS: TerminalShortcutSpecialK
   }
 }))
 
-export type TerminalKeyRowControlId = 'displayMode' | 'paste' | TerminalShortcutModifier
+type TerminalKeyRowControlId = 'displayMode' | 'paste' | TerminalShortcutModifier
 
 /** Buttons on the key row that act on the session instead of sending bytes; ordered with the keys. */
 export type TerminalKeyRowControl = {

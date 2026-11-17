@@ -179,7 +179,7 @@ export function TerminalShortcutSettings({
     [persistCustomKeys]
   )
 
-  const orderedAccessoryKeys = useMemo(
+  const orderedRowItems = useMemo(
     () => getTerminalKeyRowItems(shortcutLayout.orderedBuiltInIds),
     [shortcutLayout.orderedBuiltInIds]
   )
@@ -237,7 +237,7 @@ export function TerminalShortcutSettings({
       >
         <DragReorderList
           key="builtIn"
-          items={orderedAccessoryKeys}
+          items={orderedRowItems}
           itemKey={(shortcutKey) => shortcutKey.id}
           rowHeight={REORDER_ROW_HEIGHT}
           scrollRef={scrollRef}
