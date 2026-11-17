@@ -1,7 +1,7 @@
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { getLivePaneCensus } from '../pane-manager-registry'
+import { getLivePaneCensus, rebuildAllTerminalWebglRenderers } from '../pane-manager-registry'
 import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
@@ -45,6 +45,21 @@ type XtermWebglAddonInternals = {
 }
 
 const panesAwaitingWebglAddon = new Set<ManagedPaneInternal>()
+
+// A 4096² merged page means the shared atlas reached ~64 MiB; GL memory each pane's context accrued uploading it is freed only with the context (GiBs across panes).
+const ATLAS_REBUILD_PAGE_SIZE = 4096
+let atlasRebuildTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleAtlasMemoryRebuild(): void {
+  if (atlasRebuildTimer !== null) {
+    return
+  }
+  // Leave xterm's atlas callback first; the rebuild disposes renderers mid-render.
+  atlasRebuildTimer = setTimeout(() => {
+    atlasRebuildTimer = null
+    rebuildAllTerminalWebglRenderers('atlas-memory')
+  }, 0)
+}
 
 setTerminalWebglAddonLoadHandlers({
   onLoaded: () => {
@@ -275,6 +290,11 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // Use DOM until resume/settled reveal; the shared loss window bounds unstable retries.
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
+    })
+    addon.onAddTextureAtlasCanvas((page) => {
+      if (page.width >= ATLAS_REBUILD_PAGE_SIZE) {
+        scheduleAtlasMemoryRebuild()
+      }
     })
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
