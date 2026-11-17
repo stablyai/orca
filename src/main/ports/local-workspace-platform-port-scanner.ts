@@ -72,8 +72,19 @@ export function parseNetstatListeningOutput(output: string): RawListeningPort[] 
   return dedupeRawPorts(ports)
 }
 
-export function parseProcNetTcp(content: string): { host: string; port: number; inode: number }[] {
-  const results: { host: string; port: number; inode: number }[] = []
+type ProcNetListener = { host: string; port: number; inode: number }
+
+// Login accounts get uids in [UID_MIN, nobody); root, system services and Docker's port proxy sit below.
+const FIRST_LOGIN_UID = 1000
+const NOBODY_UID = 65534
+
+function isAnotherLoginUsersListener(uid: number, ownUid: number | undefined): boolean {
+  return ownUid !== undefined && uid !== ownUid && uid >= FIRST_LOGIN_UID && uid < NOBODY_UID
+}
+
+/** Shared hosts list every user's sockets in /proc/net; keep ours and system services', like non-root lsof on macOS. */
+export function parseProcNetTcp(content: string, ownUid: number | undefined): ProcNetListener[] {
+  const results: ProcNetListener[] = []
   const lines = content.split('\n')
   for (let i = 1; i < lines.length; i++) {
     const fields = getProcessOutputFields(lines[i], 10)
@@ -81,8 +92,14 @@ export function parseProcNetTcp(content: string): { host: string; port: number; 
       continue
     }
     const parsed = parseProcAddress(fields[1])
+    const uid = Number.parseInt(fields[7], 10)
     const inode = Number.parseInt(fields[9], 10)
-    if (!parsed || !Number.isFinite(inode) || inode === 0) {
+    if (
+      !parsed ||
+      !Number.isFinite(inode) ||
+      inode === 0 ||
+      isAnotherLoginUsersListener(uid, ownUid)
+    ) {
       continue
     }
     results.push({ ...parsed, inode })
@@ -181,9 +198,10 @@ async function scanWindowsNetstatPorts(
 }
 
 async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
+  const ownUid = process.getuid?.()
   const [tcp4, tcp6] = await Promise.all([
-    readProcNet('/proc/net/tcp'),
-    readProcNet('/proc/net/tcp6')
+    readProcNet('/proc/net/tcp', ownUid),
+    readProcNet('/proc/net/tcp6', ownUid)
   ])
   const sockets = [...tcp4, ...tcp6]
   const inodeToPid = await mapLinuxInodesToPids(new Set(sockets.map((socket) => socket.inode)))
@@ -207,10 +225,11 @@ async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
 }
 
 async function readProcNet(
-  filePath: string
-): Promise<{ host: string; port: number; inode: number }[]> {
+  filePath: string,
+  ownUid: number | undefined
+): Promise<ProcNetListener[]> {
   try {
-    return parseProcNetTcp(await readFile(filePath, 'utf-8'))
+    return parseProcNetTcp(await readFile(filePath, 'utf-8'), ownUid)
   } catch {
     return []
   }
