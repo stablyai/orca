@@ -51,7 +51,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
   admitStructuredAgentSession: (
-    await import('@/store/slices/agent-status/structured-session-admission.test-fixture')
+    await import('@/store/slices/agent-status/structured-sessions/structured-session-admission.test-fixture')
   ).admissionFromBusy(mocks.structuredSessionBusy)
 }))
 

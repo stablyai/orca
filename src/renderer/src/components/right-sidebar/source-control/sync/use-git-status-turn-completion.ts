@@ -16,7 +16,7 @@ import {
 } from '../../../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
-import type { AgentStatusChange } from '@/store/slices/agent-status/agent-status-contract'
+import type { AgentStatusChange } from '@/store/slices/agent-status/contracts/agent-status-contract'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitStatusRefreshScheduler } from './git-status-refresh-scheduler'
 

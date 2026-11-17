@@ -1,6 +1,6 @@
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
-import { agentPaneConversationForEntry } from '@/store/slices/agent-status/agent-pane-conversation'
+import { agentPaneConversationForEntry } from '@/store/slices/agent-status/conversation/agent-pane-conversation'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {

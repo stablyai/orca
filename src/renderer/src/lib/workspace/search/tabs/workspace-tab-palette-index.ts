@@ -1,6 +1,6 @@
 import { shallow } from 'zustand/shallow'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { collectAgentMetadataFromIndex, getPaneKeyTabId } from './workspace-tab-agent-metadata'
 import {
   buildPaletteTabDocument,

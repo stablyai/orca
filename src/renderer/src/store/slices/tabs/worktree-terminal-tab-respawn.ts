@@ -5,7 +5,7 @@ import {
   replaceRecordEntries,
   replaceTabBuckets,
   tabBucketDraft
-} from '../../keyed-record-transitions'
+} from '../../record-transitions/keyed-record-transitions'
 
 /**
  * Tags a worktree's wakeable terminal tabs for an activation spawn, optionally bumping their

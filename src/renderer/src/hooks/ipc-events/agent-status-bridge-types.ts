@@ -1,5 +1,5 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/agent-status-contract'
+import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/contracts/agent-status-contract'
 import type { AgentStatusPaneRoutingIndex } from './agent-status-pane-routing-index'
 
 export type PendingAgentStatusEvent = {
