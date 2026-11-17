@@ -174,6 +174,7 @@ export function NativeChatUsageLimitRow({
     {
       phase,
       window: limit?.window,
+      agent: agentName ?? sayAgentSessionFailureTranslated('theAgent', {}),
       // The cause and window, without a reset clause: the status sentences carry the times.
       sentence: agentSessionFailureSentence(
         failure,

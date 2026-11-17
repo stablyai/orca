@@ -3,12 +3,14 @@ import type { AgentSessionUsageLimitWindow } from '../../../../../shared/agent-s
 import type { NativeChatUsageLimitAutoContinueState } from './native-chat-usage-limit-auto-continue-setting'
 
 /** historical: an older turn's limit. unknown: no time to wait for. waiting: before Continue
- *  applies. ready: Continue applies now. */
+ *  applies. ready: Continue applies now (the agent has usage again). */
 export type UsageLimitPhase = 'historical' | 'unknown' | 'waiting' | 'ready'
 
 export type UsageLimitRowWordsInput = {
   phase: UsageLimitPhase
   window: AgentSessionUsageLimitWindow | undefined
+  /** The agent's display name, or the translated generic agent. */
+  agent: string
   /** The agent's limit sentence without a reset clause, e.g. "Codex hit its session limit." */
   sentence: string
   auto: NativeChatUsageLimitAutoContinueState | null
@@ -28,23 +30,37 @@ export type UsageLimitRowWords = {
   summary: string
 }
 
-function windowTitle(window: AgentSessionUsageLimitWindow | undefined, t: Translate): string {
+function limitTitle(
+  window: AgentSessionUsageLimitWindow | undefined,
+  agent: string,
+  t: Translate
+): string {
   switch (window) {
-    case 'session':
-      return t('components.native-chat.usageLimitActions.titleSession', 'Session limit')
     case 'weekly':
-      return t('components.native-chat.usageLimitActions.titleWeekly', 'Weekly limit')
     case 'weeklyModel':
-      return t('components.native-chat.usageLimitActions.titleWeeklyModel', 'Weekly model limit')
+      return t(
+        'components.native-chat.usageLimitActions.titleWeeklyReached',
+        '{{agent}} weekly limit reached',
+        { agent }
+      )
     case 'credits':
-      return t('components.native-chat.usageLimitActions.titleCredits', 'Extra usage limit')
+      return t(
+        'components.native-chat.usageLimitActions.titleExtraUsageReached',
+        '{{agent}} extra usage limit reached',
+        { agent }
+      )
+    case 'session':
     case undefined:
-      return t('components.native-chat.usageLimitActions.titleUnknown', 'Usage limit')
+      return t(
+        'components.native-chat.usageLimitActions.titleUsageReached',
+        '{{agent}} usage limit reached',
+        { agent }
+      )
   }
 }
 
 function accessibleStatus(input: UsageLimitRowWordsInput, t: Translate): string | null {
-  const { phase, auto, manualTime, autoTime, sameTime } = input
+  const { phase, agent, auto, manualTime, autoTime, sameTime } = input
   if (phase === 'historical') {
     return null
   }
@@ -54,11 +70,13 @@ function accessibleStatus(input: UsageLimitRowWordsInput, t: Translate): string 
   if (phase === 'ready') {
     return autoTime
       ? t(
-          'components.native-chat.usageLimitActions.statusReadyAuto',
-          'Ready to continue. Orca will continue this chat at {{time}}.',
-          { time: autoTime }
+          'components.native-chat.usageLimitActions.statusHasUsageAuto',
+          '{{agent}} has usage again. Orca will continue this chat at {{time}}.',
+          { agent, time: autoTime }
         )
-      : t('components.native-chat.usageLimitActions.statusReady', 'Ready to continue.')
+      : t('components.native-chat.usageLimitActions.statusHasUsage', '{{agent}} has usage again.', {
+          agent
+        })
   }
   if (autoTime && sameTime) {
     return t(
@@ -128,8 +146,10 @@ export function usageLimitRowWords(
   return {
     title:
       input.phase === 'ready'
-        ? t('components.native-chat.usageLimitActions.titleReady', 'Ready to continue')
-        : windowTitle(input.window, t),
+        ? t('components.native-chat.usageLimitActions.titleHasUsage', '{{agent}} has usage again', {
+            agent: input.agent
+          })
+        : limitTitle(input.window, input.agent, t),
     subline: subline(input, t),
     summary: status
       ? t('components.native-chat.usageLimitActions.srSummary', '{{sentence}} {{status}}', {
