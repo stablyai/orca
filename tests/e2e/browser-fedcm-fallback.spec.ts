@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, getActiveWorktreeId } from './helpers/store'
+import { waitForBrowserWebview } from './helpers/browser-webview-readiness'
 
 async function closeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -79,6 +80,7 @@ test('embedded browser omits unusable FedCM and reaches the popup fallback', asy
       },
       { targetWorktreeId: worktreeId, url: server.url }
     )
+    await waitForBrowserWebview(orcaPage, browserTabId, 10_000)
     const readGuest = async <T>(expression: string): Promise<T> =>
       orcaPage.evaluate(
         async ({ targetBrowserTabId, script }) => {
