@@ -17,6 +17,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 
+import { assertMacGuiLaunchAllowed } from '../../gui-launch/macos-gui-launch-preflight.mjs'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 import {
   DEV_BUNDLE_MARKER_FILENAME,
@@ -37,11 +38,7 @@ import {
   profileHasState,
   seedDevProfile
 } from '../profile-seeding/dev-profile-seed.mjs'
-import {
-  captureDevWebClientInputs,
-  isDevWebClientFresh,
-  recordDevWebClientInputs
-} from '../web-client/dev-web-client-freshness.mjs'
+import * as devWebClient from '../web-client/dev-web-client-freshness.mjs'
 import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-limit.mjs'
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
@@ -89,6 +86,9 @@ if (useStableElectronName) {
 }
 // Why: --help/--version exit immediately; binding probe sockets or printing instance lines is noise.
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
+if (!isHelpOrVersion) {
+  assertMacGuiLaunchAllowed()
+}
 dropInheritedDevInstanceEnv(process.env, repoRoot)
 
 function readGitValue(args) {
@@ -511,10 +511,10 @@ function prepareDevWebClient() {
     )
     return
   }
-  if (isDevWebClientFresh(repoRoot)) {
+  if (devWebClient.isDevWebClientFresh(repoRoot)) {
     return
   }
-  const inputs = captureDevWebClientInputs(repoRoot)
+  const inputs = devWebClient.captureDevWebClientInputs(repoRoot)
   console.error('[orca-dev] Building web client for pairing in the background...')
   // Pairing reads out/web per request, so a stale bundle must not delay Electron startup.
   // Stage then swap, so an interrupted build never leaves out/web empty.
@@ -560,7 +560,7 @@ function prepareDevWebClient() {
       const outDir = path.dirname(getDevWebClientIndexPath())
       rmSync(outDir, { recursive: true, force: true })
       renameSync(stagingDir, outDir)
-      recordDevWebClientInputs(repoRoot, inputs)
+      devWebClient.recordDevWebClientInputs(repoRoot, inputs)
       console.error('[orca-dev] Web client for pairing is ready')
     } catch (error) {
       console.error(`[orca-dev] Could not install the web client build: ${error.message}`)

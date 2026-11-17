@@ -102,6 +102,8 @@ function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     }
   }
   delete env.ELECTRON_EXEC_PATH
+  // This suite substitutes a Node CLI; it never launches Electron.
+  delete env.CODEX_SANDBOX
   return {
     ...env,
     ORCA_SKIP_DEV_STORAGE_RECLAIM: '1',
