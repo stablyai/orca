@@ -158,14 +158,14 @@ export function NativeChatUsageLimitRow({
     ? (validResetAt(view.usageLimitContinueAt ?? limit?.resetsAt) ?? undefined)
     : undefined
   // Historical rows pass no time, so they never schedule a wake.
-  const clock = useUsageLimitContinueClock(manualAt)
+  const passed = useUsageLimitContinueClock(manualAt)
   const auto = active ? (view.usageLimitAutoContinue ?? null) : null
   const scheduled: ScheduledAutoContinue | null = auto?.kind === 'scheduled' ? auto : null
   const phase: UsageLimitPhase = !active
     ? 'historical'
     : manualAt === undefined
       ? 'unknown'
-      : clock.passed
+      : passed
         ? 'ready'
         : 'waiting'
   const autoTime = scheduled ? formatUsageLimitResetClock(scheduled.resetsAt) : null
@@ -184,8 +184,7 @@ export function NativeChatUsageLimitRow({
       auto,
       manualTime: manualAt === undefined ? null : formatUsageLimitResetClock(manualAt),
       autoTime,
-      sameTime,
-      left: clock.passed ? null : clock.left
+      sameTime
     },
     t
   )
@@ -276,11 +275,8 @@ export function NativeChatUsageLimitRow({
               {words.title}
             </span>
             {words.subline ? (
-              <span
-                title={words.subline.title}
-                className="block min-w-0 truncate text-xs text-chat-foreground-faint tabular-nums"
-              >
-                {words.subline.text}
+              <span className="block min-w-0 text-xs [overflow-wrap:anywhere] text-chat-foreground-faint tabular-nums">
+                {words.subline}
               </span>
             ) : null}
           </div>

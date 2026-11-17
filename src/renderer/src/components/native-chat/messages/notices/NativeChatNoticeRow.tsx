@@ -272,11 +272,7 @@ export function NativeChatNoticeRow({
         block={block}
         failure={failure}
         agentName={agentName}
-        detail={
-          failureDetail?.trim() && failureDetail.trim() !== block.text.trim()
-            ? failureDetail
-            : undefined
-        }
+        detail={failureDetail?.trim() ? failureDetail : undefined}
         active={
           block.usageLimitTurnItemId !== undefined &&
           block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId

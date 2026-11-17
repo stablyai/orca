@@ -4,6 +4,13 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { ProviderAccountChatButton } from '@/components/status-bar/accounts/ProviderAccountChatButton'
 import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { NativeChatNoticeRow } from '@/components/native-chat/messages/notices/NativeChatNoticeRow'
 import {
@@ -137,6 +144,58 @@ describe('usage-limit row over time', () => {
     screen.getByRole('textbox', { name: 'composer' }).focus()
     act(() => vi.advanceTimersByTime(HOUR))
     expect(screen.getByRole('textbox', { name: 'composer' })).toHaveFocus()
+  })
+
+  it('moves focus from an open account menu that disappears at the reset to Continue', () => {
+    const account = (
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <ProviderAccountChatButton
+            provider="claude"
+            target={{ kind: 'local' }}
+            disabled={false}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem>Other account</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+    render(row({ resetsAt: start + HOUR, actions: { ...handOffActions(), account } }))
+    const trigger = screen.getByRole('button', { name: 'Switch account' })
+    trigger.focus()
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    const item = screen.getByRole('menuitem', { name: 'Other account' })
+    act(() => item.focus())
+    expect(item).toHaveFocus()
+    // Jump the wall clock and let the row's focus refresh notice it, as after sleep.
+    vi.setSystemTime(start + HOUR)
+    act(() => {
+      fireEvent(window, new Event('focus'))
+    })
+    expect(screen.queryByRole('menuitem', { name: 'Other account' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus()
+  })
+
+  it('cancels a later schedule from More once the chat is ready', () => {
+    const cancel = vi.fn()
+    const auto = { kind: 'scheduled', resetsAt: start + 3 * HOUR, cancel } as const
+    const view = render(row({ resetsAt: start + HOUR, auto }))
+    vi.setSystemTime(start + HOUR)
+    act(() => {
+      fireEvent(window, new Event('focus'))
+    })
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions' }), { key: 'Enter' })
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Don't continue at / }))
+    expect(cancel).toHaveBeenCalledTimes(1)
+
+    // While a cancel is in flight the item can't be chosen again.
+    view.rerender(row({ resetsAt: start + HOUR, auto: { ...auto, cancelDisabled: true } }))
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions' }), { key: 'Enter' })
+    expect(screen.getByRole('menuitem', { name: /^Don't continue at / })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    )
   })
 
   it('keeps a preparing Hand off focusable but inert', () => {

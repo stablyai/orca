@@ -18,13 +18,12 @@ export type UsageLimitRowWordsInput = {
   autoTime: string | null
   /** The schedule is exactly when Continue applies. */
   sameTime: boolean
-  /** Time left until Continue applies, while waiting. */
-  left: string | null
 }
 
 export type UsageLimitRowWords = {
   title: string
-  subline: { text: string; title?: string } | null
+  /** Exact times only, so the line says everything without a hover. */
+  subline: string | null
   /** One non-live sentence group a screen reader hears in place of the title and subline. */
   summary: string
 }
@@ -88,53 +87,34 @@ function accessibleStatus(input: UsageLimitRowWordsInput, t: Translate): string 
       )
 }
 
-function subline(input: UsageLimitRowWordsInput, t: Translate): UsageLimitRowWords['subline'] {
-  const { phase, manualTime, autoTime, sameTime, left } = input
-  const scheduled = autoTime
-    ? t(
-        'components.native-chat.usageLimitAutoContinue.scheduled',
-        'Orca will continue this chat at {{time}}.',
-        { time: autoTime }
-      )
-    : undefined
+/** A clock time that wraps as one piece, so "6:04" and "PM" never land on separate lines. */
+function unbroken(time: string | null): string | null {
+  return time === null ? null : time.replace(/\s/g, ' ')
+}
+
+function subline(input: UsageLimitRowWordsInput, t: Translate): string | null {
+  const { phase, sameTime } = input
+  const manualTime = unbroken(input.manualTime)
+  const autoTime = unbroken(input.autoTime)
   if (phase === 'unknown') {
-    return {
-      text: t('components.native-chat.usageLimitActions.resetUnknown', 'Reset time unknown')
-    }
+    return t('components.native-chat.usageLimitActions.resetUnknown', 'Reset time unknown')
   }
   if (phase === 'waiting' && autoTime && sameTime) {
-    return {
-      text: t('components.native-chat.usageLimitActions.continuesAt', 'Continues at {{time}}', {
-        time: autoTime
-      }),
-      title: scheduled
-    }
+    return t('components.native-chat.usageLimitActions.continuesAt', 'Continues at {{time}}', {
+      time: autoTime
+    })
   }
-  if (phase === 'waiting' && left) {
-    return {
-      text: t(
-        'components.native-chat.usageLimitActions.canContinueIn',
-        'Can continue in {{duration}}',
-        { duration: left }
-      ),
-      title: manualTime
-        ? t(
-            'components.native-chat.usageLimitActions.statusCanContinueAt',
-            'You can continue at {{time}}.',
-            { time: manualTime }
-          )
-        : undefined
-    }
+  if (phase === 'waiting' && manualTime) {
+    return t('components.native-chat.usageLimitActions.canContinueAt', 'Can continue at {{time}}', {
+      time: manualTime
+    })
   }
   if (phase === 'ready' && autoTime) {
-    return {
-      text: t(
-        'components.native-chat.usageLimitActions.autoContinuesAt',
-        'Auto-continues at {{time}}',
-        { time: autoTime }
-      ),
-      title: scheduled
-    }
+    return t(
+      'components.native-chat.usageLimitActions.autoContinuesAt',
+      'Auto-continues at {{time}}',
+      { time: autoTime }
+    )
   }
   return null
 }

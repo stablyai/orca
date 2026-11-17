@@ -21733,10 +21733,10 @@
         "statusCanContinueAt": "You can continue at {{time}}.",
         "resetUnknown": "Reset time unknown",
         "continuesAt": "Continues at {{time}}",
-        "canContinueIn": "Can continue in {{duration}}",
         "autoContinuesAt": "Auto-continues at {{time}}",
         "titleReady": "Ready to continue",
-        "srSummary": "{{sentence}} {{status}}"
+        "srSummary": "{{sentence}} {{status}}",
+        "canContinueAt": "Can continue at {{time}}"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
