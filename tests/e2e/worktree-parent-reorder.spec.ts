@@ -104,7 +104,42 @@ for (const newCardStyle of [false, true]) {
     await orcaPage.waitForTimeout(550)
     await parent.getByRole('button', { name: 'Show 53 child workspaces' }).click()
     await expect(parent.getByRole('button', { name: 'Hide 53 child workspaces' })).toBeVisible()
-    await expect(parent.locator('[role="option"]')).toHaveCount(53)
-    await expect(parent.locator('[role="option"]').first()).toContainText('Child 0')
+    const parentIndex = await parent.evaluate((row) =>
+      row.closest('[data-index]')?.getAttribute('data-index')
+    )
+    expect(parentIndex).toMatch(/^\d+$/)
+    const childRows = sidebar.locator('[role="option"][data-worktree-id]')
+    const mountedChildren = async (): Promise<{ id: string; index: number }[]> =>
+      (
+        await childRows.evaluateAll((rows) =>
+          rows.map((row) => ({
+            id: row.getAttribute('data-worktree-id') ?? '',
+            index: Number(row.closest('[data-index]')?.getAttribute('data-index'))
+          }))
+        )
+      ).filter(({ id }) => childIds.includes(id))
+    await expect(
+      sidebar.locator(`[data-worktree-id=${JSON.stringify(childIds[0])}]`)
+    ).toContainText('Child 0')
+    const seenChildren = new Set<string>()
+    for (let step = 0; step < childIds.length && seenChildren.size < childIds.length; step++) {
+      const mounted = await mountedChildren()
+      const indices = mounted.map(({ id, index }) => {
+        const childIndex = childIds.indexOf(id)
+        expect(index).toBe(Number(parentIndex) + childIndex + 1)
+        return childIndex
+      })
+      expect(indices).toEqual([...indices].sort((a, b) => a - b))
+      mounted.forEach(({ id }) => seenChildren.add(id))
+      if (seenChildren.size === childIds.length) {
+        break
+      }
+      const previousLast = mounted.at(-1)?.id
+      await sidebar.evaluate((element) => {
+        element.scrollTop += element.clientHeight / 2
+      })
+      await expect.poll(async () => (await mountedChildren()).at(-1)?.id).not.toBe(previousLast)
+    }
+    expect([...seenChildren]).toEqual(childIds)
   })
 }

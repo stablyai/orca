@@ -142,9 +142,11 @@ test.describe('Create Workspace', () => {
           }
         )
 
-        await expect(
-          orcaPage.getByRole('option', { name: new RegExp(workspaceName) })
-        ).toContainText(
+        await orcaPage
+          .getByRole('option', { name: new RegExp(workspaceName) })
+          .getByText(workspaceName)
+          .hover()
+        await expect(orcaPage.locator('[data-worktree-hover-identity-header]')).toContainText(
           autoRenameBranchFromWork ? 'sparkles-rocket-test-tube' : 'rocket-test-tube-sparkles'
         )
       } finally {
@@ -348,7 +350,10 @@ test.describe('Create Workspace', () => {
         timeout: 10_000
       })
       await expect(orcaPage.getByRole('option', { name: url })).toHaveCount(0)
-      await expect(orcaPage.getByText('Linked PR #2049')).toBeVisible()
+      await orcaPage.getByRole('option', { name: linkedWorkspacePattern }).getByText(title).hover()
+      await expect(
+        orcaPage.locator('[data-slot="hover-card-content"]').getByText('PR #2049', { exact: true })
+      ).toBeVisible()
       // Quick create reuses typing’s GitHub lookup; #5733 resolves PR head once at submit, requiring one base resolution.
       await expect
         .poll(() =>
@@ -433,7 +438,10 @@ test.describe('Create Workspace', () => {
         timeout: 10_000
       })
       await expect(orcaPage.getByRole('option', { name: /https-github/i })).toHaveCount(0)
-      await expect(orcaPage.getByText('Linked PR #2050')).toBeVisible()
+      await orcaPage.getByRole('option', { name: linkedWorkspacePattern }).getByText(title).hover()
+      await expect(
+        orcaPage.locator('[data-slot="hover-card-content"]').getByText('PR #2050', { exact: true })
+      ).toBeVisible()
     } finally {
       await orcaPage
         .evaluate(() => {

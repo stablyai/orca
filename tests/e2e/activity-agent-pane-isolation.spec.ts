@@ -133,12 +133,13 @@ async function enableActivityAgentsView(page: Page): Promise<void> {
 }
 
 async function clickWorkspaceCardAgentRow(page: Page, prompt: string): Promise<void> {
-  const agentsGroup = page.getByRole('group', { name: 'Agents' }).first()
+  const agentsGroup = page.getByRole('tree', { name: 'Agents' }).first()
+  await expect(agentsGroup).toBeVisible()
   const collapsedSummary = agentsGroup.getByRole('button', { name: /^Expand \d+ agents?:/ })
   if (await collapsedSummary.isVisible()) {
     await collapsedSummary.click()
   }
-  const agentRow = agentsGroup.getByRole('treeitem').filter({ hasText: prompt }).first()
+  const agentRow = agentsGroup.getByText(prompt, { exact: true }).first()
   await expect(agentRow).toBeVisible({ timeout: 10_000 })
   await agentRow.click()
 }

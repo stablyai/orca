@@ -12,6 +12,7 @@ import {
   ensureTerminalVisible
 } from './helpers/store'
 import { startBrowserLinkServer } from './helpers/browser-link-server'
+import { waitForBrowserWebview } from './helpers/browser-webview-readiness'
 
 type CreatedBrowserTab = {
   id: string
@@ -161,6 +162,7 @@ async function clickBrowserLink(
     frameSelector?: string
   } = {}
 ): Promise<void> {
+  await waitForBrowserWebview(page, browserTabId)
   await page.evaluate(
     async ({ targetBrowserTabId, targetSelector, inputModifiers, button, frameSelector }) => {
       const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
