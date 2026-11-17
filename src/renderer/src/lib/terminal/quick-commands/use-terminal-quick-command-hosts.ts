@@ -20,7 +20,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktre
 import {
   getTranslatedExecutionHostLabel,
   translateHostDisplayLabel
-} from '@/components/sidebar/execution-host-label'
+} from '@/runtime/hosts/display/execution-host-label'
 import { readUiLanguageMemoInput } from '@/i18n/ui-language-memo-input'
 
 export type TerminalQuickCommandHost = {

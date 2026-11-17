@@ -84,7 +84,7 @@ Icons come from **`lucide-react`**. Don't import a second icon library.
 
 ## Keyboard shortcut chips
 
-Use **`<ShortcutKeyCombo />`** from `src/renderer/src/components/ShortcutKeyCombo.tsx`. It renders a consistent key-cap style and inserts a `+` separator on Windows/Linux (Mac shows adjacent glyphs, no separator). It does **not** transform key strings — the _caller_ picks the platform-appropriate labels and passes them in:
+Use **`<ShortcutKeyCombo />`** from `src/renderer/src/components/ui/ShortcutKeyCombo.tsx`. It renders a consistent key-cap style and inserts a `+` separator on Windows/Linux (Mac shows adjacent glyphs, no separator). It does **not** transform key strings — the _caller_ picks the platform-appropriate labels and passes them in:
 
 ```tsx
 const isMac = navigator.userAgent.includes('Mac')

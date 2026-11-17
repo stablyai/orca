@@ -21,7 +21,7 @@ const fsDeletePath = vi.fn()
 const fsRenamePath = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 
-vi.mock('@/components/confirmation-dialog-context', () => ({
+vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
 vi.mock('@/lib/keyboard/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))

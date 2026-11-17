@@ -22,8 +22,8 @@ import { rowId, rowLabel } from '../../agent/launch-menu/agent-menu-row-presenta
 import {
   readNewAgentTabDefault,
   resolveTerminalAgentTabShortcut
-} from '../../terminal-agent-tab-shortcut'
-import { launchAgentTabShortcut } from '../../agent-tab-shortcut-launch'
+} from '../../terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
+import { launchAgentTabShortcut } from '../../terminal/keyboard-shortcuts/agent-tab-shortcut-launch'
 import {
   LandingItemShortcut,
   landingQueryMatches,

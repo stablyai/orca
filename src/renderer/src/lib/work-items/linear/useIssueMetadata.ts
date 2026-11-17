@@ -11,7 +11,7 @@ import type {
   LinearMember,
   LinearWorkflowState
 } from '../../../../../shared/linear/workspace-types'
-import { unionLinearMetadataById } from '../../../components/linear-issue-attribute-filter-team-ids'
+import { unionLinearMetadataById } from '../../../components/task-page/linear/filters/linear-issue-attribute-filter-team-ids'
 import {
   clearMetadataRequestStore,
   createMetadataRequestStore,

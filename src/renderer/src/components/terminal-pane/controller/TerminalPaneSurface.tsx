@@ -3,7 +3,7 @@ import { TerminalCrewPortals } from '../../orchestration-crew/TerminalCrewPortal
 import { terminalPaneMenuAgentIdProps } from '../context-menu/terminal-pane-menu-agent-session-actions'
 import { createPortal } from 'react-dom'
 import { TerminalPaneFileDropOwners } from '../input/file-drop/TerminalPaneFileDropOwner'
-import TerminalSearch from '@/components/TerminalSearch'
+import TerminalSearch from '@/components/terminal-pane/search/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { hasWorkspaceFileDragType } from '@/lib/files/drop/workspace-file-drag'

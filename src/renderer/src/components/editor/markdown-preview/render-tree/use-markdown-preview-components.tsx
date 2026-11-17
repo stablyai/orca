@@ -27,7 +27,7 @@ import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { useLocalImageSrc } from '../../document-images/useLocalImageSrc'
 import { documentResourceAccess } from '@/lib/files/access/local-file-access'
-import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
+import { MarkdownGitHubCallout } from '@/components/comment-markdown/markdown-github-callout'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { readGitHubCalloutKind } from '../../../../../../shared/github/markdown/github-callouts'
 import { translate } from '@/i18n/i18n'

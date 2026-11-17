@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { ConfirmationDialogProvider } from '../../../confirmation-dialog'
+import { ConfirmationDialogProvider } from '../../../dismiss/confirmation/confirmation-dialog'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'

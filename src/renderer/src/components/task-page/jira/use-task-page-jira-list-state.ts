@@ -18,17 +18,21 @@ import type {
   JiraIssueSortColumn,
   JiraIssueSortDirection,
   JiraPrioritiesBySite
-} from '../../jira-issue-sorter'
+} from './listing/jira-issue-sorter'
 import { jiraListPrioritiesForTarget } from '@/runtime/jira/runtime-jira-detail-client'
-import { loadJiraLinkedView, saveJiraLinkedView } from '../../jira-linked-view-storage'
-import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from '../../jira-view-mode-storage'
+import { loadJiraLinkedView, saveJiraLinkedView } from './listing/jira-linked-view-storage'
+import {
+  loadJiraViewMode,
+  saveJiraViewMode,
+  type JiraViewMode
+} from './listing/jira-view-mode-storage'
 import {
   fallbackJiraSortColumn,
   loadJiraListColumnIds,
   saveJiraListColumnIds,
   visibleJiraListColumns,
   type JiraListColumnId
-} from '../../jira-list-columns'
+} from './listing/jira-list-columns'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId

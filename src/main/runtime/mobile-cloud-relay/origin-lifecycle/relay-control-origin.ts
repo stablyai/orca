@@ -91,6 +91,11 @@ export class RelayControlOrigin {
     return this.generation
   }
 
+  // TODO(relay client two-path, failover PR): the failover path dials these; nothing reads them yet.
+  get alternateCellUrls(): readonly string[] {
+    return this.assignment.alternateCellUrls ?? []
+  }
+
   updateAssignment(assignment: RelayAssignment): void {
     if (assignment.cellUrl !== this.cellUrl || assignment.assignmentEpoch < this.assignmentEpoch) {
       throw new Error('relay_assignment_origin_mismatch')

@@ -1,4 +1,4 @@
-import { selectWslHostsServing } from '@/components/sidebar/use-wsl-hosts-enabled'
+import { selectWslHostsServing } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import type {
   WslHostCapability,
   WslHostStatus
