@@ -12,9 +12,9 @@ export function killSpawnedCommandTree(
 ): Promise<void> {
   const pid = child.pid
   if (!pid && process.platform === 'win32' && child instanceof WorkerThreadChildProcess) {
-    return runOnceWorkerReportsPid(child, () => killSpawnedCommandTree(child).then(() => true)).then(
-      () => {}
-    )
+    return runOnceWorkerReportsPid(child, () =>
+      killSpawnedCommandTree(child).then(() => true)
+    ).then(() => {})
   }
   if (!pid || process.platform !== 'win32') {
     child.kill()
