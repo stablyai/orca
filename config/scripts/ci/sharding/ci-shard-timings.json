@@ -515,7 +515,6 @@
       "src/main/ai-vault/session-scanner-timeline.test.ts": 160,
       "src/main/ai-vault/session-scanner-values.test.ts": 153,
       "src/main/ai-vault/scanners/zcode/session-scanner-zcode.test.ts": 515,
-      "src/main/ai-vault/session-scanner.test.ts": 731,
       "src/main/ai-vault/session-titles/session-title-file-reader-wsl-stall.test.ts": 284,
       "src/main/ai-vault/transcripts/session-transcript-consumers.test.ts": 562,
       "src/main/ai-vault/transcripts/session-transcript-every-agent-capture.test.ts": 856,
