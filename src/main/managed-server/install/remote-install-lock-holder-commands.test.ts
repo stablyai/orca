@@ -253,12 +253,14 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     const removal = start(
       `${installLockReleaseGate(lock)} ${removeOwnedInstallLockCommand(host, lock, first)}`
     )
+    // ast-grep-ignore: test-no-real-time-wait -- proves the real flock wait blocks the removal; there is no event to await.
     await new Promise((resolve) => setTimeout(resolve, 500))
     expect(existsSync(lock)).toBe(true)
     expect(await exited(removal)).toBe(0)
     expect(existsSync(lock)).toBe(false)
   })
 
+  // The gate's real flock wait gives up only after about 10 seconds of wall-clock time.
   it('fails the gated removal and keeps the lock while a fenced command outlives the wait', async () => {
     const lock = lockOwnedBy('t-first')
     const holder = await holdLock(lock)
@@ -272,6 +274,7 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(existsSync(lock)).toBe(true)
   }, 30_000)
 
+  // The unmark kills only after its real flock wait of about 10 seconds.
   it('kills a holder that outlives the unmark wait, so it can never mark the lock late', async () => {
     const lock = lockOwnedBy('t-first')
     const holder = start(installLockHolderCommand(lock, first))
@@ -286,6 +289,7 @@ describe.skipIf(!hasFlock)('flock-backed install lock, run for real', () => {
     expect(probe(lock)).toBe('')
   }, 30_000)
 
+  // The unmark checks the pid only after its real flock wait of about 15 seconds.
   it('never kills a process that reused the holder pid', async () => {
     const lock = lockOwnedBy('t-first')
     const holder = await holdLock(lock)
