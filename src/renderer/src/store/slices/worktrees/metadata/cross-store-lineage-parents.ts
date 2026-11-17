@@ -26,6 +26,7 @@ import {
   selectWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../../types'
+import { replacedWorktreeRows } from '../listing/worktree-catalog-membership'
 
 type CrossStoreLineageInputs = Pick<
   AppState,
@@ -179,6 +180,12 @@ type FolderChildRef = { id: string; identity: string }
 
 const NO_FOLDER_CHILD_REFS: ReadonlyMap<string, readonly FolderChildRef[]> = new Map()
 
+// Each resolved child set's host identities, so a write that replaces none of them is spotted from its own rows.
+const childIdentitiesOfRefs = new WeakMap<
+  ReadonlyMap<string, readonly FolderChildRef[]>,
+  ReadonlySet<string>
+>()
+
 let lastFolderChildRefs: {
   inputs: readonly unknown[]
   refs: ReadonlyMap<string, readonly FolderChildRef[]>
@@ -208,8 +215,21 @@ export function selectCrossStoreFolderChildrenById(
   }
   const worktreesByRepo = selectWorktreesByRepo(state)
   const previous = lastFolderChildrenCall
-  if (previous?.refs === refs && previous.catalog === worktreesByRepo) {
-    return previous.result
+  if (previous?.refs === refs) {
+    if (previous.catalog === worktreesByRepo) {
+      return previous.result
+    }
+    // Only the replaced rows are read; a write that touches no child keeps the returned children.
+    const replaced = replacedWorktreeRows(worktreesByRepo, previous.catalog)
+    const childIdentities = childIdentitiesOfRefs.get(refs)
+    if (
+      replaced &&
+      childIdentities &&
+      !replaced.some(({ after }) => childIdentities.has(getWorktreeHostIdentity(after)))
+    ) {
+      lastFolderChildrenCall = { refs, catalog: worktreesByRepo, result: previous.result }
+      return previous.result
+    }
   }
   const result = new Map<string, readonly Worktree[]>()
   for (const [folderId, children] of refs) {
@@ -233,12 +253,17 @@ function resolveFolderChildRefs(
   if (children.size === 0) {
     return NO_FOLDER_CHILD_REFS
   }
-  return new Map(
+  const refs = new Map(
     [...children].map(([folderId, rows]) => [
       folderId,
       rows.map((row) => ({ id: row.id, identity: getWorktreeHostIdentity(row) }))
     ])
   )
+  childIdentitiesOfRefs.set(
+    refs,
+    new Set([...refs.values()].flatMap((childRefs) => childRefs.map(({ identity }) => identity)))
+  )
+  return refs
 }
 
 function resolveFolderChildren(

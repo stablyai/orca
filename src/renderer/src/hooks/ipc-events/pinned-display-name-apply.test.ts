@@ -5,6 +5,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { renderHook } from '@testing-library/react'
 import {
   getIndexedAllWorktrees,
@@ -747,4 +748,72 @@ describe('applyLocalPinnedDisplayName', () => {
       expect(ancestorWalks()).toBe(0)
     }
   )
+
+  it.each([750, 7500])('an unrelated rename keeps %i resolved folder children', (size) => {
+    let childHostReads = 0
+    const children = Array.from({ length: size }, (_, index) => {
+      const child = row(size + 4, index, false, () => {})
+      Object.defineProperty(child, 'hostId', {
+        enumerable: true,
+        get: () => {
+          childHostReads++
+          return LOCAL_EXECUTION_HOST_ID
+        }
+      })
+      return child
+    })
+    const unrelated: Worktree = {
+      ...row(size + 5, 0, false, () => {}),
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }
+    const childRepoId = `repo-${size + 4}`
+    const localRepoId = `repo-${size + 5}`
+    const records = Object.fromEntries(
+      children.map((child, index) => {
+        const childKey = worktreeWorkspaceKey(child.id)
+        return [
+          childKey,
+          {
+            childWorkspaceKey: childKey,
+            childInstanceId: `instance-${size + 4}-${index}`,
+            parent: {
+              installationId: 'own-install',
+              workspaceKey: folderWorkspaceKey('folder-1'),
+              instanceId: 'folder-1'
+            },
+            origin: 'manual',
+            capture: { source: 'manual-action', confidence: 'explicit' },
+            createdAt: 0
+          }
+        ]
+      })
+    )
+    useAppStore.setState({
+      repos: [repo(childRepoId), repo(localRepoId)],
+      worktreesByRepo: { [childRepoId]: children, [localRepoId]: [unrelated] },
+      detectedWorktreesByRepo: {},
+      folderWorkspaces: [folderWorkspace('folder-1')],
+      workspaceLineageByChildKey: {},
+      worktreeLineageById: {},
+      ownLineageInstallationId: 'own-install',
+      crossStoreLineageByStoreKey: { [OWN_LINEAGE_STORE_KEY]: records }
+    })
+    const warm = selectCrossStoreFolderChildrenById(useAppStore.getState())
+    expect(warm.get('folder-1')).toHaveLength(size)
+    childHostReads = 0
+
+    for (const title of ['Unrelated one', 'Unrelated two']) {
+      applyLocalPinnedDisplayName({ worktreeId: unrelated.id, displayName: title })
+      expect(selectCrossStoreFolderChildrenById(useAppStore.getState())).toBe(warm)
+    }
+    expect(childHostReads).toBe(0)
+
+    // Retitling a child returns a new map with that child's title; the others stay the same rows.
+    applyLocalPinnedDisplayName({ worktreeId: children[0].id, displayName: TITLE })
+    const retitled = selectCrossStoreFolderChildrenById(useAppStore.getState())
+    expect(retitled).not.toBe(warm)
+    const folderChildren = retitled.get('folder-1') ?? []
+    expect(folderChildren.find(({ id }) => id === children[0].id)?.displayName).toBe(TITLE)
+    expect(folderChildren.find(({ id }) => id === children[1].id)).toBe(children[1])
+  })
 })
