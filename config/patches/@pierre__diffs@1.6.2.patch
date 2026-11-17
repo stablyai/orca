@@ -1318,6 +1318,165 @@ diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
  		this.escalateEditSessionRender();
  		return true;
  	}
+diff --git a/dist/components/VirtualizedFileDiff.js b/dist/components/VirtualizedFileDiff.js
+--- a/dist/components/VirtualizedFileDiff.js
++++ b/dist/components/VirtualizedFileDiff.js
+@@ -11,12 +11,65 @@
+ import { getDiffFileInput } from "../utils/getDiffFileInput.js";
+ import { hydratePartialDiff } from "../utils/hydratePartialDiff.js";
+ import { iterateOverDiff } from "../utils/iterateOverDiff.js";
++import { getHunkSideStartBoundary } from "../utils/getHunkSideBoundaries.js";
+ import { parseDiffFromFile } from "../utils/parseDiffFromFile.js";
+ import { FileDiff } from "./FileDiff.js";
+ //#region src/components/VirtualizedFileDiff.ts
+ const VIRTUALIZED_FILE_DIFF_LAYOUT_CHECKPOINT_INTERVAL = 3e3;
+ const NO_GHOST_TEXT_ROWS = /* @__PURE__ */ new Map();
+ let instanceId = -1;
++/** FileDiff.getLineIndexForDiff for many targets in one sweep over the hunks. */
++function getLineIndexesForTargets(fileDiff, targets) {
++	const indexes = new Map();
++	const lastHunk = fileDiff.hunks.at(-1);
++	for (const side of ["additions", "deletions"]) {
++		const lines = [...new Set(targets.filter((target) => target.side === side).map((target) => target.lineNumber))].sort((a, b) => a - b);
++		let next = 0;
++		const set = (unified, split) => indexes.set(`${side}:${lines[next++]}`, [unified, split]);
++		for (const hunk of fileDiff.hunks) {
++			if (next >= lines.length) break;
++			const hunkStart = side === "deletions" ? hunk.deletionStart : hunk.additionStart;
++			const hunkCount = side === "deletions" ? hunk.deletionCount : hunk.additionCount;
++			const first = getHunkSideStartBoundary(hunkStart, hunkCount) + 1;
++			while (next < lines.length && lines[next] < first) {
++				const difference = first - lines[next];
++				set(Math.max(hunk.unifiedLineStart - difference, 0), Math.max(hunk.splitLineStart - difference, 0));
++			}
++			let current = first;
++			let split = hunk.splitLineStart;
++			let unified = hunk.unifiedLineStart;
++			for (const content of hunk.hunkContent) {
++				if (content.type === "context") {
++					while (next < lines.length && lines[next] < current + content.lines) {
++						const difference = lines[next] - current;
++						set(unified + difference, split + difference);
++					}
++					current += content.lines;
++					split += content.lines;
++					unified += content.lines;
++					continue;
++				}
++				const sideCount = side === "deletions" ? content.deletions : content.additions;
++				while (next < lines.length && lines[next] < current + sideCount) {
++					const difference = lines[next] - current;
++					set(unified + (side === "additions" ? content.deletions : 0) + difference, split + difference);
++				}
++				current += sideCount;
++				split += Math.max(content.deletions, content.additions);
++				unified += content.deletions + content.additions;
++			}
++			if (hunk === lastHunk) while (next < lines.length) {
++				const difference = lines[next] - (first + hunkCount);
++				if (difference < 0) {
++					next++;
++					continue;
++				}
++				set(hunk.unifiedLineStart + hunk.unifiedLineCount + difference, hunk.splitLineStart + hunk.splitLineCount + difference);
++			}
++		}
++	}
++	return indexes;
++}
+ var VirtualizedFileDiff = class extends FileDiff {
+ 	__id = `little-virtualized-file-diff:${++instanceId}`;
+ 	renderType = "virtualized";
+@@ -266,37 +319,54 @@
+ 		this.computeApproximateSize(false, pendingRenderDiff);
+ 		return this.height;
+ 	}
++    /**
++    * getLinePosition for many lines: index all targets in one hunk sweep, then walk
++    * only from the layout checkpoint before each group of targets to its last one.
++    */
+     getRenderedLinePositions(targets) {
+         const diff = this.getLayoutDiff();
+         const positions = new Map();
+         if (diff == null || this.options.collapsed) return positions;
+-        const wanted = new Set(targets.map(({ lineNumber, side }) => `${side}:${lineNumber}`));
+         const { disableFileHeader = false, expandUnchanged = false, collapsedContextThreshold = 1 } = this.options;
+         const diffStyle = this.getDiffStyle();
+         const hunkSeparators = this.getHunkSeparatorType();
+-        let top = getVirtualFileHeaderRegion(this.metrics, disableFileHeader) + this.cache.fileAnnotationHeight;
+-        iterateOverDiff({
+-            diff, diffStyle,
+-            expandedHunks: expandUnchanged ? true : this.hunksRenderer.getExpandedHunksMap(),
+-            collapsedContextThreshold,
+-            callback: ({ hunkIndex, hunk, collapsedBefore, collapsedAfter, deletionLine, additionLine }) => {
+-                if (collapsedBefore > 0) {
+-                    const separator = getLeadingHunkSeparatorLayout({ type: hunkSeparators, metrics: this.metrics, hunkIndex, hunkSpecs: hunk?.hunkSpecs });
+-                    if (separator != null) top += separator.gapBefore + separator.height + separator.gapAfter;
++        const wanted = [];
++        for (const [key, indexes] of getLineIndexesForTargets(diff, targets)) wanted.push({ key, lineIndex: diffStyle === "split" ? indexes[1] : indexes[0] });
++        wanted.sort((a, b) => a.lineIndex - b.lineIndex);
++        this.approximateLayoutCheckpoints(diff);
++        const headerRegion = getVirtualFileHeaderRegion(this.metrics, disableFileHeader);
++        let next = 0;
++        while (next < wanted.length) {
++            const checkpoint = this.getLayoutCheckpointBeforeLineIndex(wanted[next].lineIndex);
++            let groupEnd = next;
++            while (groupEnd < wanted.length && this.getLayoutCheckpointBeforeLineIndex(wanted[groupEnd].lineIndex) === checkpoint) groupEnd++;
++            const lastLineIndex = wanted[groupEnd - 1].lineIndex;
++            let top = checkpoint?.top ?? headerRegion + this.cache.fileAnnotationHeight;
++            iterateOverDiff({
++                diff, diffStyle,
++                startingLine: checkpoint?.renderedLineIndex ?? 0,
++                expandedHunks: expandUnchanged ? true : this.hunksRenderer.getExpandedHunksMap(),
++                collapsedContextThreshold,
++                callback: ({ hunkIndex, hunk, collapsedBefore, collapsedAfter, deletionLine, additionLine }) => {
++                    if (collapsedBefore > 0) {
++                        const separator = getLeadingHunkSeparatorLayout({ type: hunkSeparators, metrics: this.metrics, hunkIndex, hunkSpecs: hunk?.hunkSpecs });
++                        if (separator != null) top += separator.gapBefore + separator.height + separator.gapAfter;
++                    }
++                    const lineIndex = diffStyle === "split" ? additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex : additionLine?.unifiedLineIndex ?? deletionLine?.unifiedLineIndex;
++                    const height = this.getLineHeight(lineIndex, (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false));
++                    while (next < groupEnd && wanted[next].lineIndex < lineIndex) next++;
++                    while (next < groupEnd && wanted[next].lineIndex === lineIndex) positions.set(wanted[next++].key, { top, height });
++                    top += height;
++                    if (next >= groupEnd || lineIndex >= lastLineIndex) return true;
++                    if (collapsedAfter > 0) {
++                        const separator = getTrailingHunkSeparatorLayout({ type: hunkSeparators, metrics: this.metrics });
++                        if (separator != null) top += separator.totalHeight;
++                    }
++                    return false;
+                 }
+-                const lineIndex = diffStyle === "split" ? additionLine?.splitLineIndex ?? deletionLine?.splitLineIndex : additionLine?.unifiedLineIndex ?? deletionLine?.unifiedLineIndex;
+-                const height = this.getLineHeight(lineIndex, (additionLine?.noEOFCR ?? false) || (deletionLine?.noEOFCR ?? false));
+-                for (const [side, line] of [["additions", additionLine], ["deletions", deletionLine]]) {
+-                    const key = `${side}:${line?.lineNumber}`;
+-                    if (wanted.has(key)) positions.set(key, { top, height });
+-                }
+-                top += height;
+-                if (collapsedAfter > 0) {
+-                    const separator = getTrailingHunkSeparatorLayout({ type: hunkSeparators, metrics: this.metrics });
+-                    if (separator != null) top += separator.totalHeight;
+-                }
+-            }
+-        });
++            });
++            next = groupEnd;
++        }
+         return positions;
+     }
+ 	getLinePosition(lineNumber, side = "additions") {
+diff --git a/dist/editor/pieceTable.js b/dist/editor/pieceTable.js
+--- a/dist/editor/pieceTable.js
++++ b/dist/editor/pieceTable.js
+@@ -99,6 +99,8 @@
+ 		this.#lineCount = (this.#root?.subtreeLineBreakCount ?? 0) + 1;
+ 	}
+     compact() {
++        // Nothing to reclaim while the text is still the untouched original buffer.
++        if (this.#add.text.length === 0 && this.#length === this.#original.text.length) return;
+         const text = this.getText();
+         this.#original = new TextBuffer(text);
+         this.#add = new TextBuffer("");
 diff --git a/dist/index.d.ts b/dist/index.d.ts
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
