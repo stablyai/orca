@@ -76,23 +76,47 @@ function sameRange(a: TabStripRange | null, b: TabStripRange | null): boolean {
   return a === b || (a !== null && b !== null && a.start === b.start && a.end === b.end)
 }
 
-/** Follow the strip's scroll and size; re-renders only when the mounted range moves a block. */
-export function useTabStripRange(
+function slotIdOf(strip: HTMLElement, target: EventTarget | null): string | null {
+  const slot =
+    target instanceof Element ? target.closest<HTMLElement>('[data-tab-strip-slot]') : null
+  return slot && strip.contains(slot) ? (slot.dataset.tabStripSlot ?? null) : null
+}
+
+export type TabStripWindowState = {
+  range: TabStripRange | null
+  /** The slot holding focus (rename input, keyboard focus), kept mounted so scrolling never drops it. */
+  focusedSlotId: string | null
+}
+
+const UNWINDOWED: TabStripWindowState = { range: null, focusedSlotId: null }
+
+/** Follow the strip's scroll, size and focus; re-renders only when the range moves a block or focus changes slot. */
+export function useTabStripWindowState(
   stripRef: RefObject<HTMLElement | null>,
   count: number,
   subscribeToStripResize: (listener: () => void) => () => void
-): TabStripRange | null {
-  const [range, setRange] = useState(() => computeTabStripRange(count, 0, 0))
+): TabStripWindowState {
+  const [state, setState] = useState<TabStripWindowState>(() => {
+    const range = computeTabStripRange(count, 0, 0)
+    return range ? { range, focusedSlotId: null } : UNWINDOWED
+  })
   useLayoutEffect(() => {
     const el = stripRef.current
-    const update = (): void => {
-      const next = computeTabStripRange(count, el?.scrollLeft ?? 0, el?.clientWidth ?? 0)
-      setRange((previous) => (sameRange(previous, next) ? previous : next))
-    }
-    update()
     if (!el || count < TAB_STRIP_WINDOW_MIN_TABS) {
+      setState(UNWINDOWED)
       return
     }
+    const update = (focusTarget: EventTarget | null = document.activeElement): void => {
+      const range = computeTabStripRange(count, el.scrollLeft, el.clientWidth)
+      // Why read focus with the range: the first windowed render must already keep a focused tab (a rename) mounted.
+      const focusedSlotId = slotIdOf(el, focusTarget)
+      setState((previous) =>
+        sameRange(previous.range, range) && previous.focusedSlotId === focusedSlotId
+          ? previous
+          : { range, focusedSlotId }
+      )
+    }
+    update()
     let frame = 0
     const onScroll = (): void => {
       if (frame === 0) {
@@ -102,48 +126,22 @@ export function useTabStripRange(
         })
       }
     }
+    const onFocusIn = (event: FocusEvent): void => update(event.target)
+    const onFocusOut = (event: FocusEvent): void => update(event.relatedTarget)
+    const onResize = (): void => update()
     el.addEventListener('scroll', onScroll, { passive: true })
-    const unsubscribe = subscribeToStripResize(update)
+    el.addEventListener('focusin', onFocusIn)
+    el.addEventListener('focusout', onFocusOut)
+    const unsubscribe = subscribeToStripResize(onResize)
     return () => {
       el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('focusin', onFocusIn)
+      el.removeEventListener('focusout', onFocusOut)
       unsubscribe()
       cancelAnimationFrame(frame)
     }
   }, [count, stripRef, subscribeToStripResize])
-  return range
-}
-
-function slotIdOf(strip: HTMLElement, target: EventTarget | null): string | null {
-  const slot =
-    target instanceof Element ? target.closest<HTMLElement>('[data-tab-strip-slot]') : null
-  return slot && strip.contains(slot) ? (slot.dataset.tabStripSlot ?? null) : null
-}
-
-/** The slot holding focus (rename input, keyboard focus), kept mounted so scrolling never drops it. */
-export function useFocusedTabStripSlotId(
-  stripRef: RefObject<HTMLElement | null>,
-  windowed: boolean
-): string | null {
-  const [focusedSlotId, setFocusedSlotId] = useState<string | null>(null)
-  useLayoutEffect(() => {
-    const el = stripRef.current
-    if (!el || !windowed) {
-      setFocusedSlotId(null)
-      return
-    }
-    // Why read now: a tab focused before the strip crossed into windowing (a rename) must stay mounted.
-    setFocusedSlotId(slotIdOf(el, document.activeElement))
-    const onFocusIn = (event: FocusEvent): void => setFocusedSlotId(slotIdOf(el, event.target))
-    const onFocusOut = (event: FocusEvent): void =>
-      setFocusedSlotId(slotIdOf(el, event.relatedTarget))
-    el.addEventListener('focusin', onFocusIn)
-    el.addEventListener('focusout', onFocusOut)
-    return () => {
-      el.removeEventListener('focusin', onFocusIn)
-      el.removeEventListener('focusout', onFocusOut)
-    }
-  }, [stripRef, windowed])
-  return focusedSlotId
+  return state
 }
 
 /** Scroll the first opened tab a windowed strip hasn't mounted into view by its index; false when none. */

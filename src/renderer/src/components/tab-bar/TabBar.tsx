@@ -1,11 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
-import {
-  buildTabStripSegments,
-  useFocusedTabStripSlotId,
-  useTabStripRange
-} from './strip/tab-strip-window'
+import { buildTabStripSegments, useTabStripWindowState } from './strip/tab-strip-window'
 import { useActiveDragVisibleTabId } from '../tab-group/drag/tab-drag-context'
 import { sameStringArray } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-core'
 import type { TabBarProps } from './tab-bar-props'
@@ -125,14 +121,10 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     },
     [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
   )
-  const tabStripRange = useTabStripRange(
+  const { range: tabStripRange, focusedSlotId } = useTabStripWindowState(
     tabStripNavigation.tabStripRef,
     itemProjection.orderedItems.length,
     tabStripNavigation.subscribeToStripResize
-  )
-  const focusedSlotId = useFocusedTabStripSlotId(
-    tabStripNavigation.tabStripRef,
-    tabStripRange !== null
   )
   const activeDragVisibleTabId = useActiveDragVisibleTabId()
   const { orderedItems, sortableIds, activeVisibleTabId } = itemProjection
