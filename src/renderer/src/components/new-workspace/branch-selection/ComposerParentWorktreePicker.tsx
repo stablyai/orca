@@ -35,7 +35,7 @@ import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styl
 import {
   sharesWorktreeLineageBoundary,
   type WorktreeLineageBoundary
-} from '../../../../../shared/resolved-worktree-lineage'
+} from '../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type {
   WorkspaceLineage,
@@ -45,7 +45,7 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isCrossStoreCreateParent } from '@/components/sidebar/workspace-actions/parenting/worktree-parent-candidates'

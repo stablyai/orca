@@ -656,6 +656,9 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
+      - name: Build host provider exec helper
+        run: node config/scripts/native-build/posix/build-provider-exec.mjs --host-compiler
+
       - name: Install pinned Codex CLI
         run: |
           set -euo pipefail
@@ -839,7 +842,6 @@ jobs:
       - name: Test real shell contracts
         run: |
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
-            src/main/daemon/shell-readiness/testing/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             src/main/daemon/shell-readiness/testing/shell-ready.test.ts \
             src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty/local-pty-shell-ready-zsh-launch-environment.test.ts \

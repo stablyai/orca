@@ -1,5 +1,5 @@
 import { emulatorOpeningMessage } from './session/emulator-opening-message'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { EmulatorPaneToolbar } from './devices/emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './frame/emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './agent-setup/MobileEmulatorAgentSetupGuideLayer'

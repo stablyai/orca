@@ -4,7 +4,7 @@ import { subscribeAutoAckPresenceSignals } from './agent-auto-ack-presence'
 import { useAppStore } from '@/store/index'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { startOnScreenAttentionScan } from './on-screen-attention-scan'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import {
   createClientWorkspaceViewReporter,
   subscribeViewReportPresenceSignals

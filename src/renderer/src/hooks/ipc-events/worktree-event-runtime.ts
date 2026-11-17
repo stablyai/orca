@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'

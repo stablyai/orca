@@ -13,7 +13,7 @@ import {
 import { runLocalSourceControlPlan } from './source-control-local-process'
 import { prepareSourceControlReadOnlyPlan } from '../policies/source-control-read-only-policy'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from './source-control-generation-limits'
-import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
+import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import type {
   InternalTextGenerationResult,
   LocalGenerationTarget,

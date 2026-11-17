@@ -1,7 +1,7 @@
 import type {
   AgentSessionMcpServer,
   AgentSessionMcpServerStatus
-} from '../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { CodexAppServerRpc } from '../../app-server/codex-app-server-session'
 
 export type CodexMcpRequest = CodexAppServerRpc['request']

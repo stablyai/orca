@@ -683,7 +683,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} restent en chat, comme vous l’avez choisi.",
       "defaultSurfaceSetAllChat": "Tout mettre en Chat",
       "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
-      "sameAsChoice": "Identique à {{agent}} · {{choice}}",
       "modelListFallback": "Liste intégrée. Orca n’a pas pu obtenir de liste de modèles depuis cet hôte.",
       "chatUnavailableOnWindows": "{{value0}} Chat n’est pas encore disponible sous Windows : {{value0}} s’ouvre donc dans un terminal sur cet hôte. Les chats sur un hôte macOS ou Linux fonctionnent toujours.",
       "undetectedCommandHint": "Si la CLI {{agent}} est installée hors de PATH, saisissez le chemin complet de son exécutable sur cet hôte."
@@ -711,9 +710,6 @@
         "extraArgs": "Arguments CLI supplémentaires",
         "launchOptions": "Modèle et autorisations",
         "savedLaunchOptions": "Options enregistrées : {{value0}}. Les anciens serveurs utilisent leurs propres réglages d’autorisations."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Comme {{agent}}"
       }
     },
     "ssh": {
@@ -4716,7 +4712,9 @@
             "compactTooltip": "Utilisation condensée : un résumé par fournisseur",
             "footerDetailAria": "Détail du pied de page d'utilisation",
             "notChecked": "Non vérifié",
-            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}"
+            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}",
+            "resetsIn": "Réinitialisation dans {{duration}}",
+            "resetsNow": "Réinitialisation maintenant"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Mise à jour de {{value0}}/{{value1}}",
@@ -6026,8 +6024,7 @@
           "issueCommand": "Commande d'issue",
           "newVmRecipe": "Nouvelle recette de VM",
           "vmRecipe": "Recette de VM",
-          "thisRepository": "ce dépôt",
-          "alwaysTrustRepo": "Toujours faire confiance à <code>orca.yaml</code> dans <repo/>"
+          "thisRepository": "ce dépôt"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Annuler la création du worktree",
@@ -6369,7 +6366,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} déconnecté",
           "runtimeHostProject": "Projet sur serveur Orca",
           "runtimeHostProjectNamed": "Projet sur {{hostName}}",
-          "ef18787206": "En attente de suppression"
+          "ef18787206": "En attente de suppression",
+          "notificationsMuted": "Notifications désactivées"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -6465,7 +6463,9 @@
           "copyPathOption": "Chemin",
           "copyNameOption": "Nom du worktree",
           "lineageSubmenu": "Parent et enfants",
-          "projectGroupSubmenu": "Groupe de projets"
+          "projectGroupSubmenu": "Groupe de projets",
+          "muteNotifications": "Désactiver les notifications",
+          "unmuteNotifications": "Réactiver les notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Mise à jour requise",
@@ -11855,7 +11855,7 @@
             "terminalRun": "Exécuter des commandes dans vos terminaux, y compris SSH"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez.",
-          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser le réseau, lancer d’autres programmes et contrôler Orca, y compris vos terminaux et vos agents.",
+          "fullAccessWarning": "Accès complet : s’exécute comme un programme normal et peut lire vos fichiers, utiliser vos identifiants enregistrés et vos clés SSH, utiliser le réseau, lancer d’autres programmes et contrôler Orca, y compris vos terminaux et vos agents.",
           "uiWarning": "Exécute le code de l’éditeur dans Orca pour dessiner sa vue. Orca indique à quoi il peut accéder et demande avant de l’activer."
         },
         "PluginConsentProvenance": {
@@ -13138,7 +13138,7 @@
           "catalog": "Catalogue",
           "clear": "Effacer les filtres",
           "themes": "Thèmes",
-          "codeLanguages": "Langages de programmation",
+          "codeLanguages": "Langages",
           "translations": "Traductions",
           "icons": "Icônes",
           "commands": "Commandes et panneaux",
@@ -13151,7 +13151,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "Impossible de lire cette mise à jour",
-          "newAccess": "Nouveau : {{value0}}",
           "failed": "Impossible de mettre à jour {{value0}}. Les autres ont été mis à jour.",
           "cancel": "Annuler",
           "updateOne": "Mettre à jour 1 plugin",
@@ -13165,13 +13164,20 @@
           "allAccess": "Voir tous les accès",
           "newCommands": "Commandes",
           "newContributions": "Fonctions qui agissent pour vous",
-          "newEvents": "Plus d'événements",
-          "newPanels": "Panneaux",
+          "newEvents": "Réagit à davantage d’événements Orca",
+          "newPanels": "Ajoute des panneaux",
           "newRecipes": "Recettes de machine",
           "newShortcuts": "Raccourcis clavier",
-          "sourceMoved": "Nouvelle source : {{value0}} (avant {{value1}})",
           "update": "Mettre à jour",
-          "review": "Examiner"
+          "newFileTypes": "Change les fichiers qu’il ouvre",
+          "newHooks": "Peut modifier ou arrêter ce que font Orca et vos agents",
+          "newSettings": "Une page de réglages",
+          "newStatusBarItems": "Éléments de la barre d’état",
+          "opensFileTypes": "Ouvre de nouveaux types de fichiers : {{value0}}",
+          "becomesDefaultEditor": "Devient l’éditeur par défaut pour {{value0}}",
+          "needApproval": "Nécessitent votre approbation",
+          "readyToUpdate": "Prêtes à être mises à jour",
+          "movedRepository": "Provient d’un autre dépôt"
         },
         "PluginDetailInfo": {
           "previous": "Précédente",
@@ -13283,11 +13289,11 @@
         },
         "PluginUpdateReview": {
           "title": "Examiner la mise à jour de {{value0}}",
-          "back": "Retour",
           "approve": "Approuver et mettre à jour",
-          "explain": "Cette mise à jour demande plus que la version que vous avez approuvée. Elle ne s’installe que si vous l’approuvez ici.",
-          "before": "Avant",
-          "after": "Après"
+          "uncompared": "Orca n’a pas pu comparer cette version à celle que vous avez approuvée. Vérifiez ce à quoi elle peut accéder avant de mettre à jour.",
+          "newInVersion": "Nouveau dans cette version :",
+          "titleMany": "Examiner {{value0}} mises à jour",
+          "history": "Voir ses modifications sur GitHub"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "son éditeur",
@@ -13295,7 +13301,8 @@
           "update": "Assurez-vous de faire confiance à {{value0}} avant de le mettre à jour. Ce plugin exécute le code de l’éditeur dans Orca.",
           "installed": "Assurez-vous de faire confiance à {{value0}}. Ce plugin exécute le code de l’éditeur dans Orca.",
           "label": "Plugin non officiel :",
-          "translations": "Les traductions peuvent modifier n’importe quel texte d’Orca. Assurez-vous de faire confiance à {{value0}}."
+          "translations": "Les traductions peuvent modifier n’importe quel texte d’Orca. Assurez-vous de faire confiance à {{value0}}.",
+          "community": "Plugin communautaire"
         },
         "pluginConsentCopy": {
           "addsCommands": "Ajoute des commandes",
@@ -13313,11 +13320,15 @@
           "movedTitle": "{{value0}} {{value1}} provient d’un autre dépôt",
           "accessTitle": "{{value0}} {{value1}} demande plus d’accès",
           "manyTitle": "{{value0}} mises à jour de plugins attendent votre vérification",
-          "oneDescription": "Publié par {{value0}}. Il ne sera pas mis à jour tant que vous ne l’aurez pas vérifié.",
-          "manyDescription": "Elles ne seront pas installées tant que vous ne les aurez pas vérifiées.",
-          "review": "Vérifier",
           "dismiss": "Ignorer",
-          "movedInstalled": "Il reste désactivé jusqu’à ce que vous l’examiniez."
+          "movedInstalled": "Il reste désactivé jusqu’à ce que vous l’examiniez.",
+          "approveAll": "Tout approuver et mettre à jour",
+          "approveOne": "Approuver et mettre à jour",
+          "details": "Détails",
+          "failed": "Impossible de mettre à jour {{value0}}",
+          "morePlugins": "et {{value0}} autres plugins",
+          "uncompared": "Orca n’a pas pu la comparer à la version que vous avez approuvée.",
+          "held": "{{value0}} a changé après votre examen ; il attend donc votre examen dans Réglages → Plugins."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Assurez-vous de faire confiance à ce dossier",
@@ -14937,10 +14948,10 @@
             "databaseCount_many": "{{value0}} bases de données",
             "scanning": "Analyse de {{value0}}",
             "checking": "Vérification de {{value0}}",
-            "scanned": "{{value0}} analysés",
             "agentCheckedCount_one": "{{agent}} : {{settled}} sur {{total}} candidat de l’historique vérifié",
             "agentCheckedCount_other": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés",
-            "agentCheckedCount_many": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés"
+            "agentCheckedCount_many": "{{agent}} : {{settled}} sur {{total}} candidats de l’historique vérifiés",
+            "historyRefreshed": "Historique actualisé"
           },
           "ssh": {
             "unrestored": {
@@ -15989,13 +16000,6 @@
                       "skillNotInstalled": "La skill Orca CLI n'est pas encore installée."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Impossible de masquer l'émulateur mobile."
-                    }
-                  }
                 }
               }
             }
@@ -16020,17 +16024,6 @@
             "5789936d9a": "Prévisualisez les simulateurs iOS pendant que des agents pilotent l'écran.",
             "8014b4b80b": "Conserver",
             "6e051a40b7": "Masquer"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Émulateur mobile masqué",
-                  "c46c979c1d": "Réactivez l'émulateur mobile à tout moment dans",
-                  "600f9a745a": "Paramètres › Émulateur mobile"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Le collage est trop volumineux pour la saisie clavier de l'émulateur.",
@@ -21390,6 +21383,10 @@
     },
     "wslMoved": {
       "movedToHost": "Déplacé vers l'hôte {{distro}}",
+      "sectionTitle": "Déplacés vers des hôtes WSL ({{count}})",
+      "hide": "Masquer de cette liste",
+      "hiddenToast": "{{name}} masqué de cette liste",
+      "hiddenToastDescription": "« Utiliser à nouveau sur cet ordinateur » reste dans son menu, sous l'hôte {{distro}}.",
       "useHere": "Utiliser à nouveau sur cet ordinateur",
       "useHereTitle": "Utiliser à nouveau {{name}} sur cet ordinateur ?",
       "useHereDescription": "Orca ouvrira ce projet ici tel qu'il était avant le déplacement. Votre code n'est pas concerné : il n'a jamais été déplacé. Les modifications faites sur l'hôte {{distro}} depuis le déplacement, comme de nouveaux onglets et chats, restent sur l'hôte et ne reviennent pas. Les projets déplacés avec celui-ci reviennent aussi. Le projet reste également sur l'hôte {{distro}} jusqu'à ce que vous l'y supprimiez. Cette fenêtre va se recharger.",
@@ -21451,7 +21448,13 @@
         "restartGaveUp_many": "Impossible de redémarrer le serveur Orca dans {{distro}} après {{count}} tentatives",
         "serviceUnconfirmed": "Le service WSL n'a pas confirmé si la distro est en cours d'exécution.",
         "peerCheckFailed": "Orca n'a pas pu demander à l'hôte WSL si un autre Orca sur cet ordinateur l'utilise encore : {{detail}}",
-        "removalUnrecorded": "Orca n'a pas pu enregistrer ce qui est resté en cours d'exécution après cette suppression : {{detail}}"
+        "removalUnrecorded": "Orca n'a pas pu enregistrer ce qui est resté en cours d'exécution après cette suppression : {{detail}}",
+        "installLockWait_one": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minute.",
+        "installLockWait_many": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minutes.",
+        "installLockWait_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca prend le relais dans environ {{count}} minutes.",
+        "installLockWaitGivesUp_one": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minute.",
+        "installLockWaitGivesUp_many": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes.",
+        "installLockWaitGivesUp_other": "En attente de la fin d’une autre installation d’Orca dans cette distribution. Sinon, Orca cesse d’attendre dans environ {{count}} minutes."
       }
     },
     "agentSummary": {
@@ -21552,6 +21555,7 @@
       "why": "Git, les fichiers et les terminaux s’exécutent alors nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
       "accept": "Exécuter comme hôte",
       "projectNotFound": "Impossible de trouver le projet ajouté à déplacer. Utilisez « Déplacer vers l'hôte {{distro}}… » sur le projet dans la barre latérale.",
+      "savedUnderAnotherPath": "Ce dossier est déjà un projet ici sous {{path}}, qui ne peut pas encore être déplacé vers l'hôte {{distro}}. Supprimez ce projet, puis ajoutez de nouveau le dossier pour le déplacer.",
       "existingTitle": "Ajouter sur l’hôte {{distro}} (recommandé)",
       "existingWhy": "{{distro}} s’exécute déjà comme hôte : Git, les fichiers et les terminaux s’exécutent donc nativement sous Linux plutôt qu’à travers le partage de fichiers Windows.",
       "existingAccept": "Ajouter sur l’hôte"
@@ -21915,7 +21919,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Aucune session correspondante dans l'historique indexé. Essayez une autre requête ou une autre étendue.",
       "loadMore": "Charger plus de matchs",
       "indexedHistory": "Historique indexé",
       "hostsSkipped": "Non recherché : {{value0}}",
@@ -21954,7 +21957,9 @@
         "unreachable": "injoignable",
         "scopeNotFound": "périmètre de recherche introuvable sur cet hôte",
         "agentNotSupported": "agent non pris en charge"
-      }
+      },
+      "consentTranscriptIndex": "La recherche porte sur les détails des sessions et les aperçus des messages. Pour rechercher dans les conversations complètes, activez la recherche en texte intégral (indexe les transcriptions locales, sans masquage). Les appareils appairés peuvent aussi y effectuer des recherches.",
+      "noMatchesToShow": "Aucune session correspondante à afficher."
     }
   },
   "sessionHistory": {
@@ -22208,7 +22213,7 @@
         "listLabel": "Sessions Claude à redémarrer",
         "settingRestart": "Toujours redémarrer",
         "settingKeep": "Ne jamais redémarrer",
-        "settingDescription": "Le redémarrage poursuit chaque conversation dans un terminal sur le nouveau compte.",
+        "settingDescription": "Le redémarrage poursuit chaque conversation dans un terminal sur le nouveau compte. Les sessions occupées interrompent leur travail en cours.",
         "restartingOne": "Redémarrage d’une session Claude sur {{account}}",
         "restartingOther": "Redémarrage de {{count}} sessions Claude sur {{account}}",
         "groupOnAccount": "En cours sur {{account}}",
@@ -22227,15 +22232,17 @@
         "restartCount_one": "Redémarrer {{count}} session",
         "restartCount_other": "Redémarrer {{count}} sessions",
         "restartCount_many": "Redémarrer {{count}} sessions",
-        "reviewBody_one": "{{count}} autre session Claude n’a pas été déplacée vers {{next}}.",
-        "reviewBody_other": "{{count}} autres sessions Claude n’ont pas été déplacées vers {{next}}.",
-        "reviewBody_many": "{{count}} autres sessions Claude n’ont pas été déplacées vers {{next}}.",
-        "body_one": "{{count}} session Claude est toujours active sur {{previous}}. Le redémarrage poursuit la conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
-        "body_other": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
-        "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées attendent d’être inactives avant de redémarrer.",
+        "reviewBody_one": "{{count}} session Claude n’a pas été déplacée vers {{next}}.",
+        "reviewBody_other": "{{count}} sessions Claude n’ont pas été déplacées vers {{next}}.",
+        "reviewBody_many": "{{count}} sessions Claude n’ont pas été déplacées vers {{next}}.",
+        "body_one": "{{count}} session Claude est toujours active sur {{previous}}. Le redémarrage poursuit la conversation sur {{next}}. Les sessions occupées interrompent leur travail en cours et redémarrent maintenant.",
+        "body_other": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées interrompent leur travail en cours et redémarrent maintenant.",
+        "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées interrompent leur travail en cours et redémarrent maintenant.",
         "reasonSharedSession": "Également ouverte dans un autre volet",
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
-        "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
+        "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
+        "strandedOne": "1 session Claude est peut-être encore sur {{previous}}. Redémarrez-la manuellement pour basculer.",
+        "strandedOther": "{{count}} sessions Claude sont peut-être encore sur {{previous}}. Redémarrez-les manuellement pour basculer."
       },
       "oauthUsage": {
         "title": "Suivi de l’utilisation de Claude",
@@ -22834,7 +22841,9 @@
       "chooseTransition": "Choisissez un changement de statut :",
       "cancel": "Annuler",
       "noTransition": "Aucun changement de statut vers {{column}} n'est disponible pour {{key}}.",
-      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres."
+      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres.",
+      "reorderColumn": "Réorganiser {{column}}",
+      "reorderColumnHint": "Issues dans cette colonne : {{count}}. Utilisez les flèches gauche et droite pour la déplacer."
     },
     "favourites": {
       "activeLabel": "Favoris Jira : {{name}}",
@@ -22924,21 +22933,13 @@
     "language": {
       "back": "Langues",
       "requestPrompt": "Quelle langue aimeriez-vous voir prise en charge par Orca ?",
-      "requestSuccess": "Demande de langue enregistrée. Vous pouvez poursuivre la configuration.",
       "requestError": "Impossible d’enregistrer votre demande. Réessayez.",
       "retry": "Réessayer",
       "requestAction": "Demander une langue",
       "title": "Langue d’affichage",
-      "device": "Langue du système : {{language}}",
-      "unsupported": "Langue du système : {{language}}. Cette langue n’est pas encore prise en charge.",
-      "unknown": "La langue du système n’a pas pu être détectée. Choisissez une langue ci-dessous.",
-      "loadError": "Impossible de charger cette langue. Réessayez.",
-      "saveError": "Impossible d’enregistrer votre préférence de langue. Réessayez.",
-      "other": "Autre langue…",
       "settingsError": "Impossible de charger vos paramètres.",
       "loadingSettings": "Chargement des paramètres…",
-      "loading": "Chargement de la langue…",
-      "saving": "Enregistrement de la langue…"
+      "loading": "Chargement de la langue…"
     }
   },
   "workspaceSpace": {
@@ -23514,7 +23515,6 @@
     }
   },
   "agentPicker": {
-    "catalogUnsupported": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vous pouvez conserver vos choix ou utiliser les arguments.",
     "catalogUnsupportedLaunch": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vos choix actuels s'appliquent toujours.",
     "catalogFailed": "Impossible de charger les modèles de {{agent}}. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
     "catalogSignIn": "Connectez-vous à {{agent}} pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
@@ -23530,11 +23530,9 @@
     "setByArguments": "Défini par vos arguments",
     "searchModels": "Rechercher des modèles",
     "noModels": "Aucun modèle ne correspond à votre recherche.",
-    "toggleArguments": "Afficher ou masquer les arguments",
     "argumentsTerminalHint": "S’applique uniquement aux lancements dans le terminal (CLI)",
     "searchAgentModels": "Rechercher des modèles {{agent}}…",
     "moreModelsWithCount": "Plus de modèles ({{total}})",
-    "use": "Utiliser",
     "select": "Choisir un agent",
     "promptPlaceholder": "Ajouter un prompt (facultatif) : / pour les skills, @ pour les fichiers",
     "promptPlaceholderFilesOnly": "Ajouter un prompt (facultatif) : @ pour les fichiers",
@@ -23753,7 +23751,6 @@
     "setupTrust": {
       "reviewTitle": "Approuver les nouvelles commandes de configuration de cette automatisation ?",
       "reviewBody": "Une exécution a ignoré la configuration, car les commandes de configuration du <code>orca.yaml</code> de sa branche ont changé. Si vous les approuvez, les exécutions suivantes les utiliseront. N’approuvez que si vous faites confiance à <repo/>.",
-      "approve": "Approuver",
       "approved": "Configuration approuvée. Les exécutions suivantes de cette automatisation l’exécuteront.",
       "skippedSinceApproved": "La configuration n’a pas été exécutée pour cette exécution, car les commandes de configuration orca.yaml de sa branche ont changé. Elles ont depuis été approuvées : les exécutions suivantes les exécuteront.",
       "skippedReview": "La configuration n’a pas été exécutée : la branche de cette exécution contient des commandes de configuration orca.yaml différentes de celles approuvées pour cette automatisation. Vérifiez-les pour que les exécutions suivantes exécutent la configuration.",

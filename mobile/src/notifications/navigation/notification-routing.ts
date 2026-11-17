@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../src/shared/execution-host'
+import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { HostStackRouteTarget } from '../../navigation/host-stack-navigation'
 import { mobileSessionRouteTarget } from '../../session/mobile-session-route'
 import type { HostCredentialStatus } from '../../host-catalog/host-profile'

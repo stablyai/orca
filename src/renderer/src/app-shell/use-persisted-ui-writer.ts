@@ -145,6 +145,7 @@ export function usePersistedUIWriter(): void {
       alwaysShowDefaultBranchWorkspace: s.alwaysShowDefaultBranchWorkspace,
       explorerDisplayRootByWorktree: s.explorerDisplayRootByWorktree,
       showDotfilesByWorktree: s.showDotfilesByWorktree,
+      notificationsMutedByWorktree: s.notificationsMutedByWorktree,
       filterRepoIds: s.filterRepoIds,
       // Persist focus/visibility acknowledgements and close/dismiss cleanup by map identity so live history keeps its read state after restart.
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,

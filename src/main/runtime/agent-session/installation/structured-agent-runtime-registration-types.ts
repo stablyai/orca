@@ -13,7 +13,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
-import type { createStructuredAgentSessionDispatchFollowUps } from '../structured-agent-session-dispatch-followups'
+import type { createStructuredAgentSessionDispatchFollowUps } from '../lifecycle/structured-agent-session-dispatch-followups'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import type {

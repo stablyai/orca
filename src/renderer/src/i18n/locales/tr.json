@@ -87,6 +87,10 @@
     },
     "wslMoved": {
       "movedToHost": "{{distro}} ana makinesine taşındı",
+      "sectionTitle": "WSL ana makinelerine taşınanlar ({{count}})",
+      "hide": "Bu listeden gizle",
+      "hiddenToast": "{{name}} bu listeden gizlendi",
+      "hiddenToastDescription": "“Bu bilgisayarda yeniden kullan”, {{distro}} ana makinesi altındaki menüsünde kalır.",
       "useHere": "Bu bilgisayarda yeniden kullan",
       "useHereTitle": "{{name}} bu bilgisayarda yeniden kullanılsın mı?",
       "useHereDescription": "Orca bu projeyi burada, taşımadan önceki hâliyle açar. Kodunuz etkilenmez: hiç taşınmadı. Taşımadan bu yana {{distro}} ana makinesinde yapılan yeni sekmeler ve sohbetler gibi değişiklikler ana makinede kalır ve geri gelmez. Bu projeyle birlikte taşınan projeler de geri gelir. Proje, siz oradan kaldırana kadar {{distro}} ana makinesinde de kalır. Bu pencere yeniden yüklenir.",
@@ -144,7 +148,11 @@
         "restartGaveUp_other": "{{count}} denemeden sonra {{distro}} içindeki Orca sunucusu yeniden başlatılamadı",
         "serviceUnconfirmed": "WSL hizmeti dağıtımın çalışıp çalışmadığını doğrulamadı.",
         "peerCheckFailed": "Orca tarafından WSL ana makinesine bu bilgisayardaki başka bir Orca'nın onu hâlâ kullanıp kullanmadığı sorulamadı: {{detail}}",
-        "removalUnrecorded": "Bu kaldırma işleminden sonra nelerin çalışmaya devam ettiği Orca tarafından kaydedilemedi: {{detail}}"
+        "removalUnrecorded": "Bu kaldırma işleminden sonra nelerin çalışmaya devam ettiği Orca tarafından kaydedilemedi: {{detail}}",
+        "installLockWait_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
+        "installLockWait_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
+        "installLockWaitGivesUp_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
+        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır."
       }
     },
     "agentSummary": {
@@ -222,6 +230,7 @@
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "accept": "Ana makine olarak çalıştır",
       "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın.",
+      "savedUnderAnotherPath": "Bu klasör burada zaten {{path}} olarak bir proje ve henüz {{distro}} ana bilgisayarına taşınamıyor. Taşımak için o projeyi kaldırın, ardından klasörü yeniden ekleyin.",
       "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
       "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "existingAccept": "Ana makineye ekle"
@@ -890,7 +899,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} ayarladığınız gibi sohbet olarak kalıyor.",
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
-      "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
       "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı.",
       "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder.",
       "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin."
@@ -918,9 +926,6 @@
         "extraArgs": "Ek CLI argümanları",
         "launchOptions": "Model ve izinler",
         "savedLaunchOptions": "Kaydedilen seçenekler: {{value0}}. Eski sunucular kendi izin ayarlarını kullanır."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "{{agent}} ile aynı"
       }
     },
     "mcp": {
@@ -5039,7 +5044,9 @@
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
             "footerDetailAria": "Kullanım altbilgi ayrıntısı",
             "notChecked": "Kontrol edilmedi",
-            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}"
+            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}",
+            "resetsIn": "{{duration}} içinde sıfırlanır",
+            "resetsNow": "Şimdi sıfırlanır"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",
@@ -6283,8 +6290,7 @@
           "issueCommand": "Sorun komutu",
           "newVmRecipe": "Yeni VM tarifi",
           "vmRecipe": "VM tarifi",
-          "thisRepository": "bu repository",
-          "alwaysTrustRepo": "<repo/> içindeki <code>orca.yaml</code> dosyasına her zaman güven"
+          "thisRepository": "bu repository"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Worktree oluşturmayı iptal et",
@@ -12083,7 +12089,7 @@
             "terminalRun": "SSH dahil terminalinizde komut çalıştır"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
-          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, kayıtlı oturum bilgilerinizi ve SSH anahtarlarınızı kullanabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
           "uiWarning": "Görünümünü çizmek için yayıncının kodunu Orca içinde çalıştırır. Orca nelerin erişebileceğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
@@ -13205,9 +13211,7 @@
           }
         },
         "PluginUpdateAllDialog": {
-          "review": "İncele",
           "previewError": "Bu güncelleme okunamadı",
-          "newAccess": "Yeni: {{value0}}",
           "failed": "{{value0}} güncellenemedi. Diğerleri güncellendi.",
           "cancel": "İptal",
           "updateOne": "1 eklentiyi güncelle",
@@ -13218,23 +13222,31 @@
           "updated": "Güncellendi",
           "needsOrca": "Orca {{value0}} veya üzeri gerekir",
           "current": "Zaten yüklü",
-          "sourceMoved": "Yeni kaynak: {{value0}} (önceki: {{value1}})",
           "newShortcuts": "Klavye kısayolları",
           "newCommands": "Komutlar",
-          "newPanels": "Paneller",
-          "newEvents": "Daha fazla olay",
+          "newPanels": "Paneller ekler",
+          "newEvents": "Daha fazla Orca olayına tepki verir",
           "newRecipes": "Makine tarifleri",
           "newContributions": "Sizin adınıza işlem yapan özellikler",
           "allAccess": "Tüm erişimi gör",
-          "update": "Güncelle"
+          "update": "Güncelle",
+          "newFileTypes": "Hangi dosyaları açtığını değiştirir",
+          "newHooks": "Orca'nın ve ajanlarınızın yaptıklarını değiştirebilir veya durdurabilir",
+          "newSettings": "Bir ayarlar sayfası",
+          "newStatusBarItems": "Durum çubuğu öğeleri",
+          "opensFileTypes": "Yeni dosya türlerini açar: {{value0}}",
+          "becomesDefaultEditor": "{{value0}} için varsayılan düzenleyici olur",
+          "needApproval": "Onayınızı bekliyor",
+          "readyToUpdate": "Güncellemeye hazır",
+          "movedRepository": "Farklı bir depodan geliyor"
         },
         "PluginUpdateReview": {
           "title": "{{value0}} güncellemesini incele",
-          "back": "Geri",
           "approve": "Onayla ve güncelle",
-          "explain": "Bu güncelleme, onayladığınız sürümden daha fazlasını istiyor. Yalnızca burada onaylarsanız yüklenir.",
-          "before": "Önce",
-          "after": "Sonra"
+          "uncompared": "Orca bu sürümü onayladığınız sürümle karşılaştıramadı. Güncellemeden önce nelere erişebildiğini kontrol edin.",
+          "newInVersion": "Bu sürümde yeni:",
+          "titleMany": "{{value0}} güncellemeyi incele",
+          "history": "Değişiklikleri GitHub’da gör"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "yayıncı",
@@ -13242,7 +13254,8 @@
           "update": "Güncellemeden önce {{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
           "installed": "{{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
           "label": "Resmi bir eklenti değil:",
-          "translations": "Çeviriler Orca içindeki her metni değiştirebilir. {{value0}} tarafına güvendiğinizden emin olun."
+          "translations": "Çeviriler Orca içindeki her metni değiştirebilir. {{value0}} tarafına güvendiğinizden emin olun.",
+          "community": "Topluluk eklentisi"
         },
         "PluginCardAction": {
           "installed": "Yüklendi",
@@ -13331,7 +13344,7 @@
           "catalog": "Katalog",
           "clear": "Filtreleri temizle",
           "themes": "Temalar",
-          "codeLanguages": "Programlama dilleri",
+          "codeLanguages": "Diller",
           "translations": "Çeviriler",
           "icons": "Simgeler",
           "commands": "Komutlar ve paneller",
@@ -13446,11 +13459,15 @@
           "movedTitle": "{{value0}} {{value1}} farklı bir depodan geliyor",
           "accessTitle": "{{value0}} {{value1}} daha fazla erişim istiyor",
           "manyTitle": "{{value0}} eklenti güncellemesi incelemenizi bekliyor",
-          "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
-          "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
-          "review": "İncele",
           "dismiss": "Kapat",
-          "movedInstalled": "Siz inceleyene kadar kapalı kalır."
+          "movedInstalled": "Siz inceleyene kadar kapalı kalır.",
+          "approveAll": "Tümünü onayla ve güncelle",
+          "approveOne": "Onayla ve güncelle",
+          "details": "Ayrıntılar",
+          "failed": "{{value0}} güncellenemedi",
+          "morePlugins": "ve {{value0}} eklenti daha",
+          "uncompared": "Orca bunu onayladığınız sürümle karşılaştıramadı.",
+          "held": "{{value0}} incelemenizden sonra değişti, bu yüzden Ayarlar → Eklentiler bölümünde incelemenizi bekliyor."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
@@ -15118,9 +15135,9 @@
             "databaseCount_other": "{{value0}} veritabanı",
             "scanning": "{{value0}} taranıyor",
             "checking": "{{value0}} kontrol ediliyor",
-            "scanned": "{{value0}} tarandı",
             "agentCheckedCount_other": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
-            "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi"
+            "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
+            "historyRefreshed": "Geçmiş yenilendi"
           },
           "run": {
             "source": {
@@ -16180,13 +16197,6 @@
                       "c94ff11e91": "Kurulum durumu yeniden kontrol edilemedi."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Mobil Emülatör gizlenemedi."
-                    }
-                  }
                 }
               }
             }
@@ -16211,17 +16221,6 @@
             "5789936d9a": "Ajanlar ekranı kullanırken iOS simülatörlerini önizleyin.",
             "8014b4b80b": "Tut",
             "6e051a40b7": "Gizle"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobil Emülatör gizlendi",
-                  "c46c979c1d": "Mobil Emülatörü istediğiniz zaman şurada yeniden etkinleştirin:",
-                  "600f9a745a": "Ayarlar › Mobil Emülatör"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Yapıştırılan içerik emülatör klavye girişi için çok büyük.",
@@ -21692,7 +21691,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Dizinlenmiş geçmişte eşleşen oturum yok. Başka bir sorgu veya kapsam deneyin.",
       "loadMore": "Daha fazla eşleşme yükle",
       "indexedHistory": "Dizinlenmiş geçmiş",
       "hostsSkipped": "Aranmadı: {{value0}}",
@@ -21728,7 +21726,9 @@
         "unreachable": "erişilemiyor",
         "scopeNotFound": "arama kapsamı orada bulunamadı",
         "agentNotSupported": "ajan desteklenmiyor"
-      }
+      },
+      "consentTranscriptIndex": "Arama, oturum ayrıntılarında ve mesaj önizlemelerinde eşleşme arar. Konuşmaların tamamında aramak için tam metin aramasını açın (yerel dökümleri sansürlemeden dizinler). Eşleştirilmiş cihazlar da bunlarda arama yapabilir.",
+      "noMatchesToShow": "Gösterilecek eşleşen oturum yok."
     }
   },
   "sessionHistory": {
@@ -22065,7 +22065,7 @@
         "busy": "Çalışıyor",
         "idle": "Boşta",
         "settingTitle": "Claude çalışırken hesap değiştirdiğinizde",
-        "settingDescription": "Yeniden başlatma, devam eden her sohbeti yeni hesapta sürdürür.",
+        "settingDescription": "Yeniden başlatma, devam eden her sohbeti yeni hesapta sürdürür. Meşgul oturumlar yaptıkları işi keser.",
         "keyword": {
           "restart": "yeniden başlat",
           "running": "çalışıyor"
@@ -22090,13 +22090,15 @@
         "review": "İncele",
         "restartCount_other": "{{count}} oturumu yeniden başlat",
         "restartCount_one": "{{count}} oturumu yeniden başlat",
-        "reviewBody_other": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
-        "reviewBody_one": "Diğer {{count}} Claude oturumu {{next}} hesabına taşınmadı.",
-        "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
-        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yeniden başlatılmadan önce boşta kalmayı bekler.",
+        "reviewBody_other": "{{count}} Claude oturumu {{next}} hesabına taşınmadı.",
+        "reviewBody_one": "{{count}} Claude oturumu {{next}} hesabına taşınmadı.",
+        "body_other": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yaptıkları işi keser ve hemen yeniden başlar.",
+        "body_one": "{{count}} Claude oturumu hâlâ {{previous}} hesabında çalışıyor. Yeniden başlatma her konuşmayı {{next}} hesabında sürdürür. Meşgul oturumlar yaptıkları işi keser ve hemen yeniden başlar.",
         "reasonSharedSession": "Başka bir bölmede de açık",
         "sharedOne": "Aynı konuşma başka bir bölmede açık olduğu için 1 Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
-        "sharedOther": "Aynı konuşma başka bir bölmede açık olduğu için {{count}} Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir."
+        "sharedOther": "Aynı konuşma başka bir bölmede açık olduğu için {{count}} Claude oturumu {{previous}} üzerinde kalır. Yeniden başlatmak diğer bölmedeki konuşmayı yeniden açabilir.",
+        "strandedOne": "1 Claude oturumu hâlâ {{previous}} hesabında olabilir. Geçirmek için kendiniz yeniden başlatın.",
+        "strandedOther": "{{count}} Claude oturumu hâlâ {{previous}} hesabında olabilir. Geçirmek için kendiniz yeniden başlatın."
       },
       "oauthUsage": {
         "title": "Claude kullanımını sorgula",
@@ -22623,21 +22625,13 @@
     "language": {
       "back": "Diller",
       "requestPrompt": "Orca'nın hangi dili desteklemesini istersiniz?",
-      "requestSuccess": "Dil isteği kaydedildi. İlk kuruluma devam edebilirsiniz.",
       "requestError": "İsteğiniz kaydedilemedi. Tekrar deneyin.",
       "retry": "Yeniden dene",
       "requestAction": "Dil iste",
       "title": "Görüntüleme dili",
-      "device": "Sistem dili: {{language}}",
-      "unsupported": "Sistem dili: {{language}}. Bu dil henüz desteklenmiyor.",
-      "unknown": "Sistem diliniz algılanamadı. Aşağıdan bir dil seçin.",
-      "loadError": "Bu dil yüklenemedi. Tekrar deneyin.",
-      "saveError": "Dil tercihiniz kaydedilemedi. Tekrar deneyin.",
-      "other": "Başka bir dil…",
       "settingsError": "Ayarlarınız yüklenemedi.",
       "loadingSettings": "Ayarlar yükleniyor…",
-      "loading": "Dil yükleniyor…",
-      "saving": "Dil kaydediliyor…"
+      "loading": "Dil yükleniyor…"
     }
   },
   "resourceManager": {
@@ -23406,7 +23400,6 @@
     "setupTrust": {
       "reviewTitle": "Bu otomasyonun yeni kurulum komutları onaylansın mı?",
       "reviewBody": "Dalının <code>orca.yaml</code> kurulum komutları değiştiği için bir çalıştırma kurulumu atladı. Onaylarsanız sonraki çalıştırmalar bu komutları kullanır. Yalnızca <repo/> deposuna güveniyorsanız onaylayın.",
-      "approve": "Onayla",
       "approved": "Kurulum onaylandı. Bu otomasyonun sonraki çalıştırmaları onu çalıştıracak.",
       "skippedSinceApproved": "Dalının orca.yaml kurulum komutları değiştiği için bu çalıştırmada kurulum çalışmadı. Komutlar o zamandan beri onaylandı; sonraki çalıştırmalar onları çalıştıracak.",
       "skippedReview": "Kurulum çalışmadı: bu çalıştırmanın dalındaki orca.yaml kurulum komutları bu otomasyon için onaylananlardan farklı. Sonraki çalıştırmalarda kurulumun çalışması için onları inceleyin.",
@@ -23743,7 +23736,6 @@
     "terminalUnverifiable": "Orca, WSL dağıtımı {{distro}} öğesinin çalışıp çalışmadığını denetleyemediği için bu terminali başlatmadı. Dağıtımı başlatıp yeniden deneyin."
   },
   "agentPicker": {
-    "catalogUnsupported": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimlerinizi koruyabilir veya bağımsız değişkenleri kullanabilirsiniz.",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogFailed": "{{agent}} modelleri yüklenemedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
     "catalogSignIn": "Modelleri yüklemek için {{agent}} oturumu açın, ardından ajan seçiciyi yeniden açın.",
@@ -23753,7 +23745,6 @@
     "setByArguments": "Argümanlarınızla ayarlandı",
     "searchModels": "Modelleri ara",
     "noModels": "Aramanızla eşleşen model yok.",
-    "toggleArguments": "Argümanları göster veya gizle",
     "argumentsTerminalHint": "Yalnızca terminal (CLI) başlatmaları için geçerlidir",
     "searchAgentModels": "{{agent}} modellerini ara…",
     "moreModelsWithCount": "Daha fazla model ({{total}})",
@@ -23763,7 +23754,6 @@
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
     "launchTerminal": "Terminal başlat",
-    "use": "Kullan",
     "select": "Aracı seç",
     "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
     "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @",

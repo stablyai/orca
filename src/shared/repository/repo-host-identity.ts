@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
 import type { Repo } from './repo-types'
 
 declare const hostScopedRepoKeyBrand: unique symbol

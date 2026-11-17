@@ -207,9 +207,19 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('../agents/agent-hooks.js')).AGENT_HOOK_HANDLERS
   },
   {
+    name: 'uninstall',
+    keys: ['uninstall'],
+    load: async () => (await import('../uninstall/orca-uninstall-command.js')).UNINSTALL_HANDLERS
+  },
+  {
     name: 'agent-launch',
     keys: ['agent launch'],
     load: async () => (await import('../agents/agent-launch.js')).AGENT_LAUNCH_HANDLERS
+  },
+  {
+    name: 'agent-conversations',
+    keys: ['agent list', 'agent show', 'agent read'],
+    load: async () => (await import('../agents/agent-conversations.js')).AGENT_CONVERSATION_HANDLERS
   },
   {
     name: 'chat',

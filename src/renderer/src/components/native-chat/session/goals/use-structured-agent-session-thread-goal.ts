@@ -6,13 +6,13 @@ import type {
 import {
   agentOwnedThreadGoalCommand,
   agentSessionThreadGoalReport
-} from '../../../../../../shared/agent-session/agent-session-thread-goal-report'
+} from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-report'
 import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
-import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
+} from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
+import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { StructuredAgentSessionMutate } from '../structured/writes/use-structured-agent-session-mutate'
 
 export type StructuredAgentSessionThreadGoal = {

@@ -87,6 +87,10 @@
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主機",
+      "sectionTitle": "已移至 WSL 主機 ({{count}})",
+      "hide": "從此清單隱藏",
+      "hiddenToast": "已從此清單隱藏 {{name}}",
+      "hiddenToastDescription": "「重新在這台電腦上使用」仍在 {{distro}} 主機下的選單中。",
       "useHere": "重新在這台電腦上使用",
       "useHereTitle": "要重新在這台電腦上使用 {{name}} 嗎？",
       "useHereDescription": "Orca 會依照移動前的狀態在這裡開啟此專案。你的程式碼不受影響：它從未移動。移動後在 {{distro}} 主機上所做的變更（例如新分頁和聊天）會留在主機上，不會帶回來。與它一起移動的專案也會一起回來。在你於 {{distro}} 主機上將其移除之前，專案也會一直保留在那裡。此視窗將重新載入。",
@@ -143,7 +147,9 @@
         "restartGaveUp_other": "嘗試 {{count}} 次後仍無法重新啟動 {{distro}} 中的 Orca 伺服器",
         "serviceUnconfirmed": "WSL 服務未確認此發行版是否正在執行。",
         "peerCheckFailed": "Orca 無法向 WSL 主機詢問此電腦上的另一個 Orca 是否仍在使用該主機：{{detail}}",
-        "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}"
+        "removalUnrecorded": "Orca 無法記錄此次移除後仍在執行的項目：{{detail}}",
+        "installLockWait_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後接手。",
+        "installLockWaitGivesUp_other": "正在等待此發行版中的另一個 Orca 安裝完成。若未完成，Orca 將在約 {{count}} 分鐘後停止等待。"
       }
     },
     "agentSummary": {
@@ -198,6 +204,7 @@
       "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "accept": "作為主機執行",
       "projectNotFound": "找不到要移動的已新增專案。請在側邊欄的專案上使用「移至 {{distro}} 主機…」。",
+      "savedUnderAnotherPath": "此資料夾已作為專案 {{path}} 存在，暫時無法移到 {{distro}} 主機。請移除該專案，然後重新新增此資料夾以移動它。",
       "existingTitle": "新增到 {{distro}} 主機（建議）",
       "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "existingAccept": "新增到主機"
@@ -863,7 +870,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 依您的設定繼續以聊天方式開啟。",
       "defaultSurfaceSetAllChat": "全部設為聊天",
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
-      "sameAsChoice": "與 {{agent}} 相同 · {{choice}}",
       "modelListFallback": "內建清單。Orca 無法從此主機取得模型清單。",
       "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。"
@@ -891,9 +897,6 @@
         "extraArgs": "額外的 CLI 參數",
         "launchOptions": "模型與權限",
         "savedLaunchOptions": "已儲存的選項：{{value0}}。舊版伺服器使用自身的權限設定。"
-      },
-      "actionPermissions": {
-        "sameAsAgent": "與 {{agent}} 相同"
       }
     },
     "mcp": {
@@ -4838,7 +4841,9 @@
             "compactTooltip": "精簡用量資訊：每個供應商顯示一項摘要",
             "footerDetailAria": "用量頁尾詳細資訊",
             "notChecked": "未檢查",
-            "modelWeeklyLimit": "{{model}} 每週上限：{{usage}}"
+            "modelWeeklyLimit": "{{model}} 每週上限：{{usage}}",
+            "resetsIn": "{{duration}}後重設",
+            "resetsNow": "現在重設"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -6023,8 +6028,7 @@
           "issueCommand": "議題命令",
           "newVmRecipe": "新的 VM 配方",
           "vmRecipe": "VM 配方",
-          "thisRepository": "此存放庫",
-          "alwaysTrustRepo": "一律信任 <repo/> 中的 <code>orca.yaml</code>"
+          "thisRepository": "此存放庫"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "取消工作樹建立",
@@ -11791,7 +11795,7 @@
             "terminalRun": "在您的終端機中執行命令，包括 SSH"
           },
           "decisionFailed": "無法儲存權限決定。請重試。",
-          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
+          "fullAccessWarning": "完整存取：以一般程式執行，可以讀取你的檔案、使用你已儲存的登入資訊和 SSH 金鑰、使用網路、執行其他程式，並控制 Orca（包括你的終端機和代理程式）。",
           "uiWarning": "在 Orca 中執行發佈者的程式碼來繪製其檢視畫面。Orca 會顯示它能存取什麼，並在啟用前徵求您的同意。"
         },
         "PluginConsentProvenance": {
@@ -12913,9 +12917,7 @@
           }
         },
         "PluginUpdateAllDialog": {
-          "review": "檢視",
           "previewError": "無法讀取此更新",
-          "newAccess": "新增：{{value0}}",
           "failed": "無法更新 {{value0}}。其他外掛已更新。",
           "cancel": "取消",
           "updateOne": "更新 1 個外掛",
@@ -12926,23 +12928,31 @@
           "updated": "已更新",
           "needsOrca": "需要 Orca {{value0}} 或更新版本",
           "current": "已安裝",
-          "sourceMoved": "新來源：{{value0}}（原為 {{value1}}）",
           "newShortcuts": "鍵盤快速鍵",
           "newCommands": "命令",
-          "newPanels": "面板",
-          "newEvents": "更多事件",
+          "newPanels": "新增面板",
+          "newEvents": "回應更多 Orca 事件",
           "newRecipes": "機器配方",
           "newContributions": "代替你執行動作的功能",
           "allAccess": "查看所有存取權限",
-          "update": "更新"
+          "update": "更新",
+          "newFileTypes": "變更它開啟的檔案",
+          "newHooks": "可以變更或阻止 Orca 和你的代理程式的動作",
+          "newSettings": "一個設定頁面",
+          "newStatusBarItems": "狀態列項目",
+          "opensFileTypes": "開啟新的檔案類型：{{value0}}",
+          "becomesDefaultEditor": "成為 {{value0}} 的預設編輯器",
+          "needApproval": "需要你的核准",
+          "readyToUpdate": "可以更新",
+          "movedRepository": "來自另一個存放庫"
         },
         "PluginUpdateReview": {
           "title": "檢視 {{value0}} 的更新",
-          "back": "返回",
           "approve": "核准並更新",
-          "explain": "此更新要求的權限超出你已核准的版本。只有在這裡核准後才會安裝。",
-          "before": "之前",
-          "after": "之後"
+          "uncompared": "Orca 無法將此版本與你核准的版本比較。更新前請檢查它可以存取的內容。",
+          "newInVersion": "此版本新增：",
+          "titleMany": "審核 {{value0}} 個更新",
+          "history": "在 GitHub 上查看變更"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其發布者",
@@ -12950,7 +12960,8 @@
           "update": "更新前請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
           "installed": "請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
           "label": "非官方外掛：",
-          "translations": "翻譯可以變更 Orca 中的任何文字。請確認你信任 {{value0}}。"
+          "translations": "翻譯可以變更 Orca 中的任何文字。請確認你信任 {{value0}}。",
+          "community": "社群外掛程式"
         },
         "PluginCardAction": {
           "installed": "已安裝",
@@ -13039,7 +13050,7 @@
           "catalog": "目錄",
           "clear": "清除篩選",
           "themes": "主題",
-          "codeLanguages": "程式語言",
+          "codeLanguages": "語言",
           "translations": "翻譯",
           "icons": "圖示",
           "commands": "命令和面板",
@@ -13154,11 +13165,15 @@
           "movedTitle": "{{value0}} {{value1}} 來自不同的儲存庫",
           "accessTitle": "{{value0}} {{value1}} 要求更多存取權限",
           "manyTitle": "{{value0}} 個外掛程式更新等待你審查",
-          "oneDescription": "發佈者：{{value0}}。在你審查之前不會更新。",
-          "manyDescription": "在你審查之前不會更新。",
-          "review": "審查",
           "dismiss": "關閉",
-          "movedInstalled": "在你審查之前會保持關閉。"
+          "movedInstalled": "在你審查之前會保持關閉。",
+          "approveAll": "全部核准並更新",
+          "approveOne": "核准並更新",
+          "details": "詳細資料",
+          "failed": "無法更新 {{value0}}",
+          "morePlugins": "以及另外 {{value0}} 個外掛程式",
+          "uncompared": "Orca 無法將其與你核准的版本比較。",
+          "held": "{{value0}} 在你審核後有所變更，因此正在 設定 → 外掛程式 中等待你審核。"
         },
         "PluginThemeUseNow": {
           "assignedLight": "已將 {{value0}} 設為淺色主題",
@@ -14764,8 +14779,8 @@
             "databaseCount_other": "{{value0}} 個資料庫",
             "scanning": "正在掃描 {{value0}}",
             "checking": "正在檢查 {{value0}}",
-            "scanned": "已掃描 {{value0}}",
-            "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄"
+            "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄",
+            "historyRefreshed": "歷史記錄已重新整理"
           },
           "run": {
             "source": {
@@ -15820,13 +15835,6 @@
                       "c94ff11e91": "無法重新檢查設定狀態。"
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "無法隱藏行動模擬器。"
-                    }
-                  }
                 }
               }
             }
@@ -15851,17 +15859,6 @@
             "5789936d9a": "在代理程式控制螢幕時預覽 iOS 模擬器。",
             "8014b4b80b": "保留",
             "6e051a40b7": "隱藏"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "行動模擬器已隱藏",
-                  "c46c979c1d": "如需重新啟用行動模擬器，可隨時前往",
-                  "600f9a745a": "設定 › 行動模擬器"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模擬器鍵盤輸入的貼上內容過大。",
@@ -21233,7 +21230,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "已建立索引的歷史記錄中沒有符合的工作階段。請改用其他查詢或範圍。",
       "loadMore": "載入更多符合項目",
       "indexedHistory": "已建立索引的歷史記錄",
       "hostsSkipped": "未搜尋：{{value0}}",
@@ -21266,7 +21262,9 @@
         "unreachable": "無法連線",
         "scopeNotFound": "該主機上找不到搜尋範圍",
         "agentNotSupported": "不支援此代理程式"
-      }
+      },
+      "consentTranscriptIndex": "搜尋會比對工作階段詳細資料和訊息預覽。若要搜尋完整對話，請啟用全文搜尋（為本機記錄建立索引，不遮蔽內容）。配對裝置也可以搜尋這些內容。",
+      "noMatchesToShow": "沒有可顯示的符合工作階段。"
     }
   },
   "sessionHistory": {
@@ -21602,7 +21600,7 @@
         "busy": "工作中",
         "idle": "閒置",
         "settingTitle": "Claude 執行期間切換帳戶時",
-        "settingDescription": "重新啟動後，所有進行中的對話都會使用新帳戶繼續。",
+        "settingDescription": "重新啟動後，所有進行中的對話都會使用新帳戶繼續。忙碌的工作階段會中斷目前的工作。",
         "keyword": {
           "restart": "重新啟動",
           "running": "執行中"
@@ -21626,11 +21624,13 @@
         "notMovedOther": "另有 {{count}} 個工作階段未移轉。",
         "review": "審查",
         "restartCount_other": "重新啟動 {{count}} 個工作階段",
-        "reviewBody_other": "其他 {{count}} 個 Claude 工作階段未移至 {{next}}。",
-        "body_other": "{{count}} 個 Claude 工作階段仍在 {{previous}} 上執行。重新啟動後，各對話將在 {{next}} 上繼續。忙碌的工作階段會等待閒置後再重新啟動。",
+        "reviewBody_other": "{{count}} 個 Claude 工作階段未移至 {{next}}。",
+        "body_other": "{{count}} 個 Claude 工作階段仍在 {{previous}} 上執行。重新啟動後，各對話將在 {{next}} 上繼續。忙碌的工作階段會中斷目前的工作並立即重新啟動。",
         "reasonSharedSession": "在另一個窗格中也已開啟",
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
-        "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。"
+        "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
+        "strandedOne": "1 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。",
+        "strandedOther": "{{count}} 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。"
       },
       "oauthUsage": {
         "title": "Claude 用量輪詢",
@@ -22150,21 +22150,13 @@
     "language": {
       "back": "語言",
       "requestPrompt": "希望 Orca 支援哪種語言？",
-      "requestSuccess": "已記錄語言支援需求。可以繼續初始設定。",
       "requestError": "無法記錄需求。請重試。",
       "retry": "重試",
       "requestAction": "申請語言支援",
       "title": "顯示語言",
-      "device": "系統語言：{{language}}",
-      "unsupported": "系統語言：{{language}}。尚未支援此語言。",
-      "unknown": "無法偵測系統語言。請在下方選擇語言。",
-      "loadError": "無法載入此語言。請重試。",
-      "saveError": "無法儲存語言偏好設定。請重試。",
-      "other": "其他語言…",
       "settingsError": "無法載入設定。",
       "loadingSettings": "正在載入設定…",
-      "loading": "正在載入語言…",
-      "saving": "正在儲存語言…"
+      "loading": "正在載入語言…"
     }
   },
   "resourceManager": {
@@ -22932,7 +22924,6 @@
     "setupTrust": {
       "reviewTitle": "要核准此自動化的新設定命令嗎？",
       "reviewBody": "由於分支的 <code>orca.yaml</code> 設定命令已變更，某次執行略過了設定。核准後，之後的執行將使用這些命令。僅在你信任 <repo/> 時核准。",
-      "approve": "核准",
       "approved": "已核准設定。此自動化之後的執行將執行它。",
       "skippedSinceApproved": "由於分支的 orca.yaml 設定命令已變更，此次執行未執行設定。這些命令此後已獲核准，之後的執行將執行它們。",
       "skippedReview": "設定未執行：此次執行分支中的 orca.yaml 設定命令與此自動化已核准的命令不同。請審查它們，以便之後的執行執行設定。",
@@ -23269,7 +23260,6 @@
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   },
   "agentPicker": {
-    "catalogUnsupported": "此主機上無法使用 {{agent}} 模型。你可以保留目前的選擇或使用引數。",
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
     "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
@@ -23279,7 +23269,6 @@
     "setByArguments": "由引數設定",
     "searchModels": "搜尋模型",
     "noModels": "沒有符合搜尋條件的模型。",
-    "toggleArguments": "切換引數顯示",
     "argumentsTerminalHint": "僅適用於終端機（CLI）啟動",
     "searchAgentModels": "搜尋 {{agent}} 模型…",
     "moreModelsWithCount": "更多模型 ({{total}})",
@@ -23289,7 +23278,6 @@
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
     "launchTerminal": "啟動終端機",
-    "use": "使用",
     "select": "選擇代理程式",
     "promptPlaceholder": "新增提示詞（選填）：/ 選擇技能，@ 選擇檔案",
     "promptPlaceholderFilesOnly": "新增提示詞（選填）：@ 選擇檔案",

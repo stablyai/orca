@@ -1,8 +1,8 @@
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   assertImportedFolderRemoteMatchesProject,
   resolveImportedFolderProjectLink
-} from '../../../shared/imported-folder-project-identity'
+} from '../../../shared/project/host-setup/imported-folder-project-identity'
 import {
   getProjectIdentityKey,
   getProjectIdForProviderIdentity,

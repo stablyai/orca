@@ -43,7 +43,7 @@ export const withProgress = defineFixture({
   render: () => <StateGrid size="md" progress={42} />
 })
 
-// Unread swaps only the done check for the unread dot; live and needs-you glyphs keep precedence.
+// Unread only changes the label; every glyph, including the done check, stays as-is.
 export const unread = defineFixture({
   width: 420,
   render: () => (

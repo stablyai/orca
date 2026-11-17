@@ -1,6 +1,6 @@
 import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import '../../../../../shared/constants'
+import '../../../../../shared/orca-profiles/constants'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,

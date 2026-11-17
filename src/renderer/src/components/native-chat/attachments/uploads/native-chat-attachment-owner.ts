@@ -1,5 +1,5 @@
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { getKnownExecutionHostIdForWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '../../../../lib/workspace/ownership/resolve-owner'
 import { getConnectionIdFromState } from '../../../../lib/workspace/ownership/connection-owner-resolution'
@@ -7,8 +7,8 @@ import {
   toRuntimeExecutionHostId,
   getConnectionExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findKnownWorktreeById } from '../../../../store/slices/worktrees/listing/detected-worktree-meta'
 import { getRuntimeEnvironmentRevision } from '../../../../runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { AppState } from '../../../../store/types'

@@ -1,6 +1,6 @@
 import type { ObservedAccountPlans } from '@/lib/provider-accounts/observed-account-plans'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState

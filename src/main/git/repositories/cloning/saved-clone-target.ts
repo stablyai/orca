@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
 import { isShowRefNoMatchError } from '../../../../shared/git/refs/git-show-ref-no-match'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'

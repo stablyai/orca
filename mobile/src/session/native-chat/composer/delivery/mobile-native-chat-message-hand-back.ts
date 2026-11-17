@@ -1,5 +1,5 @@
 import type { AgentJournalMessageItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { queuedEditTextForKeptImages } from '../../../../../../src/shared/queued-message-edit'
+import { queuedEditTextForKeptImages } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit'
 import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import { mobileDraftImageOfBlock } from '../../input/queued-messages/mobile-queued-message-edit-draft'
 import {
