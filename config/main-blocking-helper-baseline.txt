@@ -53,10 +53,10 @@
 3 src/main/ai-vault/scanners/hermes/hermes-state-db-schema.ts
 2 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sources.ts
 15 src/main/ai-vault/scanners/hermes/session-scanner-hermes-sqlite.ts
-3 src/main/ai-vault/scanners/hermes/session-scanner-hermes-worker.ts
+5 src/main/ai-vault/scanners/hermes/session-scanner-hermes-worker.ts
 1 src/main/ai-vault/scanners/omp/omp-session-root.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
-13 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch.ts
+15 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch.ts
 1 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts
 25 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-wsl-client.ts
@@ -541,6 +541,7 @@
 4 src/main/hermes/hermes-acp-launch-spec.ts
 4 src/main/hermes/hermes-default-home.ts
 15 src/main/hermes/hermes-home-filesystem.ts
+3 src/main/hermes/hermes-transcript-import.ts
 27 src/main/hermes/hook-service.ts
 2 src/main/host/deferred-secret-protection-report.ts
 1 src/main/host/electron-speech-services.ts
@@ -792,6 +793,7 @@
 4 src/main/native-chat/agent-session-journal/database/journal-legacy-source.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
+1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
 5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 2 src/main/native-chat/agent-session-journal/input-order/journal-input-conversion.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
@@ -838,6 +840,7 @@
 1 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/native-chat/transcript-filesystem/wsl-transcript-fs-access.ts
 2 src/main/native-chat/transcript-history/codex/codex-rollout-history-source.ts
+7 src/main/native-chat/transcript-history/hermes/transcript-hermes-sqlite.ts
 4 src/main/native-chat/transcript-history/opencode/transcript-opencode-database.ts
 7 src/main/native-chat/transcript-history/opencode/transcript-opencode-sqlite-query.ts
 4 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
