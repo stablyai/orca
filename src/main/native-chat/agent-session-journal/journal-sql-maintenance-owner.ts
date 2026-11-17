@@ -33,7 +33,8 @@ export function createJournalSqlMaintenance(
       legacySource,
       writer,
       readers,
-      conversions,
+      // A conversion the proof waits on keeps periodic cleanup running, as idle conversion does.
+      { ensure: (id, foreground) => maintenance.serviceWhile(conversions.ensure(id, foreground)) },
       () => maintenance.boundary(),
       options.onMaintenanceError,
       undefined,

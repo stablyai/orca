@@ -1,4 +1,7 @@
-import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import {
+  JournalLegacyIneligibleError,
+  JournalLegacyRetentionError
+} from './journal-legacy-retention-error'
 import { ownsOrcadProfileDirectory } from '../../orcad/instance-lock/orcad-instance-lock-hold'
 import { journalDatabasePath } from './database/journal-host-database'
 import {
@@ -120,6 +123,8 @@ export class JournalLegacyRetirement {
     try {
       await this.attempt()
     } catch (error) {
+      // Unsupported storage or file identity doesn't change while this process runs.
+      this.done ||= error instanceof JournalLegacyIneligibleError
       this.retryAt = performance.now() + this.retryDelay
       this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
       const reason = error instanceof Error ? error.message : String(error)

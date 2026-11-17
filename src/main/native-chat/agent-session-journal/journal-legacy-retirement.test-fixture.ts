@@ -131,7 +131,8 @@ export async function profile(
   const launch = (
     version = '1.0.1',
     owns = true,
-    lock = native ? acquireJournalLegacyFileLock : fakeLock
+    lock = native ? acquireJournalLegacyFileLock : fakeLock,
+    eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
   ) =>
     new JournalLegacyRetirement(
       root,
@@ -143,7 +144,7 @@ export async function profile(
       () => owns,
       lock,
       undefined,
-      native ? undefined : { check: async () => {}, present: () => {} },
+      eligibility ?? (native ? undefined : { check: async () => {}, present: () => {} }),
       version
     )
   return { root, filename, db, launch, errors, source, readers }

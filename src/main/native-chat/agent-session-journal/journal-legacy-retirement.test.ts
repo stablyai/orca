@@ -4,6 +4,7 @@ import type Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import { olderOrcaChat, profile } from './journal-legacy-retirement.test-fixture'
+import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
 
 const companions = (filename: string) =>
   [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
@@ -198,4 +199,20 @@ it('finishes removing the absorbed WAL a removal left behind its main file, and 
   save(retiring(wal.ino))
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(false)
+})
+
+it('checks unsupported storage once per launch, not on every retry', async () => {
+  const { filename, launch, errors } = await profile()
+  const check = vi.fn(async () => {
+    throw new JournalLegacyIneligibleError('legacy storage or file identity is unsupported')
+  })
+  const retirement = launch('1.0.1', true, undefined, { check, present: () => {} })
+  const now = vi.spyOn(performance, 'now')
+  for (let hour = 0; hour < 48; hour++) {
+    now.mockReturnValue(hour * 60 * 60_000)
+    await retirement.run()
+  }
+  expect(check).toHaveBeenCalledTimes(1)
+  expect(errors).toHaveLength(1)
+  expect(existsSync(filename)).toBe(true)
 })

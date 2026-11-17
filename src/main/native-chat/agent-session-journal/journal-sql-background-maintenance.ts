@@ -275,7 +275,7 @@ export class JournalSqlBackgroundMaintenance {
           return
         }
         try {
-          await this.convertSavedChat(sessionId)
+          await this.serviceWhile(this.conversions.ensure(sessionId, false))
         } catch (error) {
           this.report(error, sessionId)
         }
@@ -284,16 +284,11 @@ export class JournalSqlBackgroundMaintenance {
     }
   }
 
-  private async convertSavedChat(sessionId: string): Promise<void> {
+  async serviceWhile<T>(work: Promise<T>): Promise<T> {
     let complete = false
-    const conversion = this.conversions.ensure(sessionId, false).then(
-      () => {
-        complete = true
-      },
-      (error) => {
-        complete = true
-        this.report(error, sessionId)
-      }
+    const settled = work.then(
+      () => (complete = true),
+      () => (complete = true)
     )
     while (!complete && !this.stopped.signal.aborted) {
       await this.runOrdinaryWork()
@@ -307,11 +302,12 @@ export class JournalSqlBackgroundMaintenance {
         signal.addEventListener('abort', ready, { once: true })
       })
       try {
-        await Promise.race([conversion, wake])
+        await Promise.race([settled, wake])
       } finally {
         signal.removeEventListener('abort', ready)
       }
     }
+    return complete ? work : Promise.reject(new Error('journal maintenance stopped'))
   }
 
   private report(error: unknown, sessionId?: string): void {
