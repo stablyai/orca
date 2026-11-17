@@ -168,13 +168,16 @@ export class ZcodeStructuredOptions {
     }
   }
 
-  /** The level a switch carries: the target's own default, else the chat's current, else the lowest. */
+  /** The level a switch carries: the target's own default, else a level the target lists, else its lowest. */
   private levelForSwitch(modelId: string): string {
     const declared = this.models.find((entry) => entry.id === modelId)
+    // A carried-over level must be one the target lists — the chat's current model's default
+    // may name a level the target does not offer, and the switch would be refused or stored wrong.
+    const listed = (level: string | undefined): string | undefined =>
+      level && declared?.reasoningLevels.some((entry) => entry.value === level) ? level : undefined
     return (
       declared?.defaultLevel ??
-      this.effortOf(this.currentModelId) ??
-      this.models.find((entry) => entry.id === this.currentModelId)?.reasoningLevels[0]?.value ??
+      listed(this.effortOf(this.currentModelId)) ??
       declared?.reasoningLevels[0]?.value ??
       this.thoughtLevels[0]?.value ??
       'low'

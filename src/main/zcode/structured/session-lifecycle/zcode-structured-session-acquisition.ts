@@ -81,7 +81,9 @@ export class ZcodeAcquisitions {
       // An in-flight retirement still holds the old session row; waiting keeps the ownership
       // check honest instead of failing a re-acquire that arrives a moment too early.
       await Promise.all(Array.from(this.retiring))
-      if (this.sessions.has(sessionId)) {
+      // A retained failed-start child whose exit is still unproven counts as owned: the
+      // ownership check must refuse a second child, not silently double-start.
+      if (this.sessions.has(sessionId) || this.failedStarts.has(sessionId)) {
         throw new AgentSessionPreSpawnError(new Error('zcode session already owns a child'))
       }
       const generation = mintZcodeAcquisitionGeneration(this.deps)
@@ -150,16 +152,9 @@ export class ZcodeAcquisitions {
   acknowledgeSessionRelease(sessionId: string): void {
     const retained = this.failedStarts.get(sessionId)
     if (retained !== undefined) {
-      this.failedStarts.delete(sessionId)
-      const retirement = retained
-        .close()
-        .catch(() => false)
-        .then((stopped) => {
-          if (stopped) {
-            this.failedStarts.delete(sessionId)
-          }
-        })
-      this.trackRetirement(retirement)
+      // The entry stays until close proves exit: an unproven close must keep the child
+      // owned, so a re-acquire refuses instead of starting a second one.
+      this.trackRetirement(this.closeRetained(sessionId, retained).then(() => undefined))
       return
     }
     const retirement = acknowledgeZcodeSessionRelease(this.sessions, sessionId)
@@ -167,17 +162,24 @@ export class ZcodeAcquisitions {
   }
 
   /** Closes the retained failed-start child when one exists, else the published session. */
-  async closeOwned(sessionId: string): Promise<boolean> {
+  closeOwned(sessionId: string): Promise<boolean> {
     const retained = this.failedStarts.get(sessionId)
     if (retained !== undefined) {
-      this.failedStarts.delete(sessionId)
-      return retained.close().catch(() => false)
+      return this.closeRetained(sessionId, retained)
     }
     return closeZcodeSession(this.sessions, sessionId)
   }
 
   forceClose = async (sessionId: string, reason: string): Promise<void> => {
-    this.failedStarts.delete(sessionId)
+    const retained = this.failedStarts.get(sessionId)
+    if (retained !== undefined) {
+      // The same settle-first semantics a published session gets, over the retained child.
+      retained.failureClose = reason
+      retained.markJournalClosed(reason)
+      retained.markEnded(Date.now())
+      await this.closeRetained(sessionId, retained)
+      return
+    }
     await forceCloseZcodeSession(this.sessions, sessionId, reason)
   }
 
@@ -187,12 +189,23 @@ export class ZcodeAcquisitions {
     await Promise.allSettled(this.pendingAcquires)
     // Deleting the current entry during Map iteration is safe.
     for (const [sessionId, session] of this.failedStarts) {
-      this.failedStarts.delete(sessionId)
-      await session.close().catch(() => false)
+      await this.closeRetained(sessionId, session)
     }
     await closeAllZcodeSessions(this.sessions, this.endings, (sessionId) =>
-      closeZcodeSession(this.sessions, sessionId)
+      this.closeOwned(sessionId)
     )
+  }
+
+  /** Closes a retained child and forgets it only once its exit is proven. */
+  private async closeRetained(
+    sessionId: string,
+    session: ZcodeStructuredSession
+  ): Promise<boolean> {
+    const stopped = await session.close().catch(() => false)
+    if (stopped) {
+      this.failedStarts.delete(sessionId)
+    }
+    return stopped
   }
 
   private trackRetirement(retirement: Promise<void>): void {

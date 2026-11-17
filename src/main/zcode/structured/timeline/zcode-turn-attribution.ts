@@ -19,20 +19,20 @@ export class ZcodeTurnAttribution {
   }
 
   /**
-   * Whether this completion ends a background turn (matched by its input id), never the
-   * foreground one. Unattributed events fall through to the foreground — a bare completed is
-   * the chat's own turn, since background starts record their input ids when zcode carries them.
+   * The background turn key this completion settles, or null when it belongs to the chat's own
+   * foreground turn. Unattributed events fall through to the foreground — a bare completed is
+   * the foreground's, since background starts record their input ids when zcode carries them.
    */
-  endsBackgroundTurn(inputId: string | null): boolean {
+  settledBackgroundTurn(inputId: string | null): string | null {
     if (inputId === null) {
-      return false
+      return null
     }
     const turnKey = this.keysByInputId.get(inputId)
     if (turnKey === undefined || !this.backgroundKeys.has(turnKey)) {
-      return false
+      return null
     }
     this.backgroundKeys.delete(turnKey)
     this.keysByInputId.delete(inputId)
-    return true
+    return turnKey
   }
 }

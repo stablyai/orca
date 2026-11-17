@@ -67,6 +67,9 @@ async function scanZcodeAtRest(
     const launch = await zcodeHeadlessLaunch(environment, {
       commandSettings: deps.resolveCommandSettings?.()
     })
+    if (signal.aborted) {
+      return { commands: undefined, fromAgent: false }
+    }
     const connection = await spawnZcodeAppServerConnection(
       {
         command: launch.command,
@@ -78,6 +81,11 @@ async function scanZcodeAtRest(
       },
       { onServerRequest: (request) => answerProbeAsk(connection, request) }
     )
+    if (signal.aborted) {
+      // The abort landed while the spawn was pending; close before any request goes out.
+      await connection.close().catch(() => undefined)
+      return { commands: undefined, fromAgent: false }
+    }
     // A retired scan closes the child, so its request settles at once and the probe permit
     // frees for the next background scan instead of riding the timeout out.
     const abortClose = (): void => {

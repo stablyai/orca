@@ -189,8 +189,10 @@ export class ZcodeTimelineTranslator {
   private turnCompleted(payload: unknown, at: number): ProviderTimelineEvent[] {
     const record = readRecord(payload)
     const usage = usageEvent(readTokenUsage(record?.usage), at, this.providerSessionId)
-    // A background task's turn ended: the foreground turn keeps running, its usage still counts.
-    if (this.attribution.endsBackgroundTurn(readString(record?.inputId))) {
+    // A background completion settles only its own turn — unless that turn had opened the idle
+    // foreground slot, in which case it closes the slot like any turn would.
+    const backgroundKey = this.attribution.settledBackgroundTurn(readString(record?.inputId))
+    if (backgroundKey !== null && backgroundKey !== this.openTurnKey) {
       return usage
     }
     const events: ProviderTimelineEvent[] = [
@@ -212,8 +214,9 @@ export class ZcodeTimelineTranslator {
 
   private turnFailed(payload: unknown, at: number): ProviderTimelineEvent[] {
     const record = readRecord(payload)
-    // A background task's failure never ends the foreground turn or adds a failure row.
-    if (this.attribution.endsBackgroundTurn(readString(record?.inputId))) {
+    // A background failure that never held the foreground slot ends quietly.
+    const backgroundKey = this.attribution.settledBackgroundTurn(readString(record?.inputId))
+    if (backgroundKey !== null && backgroundKey !== this.openTurnKey) {
       return []
     }
     const message =
