@@ -15,8 +15,7 @@ import {
   stripRetiredWebChatSettings,
   migrateStoredWebSettings,
   needsChatUiChoiceCarry,
-  retainOriginalWebChatSetting,
-  runtimeChatPermissionSetting
+  retainOriginalWebChatSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
 import { followHostVoiceSettings } from '../agents/web-speech-api'
@@ -164,7 +163,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         result.settings.prBotAuthorOverrides
       )
     }
-    Object.assign(runtimeSettings, runtimeChatPermissionSetting(result.settings))
+    Object.assign(runtimeSettings, chatSettings.read(result.settings))
     chatSettings.publish(requestedEnvironment, result.settings)
     // Read-only host capability; a host without a sharing service omits it, which must not keep a stale local grant.
     runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled === true

@@ -1,3 +1,6 @@
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { NativeChatRemoteControlMenuItems } from '../../remote-control/NativeChatRemoteControlMenuItems'
+import { useNativeChatRemoteControl } from '../../remote-control/use-native-chat-remote-control'
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useMemo } from 'react'
 import { PanelBottomClose, PanelRightClose, X } from 'lucide-react'
@@ -19,7 +22,13 @@ export function NativeChatStructuredPaneMenuItems({
   splitShortcutLabels,
   resolveOrcaSessionId
 }: {
-  pane: { tabId: string; worktreeId: string; groupId: string; sessionId: string }
+  pane: {
+    tabId: string
+    worktreeId: string
+    groupId: string
+    sessionId: string
+    remoteControlTarget?: RuntimeClientTarget
+  }
   leadingSeparator: boolean
   splitShortcutLabels?: { right: string; down: string }
   resolveOrcaSessionId?: () => Promise<string | null>
@@ -46,6 +55,12 @@ export function NativeChatStructuredPaneMenuItems({
         {t('components.native-chat.splitDown', 'Split Down')}
         <DropdownMenuShortcut>{splitShortcutLabels?.down}</DropdownMenuShortcut>
       </DropdownMenuItem>
+      {pane.remoteControlTarget ? (
+        <NativeChatPaneRemoteControlItems
+          target={pane.remoteControlTarget}
+          sessionId={pane.sessionId}
+        />
+      ) : null}
       {providerSessionId || resolveOrcaSessionId ? (
         <>
           <DropdownMenuSeparator />
@@ -69,4 +84,20 @@ export function NativeChatStructuredPaneMenuItems({
       ) : null}
     </>
   )
+}
+
+function NativeChatPaneRemoteControlItems({
+  target,
+  sessionId
+}: {
+  target: RuntimeClientTarget
+  sessionId: string
+}): React.JSX.Element | null {
+  const remoteControl = useNativeChatRemoteControl(target, sessionId)
+  return remoteControl.set ? (
+    <>
+      <DropdownMenuSeparator />
+      <NativeChatRemoteControlMenuItems remoteControl={remoteControl} withStatus={false} />
+    </>
+  ) : null
 }

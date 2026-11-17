@@ -1,3 +1,6 @@
+import { useNativeChatRemoteControl } from '../../remote-control/use-native-chat-remote-control'
+import { setNativeChatRemoteControl } from '../../remote-control/native-chat-remote-control-actions'
+import { agentSessionProviderRemoteControlIsOn } from '../../../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useNativeChatMcpTray } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
@@ -126,6 +129,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     hostAgent?.capabilities.mcpServers === true &&
     (props.target.kind === 'local' || remoteManagesMcp)
   const mcpTray = useNativeChatMcpTray(props.sessionId, props.isVisible)
+  const remoteControl = useNativeChatRemoteControl(props.target, props.sessionId)
   const { fork, sideChat } = forks
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
@@ -194,7 +198,16 @@ export function useNativeChatStructuredComposerTransport(args: {
             compactInstructions: controller.compactInstructions,
             runConversationCommand: controller.runConversationCommand,
             ...(changeThreadGoal ? { changeThreadGoal } : {}),
-            ...(mcpPanel ? { openMcpPanel: mcpPanel.open } : {})
+            ...(mcpPanel ? { openMcpPanel: mcpPanel.open } : {}),
+            ...(props.agent === 'claude' && remoteControl.set
+              ? {
+                  toggleRemoteControl: () =>
+                    setNativeChatRemoteControl(
+                      remoteControl,
+                      !agentSessionProviderRemoteControlIsOn(remoteControl)
+                    )
+                }
+              : {})
           },
           onSent
         ).then(localizeStructuredComposerOutcome),
@@ -239,6 +252,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     controller,
     managesMcp,
     mcpTray,
+    remoteControl,
     fork,
     sideChat,
     worktreeId,

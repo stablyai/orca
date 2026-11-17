@@ -1,4 +1,4 @@
-import { AlertCircle, Paperclip, ServerOff, Smartphone, X } from 'lucide-react'
+import { AlertCircle, Paperclip, RadioTower, ServerOff, Smartphone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -55,15 +55,18 @@ export function NativeChatPromptSlotNotices({
 function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.Element {
   const t = useTranslate()
   const isError = notice.kind === 'error'
-  const isHostWarning = notice.kind === 'host' && notice.tone === 'warning'
+  const isHostWarning =
+    (notice.kind === 'host' || notice.kind === 'remote-control') && notice.tone === 'warning'
   const Icon =
     notice.kind === 'host'
       ? ServerOff
-      : notice.kind === 'device'
-        ? Smartphone
-        : isError
-          ? AlertCircle
-          : Paperclip
+      : notice.kind === 'remote-control'
+        ? RadioTower
+        : notice.kind === 'device'
+          ? Smartphone
+          : isError
+            ? AlertCircle
+            : Paperclip
   const dismissLabel = t('components.native-chat.notices.dismiss', 'Dismiss')
   return (
     <li data-notice-kind={notice.kind} className={cn(isError && 'bg-destructive/5')}>

@@ -11,6 +11,8 @@ import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
 import { NativeChatSettingsButton } from '../../appearance/NativeChatSettingsButton'
+import { NativeChatRemoteControlButton } from '../../remote-control/NativeChatRemoteControlButton'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
 import type { NativeChatHandOff } from './use-native-chat-hand-off'
 
@@ -27,7 +29,8 @@ export function NativeChatPaneHeader({
   nativeChat,
   focused,
   colorScheme,
-  handOff
+  handOff,
+  target
 }: {
   tabId: string
   worktreeId: string
@@ -36,6 +39,7 @@ export function NativeChatPaneHeader({
   focused: boolean
   colorScheme: React.CSSProperties['colorScheme']
   handOff?: NativeChatHeaderHandOff
+  target?: RuntimeClientTarget
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
@@ -77,6 +81,13 @@ export function NativeChatPaneHeader({
               {handOffLabel}
             </TooltipContent>
           </Tooltip>
+        ) : null}
+        {nativeChat.agent === 'claude' && target ? (
+          <NativeChatRemoteControlButton
+            sessionId={nativeChat.sessionId}
+            target={target}
+            focused={focused}
+          />
         ) : null}
         {nativeChat.agent && agentForksConversations(nativeChat.agent) ? (
           <NativeChatResumeInCliButton
@@ -134,6 +145,7 @@ export function nativeChatPaneHeader(
     | 'tabId'
     | 'groupId'
     | 'sessionId'
+    | 'target'
     | 'agent'
     | 'isVisible'
     | 'isFocusedGroup'
@@ -151,6 +163,7 @@ export function nativeChatPaneHeader(
       nativeChat={{ sessionId: view.sessionId, agent: view.agent }}
       focused={view.isFocusedGroup}
       colorScheme={colorScheme}
+      target={view.target}
       handOff={
         handOff?.available
           ? { open: handOff.open, disabled: handOff.preparing || handOff.dialog !== null }

@@ -69,6 +69,20 @@ const SHARED_SLASH_COMMAND_DESCRIPTIONS: SlashCommandDescriptionCopy = {
   mcp: {
     'Manage MCP servers': () =>
       translate('components.native-chat.slashCommandDescriptions.mcpManage', 'Manage MCP servers')
+  },
+  rc: {
+    'Short for /remote-control': () =>
+      translate(
+        'components.native-chat.slashCommandDescriptions.remoteControlAlias',
+        'Short for /remote-control'
+      )
+  },
+  'remote-control': {
+    'Connect or disconnect Remote Control': () =>
+      translate(
+        'components.native-chat.slashCommandDescriptions.remoteControlToggle',
+        'Connect or disconnect Remote Control'
+      )
   }
 }
 

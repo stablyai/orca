@@ -1,6 +1,7 @@
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
+import { ClaudeRemoteControlIcon } from '../../remote-control/ClaudeRemoteControlIcon'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -147,6 +148,15 @@ export function NativeChatUserMessageRow({
         <div className="flex items-center gap-1 text-xs text-chat-foreground-faint">
           <Goal className="size-3" aria-hidden />
           <span>{t('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
+        </div>
+      ) : null}
+      {message.sentFrom === 'provider-remote-control' ? (
+        // The icon's badge overhangs its box, so the gap clears it.
+        <div className="flex items-center gap-2 text-xs text-chat-foreground-faint">
+          <ClaudeRemoteControlIcon size={12} />
+          <span>
+            {t('components.native-chat.remoteControl.sentFrom', 'Sent via Remote Control')}
+          </span>
         </div>
       ) : null}
       {!from ? (

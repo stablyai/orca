@@ -1,6 +1,11 @@
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { AGENT_SESSION_PROVIDER_REMOTE_CONTROL_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import {
+  nativeChatClaudeRemoteControl,
+  type NativeChatClaudeRemoteControl
+} from '../../../../../shared/native-chat/settings/native-chat-claude-remote-control'
 import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import {
   useChatSettingsOwnPermissions,
@@ -17,7 +22,11 @@ import {
   nativeChatMarksNewMessages,
   nativeChatScrollsToLatestOnSend
 } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
-import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import {
+  SettingsRow,
+  SettingsSegmentedControl,
+  SettingsSwitchRow
+} from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
@@ -47,6 +56,11 @@ export function ChatBehaviorSetting({
       STRUCTURED_CHAT_HOST,
       AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
     ) === 'supported'
+  const hostConnectsRemoteControl =
+    useStructuredAgentSessionHostCapabilityState(
+      STRUCTURED_CHAT_HOST,
+      AGENT_SESSION_PROVIDER_REMOTE_CONTROL_RUNTIME_CAPABILITY
+    ) === 'supported'
   const entries = getChatBehaviorEntriesByKey()
   const rows = [
     ...(settings.nativeChatPermissionMode !== undefined
@@ -55,6 +69,7 @@ export function ChatBehaviorSetting({
     entries.resumeOnRestart,
     entries.idleStop,
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
+    ...(hostConnectsRemoteControl ? [entries.claudeRemoteControl] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
     entries.markNewMessages,
@@ -127,6 +142,44 @@ export function ChatBehaviorSetting({
             )}
             onChange={() =>
               updateSettings({ nativeChatAutoContinueAfterUsageLimit: !autoContinueEnabled })
+            }
+          />
+        </SearchableSetting>
+      ) : null}
+      {hostConnectsRemoteControl ? (
+        <SearchableSetting
+          {...entries.claudeRemoteControl}
+          id={entries.claudeRemoteControl.targetSectionId}
+          forceVisible={forceVisible}
+          className="max-w-none"
+        >
+          <SettingsRow
+            label={entries.claudeRemoteControl.title}
+            description={entries.claudeRemoteControl.description}
+            alignTop
+            control={
+              <SettingsSegmentedControl<NativeChatClaudeRemoteControl>
+                ariaLabel={entries.claudeRemoteControl.title}
+                value={nativeChatClaudeRemoteControl(settings.nativeChatClaudeRemoteControl)}
+                onChange={(value) => updateSettings({ nativeChatClaudeRemoteControl: value })}
+                options={[
+                  {
+                    value: 'claude-code',
+                    label: t(
+                      'components.settings.nativeChat.claudeRemoteControlFollow',
+                      'Claude Code'
+                    )
+                  },
+                  {
+                    value: 'on',
+                    label: t('components.settings.nativeChat.claudeRemoteControlOn', 'On')
+                  },
+                  {
+                    value: 'off',
+                    label: t('components.settings.nativeChat.claudeRemoteControlOff', 'Off')
+                  }
+                ]}
+              />
             }
           />
         </SearchableSetting>

@@ -36,7 +36,8 @@ export function useNativeChatStructuredPaneNotices({
   composerError,
   install,
   hostSendGate,
-  hostNotice
+  hostNotice,
+  remoteControlNotice
 }: {
   props: Omit<NativeChatStructuredViewProps, 'mode'>
   ownerWorktreeId: string | null
@@ -53,6 +54,7 @@ export function useNativeChatStructuredPaneNotices({
   install: ReturnType<typeof useNativeChatInstallSlot>
   hostSendGate: ReturnType<typeof useNativeChatHostSendGate>
   hostNotice: NativeChatComposerNotice | null
+  remoteControlNotice: NativeChatComposerNotice | null
 }) {
   const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
@@ -115,6 +117,9 @@ export function useNativeChatStructuredPaneNotices({
   )
   if (hostNotice) {
     notices.push(hostNotice)
+  }
+  if (remoteControlNotice) {
+    notices.push(remoteControlNotice)
   }
   return { setup, notices }
 }
