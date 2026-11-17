@@ -30,7 +30,8 @@ import {
   buildPierreDiffCommentAnnotations,
   renderPierreDiffCommentAnnotation,
   type PierreDiffAnnotationData,
-  type PierreDiffCommentAnnotation
+  type PierreDiffCommentAnnotation,
+  type PierreDiffDraftTarget
 } from './pierre-diff-comment-annotations'
 import { usePierreDiffOverview } from './use-pierre-diff-overview'
 import { usePierrePluginTokenizer } from './use-pierre-plugin-tokenizer'
@@ -88,7 +89,8 @@ export type PierreDiffSurfaceProps = {
   addCommentPlaceholder?: string
   addCommentLabel?: string
   onCancelComment?: () => void
-  onSubmitComment?: (body: string) => Promise<boolean>
+  /** Receives the anchor the draft card displays, which may be clamped to the current file. */
+  onSubmitComment?: (body: string, target: PierreDiffDraftTarget) => Promise<boolean>
   className?: string
 }
 

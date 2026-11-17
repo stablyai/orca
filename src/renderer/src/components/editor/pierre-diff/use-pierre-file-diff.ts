@@ -4,7 +4,21 @@ import type { PierreDiffInput } from './pierre-diff-metadata'
 import { requestPierreFileDiff } from './pierre-diff-parse-client'
 import { preparePierreDiffHighlight } from './pierre-diff-highlight'
 
-type DiffSnapshot = { input: PierreDiffInput; diff: FileDiffMetadata | null; error: string | null }
+// staleDiff: diff was kept from an earlier input after this input's parse failed.
+type DiffSnapshot = {
+  input: PierreDiffInput
+  diff: FileDiffMetadata | null
+  error: string | null
+  staleDiff?: boolean
+}
+
+function sameDiffContent(a: PierreDiffInput | undefined, b: PierreDiffInput | null): boolean {
+  return (
+    a?.originalContent === b?.originalContent &&
+    a?.modifiedContent === b?.modifiedContent &&
+    a?.lang === b?.lang
+  )
+}
 
 export function usePierreFileDiff(input: PierreDiffInput | null, editable = false) {
   const [snapshot, setSnapshot] = useState<DiffSnapshot | null>(null)
@@ -12,10 +26,7 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
   const sameFile =
     snapshot?.input.cacheKey === input?.cacheKey && snapshot?.input.path === input?.path
-  const currentContent =
-    snapshot?.input.originalContent === input?.originalContent &&
-    snapshot?.input.modifiedContent === input?.modifiedContent &&
-    snapshot?.input.lang === input?.lang
+  const currentContent = sameDiffContent(snapshot?.input, input) && !snapshot?.staleDiff
   const fileDiff =
     input && sameFile && (editable || currentContent) ? (snapshot?.diff ?? null) : null
   const renderedScopeRef = useRef<string | null>(null)
@@ -79,19 +90,21 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
           },
           (error: unknown) => {
             if (!controller.signal.aborted) {
-              setSnapshot((previous) => ({
-                input,
+              setSnapshot((previous) => {
                 // Keep the last good render for this file. A transient worker or queue
                 // failure must not unmount a live edit session under the user's cursor;
-                // the error is surfaced alongside the still-rendered diff instead.
-                diff:
-                  previous &&
+                // read-only views must not present that older content as this input's.
+                const keep =
+                  previous !== null &&
                   previous.input.cacheKey === input.cacheKey &&
                   previous.input.path === input.path
-                    ? previous.diff
-                    : null,
-                error: error instanceof Error ? error.message : String(error)
-              }))
+                return {
+                  input,
+                  diff: keep ? previous.diff : null,
+                  error: error instanceof Error ? error.message : String(error),
+                  staleDiff: keep && (previous.staleDiff || !sameDiffContent(previous.input, input))
+                }
+              })
             }
           }
         )

@@ -17,6 +17,21 @@ export type PierreDiffAnnotationData =
 
 export type PierreDiffCommentAnnotation = DiffLineAnnotation<PierreDiffAnnotationData>
 
+export type PierreDiffDraftTarget = { lineNumber: number; startLine?: number }
+
+/** One clamp for the draft's displayed and submitted anchor, so a shrunk file cannot split them. */
+export function clampPierreDiffDraftTarget(
+  draft: PierreDiffDraftTarget,
+  lineCount: number
+): PierreDiffDraftTarget {
+  const lineNumber = Math.max(1, Math.min(draft.lineNumber, lineCount))
+  const startLine =
+    draft.startLine === undefined ? undefined : Math.max(1, Math.min(draft.startLine, lineCount))
+  return startLine === undefined || startLine >= lineNumber
+    ? { lineNumber }
+    : { lineNumber, startLine }
+}
+
 /**
  * Notes live on the modified side, which Pierre calls `additions`. Pierre
  * measures annotation rows itself, so unlike the Monaco view zones these
@@ -25,7 +40,7 @@ export type PierreDiffCommentAnnotation = DiffLineAnnotation<PierreDiffAnnotatio
 export function buildPierreDiffCommentAnnotations(
   comments: readonly DecoratedDiffComment[],
   filePath: string,
-  draft?: { lineNumber: number; startLine?: number } | null,
+  draft?: PierreDiffDraftTarget | null,
   lineCount: number = Infinity
 ): PierreDiffCommentAnnotation[] {
   const annotations: PierreDiffCommentAnnotation[] = comments
@@ -36,14 +51,11 @@ export function buildPierreDiffCommentAnnotations(
       metadata: { kind: 'comment', comment }
     }))
   if (draft) {
+    const target = clampPierreDiffDraftTarget(draft, lineCount)
     annotations.push({
       side: 'additions',
-      lineNumber: Math.max(1, Math.min(draft.lineNumber, lineCount)),
-      metadata: {
-        kind: 'draft',
-        lineNumber: Math.max(1, Math.min(draft.lineNumber, lineCount)),
-        startLine: draft.startLine
-      }
+      lineNumber: target.lineNumber,
+      metadata: { kind: 'draft', ...target }
     })
   }
   return annotations
@@ -79,7 +91,7 @@ export function renderPierreDiffCommentAnnotation(
     draftPlaceholder?: string
     draftSubmitLabel?: string
     onCancelDraft?: () => void
-    onSubmitDraft?: (body: string) => Promise<boolean>
+    onSubmitDraft?: (body: string, target: PierreDiffDraftTarget) => Promise<boolean>
     /** Scope for drafts that must outlive this row; omit to keep them only while mounted. */
     retainKey?: string
   }
@@ -99,7 +111,9 @@ export function renderPierreDiffCommentAnnotation(
         imageUploadAddress={imageUploadAddress}
         retainKey={retainKey && `${retainKey}:compose`}
         onCancel={onCancelDraft}
-        onSubmit={onSubmitDraft}
+        onSubmit={(body) =>
+          onSubmitDraft(body, { lineNumber: data.lineNumber, startLine: data.startLine })
+        }
       />
     ) : null
   }

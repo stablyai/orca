@@ -26,6 +26,7 @@ import {
 } from '@/components/editor/pierre-diff/PierreDiffSurface'
 import type { PierreDiffInput } from '@/components/editor/pierre-diff/pierre-diff-metadata'
 import { usePierreFileDiff } from '@/components/editor/pierre-diff/use-pierre-file-diff'
+import type { PierreDiffDraftTarget } from '@/components/editor/pierre-diff/pierre-diff-comment-annotations'
 import { PierreDiffLoading } from '@/components/editor/pierre-diff/PierreDiffLoading'
 import { buildPierreParseDiffOptions } from '@/components/editor/pierre-diff/pierre-diff-options'
 import { scrollPierreDiffToLine } from '@/components/editor/pierre-diff/pierre-diff-scroll'
@@ -229,14 +230,14 @@ export default function DiffViewer({
   )
 
   const handleSubmitComment = useCallback(
-    async (body: string): Promise<boolean> => {
+    async (body: string, target: PierreDiffDraftTarget): Promise<boolean> => {
       if (!pendingComment) {
         return false
       }
       if (onAddLineComment) {
         const ok = await onAddLineComment({
-          lineNumber: pendingComment.lineNumber,
-          startLine: pendingComment.startLine,
+          lineNumber: target.lineNumber,
+          startLine: target.startLine,
           body
         })
         if (ok) {
@@ -253,8 +254,8 @@ export default function DiffViewer({
             worktreeId,
             filePath: relativePath,
             source: 'diff',
-            startLine: pendingComment.startLine,
-            lineNumber: pendingComment.lineNumber,
+            startLine: target.startLine,
+            lineNumber: target.lineNumber,
             body,
             side: 'modified'
           })

@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DecoratedDiffComment } from '../../diff-comments/decorated-diff-comment'
-import { buildPierreDiffCommentAnnotations } from './pierre-diff-comment-annotations'
+import {
+  buildPierreDiffCommentAnnotations,
+  renderPierreDiffCommentAnnotation
+} from './pierre-diff-comment-annotations'
 
 vi.mock('../../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
+vi.mock('../../diff-comments/DiffCommentDraftCard', () => ({ DiffCommentDraftCard: () => null }))
 vi.mock('../../diff-comments/DiffCommentPopover', () => ({ DiffCommentPopover: () => null }))
 vi.mock('@/components/editor/review-note-delivery/NotesSendMenu', () => ({
   NotesSendMenu: () => null
@@ -35,5 +39,32 @@ describe('Pierre review annotations', () => {
     expect(
       buildPierreDiffCommentAnnotations([note('one.ts')], 'one.ts', { lineNumber: 5, startLine: 3 })
     ).toHaveLength(2)
+  })
+
+  it('submits the same clamped anchor the draft card displays after the file shrinks', async () => {
+    const [annotation] = buildPierreDiffCommentAnnotations(
+      [],
+      'one.ts',
+      { lineNumber: 100, startLine: 90 },
+      20
+    )
+    const onSubmitDraft = vi.fn(async () => true)
+    const element = renderPierreDiffCommentAnnotation(annotation, {
+      worktreeId: 'review',
+      filePath: 'one.ts',
+      activeGroupId: 'group',
+      onDeleteComment: vi.fn(),
+      clearDeliveredDiffComments: vi.fn(),
+      onCancelDraft: vi.fn(),
+      onSubmitDraft
+    }) as React.ReactElement<{
+      lineNumber: number
+      startLine?: number
+      onSubmit: (body: string) => Promise<boolean>
+    }>
+    expect(element.props.lineNumber).toBe(20)
+    expect(element.props.startLine).toBeUndefined()
+    await element.props.onSubmit('body')
+    expect(onSubmitDraft).toHaveBeenCalledWith('body', { lineNumber: 20 })
   })
 })

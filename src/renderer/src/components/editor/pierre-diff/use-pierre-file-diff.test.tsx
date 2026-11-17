@@ -58,6 +58,22 @@ it('hides the previous head while replacement content is being parsed', async ()
   expect(result.current.fileDiff).toBeNull()
 })
 
+it('does not present the previous head as current when the replacement parse fails', async () => {
+  vi.mocked(requestPierreFileDiff).mockResolvedValueOnce(diff)
+  const { result, rerender } = renderHook(({ value }) => usePierreFileDiff(value), {
+    initialProps: { value: input }
+  })
+  await act(async () => vi.runOnlyPendingTimers())
+  vi.mocked(requestPierreFileDiff).mockRejectedValue(new Error('worker failed'))
+  rerender({ value: { ...input, modifiedContent: 'new head' } })
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(result.current.fileDiff).toBeNull()
+  expect(result.current.error).toBe('worker failed')
+  act(() => result.current.retry())
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(result.current.fileDiff).toBeNull()
+})
+
 it('never shows the preceding file under another file name', async () => {
   vi.mocked(requestPierreFileDiff).mockResolvedValue(diff)
   const { result, rerender } = renderHook(({ value }) => usePierreFileDiff(value), {

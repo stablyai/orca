@@ -21,6 +21,7 @@ import type { DiffSectionItemProps } from './diff-section-item-props'
 import { PierreDiffSurface } from '@/components/editor/pierre-diff/PierreDiffSurface'
 import type { PierreDiffInput } from '@/components/editor/pierre-diff/pierre-diff-metadata'
 import { usePierreFileDiff } from '@/components/editor/pierre-diff/use-pierre-file-diff'
+import type { PierreDiffDraftTarget } from '@/components/editor/pierre-diff/pierre-diff-comment-annotations'
 import { PierreDiffLoading } from '@/components/editor/pierre-diff/PierreDiffLoading'
 import { buildPierreParseDiffOptions } from '@/components/editor/pierre-diff/pierre-diff-options'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
@@ -197,7 +198,7 @@ export function DiffSectionItem({
   )
 
   const handleSubmitComment = useCallback(
-    async (body: string): Promise<boolean> => {
+    async (body: string, target: PierreDiffDraftTarget): Promise<boolean> => {
       if (!pendingComment) {
         return false
       }
@@ -206,7 +207,7 @@ export function DiffSectionItem({
         addDiffComment,
         body,
         onAddLineComment,
-        target: pendingComment,
+        target,
         section,
         worktreeId
       })
