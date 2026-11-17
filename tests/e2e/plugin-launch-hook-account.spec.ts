@@ -128,6 +128,9 @@ test('a launch plugin runs Claude on the saved account it chose', async ({
     )
     .toBe(true)
 
+  // Why: the settings change queues its own plugin refresh, and approval pauses while one runs.
+  await orcaPage.evaluate(() => window.api.plugins.refresh())
+
   try {
     const chosen = await spawnClaude(orcaPage, 'claude', worktreeId)
     await expect.poll(() => existsSync(markerPath), { timeout: 30_000 }).toBe(true)
