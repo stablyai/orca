@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
-import { isAbortSignalReason, throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import {
+  isAbortSignalReason,
+  throwIfSignalAborted
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   RuntimeEnvironmentSetupGuardError,

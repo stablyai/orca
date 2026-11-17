@@ -1,10 +1,10 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ExternalAutomationManager } from '../../../shared/automations/external/external-automation'
 import type { AutomationOwnerRef } from '../../../shared/automations/ownership/automation-owner-ref'
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../../shared/external-automation-scope'
+} from '../../../shared/automations/external/external-automation-scope'
 import type { AutomationsChangedPayload } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 export type ExternalAutomationManagerResult = {

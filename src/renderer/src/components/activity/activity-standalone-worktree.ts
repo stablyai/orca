@@ -1,9 +1,9 @@
 import { i18n, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getTranslationResourceVersion } from '@/i18n/translation-resource-version'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 const STANDALONE_ACTIVITY_WORKTREE_REPO_ID = '__activity_standalone__'
 const STANDALONE_ACTIVITY_WORKTREES_CAP = 200

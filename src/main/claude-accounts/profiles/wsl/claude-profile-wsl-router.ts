@@ -1,18 +1,15 @@
-import { existsSync } from 'node:fs'
 import { lstat, readFile } from 'node:fs/promises'
-import { join, posix } from 'node:path'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { posix } from 'node:path'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV,
   CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../../../shared/claude-profile-routing'
+} from '../../../../shared/agent-accounts/claude/claude-profile-routing'
 import { WSL_CLAUDE_PROFILE_HELPER_FILENAME } from '../../../../shared/remote-runtime/orcad-distribution/remote-bundle-artifacts'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { getWslHomeAsync, listRunningWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
-import { ensureWslPinnedRuntime } from '../../../wsl/execution/wsl-pinned-runtime'
-import { relayBundleCandidates } from '../../../wsl/execution/relay-bundle-paths'
 import { runWslProcess, type WslSpec } from '../../../wsl/execution/wsl-runner'
+import { runWslGuestNodeHelper } from '../../../wsl/execution/wsl-guest-node-helper'
 import { describeWslProcessFailure } from '../../../wsl/execution/wsl-process-failure'
 import { blockedWslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { claudeProfileMarkerPath, type ClaudeProfileDescriptor } from '../claude-profile-paths'
@@ -221,7 +218,10 @@ export class ClaudeWslProfileRouter {
           ? { CLAUDE_CONFIG_DIR: profile.home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: profile.home }
           : {})
       },
-      provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`
+      provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`,
+      ...(profile
+        ? { readingAccount: { accountId: profile.accountId, runtime: 'wsl', wslDistro: distro } }
+        : {})
     }
   }
 
@@ -281,32 +281,14 @@ async function runGuest(distro: string, spec: WslSpec, timeoutMs = 15_000): Prom
 
 /** Run guest setup with the pinned Node runtime. */
 const runWslSetup: WslSetup = async (distro, home, accountId) => {
-  const helper = relayBundleCandidates('wsl')
-    .map((dir) => join(dir, WSL_CLAUDE_PROFILE_HELPER_FILENAME))
-    .find(existsSync)
-  if (!helper) {
-    throw new Error('The bundled WSL Claude account helper is missing. Reinstall Orca.')
-  }
-  const run = (spec: WslSpec, timeoutMs?: number) => runGuest(distro, spec, timeoutMs)
-  const node = await ensureWslPinnedRuntime(
-    run,
-    join(getAppEnvironment().getPath('userData'), 'orcad-artifacts'),
-    AbortSignal.timeout(180_000)
-  )
-  const guestHelper = await run({
-    program: 'wslpath',
-    args: ['-a', '-u', helper],
-    loginPath: 'none'
-  })
   // Successful setup is silent; warnings produce a report and refusal exits nonzero.
-  const report = await run(
-    {
-      program: '/usr/bin/env',
-      args: ['-u', 'NODE_OPTIONS', node, guestHelper, home, distro, accountId],
-      loginPath: 'none'
-    },
-    120_000
-  )
+  const report = await runWslGuestNodeHelper({
+    distro,
+    helperFilename: WSL_CLAUDE_PROFILE_HELPER_FILENAME,
+    helperLabel: 'Claude account',
+    helperArgs: [home, distro, accountId],
+    timeoutMs: 120_000
+  })
   if (report) {
     console.warn('[claude-profile] WSL account setup was incomplete:', report)
   }

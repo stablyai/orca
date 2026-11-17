@@ -5,7 +5,6 @@ import {
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
@@ -24,6 +23,7 @@ import { renderAnimatedToast } from '../components/feedback/TransientToast'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
+import { useMobileTerminalLinkOpen } from '../terminal/session/links/use-mobile-terminal-link-open'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
 import { useHostProfile } from '../host-catalog/use-host-profile'
@@ -51,8 +51,8 @@ export function MobileSessionActiveContent({
     client,
     terminals,
     terminalTextScale,
-    setTerminalTextScale,
-    terminalTextScaleRevisionRef,
+    commitPinchedTextScale,
+    terminalFontStyle,
     activeHandle,
     terminalSplitActive,
     visibleTerminalHandles,
@@ -95,7 +95,6 @@ export function MobileSessionActiveContent({
     notifyTerminalCellBoxChange,
     handleFileTap,
     handleNativeChatFileTap,
-    handleTerminalOpenUrl,
     handleTerminalInput,
     handleTerminalQueryReply,
     handleSelectionMode,
@@ -120,6 +119,7 @@ export function MobileSessionActiveContent({
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
   const openUrlInOrca = useOpenUrlInOrca(controller)
+  const terminalLinks = useMobileTerminalLinkOpen(controller, openUrlInOrca)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
   const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
@@ -307,12 +307,8 @@ export function MobileSessionActiveContent({
               }
               terminalTheme={terminal.terminalTheme}
               textScale={terminalTextScale}
-              onTextScaleChange={(scale) => {
-                // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
-                terminalTextScaleRevisionRef.current += 1
-                setTerminalTextScale(scale)
-                void saveTerminalTextScale(scale)
-              }}
+              fontStyle={terminalFontStyle}
+              onTextScaleChange={commitPinchedTextScale}
               onRef={setTerminalWebViewRef}
               onDocumentReleased={releaseTerminalDocument}
               onWebReady={handleTerminalWebReady}
@@ -329,7 +325,7 @@ export function MobileSessionActiveContent({
               onTerminalInteraction={handleTerminalInteraction}
               onTerminalTap={handleTerminalTap}
               onFileTap={handleFileTap}
-              onOpenUrl={handleTerminalOpenUrl}
+              onOpenUrl={terminalLinks.handleTerminalOpenUrl}
             />
           )}
         </MountedTerminalPanes>
@@ -368,6 +364,7 @@ export function MobileSessionActiveContent({
                 // A workspace routed to another server stops with that server, whose name the phone lacks.
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
                 onOpenUrlInOrca={openUrlInOrca}
+                linkOpenMode={controller.linkOpenMode}
                 hostOutage={nativeChatHostOutage}
                 onRunInTerminal={(command) =>
                   void controller.handleCreateTerminal(undefined, {
@@ -382,6 +379,7 @@ export function MobileSessionActiveContent({
             </MobileNativeChatForkProvider>
           </MobileAgentMessageProvider>
         </MobileNativeChatDictationPreviewContext.Provider>
+        {terminalLinks.terminalLinkSheet}
         {toast}
       </View>
     )

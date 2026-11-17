@@ -10,13 +10,14 @@ import {
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
 import type { WslHostConnectIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {
   wslConnectFailedStatus,
+  wslConnectingStatus,
   type WslOrcadConnectionStatus
 } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
@@ -201,6 +202,12 @@ export class WslOrcadConnectionManager {
       intent: options.intent,
       pairedOffer: await this.enrolledOffer(key, environmentId),
       signal: options.signal,
+      // Only a connect that showed "Connecting" says what it waits for; null (lock taken) clears it.
+      onInstallLockWait: (wait) => {
+        if (!options.status && !options.requireRunning && !this.active.has(key) && stillCurrent()) {
+          this.dependencies.onChange?.(distro, null, wslConnectingStatus(wait))
+        }
+      },
       ...spawns.options
     }).finally(spawns.dispose)
     if (launch.outcome === 'deferred') {

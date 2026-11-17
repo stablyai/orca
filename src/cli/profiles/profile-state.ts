@@ -17,7 +17,7 @@ import {
   type ProfileStateExportsResult,
   type ProfileStateRollbackResult,
   type ProfileStateRecoverySelector
-} from '../../shared/profile-state-recovery-command'
+} from '../../shared/orca-profiles/profile-state-recovery-command'
 import {
   canLaunchProfileStateRecovery,
   launchProfileStateRecovery

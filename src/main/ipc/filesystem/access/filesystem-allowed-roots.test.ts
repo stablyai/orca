@@ -10,7 +10,7 @@ import {
   buildProjectGroupChildIndex,
   getProjectGroupSubtreeIds
 } from '../../../../shared/project/groups/project-groups'
-import type * as CrossPlatformPathModule from '../../../../shared/cross-platform-path'
+import type * as CrossPlatformPathModule from '../../../../shared/file-access/cross-platform-path'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Project } from '../../../../shared/project/project-types'
@@ -36,9 +36,9 @@ vi.mock('../../../../shared/project/groups/project-groups', async () => {
   }
 })
 
-vi.mock('../../../../shared/cross-platform-path', async () => {
+vi.mock('../../../../shared/file-access/cross-platform-path', async () => {
   const actual = await vi.importActual<typeof CrossPlatformPathModule>(
-    '../../../../shared/cross-platform-path'
+    '../../../../shared/file-access/cross-platform-path'
   )
   return { ...actual, isPathInsideOrEqual: vi.fn(actual.isPathInsideOrEqual) }
 })

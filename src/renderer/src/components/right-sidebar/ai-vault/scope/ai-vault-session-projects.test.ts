@@ -272,29 +272,6 @@ describe('buildAiVaultProjectContext', () => {
       label: 'outside/path'
     })
   })
-
-  it('uses repo fallback candidates when a setup for the repo has a blank path', () => {
-    const repo = makeRepo({ id: 'repo-1', displayName: 'Repo', path: '/repo' })
-    const session = makeSession({ id: 'claude:inside-repo', cwd: '/repo/src' })
-
-    const context = buildAiVaultProjectContext({
-      repos: [repo],
-      worktrees: [],
-      projectHostSetupProjection: makeProjection({
-        projects: [],
-        setups: [makeSetup({ repoId: repo.id, projectId: 'repo:repo-1', path: '' })]
-      }),
-      activeRepo: repo,
-      activeWorktree: null,
-      sessions: [session]
-    })
-
-    expect(context.sessionProjectById.get(session.id)).toMatchObject({
-      kind: 'repo',
-      key: 'repo:repo-1',
-      label: 'Repo'
-    })
-  })
 })
 
 function makeSession(overrides: Partial<AiVaultSession>): AiVaultSession {

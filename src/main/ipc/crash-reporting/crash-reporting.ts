@@ -12,7 +12,7 @@ import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-reporting/c
 import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
-} from '../../../shared/clipboard-text'
+} from '../../../shared/clipboard/clipboard-text'
 import { formatCrashReportCopyText } from '../../crash-reporting/reports/crash-report-copy-text'
 import {
   recentRendererErrorReportKeys,

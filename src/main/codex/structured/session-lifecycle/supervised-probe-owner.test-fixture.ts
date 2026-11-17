@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 
 // The CLI ignores stdin EOF and exits on SIGTERM; its grandchild requires process-group SIGKILL.
@@ -77,7 +77,9 @@ export function createSupervisedProbeRig(): SupervisedProbeRig {
   const env = {
     ORCA_TEST_PID_FILE: pidFile,
     ORCA_TEST_SIGNAL_FILE: signalFile,
-    ORCA_TEST_EVENTS_FILE: eventsFile
+    ORCA_TEST_EVENTS_FILE: eventsFile,
+    ORCA_TEST_APP_ROOT: process.cwd(),
+    ORCA_TEST_USER_DATA: dir
   }
   return {
     dir,
@@ -103,8 +105,21 @@ export function createSupervisedProbeRig(): SupervisedProbeRig {
     },
     bundleOwner: async (source, resolveDir) => {
       const outfile = join(dir, 'owner.cjs')
+      const environmentModule = resolve(
+        __dirname,
+        '../../../../shared/app-lifecycle/app-environment.ts'
+      )
+      const startup = `
+import { setAppEnvironment } from ${JSON.stringify(environmentModule)}
+setAppEnvironment({
+  getPath: () => process.env.ORCA_TEST_USER_DATA!,
+  getAppPath: () => process.env.ORCA_TEST_APP_ROOT!,
+  getVersion: () => '0.0.0', isPackaged: () => false,
+  onWillQuit: () => {}, getAppMetrics: () => [], exit: (code) => process.exit(code)
+})
+`
       await build({
-        stdin: { contents: source, resolveDir, loader: 'ts', sourcefile: 'owner.ts' },
+        stdin: { contents: startup + source, resolveDir, loader: 'ts', sourcefile: 'owner.ts' },
         bundle: true,
         platform: 'node',
         format: 'cjs',

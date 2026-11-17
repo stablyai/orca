@@ -1,5 +1,5 @@
-import { isWindowsAbsolutePathLike } from '../../../../src/shared/cross-platform-path'
-import { formatImageDropPasteText } from '../../../../src/shared/image-path-paste'
+import { isWindowsAbsolutePathLike } from '../../../../src/shared/file-access/cross-platform-path'
+import { formatImageDropPasteText } from '../../../../src/shared/terminal/input/image-path-paste'
 import { formatAgentImagePath } from '../../../../src/shared/native-chat/input/composer/agent-image-paste'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from './mobile-clipboard-image-upload-chunk'
 import '../../transport/connection/stable-logical-rpc-client'

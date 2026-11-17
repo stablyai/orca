@@ -1,10 +1,10 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
 import type { SessionOptionDescriptor } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
-import { useAppStore } from '../../../../../store/index'
 import { sayNativeChatSessionOptionTranslated } from '../controls/native-chat-session-option-labels-text'
 import {
   createNativeChatPtySessionOptions,
@@ -66,12 +66,9 @@ export function useNativeChatSessionOptions(args: {
     paneKey,
     claudeResponse
   } = args
-  const reportedModel = useAppStore((state) =>
-    paneKey ? (state.agentStatusByPaneKey[paneKey]?.model ?? null) : null
-  )
-  const canSwitchOmpModel = useAppStore((state) =>
-    paneKey ? state.agentStatusByPaneKey[paneKey]?.modelSwitchCommand === 'orca-model' : false
-  )
+  const status = useAgentStatus(paneKey)
+  const reportedModel = status?.model ?? null
+  const canSwitchOmpModel = status?.modelSwitchCommand === 'orca-model'
   // Only changed hook models are new evidence; repeated status pings must not undo newer user picks.
   const appliedReportedModelRef = useRef<string | null>(null)
   // Cache parsed screen text so late discovery can resolve real host model IDs.

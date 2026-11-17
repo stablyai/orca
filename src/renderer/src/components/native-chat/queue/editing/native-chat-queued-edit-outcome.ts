@@ -5,7 +5,7 @@ import type {
   NativeChatQueuedEditSession,
   NativeChatQueuedEditAttempt
 } from './native-chat-queued-edit-session'
-import { queuedEditStanding } from '../../../../../../shared/queued-message-edit'
+import { queuedEditStanding } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import { nativeChatQueuedEditValueKey } from './native-chat-queued-edit-value'
 
 type Outcome = 'close' | 'rebase' | 'gone' | 'changed' | 'refused' | 'stay'

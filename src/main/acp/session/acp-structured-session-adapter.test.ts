@@ -224,4 +224,29 @@ describe('ACP structured session adapter: close and exit', () => {
     )
     await expect(send(rig, 'send-3')).rejects.toThrow(/no live grok child/)
   })
+
+  it('keeps a stopped turn interrupted when the later process settlement loses its CLI outcome', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    await send(rig, 'send-1')
+    const prompt = await rig.frame('session/prompt')
+    rig
+      .child()
+      .agent.on('session/cancel', () =>
+        rig.child().agent.reply(prompt, { stopReason: 'cancelled' })
+      )
+    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
+    await waitFor(async () => {
+      const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
+      expect(turns.at(-1)).toMatchObject({ state: 'interrupted' })
+    })
+    rig.child().exit({ code: null, signal: null, processless: false, outcomeLost: true })
+    await waitFor(() =>
+      expect(rig.ended).toMatchObject([
+        { cause: 'unexpected-exit', failure: { kind: 'hostFault' } }
+      ])
+    )
+    const turns = (await rig.rig.rows()).flatMap((row) => readAgentJournalTurn(row.body) ?? [])
+    expect(turns.at(-1)).toMatchObject({ state: 'interrupted' })
+  })
 })

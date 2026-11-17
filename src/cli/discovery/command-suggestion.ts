@@ -1,6 +1,6 @@
 import { specPaths, type CommandSpec } from './command-spec'
-import { levenshtein } from '../../shared/edit-distance'
-import { isTerminalHandle } from '../../shared/terminal-handle-prefix'
+import { levenshtein } from '../../shared/text/edit-distance'
+import { isTerminalHandle } from '../../shared/terminal/terminal-handle-prefix'
 import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 
 const SUGGESTION_THRESHOLD = 3

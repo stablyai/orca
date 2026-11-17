@@ -3,7 +3,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import { folderWorkspaceToWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import type { Repo } from '../../repository/repo-types'
@@ -18,7 +18,7 @@ import type {
 } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
 import { getWorkspaceRowKindFacts } from '../../worktree/visibility/workspace-kinds'
-import { openEnum } from '../../zod-salvage'
+import { openEnum } from '../../validation/zod-salvage'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../workspace/status/workspace-statuses'
 import { SMART_TIERS } from '../sorting/sort-stamps'
 import {

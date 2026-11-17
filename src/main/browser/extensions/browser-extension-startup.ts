@@ -1,6 +1,6 @@
 import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
 import { app, webContents } from 'electron'
-import { isBrowserExtensionNativePage } from './api-runtime/browser-extension-native-page'
+import { isHiddenHelperContents } from '../hidden-helper-window'
 import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser/extensions/browser-extension-types'
 import {
   installBrowserExtensionApiHost,
@@ -69,7 +69,8 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
         // Why: pages already open, server pages included, were created before extensions ran.
         for (const contents of webContents.getAllWebContents()) {
           const profileId = browserSessionRegistry.profileIdForSession(contents.session)
-          if (profileId) {
+          // A hidden helper, such as a cookie save's CDP target, is not a page.
+          if (profileId && !isHiddenHelperContents(contents)) {
             browserSessionRegistry.attachExtensions(profileId)
           }
           observeExtensionContents(contents)
@@ -120,7 +121,7 @@ function observeExtensionContents(contents: Electron.WebContents): void {
   const type = contents.getType()
   if (
     (type !== 'webview' && type !== 'window' && type !== 'offscreen') ||
-    isBrowserExtensionNativePage(contents) ||
+    isHiddenHelperContents(contents) ||
     observedContents.has(contents) ||
     !getBrowserExtensionProfileIdForSession(contents.session)
   ) {

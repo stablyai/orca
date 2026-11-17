@@ -7,13 +7,13 @@ import {
   requireStructuredCapability,
   requireStructuredCleanupHost
 } from '../creation/structured-agent-session-gate'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { noteStructuredAgentSessionClose } from '../creation/structured-agent-session-close-before-create'
 import {
   captureStructuredSessionSurface,
   retireCapturedStructuredSessionSurface
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 
 export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
   // Close only provider/in-memory state, preserving record/journal for future attachment.

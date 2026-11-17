@@ -5,7 +5,7 @@ import {
   announceSessionWrites
 } from '../terminal/layout/profile-session-store.test-fixture'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -13,7 +13,7 @@ import {
   buildAgentPromptPasteBytes,
   getTerminalPasteIngestMs
 } from '../../../shared/agent-launch/startup/agent-prompt-injection'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
@@ -30,6 +30,7 @@ import type { RpcRequest } from '../rpc/core'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
@@ -414,20 +415,22 @@ async function createExplicitAgentStatusHarness(options: {
 }> {
   const leafId = '11111111-1111-4111-8111-111111111111'
   const paneKey = makePaneKey('tab-1', leafId)
+  const getRows = (): AgentStatusIpcPayload[] => [
+    {
+      paneKey,
+      state: 'working',
+      prompt: '',
+      agentType: 'codex',
+      connectionId: null,
+      receivedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      tabId: 'tab-1',
+      worktreeId: TEST_WORKTREE_ID
+    }
+  ]
   const runtime = new OrcaRuntimeService(store, undefined, {
-    getAgentStatusSnapshot: () => [
-      {
-        paneKey,
-        state: 'working',
-        prompt: '',
-        agentType: 'codex',
-        connectionId: null,
-        receivedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        tabId: 'tab-1',
-        worktreeId: TEST_WORKTREE_ID
-      }
-    ]
+    getAgentStatusSnapshot: getRows,
+    getPublicAgentStatusSnapshotForPane: (key) => getRows().filter((row) => row.paneKey === key)
   })
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),

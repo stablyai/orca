@@ -14,7 +14,7 @@ import type { BrowserUserAgentMode } from '../../../shared/browser/identity/brow
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
-  BrowserSitePermission,
+  BrowserSitePermissionKey,
   BrowserSitePermissionDecision
 } from '../../../shared/browser/site-settings/browser-site-permission'
 import type {
@@ -219,7 +219,7 @@ export const browserPageInteractionAndSessionsApi = {
   sitePermissionsSet: (args: {
     profileId: string
     origin: string
-    permission: BrowserSitePermission
+    permission: BrowserSitePermissionKey
     decision: BrowserSitePermissionDecision | null
   }) => ipcRenderer.invoke('browser:sitePermissions:set', args),
   notifyActiveTabChanged: (args: { browserPageId: string }): Promise<boolean> =>

@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
   WorkspaceSessionOperationListener,
   WorkspaceSessionWriteListener
 } from './workspace-sessions/workspace-session-write-listeners'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   StateWriteListener,
   WorktreeMetaWriteListener

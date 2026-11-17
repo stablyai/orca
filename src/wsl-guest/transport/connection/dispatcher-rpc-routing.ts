@@ -1,4 +1,4 @@
-import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/concurrency/timer-delay'
 import {
   SKILL_INSTALL_RPC_ERROR_CODE,
   SkillInstallFailureSchema

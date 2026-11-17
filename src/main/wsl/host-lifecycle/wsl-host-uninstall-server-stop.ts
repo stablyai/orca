@@ -1,7 +1,7 @@
 // Uninstall only: end each running WSL host's terminals and orcad, so its distro can stop.
 // No paired connection exists by then, so the server's own CLI inside the distro stands in for RPC.
 import { z } from 'zod'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import type { WslHostServerStop } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'

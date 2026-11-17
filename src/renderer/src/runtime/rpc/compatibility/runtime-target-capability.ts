@@ -1,4 +1,4 @@
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureLocalRuntimeCapabilities } from '../../hosts/capabilities/local-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from './runtime-capability-proof'

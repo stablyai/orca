@@ -6,7 +6,6 @@ const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/linear-cli-recovery.unit.test.ts',
   // Exercises a real peer reset through Node's native Socket.setTypeOfService.
   'src/main/network/best-effort-socket-type-of-service.test.ts',
-  'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
@@ -23,20 +22,18 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
-  'src/shared/ws-inbound-message-queue.test.ts',
+  'src/shared/network/websocket/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
   'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
   'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
-  'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
-  'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
-  'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
+
   'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
   'src/main/pi/rpc/rpc-session-startup.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
@@ -44,9 +41,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/session/acp-structured-session-adapter-resume.test.ts',
   'src/main/pi/rpc/rpc-turn-races.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-exit-delivery.test.ts',
+
   'src/main/runtime/construction/orca-runtime.test.ts',
-  'src/main/runtime/workspaces/startup/worktree-agent-first-surface.test.ts',
   'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
   'src/main/persistence/**/*.test.ts',
@@ -69,7 +65,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/shared/own-retained-string.test.ts',
+  'src/shared/text/own-retained-string.test.ts',
   'src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
@@ -104,8 +100,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/workspace-session/workspace-session-salvage.test.ts',
   'src/main/git/repositories/discovery/repo-detection.test.ts',
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
-  'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
-  'src/main/providers/working-directory/validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
   'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
@@ -122,7 +116,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/settings-delayed-response.test.ts',
   'src/main/ipc/session-window-view-save.test.ts',
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
-  'src/main/runtime/agent-session/records/structured-agent-session-startup-tab-restore.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
@@ -132,7 +125,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
-  'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
   'src/main/ipc/notifications-external-acknowledgement.test.ts'
 ]
 

@@ -46,7 +46,7 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from '../updater/lifecycle/main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './file-drop/dropped-path-preparation-ipc'
 import { isPluginFramePermissionRequest } from './security/host-frame-permission-policy'
@@ -117,7 +117,12 @@ export async function attachMainWindowServices(
   registerDaemonManagementHandlers()
   // Background git worktree list can trigger protected-folder prompts on macOS; use remembered IDs.
   scheduleHistoryGc(async () => {
-    return getKnownWorktreeIdsForHistoryGc(store)
+    // An unknown daemon inventory keeps every session folder but still runs the rest of the GC.
+    const liveSessionIds = await listLiveDaemonPtyIds().catch(() => null)
+    return {
+      ...getKnownWorktreeIdsForHistoryGc(store),
+      liveSessionIds: liveSessionIds && new Set(liveSessionIds)
+    }
   })
   openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
   openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)

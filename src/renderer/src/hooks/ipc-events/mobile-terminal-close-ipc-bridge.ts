@@ -8,7 +8,7 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/worksp
 import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import { useAppStore } from '../../store'
 import {
   afterLayoutFrame,

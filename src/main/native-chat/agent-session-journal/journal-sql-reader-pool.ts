@@ -1,7 +1,7 @@
 import type { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
 import { ReaderSlot } from './journal-sql-reader-slot'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
 import {
   currentWorkerEntryLayout,
@@ -110,7 +110,13 @@ export class JournalSqlReaderPool {
     if (response.type !== 'page') {
       throw new Error('journal reader returned no domain history page')
     }
-    return { result: response.result, ...(response.work ? { work: response.work } : {}) }
+    return {
+      result: response.result,
+      ...(response.work ? { work: response.work } : {}),
+      ...(response.acceptedUnopened === undefined
+        ? {}
+        : { acceptedUnopened: response.acceptedUnopened })
+    }
   }
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {

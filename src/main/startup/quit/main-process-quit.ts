@@ -3,24 +3,21 @@ import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdo
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
 import { markHostShuttingDown } from './host-shutdown-state'
 import { app, type Event } from 'electron'
-import { closeAllWatchers } from '../../ipc/filesystem/watchers/filesystem-watcher-shutdown'
-import { disposeWorktreeBaseDirectoryWatchers } from '../../ipc/worktrees/creation/worktree-base-directory-watcher'
-import { stopFolderRepoGitUpgradeWatch } from '../../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../../ipc/pty/kill-all'
 import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../../agent-hooks/installation/managed-agent-hook-controls'
-import { stopStructuredAgentSessionRuntime } from '../../runtime/agent-session/structured-agent-session-runtime'
-import { setStructuredAgentSessionTeardownTrigger } from '../../runtime/agent-session/structured-agent-session-runtime-teardown'
+import { stopStructuredAgentSessionRuntime } from '../../runtime/agent-session/installation/structured-agent-session-runtime'
+import { setStructuredAgentSessionTeardownTrigger } from '../../runtime/agent-session/installation/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../../runtime/files/watch/file-watcher-leases'
 import { clearRuntimeMetadataIfOwned } from '../../runtime/rpc/server/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../../codex/history/index/codex-state-db-backfill-recovery'
-import { stopCodexAccountSessionBridges } from '../../codex/history/bridges/codex-account-session-bridge'
+import { stopCodexAccountHistoryWork } from '../../codex/history/shared-store/codex-account-history-index'
 import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
@@ -42,39 +39,15 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
+import { shutdownWatchersOnce } from './filesystem-watcher-quit-shutdown'
+import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
-let watcherShutdownPromise: Promise<void> | null = null
 // Config deletion is best effort, not durable state.
 const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
 // Allow pack-refs time to terminate and unlink its lock.
 const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
-
-function shutdownWatchersOnce(): Promise<void> {
-  if (state.watcherShutdownDone) {
-    return Promise.resolve()
-  }
-  if (!watcherShutdownPromise) {
-    // Await native watcher unsubscribe before Node environment teardown.
-    stopFolderRepoGitUpgradeWatch()
-    watcherShutdownPromise = Promise.allSettled([
-      closeAllWatchers(),
-      disposeWorktreeBaseDirectoryWatchers()
-    ])
-      .then((results) => {
-        for (const result of results) {
-          if (result.status === 'rejected') {
-            console.error('[filesystem-watcher] shutdown failed:', result.reason)
-          }
-        }
-      })
-      .then(() => {
-        state.watcherShutdownDone = true
-      })
-  }
-  return watcherShutdownPromise
-}
 
 function installBeforeQuitHandler(): void {
   app.on('before-quit', (event: Event) => {
@@ -165,7 +138,7 @@ function installWillQuitHandler(): void {
     state.pluginUpdateReviewNotices = null
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
-    stopCodexAccountSessionBridges()
+    stopCodexAccountHistoryWork()
     // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
@@ -207,6 +180,7 @@ function installWillQuitHandler(): void {
     // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
+    const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
       await state.runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
@@ -292,6 +266,7 @@ function installWillQuitHandler(): void {
       { name: 'state-checkpoint', promise: state.profileShutdownCheckpoint },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
+      { name: 'browser-session-cookies', promise: browserSessionCookieFlush },
       { name: 'runtime-rpc', promise: rpcStopAndClear },
       { name: 'watchers', promise: watcherShutdown },
       { name: 'emulator', promise: emulatorShutdown },

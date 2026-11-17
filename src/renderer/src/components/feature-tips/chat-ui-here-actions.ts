@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import type { AgentDefaultSurface } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
+import type { AgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { CHAT_LAUNCH_DEFAULT_SECTION_ID } from '../settings/chat/chat-launch-search'

@@ -19,7 +19,7 @@ import {
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { createAcpAgentConnection } from '../process/acp-agent-connection'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import {
@@ -237,7 +237,15 @@ export function createAcpModelCatalogProbe(
         if (models.length === 0) {
           throw new Error(`${spec.agent} listed no models`)
         }
-        return { models, origin: 'probe' as const, ...(attemptedModels ? { attemptedModels } : {}) }
+        const fastModeSupport = models.some((model) => model.supportsFastMode === true)
+          ? { supported: true as const }
+          : undefined
+        return {
+          models,
+          origin: 'probe' as const,
+          ...(fastModeSupport ? { fastModeSupport } : {}),
+          ...(attemptedModels ? { attemptedModels } : {})
+        }
       }
     }
   }

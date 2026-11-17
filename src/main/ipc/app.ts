@@ -5,9 +5,9 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import type { AppIdentity } from '../../shared/app-identity'
+import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
-import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/presentation/window-material-suppression'
 import { isTrustedUIRenderer } from './ui'
@@ -41,6 +41,7 @@ import { isProfileStateSaveDelayed } from '../startup/profile-startup/profile-st
 import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
 import { getMacosUpgradeSupport } from '../macos-update-requirement/macos-upgrade-support'
+import { resolveWslMappedDrivePath } from '../wsl/filesystem/wsl-mapped-drive-share'
 
 import type { ReconnectFactsFor } from '../persistence/window-save-view'
 
@@ -171,6 +172,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   // Async probes avoid blocking PTY traffic and IPC for up to 5s per capability read.
   ipcMain.handle('wsl:isAvailable', (): Promise<boolean> => isWslAvailableAsync())
   ipcMain.handle('wsl:listDistros', (): Promise<string[]> => listWslDistrosAsync())
+  ipcMain.handle('wsl:resolveMappedDrivePath', (_event, path: unknown): Promise<string | null> =>
+    resolveWslMappedDrivePath(path)
+  )
   ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 

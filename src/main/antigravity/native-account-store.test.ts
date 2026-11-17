@@ -6,7 +6,7 @@ import {
   _resetSecretStoreForTests,
   getSecretStore,
   setSecretStore
-} from '../../shared/secret-store'
+} from '../../shared/secure-storage/secret-store'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { AntigravityAccountService } from './native-account-service'
 import type { AntigravityCredentialIdentity } from './native-credential-codec'

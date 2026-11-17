@@ -2,7 +2,7 @@ import { mkdtemp, rename, rm, truncate, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
-import { LOCAL_LOG_TAIL_CHUNK_BYTES } from '../../../shared/local-log-tail-types'
+import { LOCAL_LOG_TAIL_CHUNK_BYTES } from '../../../shared/file-content/local-log-tail-types'
 import { readLocalLogTailRange } from './local-log-tail-reader'
 
 const tempPaths: string[] = []

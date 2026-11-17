@@ -9,7 +9,10 @@ import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { readJournalSqlPoint } from './journal-sql-point-read'
 import { readJournalDomainHistoryFrame } from './journal-domain-history-page'
 import { journalDomainImportState } from './journal-domain-import-rows'
-import { openJournalLegacySource } from './database/journal-legacy-source'
+import {
+  journalLegacyChatRevision,
+  openJournalLegacySource
+} from './database/journal-legacy-source'
 
 if (
   !parentPort ||
@@ -172,6 +175,7 @@ function prepareEmptyConversion(
     sessionId,
     workspaceId: String(session.workspace_id),
     epoch: String(session.epoch),
+    sourceRevision: journalLegacyChatRevision(source, sessionId),
     head: {
       lastSequence: 0,
       highestFence: 0,

@@ -1,5 +1,9 @@
 import type { LibprocProcessRow } from './libproc-addon'
-import { DEADLINE_PASSED, beforeDeadline, monotonicNow } from '../../deadline-settle-notifier'
+import {
+  DEADLINE_PASSED,
+  beforeDeadline,
+  monotonicNow
+} from '../../concurrency/deadline-settle-notifier'
 import { NODEV, P_WEXIT, SIDL, SZOMB } from './libproc-ps-format'
 import { runArgvRecoveryPs } from './libproc-ps-fallback'
 

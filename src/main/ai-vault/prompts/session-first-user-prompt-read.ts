@@ -3,7 +3,10 @@ import type {
   AiVaultSession,
   AiVaultFirstUserPromptResult as ReadAiVaultFirstUserPromptResult
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { wslGatedStat } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'

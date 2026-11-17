@@ -1,4 +1,4 @@
-import type { AgentMessageSender } from '../agent-session-message-source'
+import type { AgentMessageSender } from '../journal/agent-session-message-source'
 import type { OrchestrationPartyLocationResult } from '../../orchestration/orchestration-caller-status'
 import type { AgentSessionWorkspaceKind } from '../lifecycle/agent-session-record'
 import { workspaceKindForWorktreeId } from '../../agent-launch/contracts/workspace-launch-kind'

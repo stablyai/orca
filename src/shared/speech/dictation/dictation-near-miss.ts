@@ -1,4 +1,4 @@
-import { levenshtein } from '../../edit-distance'
+import { levenshtein } from '../../text/edit-distance'
 import { createWordFilterLookup } from './dictation-word-filter'
 
 // Shorter terms sit too close to ordinary words ("Vite" and "vote", "Hono" and "honey").
@@ -30,7 +30,7 @@ function soundKey(key: string): string {
     .replace(/[cq]/g, 'k')
     .replace(/x/g, 'ks')
     .replace(/z/g, 's')
-    .replace(/(?<=[aeiouy])r(?![aeiouy])/g, '')
+    .replace(/([aeiouy])r(?![aeiouy])/g, '$1')
     .replace(/[aeiouy]+/g, 'a')
     .replace(/(.)\1+/g, '$1')
 }

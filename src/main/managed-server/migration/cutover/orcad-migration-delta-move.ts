@@ -44,7 +44,7 @@ import {
 import { collectOrcadMigrationSourceCatalog } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-catalog'
 import type { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
 import { orcadMigrationRefusalReason } from './orcad-migration-refusal-reason'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 type OrcadDeltaMoveArgs = {
   userDataPath: string

@@ -5,7 +5,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import { defineHostQuery } from '../../query/host-query'
 import type { HostQueryTarget } from '../../query/host-query-key'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

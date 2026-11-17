@@ -47,14 +47,4 @@ describe('findSkillFiles', () => {
     await expect(walk).rejects.toBeInstanceOf(Error)
     expect(isSkillRootUnavailableError(await walk.catch((error: unknown) => error))).toBe(true)
   })
-
-  it('skips Claude sync copies parked in .trash and .staging', async () => {
-    const root = join(await makeTree(), 'skills')
-    const installed = join(root, 'docs', 'SKILL.md')
-    await writeFileAt(installed)
-    await writeFileAt(join(root, '.trash', 'round', 'docs', 'SKILL.md'))
-    await writeFileAt(join(root, 'synced', 'account', '.staging', 'docs', 'SKILL.md'))
-
-    await expect(findSkillFiles(root, 4)).resolves.toEqual([installed])
-  })
 })

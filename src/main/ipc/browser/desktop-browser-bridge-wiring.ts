@@ -9,7 +9,7 @@ import {
   isDesktopBrowserBridgeMethod,
   isHostReachableDocument
 } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'

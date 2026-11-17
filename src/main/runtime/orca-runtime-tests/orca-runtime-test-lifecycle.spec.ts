@@ -90,7 +90,7 @@ import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
 import { afterAll, afterEach, beforeAll, beforeEach, vi, type MockInstance } from 'vitest'
 import { initOrcaProfilePaths } from '../../orca-profiles/profile-storage-paths'
-import { stopStructuredAgentSessionRuntime } from '../agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../agent-session/installation/structured-agent-session-runtime'
 import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests as cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
@@ -113,7 +113,7 @@ import {
   listWorktrees,
   listWorktreesSharedStrict
 } from '../../git/worktrees/catalog/worktree-scan-cache'
-import { parseOrcaYaml } from '../../../shared/orca-yaml'
+import { parseOrcaYaml } from '../../../shared/workspace-setup/orca-yaml'
 import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   setRuntimeBrowserCommandsFactory,

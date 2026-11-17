@@ -1,12 +1,15 @@
 import { useCallback, useMemo } from 'react'
-import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import {
   getAutomationHostTargetFromKey,
   type AutomationHostTarget
 } from '../hosts/automation-host-client'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { findAutomationRepo } from '../../../../../shared/automations/ownership/automation-repo-target'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
 import type { AutomationsPageListState } from '../listing/use-automations-page-list-state'

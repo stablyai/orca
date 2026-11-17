@@ -1,5 +1,5 @@
 import type { Session, WebContents } from 'electron'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
   isBlankBrowserPopupUrl,
@@ -32,6 +32,7 @@ export type BrowserRouteGuestPopupDependencies = {
   getPartitionForSession: (session: Session) => string | null
   /** Route guests replace the manager's popup handler, so a denial is otherwise entirely silent. */
   reportBlockedPopup?: (input: { openerWebContentsId: number; url: string }) => void
+  popupReleased?: (opener: WebContents) => void
   /** The manager's new-tab policy; true when it answered the request. */
   openNewTabPopup?: (
     source: WebContents,
@@ -171,8 +172,11 @@ export function createBrowserRouteGuestPopupController(input: {
   }
 
   const releasePopupOwnership = (popupWebContentsId: number): void => {
-    popupWebContentsIds.delete(popupWebContentsId)
+    const owned = popupWebContentsIds.delete(popupWebContentsId)
     releaseBrowserRouteGuestPopup(popupWebContentsId)
+    if (owned) {
+      input.dependencies.popupReleased?.(input.opener)
+    }
   }
 
   const openPopup = (options: PopupChildWindowOptions, targetUrl: string): WebContents => {

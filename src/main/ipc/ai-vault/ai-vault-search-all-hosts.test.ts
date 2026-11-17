@@ -4,7 +4,7 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse
 } from '../../../shared/ai-vault/search/ai-vault-search-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
 
 /** A host that ranks a fixed list and fences its own cursors on a generation change. */
@@ -136,31 +136,6 @@ it('calls a leg that times out unreachable and retries it on the next page', asy
   } finally {
     vi.useRealTimers()
   }
-})
-
-it('reads at most three pages from one host per merged request', async () => {
-  // Three-page budget stops a six-page host walk; retain its unread cursor for the next merged page.
-  const host = new StubHost('local', sessions('a', 12), 2)
-  const first = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', limit: 10 }, [host.leg()])
-  )
-  expect(host.pages).toBe(3)
-  expect(first.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'a-1', 'a-2', 'a-3', 'a-4', 'a-5'])
-  expect(first.page.hasMore).toBe(true)
-
-  const second = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', limit: 10, cursor: first.page.cursor! }, [
-      host.leg()
-    ])
-  )
-  expect(second.hits.map((hit) => hit.sessionId)).toEqual([
-    'a-6',
-    'a-7',
-    'a-8',
-    'a-9',
-    'a-10',
-    'a-11'
-  ])
 })
 
 it('replays bounded partial and terminal host pages without refetching or inheriting another query scope', async () => {

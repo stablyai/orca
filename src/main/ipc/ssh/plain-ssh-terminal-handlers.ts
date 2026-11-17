@@ -4,7 +4,7 @@ import { ipcMain, type WebContents } from 'electron'
 import {
   PLAIN_SSH_TERMINAL_CHANNELS,
   type PlainSshTerminalEvent
-} from '../../../shared/plain-ssh-terminal'
+} from '../../../shared/terminal/runtime/plain-ssh-terminal'
 import { isSshHostMoveBlocked } from '../../../shared/remote-runtime/ssh/ssh-host-move-blocked'
 import { mayUserSshConfigClaimAlias } from '../../ssh/config/ssh-config-alias-claim'
 import { getSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'

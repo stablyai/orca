@@ -180,6 +180,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '新功能',
     ja: '新機能'
   },
+  // The worktree cards notice badge marks a new feature too.
+  'sidebar.worktreeCardsUpdateNotice.newLabel': { zh: '新功能' },
+  // Automation status: "Active" means enabled, not the generic "current" (当前).
+  'auto.components.automations.listGroups.active': { zh: '已启用' },
+  'auto.components.automations.AutomationDetail.active': { zh: '已启用' },
+  'auto.components.automations.ExternalAutomationManagers.b3feba84c7': { zh: '已启用' },
   'auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b': {
     ko: 'Discord',
     zh: 'Discord',

@@ -34,7 +34,7 @@ import {
   hostedReviewRepoScope,
   scopeGeneration
 } from '../../../source-control/hosted-review-scope-generations'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   completePRBranchRead,
   pendingPRBranchRead,

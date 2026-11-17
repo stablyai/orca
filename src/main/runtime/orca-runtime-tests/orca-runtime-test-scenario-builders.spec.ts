@@ -6,7 +6,7 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/sessi
 import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'

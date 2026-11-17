@@ -9,8 +9,11 @@ import type {
   WorkspaceSpaceScanStatus,
   WorkspaceSpaceWorktree
 } from '../../../shared/workspace-disk-space/workspace-space-types'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../catalog/worktree-metadata-ownership'
 import {

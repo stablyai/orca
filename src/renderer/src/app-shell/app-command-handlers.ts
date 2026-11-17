@@ -11,7 +11,7 @@ import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
 } from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
-import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
+import { requestTerminalTabRename } from '../components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { useAppStore } from '../store/index'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repository/repo-kind'
@@ -22,7 +22,7 @@ import type {
   KeybindingActionId,
   KeybindingContext,
   PhysicalModifierToken
-} from '../../../shared/keybindings'
+} from '../../../shared/keybindings/types'
 import { shortcutPlatform } from './app-window-chrome'
 export { useAppShortcutActions } from './use-app-shortcut-actions'
 import type { useAppShortcutActions } from './use-app-shortcut-actions'

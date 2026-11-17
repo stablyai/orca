@@ -9,7 +9,7 @@ import type {
   ClaudeUsageSessionRow,
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
-} from '../../shared/claude-usage-types'
+} from '../../shared/agent-usage/analytics/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { ClaudeUsagePersistedState } from './types'

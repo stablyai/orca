@@ -3,7 +3,7 @@ import {
   releaseClaudeDispatchesUnansweredAtIdle
 } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
-import { forgetRetiredWaiter } from '../claude-structured-dispatch-waiters'
+import { forgetRetiredWaiter } from '../dispatch/claude-structured-dispatch-waiters'
 import {
   claudeHasReplayContent,
   readClaudeMessageEnvelope
@@ -13,8 +13,8 @@ import type {
   ClaudeLateDispatchOutcome,
   ClaudeSession
 } from '../claude-structured-session-state'
-import { readClaudeFrameString } from '../claude-structured-init-proof'
-import { claudeDispatchContentKey } from '../claude-structured-dispatch-content'
+import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
+import { claudeDispatchContentKey } from '../dispatch/claude-structured-dispatch-content'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
@@ -161,13 +161,17 @@ export function resolveClaudeReplayTurn(
   return null
 }
 
-/** Adopted UUIDs after root cycle work prove folded delivery; a new root init resets this evidence. */
+/** Adopted UUIDs after root cycle work prove folded delivery; a new root init resets this evidence, except for a steer whose interrupt held the turn open. */
 function claudeReplayIsFoldReceipt(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
   replayUuid: string
 ): boolean {
-  return replayUuid === waiter.sentUuid && session.translator?.openTurnInLiveProviderCycle === true
+  return (
+    replayUuid === waiter.sentUuid &&
+    (session.translator?.openTurnInLiveProviderCycle === true ||
+      (waiter.steers === true && session.translator?.currentTurnId != null))
+  )
 }
 
 function claudeResultUserMessageUuids(message: Record<string, unknown>): string[] {

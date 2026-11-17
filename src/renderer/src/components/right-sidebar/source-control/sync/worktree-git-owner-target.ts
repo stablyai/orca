@@ -9,7 +9,7 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/git/git-operation-target'
 import type { AttachedWorktreeOwner } from '../../folder-workspaces/folder-workspace-attached-worktrees'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function sourceControlFileWatchRuntimeEnvironmentId(
   state: AppState,

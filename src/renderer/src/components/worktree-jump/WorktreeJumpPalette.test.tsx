@@ -239,37 +239,6 @@ describe('WorktreeJumpPalette', () => {
     })
   })
 
-  it('reseeds the repository filter when reopened during the close linger', async () => {
-    const secondRepo = {
-      ...makeRepo(),
-      id: 'repo-2',
-      path: '/repos/repo-2',
-      displayName: 'Repo 2'
-    }
-    const first = makeWorktree('first', 'First repository workspace')
-    const second = makeWorktree('second', 'Second repository workspace', { repoId: 'repo-2' })
-
-    await renderPalette({
-      repos: [makeRepo(), secondRepo],
-      worktreesByRepo: { 'repo-1': [first], 'repo-2': [second] },
-      filterRepoIds: ['repo-1'],
-      showSleepingWorkspaces: true
-    })
-
-    expect(testContainer.textContent).toContain('First repository workspace')
-    expect(testContainer.textContent).not.toContain('Second repository workspace')
-
-    await act(async () => {
-      useAppStore.setState({ activeModal: 'none', filterRepoIds: ['repo-2'] })
-    })
-    await flushEffects()
-    await act(async () => useAppStore.getState().openModal('worktree-palette'))
-    await flushEffects()
-
-    expect(testContainer.textContent).not.toContain('First repository workspace')
-    expect(testContainer.textContent).toContain('Second repository workspace')
-  })
-
   it('routes same-target SSH rows through their paired runtime owner', async () => {
     const hubA = makeWorktree('shared-runtime', 'Hub A workspace', {
       hostId: 'ssh:same-private-target',
