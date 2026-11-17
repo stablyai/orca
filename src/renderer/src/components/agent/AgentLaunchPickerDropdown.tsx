@@ -1,12 +1,11 @@
 import { useState, type Ref } from 'react'
-import { MessageSquare, SquareTerminal } from 'lucide-react'
 import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
 import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
@@ -17,6 +16,7 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import type { AgentPickerSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import {
+  agentPickerButtonOrder,
   agentPickerDraft,
   type AgentPickerDraft,
   type AgentPickerDraftOwner,
@@ -73,6 +73,11 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
     entries.find((entry) => entry.agent === agent) ??
     entries.find((entry) => entry.surfaces.length > 0) ??
     entries[0]
+  const showPane = (next: Agent) => {
+    setPaneAgent(next)
+    setSwitched(true)
+    onPaneChange(next)
+  }
   if (!pane) {
     return null
   }
@@ -113,6 +118,7 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         {...props}
         initialQuery={switched ? '' : props.initialQuery}
         entry={pane}
+        onShowAgent={showPane}
       />
     </div>
   )
@@ -217,8 +223,13 @@ function AgentLaunchPickerPane({
   searchInputRef,
   choices,
   onPick,
-  onClose
-}: AgentLaunchPickerDropdownProps & { entry: AgentPickerEntry }) {
+  onClose,
+  onShowAgent
+}: AgentLaunchPickerDropdownProps & {
+  entry: AgentPickerEntry
+  /** Shows another agent's pane, for a search pick that keeps the dropdown open. */
+  onShowAgent: (agent: Agent) => void
+}) {
   const selected = value?.agent === entry.agent ? value : undefined
   const source = draftForEntry?.(entry)
   const setup = useAgentPickerSetup({
@@ -248,13 +259,17 @@ function AgentLaunchPickerPane({
       onClose()
     }
   }
-  const pickSearchResult = (result: AgentPickerSetup) => {
+  /** A model pick applies at once; `close` (Enter) also opens it the default way, as the filled button does. */
+  const pickModel = (draft: AgentPickerDraft, close: boolean) => {
+    setup.change(draft)
+    commit(close, close ? entry.defaultSurface : undefined)
+  }
+  const pickSearchResult = (result: AgentPickerSetup, close: boolean) => {
     const edit = { kind: 'choice' as const, patch: result.choices }
     if (result.entry.agent === entry.agent) {
       const draft = setup.getDraft()
       if (draft) {
-        setup.change(applyAgentPickerEdit(entry, draft, edit))
-        commit(true)
+        pickModel(applyAgentPickerEdit(entry, draft, edit), close)
       }
       return
     }
@@ -263,11 +278,17 @@ function AgentLaunchPickerPane({
       (value?.agent === other.agent ? value : undefined) ??
       draftForEntry?.(other) ??
       agentPickerDraft(other)
-    onPick(other.agent, applyAgentPickerEdit(other, base, edit), other)
-    onClose()
+    const edited = applyAgentPickerEdit(other, base, edit)
+    if (close) {
+      onPick(other.agent, { ...edited, surface: other.defaultSurface }, other, other.defaultSurface)
+      onClose()
+    } else {
+      onPick(other.agent, edited, other)
+      onShowAgent(other.agent)
+    }
   }
   // As the agent rows did: the form's setup for the agent in use, else only the agent and how it opens.
-  const pickAgent = (picked: AgentPickerEntry) => {
+  const pickAgent = (picked: AgentPickerEntry, close: boolean) => {
     const held = value?.agent === picked.agent ? value : undefined
     if (held) {
       onPick(picked.agent, held, picked)
@@ -284,7 +305,11 @@ function AgentLaunchPickerPane({
         picked.agent !== agent && row?.kind === 'chat' ? 'chat' : undefined
       )
     }
-    onClose()
+    if (close) {
+      onClose()
+    } else {
+      onShowAgent(picked.agent)
+    }
   }
   if (!setup.ready) {
     return null
@@ -314,16 +339,12 @@ function AgentLaunchPickerPane({
           commit(false)
         }
       }}
-      onPickModel={(draft) => {
-        setup.change(draft)
-        commit(true)
-      }}
+      onPickModel={pickModel}
       onUse={(draft) => commit(true, draft.surface)}
     >
       {entry.textGeneration ? null : (
-        <AgentLaunchOpenIn
+        <AgentLaunchOpenAs
           entry={entry}
-          surface={setup.draft.surface}
           disabled={disabled}
           onChoose={(surface) => commit(true, surface)}
         />
@@ -332,69 +353,45 @@ function AgentLaunchPickerPane({
   )
 }
 
-/** Chat or CLI, a setting of the pick rather than a launch: a track with the chosen side raised. */
-function AgentLaunchOpenIn({
+/** Open as chat or terminal: each takes the pane's setup and closes, like the launch buttons. */
+function AgentLaunchOpenAs({
   entry,
-  surface,
   disabled,
   onChoose
 }: {
   entry: AgentPickerEntry
-  surface: AgentPickerSurface
   disabled?: boolean
   onChoose: (surface: AgentPickerSurface) => void
 }) {
   const t = useTranslate()
+  const order = agentPickerButtonOrder(entry)
+  if (!order.length) {
+    return null
+  }
   const unavailable = entry.rows.find((row) => row.kind === 'chat-unavailable')
-  const chatReason = entry.surfaces.includes('chat')
-    ? undefined
-    : unavailable?.kind === 'chat-unavailable'
-      ? chatUnavailableLabel(unavailable.reason, t)
-      : t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label })
-  const label = t('agentPicker.openIn', 'Open as')
-  const chat = (
-    <ToggleGroupItem value="chat" disabled={Boolean(chatReason)} className="h-6">
-      <MessageSquare className="size-3.5" />
-      {t('agentPicker.chat', 'Chat')}
-    </ToggleGroupItem>
-  )
+  const reasons: Partial<Record<AgentPickerSurface, string>> = {
+    chat: entry.surfaces.includes('chat')
+      ? undefined
+      : unavailable?.kind === 'chat-unavailable'
+        ? chatUnavailableLabel(unavailable.reason, t)
+        : t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label }),
+    terminal: entry.surfaces.includes('terminal')
+      ? undefined
+      : t('agentPicker.noTerminal', 'No terminal for {{agent}}', { agent: entry.label })
+  }
+  // A surface the agent lacks stays as a disabled button that says why.
+  const missing = (['chat', 'terminal'] as const).filter((surface) => !order.includes(surface))
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-t border-border pr-2 pl-2.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <ToggleGroup
-        type="single"
-        variant="segmented-card"
-        size="xs"
-        spacing={0.5}
-        role="radiogroup"
-        aria-label={label}
+    <div className="flex items-center border-t border-border px-2 py-2">
+      <AgentLaunchSurfaceButtons
+        entry={entry}
+        surfaces={[...missing, ...order]}
+        verb="open"
         disabled={disabled}
-        value={surface}
-        // Radix reports a press on the chosen side as empty; it still picks.
-        onValueChange={(next) => onChoose(next === 'chat' || next === 'terminal' ? next : surface)}
-        className="flex w-auto"
-      >
-        {chatReason ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">{chat}</span>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {chatReason}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          chat
-        )}
-        <ToggleGroupItem
-          value="terminal"
-          disabled={!entry.surfaces.includes('terminal')}
-          className="h-6"
-        >
-          <SquareTerminal className="size-3.5" />
-          {t('agentPicker.cli', 'CLI')}
-        </ToggleGroupItem>
-      </ToggleGroup>
+        unavailable={reasons}
+        primary={entry.defaultSurface}
+        onSelect={onChoose}
+      />
     </div>
   )
 }
