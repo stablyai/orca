@@ -121,20 +121,11 @@ function resolveComposerAgentLaunch(
   return agentId ? { agent: agentId, supported } : undefined
 }
 
-async function createWorkItemWorkspace(args: {
-  client: RpcClient
-  selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
-  targetRepoId: string
-  setupDecision: WorkspaceCreateSetupDecision
-  approvedSetupHash?: string
-  agent: WorkspaceCreateAgentBundle
-  workspaceName: string | undefined
-  nameIsAutoManaged?: boolean
-  note: string | undefined
-  linkedWorkItemPromptTemplate?: string
-  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
-  parent?: WorktreeCreateParent
-}): Promise<WorktreeCreateResult> {
+async function createWorkItemWorkspace(
+  args: Omit<CreateWorkspaceFromComposerArgs, 'selection'> & {
+    selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
+  }
+): Promise<WorktreeCreateResult> {
   // The caller resolved the start point before showing its setup; creating from another could run unseen setup.
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item

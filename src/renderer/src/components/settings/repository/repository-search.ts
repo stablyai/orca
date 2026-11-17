@@ -254,15 +254,7 @@ export function getRepositoryPaneSearchEntries(
     entries.push(getRepositoryWorkspaceCleanupSearchEntry(repo, t))
   }
   entries.push(parts.sidebarVisibility, parts.removeProject)
-  if (parts.sourceControlAi) {
-    entries.push(...parts.sourceControlAi)
-  }
-  if (parts.mcp) {
-    entries.push(...parts.mcp)
-  }
-  if (parts.hooks) {
-    entries.push(...parts.hooks)
-  }
+  entries.push(...(parts.sourceControlAi ?? []), ...(parts.mcp ?? []), ...(parts.hooks ?? []))
   return entries
 }
 

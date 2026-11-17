@@ -17,11 +17,7 @@ import {
   composerCreateRepoId
 } from '../source-workspace-create'
 import { createdSetupReviewPrompt } from '../created-worktree-setup-review'
-import {
-  useNewWorkspaceSetupTrust,
-  type CreateOptions,
-  type SheetSetupTrustPrompt
-} from './use-new-workspace-setup-trust'
+import { useNewWorkspaceSetupTrust, type CreateOptions } from './use-new-workspace-setup-trust'
 import { normalizeWorkspaceAgent } from '../workspace-agent-selection'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { AgentLaunchSupport } from '../../../session/agent-launch/agent-launch-request'
@@ -82,14 +78,7 @@ export function useNewWorkspaceCreateSubmit(args: {
     executionHostId: ExecutionHostId
     parent: WorktreeCreateParent
   }
-}): {
-  creating: boolean
-  setupTrustPrompt: SheetSetupTrustPrompt | null
-  create: () => Promise<void>
-  approveSetupTrust: (alwaysTrust: boolean) => Promise<void>
-  closeSetupTrust: () => void
-  skipSetupTrust: () => void
-} {
+}) {
   const createInFlightRef = useRef(false)
   const [creating, setCreating] = useState(false)
   const setupTrust = useNewWorkspaceSetupTrust({
@@ -228,22 +217,14 @@ export function useNewWorkspaceCreateSubmit(args: {
             agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
-            ...(selection.kind === 'work-item' && args.selectedAgent.id !== '__blank__'
-              ? {
-                  linkedWorkItemPromptTemplate: await resolveMobileLinkedWorkItemPromptTemplate(
+            linkedWorkItemPromptTemplate:
+              selection.kind === 'work-item' && createdWithAgentId
+                ? await resolveMobileLinkedWorkItemPromptTemplate(
                     client,
-                    {
-                      ...selectedRepo,
-                      id:
-                        (selection.item.provider === 'github' ||
-                        selection.item.provider === 'gitlab'
-                          ? selection.item.repoId
-                          : undefined) ?? selectedRepo.id
-                    },
+                    setupRepo,
                     latestRuntimeSettings
                   )
-                }
-              : {}),
+                : undefined,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
             agentLaunchSupported: args.getAgentLaunchSupport(),
