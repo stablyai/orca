@@ -347,31 +347,7 @@ it('sends a queued card back to wait when the old account turns out busy as it i
   expect(chat.dispatchedTo('queued next')).toEqual([])
 
   chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
-  try {
-    await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
-  } catch (error) {
-    const session = rig!.host.collaboratorsForTests().sessions.get(SESSION)
-    console.error(
-      'DIAG queued-card',
-      JSON.stringify({
-        drafts: await rig!.drafts(),
-        pause: await rig!.queuePause(),
-        held: session?.awaitsAccountMove,
-        child: {
-          phase: chat.child()?.phase,
-          fence: chat.child()?.fence,
-          home: chat.child()?.accountHome
-        },
-        dispatches: rig!.dispatch.mock.calls.map(([input]) => [
-          input.fence,
-          JSON.stringify(input.body.blocks).slice(0, 40)
-        ]),
-        submission: await rig!.handoff(queued.id),
-        reads: chat.accountReads()
-      })
-    )
-    throw error
-  }
+  await eventually(() => expect(chat.dispatchedTo('queued next')).toHaveLength(1))
   expect(chat.dispatchedTo('queued next')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
 })
