@@ -87,7 +87,7 @@ function readTool(db: Database.Database) {
   return read.kind === 'items-by-kind' ? read.items : []
 }
 
-it('reads a saved tool output back whole, as the bounded client head, and through rewrites', () => {
+it('reads a saved tool output back whole, as the bounded client head, through rewrites and with writes off', () => {
   const db = chat()
   write(db, toolCall('tool', 'completed'))
   expect(stored(db, 'tool')!.blob).toBe(1)
@@ -120,7 +120,22 @@ it('reads a saved tool output back whole, as the bounded client head, and throug
   write(db, { ...raw, revision: 3 })
   expect(readTool(db)[0]!.body).toMatchObject({ output: { head: OUTPUT, truncated: false } })
   expect(readJournalDomainClientForms(db, target, ['tool']).get('tool')!.bytes).toBe(client.bytes)
-  expect(() => write(db, { ...raw, itemId: 'other' })).toThrow('names a saved output')
+  // A stored form copied to a row without its blob keeps the preview as a plain truncated output.
+  write(db, { ...raw, itemId: 'other', sequence: 11 })
+  const copy = readJournalDomainItemDetail(db, target, 'other')!.body
+  expect(copy.kind === 'tool-call' && copy.output).toEqual({
+    head: `${OUTPUT.slice(0, 512)}\n…\n${OUTPUT.slice(-512)}`,
+    byteLength: 40_011,
+    digest: 'd',
+    truncated: true
+  })
+
+  // With writes off, a rewrite stores the whole text inline again.
+  switches.writes = false
+  const tool = () => readTool(db).find((item) => item.itemId === 'tool')!
+  write(db, { ...tool(), revision: 4 })
+  expect(stored(db, 'tool')!.blob).toBe(0)
+  expect(tool().body).toMatchObject({ output: { head: OUTPUT, truncated: false } })
 })
 
 it('compacts inline rows written before the switch, leaving running calls inline', () => {

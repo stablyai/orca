@@ -4,10 +4,10 @@ import { JOURNAL_DOMAIN_ITEM_COLUMNS } from './journal-domain-item-read-columns'
 import {
   hasJournalStoredOutput,
   hydrateJournalItemOutput,
+  journalItemOutputPreview,
   JOURNAL_STORED_OUTPUT_WRITES,
   storeJournalItemOutput
 } from './journal-stored-output'
-import { AgentSessionJournalError } from './writing/journal-write-guards'
 
 type Prefix = readonly [sessionId: string, epoch: string]
 
@@ -78,13 +78,17 @@ export function journalStoredItemRow<V>(
       .prepare(`SELECT 1 FROM journal_items
         WHERE session_id=? AND epoch=? AND item_id=? AND output_blob IS NOT NULL`)
       .get(...prefix, item.itemId)
-    if (!held) {
-      throw new AgentSessionJournalError(
-        'journal_row_rejected',
-        `journal item for ${prefix[0]} names a saved output this row does not hold`
-      )
+    if (held) {
+      return { payload, values: [...values], blob: null, keep: true }
     }
-    return { payload, values: [...values], blob: null, keep: true }
+    // A fork or copy of an output that could not be read keeps its preview rather than failing.
+    console.warn(`[agent-session-journal] kept only the preview of a saved output in ${prefix[0]}`)
+    return {
+      payload: JSON.stringify(journalItemOutputPreview(item)),
+      values: [...values],
+      blob: null,
+      keep: false
+    }
   }
   const stored = writes ? storeJournalItemOutput(item) : null
   if (!stored) {

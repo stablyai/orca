@@ -105,6 +105,16 @@ export function storeJournalItemOutput<T extends AgentJournalRenderItem>(
   return { item: withPayload(item, stored), blob }
 }
 
+/** The inline preview as a plain truncated payload, for a stored form whose row holds no blob. */
+export function journalItemOutputPreview<T extends AgentJournalRenderItem>(item: T): T {
+  const payload = bodyPayload(item.body)
+  if (!payload || !storedMarker(payload)) {
+    return item
+  }
+  const { head, byteLength, digest } = payload
+  return withPayload(item, { head, byteLength, digest, truncated: true })
+}
+
 /** Unreadable blobs keep the marker, so a rewrite keeps the blob rather than an empty head. */
 export function hydrateJournalItemOutput<T extends AgentJournalRenderItem>(
   item: T,
