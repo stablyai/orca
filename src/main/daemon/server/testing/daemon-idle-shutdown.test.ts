@@ -173,6 +173,32 @@ describe('current daemon lifecycle retirement', () => {
     client.disconnect()
   })
 
+  it('lets an attach-only spawn recover an unverified idle-retirement fence', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    await adapter.spawn({ sessionId: 'live', cols: 80, rows: 24 })
+
+    // A retirement RPC that fails after connecting leaves the adapter fenced as unverifiable.
+    const client: { request: (type: string, payload?: unknown) => Promise<unknown> } = Reflect.get(
+      adapter,
+      'client'
+    )
+    vi.spyOn(client, 'request').mockRejectedValueOnce(new Error('rpc timeout'))
+    await expect(adapter.requestIdleRetirement()).resolves.toEqual({ state: 'unverifiable' })
+    expect(adapter.isIdleRetirementAdmissionClosed()).toBe(true)
+
+    // Reattaching an existing session creates nothing new, so it still reaches the daemon.
+    await expect(
+      adapter.spawn({ sessionId: 'live', cols: 80, rows: 24, attachOnly: true })
+    ).resolves.toMatchObject({ id: 'live', isReattach: true })
+    // A fresh terminal into a daemon that may be leaving still refuses.
+    await expect(adapter.spawn({ sessionId: 'fresh', cols: 80, rows: 24 })).rejects.toThrow(
+      'Terminal daemon is decommissioning'
+    )
+    subprocess.exit(0)
+    adapter.dispose()
+  })
+
   it('reopens adapter admission when the daemon refuses retirement for a live session', async () => {
     await startServer()
     const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })

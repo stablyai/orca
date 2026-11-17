@@ -70,6 +70,12 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     }
   }
 
+  /** Drops a provider this router retired itself: unlike invalidateProvider, later reads stop querying it. */
+  dropProvider(provider: T): void {
+    this.invalidateInventory()
+    this.forgetProvider(provider)
+  }
+
   async spawnAttachOnly(opts: PtySpawnOptions & { sessionId: string }): Promise<PtySpawnResult> {
     return spawnDaemonAttachOnly(opts, this.providers, this.routes, this.routeIncarnations, this)
   }
