@@ -22,9 +22,10 @@ async function seedGroupChain(page: Page, names: readonly string[]): Promise<str
     const ids: string[] = []
     for (const name of groupNames) {
       const parentGroupId = ids.at(-1)
-      const group = await store
-        .getState()
-        .createProjectGroup(name, parentGroupId ? { parentGroupId } : undefined)
+      const state = store.getState()
+      const group = parentGroupId
+        ? await state.createProjectSubgroup(name, parentGroupId)
+        : await state.createProjectGroup(name, 'local')
       if (!group) {
         throw new Error(`Failed to create Project Group: ${name}`)
       }
